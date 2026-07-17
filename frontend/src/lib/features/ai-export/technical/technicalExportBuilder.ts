@@ -1,16 +1,15 @@
 /**
  * Technical Export Builder — orchestrates signal computation for the AI export.
  *
- * For each eligible asset:
- * 1. Loads price data from assetPriceStoreRegistry
- * 2. Computes EMA20/50/200, RSI14, MACD via existing ChartSignal classes
+ * For each eligible export target:
+ * 1. Loads price data via an injected loader
+ * 2. Computes EMA20/50/200, optional RSI14, and MACD via existing ChartSignal classes
  * 3. Samples the 3M window (last 7 daily + preceding weekly)
  * 4. Computes normalized return from 3M base price
  * 5. Detects technical events (crosses)
  * 6. Builds AiTechnicalAsset output
  */
 
-import {ensureAssetPriceRangeLoaded} from '$lib/stores/assetPriceStoreRegistry';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {EmaSignal} from '$lib/charts/signals/EmaSignal';
 import {RsiSignal} from '$lib/charts/signals/RsiSignal';
@@ -31,15 +30,14 @@ const WARMUP_MONTHS = 13;
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface TechnicalExportInput {
-    assetId: number;
     assetName: string;
     /** All known market identifiers (ISIN/Ticker/CUSIP/...) — for the AI's own web research only, never used as the display label. */
     identifiers?: Record<string, string>;
-    currency: string;
+    loadPrices: (loadStart: string, endDate: string) => Promise<Array<{date: string; value: number; backwardFillInfo?: {daysBack: number} | null}>>;
     /** End date for the technical window (YYYY-MM-DD) */
     endDate: string;
-    /** Target currency for price conversion */
-    targetCurrency: string;
+    /** Disable RSI when the export domain does not use it (e.g. FX pairs). Defaults to true. */
+    computeRsi?: boolean;
 }
 
 export interface TechnicalExportResult {
@@ -101,9 +99,7 @@ async function buildSingleAsset(input: TechnicalExportInput): Promise<AiTechnica
     const loadStart = subtractMonths(endDate, WARMUP_MONTHS);
 
     // Load price data with warm-up period
-    const prices = await ensureAssetPriceRangeLoaded(input.assetId, input.currency, loadStart, endDate, {
-        targetCurrency: input.targetCurrency,
-    });
+    const prices = await input.loadPrices(loadStart, endDate);
 
     if (prices.length < 5) return null;
 
@@ -112,14 +108,14 @@ async function buildSingleAsset(input: TechnicalExportInput): Promise<AiTechnica
     const effectivePrices = tradingPrices.length >= 5 ? tradingPrices : prices;
 
     // Convert to LineDataPoint
-    const priceData: LineDataPoint[] = effectivePrices.map((p) => ({date: p.date, value: p.close}));
+    const priceData: LineDataPoint[] = effectivePrices.map((p) => ({date: p.date, value: p.value}));
 
     // Compute signals using the full data range (includes warm-up)
     const defaultStyle = {color: '#000', lineWidth: 1, lineType: 'solid' as const, markerStart: null, markerEnd: null};
     const ema20 = new EmaSignal('ema20', defaultStyle, {period: 20}).computePoints(priceData);
     const ema50 = new EmaSignal('ema50', defaultStyle, {period: 50}).computePoints(priceData);
     const ema200 = new EmaSignal('ema200', defaultStyle, {period: 200}).computePoints(priceData);
-    const rsi14 = new RsiSignal('rsi14', defaultStyle, {period: 14}).computePoints(priceData);
+    const rsi14 = input.computeRsi !== false ? new RsiSignal('rsi14', defaultStyle, {period: 14}).computePoints(priceData) : [];
     const macdSignal = new MacdSignal('macd', defaultStyle, {fastPeriod: 12, slowPeriod: 26, signalPeriod: 9});
     const macdAll = (macdSignal as any)._computeAll(priceData) as {histogram: LineDataPoint[]};
     const macdHistogram: LineDataPoint[] = macdAll.histogram;

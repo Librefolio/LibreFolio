@@ -11,6 +11,7 @@
  */
 
 import {zodiosApi} from '$lib/api';
+import {ensureAssetPriceRangeLoaded} from '$lib/stores/assetPriceStoreRegistry';
 import {buildMethodology} from '../aiExportBuilder';
 import {buildTechnicalContext} from '../technical/technicalExportBuilder';
 import {getResponseLanguage} from '../templates/languageMap';
@@ -75,12 +76,13 @@ export async function buildAssetAiExport(input: AssetExportInput, options: Asset
     // meant to reflect the asset's *current* status, not a past viewing date).
     const technicalResult = await buildTechnicalContext([
         {
-            assetId: assetInfo.id,
             assetName: assetInfo.display_name,
             identifiers: buildAssetIdentifiers(assetInfo),
-            currency: assetInfo.currency,
+            loadPrices: (loadStart, endDate) =>
+                ensureAssetPriceRangeLoaded(assetInfo.id, assetInfo.currency, loadStart, endDate, {
+                    targetCurrency: options.targetCurrency,
+                }).then((prices) => prices.map((p) => ({date: p.date, value: p.close, backwardFillInfo: p.backwardFillInfo}))),
             endDate: new Date().toISOString().slice(0, 10),
-            targetCurrency: options.targetCurrency,
         },
     ]);
 

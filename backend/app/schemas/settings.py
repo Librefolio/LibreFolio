@@ -139,4 +139,9 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "str",
         "description": "Default language for new users (en, it, fr, es)",
     },
+    "default_theme": {
+        "value": "auto",
+        "type": "str",
+        "description": "Default theme for new users (light, dark, auto)",
+    },
 }

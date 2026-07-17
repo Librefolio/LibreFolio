@@ -334,3 +334,113 @@ Il TODO chiedeva solo pagine developer-facing. Trovato invece un lavoro completo
 - `docs_url` di ogni provider (`backend/app/services/fx_providers/{ecb,fed,boe,snb}.py`) punta già alla pagina specifica (es. `ecb.py:60`: `"/mkdocs/user/fx/providers/ecb/"`), non alla pagina generica — verificato
 
 **Nota**: nel mio audit del 17/07 avevo controllato solo `developer/backend/fx/` di primo livello (trovando solo `architecture.md`/`configuration.md`) senza scendere nella sottocartella `providers/` — errore mio, corretto su segnalazione dell'utente.
+
+---
+
+## 🧹 Rimuovere endpoint `/countries/normalize` ✅
+
+**Data aggiunta**: 8 Giugno 2026
+**Data completamento**: 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+Rimosso l'endpoint HTTP morto (feature scartata, vedi voce "Normalizzazione Paese Multilingua" sopra) e i suoi helper diventati orfani:
+- `backend/app/api/v1/utilities.py`: rimossa la route `GET /countries/normalize` e la funzione `normalize_country()`
+- `backend/app/utils/geo_utils.py`: rimossi `is_region()`/`expand_region()` (usati solo da quell'endpoint) — **mantenuto** `normalize_country_to_iso3()`, ancora in uso interno da `justetf.py`
+- `backend/app/schemas/utilities.py`: rimosso `CountryNormalizationResponse`
+- Rimossi i test dedicati in `backend/test_scripts/test_api/test_utilities.py`, la classe `TestExpandRegion` in `backend/test_scripts/test_utilities/test_geo_utils.py`, e 4 test e2e in `frontend/e2e/utilities.spec.ts` che chiamavano l'endpoint direttamente
+- `./dev.py api sync` rigenerato client FE
+- **Non toccato**: `/currencies/normalize` (endpoint diverso, ancora valido) e `test_normalize_country_to_iso3` (testa la funzione sottostante, ancora usata)
+
+### File coinvolti
+- `backend/app/api/v1/utilities.py`, `backend/app/schemas/utilities.py`, `backend/app/utils/geo_utils.py`
+- `backend/test_scripts/test_api/test_utilities.py`, `backend/test_scripts/test_utilities/test_geo_utils.py`, `frontend/e2e/utilities.spec.ts`
+
+---
+
+## 🧹 Rimuovere `preview_columns` dai plugin BRIM ✅
+
+**Data aggiunta**: 8 Giugno 2026
+**Data completamento**: 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+Rimossa la feature mai utilizzata (progettata per la "Staging Modal" v4, superata dal redesign v5 ImportWizard):
+- `BRIMPreviewColumn` rimossa da `backend/app/schemas/brim.py`, campo `preview_columns` rimosso da `BRIMPluginInfo`
+- Metodo abstract `preview_columns()` rimosso da `backend/app/services/brim_provider.py` (base class + `to_plugin_info()`)
+- Implementazione rimossa da tutti gli 11 plugin in `backend/app/services/brim_providers/*.py`
+- Test aggiornati: `backend/test_scripts/test_external/test_brim_providers.py` (rimosso `test_preview_columns_baseline` + `_BASELINE_COLUMN_KEYS`), più 2 test stub (`test_brim_provider_base.py`, `test_brim_create_transaction.py`) che implementavano il metodo abstract e non ne avevano più bisogno
+- `./dev.py api sync` rigenerato client FE — verificato zero riferimenti residui a `preview_columns`/`BRIMPreviewColumn` in tutto il repo
+- 195/195 test BRIM passano
+
+### File coinvolti
+- `backend/app/schemas/brim.py`, `backend/app/services/brim_provider.py`
+- `backend/app/services/brim_providers/*.py` (11 plugin)
+- `backend/test_scripts/test_external/test_brim_providers.py`, `backend/test_scripts/test_services/{test_brim_provider_base,test_brim_create_transaction}.py`
+
+---
+
+## 📸 Gallery: 4 tipi transazione mancanti (WITHDRAWAL/INTEREST/FEE/TAX) ✅
+
+**Data aggiunta**: idea raccolta durante audit TODO del 17 Luglio 2026 (transazioni introdotte dopo la creazione originale della gallery)
+**Data completamento**: 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+- `frontend/e2e/gallery.spec.ts`: aggiunti i 4 tipi mancanti a `TX_FORM_VARIANT_TYPES` (loop già generico, zero logica aggiuntiva)
+- Carosello transazioni aggiornato nello stesso punto (`carousel-desktop-1`/`carousel-mobile-1`) in tutti gli 8 file `mkdocs_src/docs/gallery/{desktop,mobile}.{en,it,fr,es}.md`, con `data-title` tradotto e `alt` localizzato per lingua (pattern esistente: "Modulo Transazione — X" IT, "Formulaire de Transaction — X" FR, "Formulario de Transacción — X" ES — coerente con le voci già presenti nello stesso carosello)
+- 64 nuovi screenshot generati (2 viewport × 4 lingue × 2 temi × 4 tipi) via `./dev.py mkdocs gallery`
+- `./dev.py mkdocs build` verificato senza errori
+
+### File coinvolti
+- `frontend/e2e/gallery.spec.ts`
+- `mkdocs_src/docs/gallery/{desktop,mobile}.{en,it,fr,es}.md`
+
+---
+
+## ⚙️ Default lang/currency/theme da global settings (non più hardcoded) ✅
+
+**Data aggiunta**: idea raccolta durante audit TODO del 17 Luglio 2026 (gap segnalato dall'utente, confermato)
+**Data completamento**: 17 Luglio 2026 (lang/currency), stessa giornata estesa al tema su richiesta successiva dell'utente
+**Status**: ✅ COMPLETATO
+
+### Completato
+`get_or_create_user_settings()` e il ramo "crea se non esiste" di `update_user_settings()` in `backend/app/services/settings_service.py` leggono ora `default_language`/`default_currency`/**`default_theme`** da `GlobalSetting` (via `get_setting_value()`, già esistente in `global_settings_service.py`, che gestisce già il fallback a `GLOBAL_SETTINGS_DEFAULTS`), invece di avere `"en"/"EUR"/"light"` hardcoded come valore primario.
+
+**Aggiunta successiva — Default Theme in admin panel**: inizialmente il tema era stato lasciato fuori scope (nessun default globale equivalente). L'utente ha poi chiesto esplicitamente di aggiungerlo. Scoperto che gran parte del frontend era **già pronto** ma mai completato: `globalSettings.ts` e `PreferencesTab.svelte` leggevano/attendevano già una key `default_theme` dai global settings (sempre no-op perché la key non esisteva lato backend). Completato:
+- `GLOBAL_SETTINGS_DEFAULTS["default_theme"]` aggiunto (seed `"auto"`, non `"light"` — scelto per coerenza con il fallback già presente nel codice FE in 2 punti indipendenti)
+- Nuovo branch UI in `GlobalSettingsTab.svelte` (categoria "Defaults"), mirror esatto del branch `default_language` esistente, select con le 3 opzioni light/dark/auto (chiavi i18n già esistenti)
+- Nuove chiavi i18n `globalSettingNames.default_theme` / `globalSettingDescriptions.default_theme` in 4 lingue
+- Ora anche il pulsante "reset to default" del tema nella pagina Preferenze utente (`PreferencesTab.svelte`) funziona realmente (prima era permanentemente no-op)
+
+Aggiunti/estesi test in `test_settings_service.py` (pattern setup/cleanup su `GlobalSetting`): un caso con default globali custom (lang/currency/theme tutti e 3 verificati), uno con i default seedati (fallback a `en`/`EUR`/`auto`). 9/9 test passano, incluso il test pre-esistente `test_creates_settings_when_missing` (nessuna regressione). Verificato anche via e2e (`./dev.py test front-utility settings`, 37/37 pass) e `svelte-check`/`i18n audit` (0 errori, 100% completo).
+
+### File coinvolti
+- `backend/app/schemas/settings.py`, `backend/app/services/settings_service.py`
+- `backend/test_scripts/test_services/test_settings_service.py`
+- `frontend/src/lib/components/settings/tabs/GlobalSettingsTab.svelte`
+- `frontend/src/lib/i18n/{en,it,fr,es}.json`
+
+---
+
+## 🤖 AI Export — FX Pair Detail (snapshot + spiegazione trend) ✅
+
+**Data aggiunta**: idea raccolta durante audit TODO del 17 Luglio 2026
+**Data completamento**: 17 Luglio 2026
+**Status**: ✅ COMPLETATO
+
+### Completato
+Aggiunto AI export su `/fx/[pair]`, mirror ridotto (2 varianti) del pattern asset — niente su `/transactions` (deciso, non ha senso per quel dominio):
+- `fx_snapshot` (dati puri) e `fx_trend` (spiega perché il tasso si muove in questa direzione, via ricerca su differenziali di tasso/politica monetaria/eventi macro)
+- Fotografia dati include **entrambe le direzioni del tasso già calcolate** (`rate_base_to_quote` e `rate_quote_to_base` = `1/rate`, sempre in direzione canonica base→quote, indipendente dal toggle di inversione visuale della pagina) — l'LLM non deve invertire nulla
+- Segnali tecnici: EMA(20/50/200) + MACD, **niente RSI** (deciso, dominio senza vero overbought/oversold strutturale) — reso possibile generalizzando `technicalExportBuilder.ts` esistente con un `loadPrices` iniettabile + flag `computeRsi` (default `true`, comportamento asset/portfolio invariato — verificato dopo il refactor con `svelte-check` 0 errori e riletture manuali dei 2 call site esistenti, dato che non esiste test automatico su questi builder)
+- Nuovi file mirror di `ai-export/asset/*`: `frontend/src/lib/features/ai-export/fx/{fxTypes,fxPromptCatalog,fxExportBuilder,fxPromptRenderer,fxExportClipboard}.ts`
+- Wiring in `frontend/src/routes/(app)/fx/[pair]/+page.svelte` (bottone accanto ai controlli del pannello Segnali, con collasso a icona su schermi stretti come nella pagina asset) + nuove chiavi i18n `fxDetail.aiExportMenu.*` in 4 lingue
+- Verificato: `svelte-check` 0 errori, `fx-detail.spec.ts` 12/12 pass (nessuna regressione sul toggle pannello Segnali dopo il refactor del DOM header)
+
+### File coinvolti
+- `frontend/src/lib/features/ai-export/technical/technicalExportBuilder.ts` (generalizzato)
+- `frontend/src/lib/features/ai-export/asset/assetExportBuilder.ts`, `frontend/src/lib/features/ai-export/aiExportBuilder.ts` (adattati al nuovo builder generico)
+- `frontend/src/lib/features/ai-export/fx/*` (nuovo)
+- `frontend/src/routes/(app)/fx/[pair]/+page.svelte`
+- `frontend/src/lib/i18n/{en,it,fr,es}.json`

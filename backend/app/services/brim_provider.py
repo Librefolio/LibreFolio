@@ -54,7 +54,6 @@ from backend.app.schemas.brim import (
     BRIMMatchConfidence,
     BRIMParseOutput,
     BRIMPluginInfo,
-    BRIMPreviewColumn,
     BRIMTXDuplicateCandidate,
     BRIMValidationIssue,
     is_fake_asset_id,
@@ -331,15 +330,6 @@ class BRIMProvider(ABC):
         """
         return "1.0.0"
 
-    @abstractmethod
-    def preview_columns(self) -> List[BRIMPreviewColumn]:
-        """Columns metadata used by the Staging Modal preview table.
-
-        Mandatory — every plugin must declare at least the baseline
-        columns (date, type, quantity, asset, cash_amount, cash_currency).
-        """
-        pass
-
     @property
     def test_file_pattern(self) -> Optional[str]:
         """
@@ -364,7 +354,6 @@ class BRIMProvider(ABC):
             icon_url=self.icon_url,
             docs_url=self.docs_url,
             plugin_version=self.plugin_version,
-            preview_columns=self.preview_columns(),
             detection_priority=self.detection_priority,
         )
 

@@ -338,19 +338,12 @@ test.describe('Gallery Screenshots', () => {
         // "loaded" signal. The previous networkidle+700ms wasn't always enough for the
         // on-demand `performance` contribution fetch (bug: mobile positions-performance-table
         // gallery screenshot captured the loading skeleton instead of real rows).
-        const contentTestId =
-            semantic === 'holdings' ? (visual === 'table' ? 'exposure-table' : 'exposure-treemap') : visual === 'table' ? 'contribution-table' : 'performance-chart';
+        const contentTestId = semantic === 'holdings' ? (visual === 'table' ? 'exposure-table' : 'exposure-treemap') : visual === 'table' ? 'contribution-table' : 'performance-chart';
         await expect(page.getByTestId(contentTestId)).toBeVisible({timeout: 15_000});
         await page.waitForTimeout(400); // settle for chart redraw (treemap/performance-chart use ECharts)
     }
 
-    async function screenshotPositionsVariants(
-        page: Page,
-        viewport: 'desktop' | 'mobile',
-        lang: Language,
-        theme: Theme,
-        category: string,
-    ) {
+    async function screenshotPositionsVariants(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string) {
         const positionsPanel = page.getByTestId('positions-panel');
         await expect(positionsPanel).toBeVisible({timeout: 5_000});
         await positionsPanel.scrollIntoViewIfNeeded();
@@ -573,7 +566,12 @@ test.describe('Gallery Screenshots', () => {
                         await panelLoading.waitFor({state: 'hidden', timeout: 15_000}).catch(() => {});
                     }
 
-                    if (await page.getByTestId('login-page').isVisible({timeout: 1_000}).catch(() => false)) {
+                    if (
+                        await page
+                            .getByTestId('login-page')
+                            .isVisible({timeout: 1_000})
+                            .catch(() => false)
+                    ) {
                         if (attempt === 2) {
                             throw new Error('Dashboard FIFO lots panel redirected to login page during capture.');
                         }
@@ -581,8 +579,14 @@ test.describe('Gallery Screenshots', () => {
                         continue;
                     }
 
-                    const wacChartVisible = await page.getByTestId('lot-wac-price-chart').isVisible({timeout: 10_000}).catch(() => false);
-                    const bubbleTimelineVisible = await page.getByTestId('lot-gantt-chart').isVisible({timeout: 10_000}).catch(() => false);
+                    const wacChartVisible = await page
+                        .getByTestId('lot-wac-price-chart')
+                        .isVisible({timeout: 10_000})
+                        .catch(() => false);
+                    const bubbleTimelineVisible = await page
+                        .getByTestId('lot-gantt-chart')
+                        .isVisible({timeout: 10_000})
+                        .catch(() => false);
                     if (!wacChartVisible || !bubbleTimelineVisible) {
                         if (attempt === 2) {
                             await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 10_000});
@@ -604,7 +608,6 @@ test.describe('Gallery Screenshots', () => {
                 }
             });
         });
-
         test('dashboard transactions tab - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             await setupDashboardMockReport(page);
@@ -1011,6 +1014,10 @@ test.describe('Gallery Screenshots', () => {
             {type: 'TRANSFER', name: 'form-modal-transfer'},
             {type: 'FX_CONVERSION', name: 'form-modal-fxconversion'},
             {type: 'CASH_TRANSFER', name: 'form-modal-cash-transfer'},
+            {type: 'WITHDRAWAL', name: 'form-modal-withdrawal'},
+            {type: 'INTEREST', name: 'form-modal-interest'},
+            {type: 'FEE', name: 'form-modal-fee'},
+            {type: 'TAX', name: 'form-modal-tax'},
         ];
 
         /**
@@ -1930,7 +1937,6 @@ test.describe('Gallery Screenshots', () => {
                 }
             }
         });
-
     });
 
     test.describe('FX', () => {

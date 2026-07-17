@@ -9,17 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.app.schemas.common import BaseListResponse
 
 
-class CountryNormalizationResponse(BaseModel):
-    """Response for country normalization endpoint."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    query: str = Field(..., description="Original query string")
-    iso3_codes: List[str] = Field(..., description="List of ISO-3166-A3 country codes")
-    match_type: str = Field(..., description="Match type: exact, region, multi-match, not_found")
-    error: Optional[str] = Field(None, description="Error message if normalization failed")
-
-
 class CountryListItem(BaseModel):
     """Single country in the country list."""
 

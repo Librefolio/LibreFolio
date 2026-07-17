@@ -577,7 +577,6 @@
       "openQuantity": "Open Quantity",
       "currentValue": "Current Value",
       "fifoPnl": "FIFO P&L",
-      "searchPlaceholder": "Search lots...",
       "noUnifiedLots": "No lots match current filters",
       "noGanttData": "No lot custody history in selected range",
       "inTransit": "In transit",
@@ -632,6 +631,12 @@
         "openQuantity": "Open Quantity",
         "openingPrice": "Opening Unit Price",
         "currentValue": "Current Value",
+        "assetIncome": "Asset income",
+        "marketPnl": "Market P&L",
+        "totalPnl": "Total P&L",
+        "cashYield": "Cash yield",
+        "totalReturn": "Total return",
+        "estimatedAtCost": "Estimated at cost",
         "fifoPnl": "FIFO P&L",
         "openReturn": "Open Return",
         "custodyFragments": "Custody fragments",
@@ -681,7 +686,57 @@
       "viewLotDetail": "View lot detail",
       "viewGanttLot": "Go to lot in Gantt",
       "goToOpeningTransaction": "Go to opening transaction",
-      "copyLotIdentifier": "Copy lot identifier"
+      "copyLotIdentifier": "Copy lot identifier",
+      "actions": "Actions",
+      "assetIncome": "Income",
+      "categoryCost": "Cost",
+      "categoryIncome": "Income",
+      "categoryOther": "Other",
+      "estimatedAtCost": "Estimated at cost",
+      "estimatedAtCostLegend": "Estimated at cost (no market price)",
+      "incomeMarkerAmount": "Amount",
+      "incomeMarkerBroker": "Broker",
+      "incomeMarkerDate": "Transaction date",
+      "incomeMarkerDividend": "Dividend",
+      "incomeMarkerInterest": "Interest",
+      "incomeMarkerLotCount": "Lots involved",
+      "incomeMarkerType": "Type",
+      "lotIdentifierCopied": "Lot identifier copied",
+      "lotIdentifierHelp": "Stable technical identifier derived from the opening transaction, used for audit, support and API correlation.",
+      "openingBroker": "Opening broker",
+      "otherEffectsBroker": "Broker",
+      "otherEffectsCategory": "Category",
+      "otherEffectsDescription": "Description",
+      "otherEffectsPeriodPnl": "Period P&L",
+      "otherEffectsSubtitle": "Income and costs not allocated to lots",
+      "otherEffectsTitle": "Other effects for the period",
+      "otherReconciliationResidual": "Reconciliation residual",
+      "performanceAbsMode": "ABS",
+      "performancePctMode": "%",
+      "performanceBubbleEmpty": "No LONG lots to display",
+      "performanceBubbleTitle": "Lot performance",
+      "performanceNoData": "No data",
+      "totalPnl": "Total P&L",
+      "unallocatedCosts": "Unallocated costs",
+      "unallocatedIncome": "Unallocated income",
+      "tooltip": {
+        "opening": "Opening",
+        "openingType": "Type",
+        "size": "Size",
+        "current": "Current situation",
+        "assetIncome": "Dividends and interest",
+        "valueSource": "Value source",
+        "result": "Result",
+        "marketPnl": "Market P&L",
+        "totalPnl": "Total P&L",
+        "cashYield": "Cash yield"
+      },
+      "valueSource": {
+        "MARKET_PRICE": "Market price",
+        "ESTIMATED_AT_COST": "Estimated at cost"
+      },
+      "viewTimeline": "Timeline",
+      "viewPerformance": "Performance"
     },
     "createdInSystem": "Created in System"
   },
@@ -1100,6 +1155,7 @@
     "headerWarnings": "{warnings} warning(s)",
     "missingPrice": "{count} asset(s) have no market price — excluded from NAV",
     "transactionImplied": "{count} asset(s) still valued at cost — no market price available for over 2 weeks (as of {as_of_date})",
+    "currentPriceAssumedAtCost": "Current price unavailable — open value estimated at cost, market P&L excluded",
     "stalePrice": "{count} asset(s) have outdated prices",
     "missingFx": "Missing FX rates for {count} pair(s) — totals may be incomplete",
     "navIncomplete": "NAV incomplete for {count} day(s) between {date_from} and {date_to}",
@@ -1298,7 +1354,19 @@
     "insertManually": "Insert Manually",
     "syncDisabledManual": "Sync disabled — no provider configured. Add a provider or insert rates manually.",
     "editorTipDesktop": "Double-click on the chart to jump to that date",
-    "editorTipMobile": "Long-press on the chart to jump to that date"
+    "editorTipMobile": "Long-press on the chart to jump to that date",
+    "aiExportMenu": {
+      "fx_snapshot": {
+        "label": "FX Snapshot",
+        "description": "Current snapshot of this currency pair's rate, in both directions."
+      },
+      "fx_trend": {
+        "label": "Explain Rate Trend",
+        "description": "Research this currency pair online and explain why the rate is moving in its current direction."
+      }
+    },
+    "aiExport": "AI Export",
+    "aiExportBuilding": "Building export…"
   },
   "help": {
     "helpAndSupport": "Help & Support",
@@ -1449,7 +1517,7 @@
       "require_email_verification": "Require Email Verification",
       "max_file_upload_mb": "Max File Upload Size",
       "default_language": "Default Language",
-      "scheduler_enabled": "Scheduler Enabled",
+      "default_theme": "Default Theme",
       "scheduler_current_price_frequency_minutes": "Price Refresh Frequency",
       "scheduler_history_sync_times": "History Sync Times",
       "scheduler_history_sync_days": "History Sync Days",
@@ -1462,6 +1530,7 @@
       "max_file_upload_mb": "Maximum file size allowed for uploads",
       "default_currency": "Default currency for new users",
       "default_language": "Default language for new users",
+      "default_theme": "Default theme for new users",
       "scheduler_enabled": "Enable or disable the automatic market data scheduler",
       "scheduler_current_price_frequency_minutes": "How often current prices are refreshed (in minutes)",
       "scheduler_history_sync_times": "Times of day when historical data is synced (server time)",
@@ -1680,11 +1749,14 @@
       "serverError": "Save failed — server error"
     },
     "costBasisOverride": {
-      "tooltip": "Override of the weighted avg cost. If empty, auto-calculated from purchases at save. Override for Exit Tax, inheritance, or special fiscal rules.",
+      "tooltip": "Override of the weighted avg cost. If empty, auto-calculated from purchases at save. Override for Exit Tax, inheritance, or special fiscal rules. Use the Total/Per unit toggle below to choose how this amount is entered.",
       "warningAdjustment": "No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift."
     },
     "wacPreview": {
       "calculating": "Calculating...",
+      "unitModeLabel": "Show as:",
+      "unitModeTotal": "Total",
+      "unitModePerUnit": "Per unit",
       "suggested": "Suggested WAC",
       "txsUsed": "transactions used",
       "missingFx": "Cannot calculate WAC: missing FX rate",

@@ -6,6 +6,7 @@
  */
 
 import {zodiosApi} from '$lib/api';
+import {ensureAssetPriceRangeLoaded} from '$lib/stores/assetPriceStoreRegistry';
 import {getAssetInfo, ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
 import {buildTechnicalContext, type TechnicalExportInput} from './technical/technicalExportBuilder';
 import {getResponseLanguage} from './templates/languageMap';
@@ -468,12 +469,13 @@ function buildTechnicalInputs(positions: InternalPosition[], missingAssetIds: Se
         seen.add(p._assetId);
 
         inputs.push({
-            assetId: p._assetId,
             assetName: p.name,
             identifiers: p.identifiers,
-            currency: p.currency,
+            loadPrices: (loadStart, endDate) =>
+                ensureAssetPriceRangeLoaded(p._assetId, p.currency, loadStart, endDate, {
+                    targetCurrency: options.targetCurrency,
+                }).then((prices) => prices.map((price) => ({date: price.date, value: price.close, backwardFillInfo: price.backwardFillInfo}))),
             endDate: options.dateTo ?? new Date().toISOString().slice(0, 10),
-            targetCurrency: options.targetCurrency,
         });
     }
 

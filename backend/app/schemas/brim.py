@@ -181,27 +181,6 @@ class BRIMExtractedAssetInfo(BaseModel):
     extracted_name: Optional[str] = Field(default=None, description="Asset name/description from report")
 
 
-# =============================================================================
-# PLUGIN PREVIEW METADATA
-# =============================================================================
-
-
-class BRIMPreviewColumn(BaseModel):
-    """Column metadata for the Staging Modal preview table.
-
-    The frontend uses this to render a dynamic table per plugin with
-    appropriate widths/alignments and i18n labels.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    key: str = Field(..., description="Field key in the TX / event row")
-    label: str = Field(..., description="Column label (frontend passes through i18n)")
-    type: Literal["text", "number", "date", "currency", "enum", "boolean"] = Field(..., description="Data type of the column")
-    width: Optional[str] = Field(None, description="CSS width (e.g., '120px', '10%')")
-    align: Optional[Literal["left", "center", "right"]] = Field(None, description="Text alignment")
-
-
 class BRIMPluginInfo(BaseModel):
     """
     Information about an available import plugin.
@@ -217,7 +196,6 @@ class BRIMPluginInfo(BaseModel):
             for the same file would change. The frontend compares this
             with ``BRIMFileInfo.parsed_plugin_version`` to decide whether a
             cached parse is stale.
-        preview_columns: Columns metadata for the Staging Modal preview
         detection_priority: Priority for auto-detection (higher = checked first).
             100+ for broker-specific, 50-99 for semi-generic, 0-49 for fallbacks.
     """
@@ -229,7 +207,6 @@ class BRIMPluginInfo(BaseModel):
     icon_url: Optional[str] = Field(None, description="URL to broker icon/logo (absolute URL or relative path)")
     docs_url: Optional[str] = Field(None, description="URL to the plugin documentation page")
     plugin_version: str = Field(..., description="Semver of the parsing logic; bumped when plugin output would change for the same input")
-    preview_columns: List[BRIMPreviewColumn] = Field(default_factory=list, description="Columns metadata for the Staging Modal preview table")
     detection_priority: int = Field(100, description="Priority for auto-detection (higher = checked first). 100+ broker-specific, 50-99 semi-generic, 0-49 fallbacks")
 
 

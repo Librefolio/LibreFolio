@@ -33,7 +33,6 @@ from backend.app.schemas.brim import (
     BRIMExtractedAssetInfo,
     BRIMParseOutput,
     BRIMPluginInfo,
-    BRIMPreviewColumn,
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
@@ -67,15 +66,6 @@ IBKR_DEFAULT_CURRENCY_SAMPLE = SAMPLE_DIR / "ibkr-default-currency-export.csv"
 # matches the sibling real-export samples, but the row values were not verified
 # against an actual account export. Replace with a real (anonymized) export row
 # for each as soon as one becomes available.
-
-_BASELINE_COLUMN_KEYS = {
-    "date",
-    "type",
-    "quantity",
-    "asset",
-    "cash_amount",
-    "cash_currency",
-}
 
 
 def _all_plugins() -> list[tuple[str, BRIMProvider]]:
@@ -223,21 +213,11 @@ class TestBRIMPlugin:
         if url is not None:
             assert isinstance(url, str) and url.strip()
 
-    def test_preview_columns_baseline(self, code: str, plugin: BRIMProvider):
-        cols = plugin.preview_columns()
-        assert isinstance(cols, list) and cols, f"{code} preview_columns must be a non-empty list"
-        for col in cols:
-            assert isinstance(col, BRIMPreviewColumn)
-        keys = {c.key for c in cols}
-        missing = _BASELINE_COLUMN_KEYS - keys
-        assert not missing, f"{code} missing baseline columns: {missing}"
-
     def test_to_plugin_info_propagates_fields(self, code: str, plugin: BRIMProvider):
         info = plugin.to_plugin_info()
         assert isinstance(info, BRIMPluginInfo)
         assert info.code == code
         assert info.plugin_version == plugin.plugin_version
-        assert info.preview_columns == plugin.preview_columns()
         assert info.docs_url == plugin.docs_url
 
     # --- Parse behaviour ---
