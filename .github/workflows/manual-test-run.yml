@@ -1,0 +1,91 @@
+name: Manual Test Run (Resumable)
+run-name: Manual Test Run — ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read      # Required to checkout repository contents
+
+jobs:
+  run-tests:
+    name: Full Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      # ==========================================
+      # 1. BASE SETUP (Checkout & Environments)
+      # ==========================================
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install Pipenv
+        run: pip install pipenv
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      # ==========================================
+      # 2. CACHES
+      # ==========================================
+      - name: Cache Pipenv
+        uses: actions/cache@v5
+        with:
+          path: ~/.local/share/virtualenvs
+          key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pipenv-
+
+      - name: Cache NPM
+        uses: actions/cache@v5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # For Playwright we use a fixed cache per version
+      - name: Get Playwright version (from package.json)
+        id: playwright-version
+        working-directory: ./frontend
+        run: echo "PLAYWRIGHT_VERSION=$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/[\^~]/g, '')" || echo 'fallback')" >> $GITHUB_ENV
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+
+      # ==========================================
+      # 3. INSTALLATION & TESTS
+      # ==========================================
+      - name: Install Python Dependencies
+        run: pipenv install --dev
+
+      - name: Install Frontend & Playwright Dependencies (via dev.py)
+        timeout-minutes: 15
+        run: pipenv run ./dev.py install
+
+      - name: Run Complete Test Suite
+        id: run_tests
+        timeout-minutes: 180
+        run: pipenv run ./dev.py test --fresh-run --quiet all
+
+      # Upload resume cache on both pass/fail so dev can download file, place it at
+      # scripts/test_runner/.run_cache.json locally, then run:
+      #   ./dev.py test --resume all
+      # if: always() matters because normal step failures would otherwise skip upload.
+      - name: Upload test run cache
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-run-cache-${{ github.run_id }}
+          path: scripts/test_runner/.run_cache.json
+          if-no-files-found: warn
+          retention-days: 14
