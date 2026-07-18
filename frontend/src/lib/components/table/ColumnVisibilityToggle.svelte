@@ -76,22 +76,35 @@
     function updatePosition() {
         if (!triggerEl) return;
         const rect = triggerEl.getBoundingClientRect();
-        const dropH = 300; // estimated max dropdown height
-        const spaceBelow = window.innerHeight - rect.bottom - 8;
-        const spaceAbove = rect.top - 8;
+        const margin = 8;
+        // Must match the dropdown's CSS `max-h-[400px]` cap (bugfix: this was previously
+        // 300, which under-estimated the real height for tables with many columns — e.g.
+        // the lots table's 13 columns push the rendered list past 300px — causing the
+        // "open above" branch to compute a negative `bottom`/off-screen `top` and render
+        // the dropdown fully or partially outside the viewport, i.e. invisible.
+        const dropH = 400;
+        const spaceBelow = window.innerHeight - rect.bottom - margin;
+        const spaceAbove = rect.top - margin;
         const openAbove = spaceBelow < dropH && spaceAbove > spaceBelow;
-        const top = openAbove ? 'auto' : `${rect.bottom + 4}px`;
-        const bottom = openAbove ? `${window.innerHeight - rect.top + 4}px` : 'auto';
+        const preferredTop = openAbove ? rect.top - dropH - 4 : rect.bottom + 4;
+        // Clamp so the dropdown always stays fully within the viewport vertically,
+        // regardless of where the trigger button sits (even near the top/bottom edge).
+        const maxTop = Math.max(margin, window.innerHeight - dropH - margin);
+        const top = Math.min(Math.max(preferredTop, margin), maxTop);
         const right = window.innerWidth - rect.right;
-        dropdownStyle = `position: fixed; top: ${top}; bottom: ${bottom}; right: ${right}px; z-index: 9999;`;
+        dropdownStyle = `position: fixed; top: ${top}px; right: ${right}px; z-index: 9999;`;
     }
 
-    // Close dropdown on external scroll (ignore internal dropdown scrolling)
+    // Keep the dropdown anchored to the trigger while the page scrolls (ignore internal
+    // dropdown scrolling). Bugfix: this used to *close* the dropdown on any scroll, which
+    // raced with scroll-into-view side effects that can happen right as/after the trigger
+    // is clicked (e.g. bringing an off-screen button into view), instantly re-closing a
+    // dropdown that had just opened — looking like the click "did nothing".
     $effect(() => {
         if (!open) return;
         const handleScroll = (e: Event) => {
             if (dropdownRef && dropdownRef.contains(e.target as Node)) return;
-            close();
+            updatePosition();
         };
         window.addEventListener('scroll', handleScroll, true);
         return () => window.removeEventListener('scroll', handleScroll, true);
