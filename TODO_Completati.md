@@ -444,3 +444,36 @@ Aggiunto AI export su `/fx/[pair]`, mirror ridotto (2 varianti) del pattern asse
 - `frontend/src/lib/features/ai-export/fx/*` (nuovo)
 - `frontend/src/routes/(app)/fx/[pair]/+page.svelte`
 - `frontend/src/lib/i18n/{en,it,fr,es}.json`
+
+---
+
+## 💸 BRIM: FEE/TAX non collegati all'asset — Fase 1 (fix import) ✅
+
+**Data aggiunta**: 17 Luglio 2026 (bug), 18 Luglio 2026 (fix Fase 1)
+**Data completamento**: 18 Luglio 2026 (solo Fase 1 — Fase 2 motore FIFO/lotti resta aperta in `TODO_ProssimeAttivita.md`)
+**Status**: ✅ Fase 1 COMPLETATA
+
+### Completato
+
+Correzione di un errore dell'audit originale (17/07): riverificando riga-per-riga contro i CSV campione bundled nel repo (`sample_reports/`), il bug reale era più circoscritto dei "7 plugin" documentati:
+
+| Plugin | Verificato | Esito |
+|---|---|---|
+| Directa | 🐛 confermato (CSV reale utente: `Rit.cedola obb.` con ISIN identico al BUY) | **Fix applicato** |
+| Schwab | 🐛 confermato — prova nel sample bundled `schwab-export.csv:105-106` (`ADR Mgmt Fee`/`Foreign Tax Paid`, `Symbol=IBN`) | **Fix applicato** |
+| Finpension | ⚠️ FEE strutturalmente di conto, sample bundled con ISIN sempre vuoto | **Fix difensivo** (no-op oggi) |
+| Revolut | ⚠️ idem (custody fee, ticker sempre vuoto) | **Fix difensivo** (no-op oggi) |
+| eToro | ✅ non era questo bug — "Withdraw Fee"/"Conversion Fee" scartate a monte (`SKIP_TYPES`), mai create come transazione | **Non toccato**, segnalato come bug diverso in `TODO_FUTURI.md` |
+| Freetrade | ✅ non era questo bug — nessun tipo FEE/TAX nel mapping | **Non toccato** |
+| Trading212 | ✅ non era questo bug — TAX già collegato correttamente (riuso `asset_id` dalla transazione madre) | **Non toccato** |
+
+Pattern di fix: nuova categoria `asset_optional` per FEE/TAX accanto alla `asset_required` esistente — collega l'asset se ISIN/ticker/symbol presente sulla riga, mai skip della riga né placeholder fittizio se il dato è genuinamente assente (fee di conto). Verificato che una versione naive ("aggiungi FEE/TAX ad `asset_required`") avrebbe introdotto un bug peggiore: placeholder fittizio per ogni fee di conto in Directa, transazione **interamente scartata** (non solo non collegata) negli altri plugin con pattern skip-on-missing.
+
+4 nuovi test in `test_brim_providers.py` (`test_directa_parse_sample_links_tax_to_asset`, `test_schwab_parse_sample_links_adr_fee_and_tax_to_asset`, `test_finpension_parse_sample_fee_without_asset_stays_unlinked`, `test_revolut_parse_sample_fee_without_asset_stays_unlinked`), tutti su sample CSV già bundled nel repo (nessuna fixture sintetica necessaria — i sample di Directa e Schwab contenevano già righe reali col bug, semplicemente non testate prima). 199/199 test passano (195 preesistenti + 4 nuovi). Lint/format puliti su tutti i file toccati.
+
+**Fase 2 (integrare il costo nel motore FIFO/lotti) resta aperta**, tracciata come item 0 in `TODO_ProssimeAttivita.md` — rimandata dall'utente a dopo il lavoro principale in corso.
+
+### File coinvolti
+
+- `backend/app/services/brim_providers/{broker_directa,broker_schwab,broker_finpension,broker_revolut}.py`
+- `backend/test_scripts/test_external/test_brim_providers.py`
