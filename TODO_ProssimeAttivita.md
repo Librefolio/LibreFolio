@@ -10,18 +10,23 @@ Backlog azionabile e ordinato per complessità (facile → complesso), con impat
 
 ## 🔴 PRIORITÀ ALTA — fuori dall'ordinamento per complessità
 
-### 0. 💸 BRIM: FEE/TAX non collegati all'asset — verifica e consolidamento — Cx: M/L — Imp: **Alto** (correttezza dati fiscali/cost basis)
+### 0. 💸 BRIM: FEE/TAX non collegati all'asset — Fase 2 residua (motore FIFO/lotti) — Cx: M/L — Imp: **Alto** (correttezza dati fiscali/cost basis)
 
-**Bug confermato** (non solo idea) — dettaglio completo in `TODO_FUTURI.md`. Riassunto:
+**Fase 1 (fix import) ✅ COMPLETATA il 18 Luglio 2026** — dettaglio completo in `TODO_Completati.md`. Riassunto della correzione fatta e di un **errore di audit del 17/07 corretto durante l'esecuzione**:
 
-- **Directa**: confermato con export reale dell'utente — righe `Rit.cedola obb.` (TAX) hanno ISIN/ticker identici alla riga di acquisto originale, ma `broker_directa.py:306-312` esclude esplicitamente FEE/TAX dalla risoluzione asset → `asset_id` resta sempre `NULL` anche quando risolvibile
-- Stesso pattern (bug) confermato anche in `broker_etoro.py`, `broker_finpension.py`, `broker_freetrade.py`, `broker_revolut.py`, `broker_schwab.py`, `broker_trading212.py` (7 plugin su 11)
-- 4 plugin già corretti, da usare come riferimento per il fix: `broker_ibkr.py`, `broker_coinbase.py` (riusano l'`asset_id` della riga trade genitrice), `broker_degiro.py` (mappa tipo→`requires_asset` già case-by-case — il pattern più maturo), `broker_generic_csv.py` (collega se il CSV sorgente fornisce l'asset — gap qui potrebbe essere dati utente, non bug, da verificare a parte)
-- **Gap di calcolo separato dal gap di dati**: anche quando `asset_id` è già corretto, il Portfolio Engine (`portfolio_service.py:1698-1700`) già lo attribuisce correttamente alla posizione — ma il **motore FIFO/Lotti** (`fifo_utils.py`, `_HOLDING_TYPES = {BUY, SELL}`) lo ignora sempre, non impatta mai il cost basis/WAC del lotto
+- Riverificando riga-per-riga (non solo il pattern `asset_required`, ma cosa producono davvero i TYPE_MAPPINGS e i CSV campione bundled), solo **Directa e Schwab** avevano il bug reale (confermato con CSV utente + sample bundled); **Finpension e Revolut** hanno ricevuto un fix difensivo (no-op con dati reali odierni); **eToro, Freetrade, Trading212 NON erano affetti** da questo bug — l'audit originale del 17/07 li includeva per errore nella lista dei "7 plugin"
+- Scoperta collaterale: eToro scarta "Withdraw Fee"/"Conversion Fee" del tutto (mai creati come transazione) — bug diverso, segnalato come nuova voce separata in `TODO_FUTURI.md`, non corretto
+- Pattern di fix: nuova categoria `asset_optional` per FEE/TAX (accanto a `asset_required`) — collega se ISIN/ticker/symbol presente, mai skip/placeholder se assente
+- 4 nuovi test in `test_brim_providers.py`, tutti su sample CSV già bundled (nessuna fixture sintetica), 199/199 pass
 
-**Target definito dall'utente**: 2 fasi — (1) fix import per collegare l'asset quando risolvibile dal broker, (2) se l'asset è dichiarato → il costo entra nella FIFO/analisi lotti (cost basis del lotto); se non è dichiarato → resta costo generico di broker nel Portfolio Engine (comportamento già corretto oggi per quel ramo).
+**Fase 2 (integrazione nel calcolo) — ancora da fare, rimandata dall'utente**:
 
-⚠️ **Nessun codice da toccare finché non c'è un piano dedicato** — richiesta esplicita dell'utente, questa voce è solo tracciamento.
+- **Gap di calcolo**: anche con `asset_id` ora corretto, il Portfolio Engine (`portfolio_service.py:1698-1700`) già lo attribuisce correttamente alla posizione — ma il **motore FIFO/Lotti** lo ignora sempre, non impatta mai il cost basis/WAC del lotto
+- **Complicazione emersa (18/07)**: esistono 3 motori di calcolo separati nel backend — `wac_utils.py` (WAC/PMC a pool, usato ovunque in dashboard/asset-detail), `fifo_lot_engine.py` (motore a lotti event-sourced, 1002 righe, appena riscritto per il pannello Analisi Lotti, nessun concetto di FEE/TAX), e il meccanismo pro-rata appena scritto per i dividendi (`_allocate_asset_income`, metrica separata che non muta il costo base del lotto). La scelta del meccanismo (mutare `original_cost` dentro `fifo_lot_engine.py` vs. metrica ausiliaria mirror di `asset_income`) va decisa in un piano dedicato — **non affrontare senza un piano**, il motore lotti è appena stabilizzato e delicato (UI Gantt/custody).
+
+**Target definito dall'utente**: se l'asset è dichiarato → il costo entra nella FIFO/analisi lotti (cost basis del lotto); se non è dichiarato → resta costo generico di broker nel Portfolio Engine (comportamento già corretto oggi per quel ramo).
+
+⚠️ **Nessun codice da toccare finché non c'è un piano dedicato per la Fase 2** — l'utente la affronterà lui stesso dopo il lavoro principale in corso.
 
 ---
 

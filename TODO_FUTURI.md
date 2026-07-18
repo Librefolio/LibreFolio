@@ -121,9 +121,9 @@ La visibilità dei dati di altri utenti da parte del superuser deve essere ripen
 ## 💸 BRIM: FEE/TAX non collegati all'asset — verifica e consolidamento transazioni
 
 **Data aggiunta**: 17 Luglio 2026
-**Status**: 🐛 BUG CONFERMATO (Directa, con export reale) + sospetto sistemico su altri plugin
-**Priorità**: Alta
-**Scope**: Backend (11 plugin BRIM) + Motore FIFO/Lotti + Portfolio Engine
+**Status**: ✅ Fase 1 (import) COMPLETATA il 18 Luglio 2026 — Fase 2 (motore FIFO/lotti) ancora da fare, rimandata dall'utente
+**Priorità**: Alta (Fase 2 residua)
+**Scope**: Fase 1 fatta su 4 plugin BRIM (Directa, Schwab, Finpension, Revolut) — Fase 2 residua su Motore FIFO/Lotti + Portfolio Engine
 
 ### Contesto
 
@@ -147,21 +147,29 @@ asset_required = tx_type in [
 ```
 `ticker`/`isin` vengono letti dalla riga (righe 300-301) ma **buttati via** per FEE/TAX — `asset_id` resta sempre `None` per questi tipi, anche quando il dato sorgente lo renderebbe risolvibile 1:1.
 
-### Verifica sugli altri 10 plugin BRIM (17 Luglio 2026)
+### Verifica sugli altri 10 plugin BRIM — **CORRETTA il 18 Luglio 2026**
 
-Stesso pattern (`asset_required`/`asset_required_types` che esclude FEE/TAX) trovato anche in:
-- `broker_etoro.py:260-264`, `broker_finpension.py:191-195`, `broker_freetrade.py:232-236`, `broker_revolut.py:272-276`, `broker_trading212.py:237-241` — tutti escludono FEE/TAX (e INTEREST)
-- `broker_schwab.py:274-279` — esclude FEE/TAX (include BUY/SELL/DIVIDEND/ADJUSTMENT)
+⚠️ **La verifica del 17/07 sotto era imprecisa**: elencava 7 plugin come affetti dallo stesso bug solo in base al pattern `asset_required` che esclude FEE/TAX, senza verificare se quei tipi (a) vengono davvero prodotti dal plugin e (b) se il CSV sorgente porta davvero ISIN/ticker su quelle righe. Riverifica riga-per-riga (18/07) contro i CSV campione bundled nel repo (`sample_reports/`), risultato **molto più circoscritto**:
 
-Al contrario, **4 plugin già implementano il pattern corretto** (riferimento da riusare per il fix):
+| Plugin | Verificato (18/07) |
+|---|---|
+| **Directa** | 🐛 Bug reale confermato (CSV utente + sample bundled: `Rit.cedola obb.`/`Rit.provento etf` con ISIN) |
+| **Schwab** | 🐛 Bug reale confermato — prova nel sample bundled (`schwab-export.csv:105-106`): `ADR Mgmt Fee`/`Foreign Tax Paid` con `Symbol=IBN` popolato, oggi scartato |
+| **Finpension** | ⚠️ FEE esiste (`flat-rate administrative fee`) ma è strutturalmente di conto — il sample bundled mostra ISIN/Asset Name sempre vuoti per questo tipo; fix applicato in modo difensivo (no-op con dati reali odierni) |
+| **Revolut** | ⚠️ FEE esiste (`custody fee`), stesso discorso — sample bundled mostra Ticker sempre vuoto; fix difensivo |
+| **eToro** | ✅ **Non è questo bug** — "Withdraw Fee"/"Conversion Fee" sono in `SKIP_TYPES`: mai creati come transazione FEE/TAX, scartati a monte. La docstring del file (riga 20) dice "→ FEE" ma il codice fa altro — **bug diverso** (transazioni perse, non solo non collegate), segnalato in una voce separata sotto, non corretto qui |
+| **Freetrade** | ✅ Non affetto — nessun tipo FEE/TAX esiste nel `TYPE_MAPPINGS` |
+| **Trading212** | ✅ Non affetto — la ritenuta (`TAX`) è già creata riusando `asset_id` della transazione madre, stesso pattern corretto di IBKR/Coinbase; nessun FEE nel mapping principale |
+
+Al contrario, i pattern di riferimento restano validi:
 - `broker_ibkr.py:229-247` — la commissione generata riusa **lo stesso `asset_id`** già risolto per la riga BUY/SELL genitrice (stesso ISIN, stessa riga sorgente)
 - `broker_coinbase.py:283-303` — stesso pattern: FEE riusa l'`asset_id` della transazione principale sulla stessa riga
-- `broker_degiro.py:87-103` — il più sofisticato: la mappa tipo→`(TransactionType, requires_asset: bool)` distingue già caso per caso (`dividendbelasting`/ritenuta dividendo → `True`, `transactiekosten`/commissioni → `True`, ma `aansluitingskosten`/connection fee e `connection fee` → `False`, corretamente, perché sono costi di conto non legati a un asset)
+- `broker_degiro.py:87-103` — il più sofisticato: la mappa tipo→`(TransactionType, requires_asset: bool)` distingue già caso per caso
 - `broker_generic_csv.py:563-576` — non esclude FEE/TAX per tipo: collega l'asset se il campo "asset" della riga CSV è popolato, altrimenti no. **Nota dell'utente**: per questo plugin il gap osservato potrebbe essere dovuto a come l'utente ha generato/compilato il proprio CSV, non necessariamente a un bug di codice — da verificare caso per caso, non presumere colpa del plugin.
 
 ### Perché conta (lato calcolo, non solo dato)
 
-Anche quando `asset_id` **è già** popolato correttamente (i 4 plugin sopra), oggi il beneficio si ferma a metà strada:
+Anche quando `asset_id` **è già** popolato correttamente, oggi il beneficio si ferma a metà strada:
 - ✅ **Portfolio Engine** (`portfolio_service.py:1698-1700`, funzione period P&L per posizione) **già** distingue FEE/TAX con `asset_id` (attribuiti alla posizione, riga `per_fees_taxes[(broker_id, tx.asset_id)]`) da FEE/TAX senza (`unalloc_fees[broker_id]`, costo generico di broker) — la docstring lo dice esplicitamente: *"Fees/taxes without asset_id go to raw unallocated buckets"* (riga 1637). Questa metà del lavoro richiesto **esiste già**.
 - ❌ **Motore FIFO / Lotti** (`fifo_utils.py`, `_HOLDING_TYPES = {BUY, SELL}` in `portfolio_service.py:732`) **ignora sempre** FEE/TAX, anche quelli con `asset_id` popolato — non entrano nel calcolo del cost basis/WAC del lotto (`compute_wac_iterative`, righe 1111/1736/1791/1818 — tutte alimentate da transazioni filtrate a `_HOLDING_TYPES`). Una ritenuta su cedola o una commissione di acquisto oggi **non altera mai** il prezzo medio di carico del lotto, nemmeno quando sappiamo con certezza a quale asset appartiene.
 
@@ -169,20 +177,45 @@ Anche quando `asset_id` **è già** popolato correttamente (i 4 plugin sopra), o
 
 Il TODO **non è solo "fixare i plugin"**, ma un lavoro di verifica e consolidamento in 2 fasi:
 
-1. **Verifica/consolidamento import**: passare in rassegna tutti gli 11 plugin BRIM e garantire che FEE/TAX collegano `asset_id` quando il broker fornisce un identificativo asset (ISIN/ticker) sulla stessa riga/contesto — riusando il pattern già corretto (ibkr/coinbase/degiro/generic_csv) invece di reinventarlo. Dove il broker non fornisce alcun identificativo (es. commissione di conto, bollo forfettario), il costo resta correttamente senza `asset_id`.
-2. **Integrazione nel calcolo**: quando `asset_id` è dichiarato, il costo (FEE/TAX) deve confluire nella FIFO/analisi lotti (impattare cost basis/WAC del lotto specifico) — non solo nel report di periodo per-posizione come oggi. Quando `asset_id` non è dichiarato (davvero generico), deve **restare** un costo di broker nel Portfolio Engine, esattamente come già accade oggi in `positions_contribution`.
+1. **Verifica/consolidamento import** — ✅ **FATTO il 18 Luglio 2026** (vedi sotto).
+2. **Integrazione nel calcolo**: quando `asset_id` è dichiarato, il costo (FEE/TAX) deve confluire nella FIFO/analisi lotti (impattare cost basis/WAC del lotto specifico) — non solo nel report di periodo per-posizione come oggi. Quando `asset_id` non è dichiarato (davvero generico), deve **restare** un costo di broker nel Portfolio Engine, esattamente come già accade oggi in `positions_contribution`. **Ancora da fare** — rimandata dall'utente, verrà affrontata a parte dopo il lavoro principale in corso (tocca il motore FIFO/lotti appena riscritto, serve un piano dedicato).
 
-### Non fare per ora
+### ✅ Fase 1 completata — 18 Luglio 2026
 
-Su richiesta esplicita dell'utente, **nessuna modifica al codice** — solo verifica e documentazione. L'implementazione (fix dei 6-7 plugin + estensione del motore FIFO) va pianificata a parte.
+Fix applicato a Directa e Schwab (bug reale) + Finpension e Revolut (fix difensivo, no-op con dati reali odierni). Pattern: nuova categoria `asset_optional` per FEE/TAX accanto alla `asset_required` esistente — collega se ISIN/ticker/symbol presente sulla riga, mai skip della riga né placeholder fittizio se assente (attenzione: una prima versione naive "aggiungi FEE/TAX ad `asset_required`" avrebbe rotto il comportamento — in Directa avrebbe creato un asset fittizio per ogni fee di conto senza ISIN, negli altri 5 plugin con pattern skip-on-missing avrebbe **scartato l'intera transazione** invece di lasciarla solo non collegata).
 
-### File coinvolti (per il piano futuro)
+4 nuovi test in `test_brim_providers.py` (tutti su sample CSV già bundled, nessuna fixture sintetica necessaria — i sample di Directa e Schwab contenevano già righe reali col bug, semplicemente non testate). 199/199 test passano (195 preesistenti + 4 nuovi).
 
-- `backend/app/services/brim_providers/{broker_directa,broker_etoro,broker_finpension,broker_freetrade,broker_revolut,broker_schwab,broker_trading212}.py` — estendere `asset_required`/equivalente per includere FEE/TAX quando ISIN/ticker presente sulla riga
-- `backend/app/services/brim_providers/broker_generic_csv.py` — verificare a parte se è un bug di codice o solo di dati (dubbio esplicito dell'utente)
-- `backend/app/utils/financial/fifo_utils.py` — oggi `calculate_fifo_lots()` filtra solo BUY/SELL; da estendere per assorbire FEE/TAX come aggiustamento del cost basis del lotto interessato
-- `backend/app/services/portfolio_service.py` — `_HOLDING_TYPES`, `get_lots()`, `compute_wac_iterative()`/`compute_wac_iterative_multi_broker()` — punti di alimentazione dati da estendere
-- Test broker-specifici in `backend/test_scripts/test_external/test_brim_providers.py` (uno per plugin)
+eToro/Freetrade/Trading212 non toccati (non affetti da questo bug specifico). `broker_generic_csv.py` non toccato (già corretto).
+
+### File coinvolti (Fase 1, completata)
+
+- `backend/app/services/brim_providers/{broker_directa,broker_schwab,broker_finpension,broker_revolut}.py`
+- `backend/test_scripts/test_external/test_brim_providers.py` (+4 test)
+
+### File coinvolti (Fase 2, da pianificare a parte)
+
+- `backend/app/utils/financial/fifo_utils.py` / `backend/app/services/fifo_lot_engine.py` — motore lotti event-sourced, oggi senza alcun concetto di FEE/TAX
+- `backend/app/utils/financial/wac_utils.py` — motore WAC/PMC a pool, alternativa più leggera
+- `backend/app/services/portfolio_service.py` — `_HOLDING_TYPES`, `compute_wac_iterative()`
+- Nota tecnica (18/07): esistono 3 motori di calcolo separati nel backend (pool WAC, lotti event-sourced, allocazione pro-rata dividendi appena scritta per `_allocate_asset_income`) — la scelta del meccanismo (mutare il costo base del lotto vs. metrica ausiliaria pro-rata mirror di `asset_income`) va decisa nel piano dedicato, non qui.
+
+---
+
+## 🔍 eToro — "Withdraw Fee"/"Conversion Fee" scartate invece di importate come FEE
+
+**Data aggiunta**: 18 Luglio 2026 (scoperto durante la verifica del bug BRIM FEE/TAX sopra)
+**Status**: 🐛 Bug sospetto, **non corretto** — segnalato per decisione separata, come da preferenza dell'utente di non correggere bug fuori scope silenziosamente
+**Priorità**: Da valutare
+
+### Contesto
+
+`backend/app/services/brim_providers/broker_etoro.py` riga 20 (docstring): *"Withdraw Fee / Conversion Fee → FEE"* — ma il codice (righe 72-78, `SKIP_TYPES`) le mette tra i tipi **scartati a monte**, prima ancora di arrivare al mapping tipo. Queste righe non diventano mai una transazione `FEE`: vengono semplicemente perse durante l'import, non solo "non collegate a un asset" (bug diverso da quello appena risolto sopra).
+
+### Da valutare
+
+- Se l'utente vuole effettivamente importare questi costi (coerente con la docstring), serve spostarli da `SKIP_TYPES` a `TYPE_MAPPINGS` con `TransactionType.FEE`, verificando prima il formato reale delle righe eToro per queste 2 voci (non presente nel sample bundled `etoro-export.csv` — servirebbe un export reale o quantomeno la conferma dell'utente sul formato).
+- Se invece lo scarto è intenzionale (es. per evitare doppio conteggio con un'altra riga), la docstring va corretta per riflettere il comportamento reale.
 
 ---
 
