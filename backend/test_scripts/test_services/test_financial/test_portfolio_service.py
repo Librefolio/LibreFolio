@@ -1574,3 +1574,106 @@ class TestPortfolioServiceGetReport:
         second = await service.get_report(user_id=test_user.id, query=query)
 
         assert second.model_dump() == first.model_dump()
+
+    @pytest.mark.asyncio
+    async def test_get_report_narrower_date_to_not_corrupted_by_wider_blob_cache(self, session, test_user, broker_with_access, test_asset):
+        """Regression test for dashboard KPI cards showing 0-delta for a custom date range.
+
+        Root cause: the L1 portfolio "blob" cache (portfolio_engine.py) is keyed by
+        tx/price fingerprints, NOT by date range. Its old "contained" condition
+        (blob_to >= actual_to) returned a wider cached blob unmodified whenever a
+        narrower date_to was requested with an identical fingerprint — which happens
+        whenever no new PriceHistory rows were synced between the two requested end
+        dates (exactly what happens over a weekend). This leaked "phantom" future
+        days (forward-filled from the last known price) into `history`, so the
+        frontend's day-over-day KPI delta (history[-1] - history[-2]) compared two
+        identical phantom days instead of the real last two days, and `get_summary()`
+        reported the wrong end-of-period state.
+        """
+        broker, _ = broker_with_access
+        day1, day2, day3 = date(2025, 6, 1), date(2025, 6, 2), date(2025, 6, 3)
+        day4, day5 = date(2025, 6, 4), date(2025, 6, 5)
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=day1,
+                    amount=Decimal("1000"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=day2,
+                    quantity=Decimal("5"),
+                    amount=Decimal("-500"),
+                    currency="EUR",
+                ),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=day2,
+                    open=Decimal("100"),
+                    high=Decimal("100"),
+                    low=Decimal("100"),
+                    close=Decimal("100"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=day3,
+                    open=Decimal("110"),
+                    high=Decimal("110"),
+                    low=Decimal("110"),
+                    close=Decimal("110"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                # Deliberately no PriceHistory rows after day3: day4/day5 are
+                # backward-filled from day3's close, and the tx/price fingerprint
+                # for date_to=day3 is identical to date_to=day5 — the scenario that
+                # triggers the blob cache bug.
+            ]
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+
+        service = PortfolioService(session)
+
+        # Wide call: populates the L1 blob cache with daily_states day1..day5.
+        wide = await service.get_report(
+            user_id=test_user.id,
+            query=PortfolioReportQuery(
+                broker_ids=[broker.id],
+                include_summary=True,
+                include_history=True,
+                date_range={"start": str(day1), "end": str(day5)},
+            ),
+        )
+        assert [p.date for p in wide.history] == [day1, day2, day3, day4, day5]
+        assert wide.metadata.computed_date_to == day5
+
+        # Narrow call: same tx/price fingerprint as the wide call (no PriceHistory
+        # rows exist between day3 and day5), so the L1 blob cache key collides with
+        # the wide call above. Must NOT reuse the wide blob unmodified.
+        narrow = await service.get_report(
+            user_id=test_user.id,
+            query=PortfolioReportQuery(
+                broker_ids=[broker.id],
+                include_summary=True,
+                include_history=True,
+                date_range={"start": str(day1), "end": str(day3)},
+            ),
+        )
+
+        assert [p.date for p in narrow.history] == [day1, day2, day3]
+        assert narrow.metadata.computed_date_to == day3
+        assert narrow.summary.net_worth.amount == Decimal("1050")
+        # Day-over-day delta (mirrors the frontend KPI calc: history[-1] - history[-2])
+        # must reflect day3 vs day2 (real data), not two identical phantom future days.
+        assert narrow.history[-1].nav_value.amount - narrow.history[-2].nav_value.amount == Decimal("50")

@@ -9,20 +9,16 @@
   Fetch strategy (two tiers, per plan v2 §13 "il frontend non effettua autonomamente ...
   calcoli WAC"):
   - Main fetch (asset/broker/date-range change): LOT_SUMMARY + GANTT_TOPOLOGY +
-    EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY +
-    PERFORMANCE_HISTORY, with NO selected_lot_ids (service defaults to "all lots" — see
+    EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
+    NO selected_lot_ids (service defaults to "all lots" — see
     LotsAnalysisService._resolve_selected_lot_ids). EVENT_HISTORY (superset of the old
     CUSTODY_HISTORY subset) feeds both the WAC chart's transaction markers and the
-    Custody modal's full chronology (refinement v1 §5 / modal spec). PERFORMANCE_HISTORY
-    is asset-wide ROI/TWRR (refinement v2 §5.2), ignores selected_lot_ids just like the
-    WAC series it's plotted alongside. Feeds every component except the comparison
-    chart's Value/Return modes.
+    Custody modal's full chronology (refinement v1 §5 / modal spec). PRICE_HISTORY +
+    BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY feed the WAC/price chart.
   - Selection fetch (effectiveSelectionIds change): VALUE_HISTORY + RETURN_HISTORY scoped to
     the effective lot set. Per plan v3 §13 an empty selectedLotIds means "all visible lots"
     (effectiveSelectionIds), so the comparison chart shows the whole visible set by default and
-    narrows only on an explicit selection. PRICE_HISTORY is NOT re-fetched here: market price
-    doesn't vary by lot, so the main fetch's already-deduped price series is reused for the
-    comparison chart's Price mode too.
+    narrows only on an explicit selection.
 
   Gantt <-> WAC chart zoom/pan stay bidirectionally synced (sharedZoomStart/End), matching
   the old panel's pattern. The comparison chart takes only an *initial* xAxisRange (plan
@@ -57,7 +53,6 @@
     type LotPriceHistoryPoint = z.infer<typeof schemas.LotPriceHistoryPoint>;
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
-    type PerformanceHistoryPoint = z.infer<typeof schemas.PerformanceHistoryPoint>;
     type DateRange = {min: string; max: string};
 
     /**
@@ -107,7 +102,6 @@
     let priceHistory = $state<LotPriceHistoryPoint[]>([]);
     let brokerWacHistory = $state<BrokerWACHistoryPoint[]>([]);
     let cumulativeWacHistory = $state<CumulativeWACHistoryPoint[]>([]);
-    let performanceHistory = $state<PerformanceHistoryPoint[]>([]);
     let incomeEvents = $state<LotIncomeEvent[]>([]);
     let dataQualityIssues = $state<DataQualityIssue[]>([]);
     let computedRange = $state<DateRange | null>(null);
@@ -186,7 +180,7 @@
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
                 date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
-                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'PERFORMANCE_HISTORY', 'INCOME_EVENTS'] as const,
+                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const,
             };
             const response = await zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post(body);
             if (version !== fetchVersion) return; // stale response from a since-superseded open/asset change
@@ -201,9 +195,6 @@
             priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
             brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
             cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
-            // Asset-wide ROI/TWRR (ignores selected_lot_ids, same broker scope as the WAC series
-            // above) — feeds only the WAC/Price chart's percentage mode.
-            performanceHistory = asArray<PerformanceHistoryPoint>(response.performance_history);
             incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
                 type: event.type,
                 date: event.date,
@@ -231,7 +222,6 @@
             priceHistory = [];
             brokerWacHistory = [];
             cumulativeWacHistory = [];
-            performanceHistory = [];
             dataQualityIssues = [];
             incomeEvents = [];
         } finally {
@@ -448,7 +438,6 @@
                     {cumulativeWacHistory}
                     {priceHistory}
                     {lotEvents}
-                    {performanceHistory}
                     {incomeEvents}
                     {brokers}
                     {currency}
@@ -493,7 +482,7 @@
                     onRowDoubleClick={handleTableRowDoubleClick}
                 />
 
-                <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} {priceHistory} {brokerWacHistory} {cumulativeWacHistory} {incomeEvents} {brokers} {currency} {xAxisRange} />
+                <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} {incomeEvents} {brokers} {currency} {xAxisRange} />
             {/if}
         </div>
     </div>

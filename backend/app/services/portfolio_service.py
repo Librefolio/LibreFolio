@@ -668,6 +668,24 @@ def _price_on_date(
     return close, ccy
 
 
+def _daily_state_as_of(daily_states: list[Any], as_of: date_type) -> Any | None:
+    """Return the last daily state with date <= as_of using backward fill.
+
+    daily_states must be sorted ascending by date. Defensive helper: engine_result's
+    daily_states is expected to already be bound to the requested date_to, but this
+    guards downstream consumers against a stale/wider cached blob leaking states
+    beyond the requested range (rather than blindly indexing daily_states[-1]).
+    Returns None if no state exists at or before as_of.
+    """
+    if not daily_states:
+        return None
+    dates = [s.date for s in daily_states]
+    idx = bisect.bisect_right(dates, as_of) - 1
+    if idx < 0:
+        return None
+    return daily_states[idx]
+
+
 def _build_history_series(
     transactions: list[_HistoryTxRow],
     date_to: date_type | None = None,
@@ -891,8 +909,14 @@ class PortfolioService:
     def _compute_period_summary_metrics(
         engine_result: Any,
         date_from: date_type | None,
+        as_of: date_type,
     ) -> dict[str, Decimal | None]:
-        """Compute period NAV/P&L inputs from engine daily states."""
+        """Compute period NAV/P&L inputs from engine daily states.
+
+        as_of: the requested date_to (or today) — the "end" state is looked up
+        by date rather than assumed to be daily_states[-1], as a guard against
+        a stale/wider cached blob leaking states beyond the requested range.
+        """
         metrics: dict[str, Decimal | None] = {
             "period_nav_start_val": None,
             "period_net_flows_val": None,
@@ -908,7 +932,9 @@ class PortfolioService:
             return metrics
 
         zero = Decimal("0")
-        end_state = daily_states[-1]
+        end_state = _daily_state_as_of(daily_states, as_of)
+        if end_state is None:
+            return metrics
         period_ugl_end = end_state.market_value - end_state.open_cost_basis
 
         if date_from:
@@ -998,7 +1024,9 @@ class PortfolioService:
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
 
         # ── 2. Extract aggregate values from last daily state ──
-        last_state = engine_result.daily_states[-1] if engine_result.daily_states else None
+        # Looked up by date (not blindly daily_states[-1]) as a guard against a
+        # stale/wider cached blob leaking states beyond the requested valuation_date.
+        last_state = _daily_state_as_of(engine_result.daily_states, valuation_date)
         engine_nav = last_state.nav_value if last_state else Decimal("0")
         engine_cash = last_state.cash_value if last_state else Decimal("0")
         engine_market_value = last_state.market_value if last_state else Decimal("0")
@@ -1342,7 +1370,7 @@ class PortfolioService:
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
         # ── Period P&L breakdown: NAV, unrealized delta, income, fees ──
-        period_metrics = self._compute_period_summary_metrics(engine_result, date_from)
+        period_metrics = self._compute_period_summary_metrics(engine_result, date_from, valuation_date)
         period_nav_start_val = period_metrics["period_nav_start_val"]
         period_net_flows_val = period_metrics["period_net_flows_val"]
         period_pnl_val = period_metrics["period_pnl_val"]
@@ -1570,6 +1598,11 @@ class PortfolioService:
         for h in history_dicts:
             d = h["date"]
             if date_from and d < date_from:
+                continue
+            # Defensive upper bound: daily_states should already be bound to
+            # date_to by the engine, but guard against a stale/wider cached
+            # blob leaking extra days into the returned history array.
+            if date_to and d > date_to:
                 continue
 
             twrr = twrr_map.get(d)
@@ -1966,7 +1999,7 @@ class PortfolioService:
                 target_currency=base_currency,
             )
 
-        period_metrics = self._compute_period_summary_metrics(engine_result, date_from)
+        period_metrics = self._compute_period_summary_metrics(engine_result, date_from, effective_end)
         period_pnl_total = period_metrics["period_pnl_val"]
         period_ugl_delta = period_metrics["period_ugl_delta"]
         period_other_result: Decimal | None = None

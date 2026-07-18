@@ -9,7 +9,7 @@
     import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
-    import {buildGridColors, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -279,10 +279,16 @@
         return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency);
     }
 
-    function formatPercentField(value: unknown): string {
+    function formatSignedMoneyField(value: unknown): string {
+        const parsed = parseUnknownNumber(value);
+        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {showSign: parsed !== 0});
+    }
+
+    function formatSignedPercentField(value: unknown): string {
         const parsed = parseUnknownNumber(value);
         if (parsed == null) return '—';
-        return `${(parsed * 100).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}%`;
+        const sign = parsed > 0 ? '+' : '';
+        return `${sign}${(parsed * 100).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}%`;
     }
 
     function withAlpha(color: string, alpha: number): string {
@@ -768,53 +774,89 @@
 
     const eventMarkerData = $derived.by((): EventMarkerDatum[] => (events.length > 0 ? buildExplicitEventMarkers() : buildInferredEventMarkers()));
 
+    function firstPresentUnknown(...values: unknown[]): unknown {
+        for (const value of values) {
+            if (Array.isArray(value)) {
+                const scalar = value[0];
+                if (scalar != null) return scalar;
+            } else if (value != null) {
+                return value;
+            }
+        }
+        return undefined;
+    }
+
+    function compactStateLabel(lot: LotModel | undefined, openQuantity: number, originalQuantity: number): string {
+        if (openQuantity <= 0) return translatedOr('brokers.lots.modal.state.closed', 'Closed');
+        if (lot?.states.includes('PARTIALLY_CLOSED') || openQuantity < originalQuantity) return translatedOr('brokers.lots.modal.state.partially_closed', 'Partially closed');
+        return translatedOr('brokers.lots.modal.state.open', 'Open');
+    }
+
+    function latestLotEndDate(lotId: number): string | null {
+        const latest = (segmentModelsByLot.get(lotId) ?? [])
+            .filter((segment) => segment.endDate != null)
+            .sort((a, b) => b.endMs - a.endMs)[0];
+        return latest?.endDate ?? null;
+    }
+
+    function segmentBrokerLabel(meta: RenderedSegment, lot: LotModel | undefined): string {
+        if (meta.custodyType === 'IN_TRANSIT') return `${brokerName(meta.sourceBrokerId)} → ${brokerName(meta.destinationBrokerId)}`;
+        return brokerName(meta.brokerId ?? lot?.openingBrokerId ?? null);
+    }
+
+    function signedColorField(value: unknown, formatter: (v: unknown) => string, themeDark: boolean): string {
+        const num = parseUnknownNumber(value);
+        const text = escapeHtml(formatter(value));
+        if (num == null || num === 0) return text;
+        const color = num > 0 ? (themeDark ? '#4ade80' : '#16a34a') : themeDark ? '#f87171' : '#dc2626';
+        return `<span style="color:${color}">${text}</span>`;
+    }
+
     function buildTooltip(meta: RenderedSegment, themeDark: boolean): string {
         const theme = buildTooltipTheme(themeDark);
         const lot = renderedLanes.find((lane) => lane.lotId === meta.lotId)?.lot;
-        const statusLabel = meta.custodyType === 'IN_TRANSIT' ? $t('brokers.lots.inTransit') || 'In transit' : meta.isOpen ? $t('dashboard.openPositions') || 'Open' : $t('dashboard.closedPositions') || 'Closed';
         const lotDto = lot?.lot;
-        const lotAny = lotDto as (LotSummarySchema & {sale_proceeds?: unknown}) | undefined;
-        const custodyLabel =
-            lotDto?.current_custody
-                ?.map((slice) => {
-                    const qty = formatQuantity(parseNumber(slice.quantity));
-                    return slice.custody_type === 'IN_TRANSIT' ? `${escapeHtml(translatedOr('brokers.lots.inTransitShort', 'Transit'))} · ${escapeHtml(qty)}` : `${escapeHtml(brokerName(safeInt(slice.broker_id)))} · ${escapeHtml(qty)}`;
-                })
-                .join('<br/>') || escapeHtml(meta.custodyType === 'IN_TRANSIT' ? `${brokerName(meta.sourceBrokerId)} → ${brokerName(meta.destinationBrokerId)}` : brokerName(meta.brokerId));
-        const stateLabel = (lot?.states ?? []).map((state) => translatedOr(`brokers.lots.states.${state}`, state)).join(', ') || statusLabel;
+        const openingDate = lot?.openingDate || meta.startDate;
+        const openQuantity = lot?.openQuantity ?? Math.max(0, meta.isOpen ? meta.quantity : 0);
+        const originalQuantity = lot?.originalQuantity ?? Math.max(openQuantity, meta.quantity);
+        const isClosedLot = openQuantity <= 0;
+        const stateLabel = compactStateLabel(lot, openQuantity, originalQuantity);
+        const brokerLabel = segmentBrokerLabel(meta, lot);
         const valueSource = safeUnknownString(lotDto?.value_source);
-        const valueSourceLabel = valueSource ? translatedOr(`brokers.lots.valueSource.${valueSource}`, valueSource === 'ESTIMATED_AT_COST' ? 'Estimated at cost' : 'Market price') : '—';
-        let html = buildTooltipHeader(escapeHtml(lotLabel(lot?.openingDate ?? meta.startDate)), theme.textColor);
-        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.opening', 'Opening'))}</div>`;
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.buyDate', 'Opening date')), escapeHtml(formatDateLong(lot?.openingDate ?? meta.startDate)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.openingType', 'Type')), escapeHtml(eventMarkerLabel(lot?.direction === 'SHORT' ? 'SELL' : 'BUY')));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.direction', 'Direction')), escapeHtml(meta.direction));
-        html += buildTooltipRow(escapeHtml(translatedOr('common.broker', 'Broker')), escapeHtml(brokerName(lot?.openingBrokerId ?? meta.brokerId)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.custody', 'Custody')), custodyLabel);
+        const isEstimatedAtCost = valueSource === 'ESTIMATED_AT_COST';
+        const currentValue = firstPresentUnknown(lotDto?.open_value, lotDto?.total_value);
+        const valueField = isClosedLot ? lotDto?.original_cost : currentValue;
+        const valueLabel = isClosedLot ? translatedOr('brokers.lots.tooltip.initialValue', 'Initial value') : translatedOr('brokers.lots.currentValue', 'Current value');
+        const assetIncome = parseUnknownNumber(lotDto?.asset_income);
+        const quantityLine = isClosedLot
+            ? `${formatQuantity(originalQuantity)} → 0 ${translatedOr('brokers.lots.tooltip.shares', 'shares')}`
+            : `${formatQuantity(openQuantity)} ${translatedOr('brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${formatQuantity(originalQuantity)}`;
+        const closeDate = isClosedLot ? latestLotEndDate(meta.lotId) ?? meta.endDate : null;
+        const footer = isClosedLot
+            ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}`
+            : `${translatedOr('brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
+        let html = buildTooltipHeader(escapeHtml(lotLabel(openingDate)), theme.textColor);
+        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(brokerLabel)} · ${escapeHtml(meta.direction)} · ${escapeHtml(stateLabel)}</div>`;
+        html += `<div style="margin-top:2px;color:${theme.mutedColor}">${escapeHtml(quantityLine)}</div>`;
+        html += buildTooltipDivider(theme.border);
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.openingPriceReference', 'Opening price')), escapeHtml(formatMoneyField(firstPresentUnknown(lotDto?.opening_unit_price, meta.unitPrice))));
+        if (isEstimatedAtCost && !isClosedLot) {
+            const estimatedColor = themeDark ? '#fbbf24' : '#d97706';
+            const estLabel = `<span style="color:${estimatedColor};font-weight:600">⚠ ${escapeHtml(translatedOr('brokers.lots.estimatedCurrentValue', 'Estimated current value'))}</span>`;
+            const estValue = `<span style="color:${estimatedColor}">${escapeHtml(formatMoneyField(valueField))}</span>`;
+            html += buildTooltipRow(estLabel, estValue);
+        } else {
+            html += buildTooltipRow(escapeHtml(valueLabel), escapeHtml(formatMoneyField(valueField)));
+        }
+        if (assetIncome != null && assetIncome !== 0) {
+            html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.assetIncome', 'Income')), signedColorField(assetIncome, formatSignedMoneyField, themeDark));
+        }
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.totalReturn', 'Total return')), signedColorField(lotDto?.total_return, formatSignedPercentField, themeDark));
+        html += buildTooltipDivider(theme.border);
+        html += `<div style="margin-top:4px;color:${theme.mutedColor}">${escapeHtml(footer)}</div>`;
 
-        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.size', 'Size'))}</div>`;
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.modal.originalQuantity', 'Original quantity')), escapeHtml(formatQuantity(lot?.originalQuantity ?? meta.quantity)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.openQuantity', 'Open quantity')), escapeHtml(formatQuantity(lot?.openQuantity ?? meta.quantity)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.modal.openingPrice', 'Opening price')), escapeHtml(formatMoneyField(lotDto?.opening_unit_price ?? meta.unitPrice)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.modal.openingValue', 'Opening value')), escapeHtml(formatMoneyField(lotDto?.original_cost)));
-
-        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.current', 'Current situation'))}</div>`;
-        html += buildTooltipRow(escapeHtml(translatedOr('common.status', 'Status')), escapeHtml(stateLabel));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.currentValue', 'Current value')), escapeHtml(formatMoneyField(lotDto?.open_value ?? lotDto?.total_value)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.chartMarkers.proceeds', 'Proceeds')), escapeHtml(formatMoneyField(lotAny?.sale_proceeds ?? lotDto?.cumulative_proceeds)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.assetIncome', 'Dividends and interest')), escapeHtml(formatMoneyField(lotDto?.asset_income)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.valueSource', 'Value source')), escapeHtml(valueSourceLabel));
-
-        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.result', 'Result'))}</div>`;
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.marketPnl', 'Market P&L')), escapeHtml(formatMoneyField(lotDto?.market_pnl)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.chartMarkers.realizedPnl', 'Realized P&L')), escapeHtml(formatMoneyField(lotDto?.realized_pnl)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.totalPnl', 'Total P&L')), escapeHtml(formatMoneyField(lotDto?.total_pnl ?? lotDto?.pnl)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.openReturn', 'Open Return')), escapeHtml(formatPercentField(lotDto?.relative_return)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.totalReturn', 'Total return')), escapeHtml(formatPercentField(lotDto?.total_return)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.cashYield', 'Cash yield')), escapeHtml(formatPercentField(lotDto?.cash_yield)));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.dateRange', 'Range')), escapeHtml(`${formatDateLong(meta.startDate)} → ${meta.endDate ? formatDateLong(meta.endDate) : '…'}`));
-
-        return `<div style="min-width:240px;font-size:11px;color:${theme.textColor}">${html}</div>`;
+        return `<div style="min-width:250px;font-size:11px;color:${theme.textColor}">${html}</div>`;
     }
 
     function buildOption(themeDark: boolean): echarts.EChartsOption {
@@ -1068,7 +1110,7 @@
             },
             tooltip: {
                 trigger: 'item',
-                position: tooltipPositionSide,
+                position: tooltipPositionAboveFinger,
                 appendTo: 'body',
                 backgroundColor: theme.bg,
                 borderColor: theme.border,

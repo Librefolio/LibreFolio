@@ -19,12 +19,10 @@
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
     type LotPriceHistoryPoint = z.infer<typeof schemas.LotPriceHistoryPoint>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
-    type PerformanceHistoryPoint = z.infer<typeof schemas.PerformanceHistoryPoint>;
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type DisplayMode = 'absolute' | 'percentage';
     type EventMarkerSeriesKind = 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split';
 
-    const DAY_MS = 24 * 60 * 60 * 1000;
     const TRANSFER_MARKER_SYMBOL = 'path://M1 10 L6 5 L6 8 L14 8 L14 5 L19 10 L14 15 L14 12 L6 12 L6 15 Z';
     const SPLIT_MARKER_SYMBOL = 'path://M8 1 H12 V8 H16 V12 H12 V19 H8 V12 H4 V8 H8 Z';
     const MARKER_VERTICAL_OFFSET_STEP = 12;
@@ -58,9 +56,6 @@
         lots?: LotSummarySchema[];
         /** Implicit selection (plan v3 §13): empty = all visible lots; otherwise only these are highlighted. */
         selectedLotIds?: number[];
-        /** Asset-wide ROI/TWRR (ignores selectedLotIds — see LotsAnalysisService._build_performance_history),
-         * plotted only in percentage mode alongside the already-normalized market/WAC series. */
-        performanceHistory?: PerformanceHistoryPoint[];
         /** Asset-linked DIVIDEND/INTEREST transactions (plan v3 §11): rendered as dashed vertical
          * markers on the date of the income transaction. */
         incomeEvents?: ReadonlyArray<LotIncomeEvent>;
@@ -115,9 +110,21 @@
         percent: number | null;
         category: EventMarkerSeriesKind;
         event: LotTimelineEventSchema;
-        marketPriceDate: string;
         transferDepartDate: string | null;
+        transferArriveDate: string | null;
         verticalOffsetPx: number;
+    }
+
+    interface EventStateSnapshot {
+        quantityBefore: number | null;
+        quantityAfter: number | null;
+        unitPriceBefore: number | null;
+        unitPriceAfter: number | null;
+    }
+
+    interface LotEventState {
+        quantity: number | null;
+        unitPrice: number | null;
     }
 
     interface EventMarkerSeries {
@@ -142,7 +149,6 @@
         lotEvents = [],
         lots = [],
         selectedLotIds = [],
-        performanceHistory = [],
         incomeEvents = [],
         brokers = [],
         currency,
@@ -169,6 +175,11 @@
 
     function escapeHtml(value: string): string {
         return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function translatedOr(key: string, fallback: string): string {
+        const translated = $_(key);
+        return !translated || translated === key ? fallback : translated;
     }
 
     function safeScalar<T>(value: T | Array<T | null> | null | undefined): T | null {
@@ -220,32 +231,6 @@
             return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(normalized);
         }
         return normalized.toLocaleString(undefined, {minimumFractionDigits: abs < 10 && abs % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2});
-    }
-
-    function parseDateToUtcMs(value: string | number): number | null {
-        if (typeof value === 'number') {
-            if (!Number.isFinite(value)) return null;
-            const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? null : Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-        }
-
-        const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (dateOnlyMatch) {
-            const [, year, month, day] = dateOnlyMatch;
-            return Date.UTC(Number(year), Number(month) - 1, Number(day));
-        }
-
-        const parsed = Date.parse(value);
-        if (!Number.isFinite(parsed)) return null;
-        const date = new Date(parsed);
-        return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-    }
-
-    function elapsedDaysBetween(start: string, end: string | number): number | null {
-        const startMs = parseDateToUtcMs(start);
-        const endMs = parseDateToUtcMs(end);
-        if (startMs == null || endMs == null || endMs < startMs) return null;
-        return Math.floor((endMs - startMs) / DAY_MS);
     }
 
     function sortDates(a: string, b: string): number {
@@ -324,28 +309,23 @@
         return formatDecimalForDisplay(Math.abs(value), {minFrac: 0, maxFrac: 8});
     }
 
+    function formatSignedQuantityValue(value: number): string {
+        const normalized = normalizeZero(value);
+        const sign = normalized > 0 ? '+' : normalized < 0 ? '-' : '';
+        return `${sign}${formatQuantityValue(normalized)}`;
+    }
+
+    function formatMaybeQuantity(value: number | null): string {
+        return value == null ? '—' : formatQuantityValue(value);
+    }
+
+    function formatMaybeMoney(value: number | null): string {
+        return value == null ? '—' : formatCurrencyAmountPlain(value, currency);
+    }
+
     function eventQuantityText(event: LotTimelineEventSchema): string | null {
         const quantity = parseNumber(event.quantity);
         return quantity == null ? null : formatQuantityValue(quantity);
-    }
-
-    function deriveEventAmount(event: LotTimelineEventSchema): number | null {
-        const quantity = parseNumber(event.quantity);
-        const unitPrice = parseNumber(event.unit_price);
-
-        if (event.kind === 'SELL') {
-            return parseNumber(event.proceeds) ?? (quantity != null && unitPrice != null ? Math.abs(quantity) * unitPrice : null);
-        }
-        if (event.kind === 'BUY') {
-            return quantity != null && unitPrice != null ? -Math.abs(quantity) * unitPrice : null;
-        }
-        if (event.kind === 'ADJUSTMENT_OUT') {
-            return parseNumber(event.proceeds) ?? (quantity != null && unitPrice != null ? -Math.abs(quantity) * unitPrice : null);
-        }
-        if (event.kind === 'ADJUSTMENT_IN') {
-            return quantity != null && unitPrice != null ? Math.abs(quantity) * unitPrice : null;
-        }
-        return null;
     }
 
     function resolveMarketPriceAtOrBefore(date: string, points: ReadonlyArray<MarketPriceLookupPoint>): MarketPriceLookupPoint | null {
@@ -381,6 +361,92 @@
         candidates.sort((left, right) => sortDates(right.date, left.date) || right.transaction_id - left.transaction_id);
         return candidates[0] ?? null;
     }
+
+    function findTransferArriveEvent(departEvent: LotTimelineEventSchema, arriveEvents: ReadonlyArray<LotTimelineEventSchema>): LotTimelineEventSchema | null {
+        const candidates = arriveEvents.filter((candidate) => {
+            if (candidate.lot_id !== departEvent.lot_id) return false;
+            if (sortDates(candidate.date, departEvent.date) < 0) return false;
+            if (candidate.source_broker_id != null && departEvent.source_broker_id != null && candidate.source_broker_id !== departEvent.source_broker_id) return false;
+            if (candidate.destination_broker_id != null && departEvent.destination_broker_id != null && candidate.destination_broker_id !== departEvent.destination_broker_id) return false;
+            if (departEvent.related_transaction_id != null && candidate.transaction_id === departEvent.related_transaction_id) return true;
+            if (candidate.related_transaction_id != null && candidate.related_transaction_id === departEvent.transaction_id) return true;
+            if (departEvent.fragment_id != null && candidate.fragment_id != null && candidate.fragment_id === departEvent.fragment_id) return true;
+            return false;
+        });
+
+        candidates.sort((left, right) => sortDates(left.date, right.date) || left.transaction_id - right.transaction_id);
+        return candidates[0] ?? null;
+    }
+
+    function eventTimelineOrder(event: LotTimelineEventSchema): number {
+        if (event.kind === 'TRANSFER_DEPART') return 0;
+        if (event.kind === 'TRANSFER_ARRIVE') return 1;
+        if (event.kind === 'SPLIT') return 2;
+        if (event.kind === 'BUY' || event.kind === 'ADJUSTMENT_IN') return 3;
+        return 4;
+    }
+
+    function cloneLotEventState(state: LotEventState | undefined): LotEventState {
+        return {quantity: state?.quantity ?? null, unitPrice: state?.unitPrice ?? null};
+    }
+
+    const eventStateSnapshots = $derived.by(() => {
+        const stateByLot = new Map<number, LotEventState>();
+        const snapshots = new Map<string, EventStateSnapshot>();
+        const sortedEvents = [...lotEvents].sort((left, right) => sortDates(left.date, right.date) || eventTimelineOrder(left) - eventTimelineOrder(right) || left.transaction_id - right.transaction_id);
+
+        for (const event of sortedEvents) {
+            const state = cloneLotEventState(stateByLot.get(event.lot_id));
+            const beforeQuantity = state.quantity;
+            const beforeUnitPrice = state.unitPrice;
+            const quantity = parseNumber(event.quantity);
+            const unitPrice = parseNumber(event.unit_price ?? event.open_unit_price ?? event.close_unit_price);
+            const ratio = parseNumber(event.ratio);
+            let afterQuantity = beforeQuantity;
+            let afterUnitPrice = beforeUnitPrice;
+
+            if (event.kind === 'BUY') {
+                const openedQuantity = quantity == null ? null : Math.abs(quantity);
+                const baseQuantity = beforeQuantity ?? 0;
+                afterQuantity = openedQuantity == null ? beforeQuantity : baseQuantity + openedQuantity;
+                afterUnitPrice = unitPrice ?? beforeUnitPrice;
+            } else if (event.kind === 'ADJUSTMENT_IN') {
+                const addedQuantity = quantity == null ? null : Math.abs(quantity);
+                const baseQuantity = beforeQuantity ?? 0;
+                if (addedQuantity != null) {
+                    afterQuantity = baseQuantity + addedQuantity;
+                    if (unitPrice != null && beforeUnitPrice != null && baseQuantity > 0) {
+                        afterUnitPrice = (beforeUnitPrice * baseQuantity + unitPrice * addedQuantity) / afterQuantity;
+                    } else {
+                        afterUnitPrice = unitPrice ?? beforeUnitPrice;
+                    }
+                }
+            } else if (event.kind === 'SELL' || event.kind === 'ADJUSTMENT_OUT') {
+                const closedQuantity = quantity == null ? null : Math.abs(quantity);
+                afterQuantity = beforeQuantity != null && closedQuantity != null ? Math.max(0, beforeQuantity - closedQuantity) : beforeQuantity;
+                afterUnitPrice = beforeUnitPrice;
+            } else if (event.kind === 'SPLIT') {
+                const fallbackAfterQuantity = quantity == null ? null : Math.abs(quantity);
+                const fallbackBeforeQuantity = ratio != null && ratio !== 0 && fallbackAfterQuantity != null ? fallbackAfterQuantity / ratio : null;
+                const splitBeforeQuantity = beforeQuantity ?? fallbackBeforeQuantity;
+                afterQuantity = splitBeforeQuantity != null && ratio != null ? splitBeforeQuantity * ratio : beforeQuantity;
+                afterUnitPrice = beforeUnitPrice != null && ratio != null && ratio !== 0 ? beforeUnitPrice / ratio : beforeUnitPrice;
+            } else if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') {
+                afterQuantity = beforeQuantity ?? (quantity == null ? null : Math.abs(quantity));
+                afterUnitPrice = beforeUnitPrice ?? unitPrice;
+            }
+
+            snapshots.set(eventKey(event), {
+                quantityBefore: beforeQuantity,
+                quantityAfter: afterQuantity,
+                unitPriceBefore: beforeUnitPrice,
+                unitPriceAfter: afterUnitPrice,
+            });
+            stateByLot.set(event.lot_id, {quantity: afterQuantity, unitPrice: afterUnitPrice});
+        }
+
+        return snapshots;
+    });
 
     function buildMarkerSeriesDefinitions(): MarkerSeriesDefinition[] {
         return [
@@ -427,17 +493,14 @@
         const marketPrice = $_('chart.marketPrice');
         const abs = $_('dashboard.abs');
         const pct = $_('dashboard.pct');
-        const days = $_('datePicker.granularity.days');
         const combined = $_('brokers.lots.combined');
         const noData = $_('common.noData');
         const broker = $_('common.broker');
         const quantity = $_('common.quantity');
-        const amount = $_('common.amount');
         const from = $_('common.from');
         const to = $_('common.to');
         const unitPrice = $_('brokers.lots.chartMarkers.unitPrice');
         const transitInterval = $_('brokers.lots.chartMarkers.transitInterval');
-        const ratio = $_('brokers.lots.chartMarkers.ratio');
         const proceeds = $_('brokers.lots.chartMarkers.proceeds');
         const realizedPnl = $_('brokers.lots.chartMarkers.realizedPnl');
         const markerLegendBuy = $_('brokers.lots.chartMarkers.legend.buy');
@@ -452,9 +515,22 @@
         const eventTypeTransferDepart = $_('brokers.lots.chartMarkers.eventType.TRANSFER_DEPART');
         const eventTypeTransferArrive = $_('brokers.lots.chartMarkers.eventType.TRANSFER_ARRIVE');
         const eventTypeSplit = $_('brokers.lots.chartMarkers.eventType.SPLIT');
-        const roi = $_('dashboard.roi');
-        const twrr = $_('dashboard.twrr');
         const pmc = $_('dashboard.pmc');
+        const openingValue = translatedOr('brokers.lots.chartMarkers.openingValue', 'Opening value');
+        const quantitySold = translatedOr('brokers.lots.chartMarkers.quantitySold', 'Quantity sold');
+        const residualQuantity = translatedOr('brokers.lots.chartMarkers.residualQuantity', 'Residual quantity');
+        const salePrice = translatedOr('brokers.lots.chartMarkers.salePrice', 'Sale price');
+        const completeSale = translatedOr('brokers.lots.chartMarkers.completeSale', 'Complete sale');
+        const partialSale = translatedOr('brokers.lots.chartMarkers.partialSale', 'Partial sale');
+        const adjustmentType = translatedOr('brokers.lots.chartMarkers.adjustmentType', 'Adjustment type');
+        const eventDate = translatedOr('brokers.lots.chartMarkers.eventDate', 'Date');
+        const quantityEffect = translatedOr('brokers.lots.chartMarkers.quantityEffect', 'Lot quantity effect');
+        const previousQuantity = translatedOr('brokers.lots.chartMarkers.previousQuantity', 'Previous quantity');
+        const nextQuantity = translatedOr('brokers.lots.chartMarkers.nextQuantity', 'Next quantity');
+        const previousPrice = translatedOr('brokers.lots.chartMarkers.previousPrice', 'Previous price');
+        const nextPrice = translatedOr('brokers.lots.chartMarkers.nextPrice', 'Next price');
+        const totalCost = translatedOr('brokers.lots.chartMarkers.totalCost', 'Total cost');
+        const unchanged = translatedOr('brokers.lots.chartMarkers.unchanged', 'Unchanged');
         const bubbleOpeningDate = $_('brokers.lots.openingDate');
         const bubbleOpeningValue = $_('brokers.lots.openingValue');
         const bubbleTotalPnl = $_('brokers.lots.totalPnl');
@@ -472,21 +548,31 @@
             marketPrice: !marketPrice || marketPrice === 'chart.marketPrice' ? 'Market Price' : marketPrice,
             abs: !abs || abs === 'dashboard.abs' ? 'ABS' : abs,
             pct: !pct || pct === 'dashboard.pct' ? '%' : pct,
-            days: !days || days === 'datePicker.granularity.days' ? 'Days' : days,
             combined: !combined || combined === 'brokers.lots.combined' ? 'Combined' : combined,
             noData: !noData || noData === 'common.noData' ? 'No data' : noData,
             broker: !broker || broker === 'common.broker' ? 'Broker' : broker,
             quantity: !quantity || quantity === 'common.quantity' ? 'Quantity' : quantity,
-            amount: !amount || amount === 'common.amount' ? 'Amount' : amount,
             from: !from || from === 'common.from' ? 'From' : from,
             to: !to || to === 'common.to' ? 'To' : to,
             unitPrice: !unitPrice || unitPrice === 'brokers.lots.chartMarkers.unitPrice' ? 'Unit Price' : unitPrice,
             transitInterval: !transitInterval || transitInterval === 'brokers.lots.chartMarkers.transitInterval' ? 'Transit Interval' : transitInterval,
-            ratio: !ratio || ratio === 'brokers.lots.chartMarkers.ratio' ? 'Ratio' : ratio,
             proceeds: !proceeds || proceeds === 'brokers.lots.chartMarkers.proceeds' ? 'Proceeds' : proceeds,
             realizedPnl: !realizedPnl || realizedPnl === 'brokers.lots.chartMarkers.realizedPnl' ? 'Realized P&L' : realizedPnl,
-            roi: !roi || roi === 'dashboard.roi' ? 'ROI' : roi,
-            twrr: !twrr || twrr === 'dashboard.twrr' ? 'TWRR' : twrr,
+            openingValue,
+            quantitySold,
+            residualQuantity,
+            salePrice,
+            completeSale,
+            partialSale,
+            adjustmentType,
+            eventDate,
+            quantityEffect,
+            previousQuantity,
+            nextQuantity,
+            previousPrice,
+            nextPrice,
+            totalCost,
+            unchanged,
             bubbleOpeningDate: !bubbleOpeningDate || bubbleOpeningDate === 'brokers.lots.openingDate' ? 'Opening Date' : bubbleOpeningDate,
             bubbleOpeningValue: !bubbleOpeningValue || bubbleOpeningValue === 'brokers.lots.openingValue' ? 'Opening Value' : bubbleOpeningValue,
             bubbleTotalPnl: !bubbleTotalPnl || bubbleTotalPnl === 'brokers.lots.totalPnl' ? 'Total P&L' : bubbleTotalPnl,
@@ -580,6 +666,7 @@
         );
 
         const transferDepartEvents = lotEvents.filter((event) => event.kind === 'TRANSFER_DEPART');
+        const transferArriveEvents = lotEvents.filter((event) => event.kind === 'TRANSFER_ARRIVE');
         const rawMarkerPoints: EventMarkerDatum[] = [];
         for (const event of lotEvents) {
             const category = eventCategory(event.kind);
@@ -589,6 +676,7 @@
             if (!marketPricePoint) continue;
 
             const transferDepart = event.kind === 'TRANSFER_ARRIVE' ? findTransferDepartEvent(event, transferDepartEvents) : null;
+            const transferArrive = event.kind === 'TRANSFER_DEPART' ? findTransferArriveEvent(event, transferArriveEvents) : null;
             rawMarkerPoints.push({
                 id: eventKey(event),
                 date: event.date,
@@ -596,8 +684,8 @@
                 percent: marketPricePoint.percent,
                 category,
                 event,
-                marketPriceDate: marketPricePoint.date,
                 transferDepartDate: transferDepart?.date ?? null,
+                transferArriveDate: transferArrive?.date ?? null,
                 verticalOffsetPx: 0,
             });
         }
@@ -651,32 +739,12 @@
         };
     });
 
-    /** Asset-wide ROI/TWRR, percentage-mode only. Backend already returns cumulative fractions
-     * (e.g. 0.52 for +52%) — multiply by 100 to match this chart's existing "percentage points"
-     * convention (see toPercentSeries above), no rebasing-to-baseline needed since these are
-     * already returns, not raw price/WAC levels. */
-    function toPercentPoints(value: number | null): number | null {
-        return value == null ? null : value * 100;
-    }
-
-    const performancePercentPoints = $derived.by(() => {
-        const sorted = [...performanceHistory].sort((a, b) => sortDates(a.date, b.date));
-        const roiValues = sorted.map((point) => toPercentPoints(parseNumber(point.roi)));
-        const twrrValues = sorted.map((point) => toPercentPoints(parseNumber(point.twrr)));
-        return {
-            roi: sorted.map((point, index) => namedPoint(point.date, roiValues[index])),
-            twrr: sorted.map((point, index) => namedPoint(point.date, twrrValues[index])),
-            hasRoi: roiValues.some((value) => value != null),
-            hasTwrr: twrrValues.some((value) => value != null),
-        };
-    });
-
     let hasAbsoluteData = $derived(groupedChartData.hasAbsoluteData);
-    let hasPercentData = $derived(groupedChartData.hasPercentData);
-    let chartStartDate = $derived(groupedChartData.minDate);
-    let showChart = $derived(groupedChartData.totalPointCount > 0 && (displayMode === 'absolute' ? hasAbsoluteData : hasPercentData));
+    let hasLotBubblePercentData = $derived(lots.some((lot) => lot.direction === 'LONG' && parseNumber(lot.total_return) != null));
+    let hasPercentData = $derived(groupedChartData.hasPercentData || hasLotBubblePercentData);
+    let showChart = $derived((groupedChartData.totalPointCount > 0 || (displayMode === 'percentage' && hasLotBubblePercentData)) && (displayMode === 'absolute' ? hasAbsoluteData : hasPercentData));
     let emptyMessage = $derived.by(() => {
-        if (groupedChartData.totalPointCount === 0) return labels.noData;
+        if (groupedChartData.totalPointCount === 0 && !(displayMode === 'percentage' && hasLotBubblePercentData)) return labels.noData;
         if (displayMode === 'absolute' && !hasAbsoluteData) return labels.noData;
         if (displayMode === 'percentage' && !hasPercentData) return labels.noData;
         return '';
@@ -1049,33 +1117,6 @@
             });
         }
 
-        if (displayMode === 'percentage') {
-            if (performancePercentPoints.hasRoi) {
-                series.push({
-                    name: labels.roi,
-                    type: 'line',
-                    data: performancePercentPoints.roi,
-                    showSymbol: false,
-                    connectNulls: false,
-                    smooth: false,
-                    lineStyle: {width: 2, color: isDark ? '#fbbf24' : '#b45309', type: 'dotted'},
-                    itemStyle: {color: isDark ? '#fbbf24' : '#b45309'},
-                });
-            }
-            if (performancePercentPoints.hasTwrr) {
-                series.push({
-                    name: labels.twrr,
-                    type: 'line',
-                    data: performancePercentPoints.twrr,
-                    showSymbol: false,
-                    connectNulls: false,
-                    smooth: false,
-                    lineStyle: {width: 2, color: isDark ? '#f472b6' : '#be185d', type: 'dotted'},
-                    itemStyle: {color: isDark ? '#f472b6' : '#be185d'},
-                });
-            }
-        }
-
         for (const definition of buildMarkerSeriesDefinitions()) {
             const markerSeries = groupedChartData.markerSeries.find((seriesGroup) => seriesGroup.category === definition.key);
             if (!markerSeries) continue;
@@ -1119,63 +1160,107 @@
         return series;
     }
 
+    function markerTooltipRow(label: string, value: string, color?: string): string {
+        return buildTooltipRow(escapeHtml(label), escapeHtml(value), color);
+    }
+
+    function splitRatioText(event: LotTimelineEventSchema): string | null {
+        const ratio = parseNumber(event.ratio);
+        return ratio == null ? null : `${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}:1`;
+    }
+
+    function saleHeaderLabel(snapshot: EventStateSnapshot | null): string {
+        if (snapshot?.quantityAfter == null) return labels.eventType.SELL;
+        return Math.abs(snapshot.quantityAfter) <= LOT_BUBBLE_ZERO_EPS ? labels.completeSale : labels.partialSale;
+    }
+
+    function quantityEffectText(event: LotTimelineEventSchema, snapshot: EventStateSnapshot | null): string {
+        if (snapshot?.quantityBefore != null && snapshot.quantityAfter != null) {
+            const delta = snapshot.quantityAfter - snapshot.quantityBefore;
+            return `${formatSignedQuantityValue(delta)} (${formatQuantityValue(snapshot.quantityBefore)} → ${formatQuantityValue(snapshot.quantityAfter)})`;
+        }
+
+        const quantity = parseNumber(event.quantity);
+        if (quantity == null) return '—';
+        const sign = event.kind === 'ADJUSTMENT_OUT' ? -1 : 1;
+        return formatSignedQuantityValue(sign * Math.abs(quantity));
+    }
+
+    function transferIntervalText(datum: EventMarkerDatum): string {
+        const departDate = datum.event.kind === 'TRANSFER_ARRIVE' ? datum.transferDepartDate : datum.date;
+        const arriveDate = datum.event.kind === 'TRANSFER_DEPART' ? datum.transferArriveDate : datum.date;
+        if (departDate != null && arriveDate != null && departDate !== arriveDate) {
+            return `${formatDate(departDate)} → ${formatDate(arriveDate)}`;
+        }
+        return formatDate(datum.date);
+    }
+
+    function markerHeaderLabel(event: LotTimelineEventSchema, snapshot: EventStateSnapshot | null): string {
+        if (event.kind === 'SELL') return saleHeaderLabel(snapshot);
+        if (event.kind === 'SPLIT') {
+            const ratio = splitRatioText(event);
+            return ratio == null ? eventKindLabel(event.kind) : `${eventKindLabel(event.kind)} ${ratio}`;
+        }
+        return eventKindLabel(event.kind);
+    }
+
     function buildMarkerTooltip(datum: EventMarkerDatum | null): string {
         if (!datum) return '';
 
         const theme = buildTooltipTheme(isDark);
         const event = datum.event;
-        const quantity = eventQuantityText(event);
-        const amount = deriveEventAmount(event);
-        const unitPrice = parseNumber(event.unit_price);
-        const proceeds = parseNumber(event.proceeds);
-        const realizedPnl = parseNumber(event.realized_pnl);
-        const ratio = parseNumber(event.ratio);
-        const brokerId = safeInt(event.broker_id) ?? safeInt(event.destination_broker_id) ?? safeInt(event.source_broker_id);
+        const snapshot = eventStateSnapshots.get(datum.id) ?? null;
         const rows: string[] = [];
 
-        if (datum.category === 'transfer') {
+        if (event.kind === 'BUY') {
+            const quantity = parseNumber(event.quantity);
+            const unitPrice = parseNumber(event.unit_price);
+            const openingValue = quantity != null && unitPrice != null ? Math.abs(quantity) * unitPrice : null;
+            rows.push(markerTooltipRow(labels.quantity, quantity == null ? '—' : formatQuantityValue(quantity)));
+            rows.push(markerTooltipRow(labels.unitPrice, formatMaybeMoney(unitPrice)));
+            rows.push(markerTooltipRow(labels.openingValue, formatMaybeMoney(openingValue)));
+            rows.push(markerTooltipRow(labels.broker, brokerName(safeInt(event.broker_id))));
+        } else if (event.kind === 'SELL') {
+            const quantity = parseNumber(event.quantity);
+            const salePrice = parseNumber(event.close_unit_price ?? event.unit_price);
+            const proceeds = parseNumber(event.proceeds);
+            const realizedPnl = parseNumber(event.realized_pnl);
+            const residualQuantity = snapshot?.quantityAfter ?? null;
+            rows.push(markerTooltipRow(labels.quantitySold, quantity == null ? '—' : formatQuantityValue(quantity)));
+            if (residualQuantity != null && Math.abs(residualQuantity) > LOT_BUBBLE_ZERO_EPS) {
+                rows.push(markerTooltipRow(labels.residualQuantity, formatQuantityValue(residualQuantity)));
+            }
+            rows.push(markerTooltipRow(labels.salePrice, formatMaybeMoney(salePrice)));
+            rows.push(markerTooltipRow(labels.proceeds, formatMaybeMoney(proceeds)));
+            rows.push(markerTooltipRow(labels.realizedPnl, formatMaybeMoney(realizedPnl)));
+        } else if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') {
             const sourceBrokerId = safeInt(event.source_broker_id);
             const destinationBrokerId = safeInt(event.destination_broker_id);
-            if (sourceBrokerId != null) {
-                rows.push(buildTooltipRow(escapeHtml(labels.from), escapeHtml(brokerName(sourceBrokerId))));
-            }
-            if (destinationBrokerId != null) {
-                rows.push(buildTooltipRow(escapeHtml(labels.to), escapeHtml(brokerName(destinationBrokerId))));
-            }
-            if (sourceBrokerId == null && destinationBrokerId == null && brokerId != null) {
-                rows.push(buildTooltipRow(escapeHtml(labels.broker), escapeHtml(brokerName(brokerId))));
-            }
-        } else if (brokerId != null) {
-            rows.push(buildTooltipRow(escapeHtml(labels.broker), escapeHtml(brokerName(brokerId))));
+            rows.push(markerTooltipRow(labels.from, brokerName(sourceBrokerId)));
+            rows.push(markerTooltipRow(labels.to, brokerName(destinationBrokerId)));
+            rows.push(markerTooltipRow(labels.quantity, eventQuantityText(event) ?? '—'));
+            rows.push(markerTooltipRow(labels.transitInterval, transferIntervalText(datum)));
+        } else if (event.kind === 'ADJUSTMENT_IN' || event.kind === 'ADJUSTMENT_OUT') {
+            rows.push(markerTooltipRow(labels.adjustmentType, eventKindLabel(event.kind)));
+            rows.push(markerTooltipRow(labels.eventDate, formatDate(event.date)));
+            rows.push(markerTooltipRow(labels.quantity, eventQuantityText(event) ?? '—'));
+            rows.push(markerTooltipRow(labels.quantityEffect, quantityEffectText(event, snapshot)));
+        } else if (event.kind === 'SPLIT') {
+            const ratio = parseNumber(event.ratio);
+            const fallbackAfterQuantity = parseNumber(event.quantity);
+            const previousQuantity = snapshot?.quantityBefore ?? (ratio != null && ratio !== 0 && fallbackAfterQuantity != null ? Math.abs(fallbackAfterQuantity) / ratio : null);
+            const nextQuantity = snapshot?.quantityAfter ?? (previousQuantity != null && ratio != null ? previousQuantity * ratio : fallbackAfterQuantity == null ? null : Math.abs(fallbackAfterQuantity));
+            const previousPrice = snapshot?.unitPriceBefore ?? null;
+            const nextPrice = snapshot?.unitPriceAfter ?? (previousPrice != null && ratio != null && ratio !== 0 ? previousPrice / ratio : null);
+            rows.push(markerTooltipRow(labels.previousQuantity, formatMaybeQuantity(previousQuantity)));
+            rows.push(markerTooltipRow(labels.nextQuantity, formatMaybeQuantity(nextQuantity)));
+            rows.push(markerTooltipRow(labels.previousPrice, formatMaybeMoney(previousPrice)));
+            rows.push(markerTooltipRow(labels.nextPrice, formatMaybeMoney(nextPrice)));
+            rows.push(markerTooltipRow(labels.totalCost, labels.unchanged));
         }
 
-        if (quantity != null) {
-            rows.push(buildTooltipRow(escapeHtml(labels.quantity), escapeHtml(quantity)));
-        }
-        if (amount != null) {
-            rows.push(buildTooltipRow(escapeHtml(labels.amount), escapeHtml(formatCurrencyAmountPlain(amount, currency))));
-        }
-        if (unitPrice != null) {
-            rows.push(buildTooltipRow(escapeHtml(labels.unitPrice), escapeHtml(formatCurrencyAmountPlain(unitPrice, currency))));
-        }
-        if (datum.category === 'transfer') {
-            const transitInterval = datum.transferDepartDate != null && datum.transferDepartDate !== datum.date ? `${formatDate(datum.transferDepartDate)} → ${formatDate(datum.date)}` : formatDate(datum.date);
-            rows.push(buildTooltipRow(escapeHtml(labels.transitInterval), escapeHtml(transitInterval)));
-        }
-        if (ratio != null) {
-            rows.push(buildTooltipRow(escapeHtml(labels.ratio), escapeHtml(formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8}))));
-        }
-        if (proceeds != null) {
-            rows.push(buildTooltipRow(escapeHtml(labels.proceeds), escapeHtml(formatCurrencyAmountPlain(proceeds, currency))));
-        }
-        if (realizedPnl != null) {
-            rows.push(buildTooltipRow(escapeHtml(labels.realizedPnl), escapeHtml(formatCurrencyAmountPlain(realizedPnl, currency))));
-        }
-
-        const marketPriceValue = datum.marketPriceDate === datum.date ? formatCurrencyAmountPlain(datum.absolute, currency) : `${formatCurrencyAmountPlain(datum.absolute, currency)} · ${formatDate(datum.marketPriceDate)}`;
-        rows.push(buildTooltipRow(escapeHtml(labels.marketPrice), escapeHtml(marketPriceValue)));
-
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(datum.date)), theme.textColor)}<div style="font-size:12px;font-weight:600;color:${theme.textColor};margin-bottom:4px">${escapeHtml(eventKindLabel(event.kind))}</div>${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+        const header = `${markerHeaderLabel(event, snapshot)} · ${formatDate(datum.date)}`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(header), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
     function buildTooltip(params: any[]): string {
@@ -1186,7 +1271,6 @@
         }
 
         const rawDate: number | string = params[0]?.axisValue ?? params[0]?.value?.[0] ?? '';
-        const elapsedDays = chartStartDate ? elapsedDaysBetween(chartStartDate, rawDate) : null;
         const rows = params
             .filter((param) => param?.seriesType !== 'scatter')
             .map((param) => {
@@ -1199,22 +1283,19 @@
             })
             .filter((row): row is string => row != null);
 
-        if (elapsedDays != null) {
-            rows.unshift(buildTooltipRow(escapeHtml(labels.days), escapeHtml(String(elapsedDays))));
-        }
-
         if (rows.length === 0) return '';
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
     /** Legend names, excluding internal helper series that shouldn't appear as toggles: the per-lot
      * bubble→baseline connectors, the bubble state centre markers and the income "|" markers. Keeps the
-     * real WAC/market/ROI lines, event markers and the single "lot-performance-bubbles" entry. */
+     * real WAC/market lines, event markers and the single "lot-performance-bubbles" entry. */
     function collectLegendNames(series: echarts.SeriesOption[]): string[] {
         const names: string[] = [];
         for (const item of series) {
             const name = (item as {name?: unknown}).name;
             if (typeof name !== 'string' || name.length === 0) continue;
+            if (name.startsWith('__')) continue;
             if (name.startsWith('lot-bubble-connector-')) continue;
             if (name === 'lot-performance-bubble-centers') continue;
             if (name === LOT_INCOME_MARKER_SERIES_ID) continue;
@@ -1227,6 +1308,26 @@
         const theme = buildTooltipTheme(isDark);
         const gridColors = buildGridColors(isDark);
         const series = attachIncomeMarkers(buildSeries());
+
+        // In percentage mode, emphasise the 0% baseline so gains/losses read against a clear zero.
+        if (displayMode === 'percentage') {
+            series.push({
+                name: '__zero-baseline',
+                type: 'line',
+                data: [],
+                silent: true,
+                markLine: {
+                    silent: true,
+                    symbol: 'none',
+                    animation: false,
+                    label: {show: false},
+                    lineStyle: {color: isDark ? 'rgba(148,163,184,0.75)' : 'rgba(71,85,105,0.6)', width: 1.5, type: 'solid'},
+                    data: [{yAxis: 0}],
+                },
+                z: 0,
+                zlevel: 0,
+            } as echarts.SeriesOption);
+        }
 
         return {
             ...CHART_ANIMATION_CONFIG,
@@ -1287,6 +1388,7 @@
             yAxis: {
                 type: 'value',
                 scale: true,
+                ...(displayMode === 'percentage' ? {min: (v: {min: number}) => Math.min(0, v.min), max: (v: {max: number}) => Math.max(0, v.max)} : {}),
                 axisLine: {show: false},
                 axisTick: {show: false},
                 splitLine: {
@@ -1404,7 +1506,7 @@
         void $currentLanguage;
         void brokers;
         void xAxisRange;
-        void performancePercentPoints;
+        void eventStateSnapshots;
         void lotBubblePoints;
         void selectedLotIds;
 
