@@ -1,7 +1,7 @@
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import {browser} from '$app/environment';
-    import {goto} from '$app/navigation';
+    import {goto, replaceState} from '$app/navigation';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {Plus, Upload, Pencil, Copy, Trash2, RefreshCw, Link2, Unlink} from 'lucide-svelte';
@@ -70,6 +70,7 @@
 
     function syncUrl() {
         if (!browser || !urlInitialized) return;
+        if ($page.url.searchParams.has('highlight')) return;
         const next = buildTransactionsFiltersUrl(filters);
         if (next !== `${$page.url.pathname}${$page.url.search}`) {
             goto(next, {replaceState: true, noScroll: true, keepFocus: true});
@@ -211,6 +212,9 @@
     let formOpen = $state(false);
     let formMode = $state<'create' | 'edit' | 'duplicate' | 'view'>('create');
     let formItems = $state<FormModalItems | null>(null);
+    let highlightDrivenViewTxId = $state<number | null>(null);
+    let lastHighlightParam = $state<string | null>(null);
+    let highlightConsumeSeq = 0;
 
     // Bulk modal (unified batch editor on DataTable).
     let bulkOpen = $state(false);
@@ -447,6 +451,144 @@
         }, 1600);
     }
 
+    function parseHighlightId(raw: string | null): number | null {
+        if (!raw) return null;
+        const id = Number(raw);
+        return Number.isInteger(id) && id > 0 ? id : null;
+    }
+
+    function cleanHighlightParam(expectedRaw?: string) {
+        if (!browser) return;
+        const currentRaw = $page.url.searchParams.get('highlight');
+        if (!currentRaw || (expectedRaw != null && currentRaw !== expectedRaw)) return;
+        const url = new URL($page.url);
+        url.searchParams.delete('highlight');
+        replaceState(`${url.pathname}${url.search}${url.hash}`, $page.state);
+    }
+
+    function findLoadedTransaction(txId: number): TXReadItem | null {
+        return mainRows.find((r) => r.id === txId) ?? partnerRows.find((r) => r.id === txId) ?? txStoreGet(txId) ?? null;
+    }
+
+    async function fetchTransactionById(txId: number): Promise<TXReadItem | null> {
+        try {
+            const res = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {ids: [txId]}} as never)) as TXReadItem[];
+            return (res ?? []).find((r) => r.id === txId) ?? null;
+        } catch (e) {
+            console.warn('[transactions] failed to fetch highlighted transaction:', e);
+            return null;
+        }
+    }
+
+    function rowFromTestId(txId: number): HTMLElement | null {
+        const marker =
+            document.querySelector<HTMLElement>(`[data-testid="tx-id-${txId}"]`) ??
+            document.querySelector<HTMLElement>(`[data-testid="tx-type-icon-${txId}"]`) ??
+            document.querySelector<HTMLElement>(`[data-testid="tx-cash-cell-${txId}"]`) ??
+            document.querySelector<HTMLElement>(`[data-testid="tx-desc-${txId}"]`) ??
+            document.querySelector<HTMLElement>(`[data-testid="tx-tag-list-${txId}"]`);
+        const row = marker?.closest('tr');
+        return row instanceof HTMLElement ? row : null;
+    }
+
+    function findTransactionElement(txId: number): HTMLElement | null {
+        return rowFromTestId(txId) ?? document.querySelector<HTMLElement>(`[data-row-id="tx-${txId}"]`) ?? document.querySelector<HTMLElement>(`[data-row-id="ghost-${txId}"]`);
+    }
+
+    async function waitForDomFrame(): Promise<void> {
+        await tick();
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+
+    async function waitForTransactionsTable(): Promise<void> {
+        for (let i = 0; i < 60; i++) {
+            if (!loading && transactionsTableComponent) {
+                await waitForDomFrame();
+                return;
+            }
+            await waitForDomFrame();
+        }
+    }
+
+    async function mergeFetchedTransaction(row: TXReadItem): Promise<void> {
+        if (mainRows.some((r) => r.id === row.id) || partnerRows.some((r) => r.id === row.id)) return;
+        mainRows = [row, ...mainRows];
+
+        const partnerId = row.related_transaction_id;
+        if (partnerId != null && !mainRows.some((r) => r.id === partnerId) && !partnerRows.some((r) => r.id === partnerId)) {
+            const partner = await fetchTransactionById(partnerId);
+            if (partner) partnerRows = [...partnerRows, partner];
+        }
+
+        txStoreSetAll(mainRows, partnerRows);
+        await waitForDomFrame();
+    }
+
+    async function resolveHighlightedTransaction(txId: number): Promise<TXReadItem | null> {
+        const loaded = findLoadedTransaction(txId);
+        if (loaded) return loaded;
+        const fetched = await fetchTransactionById(txId);
+        if (!fetched) return null;
+        await mergeFetchedTransaction(fetched);
+        return fetched;
+    }
+
+    async function pulseTransactionRow(txId: number): Promise<boolean> {
+        if (!browser) return false;
+        await waitForDomFrame();
+        let el = findTransactionElement(txId);
+        if (!el) {
+            await transactionsTableComponent?.navigateToPartner(txId);
+            await waitForDomFrame();
+            el = findTransactionElement(txId);
+        }
+        if (!el) {
+            transactionsTableComponent?.getTableRef()?.navigateToRowId(`tx-${txId}`);
+            await waitForDomFrame();
+            el = findTransactionElement(txId);
+        }
+        if (!el) return false;
+        pulseElement(el);
+        return true;
+    }
+
+    async function consumeHighlightParam(raw: string): Promise<void> {
+        const token = ++highlightConsumeSeq;
+        const txId = parseHighlightId(raw);
+        if (txId == null) {
+            cleanHighlightParam(raw);
+            return;
+        }
+
+        await waitForTransactionsTable();
+        if (token !== highlightConsumeSeq) return;
+
+        const row = await resolveHighlightedTransaction(txId);
+        if (token !== highlightConsumeSeq) return;
+        if (!row) {
+            cleanHighlightParam(raw);
+            return;
+        }
+
+        await pulseTransactionRow(txId);
+        if (token !== highlightConsumeSeq) return;
+        highlightDrivenViewTxId = txId;
+        handleViewRow(row);
+        cleanHighlightParam(raw);
+    }
+
+    $effect(() => {
+        if (!browser || !urlInitialized) return;
+        const raw = $page.url.searchParams.get('highlight');
+        if (!raw) {
+            lastHighlightParam = null;
+            return;
+        }
+        if (raw === lastHighlightParam) return;
+        lastHighlightParam = raw;
+        void consumeHighlightParam(raw);
+    });
+
     function findPartnerElement(partnerId: number): HTMLElement | null {
         return document.querySelector<HTMLElement>(`[data-row-id="tx-${partnerId}"]`) ?? document.querySelector<HTMLElement>(`[data-row-id="ghost-${partnerId}"]`);
     }
@@ -485,6 +627,14 @@
         formMode = 'view';
         formItems = resolveFormItemsForView(row, txStoreGet as (id: number) => TXReadItem | undefined, getBrokerRole);
         formOpen = true;
+    }
+
+    function handleFormClose() {
+        formOpen = false;
+        if (highlightDrivenViewTxId == null) return;
+        const txId = highlightDrivenViewTxId;
+        highlightDrivenViewTxId = null;
+        void pulseTransactionRow(txId);
     }
 
     /** Bug3-fix: determine if the view→edit switch should be allowed. */
@@ -799,9 +949,10 @@
     items={formItems}
     {availableTags}
     canEdit={formCanEdit}
-    onClose={() => (formOpen = false)}
+    onClose={handleFormClose}
     onCommitted={handleFormCommitted}
     onSwitchToEdit={() => {
+        highlightDrivenViewTxId = null;
         formOpen = false;
         if (formItems?.[0]) handleEditRow(formItems[0]);
     }}

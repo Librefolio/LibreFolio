@@ -257,6 +257,18 @@ def front_tx_wac_mode(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("transactions/tx-wac-mode.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_wac_unit_toggle(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX Cost Basis Total/Per-unit toggle E2E tests."""
+    print_section("Frontend TX WAC Unit Toggle Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-wac-unit-toggle.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run TX Event Picker E2E tests (card-style dropdown, delta, slider, visibility)."""
     print_section("Frontend TX Event Picker Tests")
@@ -321,6 +333,7 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX WAC FormModal", lambda: front_tx_wac_formmodal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX WAC FX", lambda: front_tx_wac_fx(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX WAC Mode", lambda: front_tx_wac_mode(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX WAC Unit Toggle", lambda: front_tx_wac_unit_toggle(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Event Picker", lambda: front_tx_event_picker(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX BRIM Import", lambda: front_tx_brim_import(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Import Resolution", lambda: front_tx_import_resolution(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
@@ -357,6 +370,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-wac-formmodal", front_tx_wac_formmodal, name="TX WAC FormModal Tests", desc="FormModal WAC payload: cost_basis_mode propagation, auto/manual toggle, partner rows", tests="transactions/tx-wac-formmodal.spec.ts")
     add_test(cat, "tx-wac-fx", front_tx_wac_fx, name="TX WAC FX Tests", desc="WAC FX sync modal, qualifying table cross-currency arrow, tooltip format, stale banner", tests="transactions/tx-wac-fx.spec.ts")
     add_test(cat, "tx-wac-mode", front_tx_wac_mode, name="TX WAC Mode Tests", desc="WAC auto/manual toggle, blur-without-change stays auto, placeholder with validate hint", tests="transactions/tx-wac-mode.spec.ts")
+    add_test(cat, "tx-wac-unit-toggle", front_tx_wac_unit_toggle, name="TX WAC Unit Toggle Tests", desc="Cost basis Total/Per-unit display toggle, round-trip conversion, commit payload stays per-unit, localStorage persistence", tests="transactions/tx-wac-unit-toggle.spec.ts")
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(cat, "tx-brim-import", front_tx_brim_import, name="TX BRIM Import Wizard Tests", desc="Import Wizard flow: open, select file, parse, resolve assets, import to BulkModal", tests="transactions/tx-brim-import.spec.ts")
     add_test(cat, "tx-import-resolution", front_tx_import_resolution, name="TX Import Resolution Tests", desc="Advanced resolve flow: resolve section, AssetSelect, identifier prompt, create asset, full E2E", tests="transactions/tx-import-resolution.spec.ts")

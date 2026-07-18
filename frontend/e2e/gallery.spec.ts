@@ -11,7 +11,7 @@
  *   - Run `./dev.py db populate --force` before generating gallery
  *   - This ensures brokers with icons exist for realistic screenshots
  */
-import {expect, Page, test} from '@playwright/test';
+import {expect, type Locator, type Page, test} from '@playwright/test';
 import {login, logout, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
@@ -27,6 +27,14 @@ const __dirname = path.dirname(__filename);
 const GALLERY_ROOT = path.join(__dirname, '../../mkdocs_src/docs/gallery');
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
+
+async function clickRowAction(page: Page, scope: Page | Locator, actionId: string, index = 0): Promise<void> {
+    const actionsButton = scope.getByTestId(/^row-actions-/).nth(index);
+    await expect(actionsButton).toBeVisible({timeout: 5_000});
+    await actionsButton.scrollIntoViewIfNeeded();
+    await actionsButton.click();
+    await page.getByTestId(`context-menu-action-${actionId}`).click();
+}
 
 function ensureDir(dir: string) {
     if (!fs.existsSync(dir)) {
@@ -555,10 +563,7 @@ test.describe('Gallery Screenshots', () => {
                     // dividend + 3-year price history) — a proper FIFO/WAC demo.
                     const positionsPanel = page.getByTestId('positions-panel');
                     const appleRow = positionsPanel.locator('tr[data-row-id]').filter({hasText: 'Apple'}).first();
-                    const analyzeLotsButton = appleRow.getByTestId('row-action-analyze-lots');
-                    await expect(analyzeLotsButton).toBeVisible({timeout: 5_000});
-                    await analyzeLotsButton.scrollIntoViewIfNeeded();
-                    await analyzeLotsButton.click();
+                    await clickRowAction(page, appleRow, 'analyze-lots');
 
                     await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5_000});
                     const panelLoading = page.getByTestId('lots-analysis-panel-loading');
@@ -904,9 +909,13 @@ test.describe('Gallery Screenshots', () => {
                     await page.waitForTimeout(500);
 
                     // Click the preview action on the first BRIM file row
-                    const previewBtn = page.locator('[data-testid="files-table-brim"] [data-testid="row-action-preview"]').first();
-                    if (await previewBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-                        await previewBtn.click();
+                    const previewActionsBtn = page
+                        .locator('[data-testid="files-table-brim"]')
+                        .getByTestId(/^row-actions-/)
+                        .first();
+                    if (await previewActionsBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                        await previewActionsBtn.click();
+                        await page.getByTestId('context-menu-action-preview').click();
                         const previewModal = page.getByTestId('file-preview-modal');
                         await expect(previewModal).toBeVisible({timeout: 8_000});
                         await page.waitForTimeout(1000); // Wait for file content to load
@@ -939,11 +948,12 @@ test.describe('Gallery Screenshots', () => {
                         await freezeAnimations(page);
                         await page.waitForTimeout(500);
 
-                        // Find first row with a preview button
+                        // Find first row with a preview action
                         const table = page.locator('[data-testid="files-table-static"]');
-                        const firstPreviewBtn = table.locator('[data-testid="row-action-preview"]').first();
-                        if (await firstPreviewBtn.isVisible({timeout: 3_000}).catch(() => false)) {
-                            await firstPreviewBtn.click();
+                        const firstPreviewActionsBtn = table.getByTestId(/^row-actions-/).first();
+                        if (await firstPreviewActionsBtn.isVisible({timeout: 3_000}).catch(() => false)) {
+                            await firstPreviewActionsBtn.click();
+                            await page.getByTestId('context-menu-action-preview').click();
                             const previewModal = page.getByTestId('file-preview-modal');
                             if (await previewModal.isVisible({timeout: 8_000}).catch(() => false)) {
                                 await waitForNetworkSettled(page);
@@ -1484,10 +1494,7 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
                     await setPositionsView(page, 'holdings', 'table');
 
-                    const analyzeLotsButton = page.getByTestId('row-action-analyze-lots').first();
-                    await expect(analyzeLotsButton).toBeVisible({timeout: 5_000});
-                    await analyzeLotsButton.scrollIntoViewIfNeeded();
-                    await analyzeLotsButton.click();
+                    await clickRowAction(page, page, 'analyze-lots');
 
                     await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5_000});
                     await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 10_000});

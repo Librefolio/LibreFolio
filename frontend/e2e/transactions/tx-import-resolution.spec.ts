@@ -608,8 +608,8 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         const step2 = page.getByTestId('import-wizard-step2');
 
-        // Find the row action button for "preview" (Eye icon, data-testid="row-action-preview")
-        const previewBtn = step2.locator('[data-testid="row-action-preview"]').first();
+        // Find the row action menu and choose "preview".
+        const previewBtn = step2.getByTestId(/^row-actions-/).first();
         const previewBtnVisible = await previewBtn.isVisible({timeout: 3_000}).catch(() => false);
 
         if (!previewBtnVisible) {
@@ -619,6 +619,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
         }
 
         await previewBtn.click();
+        await page.getByTestId('context-menu-action-preview').click();
         await page.waitForTimeout(600);
 
         // FilePreviewModal should open (ModalBase with testId="file-preview-modal")

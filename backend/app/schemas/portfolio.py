@@ -190,6 +190,7 @@ class IssueCode(StrEnum):
     SHORT_ADJUSTMENT_NOT_SUPPORTED = "SHORT_ADJUSTMENT_NOT_SUPPORTED"
     FIFO_SOURCE_QUANTITY_MISSING = "FIFO_SOURCE_QUANTITY_MISSING"
     TRANSFER_PAIR_MISSING = "TRANSFER_PAIR_MISSING"
+    CURRENT_PRICE_ASSUMED_AT_COST = "CURRENT_PRICE_ASSUMED_AT_COST"
 
 
 class DataQualityIssue(BaseModel):
@@ -451,6 +452,7 @@ LotDirection = Literal["LONG", "SHORT"]
 LotCustodyType = Literal["BROKER", "IN_TRANSIT"]
 ReferencePriceSource = Literal["exact", "fallback", "unavailable"]
 LotCalculationStatus = Literal["COMPLETE", "DEGRADED", "UNAVAILABLE"]
+LotValueSource = Literal["MARKET_PRICE", "ESTIMATED_AT_COST"]
 
 
 class LotAnalysisType(StrEnum):
@@ -466,6 +468,7 @@ class LotAnalysisType(StrEnum):
     BROKER_WAC_HISTORY = "BROKER_WAC_HISTORY"
     CUMULATIVE_WAC_HISTORY = "CUMULATIVE_WAC_HISTORY"
     PERFORMANCE_HISTORY = "PERFORMANCE_HISTORY"
+    INCOME_EVENTS = "INCOME_EVENTS"
 
 
 class LotsAnalysisQuery(BaseModel):
@@ -531,8 +534,14 @@ class LotSummarySchema(BaseModel):
     current_custody: List[LotCustodySummarySchema] = Field(default_factory=list, description="Active custody slices for unified table and modal summary.")
     open_value: Optional[SafeDecimal] = Field(None, description="Current open mark-to-market value in response target_currency.")
     total_value: Optional[SafeDecimal] = Field(None, description="Current total lot value (open_value + realized cash logic) in response target_currency.")
-    pnl: Optional[SafeDecimal] = Field(None, description="Current total lot P&L in response target_currency.")
-    relative_return: Optional[SafeDecimal] = Field(None, description="Relative return vs reference_unit_price, when computable.")
+    pnl: Optional[SafeDecimal] = Field(None, description="Market+realized lot P&L in target_currency (excludes asset income). = market_pnl + realized_pnl.")
+    relative_return: Optional[SafeDecimal] = Field(None, description="Open Return: relative return vs reference_unit_price, when computable.")
+    asset_income: SafeDecimal = Field(default=0, description="Cumulative asset-linked dividends+interest allocated to this lot, in target_currency.")
+    market_pnl: Optional[SafeDecimal] = Field(None, description="Price-only P&L: OpenValue - open cost basis. 0 when value_source=ESTIMATED_AT_COST. = pnl - realized_pnl.")
+    total_pnl: Optional[SafeDecimal] = Field(None, description="market_pnl + realized_pnl + asset_income, in target_currency.")
+    cash_yield: Optional[SafeDecimal] = Field(None, description="asset_income / opening_value, when opening_value > 0.")
+    total_return: Optional[SafeDecimal] = Field(None, description="total_pnl / opening_value (opening_value = original_cost), when > 0.")
+    value_source: Optional[LotValueSource] = Field(None, description="MARKET_PRICE when a real current price exists, else ESTIMATED_AT_COST (open value assumed at cost, market_pnl=0).")
 
     @field_validator("currency")
     @classmethod
@@ -609,6 +618,7 @@ class LotValueHistoryPoint(BaseModel):
     total_value: SafeDecimal
     original_cost: SafeDecimal
     pnl: SafeDecimal
+    income: SafeDecimal = Field(default=0, description="Cumulative asset-linked income (dividends+interest) allocated to this lot up to date, in target_currency.")
 
 
 class LotReturnHistoryPoint(BaseModel):
@@ -620,10 +630,11 @@ class LotReturnHistoryPoint(BaseModel):
     date: date_type
     total_return: Optional[SafeDecimal] = Field(
         None,
-        description="(OpenValue(t)+Proceeds(t))/OriginalCost - 1. Always computable when original_cost != 0, independent of reference_unit_price.",
+        description="(OpenValue(t)+Proceeds(t)+Income(t))/OriginalCost - 1. Includes asset-linked income. Computable when original_cost != 0.",
     )
     relative_return: Optional[SafeDecimal] = Field(None, description="None when reference price is unavailable or zero.")
     reference_price_source: Optional[ReferencePriceSource] = Field(None, description="Reference price resolution echoed for chart/tooltips.")
+    income: SafeDecimal = Field(default=0, description="Cumulative asset-linked income allocated to this lot up to date, in target_currency.")
 
 
 class LotPriceHistoryPoint(BaseModel):
@@ -673,6 +684,31 @@ class PerformanceHistoryPoint(BaseModel):
     twrr: Optional[SafeDecimal] = Field(None, description="Cumulative TWRR at this date, None if not computable.")
 
 
+class LotIncomeEventKind(StrEnum):
+    """Asset-linked income transaction kinds allocated to LONG lots (plan v3 §11 markers)."""
+
+    DIVIDEND = "DIVIDEND"
+    INTEREST = "INTEREST"
+
+
+class LotIncomeEventSchema(BaseModel):
+    """A single asset-linked DIVIDEND/INTEREST transaction allocated pro-rata across open LONG lots.
+
+    Powers the dashed income markers on the WAC/Value/Return charts (plan v3 §11): one entry per
+    income transaction that had at least one open LONG lot on its date. ``amount`` is the whole
+    transaction total in target_currency (pre-split); ``lot_ids`` are the lots it was allocated to.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: LotIncomeEventKind
+    date: date_type
+    broker_id: Optional[int] = Field(None, description="Broker of the income transaction.")
+    transaction_id: Optional[int] = Field(None, description="Source transaction id.")
+    amount: SafeDecimal = Field(..., description="Total income in target_currency (before pro-rata allocation).")
+    lot_ids: List[int] = Field(default_factory=list, description="LONG lots the income was allocated to at transaction.date.")
+
+
 class LotsAnalysisMetadata(BaseModel):
     """Metadata describing bulk lots-analysis computation."""
 
@@ -713,6 +749,10 @@ class LotsAnalysisResponse(BaseModel):
     performance_history: Optional[List[PerformanceHistoryPoint]] = Field(
         None,
         description="PERFORMANCE_HISTORY payload — asset-wide ROI/TWRR, ignores selected_lot_ids.",
+    )
+    income_events: Optional[List[LotIncomeEventSchema]] = Field(
+        None,
+        description="INCOME_EVENTS payload — asset-linked DIVIDEND/INTEREST allocated to LONG lots, for chart markers.",
     )
 
     @field_validator("target_currency")

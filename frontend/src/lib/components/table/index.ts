@@ -33,6 +33,8 @@
  *   storageKey="myFiles"
  * />
  * ```
+ *
+ * Row actions render as a native kebab menu in the right actions column.
  */
 
 // Main component
@@ -65,6 +67,7 @@ export type {
     EnumOption,
     // Actions
     RowAction,
+    RowActions,
     BulkAction,
     // Filters
     ColumnFilter,

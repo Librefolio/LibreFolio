@@ -54,6 +54,7 @@
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getStringColor} from '$lib/utils/colors';
+    import {getUserStorage} from '$lib/utils/storage';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -1638,13 +1639,23 @@
                         return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
                     }
 
+                    // Read-only mirror of WacPreviewSection's Total/Per-unit toggle (same
+                    // 'wacPreviewUnitMode' localStorage key) so this cell stays consistent with
+                    // whatever the row's own FormModal last showed. `cbo.amount` is always
+                    // per-unit at rest — only the display here gets multiplied.
+                    const unitModeStored = getUserStorage('wacPreviewUnitMode', 'unit');
+                    const qtyAbs = Math.abs(Number(source.fields.quantity ?? '0'));
+                    const showAsTotal = unitModeStored === 'total' && qtyAbs > 0;
+                    const displayAmount = (amount: number) => (showAsTotal ? amount * qtyAbs : amount);
+                    const modeSuffix = `<span class="text-[9px] text-gray-400 ml-1">${showAsTotal ? ($t('transactions.wacPreview.unitModeTotal') ?? 'Total') : ($t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit')}</span>`;
+
                     // mode 'auto'
                     if (mode === 'auto') {
                         if (cbo && cbo.amount) {
                             // Auto-calculated value present
                             return {
                                 type: 'html',
-                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 ${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`,
+                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
                             };
                         }
                         // Loading/pending
@@ -1653,7 +1664,7 @@
 
                     // mode 'manual'
                     if (cbo && cbo.amount) {
-                        return {type: 'html', html: `<span class="font-mono text-xs" data-testid="tx-bulk-cost-basis-manual">${formatCurrencyAmountHtml(Number(cbo.amount), cbo.code)}</span>`};
+                        return {type: 'html', html: `<span class="font-mono text-xs" data-testid="tx-bulk-cost-basis-manual">${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`};
                     }
                     // User explicitly cleared the value
                     return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
@@ -2353,8 +2364,8 @@
             const labelA = opA.op === 'edit' ? `#${(opA as any).txId}` : opA.tempId.slice(0, 6);
             const labelB = opB.op === 'edit' ? `#${(opB as any).txId}` : opB.tempId.slice(0, 6);
             promoteMergeData = {
-                txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date, cost_basis_override: opA.fields.cost_basis_override},
-                txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date, cost_basis_override: opB.fields.cost_basis_override},
+                txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
+                txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
                 targetTypeLabel: targetLabel,
                 opA,
                 opB,
@@ -2623,8 +2634,8 @@
                 const labelA = opA.fields.type;
                 const labelB = opB.fields.type;
                 promoteMergeData = {
-                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date, cost_basis_override: opA.fields.cost_basis_override},
-                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date, cost_basis_override: opB.fields.cost_basis_override},
+                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
+                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
                     targetTypeLabel: match.targetLabel,
                     opA,
                     opB,
@@ -2657,8 +2668,8 @@
                 const labelA = `#${(opA as any).txId ?? ''} ${opA.fields.type}`;
                 const labelB = `#${(opB as any).txId ?? ''} ${opB.fields.type}`;
                 promoteMergeData = {
-                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date, cost_basis_override: opA.fields.cost_basis_override},
-                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date, cost_basis_override: opB.fields.cost_basis_override},
+                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
+                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
                     targetTypeLabel: match.targetLabel,
                     opA,
                     opB,
@@ -3033,7 +3044,7 @@
                 enableSorting={false}
                 enableColumnVisibility={true}
                 enableActions={true}
-                actionsColumnWidth="160px"
+                actionsColumnWidth="64px"
                 rowActions={rowActionsForTable}
                 bulkActions={bulkActionsForTable}
                 onSelectionChange={handleBulkTableSelectionChange}

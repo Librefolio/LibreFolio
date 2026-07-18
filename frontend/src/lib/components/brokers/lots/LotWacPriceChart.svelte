@@ -13,12 +13,14 @@
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
     type LotPriceHistoryPoint = z.infer<typeof schemas.LotPriceHistoryPoint>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
     type PerformanceHistoryPoint = z.infer<typeof schemas.PerformanceHistoryPoint>;
+    type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type DisplayMode = 'absolute' | 'percentage';
     type EventMarkerSeriesKind = 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split';
 
@@ -26,6 +28,14 @@
     const TRANSFER_MARKER_SYMBOL = 'path://M1 10 L6 5 L6 8 L14 8 L14 5 L19 10 L14 15 L14 12 L6 12 L6 15 Z';
     const SPLIT_MARKER_SYMBOL = 'path://M8 1 H12 V8 H16 V12 H12 V19 H8 V12 H4 V8 H8 Z';
     const MARKER_VERTICAL_OFFSET_STEP = 12;
+    // Per-lot performance bubbles (plan v3 round-2 §5/§6): opening-marker overlay migrated here from
+    // the removed LotPerformanceBubbleChart. Radius scales sqrt-proportionally to a per-mode metric
+    // (ABS→open_quantity, %→opening value) between these bounds.
+    const LOT_BUBBLE_MIN_RADIUS = 7;
+    const LOT_BUBBLE_MAX_RADIUS = 22;
+    const LOT_BUBBLE_ZERO_EPS = 0.0005;
+    // Income (dividend/interest) "|" markers share this series id so it can be filtered out of the legend.
+    const LOT_INCOME_MARKER_SERIES_ID = 'lot-income-markers';
     // Fixed (non-containLabel) grid bounds shared byte-for-byte with LotGanttChart.svelte so the
     // two charts' X axes are pixel-perfect aligned regardless of how wide either chart's Y-axis
     // labels happen to be (containLabel:true would make that alignment drift with content).
@@ -44,9 +54,16 @@
         cumulativeWacHistory: CumulativeWACHistoryPoint[];
         priceHistory: LotPriceHistoryPoint[];
         lotEvents: LotTimelineEventSchema[];
+        /** Lots to overlay as per-lot performance bubbles (plan v3 round-2). Only LONG lots are drawn. */
+        lots?: LotSummarySchema[];
+        /** Implicit selection (plan v3 §13): empty = all visible lots; otherwise only these are highlighted. */
+        selectedLotIds?: number[];
         /** Asset-wide ROI/TWRR (ignores selectedLotIds — see LotsAnalysisService._build_performance_history),
          * plotted only in percentage mode alongside the already-normalized market/WAC series. */
         performanceHistory?: PerformanceHistoryPoint[];
+        /** Asset-linked DIVIDEND/INTEREST transactions (plan v3 §11): rendered as dashed vertical
+         * markers on the date of the income transaction. */
+        incomeEvents?: ReadonlyArray<LotIncomeEvent>;
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
         xAxisRange?: {min: string; max: string} | null;
@@ -55,6 +72,19 @@
         externalZoomEnd?: number | null;
         onRangeComputed?: (min: string, max: string) => void;
         onLoadingChange?: (loading: boolean) => void;
+        /** Double-click on an event marker (BUY/SELL/TRANSFER/SPLIT/ADJUSTMENT) — plan v3 §9. */
+        onEventDoubleClick?: (event: LotTimelineEventSchema) => void;
+        /** Click on a performance bubble toggles that lot's selection (plan v3 §13). */
+        onSelectionChange?: (ids: number[]) => void;
+    };
+
+    /** Local mirror of LotComparisonChart's LotIncomeEvent — shape matches the LotIncomeEventSchema DTO. */
+    type LotIncomeEvent = {
+        type: 'DIVIDEND' | 'INTEREST';
+        date: string;
+        broker_id: number | null;
+        amount: string;
+        lot_ids: number[];
     };
 
     interface ValuePoint {
@@ -105,7 +135,26 @@
         color: string;
     }
 
-    let {brokerWacHistory = [], cumulativeWacHistory = [], priceHistory = [], lotEvents = [], performanceHistory = [], brokers = [], currency, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null, onRangeComputed, onLoadingChange}: ComponentProps = $props();
+    let {
+        brokerWacHistory = [],
+        cumulativeWacHistory = [],
+        priceHistory = [],
+        lotEvents = [],
+        lots = [],
+        selectedLotIds = [],
+        performanceHistory = [],
+        incomeEvents = [],
+        brokers = [],
+        currency,
+        xAxisRange = null,
+        onZoomChange,
+        externalZoomStart = null,
+        externalZoomEnd = null,
+        onRangeComputed,
+        onLoadingChange,
+        onEventDoubleClick,
+        onSelectionChange,
+    }: ComponentProps = $props();
 
     let displayMode = $state<DisplayMode>('absolute');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -406,6 +455,17 @@
         const roi = $_('dashboard.roi');
         const twrr = $_('dashboard.twrr');
         const pmc = $_('dashboard.pmc');
+        const bubbleOpeningDate = $_('brokers.lots.openingDate');
+        const bubbleOpeningValue = $_('brokers.lots.openingValue');
+        const bubbleTotalPnl = $_('brokers.lots.totalPnl');
+        const bubbleTotalReturn = $_('brokers.lots.totalReturn');
+        const bubbleAssetIncome = $_('brokers.lots.assetIncome');
+        const bubbleEstimatedAtCost = $_('brokers.lots.estimatedAtCost');
+        const bubbleSeriesName = $_('brokers.lots.performanceBubbleTitle');
+        const bubbleState = $_('brokers.lots.status');
+        const bubbleStateOpen = $_('brokers.lots.states.OPEN');
+        const bubbleStatePartial = $_('brokers.lots.states.PARTIALLY_CLOSED');
+        const bubbleStateClosed = $_('brokers.lots.states.CLOSED');
 
         return {
             wac: !pmc || pmc === 'dashboard.pmc' ? 'WAC' : pmc,
@@ -427,6 +487,17 @@
             realizedPnl: !realizedPnl || realizedPnl === 'brokers.lots.chartMarkers.realizedPnl' ? 'Realized P&L' : realizedPnl,
             roi: !roi || roi === 'dashboard.roi' ? 'ROI' : roi,
             twrr: !twrr || twrr === 'dashboard.twrr' ? 'TWRR' : twrr,
+            bubbleOpeningDate: !bubbleOpeningDate || bubbleOpeningDate === 'brokers.lots.openingDate' ? 'Opening Date' : bubbleOpeningDate,
+            bubbleOpeningValue: !bubbleOpeningValue || bubbleOpeningValue === 'brokers.lots.openingValue' ? 'Opening Value' : bubbleOpeningValue,
+            bubbleTotalPnl: !bubbleTotalPnl || bubbleTotalPnl === 'brokers.lots.totalPnl' ? 'Total P&L' : bubbleTotalPnl,
+            bubbleTotalReturn: !bubbleTotalReturn || bubbleTotalReturn === 'brokers.lots.totalReturn' ? 'Total return' : bubbleTotalReturn,
+            bubbleAssetIncome: !bubbleAssetIncome || bubbleAssetIncome === 'brokers.lots.assetIncome' ? 'Income' : bubbleAssetIncome,
+            bubbleEstimatedAtCost: !bubbleEstimatedAtCost || bubbleEstimatedAtCost === 'brokers.lots.estimatedAtCost' ? 'Estimated at cost' : bubbleEstimatedAtCost,
+            bubbleSeriesName: !bubbleSeriesName || bubbleSeriesName === 'brokers.lots.performanceBubbleTitle' ? 'Lot performance' : bubbleSeriesName,
+            bubbleState: !bubbleState || bubbleState === 'brokers.lots.status' ? 'State' : bubbleState,
+            bubbleStateOpen: !bubbleStateOpen || bubbleStateOpen === 'brokers.lots.states.OPEN' ? 'Open' : bubbleStateOpen,
+            bubbleStatePartial: !bubbleStatePartial || bubbleStatePartial === 'brokers.lots.states.PARTIALLY_CLOSED' ? 'Partially closed' : bubbleStatePartial,
+            bubbleStateClosed: !bubbleStateClosed || bubbleStateClosed === 'brokers.lots.states.CLOSED' ? 'Closed' : bubbleStateClosed,
             markerLegend: {
                 buy: !markerLegendBuy || markerLegendBuy === 'brokers.lots.chartMarkers.legend.buy' ? 'Buys' : markerLegendBuy,
                 sell: !markerLegendSell || markerLegendSell === 'brokers.lots.chartMarkers.legend.sell' ? 'Sales' : markerLegendSell,
@@ -611,6 +682,318 @@
         return '';
     });
 
+    function incomeEventColor(type: LotIncomeEvent['type']): string {
+        if (type === 'DIVIDEND') return isDark ? '#2dd4bf' : '#0f766e';
+        return isDark ? '#a78bfa' : '#6d28d9';
+    }
+
+    function incomeEventTypeLabel(type: LotIncomeEvent['type']): string {
+        return type === 'DIVIDEND' ? $_('brokers.lots.incomeMarkerDividend') : $_('brokers.lots.incomeMarkerInterest');
+    }
+
+    let incomeMarkerEvents = $derived.by((): LotIncomeEvent[] => (incomeEvents ?? []).filter((event): event is LotIncomeEvent => (event?.type === 'DIVIDEND' || event?.type === 'INTEREST') && !!event.date));
+
+    function buildIncomeEventTooltip(event: LotIncomeEvent | null): string {
+        if (!event) return '';
+        const theme = buildTooltipTheme(isDark);
+        const amount = Number.parseFloat(event.amount);
+        const rows = [
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerType')), escapeHtml(incomeEventTypeLabel(event.type)), incomeEventColor(event.type)),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatShortDate(event.date))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerBroker')), escapeHtml(brokerName(event.broker_id))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, currency) : String(event.amount))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerLotCount')), escapeHtml(String(event.lot_ids?.length ?? 0))),
+        ];
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(incomeEventTypeLabel(event.type)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+    }
+
+    /** Opening unit price (cost basis / share) per lot id — the fallback height for income "|" markers on
+     * transactions-only assets that have no market price (e.g. Lonate: the buy price height). */
+    const openingUnitPriceByLot = $derived.by(() => {
+        const map = new Map<number, number>();
+        for (const lot of lots) {
+            const value = parseNumber(lot.opening_unit_price);
+            if (value != null) map.set(lot.lot_id, value);
+        }
+        return map;
+    });
+
+    /** Y (price) at which to drop an income "|" marker: the market price on that date, or — when the asset
+     * has no price history — the mean opening unit price of the lots the distribution was allocated to. */
+    function incomeMarkerYValue(event: LotIncomeEvent): number | null {
+        const market = resolveMarketPriceAtOrBefore(event.date, priceLookupPoints)?.absolute ?? null;
+        if (market != null) return market;
+        const prices = (event.lot_ids ?? []).map((id) => openingUnitPriceByLot.get(id)).filter((value): value is number => value != null);
+        if (prices.length === 0) return null;
+        return prices.reduce((sum, value) => sum + value, 0) / prices.length;
+    }
+
+    /** Income markers as short vertical "|" glyphs (rect 2×16px) sitting at the price line on the
+     * distribution date, coloured by type (dividend/interest). Only meaningful on the price axis, so
+     * rendered in ABS mode; returns undefined otherwise or when there are no income events. */
+    function buildIncomeMarkerSeries(): echarts.SeriesOption | undefined {
+        if (displayMode !== 'absolute' || incomeMarkerEvents.length === 0) return undefined;
+        const data = incomeMarkerEvents
+            .map((event) => {
+                const y = incomeMarkerYValue(event);
+                if (y == null) return null;
+                return {
+                    value: [event.date, y],
+                    incomeEvent: event,
+                    itemStyle: {color: incomeEventColor(event.type), opacity: 0.95},
+                };
+            })
+            .filter((entry): entry is {value: (string | number)[]; incomeEvent: LotIncomeEvent; itemStyle: {color: string; opacity: number}} => entry != null);
+        if (data.length === 0) return undefined;
+        return {
+            id: LOT_INCOME_MARKER_SERIES_ID,
+            name: LOT_INCOME_MARKER_SERIES_ID,
+            type: 'scatter',
+            symbol: 'rect',
+            symbolSize: [2, 16],
+            clip: true,
+            z: 5,
+            data,
+            emphasis: {scale: 1.4},
+            tooltip: {
+                trigger: 'item',
+                formatter: (param: any) => buildIncomeEventTooltip((param?.data?.incomeEvent ?? null) as LotIncomeEvent | null),
+            },
+        } as echarts.SeriesOption;
+    }
+
+    /** Append the income "|" markers so vertical distribution glyphs appear on the income dates
+     * (plan v3 §11). No-op when there are no income events / not in ABS mode. */
+    function attachIncomeMarkers(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
+        const markerSeries = buildIncomeMarkerSeries();
+        if (!markerSeries) return series;
+        return [...series, markerSeries];
+    }
+
+    interface LotBubblePoint {
+        lotId: number;
+        openingDate: string;
+        label: string;
+        brokerId: number | null;
+        brokerName: string;
+        fillColor: string;
+        priceAtOpening: number | null;
+        openingUnitPrice: number | null;
+        totalReturn: number | null;
+        totalPnl: number;
+        openQuantity: number;
+        originalQuantity: number;
+        openingValue: number;
+        assetIncome: number;
+        estimatedAtCost: boolean;
+        state: LotDisplayState;
+        active: boolean;
+    }
+
+    function lotBubbleFillColor(brokerId: number | null): string {
+        if (brokerId == null) return isDark ? '#94a3b8' : '#475569';
+        const colors = getBrokerColor(brokerId, brokers);
+        return isDark ? colors.vivid : colors.vividLight;
+    }
+
+    function lotBubbleSignColor(signed: number): string {
+        if (signed > LOT_BUBBLE_ZERO_EPS) return isDark ? '#4ade80' : '#16a34a';
+        if (signed < -LOT_BUBBLE_ZERO_EPS) return isDark ? '#f87171' : '#dc2626';
+        return isDark ? '#94a3b8' : '#64748b';
+    }
+
+    function lotBubbleRadius(value: number, minValue: number, maxValue: number): number {
+        const mid = (LOT_BUBBLE_MIN_RADIUS + LOT_BUBBLE_MAX_RADIUS) / 2;
+        if (maxValue <= minValue) return mid;
+        const minRoot = Math.sqrt(Math.max(0, minValue));
+        const maxRoot = Math.sqrt(Math.max(0, maxValue));
+        if (maxRoot === minRoot) return mid;
+        const valueRoot = Math.sqrt(Math.max(0, value));
+        const normalized = Math.min(1, Math.max(0, (valueRoot - minRoot) / (maxRoot - minRoot)));
+        return LOT_BUBBLE_MIN_RADIUS + normalized * (LOT_BUBBLE_MAX_RADIUS - LOT_BUBBLE_MIN_RADIUS);
+    }
+
+    const lotSelectionSet = $derived.by(() => new Set(selectedLotIds));
+
+    /** Sorted, deduped, non-null market prices for at-or-before lookups (bubble opening price). */
+    const priceLookupPoints = $derived.by<MarketPriceLookupPoint[]>(() => {
+        const byDate = new Map<string, number | null>();
+        for (const point of priceHistory) {
+            const value = parseNumber(point.market_price);
+            if (!byDate.has(point.date)) {
+                byDate.set(point.date, value);
+                continue;
+            }
+            if (byDate.get(point.date) == null && value != null) byDate.set(point.date, value);
+        }
+        return Array.from(byDate.entries())
+            .flatMap(([date, value]) => (value == null ? [] : [{date, absolute: value, percent: null}]))
+            .sort((left, right) => sortDates(left.date, right.date));
+    });
+
+    const lotBubblePoints = $derived.by<LotBubblePoint[]>(() => {
+        const longLots = lots.filter((lot) => lot.direction === 'LONG');
+        return longLots.map((lot) => {
+            const priceAtOpening = resolveMarketPriceAtOrBefore(lot.opening_date, priceLookupPoints)?.absolute ?? null;
+            const openQuantity = Math.max(0, parseNumber(lot.open_quantity) ?? 0);
+            const originalQuantity = Math.max(0, parseNumber(lot.original_quantity) ?? 0);
+            return {
+                lotId: lot.lot_id,
+                openingDate: lot.opening_date,
+                label: formatDate(lot.opening_date),
+                brokerId: lot.opening_broker_id,
+                brokerName: brokerName(lot.opening_broker_id),
+                fillColor: lotBubbleFillColor(lot.opening_broker_id),
+                priceAtOpening,
+                openingUnitPrice: parseNumber(lot.opening_unit_price),
+                totalReturn: parseNumber(lot.total_return),
+                totalPnl: parseNumber(lot.total_pnl) ?? 0,
+                openQuantity,
+                originalQuantity,
+                openingValue: Math.max(0, parseNumber(lot.original_cost) ?? 0),
+                assetIncome: parseNumber(lot.asset_income) ?? 0,
+                estimatedAtCost: safeString(lot.value_source) === 'ESTIMATED_AT_COST',
+                state: lotDisplayState(openQuantity, originalQuantity),
+                active: lotSelectionSet.size === 0 || lotSelectionSet.has(lot.lot_id),
+            };
+        });
+    });
+
+    function lotBubbleStateLabel(state: LotDisplayState): string {
+        if (state === 'OPEN') return labels.bubbleStateOpen;
+        if (state === 'PARTIAL') return labels.bubbleStatePartial;
+        return labels.bubbleStateClosed;
+    }
+
+    function buildBubbleTooltip(point: LotBubblePoint | null): string {
+        if (!point) return '';
+        const theme = buildTooltipTheme(isDark);
+        const rows = [
+            buildTooltipRow(escapeHtml(labels.bubbleOpeningDate), escapeHtml(formatDate(point.openingDate))),
+            buildTooltipRow(escapeHtml(labels.broker), escapeHtml(point.brokerName), point.fillColor),
+            buildTooltipRow(escapeHtml(labels.bubbleState), escapeHtml(lotBubbleStateLabel(point.state)), lotStateColor(point.state, isDark)),
+            buildTooltipRow(escapeHtml(labels.bubbleOpeningValue), escapeHtml(formatCurrencyAmountPlain(point.openingValue, currency))),
+            buildTooltipRow(escapeHtml(labels.bubbleTotalPnl), `<span style="color:${lotBubbleSignColor(point.totalPnl)}">${escapeHtml(formatCurrencyAmountPlain(point.totalPnl, currency))}</span>`),
+            buildTooltipRow(escapeHtml(labels.bubbleTotalReturn), point.totalReturn == null ? '—' : `<span style="color:${lotBubbleSignColor(point.totalReturn)}">${escapeHtml(formatPercent(point.totalReturn * 100))}</span>`),
+        ];
+        if (point.assetIncome > 0) {
+            rows.push(buildTooltipRow(escapeHtml(labels.bubbleAssetIncome), escapeHtml(formatCurrencyAmountPlain(point.assetIncome, currency))));
+        }
+        if (point.estimatedAtCost) {
+            rows.push(buildTooltipRow(escapeHtml(labels.bubbleEstimatedAtCost), escapeHtml('•'), point.fillColor));
+        }
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(point.label), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+    }
+
+    /** Per-lot performance bubbles + dashed baseline→bubble connectors (ABS: from the lot's opening unit
+     * price / cost basis; %: from the 0% baseline) + a small centre marker whose shape/colour encodes the
+     * lot's open/partial/closed state. Empty selection = all visible lots highlighted; otherwise
+     * non-selected bubbles are dimmed. */
+    function buildLotBubbleSeries(): echarts.SeriesOption[] {
+        const isAbsolute = displayMode === 'absolute';
+        const renderable = lotBubblePoints
+            .map((point) => {
+                if (point.totalReturn == null) return null;
+                if (isAbsolute) {
+                    // Base the ABS bubble on the lot's own opening unit price (cost basis / share) rather
+                    // than the market close on the opening day. total_return is computed against the lot's
+                    // cost basis, so opening_unit_price * (1 + total_return) collapses to the current unit
+                    // price → same-asset lots with no distributions land at the same height. It also lets
+                    // price-less assets (transactions only) still show a bubble (they always have a cost).
+                    const baseY = point.openingUnitPrice;
+                    if (baseY == null) return null;
+                    // Closed lots have no open quantity — size them by the original quantity instead so
+                    // they stay visible rather than collapsing to the minimum radius.
+                    const metric = point.openQuantity > 0 ? point.openQuantity : point.originalQuantity;
+                    return {point, baseY, yValue: baseY * (1 + point.totalReturn), metric};
+                }
+                return {point, baseY: 0, yValue: point.totalReturn * 100, metric: point.openingValue};
+            })
+            .filter((entry): entry is {point: LotBubblePoint; baseY: number; yValue: number; metric: number} => entry != null);
+
+        if (renderable.length === 0) return [];
+
+        const metrics = renderable.map((entry) => entry.metric);
+        const minMetric = Math.min(...metrics);
+        const maxMetric = Math.max(...metrics);
+
+        const series: echarts.SeriesOption[] = [];
+
+        for (const entry of renderable) {
+            const signColor = lotBubbleSignColor(entry.point.totalReturn ?? 0);
+            series.push({
+                id: `lot-bubble-connector-${entry.point.lotId}`,
+                name: `lot-bubble-connector-${entry.point.lotId}`,
+                type: 'line',
+                data: [
+                    [entry.point.openingDate, entry.baseY],
+                    [entry.point.openingDate, entry.yValue],
+                ],
+                showSymbol: false,
+                silent: true,
+                tooltip: {show: false},
+                lineStyle: {color: signColor, width: 1.25, type: 'dashed', opacity: entry.point.active ? 0.8 : 0.16},
+                emphasis: {disabled: true},
+                z: 4,
+            });
+        }
+
+        series.push({
+            id: 'lot-performance-bubbles',
+            name: labels.bubbleSeriesName,
+            type: 'scatter',
+            symbol: 'circle',
+            clip: true,
+            z: 6,
+            data: renderable.map((entry) => ({
+                name: `lot-bubble-${entry.point.lotId}`,
+                value: [entry.point.openingDate, entry.yValue],
+                lotBubbleId: entry.point.lotId,
+                point: entry.point,
+                symbolSize: lotBubbleRadius(entry.metric, minMetric, maxMetric) * 2,
+                itemStyle: {
+                    color: entry.point.fillColor,
+                    borderColor: isDark ? '#0f172a' : '#ffffff',
+                    borderWidth: entry.point.estimatedAtCost ? 2.5 : 1.5,
+                    borderType: entry.point.estimatedAtCost ? 'dashed' : 'solid',
+                    opacity: entry.point.active ? 0.9 : 0.22,
+                },
+                emphasis: {scale: true, itemStyle: {opacity: 1, borderColor: isDark ? '#e2e8f0' : '#0f172a', borderWidth: 2}},
+            })),
+            symbolSize: (_value: unknown, params: any) => params?.data?.symbolSize ?? 18,
+            cursor: onSelectionChange ? 'pointer' : 'default',
+            tooltip: {
+                trigger: 'item',
+                formatter: (param: any) => buildBubbleTooltip((param?.data?.point as LotBubblePoint | undefined) ?? null),
+            },
+        } as echarts.SeriesOption);
+
+        // Centre marker: silent so hover/click fall through to the bubble beneath; shape + colour encode
+        // the lot's open / partially-closed / closed state.
+        series.push({
+            id: 'lot-performance-bubble-centers',
+            name: 'lot-performance-bubble-centers',
+            type: 'scatter',
+            clip: true,
+            silent: true,
+            z: 7,
+            data: renderable.map((entry) => ({
+                value: [entry.point.openingDate, entry.yValue],
+                symbol: lotStateSymbol(entry.point.state),
+                itemStyle: {
+                    color: lotStateColor(entry.point.state, isDark),
+                    borderColor: isDark ? '#0f172a' : '#ffffff',
+                    borderWidth: 1,
+                    opacity: entry.point.active ? 1 : 0.28,
+                },
+            })),
+            symbolSize: 6,
+            tooltip: {show: false},
+        } as echarts.SeriesOption);
+
+        return series;
+    }
+
     function buildSeries(): echarts.SeriesOption[] {
         const valueKey = displayMode === 'absolute' ? 'absolute' : 'percent';
         const series: echarts.SeriesOption[] = [];
@@ -731,6 +1114,8 @@
             });
         }
 
+        series.push(...buildLotBubbleSeries());
+
         return series;
     }
 
@@ -822,9 +1207,26 @@
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
+    /** Legend names, excluding internal helper series that shouldn't appear as toggles: the per-lot
+     * bubble→baseline connectors, the bubble state centre markers and the income "|" markers. Keeps the
+     * real WAC/market/ROI lines, event markers and the single "lot-performance-bubbles" entry. */
+    function collectLegendNames(series: echarts.SeriesOption[]): string[] {
+        const names: string[] = [];
+        for (const item of series) {
+            const name = (item as {name?: unknown}).name;
+            if (typeof name !== 'string' || name.length === 0) continue;
+            if (name.startsWith('lot-bubble-connector-')) continue;
+            if (name === 'lot-performance-bubble-centers') continue;
+            if (name === LOT_INCOME_MARKER_SERIES_ID) continue;
+            names.push(name);
+        }
+        return names;
+    }
+
     function buildOption(): echarts.EChartsOption {
         const theme = buildTooltipTheme(isDark);
         const gridColors = buildGridColors(isDark);
+        const series = attachIncomeMarkers(buildSeries());
 
         return {
             ...CHART_ANIMATION_CONFIG,
@@ -837,6 +1239,7 @@
             },
             legend: {
                 type: 'scroll',
+                data: collectLegendNames(series),
                 top: 4,
                 left: 'center',
                 right: 8,
@@ -896,9 +1299,18 @@
                     formatter: (value: number) => (displayMode === 'absolute' ? formatAxisNumber(value) : `${normalizeZero(value).toFixed(0)}%`),
                 },
             },
-            series: buildSeries(),
-            dataZoom: buildDataZoom([0]),
+            series,
+            // Preserve the shared zoom window across re-renders: setOption otherwise resets
+            // dataZoom to 0-100 on every data/label change, silently desyncing this chart from
+            // the Gantt (whose window stayed put). Applying the external window here keeps the
+            // x-axis in sync; setOption does not re-emit a 'dataZoom' event, so no ping-pong.
+            dataZoom: applySharedZoomWindow(buildDataZoom([0])),
         };
+    }
+
+    function applySharedZoomWindow<T extends {start?: number; end?: number}>(zooms: T[]): T[] {
+        if (externalZoomStart == null || externalZoomEnd == null) return zooms;
+        return zooms.map((zoom) => ({...zoom, start: externalZoomStart as number, end: externalZoomEnd as number}));
     }
 
     function setupResizeObserver() {
@@ -932,6 +1344,18 @@
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
             dataZoomSyncHandle = attachDataZoomSync(chartInstance, (start, end) => onZoomChange?.(start, end));
+            chartInstance.on('dblclick', (params: any) => {
+                const event = (params?.seriesType === 'scatter' ? (params?.data?.meta as EventMarkerDatum | undefined)?.event : undefined) ?? null;
+                if (event) onEventDoubleClick?.(event);
+            });
+            chartInstance.on('click', (params: any) => {
+                const lotBubbleId = params?.data?.lotBubbleId as number | undefined;
+                if (lotBubbleId == null || !onSelectionChange) return;
+                const current = new Set(selectedLotIds);
+                if (current.has(lotBubbleId)) current.delete(lotBubbleId);
+                else current.add(lotBubbleId);
+                onSelectionChange(Array.from(current));
+            });
         }
 
         if (!showChart) {
@@ -981,6 +1405,8 @@
         void brokers;
         void xAxisRange;
         void performancePercentPoints;
+        void lotBubblePoints;
+        void selectedLotIds;
 
         if (!chartContainer) return;
         tick().then(() => {

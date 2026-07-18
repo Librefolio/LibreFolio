@@ -276,8 +276,13 @@ class SchwabBrokerProvider(BRIMProvider):
                         TransactionType.DIVIDEND,
                         TransactionType.ADJUSTMENT,
                     ]
+                    # FEE/TAX rows sometimes carry the related Symbol (e.g. "ADR
+                    # Mgmt Fee", "Foreign Tax Paid" on an ADR holding) — link when
+                    # resolvable, but never require it: most FEE/TAX rows (e.g.
+                    # "Advisor Fee") are genuinely account-level with no symbol.
+                    asset_optional = tx_type in [TransactionType.FEE, TransactionType.TAX]
 
-                    if asset_required:
+                    if asset_required or (asset_optional and symbol):
                         if not symbol:
                             if tx_type == TransactionType.DIVIDEND:
                                 # Dividend from a cash fund (e.g. money-market) with no ticker

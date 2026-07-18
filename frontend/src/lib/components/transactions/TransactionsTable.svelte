@@ -1005,7 +1005,7 @@
         enableSorting={!compact}
         enableContextMenu={!compact}
         stickyActions={false}
-        actionsColumnWidth="160px"
+        actionsColumnWidth="64px"
         emptyMessage={$t('transactions.empty') || 'No transactions yet'}
         {getRowClass}
         {getRowStyle}

@@ -193,8 +193,12 @@ class FinpensionBrokerProvider(BRIMProvider):
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
                     ]
+                    # FEE rows ("flat-rate administrative fee") are normally
+                    # account-level with no asset info, but link when the
+                    # source row does carry an ISIN/asset name.
+                    asset_optional = tx_type in [TransactionType.FEE, TransactionType.TAX]
 
-                    if asset_required:
+                    if asset_required or (asset_optional and (isin or asset_name)):
                         if not isin and not asset_name:
                             warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
                             continue

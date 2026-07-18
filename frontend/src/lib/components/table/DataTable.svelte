@@ -23,7 +23,7 @@
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
-    import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, PaginationState, RowAction, SelectionState, SortState, VisibilityState} from './types';
+    import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
 
     interface Props {
         data: T[];
@@ -41,7 +41,8 @@
         onRowDoubleClick?: (row: T) => void;
         enableActions?: boolean;
         actionsColumnWidth?: string;
-        rowActions?: RowAction<T>[];
+        actionsLabel?: string;
+        rowActions?: RowActions<T>;
         bulkActions?: BulkAction<T>[];
         enableSorting?: boolean;
         enableColumnFilters?: boolean;
@@ -105,6 +106,8 @@
          *  even if all items fit on the current page. Default: false (hide when
          *  all items fit on the smallest non-zero page size). */
         alwaysShowPagination?: boolean;
+        /** Optional aggregate footer. Receives selected rows, or filtered rows when nothing is selected. */
+        footerCells?: FooterCells<T>;
     }
 
     let {
@@ -121,7 +124,8 @@
         onRowClick,
         onRowDoubleClick,
         enableActions = true,
-        actionsColumnWidth = '100px',
+        actionsColumnWidth = '64px',
+        actionsLabel,
         rowActions = [],
         bulkActions = [],
         enableSorting = true,
@@ -150,6 +154,7 @@
         onColumnResize,
         getRowHref,
         alwaysShowPagination = false,
+        footerCells,
     }: Props = $props();
 
     /** Dataset used for computing filter boundaries (min/max, currency ranges). */
@@ -171,6 +176,7 @@
     // Context menu
     let contextMenuRow = $state<T | null>(null);
     let contextMenuPos = $state<{x: number; y: number} | null>(null);
+    let contextMenuAnchor = $state<HTMLElement | null>(null);
 
     // Pagination
     let pagination = $state<PaginationState>({
@@ -322,6 +328,10 @@
     // Visible and ordered columns (for table rendering)
     let visibleColumns = $derived(orderedColumns.filter((c) => columnVisibility[c.id] !== false));
 
+    let hasRowActionProvider = $derived(typeof rowActions === 'function' || rowActions.length > 0);
+    let showActionsColumn = $derived(enableActions && hasRowActionProvider);
+    let resolvedActionsLabel = $derived(actionsLabel ?? $t('table.actions') ?? 'Actions');
+
     // Filtered data
     let filteredData = $derived.by(() => {
         let result = [...data];
@@ -435,6 +445,13 @@
             .map((id) => data.find((row) => getRowId(row) === id))
             .filter((r): r is T => r !== undefined),
     );
+
+    let footerSourceRows = $derived(selectedRows.length > 0 ? selectedRows : filteredData);
+    let computedFooterCells = $derived.by<Record<string, FooterCellContent>>(() => {
+        if (!footerCells) return {};
+        return typeof footerCells === 'function' ? footerCells(footerSourceRows, selectedRows, visibleColumns) : footerCells;
+    });
+    let hasFooterCells = $derived(Object.keys(computedFooterCells).length > 0);
 
     // Check if all rows on current page are selected
     let isAllPageSelected = $derived.by(() => {
@@ -786,6 +803,40 @@
         }
     }
 
+    function getVisibleRowActions(row: T): RowAction<T>[] {
+        const actions = typeof rowActions === 'function' ? rowActions(row) : rowActions;
+        return actions.filter((action) => !action.visible || action.visible(row));
+    }
+
+    function rowActionsToMenuItems(actions: RowAction<T>[], row: T): ContextMenuItem[] {
+        return actions.map((action) => ({
+            id: action.id,
+            label: typeof action.label === 'function' ? action.label(row) : action.label,
+            icon: action.icon,
+            variant: action.variant,
+            disabled: action.disabled?.(row) ?? false,
+        }));
+    }
+
+    function openRowActionsMenu(row: T, button: HTMLButtonElement): void {
+        const rect = button.getBoundingClientRect();
+        contextMenuRow = row;
+        contextMenuAnchor = button;
+        contextMenuPos = {x: rect.left, y: rect.bottom + 4};
+    }
+
+    function closeContextMenu(): void {
+        contextMenuRow = null;
+        contextMenuPos = null;
+        contextMenuAnchor = null;
+    }
+
+    function handleContextMenuAction(actionId: string, row: T): void {
+        const action = getVisibleRowActions(row).find((candidate) => candidate.id === actionId);
+        closeContextMenu();
+        if (action) handleRowAction(action, row);
+    }
+
     function confirmRowAction() {
         if (pendingRowAction) {
             pendingRowAction.action.onClick(pendingRowAction.row);
@@ -809,7 +860,8 @@
     }
 
     function toggleColumnVisibility(columnId: string) {
-        columnVisibility = {...columnVisibility, [columnId]: !columnVisibility[columnId]};
+        const current = columnVisibility[columnId] ?? defaultColumnVisibility[columnId] ?? true;
+        columnVisibility = {...columnVisibility, [columnId]: !current};
         saveToStorage(getStorageKey('columnVisibility'), columnVisibility);
     }
 
@@ -1225,9 +1277,9 @@
                     {/each}
 
                     <!-- Actions column -->
-                    {#if enableActions && rowActions.length > 0}
+                    {#if showActionsColumn}
                         <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};">
-                            {$t('table.actions') || 'Actions'}
+                            {resolvedActionsLabel}
                         </th>
                     {/if}
                 </tr>
@@ -1235,14 +1287,14 @@
             <tbody>
                 {#if isLoading}
                     <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)} class="td-loading">
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading">
                             <div class="loading-spinner"></div>
                             <span>{$t('common.loading') || 'Loading...'}</span>
                         </td>
                     </tr>
                 {:else if paginatedData.length === 0}
                     <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (enableActions ? 1 : 0)} class="td-empty">
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-empty">
                             {emptyMessage || $t('common.noData') || 'No data available'}
                         </td>
                     </tr>
@@ -1250,6 +1302,7 @@
                     {#each paginatedData as row}
                         {@const rowId = getRowId(row)}
                         {@const isSelected = rowSelection[rowId]}
+                        {@const visibleRowActions = getVisibleRowActions(row)}
                         <tr
                             data-row-id={rowId}
                             class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
@@ -1270,9 +1323,10 @@
                                 }
                             }}
                             oncontextmenu={(e) => {
-                                if (enableContextMenu && rowActions.length > 0) {
+                                if (enableContextMenu && visibleRowActions.length > 0) {
                                     e.preventDefault();
                                     contextMenuRow = row;
+                                    contextMenuAnchor = null;
                                     contextMenuPos = {x: e.clientX, y: e.clientY};
                                     return;
                                 }
@@ -1490,28 +1544,25 @@
                             {/each}
 
                             <!-- Actions cell -->
-                            {#if enableActions && rowActions.length > 0}
+                            {#if showActionsColumn}
                                 <td class="{stickyActions ? 'td-fixed' : ''} td-actions">
                                     <div class="actions-row">
-                                        {#each rowActions as action}
-                                            {#if !action.visible || action.visible(row)}
-                                                <button
-                                                    type="button"
-                                                    class="action-btn"
-                                                    data-action-id={action.id}
-                                                    data-testid="row-action-{action.id}"
-                                                    class:danger={action.variant === 'danger'}
-                                                    disabled={action.disabled?.(row)}
-                                                    onclick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleRowAction(action, row);
-                                                    }}
-                                                    title={typeof action.label === 'function' ? action.label(row) : action.label}
-                                                >
-                                                    <action.icon size={16} class={action.iconClass?.(row) ?? ''} />
-                                                </button>
-                                            {/if}
-                                        {/each}
+                                        {#if visibleRowActions.length > 0}
+                                            <button
+                                                type="button"
+                                                class="row-actions-btn"
+                                                data-testid="row-actions-{rowId}"
+                                                aria-label={resolvedActionsLabel}
+                                                title={resolvedActionsLabel}
+                                                onclick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    openRowActionsMenu(row, e.currentTarget);
+                                                }}
+                                            >
+                                                ⋮
+                                            </button>
+                                        {/if}
                                     </div>
                                 </td>
                             {/if}
@@ -1519,6 +1570,58 @@
                     {/each}
                 {/if}
             </tbody>
+            {#if hasFooterCells && !isLoading && footerSourceRows.length > 0}
+                <tfoot>
+                    <tr>
+                        {#if effectiveSelectionMode === 'multi'}
+                            <td class="td-fixed td-select td-footer"></td>
+                        {/if}
+                        {#each visibleColumns as column}
+                            {@const footerContent = computedFooterCells[column.id] ?? ''}
+                            <td class="td-data td-footer" class:td-fixed={column.pinned != null} class:td-pinned-right={column.pinned === 'right'} style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
+                                {#if typeof footerContent === 'string' || typeof footerContent === 'number'}
+                                    {footerContent}
+                                {:else if footerContent && typeof footerContent === 'object' && 'type' in footerContent && footerContent.type === 'html'}
+                                    {#if footerContent.tooltip}
+                                        <Tooltip text={footerContent.tooltip.text ?? ''} html={footerContent.tooltip.html ?? ''} position={footerContent.tooltip.position ?? 'top'} maxWidth={footerContent.tooltip.maxWidth ?? '320px'}>
+                                            {#if footerContent.onClick}
+                                                <button
+                                                    type="button"
+                                                    class="cursor-pointer"
+                                                    onclick={(event) => {
+                                                        event.stopPropagation();
+                                                        footerContent.onClick?.();
+                                                    }}
+                                                >
+                                                    {@html footerContent.html}
+                                                </button>
+                                            {:else}
+                                                <span>{@html footerContent.html}</span>
+                                            {/if}
+                                        </Tooltip>
+                                    {:else if footerContent.onClick}
+                                        <button
+                                            type="button"
+                                            class="cursor-pointer"
+                                            onclick={(event) => {
+                                                event.stopPropagation();
+                                                footerContent.onClick?.();
+                                            }}
+                                        >
+                                            {@html footerContent.html}
+                                        </button>
+                                    {:else}
+                                        {@html footerContent.html}
+                                    {/if}
+                                {/if}
+                            </td>
+                        {/each}
+                        {#if showActionsColumn}
+                            <td class="{stickyActions ? 'td-fixed' : ''} td-actions td-footer"></td>
+                        {/if}
+                    </tr>
+                </tfoot>
+            {/if}
         </table>
     </div>
 
@@ -1531,32 +1634,7 @@
 <!-- Context menu for right-click / long-press -->
 {#if contextMenuRow != null && contextMenuPos != null}
     {@const cmRow = contextMenuRow}
-    <ContextMenu
-        x={contextMenuPos.x}
-        y={contextMenuPos.y}
-        items={rowActions
-            .filter((a) => !a.visible || a.visible(cmRow))
-            .map(
-                (a) =>
-                    ({
-                        id: a.id,
-                        label: typeof a.label === 'function' ? a.label(cmRow) : a.label,
-                        icon: a.icon,
-                        variant: a.variant,
-                        disabled: a.disabled?.(cmRow) ?? false,
-                    }) satisfies ContextMenuItem,
-            )}
-        onAction={(id) => {
-            const action = rowActions.find((a) => a.id === id);
-            if (action) handleRowAction(action, cmRow);
-            contextMenuRow = null;
-            contextMenuPos = null;
-        }}
-        onClose={() => {
-            contextMenuRow = null;
-            contextMenuPos = null;
-        }}
-    />
+    <ContextMenu x={contextMenuPos.x} y={contextMenuPos.y} items={rowActionsToMenuItems(getVisibleRowActions(cmRow), cmRow)} anchorEl={contextMenuAnchor} onAction={(id) => handleContextMenuAction(id, cmRow)} onClose={closeContextMenu} />
 {/if}
 
 <!-- Confirm modal for bulk actions -->
@@ -1810,6 +1888,26 @@
 
     :global(.dark) tbody tr {
         background: #0f172a;
+    }
+
+    tfoot tr {
+        background: #f8fafc;
+    }
+
+    :global(.dark) tfoot tr {
+        background: #1e293b;
+    }
+
+    .td-footer {
+        border-top: 1px solid #e2e8f0;
+        border-bottom: 0;
+        font-weight: 700;
+        color: #334155;
+    }
+
+    :global(.dark) .td-footer {
+        border-top-color: #334155;
+        color: #e2e8f0;
     }
 
     tbody tr:hover {
@@ -2222,67 +2320,41 @@
     .actions-row {
         display: flex;
         justify-content: center;
-        gap: 0.375rem;
     }
 
-    .action-btn {
-        display: flex;
+    .row-actions-btn {
+        display: inline-flex;
+        height: 1.75rem;
+        width: 1.75rem;
         align-items: center;
         justify-content: center;
-        width: 28px;
-        height: 28px;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        background: #f8fafc;
+        border: 0;
+        border-radius: 9999px;
+        background: transparent;
         color: #64748b;
         cursor: pointer;
-        transition: all 0.15s;
+        font-size: 1.25rem;
+        line-height: 1;
+        transition:
+            background-color 0.15s,
+            color 0.15s;
     }
 
-    .action-btn:hover {
-        background: #f1f5f9;
-        border-color: #cbd5e1;
-        color: #0f172a;
+    .row-actions-btn:hover,
+    .row-actions-btn:focus-visible {
+        background: #e2e8f0;
+        color: #1a4031;
+        outline: none;
     }
 
-    .action-btn.danger {
-        color: #dc2626;
-        border-color: #fecaca;
-        background: #fef2f2;
+    :global(.dark) .row-actions-btn {
+        color: #94a3b8;
     }
 
-    .action-btn.danger:hover {
-        background: #fee2e2;
-        border-color: #fca5a5;
-        color: #b91c1c;
-    }
-
-    .action-btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-    }
-
-    :global(.dark) .action-btn {
-        background: #1e293b;
-        border-color: #334155;
-        color: #cbd5e1;
-    }
-
-    :global(.dark) .action-btn:hover {
+    :global(.dark) .row-actions-btn:hover,
+    :global(.dark) .row-actions-btn:focus-visible {
         background: #334155;
-        border-color: #475569;
-        color: #f8fafc;
-    }
-
-    :global(.dark) .action-btn.danger {
-        color: #f87171;
-        border-color: #7f1d1d;
-        background: #450a0a;
-    }
-
-    :global(.dark) .action-btn.danger:hover {
-        background: #7f1d1d;
-        border-color: #991b1b;
+        color: #4ade80;
     }
 
     /* Responsive: hide sticky actions on mobile */

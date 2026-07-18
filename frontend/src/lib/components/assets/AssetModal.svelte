@@ -386,7 +386,7 @@
         {
             id: 'delete',
             icon: X,
-            label: 'Remove',
+            label: () => $t('common.remove'),
             variant: 'danger',
             onClick: (row) => removeIdentifierRow(row.id),
         },
@@ -1469,7 +1469,7 @@
                                 enableColumnResize={false}
                                 enableColumnVisibility={false}
                                 enableActions={true}
-                                actionsColumnWidth="40px"
+                                actionsColumnWidth="64px"
                                 rowActions={identifierRowActions}
                                 tableLayout="auto"
                             />

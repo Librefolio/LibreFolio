@@ -703,19 +703,8 @@
       "incomeMarkerType": "Type",
       "lotIdentifierCopied": "Lot identifier copied",
       "lotIdentifierHelp": "Stable technical identifier derived from the opening transaction, used for audit, support and API correlation.",
-      "openingBroker": "Opening broker",
-      "otherEffectsBroker": "Broker",
-      "otherEffectsCategory": "Category",
-      "otherEffectsDescription": "Description",
-      "otherEffectsPeriodPnl": "Period P&L",
-      "otherEffectsSubtitle": "Income and costs not allocated to lots",
-      "otherEffectsTitle": "Other effects for the period",
       "otherReconciliationResidual": "Reconciliation residual",
-      "performanceAbsMode": "ABS",
-      "performancePctMode": "%",
-      "performanceBubbleEmpty": "No LONG lots to display",
       "performanceBubbleTitle": "Lot performance",
-      "performanceNoData": "No data",
       "totalPnl": "Total P&L",
       "unallocatedCosts": "Unallocated costs",
       "unallocatedIncome": "Unallocated income",
@@ -735,8 +724,8 @@
         "MARKET_PRICE": "Market price",
         "ESTIMATED_AT_COST": "Estimated at cost"
       },
-      "viewTimeline": "Timeline",
-      "viewPerformance": "Performance"
+      "footerTotals": "Totals",
+      "closedOnly": "Closed"
     },
     "createdInSystem": "Created in System"
   },

@@ -247,7 +247,7 @@
         rowActions={[
             {
                 id: 'sync',
-                label: 'Sync',
+                label: () => $t('common.sync'),
                 icon: RotateCw,
                 onClick: async (row) => {
                     const rid = String(row.id);

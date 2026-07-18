@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.portfolio import IssueCode
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.utils.datetime_utils import utcnow
 
@@ -786,3 +787,284 @@ async def test_performance_history_missing_price_yields_none_without_exception(s
     assert points[date(2025, 1, 11)].twrr is None
     assert points[date(2025, 1, 12)].roi == Decimal("0.2")
     assert points[date(2025, 1, 12)].twrr is None
+
+
+@pytest.mark.asyncio
+async def test_dividend_allocated_pro_rata_to_open_long_lots(session, test_user, asset, broker):
+    """DIVIDEND is split across open LONG lots by open quantity; conservation holds; metrics reflect income."""
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 15), quantity=Decimal("30"), amount=Decimal("-3000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 20), quantity=Decimal("-4"), amount=Decimal("520"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), quantity=Decimal("0"), amount=Decimal("360"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 2, 1), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 1),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None
+    by_qty = {lot.original_quantity: lot for lot in result.lots}
+    lot_a = by_qty[Decimal("10")]  # partially sold (open 6)
+    lot_b = by_qty[Decimal("30")]  # fully open
+
+    # Conservation: total allocated income equals the dividend amount.
+    assert lot_a.asset_income + lot_b.asset_income == Decimal("360")
+    # Pro-rata by open quantity at dividend date: A open 6, B open 30 -> 6/36 and 30/36.
+    assert lot_a.asset_income == Decimal("60")
+    assert lot_b.asset_income == Decimal("300")
+
+    # Lot A (partial): market_pnl excludes income, total_pnl includes it.
+    assert lot_a.realized_pnl == Decimal("120")
+    assert lot_a.market_pnl == Decimal("0")
+    assert lot_a.total_pnl == Decimal("180")
+    assert lot_a.cash_yield == Decimal("60") / Decimal("1000")
+    assert lot_a.total_return == Decimal("180") / Decimal("1000")
+    assert lot_a.value_source == "MARKET_PRICE"
+
+    # Lot B (fully open, no market move): total_pnl == income.
+    assert lot_b.market_pnl == Decimal("0")
+    assert lot_b.total_pnl == Decimal("300")
+    assert lot_b.total_return == Decimal("300") / Decimal("3000")
+
+    # Value/return history carry cumulative income for lot B (0 before, 300 from dividend date).
+    b_value = _points_by_date([p for p in result.value_history if p.lot_id == lot_b.lot_id])
+    assert b_value[date(2025, 1, 31)].income == Decimal("0")
+    assert b_value[date(2025, 2, 1)].income == Decimal("300")
+    b_return = _points_by_date([p for p in result.return_history if p.lot_id == lot_b.lot_id])
+    assert b_return[date(2025, 2, 1)].total_return == Decimal("300") / Decimal("3000")
+
+
+@pytest.mark.asyncio
+async def test_income_events_payload_exposes_allocated_income_markers(session, test_user, asset, broker):
+    """INCOME_EVENTS returns one marker per allocated income tx with total amount + involved lot ids (plan v3 §11)."""
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 15), quantity=Decimal("30"), amount=Decimal("-3000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), quantity=Decimal("0"), amount=Decimal("360"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.INTEREST, date=date(2025, 2, 10), quantity=Decimal("0"), amount=Decimal("40"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 2, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "INCOME_EVENTS"],
+    )
+
+    assert result.income_events is not None
+    assert len(result.income_events) == 2
+    by_date = {event.date: event for event in result.income_events}
+
+    dividend = by_date[date(2025, 2, 1)]
+    assert dividend.type == "DIVIDEND"
+    assert dividend.amount == Decimal("360")
+    assert dividend.broker_id == broker.id
+    # Both lots open at the dividend date -> both allocated.
+    lot_ids = {lot.lot_id for lot in result.lots}
+    assert set(dividend.lot_ids) == lot_ids
+
+    interest = by_date[date(2025, 2, 10)]
+    assert interest.type == "INTEREST"
+    assert interest.amount == Decimal("40")
+
+
+@pytest.mark.asyncio
+async def test_dividend_in_foreign_currency_converted_to_target(session, test_user, asset, broker):
+    """Income is FX-converted to target currency at the transaction date before allocation."""
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), quantity=Decimal("0"), amount=Decimal("120"), currency="USD"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 2, 1), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            FxRate(date=date(2025, 2, 1), base="EUR", quote="USD", rate=Decimal("1.25"), source="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 1),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    assert result.lots[0].asset_income == Decimal("96")  # 120 USD / 1.25
+
+
+@pytest.mark.asyncio
+async def test_estimated_at_cost_when_no_price_history(session, test_user, asset, broker):
+    """No price history -> open value estimated at cost, market_pnl 0, income still accrues, DQ issue raised."""
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("1000"), amount=Decimal("-15000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.INTEREST, date=date(2025, 3, 1), quantity=Decimal("0"), amount=Decimal("1250"), currency="EUR"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 3, 1),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    assert lot.value_source == "ESTIMATED_AT_COST"
+    assert lot.open_value == Decimal("15000")
+    assert lot.market_pnl == Decimal("0")
+    assert lot.asset_income == Decimal("1250")
+    assert lot.total_pnl == Decimal("1250")
+    assert lot.total_return == Decimal("1250") / Decimal("15000")
+
+    codes = {issue.code for issue in result.data_quality.issues}
+    assert IssueCode.CURRENT_PRICE_ASSUMED_AT_COST in codes
+
+    # History is now populated (previously skipped when market_price was None).
+    assert result.value_history
+    last_value = _points_by_date(result.value_history)[date(2025, 3, 1)]
+    assert last_value.open_value == Decimal("15000")
+    assert last_value.income == Decimal("1250")
+    last_return = _points_by_date(result.return_history)[date(2025, 3, 1)]
+    assert abs(last_return.total_return - Decimal("1250") / Decimal("15000")) < Decimal("1e-9")
+
+
+@pytest.mark.asyncio
+async def test_income_after_lot_closed_is_not_allocated(session, test_user, asset, broker):
+    """A dividend paid after the only lot is fully closed is not attributed to it (broker-level effect)."""
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 20), quantity=Decimal("-10"), amount=Decimal("1300"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), quantity=Decimal("0"), amount=Decimal("50"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 2, 1), close=Decimal("130"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 1),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    assert lot.asset_income == Decimal("0")
+    assert lot.total_pnl == lot.pnl  # income does not distort a fully-closed lot
+
+
+@pytest.mark.asyncio
+async def test_same_asset_open_value_scales_with_quantity_only(session, test_user, asset, broker):
+    """Reproduces the user report: 4 open lots of the same asset show DIFFERENT current values.
+
+    Expected (not a bug): current value = open_quantity * latest_market_price, and
+    latest_market_price is a single scalar shared by every lot of the asset. So the per-unit
+    current value is uniform across lots; a lot with a larger open quantity simply has a larger
+    current value. Here 3 lots hold 36 units (-> 304.20) and 1 lot holds 40 units (-> 338.00),
+    latest price 8.45 EUR, mirroring the real portfolio numbers.
+    """
+    latest_price = Decimal("8.45")
+    quantities = [Decimal("36"), Decimal("36"), Decimal("40"), Decimal("36")]
+    buy_dates = [date(2026, 1, 2), date(2026, 2, 2), date(2026, 3, 2), date(2026, 7, 1)]
+    unit_costs = [Decimal("7.67"), Decimal("7.89"), Decimal("7.79"), Decimal("8.48")]
+
+    rows: list = []
+    for qty, buy_date, unit_cost in zip(quantities, buy_dates, unit_costs, strict=True):
+        rows.append(
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=buy_date,
+                quantity=qty,
+                amount=-(qty * unit_cost),
+                currency="EUR",
+            )
+        )
+        rows.append(
+            PriceHistory(asset_id=asset.id, date=buy_date, close=unit_cost, currency="EUR", source_plugin_key="TEST")
+        )
+    # Single latest market price shared by all lots.
+    rows.append(PriceHistory(asset_id=asset.id, date=date(2026, 7, 2), close=latest_price, currency="EUR", source_plugin_key="TEST"))
+    session.add_all(rows)
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2026, 7, 2),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 4
+    lots = sorted(result.lots, key=lambda lot_row: lot_row.opening_date)
+
+    # 1) Every lot is priced at the same single market price.
+    for lot in lots:
+        assert lot.value_source == "MARKET_PRICE"
+        assert lot.open_value == lot.open_quantity * latest_price
+        # Per-unit current value is uniform across all lots of the asset.
+        assert lot.open_value / lot.open_quantity == latest_price
+
+    # 2) The differing current values are explained ONLY by differing quantities.
+    by_qty = {lot.open_quantity: lot.open_value for lot in lots}
+    assert by_qty[Decimal("36")] == Decimal("304.20")
+    assert by_qty[Decimal("40")] == Decimal("338.00")
+    assert by_qty[Decimal("40")] - by_qty[Decimal("36")] == (Decimal("40") - Decimal("36")) * latest_price
+
+    # 3) Totals are internally consistent (sum of lots == total quantity * price).
+    total_quantity = sum((lot.open_quantity for lot in lots), Decimal("0"))
+    total_open_value = sum((lot.open_value for lot in lots), Decimal("0"))
+    assert total_quantity == Decimal("148")
+    assert total_open_value == Decimal("1250.60")
+    assert total_open_value == total_quantity * latest_price

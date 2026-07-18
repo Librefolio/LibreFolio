@@ -703,19 +703,8 @@
       "incomeMarkerType": "Type",
       "lotIdentifierCopied": "Identifiant du lot copié",
       "lotIdentifierHelp": "Identifiant technique stable dérivé de la transaction d'ouverture, utilisé pour l'audit, le support et la corrélation API.",
-      "openingBroker": "Courtier d'ouverture",
-      "otherEffectsBroker": "Courtier",
-      "otherEffectsCategory": "Catégorie",
-      "otherEffectsDescription": "Description",
-      "otherEffectsPeriodPnl": "P&L de la période",
-      "otherEffectsSubtitle": "Revenus et coûts non alloués aux lots",
-      "otherEffectsTitle": "Autres effets de la période",
       "otherReconciliationResidual": "Résidu de réconciliation",
-      "performanceAbsMode": "ABS",
-      "performancePctMode": "%",
-      "performanceBubbleEmpty": "Aucun lot LONG à afficher",
       "performanceBubbleTitle": "Performance des lots",
-      "performanceNoData": "Aucune donnée",
       "totalPnl": "P&L total",
       "unallocatedCosts": "Coûts non alloués",
       "unallocatedIncome": "Revenus non alloués",
@@ -735,8 +724,8 @@
         "MARKET_PRICE": "Prix de marché",
         "ESTIMATED_AT_COST": "Estimé au coût"
       },
-      "viewTimeline": "Chronologie",
-      "viewPerformance": "Performance"
+      "footerTotals": "Totaux",
+      "closedOnly": "Fermés"
     },
     "createdInSystem": "Créé dans le Système"
   },
