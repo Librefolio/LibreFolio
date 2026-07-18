@@ -171,6 +171,7 @@
     let axisResizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
+    let activeTooltipDataIndex: number | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let axisDataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
@@ -1004,15 +1005,17 @@
                         style: {
                             stroke: themeDark ? 'rgba(226,232,240,0.48)' : 'rgba(71,85,105,0.45)',
                             lineWidth: 1.5,
+                            fill: 'none',
                         },
                     });
                 }
 
                 if (isClippedLeft) {
-                    // Segment starts before the visible range — a left-pointing chevron replaces
-                    // the usual opening dot to signal "this lot's story continues off-screen".
+                    // Segment starts before the visible range — a left-pointing chevron ("‹" arrow,
+                    // stroked not filled) replaces the usual opening dot to signal "this lot's story
+                    // continues off-screen" without reading as a heavy black triangle when selected.
                     children.push({
-                        type: 'polygon',
+                        type: 'polyline',
                         silent: true,
                         shape: {
                             points: [
@@ -1021,13 +1024,13 @@
                                 [edgeMarkerX + 6, startCoord[1] + Math.min(7, barHeight / 2)],
                             ],
                         },
-                        style: {fill: borderColor, opacity: 0.9},
+                        style: {stroke: borderColor, lineWidth: 2, fill: 'none', opacity: 0.9},
                     });
                 }
 
                 if ((meta.isOpen || isClippedRight) && rectShape.width >= 24) {
                     children.push({
-                        type: 'polygon',
+                        type: 'polyline',
                         silent: true,
                         shape: {
                             points: [
@@ -1036,7 +1039,7 @@
                                 [rectShape.x + rectShape.width - 10, startCoord[1] + Math.min(7, barHeight / 2)],
                             ],
                         },
-                        style: {fill: borderColor, opacity: 0.9},
+                        style: {stroke: borderColor, lineWidth: 2, fill: 'none', opacity: 0.9},
                     });
                 }
 
@@ -1302,11 +1305,24 @@
     function showSegmentTooltip(rect: OverlayRect) {
         const seriesIndex = segmentsSeriesIndex();
         if (seriesIndex == null) return;
+        activeTooltipDataIndex = rect.dataIndex;
         chartInstance?.dispatchAction({type: 'showTip', seriesIndex, dataIndex: rect.dataIndex});
     }
 
     function hideSegmentTooltip() {
+        activeTooltipDataIndex = null;
         chartInstance?.dispatchAction({type: 'hideTip'});
+    }
+
+    /** Re-assert the currently hovered/tapped segment's tooltip after a selection re-render.
+     * On touch a tap both shows the tooltip (mouseenter) and toggles selection (click); the
+     * selection setOption would otherwise drop the freshly shown tip — re-showing keeps it up
+     * (the touch auto-hide timer still dismisses it a few seconds later). */
+    function reassertActiveTooltip() {
+        if (activeTooltipDataIndex == null) return;
+        const seriesIndex = segmentsSeriesIndex();
+        if (seriesIndex == null) return;
+        chartInstance?.dispatchAction({type: 'showTip', seriesIndex, dataIndex: activeTooltipDataIndex});
     }
 
     function renderChart() {
@@ -1383,6 +1399,9 @@
         if (!chartInstance || !chartHasData) return;
         chartInstance.setOption(
             {
+                // Selection only re-tints existing bars — skip the 450ms update morph so a mobile tap
+                // (which both selects and shows a tooltip) doesn't animate every chart or drop the tip.
+                animationDurationUpdate: 0,
                 series: [
                     {name: '__lane-highlight', data: laneHighlightData},
                     {name: '__segments', data: segmentSeriesData},
@@ -1392,6 +1411,7 @@
             {notMerge: false},
         );
         refreshOverlayRects();
+        reassertActiveTooltip();
     }
 
     $effect(() => {

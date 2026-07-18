@@ -129,9 +129,6 @@
     let {selectedLots = [], valueHistory = [], returnHistory = [], brokers = [], currency, xAxisRange = null, incomeEvents = []}: Props = $props();
 
     let mode = $state<ChartMode>('value');
-    // C1: Return chart can be read as weighted % (default) or as absolute currency P&L,
-    // where the aggregate is the plain visible sum of the individual lots.
-    let returnDisplay = $state<'percentage' | 'absolute'>('percentage');
     // C2: Value chart Y axis — automatic (data-fit) or anchored at 0.
     let valueYFromZero = $state(false);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -208,7 +205,7 @@
     function formatShortDate(value: string): string {
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, {day: '2-digit', month: '2-digit'});
+        return date.toLocaleDateString($currentLanguage || undefined, {day: '2-digit', month: '2-digit', year: '2-digit'});
     }
 
     function formatLongDate(value: number | string): string {
@@ -365,12 +362,8 @@
         comprehensiveValue: tr('brokers.lots.aggregateComprehensiveValue', 'Comprehensive value'),
         aggregateOpeningValue: tr('brokers.lots.aggregateOpeningValue', 'Opening value'),
         aggregateReturn: tr('brokers.lots.aggregateReturn', 'Aggregate return'),
-        aggregateReturnNotComputable: tr('brokers.lots.aggregateReturnNotComputable', 'Not computable (opening value <= 0)'),
         fifoPnl: tr('brokers.lots.fifoPnl', 'FIFO P&L'),
-        totalReturn: tr('brokers.lots.totalReturn', 'Total return'),
         totalPnl: tr('brokers.lots.tooltip.totalPnl', 'Total P&L'),
-        abs: tr('dashboard.abs', 'Abs'),
-        pct: tr('dashboard.pct', '%'),
         yAuto: tr('brokers.lots.yAxisAuto', 'Auto'),
         yFromZero: tr('brokers.lots.yAxisFromZero', 'From 0'),
         openReturn: tr('brokers.lots.openReturn', 'Open Return'),
@@ -487,7 +480,7 @@
     const returnLotsWithData = $derived.by(() => visibleLots.filter((lot) => returnPointsByLotId.get(lot.lotId)?.some((point) => point.totalReturn != null)));
 
     const aggregateReturnPoints = $derived.by(() => {
-        if (returnLotsWithData.length < 2) return [] satisfies AggregateReturnPoint[];
+        if (returnLotsWithData.length < 1) return [] satisfies AggregateReturnPoint[];
 
         const totals = new Map<string, {date: string; pnlWithIncome: number; openingValue: number}>();
         for (const lot of returnLotsWithData) {
@@ -509,7 +502,7 @@
             .sort((left, right) => left.date.localeCompare(right.date)) satisfies AggregateReturnPoint[];
     });
 
-    const showAggregateReturn = $derived(returnLotsWithData.length >= 2 && aggregateReturnPoints.length > 0);
+    const showAggregateReturn = $derived(returnLotsWithData.length >= 1 && aggregateReturnPoints.length > 0);
 
     const emptyMessage = $derived.by(() => {
         if (selectedLots.length === 0) return modeLabels.selectLots;
@@ -560,15 +553,9 @@
             } else if (mode === 'return') {
                 for (const lotId of event.lot_ids ?? []) {
                     if (!visibleLots.some((lot) => lot.lotId === lotId)) continue;
-                    if (returnDisplay === 'absolute') {
-                        const vp = findPointAtOrBefore(valuePointsByLotId.get(lotId) ?? [], timestamp);
-                        if (!vp) continue;
-                        data.push({value: [event.date, vp.pnl + vp.income], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
-                    } else {
-                        const point = findPointAtOrBefore(returnPointsByLotId.get(lotId) ?? [], timestamp);
-                        if (!point || point.totalReturn == null) continue;
-                        data.push({value: [event.date, point.totalReturn * 100], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
-                    }
+                    const vp = findPointAtOrBefore(valuePointsByLotId.get(lotId) ?? [], timestamp);
+                    if (!vp) continue;
+                    data.push({value: [event.date, vp.pnl + vp.income], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
                 }
             }
         }
@@ -619,6 +606,23 @@
         return min != null && max != null ? [min, max] : null;
     }
 
+    /** Every distinct x-date present in the given series, sorted ascending. Used to build a DENSE
+     * axis-trigger anchor so the shared infobox + per-lot hover dots fire at every plotted date
+     * (with a time axis, a 2-point anchor only snaps near its endpoints). */
+    function seriesDataDates(series: echarts.SeriesOption[]): string[] {
+        const dates = new Set<string>();
+        for (const item of series) {
+            const data = (item as {data?: unknown[]}).data;
+            if (!Array.isArray(data)) continue;
+            for (const raw of data) {
+                const x = Array.isArray((raw as {value?: unknown[]})?.value) ? (raw as {value: unknown[]}).value[0] : Array.isArray(raw) ? (raw as unknown[])[0] : null;
+                if (typeof x !== 'string' || x.trim() === '') continue;
+                dates.add(x);
+            }
+        }
+        return Array.from(dates).sort((left, right) => left.localeCompare(right));
+    }
+
     /** Prepend the hidden axis-trigger anchor (see AXIS_TRIGGER_ANCHOR_ID) only when no visible
      * series is left to drive the chart-level axis tooltip — i.e. every series opted out via the
      * per-lot item-trigger override. No-op otherwise, so value mode keeps its native axis
@@ -631,14 +635,21 @@
         });
         if (hasAxisSeries) return series;
 
-        const range = xAxisRange ? ([xAxisRange.min, xAxisRange.max] as [string, string]) : seriesDataDateRange(series);
-        if (!range) return series;
+        const anchorDates = seriesDataDates(series);
+        let anchorData: Array<ReturnType<typeof namedPoint>>;
+        if (anchorDates.length > 0) {
+            anchorData = anchorDates.map((date) => namedPoint(date, 0));
+        } else {
+            const range = xAxisRange ? ([xAxisRange.min, xAxisRange.max] as [string, string]) : seriesDataDateRange(series);
+            if (!range) return series;
+            anchorData = [namedPoint(range[0], 0), namedPoint(range[1], 0)];
+        }
 
         const anchor: echarts.SeriesOption = {
             id: AXIS_TRIGGER_ANCHOR_ID,
             name: AXIS_TRIGGER_ANCHOR_ID,
             type: 'line',
-            data: [namedPoint(range[0], 0), namedPoint(range[1], 0)],
+            data: anchorData,
             showSymbol: false,
             symbol: 'none',
             connectNulls: false,
@@ -655,14 +666,9 @@
         return returnLotsWithData
             .map((lot) => {
                 if (excludedLotIds.has(lot.lotId)) return null;
-                if (returnDisplay === 'absolute') {
-                    const vp = findPointAtOrBefore(valuePointsByLotId.get(lot.lotId) ?? [], timestampMs);
-                    if (!vp) return null;
-                    return buildTooltipRow(escapeHtml(lot.label), escapeHtml(formatCurrencyAmountPlain(vp.pnl + vp.income, currency, {showSign: true})), lotColor(lot.lotId));
-                }
-                const point = findPointAtOrBefore(returnPointsByLotId.get(lot.lotId) ?? [], timestampMs);
-                if (!point || point.totalReturn == null) return null;
-                return buildTooltipRow(escapeHtml(lot.label), escapeHtml(formatPercent(point.totalReturn * 100)), lotColor(lot.lotId));
+                const vp = findPointAtOrBefore(valuePointsByLotId.get(lot.lotId) ?? [], timestampMs);
+                if (!vp) return null;
+                return buildTooltipRow(escapeHtml(lot.label), escapeHtml(formatCurrencyAmountPlain(vp.pnl + vp.income, currency, {showSign: true})), lotColor(lot.lotId));
             })
             .filter((row): row is string => row != null);
     }
@@ -671,12 +677,7 @@
         if (!showAggregateReturn) return [];
         const point = findPointAtOrBefore(aggregateReturnPoints, timestampMs);
         if (!point) return [];
-        const value =
-            returnDisplay === 'absolute'
-                ? formatCurrencyAmountPlain(point.pnlWithIncome, currency, {showSign: true})
-                : point.totalReturn == null || point.openingValue <= 0
-                  ? modeLabels.aggregateReturnNotComputable
-                  : formatPercent(point.totalReturn * 100);
+        const value = formatCurrencyAmountPlain(point.pnlWithIncome, currency, {showSign: true});
         return [buildTooltipRow(escapeHtml(modeLabels.aggregateReturn), escapeHtml(value), aggregateReturnColor())];
     }
 
@@ -717,8 +718,8 @@
 
                 const color = typeof param.color === 'string' ? param.color : lotColor(lot.lotId);
                 const valuePoint = valuePointByLotDate.get(pointKey(lot.lotId, returnPoint.date));
-                const headlineLabel = returnDisplay === 'absolute' ? modeLabels.totalPnl : modeLabels.totalReturn;
-                const headlineValue = returnDisplay === 'absolute' ? formatCurrencyAmountPlain(value, currency, {showSign: true}) : formatPercent(value);
+                const headlineLabel = modeLabels.totalPnl;
+                const headlineValue = formatCurrencyAmountPlain(value, currency, {showSign: true});
                 const rows: string[] = [buildTooltipRow(escapeHtml(headlineLabel), escapeHtml(headlineValue), color)];
 
                 if (returnPoint.relativeReturn != null) {
@@ -770,7 +771,7 @@
                 itemStyle: {color: residualLineColor},
                 emphasis: {scale: false, focus: 'none'},
                 blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}, areaStyle: {opacity: isDark ? 0.4 : 0.22}},
-                z: 1,
+                z: 3,
                 zlevel: 0,
             },
             {
@@ -853,13 +854,13 @@
                 id: AGGREGATE_RETURN_SERIES_ID,
                 name: modeLabels.aggregateReturn,
                 type: 'line',
-                data: aggregateReturnPoints.map((point) => namedPoint(point.date, returnDisplay === 'absolute' ? point.pnlWithIncome : point.totalReturn == null ? null : point.totalReturn * 100)),
+                data: aggregateReturnPoints.map((point) => namedPoint(point.date, point.pnlWithIncome)),
                 showSymbol: false,
                 symbol: 'none',
                 connectNulls: false,
                 smooth: false,
                 lineStyle: {width: 2.4, color},
-                areaStyle: {color: withAlpha(color, isDark ? 0.18 : 0.14)},
+                areaStyle: {color: withAlpha(color, isDark ? 0.18 : 0.14), origin: 0},
                 itemStyle: {color},
                 emphasis: {scale: false, focus: 'none'},
                 blur: {lineStyle: {opacity: 1}, itemStyle: {opacity: 1}, areaStyle: {opacity: isDark ? 0.18 : 0.14}},
@@ -868,26 +869,27 @@
             });
         }
 
-        for (const lot of returnLotsWithData) {
-            const color = lotColor(lot.lotId);
-            series.push({
-                id: `return-${lot.lotId}`,
-                name: lot.label,
-                type: 'line',
-                data:
-                    returnDisplay === 'absolute'
-                        ? (valuePointsByLotId.get(lot.lotId) ?? []).map((point) => namedPoint(point.date, point.pnl + point.income))
-                        : (returnPointsByLotId.get(lot.lotId) ?? []).map((point) => namedPoint(point.date, point.totalReturn == null ? null : point.totalReturn * 100)),
-                showSymbol: false,
-                connectNulls: false,
-                smooth: false,
-                lineStyle: {width: 2.5, color},
-                itemStyle: {color},
-                emphasis: {scale: false, focus: 'none'},
-                tooltip: PER_LOT_LINE_TOOLTIP_OVERRIDE,
-                z: 6,
-                zlevel: 0,
-            });
+        // Individual lot lines only when 2+ lots are plotted; with a single lot we show the
+        // aggregate area alone (R7.5) so the shape reads the P&L from 0 instead of a lone flat line.
+        if (returnLotsWithData.length >= 2) {
+            for (const lot of returnLotsWithData) {
+                const color = lotColor(lot.lotId);
+                series.push({
+                    id: `return-${lot.lotId}`,
+                    name: lot.label,
+                    type: 'line',
+                    data: (valuePointsByLotId.get(lot.lotId) ?? []).map((point) => namedPoint(point.date, point.pnl + point.income)),
+                    showSymbol: false,
+                    connectNulls: false,
+                    smooth: false,
+                    lineStyle: {width: 2.5, color},
+                    itemStyle: {color},
+                    emphasis: {scale: false, focus: 'none'},
+                    tooltip: PER_LOT_LINE_TOOLTIP_OVERRIDE,
+                    z: 6,
+                    zlevel: 0,
+                });
+            }
         }
 
         return attachIncomeMarkers(series);
@@ -896,12 +898,12 @@
     /** Position dots for return-mode per-lot lines at a hovered date (r3 fix5). */
     function buildPerLotHoverDotData(axisValueMs: number): Array<{value: [number, number]; itemStyle: {color: string}}> {
         const dots: Array<{value: [number, number]; itemStyle: {color: string}}> = [];
-        if (mode !== 'return') return dots;
+        if (mode !== 'return' || returnLotsWithData.length < 2) return dots;
 
         for (const lot of returnLotsWithData) {
-            const point = findPointAtOrBefore(returnPointsByLotId.get(lot.lotId) ?? [], axisValueMs);
-            if (!point || point.totalReturn == null) continue;
-            dots.push({value: [axisValueMs, point.totalReturn * 100], itemStyle: {color: lotColor(lot.lotId)}});
+            const vp = findPointAtOrBefore(valuePointsByLotId.get(lot.lotId) ?? [], axisValueMs);
+            if (!vp) continue;
+            dots.push({value: [axisValueMs, vp.pnl + vp.income], itemStyle: {color: lotColor(lot.lotId)}});
         }
         return dots;
     }
@@ -1009,13 +1011,17 @@
             },
             yAxis: {
                 type: 'value',
-                ...(mode === 'value' && valueYFromZero ? {min: 0, scale: false} : {scale: true}),
+                ...(mode === 'value' && valueYFromZero
+                    ? {min: 0, scale: false}
+                    : mode === 'return'
+                      ? {min: (v: {min: number}) => Math.min(0, v.min), max: (v: {max: number}) => Math.max(0, v.max), scale: true}
+                      : {scale: true}),
                 axisLine: {show: false},
                 axisTick: {show: false},
                 splitLine: {lineStyle: {color: gridColors.gridColor}},
                 axisLabel: {
                     color: gridColors.textColor,
-                    formatter: (value: number) => (mode === 'return' && returnDisplay === 'percentage' ? `${normalizeZero(value).toFixed(0)}%` : formatAxisNumber(value)),
+                    formatter: (value: number) => formatAxisNumber(value),
                 },
             },
             series: [...baseSeries, emptyHoverDotsSeries()],
@@ -1129,7 +1135,6 @@
         void currency;
         void incomeEvents;
         void mode;
-        void returnDisplay;
         void valueYFromZero;
         void xAxisRange;
         void lotModels;
@@ -1160,49 +1165,7 @@
         </h3>
 
         <div class="flex flex-wrap items-center gap-2">
-            <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-mode-toggle">
-                <button
-                    type="button"
-                    class="px-3 py-1 transition-colors {mode === 'value' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                    onclick={() => (mode = 'value')}
-                    aria-pressed={mode === 'value'}
-                    data-testid="lot-comparison-mode-value"
-                >
-                    {modeLabels.value}
-                </button>
-                <button
-                    type="button"
-                    class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {mode === 'return' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                    onclick={() => (mode = 'return')}
-                    aria-pressed={mode === 'return'}
-                    data-testid="lot-comparison-mode-return"
-                >
-                    {modeLabels.return}
-                </button>
-            </div>
-
-            {#if mode === 'return'}
-                <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-return-display-toggle">
-                    <button
-                        type="button"
-                        class="px-3 py-1 transition-colors {returnDisplay === 'percentage' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                        onclick={() => (returnDisplay = 'percentage')}
-                        aria-pressed={returnDisplay === 'percentage'}
-                        data-testid="lot-comparison-return-display-pct"
-                    >
-                        {modeLabels.pct}
-                    </button>
-                    <button
-                        type="button"
-                        class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {returnDisplay === 'absolute' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                        onclick={() => (returnDisplay = 'absolute')}
-                        aria-pressed={returnDisplay === 'absolute'}
-                        data-testid="lot-comparison-return-display-abs"
-                    >
-                        {modeLabels.abs}
-                    </button>
-                </div>
-            {:else}
+            {#if mode === 'value'}
                 <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-value-yaxis-toggle">
                     <button
                         type="button"
@@ -1224,6 +1187,27 @@
                     </button>
                 </div>
             {/if}
+
+            <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-mode-toggle">
+                <button
+                    type="button"
+                    class="px-3 py-1 transition-colors {mode === 'value' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                    onclick={() => (mode = 'value')}
+                    aria-pressed={mode === 'value'}
+                    data-testid="lot-comparison-mode-value"
+                >
+                    {modeLabels.value}
+                </button>
+                <button
+                    type="button"
+                    class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {mode === 'return' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                    onclick={() => (mode = 'return')}
+                    aria-pressed={mode === 'return'}
+                    data-testid="lot-comparison-mode-return"
+                >
+                    {modeLabels.return}
+                </button>
+            </div>
         </div>
     </div>
 

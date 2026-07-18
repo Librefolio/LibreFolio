@@ -584,6 +584,9 @@ class TestLotsAnalysisEndpoint:
 
             assert data["calculation_status"] == "COMPLETE"
             assert data["target_currency"] == "EUR"
+            # quote_base_quantity is echoed so the frontend can rescale per-quote unit prices
+            # (opening_unit_price) onto the per-unit price axis. Default asset => 1.
+            assert data["quote_base_quantity"] == 1
             assert len(data["lots"]) == 1
             lot = data["lots"][0]
             assert lot["direction"] == "LONG"
