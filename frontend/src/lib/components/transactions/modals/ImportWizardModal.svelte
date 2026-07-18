@@ -23,7 +23,7 @@
     import {getIndexColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
-    import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded} from '$lib/stores/transactions/transactionTypeStore';
+    import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/stores/transactions/transactionTypeStore';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -43,7 +43,7 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import type {ColumnDef, RowAction, EnumOption} from '$lib/components/table/types';
     import type {BrimDuplicateMatch} from '$lib/types/files';
     import TransactionFormModal from '$lib/components/transactions/modals/TransactionFormModal.svelte';
     import type {TXReadItem} from '$lib/components/transactions';
@@ -679,7 +679,11 @@
                 width: 140,
                 minWidth: 100,
                 getValue: (mt) => String(mt.tx.type ?? ''),
-                enumOptions: [],
+                enumOptions: TX_TYPES.filter((tt) => mergedTransactions.some((mt) => String(mt.tx.type ?? '') === tt)).map((tt) => ({
+                    value: tt,
+                    label: $t(`transactions.types.${tt}`) || tt,
+                    iconUrl: getTransactionTypeIconUrl(tt),
+                })),
                 cell: (mt) => {
                     const type = String(mt.tx.type ?? '');
                     const slug = type.toLowerCase().replace(/_/g, '-');
@@ -697,12 +701,60 @@ ${arrow}<span>${label}</span></span>`,
             {
                 id: 'asset',
                 header: () => $t('common.asset'),
-                type: 'text',
+                type: 'enum',
                 sortable: true,
                 filterable: true,
                 width: 200,
                 minWidth: 150,
-                getValue: (mt) => getAssetDisplayName(typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null),
+                getValue: (mt) => {
+                    const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
+                    if (assetId === null) return '__null__';
+                    if (isFakeAssetId(assetId)) {
+                        const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
+                        // Group under the resolved real asset once assigned; keep distinct per
+                        // extracted instrument while still unresolved.
+                        if (res?.resolvedAssetId) return String(res.resolvedAssetId);
+                        return String(assetId);
+                    }
+                    return String(assetId);
+                },
+                enumOptions: (() => {
+                    const opts = new Map<string, EnumOption>();
+                    let hasNull = false;
+                    for (const mt of mergedTransactions) {
+                        const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
+                        if (assetId === null) {
+                            hasNull = true;
+                            continue;
+                        }
+                        if (isFakeAssetId(assetId)) {
+                            const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
+                            if (res?.resolvedAssetId) {
+                                const key = String(res.resolvedAssetId);
+                                if (!opts.has(key)) {
+                                    const rInfo = getAssetInfo(res.resolvedAssetId);
+                                    const rIcon = rInfo?.icon_url ?? (rInfo?.asset_type ? getAssetTypeIconUrl(rInfo.asset_type) : undefined);
+                                    opts.set(key, {value: key, label: rInfo?.display_name ?? `#${res.resolvedAssetId}`, iconUrl: rIcon ?? undefined});
+                                }
+                                continue;
+                            }
+                            const key = String(assetId);
+                            if (!opts.has(key)) {
+                                opts.set(key, {value: key, label: getAssetDisplayName(assetId), dotColor: '#dc2626'});
+                            }
+                            continue;
+                        }
+                        const key = String(assetId);
+                        if (!opts.has(key)) {
+                            const info = getAssetInfo(assetId);
+                            const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : undefined);
+                            opts.set(key, {value: key, label: info?.display_name ?? `#${assetId}`, iconUrl: iconUrl ?? undefined});
+                        }
+                    }
+                    const list = [...opts.values()].sort((a, b) => a.label.localeCompare(b.label));
+                    if (hasNull) list.unshift({value: '__null__', label: $t('transactions.noAsset')});
+                    return list;
+                })(),
                 cell: (mt) => {
                     const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
                     if (assetId === null) return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
