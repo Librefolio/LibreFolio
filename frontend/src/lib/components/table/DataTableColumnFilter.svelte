@@ -19,6 +19,7 @@
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {currencyStoreVersion} from '$lib/stores/reference/currencyStore';
+    import {clamp, DROPDOWN_VIEWPORT_MARGIN} from '$lib/utils/layout/dropdownPosition';
 
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
@@ -622,18 +623,23 @@
         if (anchorElement) {
             const updatePosition = () => {
                 const rect = anchorElement!.getBoundingClientRect();
-                const popW = popoverElement?.offsetWidth ?? 240;
+                // Never let the popover be wider than the viewport (minus a safety
+                // margin on each side) — narrow/mobile screens otherwise get a
+                // popover wider than the screen itself.
+                const maxPopW = window.innerWidth - DROPDOWN_VIEWPORT_MARGIN * 2;
+                const popW = Math.min(popoverElement?.offsetWidth ?? 240, maxPopW);
                 const popH = popoverElement?.offsetHeight ?? 300;
-                let left = rect.left;
-                // Prevent overflow on right edge
-                if (left + popW > window.innerWidth - 8) {
-                    left = window.innerWidth - popW - 8;
-                }
+                // Clamp horizontal position on BOTH edges — previously only the right
+                // edge was guarded, so a popover wider than the viewport (or anchored
+                // near the left edge) could still spill off-screen to the left.
+                const minLeft = DROPDOWN_VIEWPORT_MARGIN;
+                const maxLeft = Math.max(minLeft, window.innerWidth - popW - DROPDOWN_VIEWPORT_MARGIN);
+                const left = clamp(rect.left, minLeft, maxLeft);
                 // Smart top/bottom: open upward if not enough space below
                 const spaceBelow = window.innerHeight - rect.bottom - 8;
                 const openAbove = spaceBelow < popH && rect.top > popH;
                 const top = openAbove ? rect.top - popH - 4 : rect.bottom + 4;
-                popoverStyle = `position: fixed; top: ${top}px; left: ${left}px;`;
+                popoverStyle = `position: fixed; top: ${top}px; left: ${left}px; max-width: ${maxPopW}px;`;
             };
             updatePosition();
             // Re-measure after first render to get actual popover height
@@ -1016,6 +1022,7 @@
         left: 0;
         margin-top: 0.25rem;
         min-width: 240px;
+        box-sizing: border-box;
         background: white;
         border: 1px solid #e2e8f0;
         border-radius: 8px;
@@ -1507,6 +1514,17 @@
         text-align: center;
     }
 
+    /* No rule existed for this at all — long unbroken labels (asset/broker names)
+     * forced the row (and the whole popover) wider than intended. Same truncation
+     * recipe as .currency-stack-range below. */
+    .enum-label {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .enum-option-icon {
         width: 1rem;
         height: 1rem;
@@ -1572,7 +1590,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
-        min-width: 280px;
+        min-width: min(280px, 100%);
     }
     .currency-add-row {
         display: flex;
