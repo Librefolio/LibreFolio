@@ -1838,9 +1838,14 @@ class PortfolioCalculationEngine:
         if blob_hit and cached_blob is not None:
             blob_from = cached_blob.date_from
             blob_to = cached_blob.date_to
-            # Check if requested range is fully contained in blob
-            if blob_from <= actual_from and blob_to >= actual_to:
-                logger.debug("Portfolio blob cache hit (contained)", user_id=user_id)
+            # Check if requested range exactly matches the blob's range.
+            # NOTE: must be an EXACT match on blob_to, not a superset check
+            # (blob_to >= actual_to). The blob's daily_states/position_states_end/
+            # end_state are not trimmed to actual_to before being returned, so a
+            # "wider" cached blob would leak days beyond the requested date_to
+            # into every downstream consumer (get_history, get_summary, ...).
+            if blob_from <= actual_from and blob_to == actual_to:
+                logger.debug("Portfolio blob cache hit (exact match)", user_id=user_id)
                 return cached_blob
             # Forward extension: blob covers from start but needs more days at end
             if (blob_from <= actual_from and blob_to < actual_to

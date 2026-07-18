@@ -1,7 +1,7 @@
 """Integration tests for LotsAnalysisService."""
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -27,6 +27,36 @@ from backend.app.utils.datetime_utils import utcnow
 
 def _points_by_date(points):
     return {point.date: point for point in points}
+
+
+def _points_by_lot_date(points):
+    return {(point.lot_id, point.date): point for point in points}
+
+
+def _assert_closed_lot_history_flat(result, lot_id: int, close_date: date, date_to: date) -> None:
+    assert result.value_history is not None
+    assert result.return_history is not None
+    value_points = _points_by_lot_date(result.value_history)
+    return_points = _points_by_lot_date(result.return_history)
+
+    close_value = value_points[(lot_id, close_date)]
+    close_return = return_points[(lot_id, close_date)]
+    assert close_value.open_value == Decimal("0")
+
+    current_date = close_date + timedelta(days=1)
+    while current_date <= date_to:
+        value_point = value_points[(lot_id, current_date)]
+        return_point = return_points[(lot_id, current_date)]
+
+        assert value_point.open_value == Decimal("0")
+        assert value_point.proceeds == close_value.proceeds
+        assert value_point.income == close_value.income
+        assert value_point.total_value == close_value.total_value
+        assert value_point.pnl == close_value.pnl
+        assert return_point.income == close_return.income
+        assert return_point.total_return == close_return.total_return
+
+        current_date += timedelta(days=1)
 
 
 @pytest.fixture(scope="module")
@@ -964,6 +994,191 @@ async def test_estimated_at_cost_when_no_price_history(session, test_user, asset
     assert last_value.income == Decimal("1250")
     last_return = _points_by_date(result.return_history)[date(2025, 3, 1)]
     assert abs(last_return.total_return - Decimal("1250") / Decimal("15000")) < Decimal("1e-9")
+
+
+@pytest.mark.asyncio
+async def test_closed_lot_history_continues_flat_without_close_market_price(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 12), quantity=Decimal("-10"), amount=Decimal("1300"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 15), close=Decimal("125"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 16),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY", "PRICE_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    _assert_closed_lot_history_flat(result, lot.lot_id, date(2025, 1, 12), date(2025, 1, 16))
+
+    value_points = _points_by_lot_date(result.value_history)
+    return_points = _points_by_lot_date(result.return_history)
+    assert value_points[(lot.lot_id, date(2025, 1, 12))].proceeds == Decimal("1300")
+    assert value_points[(lot.lot_id, date(2025, 1, 12))].pnl == Decimal("300")
+    assert return_points[(lot.lot_id, date(2025, 1, 12))].total_return == Decimal("0.3")
+    assert return_points[(lot.lot_id, date(2025, 1, 13))].relative_return is None
+    assert return_points[(lot.lot_id, date(2025, 1, 14))].relative_return is None
+    assert result.price_history == []
+
+
+@pytest.mark.asyncio
+async def test_partially_then_fully_closed_lot_history_continues_flat(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 12), quantity=Decimal("-4"), amount=Decimal("520"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 14), quantity=Decimal("-6"), amount=Decimal("780"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 14), close=Decimal("130"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 16),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    _assert_closed_lot_history_flat(result, lot.lot_id, date(2025, 1, 14), date(2025, 1, 16))
+
+    close_value = _points_by_lot_date(result.value_history)[(lot.lot_id, date(2025, 1, 14))]
+    assert close_value.proceeds == Decimal("1300")
+    assert close_value.pnl == Decimal("300")
+
+
+@pytest.mark.asyncio
+async def test_closed_lot_history_keeps_income_crystallized_after_close(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 12), quantity=Decimal("0"), amount=Decimal("50"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 14), quantity=Decimal("-10"), amount=Decimal("1200"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 14), close=Decimal("120"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 16),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    _assert_closed_lot_history_flat(result, lot.lot_id, date(2025, 1, 14), date(2025, 1, 16))
+
+    close_value = _points_by_lot_date(result.value_history)[(lot.lot_id, date(2025, 1, 14))]
+    close_return = _points_by_lot_date(result.return_history)[(lot.lot_id, date(2025, 1, 14))]
+    assert close_value.income == Decimal("50")
+    assert close_value.total_value == Decimal("1200")
+    assert close_value.pnl == Decimal("200")
+    assert close_return.income == Decimal("50")
+    assert close_return.total_return == Decimal("0.25")
+
+
+@pytest.mark.asyncio
+async def test_closed_and_open_lots_keep_independent_history_continuity(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 11), quantity=Decimal("5"), amount=Decimal("-500"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 12), quantity=Decimal("-10"), amount=Decimal("1300"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 12), close=Decimal("130"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 14), close=Decimal("140"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 14),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 2
+    closed_lot = next(row for row in result.lots if row.opening_date == date(2025, 1, 10))
+    open_lot = next(row for row in result.lots if row.opening_date == date(2025, 1, 11))
+    _assert_closed_lot_history_flat(result, closed_lot.lot_id, date(2025, 1, 12), date(2025, 1, 14))
+
+    open_value = _points_by_lot_date(result.value_history)[(open_lot.lot_id, date(2025, 1, 14))]
+    open_return = _points_by_lot_date(result.return_history)[(open_lot.lot_id, date(2025, 1, 14))]
+    assert open_value.open_value == Decimal("700")
+    assert open_value.total_value == Decimal("700")
+    assert open_return.total_return == Decimal("0.4")
+
+
+@pytest.mark.asyncio
+async def test_multiple_fully_closed_lots_each_continue_flat_to_date_to(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 11), quantity=Decimal("20"), amount=Decimal("-2000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 12), quantity=Decimal("-10"), amount=Decimal("1100"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 1, 13), quantity=Decimal("-20"), amount=Decimal("2500"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 13), close=Decimal("125"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 15),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 2
+    first_lot = next(row for row in result.lots if row.opening_date == date(2025, 1, 10))
+    second_lot = next(row for row in result.lots if row.opening_date == date(2025, 1, 11))
+
+    _assert_closed_lot_history_flat(result, first_lot.lot_id, date(2025, 1, 12), date(2025, 1, 15))
+    _assert_closed_lot_history_flat(result, second_lot.lot_id, date(2025, 1, 13), date(2025, 1, 15))
+
+    value_points = _points_by_lot_date(result.value_history)
+    assert value_points[(first_lot.lot_id, date(2025, 1, 12))].pnl == Decimal("100")
+    assert value_points[(second_lot.lot_id, date(2025, 1, 13))].pnl == Decimal("500")
 
 
 @pytest.mark.asyncio

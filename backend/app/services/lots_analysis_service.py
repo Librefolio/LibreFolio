@@ -1339,27 +1339,40 @@ class LotsAnalysisService:
         points: list[LotValueHistoryPoint] = []
         for lot_id in selected_ids:
             lot = lots_by_id[lot_id]
-            last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1])
+            last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1], extend_closed=True)
             proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost
             converted_short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) or lot.cumulative_proceeds
             income_prefix = income_prefix_by_lot.get(lot_id, {})
             estimated_unit_value = converted_original_cost / lot.original_quantity if lot.original_quantity != Decimal("0") else Decimal("0")
+            fragments = fragments_by_lot.get(lot_id, [])
             for current_date in history_dates:
                 if current_date < lot.opening_date or current_date > last_date:
                     continue
                 market_price = market_prices.get(current_date)
                 if market_price is None:
-                    if not (estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0")):
+                    open_quantity = self._open_quantity_on_date(fragments, current_date)
+                    if open_quantity == Decimal("0"):
+                        open_value = Decimal("0")
+                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
+                        if lot.direction == "LONG":
+                            total_value = open_value + proceeds
+                            pnl = total_value - converted_original_cost
+                        else:
+                            proceeds = converted_short_proceeds
+                            total_value = proceeds - open_value
+                            pnl = total_value
+                    elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
+                        open_value = open_quantity * estimated_unit_value
+                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
+                        total_value = open_value + proceeds
+                        pnl = total_value - converted_original_cost
+                    else:
                         continue
-                    open_value = self._open_quantity_on_date(fragments_by_lot.get(lot_id, []), current_date) * estimated_unit_value
-                    proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-                    total_value = open_value + proceeds
-                    pnl = total_value - converted_original_cost
                 else:
                     open_value, proceeds, total_value, pnl = self._value_snapshot_on_date(
                         lot=lot,
-                        fragments=fragments_by_lot.get(lot_id, []),
+                        fragments=fragments,
                         proceeds_by_day=proceeds_by_day,
                         market_price=market_price,
                         current_date=current_date,
@@ -1400,27 +1413,38 @@ class LotsAnalysisService:
             lot = lots_by_id[lot_id]
             raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup)
             converted_reference = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
-            last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1])
+            last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1], extend_closed=True)
             proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost
             converted_short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) or lot.cumulative_proceeds
             income_prefix = income_prefix_by_lot.get(lot_id, {})
             estimated_unit_value = converted_original_cost / lot.original_quantity if lot.original_quantity != Decimal("0") else Decimal("0")
+            fragments = fragments_by_lot.get(lot_id, [])
             for current_date in history_dates:
                 if current_date < lot.opening_date or current_date > last_date:
                     continue
                 market_price = market_prices.get(current_date)
                 relative_return = None
                 if market_price is None:
-                    if not (estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0")):
+                    open_quantity = self._open_quantity_on_date(fragments, current_date)
+                    if open_quantity == Decimal("0"):
+                        open_value = Decimal("0")
+                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
+                        if lot.direction == "LONG":
+                            total_value = open_value + proceeds
+                        else:
+                            proceeds = converted_short_proceeds
+                            total_value = proceeds - open_value
+                    elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
+                        open_value = open_quantity * estimated_unit_value
+                        proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
+                        total_value = open_value + proceeds
+                    else:
                         continue
-                    open_value = self._open_quantity_on_date(fragments_by_lot.get(lot_id, []), current_date) * estimated_unit_value
-                    proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
-                    total_value = open_value + proceeds
                 else:
                     open_value, proceeds, total_value, _pnl = self._value_snapshot_on_date(
                         lot=lot,
-                        fragments=fragments_by_lot.get(lot_id, []),
+                        fragments=fragments,
                         proceeds_by_day=proceeds_by_day,
                         market_price=market_price,
                         current_date=current_date,
@@ -1546,8 +1570,15 @@ class LotsAnalysisService:
                 impacted.add(fragment.lot_id)
         return impacted
 
-    def _lot_history_end_date(self, lot: FifoLot, closures: Sequence[LotClosure], fallback_end: date_type) -> date_type:
-        if lot.open_quantity > 0:
+    def _lot_history_end_date(
+        self,
+        lot: FifoLot,
+        closures: Sequence[LotClosure],
+        fallback_end: date_type,
+        *,
+        extend_closed: bool = False,
+    ) -> date_type:
+        if extend_closed or lot.open_quantity > 0:
             return fallback_end
         if not closures:
             return lot.opening_date
