@@ -20,6 +20,8 @@
     import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {clamp, DROPDOWN_VIEWPORT_MARGIN} from '$lib/utils/layout/dropdownPosition';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
@@ -874,7 +876,7 @@
                                         <img src={iconCandidates[0]} alt="" class="enum-option-icon enum-icon-overlay" data-fallbacks={JSON.stringify(iconCandidates.slice(1))} onerror={handleEnumIconError} referrerpolicy="no-referrer" />
                                     {/if}
                                 </span>
-                                <span class="enum-label">{option.label}</span>
+                                <span use:scrollOnOverflow class="enum-label {overflowScrollTextClass}" title={option.label}>{option.label}</span>
                                 {#if option.count != null}
                                     <span class="enum-count">{option.count}</span>
                                 {/if}
@@ -918,7 +920,7 @@
                                         <img src={iconCandidates[0]} alt="" class="enum-option-icon enum-icon-overlay" data-fallbacks={JSON.stringify(iconCandidates.slice(1))} onerror={handleEnumIconError} referrerpolicy="no-referrer" />
                                     {/if}
                                 </span>
-                                <span class="enum-label">{option.label}</span>
+                                <span use:scrollOnOverflow class="enum-label {overflowScrollTextClass}" title={option.label}>{option.label}</span>
                                 {#if option.count != null}
                                     <span class="enum-count">{option.count}</span>
                                 {/if}
@@ -1512,17 +1514,22 @@
         font-size: 0.75rem;
         color: #94a3b8;
         text-align: center;
+        max-width: 200px;
+        margin: 0 auto;
+        /* .filter-popover is rendered inside the column <th> in the DOM (only escaped
+         * visually via position:fixed) and th { white-space: nowrap } in DataTable.svelte
+         * is inherited straight through — max-width alone can't wrap text while nowrap
+         * is still inherited, so it must be reset explicitly here. */
+        white-space: normal;
     }
 
-    /* No rule existed for this at all — long unbroken labels (asset/broker names)
-     * forced the row (and the whole popover) wider than intended. Same truncation
-     * recipe as .currency-stack-range below. */
+    /* flex/min-width let this shrink inside .enum-option instead of forcing the row (and
+     * the whole popover) wider than intended; overflow-x-hidden/whitespace-nowrap/block come
+     * from overflowScrollTextClass (applied in the markup) for the auto-scroll marquee —
+     * same pattern as AssetCard/BrokerCard/KpiCard for long names. */
     .enum-label {
         flex: 1 1 auto;
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
     }
 
     .enum-option-icon {
@@ -1601,6 +1608,10 @@
         color: #94a3b8;
         text-align: center;
         padding: 0.5rem;
+        max-width: 200px;
+        margin: 0 auto;
+        /* Same inherited-nowrap issue as .enum-empty above — reset explicitly. */
+        white-space: normal;
     }
     .currency-stack-list {
         list-style: none;
