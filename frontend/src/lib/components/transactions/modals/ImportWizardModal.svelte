@@ -1857,7 +1857,7 @@ ${arrow}<span>${label}</span></span>`,
                             selectionMode="multi"
                             onSelectionChange={(ids) => (step1SelectedIds = ids)}
                             enableActions={true}
-                            actionsColumnWidth="50px"
+                            actionsColumnWidth="64px"
                             rowActions={pendingFileActions}
                             enableSorting={false}
                             enableColumnFilters={false}
@@ -1933,7 +1933,7 @@ ${arrow}<span>${label}</span></span>`,
                                             onSelectionChange={(ids) => handleSelectionChange(broker.id, ids)}
                                             onRowDoubleClick={(row) => openPreview(row.file_id)}
                                             enableActions={true}
-                                            actionsColumnWidth="60px"
+                                            actionsColumnWidth="64px"
                                             rowActions={[{id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)}]}
                                             enableSorting={true}
                                             enableColumnFilters={true}
@@ -1996,7 +1996,7 @@ ${arrow}<span>${label}</span></span>`,
                     storageKey="import-wizard-parse-results"
                     enableSelection={false}
                     enableActions={true}
-                    actionsColumnWidth="60px"
+                    actionsColumnWidth="64px"
                     rowActions={step3RowActions}
                     onRowDoubleClick={(row) => {
                         if (row.status === 'done') openParseDetail(row);

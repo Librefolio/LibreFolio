@@ -55,6 +55,14 @@ def front_utilities(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("utilities.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tooltip(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run shared Tooltip component E2E tests (pinned hover/click model)."""
+    print_section("Frontend Tooltip Component Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("tooltip-component.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_scheduler(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run scheduler settings E2E tests (admin: config modal, log modal, regression)."""
     print_section("Frontend Scheduler Settings Tests")
@@ -69,7 +77,7 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
     print_header("Frontend Utility Tests (Playwright)")
     if not _ensure_frontend_build(): return False
     if not _ensure_test_users(): return False
-    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "settings/scheduler.spec.ts"]
+    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "settings/scheduler.spec.ts", "tooltip-component.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend Utility Tests",
         tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
@@ -93,6 +101,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
     add_test(cat, "image-crop", front_image_crop, name="Image Crop & Media Tests", desc="ImageEditModal, AssetPicker, FileGrid, avatar", prereq="Login working", tests="image-crop.spec.ts")
     add_test(cat, "utilities", front_utilities, name="Utilities API E2E", desc="Currencies, countries, sectors API", prereq="Login working", tests="utilities.spec.ts")
+    add_test(cat, "tooltip", front_tooltip, name="Tooltip Component Tests", desc="Pinned hover/click model: hover-only, click-to-pin, grace dismiss, click-outside", prereq="Login working", tests="tooltip-component.spec.ts")
     add_test(cat, "scheduler", front_scheduler, name="Scheduler Settings E2E", desc="ConfigModal, LogModal, status row, fetch_interval regression", prereq="Admin user + populated DB", tests="settings/scheduler.spec.ts")
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")
     registry["front-utility"] = cat

@@ -310,8 +310,14 @@ class DirectaBrokerProvider(BRIMProvider):
                         TransactionType.DIVIDEND,
                         TransactionType.INTEREST,
                     ]
+                    # FEE/TAX rows sometimes carry the same ticker/ISIN as the
+                    # position they relate to (e.g. "Rit.cedola obb." withholding
+                    # tax on a bond coupon) — link when resolvable, but never
+                    # force a placeholder asset for genuinely account-level rows
+                    # (e.g. "Bollo" stamp duty, generic commissions).
+                    asset_optional = tx_type in [TransactionType.FEE, TransactionType.TAX]
 
-                    if asset_required:
+                    if asset_required or (asset_optional and (isin or ticker)):
                         # Create a unique key for this asset
                         asset_key = isin if isin else ticker if ticker else f"UNKNOWN_ROW_{row_num}"
 

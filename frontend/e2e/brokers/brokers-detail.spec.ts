@@ -1,4 +1,4 @@
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Locator, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 
@@ -24,6 +24,13 @@ async function ensureBrokerExists(page: Page): Promise<void> {
         // Wait for the card to appear
         await expect(brokerCards.first()).toBeVisible({timeout: 5000});
     }
+}
+
+async function clickRowAction(page: Page, row: Locator, actionId: string): Promise<void> {
+    const actionsButton = row.getByTestId(/^row-actions-/);
+    await expect(actionsButton).toBeVisible({timeout: 5_000});
+    await actionsButton.click();
+    await page.getByTestId(`context-menu-action-${actionId}`).click();
 }
 
 /**
@@ -201,9 +208,13 @@ test.describe('Broker Detail Page', () => {
         await page.getByTestId('broker-show-import-history').click();
         await expect(page.getByTestId('import-files-modal')).toBeVisible({timeout: 5000});
 
-        const previewButton = page.getByTestId('row-action-preview').first();
-        await expect(previewButton).toBeVisible({timeout: 8000});
-        await previewButton.click();
+        const previewActionsButton = page
+            .getByTestId('import-files-modal')
+            .getByTestId(/^row-actions-/)
+            .first();
+        await expect(previewActionsButton).toBeVisible({timeout: 8000});
+        await previewActionsButton.click();
+        await page.getByTestId('context-menu-action-preview').click();
 
         await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8000});
         await expect(page.getByTestId('file-preview-markdown-rendered')).toContainText('Modal reuse works.', {timeout: 8000});
@@ -224,7 +235,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return; // no holdings for this broker — nothing to click
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
             await expect(page.getByTestId('lots-analysis-panel-title')).toBeVisible();
 
@@ -239,7 +250,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
             await page.getByTestId('lots-analysis-panel-close').click();
@@ -254,7 +265,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-view-asset').click();
+            await clickRowAction(page, row, 'view-asset');
             await expect(page).toHaveURL(/\/assets\/\d+/, {timeout: 5000});
         });
 
@@ -281,7 +292,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
             await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 5000});
 
@@ -299,7 +310,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
             await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10000});
 
@@ -326,7 +337,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
             const custodyCell = page.locator('[data-testid^="unified-lots-custody-"]').first();
@@ -352,7 +363,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
@@ -377,7 +388,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
             await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10000});
 
@@ -401,7 +412,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
             if ((await row.count()) === 0) return;
 
-            await row.getByTestId('row-action-analyze-lots').click();
+            await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
             const checkbox = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first().locator('.checkbox-btn, button').first();

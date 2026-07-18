@@ -274,8 +274,11 @@ class RevolutBrokerProvider(BRIMProvider):
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
                     ]
+                    # FEE rows ("custody fee") are normally account-level with
+                    # no ticker, but link when the source row does carry one.
+                    asset_optional = tx_type in [TransactionType.FEE, TransactionType.TAX]
 
-                    if asset_required:
+                    if asset_required or (asset_optional and ticker):
                         if not ticker:
                             warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
                             continue

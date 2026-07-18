@@ -13,14 +13,17 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {lotStateColor} from './lotStateVisual';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
-    type FilterMode = 'open' | 'all';
+    type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
+    type EventMarkerKind = 'BUY' | 'SELL' | 'TRANSFER' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT';
 
     interface Props {
         lots: ReadonlyArray<LotSummarySchema>;
         segments: ReadonlyArray<GanttSegmentSchema>;
+        events?: ReadonlyArray<LotTimelineEventSchema>;
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
         selectedLotIds?: number[];
@@ -30,10 +33,13 @@
         externalZoomStart?: number | null;
         externalZoomEnd?: number | null;
         onRowDoubleClick?: (lotId: number) => void;
-        /** Shared Aperti/Tutti filter (lifted to the orchestrator so UnifiedLotsTable shows the
-         * same lot set — see LotsAnalysisPanel.svelte). The toggle control still renders here. */
-        filterMode?: FilterMode;
-        onFilterModeChange?: (mode: FilterMode) => void;
+        /** Shared "Aperti | Chiusi" filter (lifted to the orchestrator so UnifiedLotsTable and the
+         * bubbles show the same lot set — see LotsAnalysisPanel.svelte). The two-button toggle renders
+         * here; the incoming `lots` are already filtered, this component only reflects/drives the state. */
+        openSelected?: boolean;
+        closedSelected?: boolean;
+        onToggleOpen?: () => void;
+        onToggleClosed?: () => void;
     }
 
     interface LotModel {
@@ -69,14 +75,20 @@
     }
 
     interface RenderedSegment extends SegmentModel {
+        laneKey: string;
         laneIndex: number;
+        parentLaneIndex: number | null;
+        branchDepth: number;
         thickness: number;
         isOpen: boolean;
         isFirstInLane: boolean;
     }
 
     interface RenderedLane {
+        laneKey: string;
         laneIndex: number;
+        parentLaneIndex: number | null;
+        branchDepth: number;
         lotId: number;
         lot: LotModel;
         segments: RenderedSegment[];
@@ -91,8 +103,14 @@
 
     interface LaneHighlightDatum {
         name: string;
-        value: [number];
-        meta: {laneIndex: number; lotId: number; pulse: boolean; selected: boolean};
+        value: [number, number, number, number];
+        meta: {segment: RenderedSegment; lotId: number; pulse: boolean; selected: boolean};
+    }
+
+    interface EventMarkerDatum {
+        name: string;
+        value: [number, number];
+        meta: {kind: EventMarkerKind; lotId: number; laneIndex: number; dateMs: number; date: string; quantity: number | null; label: string};
     }
 
     /** Invisible, focusable per-segment hit target absolutely positioned over the ECharts custom
@@ -111,29 +129,56 @@
     }
 
     const DAY_MS = 24 * 60 * 60 * 1000;
-    const LANE_ROW_HEIGHT = 72;
-    const ZOOM_AREA_HEIGHT = 64;
+    const LANE_ROW_HEIGHT = 30;
+    const STICKY_AXIS_HEIGHT = 52;
     const CHART_MIN_WIDTH = 720;
     const PULSE_DURATION_MS = 1800;
     const TOGGLE_DEBOUNCE_MS = 260;
-    const THICKNESS_MIN = 12;
-    const THICKNESS_MAX = 28;
+    const THICKNESS_MIN = 10;
+    const THICKNESS_MAX = 26;
+    const BRANCH_THICKNESS_MAX = 22;
+    const LANE_GAP_PX = 4;
+    const LANE_CHART_MIN_HEIGHT = 160;
     const GRID_LEFT_PX = 56;
     const GRID_RIGHT_PX = 18;
 
-    let {lots = [], segments = [], brokers = [], currency, selectedLotIds = [], onSelectionChange, xAxisRange = null, onZoomChange, externalZoomStart = null, externalZoomEnd = null, onRowDoubleClick, filterMode = 'open', onFilterModeChange}: Props = $props();
+    let {
+        lots = [],
+        segments = [],
+        events = [],
+        brokers = [],
+        currency,
+        selectedLotIds = [],
+        onSelectionChange,
+        xAxisRange = null,
+        onZoomChange,
+        externalZoomStart = null,
+        externalZoomEnd = null,
+        onRowDoubleClick,
+        openSelected = true,
+        closedSelected = true,
+        onToggleOpen,
+        onToggleClosed,
+    }: Props = $props();
 
     let wrapperEl: HTMLDivElement | undefined = $state(undefined);
     let lanesScrollEl: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
+    let axisContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    let axisInstance: echarts.ECharts | undefined = undefined;
     let resizeObserver: ResizeObserver | null = null;
+    let axisResizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
+    let axisDataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
+    let axisDataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
     let overlayRects = $state<OverlayRect[]>([]);
+    let axisScrollLeft = $state(0);
+    let axisContentWidthPx = $state(CHART_MIN_WIDTH);
     let pulseState = $state<{lotId: number; nonce: number} | null>(null);
     let pulseTimeoutId: ReturnType<typeof setTimeout> | null = null;
     let pulseNonce = 0;
@@ -163,6 +208,20 @@
         if (raw == null) return 0;
         const parsed = Number.parseFloat(raw);
         return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function safeUnknownString(value: unknown): string | null {
+        if (Array.isArray(value)) return safeUnknownString(value[0]);
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+        return null;
+    }
+
+    function parseUnknownNumber(value: unknown): number | null {
+        const raw = safeUnknownString(value);
+        if (raw == null) return null;
+        const parsed = Number.parseFloat(raw);
+        return Number.isFinite(parsed) ? parsed : null;
     }
 
     function parseDateToUtcMs(value: string): number | null {
@@ -210,6 +269,22 @@
         return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    function translatedOr(key: string, fallback: string): string {
+        const translated = $t(key);
+        return !translated || translated === key ? fallback : translated;
+    }
+
+    function formatMoneyField(value: unknown): string {
+        const parsed = parseUnknownNumber(value);
+        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency);
+    }
+
+    function formatPercentField(value: unknown): string {
+        const parsed = parseUnknownNumber(value);
+        if (parsed == null) return '—';
+        return `${(parsed * 100).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}%`;
+    }
+
     function withAlpha(color: string, alpha: number): string {
         const hslMatch = color.match(/^hsl\((.+)\)$/i);
         if (hslMatch) return `hsla(${hslMatch[1]}, ${alpha})`;
@@ -248,9 +323,10 @@
         return segment.endDate == null ? 0.9 : 0.45;
     }
 
-    function thicknessForQuantity(quantity: number, qMax: number): number {
+    function thicknessForQuantity(quantity: number, qMax: number, isBranch: boolean): number {
         if (qMax <= 0) return THICKNESS_MIN;
-        return THICKNESS_MIN + (clamp(quantity, 0, qMax) / qMax) * (THICKNESS_MAX - THICKNESS_MIN);
+        const maxThickness = isBranch ? BRANCH_THICKNESS_MAX : THICKNESS_MAX;
+        return THICKNESS_MIN + (clamp(quantity, 0, qMax) / qMax) * (maxThickness - THICKNESS_MIN);
     }
 
     function segmentIntersectsRange(segment: SegmentModel, minMs: number | null, maxMs: number | null): boolean {
@@ -301,6 +377,35 @@
         return variants.at(-1) ?? dateText;
     }
 
+    function transferPairId(fragmentId: string): string | null {
+        return fragmentId.match(/\/transfer:([^/]+)/)?.[1] ?? null;
+    }
+
+    function isTransferFragment(segment: SegmentModel): boolean {
+        return segment.fragmentId.includes('/transfer:') || segment.custodyType === 'IN_TRANSIT';
+    }
+
+    function laneKeyForFragmentId(lotId: number, fragmentId: string): string {
+        const pairId = transferPairId(fragmentId);
+        if (pairId != null) return `lot:${lotId}/transfer:${pairId}`;
+        return fragmentId;
+    }
+
+    function laneKeyForSegment(segment: SegmentModel): string {
+        const pairId = transferPairId(segment.fragmentId);
+        if (pairId != null) return `lot:${segment.lotId}/transfer:${pairId}`;
+        return segment.fragmentId;
+    }
+
+    function branchDepthForLaneKey(laneKey: string): number {
+        return laneKey.includes('/transfer:') ? 1 : 0;
+    }
+
+    function laneSortKey(segmentsForLane: SegmentModel[], laneKey: string): [number, number, string] {
+        const firstStart = Math.min(...segmentsForLane.map((segment) => segment.startMs));
+        return [branchDepthForLaneKey(laneKey), firstStart, laneKey];
+    }
+
     function triggerPulse(lotId: number) {
         pulseNonce += 1;
         const nonce = pulseNonce;
@@ -343,7 +448,6 @@
     }
 
     export function pulseLot(lotId: number): void {
-        if (filterMode === 'open' && !openLotIdSet.has(lotId)) onFilterModeChange?.('all');
         wrapperEl?.scrollIntoView({behavior: 'smooth', block: 'center'});
         triggerPulse(lotId);
     }
@@ -438,32 +542,65 @@
     });
 
     const renderedLanes = $derived.by((): RenderedLane[] => {
-        const sourceLots = filterMode === 'open' ? lotModels.filter((lot) => openLotIdSet.has(lot.lotId)) : lotModels;
+        // The incoming `lots` are already filtered by the shared Aperti|Chiusi toggle (LotsAnalysisPanel),
+        // so render every lot model as-is; only range-intersection filtering happens below.
+        const sourceLots = lotModels;
         const minMs = axisRangeMs?.minMs ?? null;
         const maxMs = axisRangeMs?.maxMs ?? null;
         const candidateLots = sourceLots.filter((lot) => (segmentModelsByLot.get(lot.lotId) ?? []).some((segment) => segmentIntersectsRange(segment, minMs, maxMs)));
-        const qMax = Math.max(1, ...candidateLots.map((lot) => lot.originalQuantity));
+        const qMax = Math.max(1, ...candidateLots.map((lot) => lot.originalQuantity), ...candidateLots.flatMap((lot) => (segmentModelsByLot.get(lot.lotId) ?? []).map((segment) => segment.quantity)));
 
-        return candidateLots.map((lot, laneIndex) => {
+        const lanes: RenderedLane[] = [];
+        for (const lot of candidateLots) {
             const lotSegments = (segmentModelsByLot.get(lot.lotId) ?? []).filter((segment) => segmentIntersectsRange(segment, minMs, maxMs));
-            return {
-                laneIndex,
-                lotId: lot.lotId,
-                lot,
-                isOpen: openLotIdSet.has(lot.lotId),
-                segments: lotSegments.map((segment, segmentIndex) => ({
-                    ...segment,
+            const grouped = new Map<string, SegmentModel[]>();
+            for (const segment of lotSegments) {
+                const laneKey = laneKeyForSegment(segment);
+                const laneSegments = grouped.get(laneKey) ?? [];
+                laneSegments.push(segment);
+                grouped.set(laneKey, laneSegments);
+            }
+
+            const sortedGroups = [...grouped.entries()]
+                .map(([laneKey, laneSegments]) => [laneKey, laneSegments.sort((a, b) => a.startMs - b.startMs || a.sortEndMs - b.sortEndMs || a.fragmentId.localeCompare(b.fragmentId))] as const)
+                .sort((a, b) => {
+                    const left = laneSortKey(a[1], a[0]);
+                    const right = laneSortKey(b[1], b[0]);
+                    return left[0] - right[0] || left[1] - right[1] || left[2].localeCompare(right[2]);
+                });
+
+            const originLaneIndex = sortedGroups.some(([laneKey]) => branchDepthForLaneKey(laneKey) === 0) ? lanes.length : null;
+            for (const [laneKey, laneSegments] of sortedGroups) {
+                const branchDepth = branchDepthForLaneKey(laneKey);
+                const laneIndex = lanes.length;
+                const segmentParentLaneIndex = branchDepth > 0 ? originLaneIndex : null;
+                lanes.push({
+                    laneKey,
                     laneIndex,
-                    thickness: thicknessForQuantity(segment.quantity, qMax),
-                    isOpen: segment.endDate == null,
-                    isFirstInLane: segmentIndex === 0,
-                })),
-            };
-        });
+                    parentLaneIndex: segmentParentLaneIndex,
+                    branchDepth,
+                    lotId: lot.lotId,
+                    lot,
+                    isOpen: openLotIdSet.has(lot.lotId),
+                    segments: laneSegments.map((segment, segmentIndex) => ({
+                        ...segment,
+                        laneKey,
+                        laneIndex,
+                        parentLaneIndex: segmentParentLaneIndex,
+                        branchDepth,
+                        thickness: thicknessForQuantity(segment.quantity, qMax, branchDepth > 0),
+                        isOpen: segment.endDate == null,
+                        isFirstInLane: segmentIndex === 0,
+                    })),
+                });
+            }
+        }
+
+        return lanes;
     });
 
     const chartHasData = $derived(renderedLanes.length > 0);
-    const chartHeightPx = $derived(Math.max(220, renderedLanes.length * LANE_ROW_HEIGHT + ZOOM_AREA_HEIGHT));
+    const chartHeightPx = $derived(Math.max(LANE_CHART_MIN_HEIGHT, renderedLanes.length * LANE_ROW_HEIGHT + 16));
 
     const visibleBrokers = $derived.by(() => {
         const ids = new Set<number>();
@@ -494,37 +631,190 @@
     const laneHighlightData = $derived.by((): LaneHighlightDatum[] =>
         renderedLanes
             .filter((lane) => selectedLotIdSet.has(lane.lotId) || pulseState?.lotId === lane.lotId)
-            .map((lane) => ({
-                name: `highlight-${lane.lotId}`,
-                value: [lane.laneIndex],
-                meta: {
-                    laneIndex: lane.laneIndex,
-                    lotId: lane.lotId,
-                    pulse: pulseState?.lotId === lane.lotId,
-                    selected: selectedLotIdSet.has(lane.lotId),
-                },
-            })),
+            .flatMap((lane) =>
+                lane.segments.map((segment) => ({
+                    name: `highlight-${segment.key}`,
+                    value: [segment.startMs, segment.laneIndex, segment.endMs, segment.thickness],
+                    meta: {
+                        segment,
+                        lotId: lane.lotId,
+                        pulse: pulseState?.lotId === lane.lotId,
+                        selected: selectedLotIdSet.has(lane.lotId),
+                    },
+                })),
+            ),
     );
+
+    function eventMarkerKind(kind: string): EventMarkerKind {
+        if (kind === 'TRANSFER_DEPART' || kind === 'TRANSFER_ARRIVE') return 'TRANSFER';
+        if (kind === 'ADJUSTMENT_IN') return 'ADJUSTMENT_IN';
+        if (kind === 'ADJUSTMENT_OUT') return 'ADJUSTMENT_OUT';
+        if (kind === 'SPLIT') return 'SPLIT';
+        if (kind === 'SELL') return 'SELL';
+        return 'BUY';
+    }
+
+    function eventMarkerSymbol(kind: EventMarkerKind): string {
+        if (kind === 'SELL') return '▼';
+        if (kind === 'TRANSFER') return '◆';
+        if (kind === 'ADJUSTMENT_IN') return '+';
+        if (kind === 'ADJUSTMENT_OUT') return '×';
+        if (kind === 'SPLIT') return '│';
+        return '▲';
+    }
+
+    function eventMarkerLabel(kind: EventMarkerKind): string {
+        const keyKind = kind === 'TRANSFER' ? 'TRANSFER_DEPART' : kind;
+        const fallback = kind === 'ADJUSTMENT_IN' ? 'Adjustment In' : kind === 'ADJUSTMENT_OUT' ? 'Adjustment Out' : kind === 'TRANSFER' ? 'Transfer' : kind === 'SELL' ? 'Sale' : kind === 'SPLIT' ? 'Split' : 'Buy';
+        return translatedOr(`brokers.lots.chartMarkers.eventType.${keyKind}`, fallback);
+    }
+
+    function isSplitTransition(prev: RenderedSegment, next: RenderedSegment): boolean {
+        if (prev.quantity === next.quantity || prev.unitPrice <= 0 || next.unitPrice <= 0) return false;
+        const prevNotional = prev.quantity * prev.unitPrice;
+        const nextNotional = next.quantity * next.unitPrice;
+        return Math.abs(prevNotional - nextNotional) <= Math.max(0.000001, Math.abs(prevNotional) * 0.0001);
+    }
+
+    function inferredTransitionKind(prev: RenderedSegment, next: RenderedSegment, transferDates: Set<number> | undefined): EventMarkerKind {
+        if (transferDates?.has(next.startMs)) return 'TRANSFER';
+        if (isSplitTransition(prev, next)) return 'SPLIT';
+        if (next.quantity > prev.quantity) return 'ADJUSTMENT_IN';
+        if (next.quantity < prev.quantity) return 'SELL';
+        return 'TRANSFER';
+    }
+
+    function pushEventMarker(target: EventMarkerDatum[], seen: Set<string>, kind: EventMarkerKind, segment: RenderedSegment, dateMs: number, date: string, quantity: number | null = segment.quantity) {
+        const key = `${kind}:${segment.lotId}:${segment.laneIndex}:${dateMs}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        target.push({
+            name: key,
+            value: [dateMs, segment.laneIndex],
+            meta: {
+                kind,
+                lotId: segment.lotId,
+                laneIndex: segment.laneIndex,
+                dateMs,
+                date,
+                quantity,
+                label: eventMarkerLabel(kind),
+            },
+        });
+    }
+
+    function buildExplicitEventMarkers(): EventMarkerDatum[] {
+        const byLaneKey = new Map(renderedLanes.map((lane) => [lane.laneKey, lane]));
+        const firstByLot = new Map<number, RenderedLane>();
+        for (const lane of renderedLanes) {
+            if (!firstByLot.has(lane.lotId)) firstByLot.set(lane.lotId, lane);
+        }
+
+        const out: EventMarkerDatum[] = [];
+        const seen = new Set<string>();
+        for (const event of events) {
+            const date = safeString(event.date) ?? '';
+            const dateMs = date ? parseDateToUtcMs(date) : null;
+            if (dateMs == null) continue;
+            const fragmentId = safeString(event.fragment_id);
+            const lane = (fragmentId != null ? byLaneKey.get(laneKeyForFragmentId(event.lot_id, fragmentId)) : null) ?? firstByLot.get(event.lot_id);
+            const segment = lane?.segments.find((entry) => entry.startMs <= dateMs && entry.endMs >= dateMs) ?? lane?.segments[0];
+            if (!segment) continue;
+            pushEventMarker(out, seen, eventMarkerKind(event.kind), segment, dateMs, date, parseUnknownNumber(event.quantity));
+        }
+        return out.sort((a, b) => a.value[0] - b.value[0] || a.value[1] - b.value[1] || a.name.localeCompare(b.name));
+    }
+
+    function buildInferredEventMarkers(): EventMarkerDatum[] {
+        const out: EventMarkerDatum[] = [];
+        const seen = new Set<string>();
+        const transferStartsByLot = new Map<number, Set<number>>();
+        for (const lane of renderedLanes) {
+            if (lane.branchDepth === 0) continue;
+            const first = lane.segments[0];
+            if (!first) continue;
+            const starts = transferStartsByLot.get(lane.lotId) ?? new Set<number>();
+            starts.add(first.startMs);
+            transferStartsByLot.set(lane.lotId, starts);
+        }
+
+        for (const lane of renderedLanes) {
+            const transferStarts = transferStartsByLot.get(lane.lotId);
+            const sorted = [...lane.segments].sort((a, b) => a.startMs - b.startMs || a.sortEndMs - b.sortEndMs);
+            const first = sorted[0];
+            if (!first) continue;
+            pushEventMarker(out, seen, lane.branchDepth > 0 || isTransferFragment(first) ? 'TRANSFER' : 'BUY', first, first.startMs, first.startDate, first.quantity);
+
+            for (let index = 1; index < sorted.length; index += 1) {
+                const prev = sorted[index - 1];
+                const next = sorted[index];
+                if (prev.endMs !== next.startMs) continue;
+                pushEventMarker(out, seen, inferredTransitionKind(prev, next, transferStarts), next, next.startMs, next.startDate, Math.abs(prev.quantity - next.quantity) || next.quantity);
+            }
+
+            for (const segment of sorted) {
+                if (segment.custodyType === 'IN_TRANSIT' && segment.endDate != null) {
+                    pushEventMarker(out, seen, 'TRANSFER', segment, segment.endMs, segment.endDate, segment.quantity);
+                }
+            }
+
+            const last = sorted.at(-1);
+            if (last?.endDate != null && !transferStarts?.has(last.endMs)) {
+                pushEventMarker(out, seen, 'SELL', last, last.endMs, last.endDate, last.quantity);
+            }
+        }
+        return out.sort((a, b) => a.value[0] - b.value[0] || a.value[1] - b.value[1] || a.name.localeCompare(b.name));
+    }
+
+    const eventMarkerData = $derived.by((): EventMarkerDatum[] => (events.length > 0 ? buildExplicitEventMarkers() : buildInferredEventMarkers()));
 
     function buildTooltip(meta: RenderedSegment, themeDark: boolean): string {
         const theme = buildTooltipTheme(themeDark);
         const lot = renderedLanes.find((lane) => lane.lotId === meta.lotId)?.lot;
         const statusLabel = meta.custodyType === 'IN_TRANSIT' ? $t('brokers.lots.inTransit') || 'In transit' : meta.isOpen ? $t('dashboard.openPositions') || 'Open' : $t('dashboard.closedPositions') || 'Closed';
+        const lotDto = lot?.lot;
+        const lotAny = lotDto as (LotSummarySchema & {sale_proceeds?: unknown}) | undefined;
+        const custodyLabel =
+            lotDto?.current_custody
+                ?.map((slice) => {
+                    const qty = formatQuantity(parseNumber(slice.quantity));
+                    return slice.custody_type === 'IN_TRANSIT' ? `${escapeHtml(translatedOr('brokers.lots.inTransitShort', 'Transit'))} · ${escapeHtml(qty)}` : `${escapeHtml(brokerName(safeInt(slice.broker_id)))} · ${escapeHtml(qty)}`;
+                })
+                .join('<br/>') || escapeHtml(meta.custodyType === 'IN_TRANSIT' ? `${brokerName(meta.sourceBrokerId)} → ${brokerName(meta.destinationBrokerId)}` : brokerName(meta.brokerId));
+        const stateLabel = (lot?.states ?? []).map((state) => translatedOr(`brokers.lots.states.${state}`, state)).join(', ') || statusLabel;
+        const valueSource = safeUnknownString(lotDto?.value_source);
+        const valueSourceLabel = valueSource ? translatedOr(`brokers.lots.valueSource.${valueSource}`, valueSource === 'ESTIMATED_AT_COST' ? 'Estimated at cost' : 'Market price') : '—';
         let html = buildTooltipHeader(escapeHtml(lotLabel(lot?.openingDate ?? meta.startDate)), theme.textColor);
-        html += buildTooltipRow(escapeHtml($t('brokers.lots.buyDate') || 'Opening date'), escapeHtml(formatDateLong(lot?.openingDate ?? meta.startDate)));
-        html += buildTooltipRow(escapeHtml($t('brokers.lots.direction') || 'Direction'), escapeHtml(meta.direction));
-        html += buildTooltipRow(escapeHtml($t('common.status') || 'Status'), escapeHtml(statusLabel));
-        html += buildTooltipRow(escapeHtml($t('dashboard.quantity') || 'Qty'), escapeHtml(formatQuantity(meta.quantity)));
-        html += buildTooltipRow(escapeHtml($t('dashboard.price') || 'Price'), escapeHtml(formatCurrencyAmountPlain(meta.unitPrice, currency)));
-        html += buildTooltipRow(escapeHtml($t('brokers.lots.dateRange') || 'Range'), escapeHtml(`${formatDateLong(meta.startDate)} → ${meta.endDate ? formatDateLong(meta.endDate) : '…'}`));
+        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.opening', 'Opening'))}</div>`;
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.buyDate', 'Opening date')), escapeHtml(formatDateLong(lot?.openingDate ?? meta.startDate)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.openingType', 'Type')), escapeHtml(eventMarkerLabel(lot?.direction === 'SHORT' ? 'SELL' : 'BUY')));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.direction', 'Direction')), escapeHtml(meta.direction));
+        html += buildTooltipRow(escapeHtml(translatedOr('common.broker', 'Broker')), escapeHtml(brokerName(lot?.openingBrokerId ?? meta.brokerId)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.custody', 'Custody')), custodyLabel);
 
-        if (meta.custodyType === 'IN_TRANSIT') {
-            html += buildTooltipRow(escapeHtml($t('brokers.lots.inTransit') || 'In transit'), escapeHtml(`${brokerName(meta.sourceBrokerId)} → ${brokerName(meta.destinationBrokerId)}`));
-        } else {
-            html += buildTooltipRow(escapeHtml($t('common.broker') || 'Broker'), escapeHtml(brokerName(meta.brokerId)));
-        }
+        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.size', 'Size'))}</div>`;
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.modal.originalQuantity', 'Original quantity')), escapeHtml(formatQuantity(lot?.originalQuantity ?? meta.quantity)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.openQuantity', 'Open quantity')), escapeHtml(formatQuantity(lot?.openQuantity ?? meta.quantity)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.modal.openingPrice', 'Opening price')), escapeHtml(formatMoneyField(lotDto?.opening_unit_price ?? meta.unitPrice)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.modal.openingValue', 'Opening value')), escapeHtml(formatMoneyField(lotDto?.original_cost)));
 
-        return `<div style="font-size:11px;color:${theme.textColor}">${html}</div>`;
+        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.current', 'Current situation'))}</div>`;
+        html += buildTooltipRow(escapeHtml(translatedOr('common.status', 'Status')), escapeHtml(stateLabel));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.currentValue', 'Current value')), escapeHtml(formatMoneyField(lotDto?.open_value ?? lotDto?.total_value)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.chartMarkers.proceeds', 'Proceeds')), escapeHtml(formatMoneyField(lotAny?.sale_proceeds ?? lotDto?.cumulative_proceeds)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.assetIncome', 'Dividends and interest')), escapeHtml(formatMoneyField(lotDto?.asset_income)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.valueSource', 'Value source')), escapeHtml(valueSourceLabel));
+
+        html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(translatedOr('brokers.lots.tooltip.result', 'Result'))}</div>`;
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.marketPnl', 'Market P&L')), escapeHtml(formatMoneyField(lotDto?.market_pnl)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.chartMarkers.realizedPnl', 'Realized P&L')), escapeHtml(formatMoneyField(lotDto?.realized_pnl)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.totalPnl', 'Total P&L')), escapeHtml(formatMoneyField(lotDto?.total_pnl ?? lotDto?.pnl)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.openReturn', 'Open Return')), escapeHtml(formatPercentField(lotDto?.relative_return)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.totalReturn', 'Total return')), escapeHtml(formatPercentField(lotDto?.total_return)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.cashYield', 'Cash yield')), escapeHtml(formatPercentField(lotDto?.cash_yield)));
+        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.dateRange', 'Range')), escapeHtml(`${formatDateLong(meta.startDate)} → ${meta.endDate ? formatDateLong(meta.endDate) : '…'}`));
+
+        return `<div style="min-width:240px;font-size:11px;color:${theme.textColor}">${html}</div>`;
     }
 
     function buildOption(themeDark: boolean): echarts.EChartsOption {
@@ -546,19 +836,31 @@
             renderItem: (params: any, api: any) => {
                 const meta = laneHighlightData[params.dataIndex]?.meta as LaneHighlightDatum['meta'] | undefined;
                 if (!meta) return null;
-                const [, centerY] = api.coord([minMs, meta.laneIndex]);
+                const segment = meta.segment;
+                const startCoord = api.coord([segment.startMs, segment.laneIndex]);
+                const endCoord = api.coord([segment.endMs, segment.laneIndex]);
                 const bandSize = (api.size?.([0, 1]) as number[] | undefined)?.[1] ?? LANE_ROW_HEIGHT;
-                const coordSys = params.coordSys as {x: number; width: number};
+                const barHeight = Math.min(segment.thickness + 6, Math.max(8, bandSize - 2));
+                const coordSys = params.coordSys as {x: number; y: number; width: number; height: number};
+                const rectShape = echarts.graphic.clipRectByRect(
+                    {
+                        x: Math.min(startCoord[0], endCoord[0]) - 2,
+                        y: startCoord[1] - barHeight / 2,
+                        width: Math.max(5, Math.abs(endCoord[0] - startCoord[0]) + 4),
+                        height: barHeight,
+                    },
+                    {
+                        x: coordSys.x,
+                        y: coordSys.y,
+                        width: coordSys.width,
+                        height: coordSys.height,
+                    },
+                );
+                if (!rectShape) return null;
                 return {
                     type: 'rect',
                     silent: true,
-                    shape: {
-                        x: coordSys.x,
-                        y: centerY - bandSize * 0.42,
-                        width: coordSys.width,
-                        height: bandSize * 0.84,
-                        r: 10,
-                    },
+                    shape: {...rectShape, r: 8},
                     style: {
                         fill: meta.pulse ? (themeDark ? 'rgba(168, 85, 247, 0.16)' : 'rgba(147, 51, 234, 0.12)') : themeDark ? 'rgba(96, 165, 250, 0.10)' : 'rgba(59, 130, 246, 0.08)',
                         stroke: meta.pulse ? (themeDark ? '#c084fc' : '#7c3aed') : themeDark ? '#60a5fa' : '#2563eb',
@@ -584,7 +886,7 @@
                 const endCoord = api.coord([meta.endMs, meta.laneIndex]);
                 const coordSys = params.coordSys as {x: number; y: number; width: number; height: number};
                 const laneBand = (api.size?.([0, 1]) as number[] | undefined)?.[1] ?? LANE_ROW_HEIGHT;
-                const barHeight = Math.min(meta.thickness, laneBand - 12);
+                const barHeight = Math.min(meta.thickness, Math.max(8, laneBand - LANE_GAP_PX));
                 const rawX = Math.min(startCoord[0], endCoord[0]);
                 const rawWidth = Math.max(3, Math.abs(endCoord[0] - startCoord[0]));
 
@@ -644,6 +946,26 @@
                     },
                 ];
 
+                if (meta.isFirstInLane && meta.parentLaneIndex != null && !isClippedLeft) {
+                    const parentCoord = api.coord([meta.startMs, meta.parentLaneIndex]);
+                    const elbowX = Math.max(coordSys.x + 4, startCoord[0] - 12 - meta.branchDepth * 8);
+                    children.unshift({
+                        type: 'polyline',
+                        silent: true,
+                        shape: {
+                            points: [
+                                [elbowX, parentCoord[1]],
+                                [elbowX, startCoord[1]],
+                                [Math.max(coordSys.x + 4, startCoord[0] - 2), startCoord[1]],
+                            ],
+                        },
+                        style: {
+                            stroke: themeDark ? 'rgba(226,232,240,0.48)' : 'rgba(71,85,105,0.45)',
+                            lineWidth: 1.5,
+                        },
+                    });
+                }
+
                 if (isClippedLeft) {
                     // Segment starts before the visible range — a left-pointing chevron replaces
                     // the usual opening dot to signal "this lot's story continues off-screen".
@@ -658,17 +980,6 @@
                             ],
                         },
                         style: {fill: borderColor, opacity: 0.9},
-                    });
-                } else if (meta.isFirstInLane) {
-                    children.push({
-                        type: 'circle',
-                        silent: true,
-                        shape: {cx: edgeMarkerX, cy: startCoord[1], r: Math.min(6, barHeight / 2)},
-                        style: {
-                            fill: pulsing ? (themeDark ? '#c084fc' : '#7c3aed') : themeDark ? '#f8fafc' : '#0f172a',
-                            stroke: borderColor,
-                            lineWidth: pulsing ? 2 : 1,
-                        },
                     });
                 }
 
@@ -710,19 +1021,55 @@
             },
         };
 
+        const eventMarkerSeries: any = {
+            name: '__event-markers',
+            type: 'custom',
+            clip: false,
+            z: 6,
+            tooltip: {show: false},
+            data: eventMarkerData,
+            renderItem: (params: any, api: any) => {
+                const meta = eventMarkerData[params.dataIndex]?.meta as EventMarkerDatum['meta'] | undefined;
+                if (!meta) return null;
+                const coord = api.coord([meta.dateMs, meta.laneIndex]);
+                const coordSys = params.coordSys as {x: number; width: number};
+                if (coord[0] < coordSys.x - 10 || coord[0] > coordSys.x + coordSys.width + 10) return null;
+                const color = meta.kind === 'SELL' || meta.kind === 'ADJUSTMENT_OUT' ? (themeDark ? '#f87171' : '#dc2626') : meta.kind === 'TRANSFER' ? (themeDark ? '#c084fc' : '#7c3aed') : meta.kind === 'SPLIT' ? (themeDark ? '#facc15' : '#ca8a04') : themeDark ? '#34d399' : '#059669';
+                return {
+                    type: 'text',
+                    info: {lotId: meta.lotId},
+                    cursor: 'pointer',
+                    x: coord[0],
+                    y: coord[1],
+                    silent: false,
+                    style: {
+                        text: eventMarkerSymbol(meta.kind),
+                        fill: color,
+                        stroke: themeDark ? '#0f172a' : '#ffffff',
+                        lineWidth: 3,
+                        fontSize: meta.kind === 'SPLIT' ? 18 : 15,
+                        fontWeight: 800,
+                        textAlign: 'center',
+                        textVerticalAlign: 'middle',
+                    },
+                };
+            },
+        };
+
         return {
             ...CHART_ANIMATION_CONFIG,
             animationDurationUpdate: 450,
             grid: {
                 top: 8,
                 right: GRID_RIGHT_PX,
-                bottom: 54,
+                bottom: 8,
                 left: GRID_LEFT_PX,
                 containLabel: false,
             },
             tooltip: {
                 trigger: 'item',
                 position: tooltipPositionSide,
+                appendTo: 'body',
                 backgroundColor: theme.bg,
                 borderColor: theme.border,
                 textStyle: {color: theme.textColor},
@@ -745,6 +1092,7 @@
                     },
                 },
                 axisLabel: {
+                    show: false,
                     color: gridColors.textColor,
                     hideOverlap: true,
                     formatter: (value: number) => formatAxisDate(value),
@@ -765,15 +1113,81 @@
                     },
                 },
             },
-            series: [laneHighlightSeries, segmentSeries],
-            dataZoom: buildDataZoom([0]),
+            series: [laneHighlightSeries, segmentSeries, eventMarkerSeries],
+            dataZoom: ganttDataZoom(),
+        };
+    }
+
+    /** Preserve the shared zoom window across re-renders (both the lane instance and the sticky
+     * axis instance), so a data/theme re-render does not silently reset dataZoom to 0-100 and
+     * desync the Gantt from the WAC/price chart. setOption does not re-emit a 'dataZoom' event,
+     * so this cannot cause a sync ping-pong. */
+    function applySharedZoomWindow<T extends {start?: number; end?: number}>(zooms: T[]): T[] {
+        if (externalZoomStart == null || externalZoomEnd == null) return zooms;
+        return zooms.map((zoom) => ({...zoom, start: externalZoomStart as number, end: externalZoomEnd as number}));
+    }
+
+    /** Gantt bars are custom-series items whose x-value is the segment START. With the default
+     * dataZoom `filterMode:'filter'` ECharts DROPS any data item whose start scrolls out of the
+     * zoom window, so a bar that still overlaps the visible range vanishes entirely the moment its
+     * opening event leaves the left edge. `filterMode:'none'` keeps every item and lets the
+     * renderItem `clipRectByRect` trim the bar at the plot edges instead (see renderItem clip). */
+    function ganttDataZoom(): any[] {
+        return applySharedZoomWindow(buildDataZoom([0]).map((zoom) => ({...zoom, filterMode: 'none'})));
+    }
+
+    function buildAxisOption(themeDark: boolean): echarts.EChartsOption {
+        const gridColors = buildGridColors(themeDark);
+        const minMs = axisRangeMs?.minMs ?? Date.now() - DAY_MS;
+        const maxMs = axisRangeMs?.maxMs ?? Date.now();
+        return {
+            ...CHART_ANIMATION_CONFIG,
+            grid: {
+                top: 4,
+                right: GRID_RIGHT_PX,
+                bottom: 22,
+                left: GRID_LEFT_PX,
+                containLabel: false,
+            },
+            xAxis: {
+                type: 'time',
+                min: xAxisRange?.min ?? minMs,
+                max: xAxisRange?.max ?? maxMs,
+                axisLine: {lineStyle: {color: gridColors.gridColor}},
+                axisTick: {show: true, lineStyle: {color: gridColors.gridColor}},
+                splitLine: {show: false},
+                axisLabel: {
+                    color: gridColors.textColor,
+                    hideOverlap: true,
+                    formatter: (value: number) => formatAxisDate(value),
+                },
+            },
+            yAxis: {
+                type: 'value',
+                min: 0,
+                max: 1,
+                axisLine: {show: false},
+                axisTick: {show: false},
+                axisLabel: {show: false},
+                splitLine: {show: false},
+            },
+            series: [],
+            dataZoom: ganttDataZoom(),
         };
     }
 
     function setupResizeObserver() {
-        if (!chartContainer || resizeObserver) return;
-        resizeObserver = new ResizeObserver(() => chartInstance?.resize());
-        resizeObserver.observe(chartContainer);
+        if (chartContainer && !resizeObserver) {
+            resizeObserver = new ResizeObserver(() => {
+                syncAxisViewport();
+                chartInstance?.resize();
+            });
+            resizeObserver.observe(chartContainer);
+        }
+        if (axisContainer && !axisResizeObserver) {
+            axisResizeObserver = new ResizeObserver(() => axisInstance?.resize());
+            axisResizeObserver.observe(axisContainer);
+        }
     }
 
     /** Recomputes the invisible per-segment hit targets (see OverlayRect) from the chart's
@@ -802,9 +1216,9 @@
                     lotId: meta.lotId,
                     dataIndex,
                     left: Math.min(left[0], right[0]),
-                    top: left[1] - LANE_ROW_HEIGHT / 2,
+                    top: left[1] - Math.min(LANE_ROW_HEIGHT, Math.max(24, meta.thickness + 8)) / 2,
                     width: Math.max(4, Math.abs(right[0] - left[0])),
-                    height: LANE_ROW_HEIGHT,
+                    height: Math.min(LANE_ROW_HEIGHT, Math.max(24, meta.thickness + 8)),
                 });
             } catch {
                 // Chart not fully laid out yet (e.g. mid-resize) — skip this segment for this
@@ -816,6 +1230,17 @@
 
     function refreshOverlayRects() {
         overlayRects = computeOverlayRects();
+    }
+
+    function syncAxisViewport() {
+        if (!lanesScrollEl) return;
+        axisScrollLeft = lanesScrollEl.scrollLeft;
+        axisContentWidthPx = Math.max(CHART_MIN_WIDTH, chartContainer?.clientWidth ?? lanesScrollEl.scrollWidth ?? CHART_MIN_WIDTH);
+    }
+
+    function handleLanesScroll() {
+        syncAxisViewport();
+        refreshOverlayRects();
     }
 
     /** Index of the '__segments' custom series in the live ECharts option — looked up by name
@@ -843,7 +1268,12 @@
     }
 
     function renderChart() {
-        if (!chartContainer) return;
+        if (!chartContainer) {
+            chartInstance?.clear();
+            axisInstance?.clear();
+            overlayRects = [];
+            return;
+        }
 
         syncTheme();
 
@@ -858,10 +1288,19 @@
             chartInstance.dispose();
             chartInstance = undefined;
         }
+        if (axisInstance && (!axisContainer || axisInstance.getDom() !== axisContainer)) {
+            axisResizeObserver?.disconnect();
+            axisResizeObserver = null;
+            axisDataZoomTouchPanHandle?.dispose();
+            axisDataZoomTouchPanHandle = null;
+            axisDataZoomSyncHandle?.dispose();
+            axisDataZoomSyncHandle = null;
+            axisInstance.dispose();
+            axisInstance = undefined;
+        }
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
-            setupResizeObserver();
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
@@ -876,15 +1315,40 @@
             });
             chartInstance.on('rendered', refreshOverlayRects);
         }
+        if (axisContainer && !axisInstance) {
+            axisInstance = echarts.init(axisContainer, undefined, {renderer: 'canvas'});
+            axisDataZoomTouchPanHandle = attachDataZoomTouchPan(axisInstance, axisContainer);
+            axisDataZoomSyncHandle = attachDataZoomSync(axisInstance, (start, end) => onZoomChange?.(start, end));
+        }
+        setupResizeObserver();
 
         if (!chartHasData) {
             chartInstance.clear();
+            axisInstance?.clear();
             overlayRects = [];
             return;
         }
 
+        syncAxisViewport();
         chartInstance.setOption(buildOption(isDark), CHART_SET_OPTION_OPTS);
+        axisInstance?.setOption(buildAxisOption(isDark), CHART_SET_OPTION_OPTS);
         chartInstance.resize();
+        axisInstance?.resize();
+        refreshOverlayRects();
+    }
+
+    function refreshSelectionRendering() {
+        if (!chartInstance || !chartHasData) return;
+        chartInstance.setOption(
+            {
+                series: [
+                    {name: '__lane-highlight', data: laneHighlightData},
+                    {name: '__segments', data: segmentSeriesData},
+                    {name: '__event-markers', data: eventMarkerData},
+                ],
+            },
+            {notMerge: false},
+        );
         refreshOverlayRects();
     }
 
@@ -901,12 +1365,19 @@
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
+            axisResizeObserver?.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
             dataZoomSyncHandle?.dispose();
             dataZoomSyncHandle = null;
+            axisDataZoomTouchPanHandle?.dispose();
+            axisDataZoomTouchPanHandle = null;
+            axisDataZoomSyncHandle?.dispose();
+            axisDataZoomSyncHandle = null;
             chartInstance?.dispose();
             chartInstance = undefined;
+            axisInstance?.dispose();
+            axisInstance = undefined;
             if (pulseTimeoutId != null) clearTimeout(pulseTimeoutId);
         };
     });
@@ -916,6 +1387,17 @@
         const end = externalZoomEnd;
         if (start == null || end == null) return;
         dataZoomSyncHandle?.applyExternal(start, end);
+        axisDataZoomSyncHandle?.applyExternal(start, end);
+    });
+
+    $effect(() => {
+        void selectedLotIds;
+        void laneHighlightData;
+        void segmentSeriesData;
+        void eventMarkerData;
+        void pulseState;
+        if (!chartInstance || !chartHasData) return;
+        tick().then(refreshSelectionRendering);
     });
 
     $effect(() => {
@@ -931,6 +1413,7 @@
     $effect(() => {
         void lots;
         void segments;
+        void events;
         void brokers;
         void currency;
         void xAxisRange;
@@ -941,10 +1424,11 @@
         void chartHasData;
         void chartHeightPx;
         void pulseState;
-        void filterMode;
+        void openSelected;
+        void closedSelected;
+        void axisContainer;
+        void axisContentWidthPx;
         void $currentLanguage;
-
-        if (!chartContainer) return;
 
         tick().then(() => {
             renderChart();
@@ -958,60 +1442,72 @@
             {$t('brokers.lots.ganttTitle') || 'Lot life & custody'}
         </h3>
 
-        <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600">
+        <div class="flex w-fit overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-gantt-state-filter">
             <button
-                class="px-3 py-1 transition-colors {filterMode === 'open' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                onclick={() => onFilterModeChange?.('open')}
+                class="px-3 py-1 transition-colors {openSelected ? '' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                style={openSelected ? `background-color:${lotStateColor('OPEN', isDark)};color:${isDark ? '#0f172a' : '#ffffff'}` : ''}
+                onclick={() => onToggleOpen?.()}
                 data-testid="lot-gantt-filter-open"
+                aria-pressed={openSelected}
                 type="button"
             >
                 {$t('brokers.lots.openOnly') || 'Open'}
             </button>
             <button
-                class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {filterMode === 'all' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                onclick={() => onFilterModeChange?.('all')}
-                data-testid="lot-gantt-filter-all"
+                class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {closedSelected ? '' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                style={closedSelected ? `background-color:${lotStateColor('CLOSED', isDark)};color:${isDark ? '#0f172a' : '#ffffff'}` : ''}
+                onclick={() => onToggleClosed?.()}
+                data-testid="lot-gantt-filter-closed"
+                aria-pressed={closedSelected}
                 type="button"
             >
-                {$t('brokers.lots.allLots') || 'All'}
+                {$t('brokers.lots.closedOnly') || 'Closed'}
             </button>
         </div>
     </div>
 
-    <div bind:this={lanesScrollEl} class="max-h-[34rem] overflow-auto rounded-lg border border-gray-100 dark:border-slate-700" data-testid="lot-gantt-scroll">
-        {#if chartHasData}
-            <div class="relative min-w-[720px]">
-                <div bind:this={chartContainer} class="w-full" data-testid="lot-gantt-echart" style={`height:${chartHeightPx}px; min-width:${CHART_MIN_WIDTH}px;`}></div>
+    <div class="overflow-hidden rounded-lg border border-gray-100 dark:border-slate-700">
+        <div bind:this={lanesScrollEl} class="max-h-[34rem] overflow-auto" data-testid="lot-gantt-scroll" onscroll={handleLanesScroll}>
+            {#if chartHasData}
+                <div class="relative min-w-[720px]">
+                    <div bind:this={chartContainer} class="w-full" data-testid="lot-gantt-echart" style={`height:${chartHeightPx}px; min-width:${CHART_MIN_WIDTH}px;`}></div>
 
-                <!-- Invisible per-segment hit targets kept in sync with the ECharts custom
+                    <!-- Invisible per-segment hit targets kept in sync with the ECharts custom
                      series (see computeOverlayRects) — provide a real, focusable, testable DOM
                      element over each Gantt bar without reintroducing a fixed HTML column.
                      mouseenter/mousemove/mouseleave drive the native tooltip via dispatchAction
                      (see showSegmentTooltip) since this element's own pointer-events would
                      otherwise block the canvas from ever seeing the hover. -->
-                {#each overlayRects as rect (rect.dataIndex)}
-                    <button
-                        type="button"
-                        class="absolute cursor-pointer bg-transparent opacity-0"
-                        style={`left:${rect.left}px; top:${rect.top}px; width:${rect.width}px; height:${rect.height}px;`}
-                        data-testid={`lot-gantt-segment-${rect.lotId}`}
-                        aria-label={lotLabel(lots.find((lot) => lot.lot_id === rect.lotId)?.opening_date ?? '')}
-                        onclick={(event) => {
-                            if (event.detail !== 1) return;
-                            toggleLotSelection(rect.lotId);
-                        }}
-                        ondblclick={() => handleLaneDoubleClick(rect.lotId)}
-                        onmouseenter={() => showSegmentTooltip(rect)}
-                        onmousemove={() => showSegmentTooltip(rect)}
-                        onmouseleave={hideSegmentTooltip}
-                        onfocus={() => showSegmentTooltip(rect)}
-                        onblur={hideSegmentTooltip}
-                    ></button>
-                {/each}
-            </div>
-        {:else}
-            <div class="flex h-[220px] items-center justify-center px-4 text-center text-sm italic text-gray-400 dark:text-gray-500">
-                {$t('brokers.lots.noGanttData') || 'No lot custody history in selected range'}
+                    {#each overlayRects as rect (rect.dataIndex)}
+                        <button
+                            type="button"
+                            class="absolute cursor-pointer bg-transparent opacity-0"
+                            style={`left:${rect.left}px; top:${rect.top}px; width:${rect.width}px; height:${rect.height}px;`}
+                            data-testid={`lot-gantt-segment-${rect.lotId}`}
+                            aria-label={lotLabel(lots.find((lot) => lot.lot_id === rect.lotId)?.opening_date ?? '')}
+                            onclick={(event) => {
+                                if (event.detail !== 1) return;
+                                toggleLotSelection(rect.lotId);
+                            }}
+                            ondblclick={() => handleLaneDoubleClick(rect.lotId)}
+                            onmouseenter={() => showSegmentTooltip(rect)}
+                            onmousemove={() => showSegmentTooltip(rect)}
+                            onmouseleave={hideSegmentTooltip}
+                            onfocus={() => showSegmentTooltip(rect)}
+                            onblur={hideSegmentTooltip}
+                        ></button>
+                    {/each}
+                </div>
+            {:else}
+                <div class="flex h-[220px] items-center justify-center px-4 text-center text-sm italic text-gray-400 dark:text-gray-500">
+                    {$t('brokers.lots.noGanttData') || 'No lot custody history in selected range'}
+                </div>
+            {/if}
+        </div>
+
+        {#if chartHasData}
+            <div class="overflow-hidden border-t border-gray-100 bg-white dark:border-slate-700 dark:bg-slate-800" data-testid="lot-gantt-sticky-axis">
+                <div bind:this={axisContainer} class="will-change-transform" style={`height:${STICKY_AXIS_HEIGHT}px; width:${axisContentWidthPx}px; min-width:${CHART_MIN_WIDTH}px; transform:translateX(-${axisScrollLeft}px);`}></div>
             </div>
         {/if}
     </div>

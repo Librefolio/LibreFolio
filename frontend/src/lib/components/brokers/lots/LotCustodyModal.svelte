@@ -280,6 +280,14 @@
     let lotCumulativeProceeds = $derived.by(() => (lot ? parseNumber(lot.cumulative_proceeds) : null));
     let lotPnl = $derived.by(() => (lot ? parseNumber(lot.pnl) : null));
     let lotRelativeReturn = $derived.by(() => (lot ? parseNumber(lot.relative_return) : null));
+    let lotAssetIncome = $derived.by(() => (lot ? parseNumber(lot.asset_income) : null));
+    let lotMarketPnl = $derived.by(() => (lot ? parseNumber(lot.market_pnl) : null));
+    let lotTotalPnl = $derived.by(() => (lot ? parseNumber(lot.total_pnl) : null));
+    let lotCashYield = $derived.by(() => (lot ? parseNumber(lot.cash_yield) : null));
+    let lotTotalReturn = $derived.by(() => (lot ? parseNumber(lot.total_return) : null));
+    let lotValueSource = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.value_source) ?? null) : null));
+    let lotIsEstimated = $derived(lotValueSource === 'ESTIMATED_AT_COST');
+    let lotHasIncome = $derived(lotAssetIncome != null && lotAssetIncome !== 0);
 
     $effect(() => {
         void open;
@@ -340,19 +348,55 @@
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.currentValue')}</dt>
                         <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCurrentValue)}</dd>
+                        {#if lotIsEstimated}
+                            <p class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400" data-testid="lot-custody-modal-value-source">
+                                <Info size={12} />
+                                {$_('brokers.lots.modal.estimatedAtCost')}
+                            </p>
+                        {/if}
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.cumulativeProceeds')}</dt>
                         <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCumulativeProceeds)}</dd>
                     </div>
+                    {#if lotHasIncome}
+                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.assetIncome')}</dt>
+                            <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotAssetIncome)}`} data-testid="lot-custody-modal-asset-income">{formatSignedCurrency(lotAssetIncome)}</dd>
+                        </div>
+                    {/if}
+                    {#if lotMarketPnl != null}
+                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.marketPnl')}</dt>
+                            <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotMarketPnl)}`} data-testid="lot-custody-modal-market-pnl">{formatSignedCurrency(lotMarketPnl)}</dd>
+                        </div>
+                    {/if}
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.fifoPnl')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotPnl)}`}>{formatSignedCurrency(lotPnl)}</dd>
                     </div>
+                    {#if lotTotalPnl != null}
+                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.totalPnl')}</dt>
+                            <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalPnl)}`} data-testid="lot-custody-modal-total-pnl">{formatSignedCurrency(lotTotalPnl)}</dd>
+                        </div>
+                    {/if}
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openReturn')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotRelativeReturn)}`}>{formatPercent(lotRelativeReturn)}</dd>
                     </div>
+                    {#if lotTotalReturn != null}
+                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.totalReturn')}</dt>
+                            <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalReturn)}`} data-testid="lot-custody-modal-total-return">{formatPercent(lotTotalReturn)}</dd>
+                        </div>
+                    {/if}
+                    {#if lotHasIncome && lotCashYield != null}
+                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.cashYield')}</dt>
+                            <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotCashYield)}`} data-testid="lot-custody-modal-cash-yield">{formatPercent(lotCashYield)}</dd>
+                        </div>
+                    {/if}
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70 sm:col-span-2">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('common.status')}</dt>
                         <dd class="mt-2 flex flex-wrap gap-2" data-testid="lot-custody-modal-states">

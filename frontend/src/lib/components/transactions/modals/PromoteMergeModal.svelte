@@ -22,8 +22,8 @@
 
     interface Props {
         open: boolean;
-        txA?: {label: string; description: string; tags: string[]; date: string; cost_basis_override: string} | null;
-        txB?: {label: string; description: string; tags: string[]; date: string; cost_basis_override: string} | null;
+        txA?: {label: string; description: string; tags: string[]; date: string} | null;
+        txB?: {label: string; description: string; tags: string[]; date: string} | null;
         targetTypeLabel: string;
         availableTags?: string[];
         onConfirm: (resolved: {description?: string; tags?: string[]}) => void;

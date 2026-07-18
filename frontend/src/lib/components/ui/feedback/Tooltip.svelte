@@ -3,12 +3,28 @@
      * Tooltip - Instant tooltip with click-outside dismiss
      *
      * Features:
-     * - 0ms delay on hover
-     * - Also opens on click (for mobile)
+     * - 0ms delay on hover; stays open indefinitely while the pointer remains
+     *   over the trigger OR the tooltip body itself (no fixed disappear timer
+     *   while genuinely hovered — see bug note below)
+     * - Also opens on click/tap ("pinned"): stays open indefinitely while
+     *   hovered, and only starts a multi-second grace-dismiss timer once the
+     *   pointer actually leaves (mouse) or contact ends (touch)
      * - Fixed positioning: renders relative to viewport, never clipped by modal/overflow
      * - Auto-positions to avoid viewport overflow
      * - Closes on click outside
      * - Supports plain text, raw HTML, and inline LaTeX ($...$) via KaTeX
+     *
+     * Bug fixed: previously, a fixed 5s auto-dismiss timer started as soon as
+     * a click/tap opened the tooltip, regardless of continued pointer contact
+     * — so a tooltip opened via a touch-classified interaction (confirmed via
+     * live repro with a touch-enabled browser context: a tap made the
+     * tooltip vanish at exactly t=5s even though "contact" was ongoing)
+     * disappeared while the user was still trying to read it. Fixed by
+     * deferring the grace timer to the moment contact actually ends
+     * (mouseleave from both trigger+tooltip, or touchend), and by giving the
+     * tooltip body its own mouseenter/mouseleave handlers so moving the
+     * pointer from the trigger into the tooltip content (e.g. to select
+     * text) no longer closes it either.
      *
      * Svelte 5 runes.
      */
@@ -39,23 +55,40 @@
     let fixedTop = $state(0);
     let fixedLeft = $state(0);
 
-    /** Auto-dismiss timer for mobile (touch) interactions */
-    let autoDismissTimer: ReturnType<typeof setTimeout> | null = $state(null);
+    /** True once opened via click/tap ("pinned") rather than plain hover.
+     *  Pinned tooltips stay open indefinitely while the pointer remains over
+     *  the trigger or the tooltip body; only once contact ends does a grace
+     *  timer start (see PINNED_LEAVE_GRACE_MS). Plain-hover tooltips use a
+     *  much shorter bridge delay instead, just enough to cross the visual
+     *  gap between trigger and tooltip without flicker. */
+    let pinned = $state(false);
     /** Whether the current interaction is touch-based */
     let isTouchInteraction = $state(false);
 
-    function clearAutoDismiss() {
-        if (autoDismissTimer) {
-            clearTimeout(autoDismissTimer);
-            autoDismissTimer = null;
+    /** Grace period after a *pinned* tooltip loses contact (mouse leaves both
+     *  trigger and tooltip, or a touch ends) before it auto-dismisses. */
+    const PINNED_LEAVE_GRACE_MS = 5000;
+    /** Near-instant delay for plain hover — bridges the gap between trigger
+     *  and tooltip elements when the pointer moves from one to the other,
+     *  without introducing a perceptible "stays open" timer. */
+    const HOVER_LEAVE_BRIDGE_MS = 150;
+
+    /** Single pending-hide timer, shared by both the pinned grace period and
+     *  the plain-hover bridge delay — always cancelled on re-entry. */
+    let pendingHideTimer: ReturnType<typeof setTimeout> | null = $state(null);
+
+    function clearPendingHide() {
+        if (pendingHideTimer) {
+            clearTimeout(pendingHideTimer);
+            pendingHideTimer = null;
         }
     }
 
-    function startAutoDismiss() {
-        clearAutoDismiss();
-        autoDismissTimer = setTimeout(() => {
+    function scheduleHide(delayMs: number) {
+        clearPendingHide();
+        pendingHideTimer = setTimeout(() => {
             hide();
-        }, 5000);
+        }, delayMs);
     }
 
     function show() {
@@ -66,37 +99,78 @@
 
     function hide() {
         visible = false;
-        clearAutoDismiss();
+        pinned = false;
+        clearPendingHide();
         isTouchInteraction = false;
     }
 
     function toggle(event: MouseEvent) {
         event.stopPropagation();
-        if (visible) {
+        // A click while it's already open-but-not-pinned (i.e. shown purely
+        // via hover, which on desktop always precedes a click on the same
+        // element) means "pin it open", not "close it" — only a click while
+        // ALREADY pinned acts as an explicit close.
+        if (visible && pinned) {
             hide();
         } else {
+            clearPendingHide();
             show();
+            pinned = true;
         }
+    }
+
+    /** Pointer entered trigger OR tooltip body — cancel any scheduled hide
+     *  and ensure it's shown (covers both plain hover and re-entry into a
+     *  pinned tooltip before its grace period elapses). */
+    function handlePointerEnter() {
+        if (isTouchInteraction) return;
+        clearPendingHide();
+        if (!visible) show();
+    }
+
+    /** Pointer left trigger OR tooltip body. Pinned tooltips get a multi-
+     *  second grace period (real dismiss only after contact stays lost);
+     *  plain-hover tooltips get a near-instant bridge delay so moving the
+     *  mouse across the small gap between trigger and tooltip doesn't close
+     *  it, while still closing promptly once genuinely done hovering. */
+    function handlePointerLeave() {
+        if (isTouchInteraction) return;
+        scheduleHide(pinned ? PINNED_LEAVE_GRACE_MS : HOVER_LEAVE_BRIDGE_MS);
     }
 
     function handleTouchStart(event: TouchEvent) {
         event.stopPropagation();
         isTouchInteraction = true;
+        clearPendingHide();
         if (visible) {
             hide();
         } else {
             show();
-            startAutoDismiss();
+            pinned = true;
+            // No timer here — deferred to handleTouchEnd so the tooltip
+            // doesn't vanish while contact is still active (the original
+            // bug: a fixed timer fired regardless of continued contact).
+        }
+    }
+
+    /** Touch contact ended — start the pinned grace period now (mirrors
+     *  mouse's handlePointerLeave, since touch has no hover to lean on). */
+    function handleTouchEnd() {
+        if (isTouchInteraction && visible && pinned) {
+            scheduleHide(PINNED_LEAVE_GRACE_MS);
         }
     }
 
     function handleKeydown(event: KeyboardEvent) {
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            if (visible) {
+            // Same "pin, don't close" rule as toggle() — see its comment.
+            if (visible && pinned) {
                 hide();
             } else {
+                clearPendingHide();
                 show();
+                pinned = true;
             }
         }
     }
@@ -256,13 +330,10 @@
         if (!isTouchInteraction) toggle(e);
     }}
     onkeydown={handleKeydown}
-    onmouseenter={() => {
-        if (!isTouchInteraction) show();
-    }}
-    onmouseleave={() => {
-        if (!isTouchInteraction) hide();
-    }}
+    onmouseenter={handlePointerEnter}
+    onmouseleave={handlePointerLeave}
     ontouchstart={handleTouchStart}
+    ontouchend={handleTouchEnd}
     role="button"
     tabindex="0"
 >
@@ -273,7 +344,15 @@
 
 {#if visible}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div bind:this={tooltipElement} class="tooltip-fixed" style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;" role="tooltip" data-testid="tooltip-content">
+    <div
+        bind:this={tooltipElement}
+        class="tooltip-fixed"
+        style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;"
+        role="tooltip"
+        data-testid="tooltip-content"
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+    >
         {#if math || html}
             {@html renderedContent}
         {:else}

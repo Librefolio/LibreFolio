@@ -4,6 +4,8 @@
  * Generic type definitions for the reusable DataTable component.
  * These types allow full control over columns, actions, and behavior.
  */
+import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyComponent = any;
 
@@ -314,6 +316,10 @@ export interface ColumnDef<T> {
     displayName?: string | (() => string);
 }
 
+export type FooterCellContent = SimpleCellContent | HtmlCell;
+
+export type FooterCells<T> = Record<string, FooterCellContent> | ((rows: T[], selectedRows: T[], visibleColumns: ColumnDef<T>[]) => Record<string, FooterCellContent>);
+
 // ============ Action Types ============
 
 /**
@@ -321,21 +327,18 @@ export interface ColumnDef<T> {
  *
  * @typeParam T - The row data type
  */
-export interface RowAction<T> {
+export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled'> {
     /** Unique action identifier */
     id: string;
 
     /** Icon component */
     icon: AnyComponent;
 
-    /** Label - string, i18n function, or row-derived (used as button title attr) */
+    /** Menu label - string, i18n function, or row-derived */
     label: string | (() => string) | ((row: T) => string);
 
     /** Click handler */
     onClick: (row: T) => void | Promise<void>;
-
-    /** Visual variant */
-    variant?: 'default' | 'danger';
 
     /** Conditionally show/hide action */
     visible?: (row: T) => boolean;
@@ -352,6 +355,8 @@ export interface RowAction<T> {
     /** Confirmation message - string or function */
     confirmMessage?: string | ((row: T) => string);
 }
+
+export type RowActions<T> = RowAction<T>[] | ((row: T) => RowAction<T>[]);
 
 /**
  * Bulk action for multiple selected rows
@@ -505,11 +510,14 @@ export interface DataTableProps<T> {
     /** Enable actions column (default: true) */
     enableActions?: boolean;
 
-    /** Actions column width (default: '10%') */
+    /** Actions column width (default: '64px') */
     actionsColumnWidth?: string;
 
-    /** Row actions - passed by user */
-    rowActions?: RowAction<T>[];
+    /** Accessible label for the native row-actions kebab button. Defaults to table.actions. */
+    actionsLabel?: string;
+
+    /** Row actions - array or row-derived callback. Rendered by DataTable as a kebab menu. */
+    rowActions?: RowActions<T>;
 
     /** Bulk actions for multi-selection */
     bulkActions?: BulkAction<T>[];
@@ -549,6 +557,9 @@ export interface DataTableProps<T> {
 
     /** Loading state */
     isLoading?: boolean;
+
+    /** Optional aggregate footer. Receives selected rows, or filtered rows when nothing is selected. */
+    footerCells?: FooterCells<T>;
 }
 
 // ============ State Types ============

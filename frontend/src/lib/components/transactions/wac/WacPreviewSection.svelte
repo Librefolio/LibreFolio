@@ -20,12 +20,21 @@
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
+    import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
     // =========================================================================
     // Types
     // =========================================================================
 
     export type WacMode = 'auto' | 'manual';
+
+    /** Whether the cost-basis amount shown/typed represents the total for the
+     *  whole transaction quantity, or the per-unit price (current/legacy
+     *  behavior). Purely a presentation concern — `value`/`onChange` always
+     *  deal in per-unit amounts; conversion happens only at the UI boundary. */
+    export type WacUnitMode = 'total' | 'unit';
+
+    const UNIT_MODE_STORAGE_KEY = 'wacPreviewUnitMode';
 
     export interface WacPreviewResult {
         wac: {code: string; amount: string} | null;
@@ -98,6 +107,11 @@
         availableCurrencies?: string[];
         /** Called when user clicks sync FX button — parent opens FxSyncModal */
         onOpenFxSync?: () => void;
+        /** Quantity of the transaction this cost basis applies to (signed or
+         *  unsigned, only the absolute value is used). Enables the
+         *  Total/Per-unit display toggle — without it (or with quantity <= 0)
+         *  the field always behaves as "Per unit" regardless of the toggle. */
+        quantity?: string | null;
     }
 
     let {
@@ -120,6 +134,7 @@
         onCurrencyChange,
         availableCurrencies = [],
         onOpenFxSync,
+        quantity = null,
     }: Props = $props();
 
     // =========================================================================
@@ -131,6 +146,54 @@
     let previewResult = $state<WacPreviewResult | null>(null);
     let error = $state<string | null>(null);
     let showQualifying = $state(false);
+
+    /** Total/Per-unit display toggle — defaults to "unit" (current/legacy
+     *  behavior, unchanged for anyone who doesn't touch the new control),
+     *  persisted per-user in localStorage like other app toggles (see
+     *  ViewModeToggle.svelte for the same pattern). */
+    let unitMode = $state<WacUnitMode>('unit');
+    $effect(() => {
+        const stored = getUserStorage(UNIT_MODE_STORAGE_KEY, 'unit');
+        if (stored === 'total' || stored === 'unit') unitMode = stored;
+    });
+
+    function setUnitMode(next: WacUnitMode) {
+        unitMode = next;
+        setUserStorage(UNIT_MODE_STORAGE_KEY, next);
+    }
+
+    /** Absolute quantity for this transaction, or 0 if unknown/invalid — a
+     *  quantity of 0 makes "Total" meaningless, so conversions fall back to
+     *  the raw per-unit value in that case regardless of `unitMode`. */
+    let quantityNum = $derived.by(() => {
+        const n = Math.abs(Number(quantity ?? '0'));
+        return Number.isFinite(n) ? n : 0;
+    });
+    /** Whether the Total/Per-unit toggle can actually take effect right now. */
+    let unitToggleActive = $derived(unitMode === 'total' && quantityNum > 0);
+
+    /** Convert a per-unit {code,amount} to the display representation
+     *  (× quantity when in "Total" mode), or pass through unchanged. */
+    function toDisplayAmount(v: {code: string; amount: string} | null): {code: string; amount: string} | null {
+        if (!v || !unitToggleActive) return v;
+        const amt = Number(v.amount);
+        if (!Number.isFinite(amt)) return v;
+        return {code: v.code, amount: String(amt * quantityNum)};
+    }
+
+    /** Convert a displayed amount back to per-unit (÷ quantity when in
+     *  "Total" mode) — used before propagating any user-entered value, so
+     *  `value`/`onChange` always deal in per-unit amounts. */
+    function toPerUnitAmount(v: {code: string; amount: string} | null): {code: string; amount: string} | null {
+        if (!v || !unitToggleActive) return v;
+        const amt = Number(v.amount);
+        if (!Number.isFinite(amt)) return v;
+        return {code: v.code, amount: String(amt / quantityNum)};
+    }
+
+    /** What `CompactCashCell` actually renders — `value` converted for
+     *  display per the current Total/Per-unit toggle. */
+    let displayValue = $derived(toDisplayAmount(value));
 
     // Reset qualifying table visibility when mode switches to manual
     // Reset previewResult when switching to auto (stale data shouldn't show while awaiting re-validate)
@@ -202,8 +265,16 @@
     }
 
     /** Called when user types in the amount field — auto-switch to manual.
-     *  In auto mode: currency change → WAC currency override; amount change → switch to manual. */
-    function handleValueChange(next: {code: string; amount: string} | null) {
+     *  In auto mode: currency change → WAC currency override; amount change → switch to manual.
+     *
+     *  `next` arrives in DISPLAY terms (total when the Total/Per-unit toggle
+     *  is active, per-unit otherwise) since it comes straight from
+     *  `CompactCashCell`, which is bound to `displayValue`. Converted back to
+     *  per-unit immediately — every comparison/propagation below (and
+     *  `value`/`onChange` in general) always deals in per-unit amounts. */
+    function handleValueChange(rawNext: {code: string; amount: string} | null) {
+        const next = toPerUnitAmount(rawNext);
+
         if (!next) {
             onChange(next);
             return;
@@ -306,9 +377,31 @@
         {/if}
     </div>
 
+    <!-- Toggle Total/Per-unit — governs how the amount below is interpreted.
+         Always shown (even with quantity unavailable/0, where it's a no-op —
+         see unitToggleActive) so its state persists across quantity edits. -->
+    {#if !disabled}
+        <div class="flex items-center gap-1 text-[10px]" data-testid="{testid}-unit-toggle">
+            <span class="text-gray-400 dark:text-gray-500">{$t('transactions.wacPreview.unitModeLabel') ?? 'Show as:'}</span>
+            <button
+                type="button"
+                class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
+                onclick={() => setUnitMode('total')}
+                data-testid="{testid}-unit-toggle-total">{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
+            >
+            <span class="text-gray-300 dark:text-gray-600">|</span>
+            <button
+                type="button"
+                class="px-1.5 py-0.5 rounded {unitMode === 'unit' ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
+                onclick={() => setUnitMode('unit')}
+                data-testid="{testid}-unit-toggle-unit">{$t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit'}</button
+            >
+        </div>
+    {/if}
+
     <!-- Input field -->
     <div class="flex items-center gap-2">
-        <CompactCashCell {value} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? ($t('transactions.wacPreview.placeholderAuto') ?? 'auto (⚡ Validate)') : '0.00'} {defaultCode} currencyDisabled={disabled} {disabled} testid="{testid}-input" />
+        <CompactCashCell value={displayValue} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? ($t('transactions.wacPreview.placeholderAuto') ?? 'auto (⚡ Validate)') : '0.00'} {defaultCode} currencyDisabled={disabled} {disabled} testid="{testid}-input" />
 
         {#if loading}
             <span class="text-[10px] text-gray-400 animate-pulse" data-testid="{testid}-loading">

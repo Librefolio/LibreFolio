@@ -11,7 +11,7 @@ from typing import Iterable, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, PriceHistory, Transaction
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     BrokerWACHistoryPoint,
@@ -24,6 +24,8 @@ from backend.app.schemas.portfolio import (
     IssueSeverity,
     LotAnalysisType,
     LotCalculationStatus,
+    LotIncomeEventKind,
+    LotIncomeEventSchema,
     LotPriceHistoryPoint,
     LotReturnHistoryPoint,
     LotsAnalysisMetadata,
@@ -53,6 +55,7 @@ from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_t
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
     IssueCode.REFERENCE_PRICE_UNAVAILABLE,
+    IssueCode.CURRENT_PRICE_ASSUMED_AT_COST,
 }
 
 _CUSTODY_KINDS = {
@@ -206,6 +209,8 @@ class LotsAnalysisService:
         broker_shorting = await self._load_broker_shorting(scope_broker_ids)
         prices = await self._load_prices(asset_id=asset_id, date_to=actual_to)
         price_lookup = _PriceHistoryLookup(prices)
+        estimated_mode = price_lookup.latest() is None
+        income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
 
         def reference_price_lookup(resolved_asset_id: int, opened_at: date_type) -> ReferencePriceResolution | None:
             if resolved_asset_id != asset_id:
@@ -284,9 +289,39 @@ class LotsAnalysisService:
             lots_by_id=performance_context.lots_by_id,
             asset_currency=asset.currency,
         )
+        needs_income_alloc = any(analysis in normalized_analyses for analysis in (LotAnalysisType.LOT_SUMMARY, LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.INCOME_EVENTS))
+        if needs_income_alloc:
+            for tx in income_transactions:
+                fx_resolver.need(tx.currency or asset.currency, tx.date)
+            if estimated_mode:
+                # Estimated-at-cost values the open portion at converted opening cost -> needs fx@opening.
+                for lot in lots_by_id.values():
+                    fx_resolver.need(lot.currency, lot.opening_date)
         await fx_resolver.load(self.db)
 
+        income_by_lot: dict[int, Decimal] = {}
+        income_prefix_by_lot: dict[int, dict[date_type, Decimal]] = {}
+        income_events_payload: list[LotIncomeEventSchema] = []
+        if needs_income_alloc and income_transactions:
+            income_by_lot, income_prefix_by_lot, income_events_payload = self._allocate_asset_income(
+                income_transactions=income_transactions,
+                lots_by_id=lots_by_id,
+                fragments_by_lot=fragments_by_lot,
+                fx_resolver=fx_resolver,
+                asset_currency=asset.currency,
+            )
+
         data_quality = self._build_data_quality_report(engine_result.issues)
+        if estimated_mode and self._needs_market_series(normalized_analyses):
+            data_quality.issues.append(
+                DataQualityIssue(
+                    domain=IssueDomain.PORTFOLIO,
+                    code=IssueCode.CURRENT_PRICE_ASSUMED_AT_COST,
+                    severity=IssueSeverity.WARNING,
+                    message_i18n_key=_message_key_for_issue(IssueCode.CURRENT_PRICE_ASSUMED_AT_COST),
+                    message_params={"asset_id": asset_id},
+                )
+            )
         active_price_dates = history_dates if self._needs_market_series(normalized_analyses) else [actual_to]
         market_prices = self._build_market_price_map(price_lookup, fx_resolver, active_price_dates)
         wac_context = self._build_wac_context(
@@ -307,6 +342,8 @@ class LotsAnalysisService:
                 market_prices=market_prices,
                 price_lookup=price_lookup,
                 closures_by_lot=closures_by_lot,
+                income_by_lot=income_by_lot,
+                estimated_mode=estimated_mode,
             )
 
         gantt_segments = None
@@ -340,6 +377,8 @@ class LotsAnalysisService:
                     market_prices=market_prices,
                     history_dates=history_dates,
                     fx_resolver=fx_resolver,
+                    income_prefix_by_lot=income_prefix_by_lot,
+                    estimated_mode=estimated_mode,
                 ),
                 display_from,
                 actual_to,
@@ -357,6 +396,8 @@ class LotsAnalysisService:
                     fx_resolver=fx_resolver,
                     history_dates=history_dates,
                     closures_by_lot=closures_by_lot,
+                    income_prefix_by_lot=income_prefix_by_lot,
+                    estimated_mode=estimated_mode,
                 ),
                 display_from,
                 actual_to,
@@ -408,6 +449,12 @@ class LotsAnalysisService:
                 actual_to,
             )
 
+        income_events = None
+        if LotAnalysisType.INCOME_EVENTS in normalized_analyses:
+            # Only markers within the visualized window; events before display_from already
+            # contributed to the opening state and would clutter the chart.
+            income_events = [event for event in income_events_payload if display_from <= event.date <= actual_to]
+
         return LotsAnalysisResponse(
             asset_id=asset_id,
             target_currency=target_currency,
@@ -433,6 +480,7 @@ class LotsAnalysisService:
             broker_wac_history=broker_wac_history,
             cumulative_wac_history=cumulative_wac_history,
             performance_history=performance_history,
+            income_events=income_events,
         )
 
     async def _get_base_currency(self) -> str:
@@ -448,6 +496,25 @@ class LotsAnalysisService:
 
     async def _load_transactions(self, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[Transaction]:
         stmt = select(Transaction).where(Transaction.asset_id == asset_id).where(Transaction.broker_id.in_(scope_broker_ids)).where(Transaction.date <= date_to).where(Transaction.quantity.is_not(None)).where(Transaction.quantity != 0).order_by(Transaction.date, Transaction.id)
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def _load_income_transactions(self, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[Transaction]:
+        """Load asset-linked DIVIDEND/INTEREST cash transactions for pro-rata lot allocation.
+
+        These are cash-only events (no quantity) so they never enter the FIFO engine load;
+        they are attributed to open LONG lots at ``transaction.date`` (see ``_allocate_asset_income``).
+        Income without ``asset_id`` is intentionally excluded here — it is handled broker-level
+        by the Portfolio Engine ("Altri effetti del periodo").
+        """
+        stmt = (
+            select(Transaction)
+            .where(Transaction.asset_id == asset_id)
+            .where(Transaction.broker_id.in_(scope_broker_ids))
+            .where(Transaction.date <= date_to)
+            .where(Transaction.type.in_([TransactionType.DIVIDEND, TransactionType.INTEREST]))
+            .where(Transaction.amount != 0)
+            .order_by(Transaction.date, Transaction.id)
+        )
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def _load_split_ratios(self, transactions: Sequence[Transaction]) -> dict[int, Decimal]:
@@ -836,6 +903,76 @@ class LotsAnalysisService:
             points.append((current_date, calc.wac_amount, calc.pool_qty))
         return points
 
+    def _allocate_asset_income(
+        self,
+        *,
+        income_transactions: Sequence[Transaction],
+        lots_by_id: dict[int, FifoLot],
+        fragments_by_lot: dict[int, list[FragmentInterval]],
+        fx_resolver: _FxRateResolver,
+        asset_currency: str,
+    ) -> tuple[dict[int, Decimal], dict[int, dict[date_type, Decimal]], list[LotIncomeEventSchema]]:
+        """Allocate asset-linked DIVIDEND/INTEREST pro-rata to open LONG lots.
+
+        Weight per lot = open_qty_i(t) / Σ open_qty_j(t) over LONG lots open at ``tx.date``.
+        Amounts are converted to target currency at ``tx.date`` before allocation. The sum of
+        allocations exactly equals the (converted) income (running-remainder: the last lot in a
+        deterministic order absorbs any division residual — no value created or lost). Income for
+        which no LONG lot is open on that date is skipped here (it is a broker-level effect handled
+        by the Portfolio Engine).
+
+        Returns ``(income_by_lot, income_prefix_by_lot, income_events_payload)``: the scalar
+        cumulative income per lot; per lot a cumulative-by-date map (same shape as
+        ``_closure_proceeds_prefix``) for histories; and one ``LotIncomeEventSchema`` per allocated
+        income transaction (plan v3 §11 chart markers).
+        """
+        income_by_lot: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
+        income_events: dict[int, list[tuple[date_type, Decimal]]] = defaultdict(list)
+        income_events_payload: list[LotIncomeEventSchema] = []
+        for tx in sorted(income_transactions, key=lambda row: (row.date, row.id or 0)):
+            total = self._converted_external_amount(tx.amount, tx.currency or asset_currency, tx.date, fx_resolver)
+            open_lots: list[tuple[int, Decimal]] = []
+            for lot_id, lot in lots_by_id.items():
+                if lot.direction != "LONG" or lot.opening_date > tx.date:
+                    continue
+                open_qty = self._open_quantity_on_date(fragments_by_lot.get(lot_id, []), tx.date)
+                if open_qty > 0:
+                    open_lots.append((lot_id, open_qty))
+            total_qty = sum((qty for _lot_id, qty in open_lots), Decimal("0"))
+            if total_qty <= 0:
+                continue
+            open_lots.sort(key=lambda item: item[0])
+            remaining = total
+            remaining_qty = total_qty
+            for idx, (lot_id, qty) in enumerate(open_lots):
+                if idx == len(open_lots) - 1:
+                    allocated = remaining
+                else:
+                    allocated = remaining * qty / remaining_qty
+                    remaining -= allocated
+                    remaining_qty -= qty
+                income_by_lot[lot_id] += allocated
+                income_events[lot_id].append((tx.date, allocated))
+            income_events_payload.append(
+                LotIncomeEventSchema(
+                    type=LotIncomeEventKind.DIVIDEND if tx.type == TransactionType.DIVIDEND else LotIncomeEventKind.INTEREST,
+                    date=tx.date,
+                    broker_id=tx.broker_id,
+                    transaction_id=tx.id,
+                    amount=total,
+                    lot_ids=[lot_id for lot_id, _qty in open_lots],
+                )
+            )
+        income_prefix_by_lot: dict[int, dict[date_type, Decimal]] = {}
+        for lot_id, events in income_events.items():
+            running = Decimal("0")
+            prefix: dict[date_type, Decimal] = {}
+            for event_date, amount in sorted(events, key=lambda item: item[0]):
+                running += amount
+                prefix[event_date] = running
+            income_prefix_by_lot[lot_id] = prefix
+        return dict(income_by_lot), income_prefix_by_lot, income_events_payload
+
     def _build_lot_summaries(
         self,
         *,
@@ -846,6 +983,8 @@ class LotsAnalysisService:
         market_prices: dict[date_type, Decimal | None],
         price_lookup: _PriceHistoryLookup,
         closures_by_lot: dict[int, list[LotClosure]],
+        income_by_lot: dict[int, Decimal],
+        estimated_mode: bool,
     ) -> list[LotSummarySchema]:
         latest_market_price = market_prices.get(max(market_prices)) if market_prices else None
         out: list[LotSummarySchema] = []
@@ -864,8 +1003,14 @@ class LotsAnalysisService:
             opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
             raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup)
             reference_unit_price = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
+            realized_pnl = self._converted_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
+            asset_income = income_by_lot.get(lot_id, Decimal("0"))
+            opening_value = converted_original_cost if converted_original_cost is not None else lot.original_cost
             open_value = total_value = pnl = relative_return = None
+            market_pnl: Decimal | None = None
+            value_source: str | None = None
             if latest_market_price is not None:
+                value_source = "MARKET_PRICE"
                 open_value = lot.open_quantity * latest_market_price
                 proceeds = converted_proceeds or Decimal("0")
                 if lot.direction == "LONG":
@@ -874,8 +1019,26 @@ class LotsAnalysisService:
                 else:
                     total_value = proceeds - open_value
                     pnl = total_value
+                market_pnl = pnl - realized_pnl
                 if reference_unit_price not in (None, Decimal("0")):
                     relative_return = (latest_market_price / reference_unit_price) - Decimal("1")
+            elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
+                # No current price: value the open portion at cost. Market P&L is 0 until a real price exists.
+                value_source = "ESTIMATED_AT_COST"
+                open_value = (opening_value or Decimal("0")) * lot.open_quantity / lot.original_quantity
+                proceeds = converted_proceeds or Decimal("0")
+                total_value = open_value + proceeds
+                pnl = total_value - (converted_original_cost or Decimal("0"))
+                market_pnl = Decimal("0")
+            total_pnl = None
+            if market_pnl is not None:
+                total_pnl = market_pnl + realized_pnl + asset_income
+            cash_yield = None
+            total_return = None
+            if opening_value is not None and opening_value > Decimal("0"):
+                cash_yield = asset_income / opening_value
+                if total_pnl is not None:
+                    total_return = total_pnl / opening_value
             out.append(
                 LotSummarySchema(
                     lot_id=lot.lot_id,
@@ -890,7 +1053,7 @@ class LotsAnalysisService:
                     currency=lot.currency,
                     open_quantity=lot.open_quantity,
                     realized_quantity=lot.realized_quantity,
-                    realized_pnl=self._converted_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver),
+                    realized_pnl=realized_pnl,
                     cumulative_proceeds=converted_proceeds if converted_proceeds is not None else lot.cumulative_proceeds,
                     reference_unit_price=reference_unit_price,
                     reference_price_source=reference_price_source,
@@ -900,6 +1063,12 @@ class LotsAnalysisService:
                     total_value=total_value,
                     pnl=pnl,
                     relative_return=relative_return,
+                    asset_income=asset_income,
+                    market_pnl=market_pnl,
+                    total_pnl=total_pnl,
+                    cash_yield=cash_yield,
+                    total_return=total_return,
+                    value_source=value_source,
                 )
             )
         return out
@@ -1164,6 +1333,8 @@ class LotsAnalysisService:
         market_prices: dict[date_type, Decimal | None],
         history_dates: Sequence[date_type],
         fx_resolver: _FxRateResolver,
+        income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
+        estimated_mode: bool,
     ) -> list[LotValueHistoryPoint]:
         points: list[LotValueHistoryPoint] = []
         for lot_id in selected_ids:
@@ -1172,21 +1343,30 @@ class LotsAnalysisService:
             proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost
             converted_short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) or lot.cumulative_proceeds
+            income_prefix = income_prefix_by_lot.get(lot_id, {})
+            estimated_unit_value = converted_original_cost / lot.original_quantity if lot.original_quantity != Decimal("0") else Decimal("0")
             for current_date in history_dates:
                 if current_date < lot.opening_date or current_date > last_date:
                     continue
                 market_price = market_prices.get(current_date)
                 if market_price is None:
-                    continue
-                open_value, proceeds, total_value, pnl = self._value_snapshot_on_date(
-                    lot=lot,
-                    fragments=fragments_by_lot.get(lot_id, []),
-                    proceeds_by_day=proceeds_by_day,
-                    market_price=market_price,
-                    current_date=current_date,
-                    converted_original_cost=converted_original_cost,
-                    converted_short_proceeds=converted_short_proceeds,
-                )
+                    if not (estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0")):
+                        continue
+                    open_value = self._open_quantity_on_date(fragments_by_lot.get(lot_id, []), current_date) * estimated_unit_value
+                    proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
+                    total_value = open_value + proceeds
+                    pnl = total_value - converted_original_cost
+                else:
+                    open_value, proceeds, total_value, pnl = self._value_snapshot_on_date(
+                        lot=lot,
+                        fragments=fragments_by_lot.get(lot_id, []),
+                        proceeds_by_day=proceeds_by_day,
+                        market_price=market_price,
+                        current_date=current_date,
+                        converted_original_cost=converted_original_cost,
+                        converted_short_proceeds=converted_short_proceeds,
+                    )
+                income = self._prefix_value_on_date(income_prefix, current_date)
                 points.append(
                     LotValueHistoryPoint(
                         lot_id=lot_id,
@@ -1196,6 +1376,7 @@ class LotsAnalysisService:
                         total_value=total_value,
                         original_cost=converted_original_cost,
                         pnl=pnl,
+                        income=income,
                     )
                 )
         return points
@@ -1211,6 +1392,8 @@ class LotsAnalysisService:
         fx_resolver: _FxRateResolver,
         history_dates: Sequence[date_type],
         closures_by_lot: dict[int, list[LotClosure]],
+        income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
+        estimated_mode: bool,
     ) -> list[LotReturnHistoryPoint]:
         points: list[LotReturnHistoryPoint] = []
         for lot_id in selected_ids:
@@ -1221,27 +1404,35 @@ class LotsAnalysisService:
             proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost
             converted_short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) or lot.cumulative_proceeds
+            income_prefix = income_prefix_by_lot.get(lot_id, {})
+            estimated_unit_value = converted_original_cost / lot.original_quantity if lot.original_quantity != Decimal("0") else Decimal("0")
             for current_date in history_dates:
                 if current_date < lot.opening_date or current_date > last_date:
                     continue
                 market_price = market_prices.get(current_date)
+                relative_return = None
                 if market_price is None:
-                    continue
-                open_value, proceeds, total_value, _pnl = self._value_snapshot_on_date(
-                    lot=lot,
-                    fragments=fragments_by_lot.get(lot_id, []),
-                    proceeds_by_day=proceeds_by_day,
-                    market_price=market_price,
-                    current_date=current_date,
-                    converted_original_cost=converted_original_cost,
-                    converted_short_proceeds=converted_short_proceeds,
-                )
+                    if not (estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0")):
+                        continue
+                    open_value = self._open_quantity_on_date(fragments_by_lot.get(lot_id, []), current_date) * estimated_unit_value
+                    proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
+                    total_value = open_value + proceeds
+                else:
+                    open_value, proceeds, total_value, _pnl = self._value_snapshot_on_date(
+                        lot=lot,
+                        fragments=fragments_by_lot.get(lot_id, []),
+                        proceeds_by_day=proceeds_by_day,
+                        market_price=market_price,
+                        current_date=current_date,
+                        converted_original_cost=converted_original_cost,
+                        converted_short_proceeds=converted_short_proceeds,
+                    )
+                    if converted_reference not in (None, Decimal("0")):
+                        relative_return = (market_price / converted_reference) - Decimal("1")
+                income = self._prefix_value_on_date(income_prefix, current_date)
                 total_return = None
                 if converted_original_cost != Decimal("0"):
-                    total_return = (total_value / converted_original_cost) - Decimal("1")
-                relative_return = None
-                if converted_reference not in (None, Decimal("0")):
-                    relative_return = (market_price / converted_reference) - Decimal("1")
+                    total_return = ((total_value + income) / converted_original_cost) - Decimal("1")
                 points.append(
                     LotReturnHistoryPoint(
                         lot_id=lot_id,
@@ -1249,6 +1440,7 @@ class LotsAnalysisService:
                         total_return=total_return,
                         relative_return=relative_return,
                         reference_price_source=reference_price_source if relative_return is not None else None,
+                        income=income,
                     )
                 )
         return points
@@ -1455,6 +1647,7 @@ def _message_key_for_issue(code: IssueCode) -> str:
         IssueCode.SHORT_ADJUSTMENT_NOT_SUPPORTED: "dataQuality.shortAdjustmentNotSupported",
         IssueCode.FIFO_SOURCE_QUANTITY_MISSING: "dataQuality.fifoSourceQuantityMissing",
         IssueCode.TRANSFER_PAIR_MISSING: "dataQuality.transferPairMissing",
+        IssueCode.CURRENT_PRICE_ASSUMED_AT_COST: "dataQuality.currentPriceAssumedAtCost",
     }
     return mapping[code]
 

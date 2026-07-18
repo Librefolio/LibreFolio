@@ -370,7 +370,7 @@
             {
                 id: 'delete',
                 icon: Trash2,
-                label: 'Delete',
+                label: () => $t('common.delete'),
                 variant: 'danger' as const,
                 onClick: (row) => handleStatusChangeByRowId(row.rowId, 'deleted'),
                 visible: (row) => row.status !== 'deleted',
@@ -378,7 +378,7 @@
             {
                 id: 'revert',
                 icon: Undo2,
-                label: 'Revert',
+                label: () => $t('common.undo'),
                 variant: 'default' as const,
                 onClick: (row) => handleStatusChangeByRowId(row.rowId, 'revert'),
                 visible: (row) => row.status === 'deleted' || row.status === 'edited' || row.status === 'appended',

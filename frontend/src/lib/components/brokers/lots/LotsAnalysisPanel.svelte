@@ -17,10 +17,12 @@
     is asset-wide ROI/TWRR (refinement v2 §5.2), ignores selected_lot_ids just like the
     WAC series it's plotted alongside. Feeds every component except the comparison
     chart's Value/Return modes.
-  - Selection fetch (selectedLotIds change, only when non-empty): VALUE_HISTORY +
-    RETURN_HISTORY scoped to selected_lot_ids. PRICE_HISTORY is NOT re-fetched here:
-    market price doesn't vary by lot, so the main fetch's already-deduped price series
-    is reused for the comparison chart's Price mode too.
+  - Selection fetch (effectiveSelectionIds change): VALUE_HISTORY + RETURN_HISTORY scoped to
+    the effective lot set. Per plan v3 §13 an empty selectedLotIds means "all visible lots"
+    (effectiveSelectionIds), so the comparison chart shows the whole visible set by default and
+    narrows only on an explicit selection. PRICE_HISTORY is NOT re-fetched here: market price
+    doesn't vary by lot, so the main fetch's already-deduped price series is reused for the
+    comparison chart's Price mode too.
 
   Gantt <-> WAC chart zoom/pan stay bidirectionally synced (sharedZoomStart/End), matching
   the old panel's pattern. The comparison chart takes only an *initial* xAxisRange (plan
@@ -44,6 +46,7 @@
     import UnifiedLotsTable from './UnifiedLotsTable.svelte';
     import LotCustodyModal from './LotCustodyModal.svelte';
     import LotComparisonChart from './LotComparisonChart.svelte';
+    import type {LotIncomeEvent} from './LotComparisonChart.svelte';
     import DataQualityBanner, {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -105,6 +108,7 @@
     let brokerWacHistory = $state<BrokerWACHistoryPoint[]>([]);
     let cumulativeWacHistory = $state<CumulativeWACHistoryPoint[]>([]);
     let performanceHistory = $state<PerformanceHistoryPoint[]>([]);
+    let incomeEvents = $state<LotIncomeEvent[]>([]);
     let dataQualityIssues = $state<DataQualityIssue[]>([]);
     let computedRange = $state<DateRange | null>(null);
 
@@ -126,22 +130,41 @@
     let fetchVersion = 0;
     let selectionFetchVersion = 0;
 
-    /** Shared Aperti/Tutti filter (plan §11): the UI control lives inside LotGanttChart, but the
-     * resulting lot set is shared with UnifiedLotsTable so both stay consistent. "Aperti" mirrors
-     * FifoEngineResult's OPEN state tag / open_quantity>0; "Tutti" passes every lot through — each
-     * consumer still does its own range-intersection filtering (e.g. Gantt drops lots whose segments
-     * are entirely outside the visible window). */
-    let lotFilterMode = $state<'open' | 'all'>('open');
+    /** Shared "Aperti | Chiusi" lot filter (plan §11 + round-3): two independent on/off buckets like
+     * the Aggregato/Per-lotto value toggle — "both on" (default) and "both off" both mean "show every
+     * lot"; a single bucket narrows to just open or just closed. The UI control lives inside
+     * LotGanttChart, but the resulting lot set (visibleLots) is shared with UnifiedLotsTable, the
+     * WAC/price bubbles and the comparison chart so every consumer stays consistent. "Aperti" mirrors
+     * FifoEngineResult's OPEN state tag / open_quantity>0 (includes partially-closed lots); "Chiusi" is
+     * every fully-closed lot. Each consumer still does its own range-intersection filtering. */
+    let lotStateFilter = $state<{open: boolean; closed: boolean}>({open: true, closed: true});
+
+    /** Vita e custodia view (plan v3 §8): the compact hierarchical Gantt (Timeline). */
+
+    function lotIsOpenish(lot: LotSummarySchema): boolean {
+        return Number.parseFloat(lot.open_quantity) > 0 || (lot.states ?? []).includes('OPEN');
+    }
 
     let visibleLots = $derived.by((): LotSummarySchema[] => {
-        if (lotFilterMode === 'all') return lots;
-        return lots.filter((lot) => Number.parseFloat(lot.open_quantity) > 0 || (lot.states ?? []).includes('OPEN'));
+        const bothSame = lotStateFilter.open === lotStateFilter.closed;
+        const showOpen = bothSame || lotStateFilter.open;
+        const showClosed = bothSame || lotStateFilter.closed;
+        return lots.filter((lot) => (lotIsOpenish(lot) ? showOpen : showClosed));
     });
 
     let selectedLots = $derived.by((): LotSummarySchema[] => {
         const selected = new Set(selectedLotIds);
         return lots.filter((lot) => selected.has(lot.lot_id));
     });
+
+    /** Implicit selection (plan v3 §13): an empty selectedLotIds means "all visible lots", NOT "none".
+     * These effective derivations drive every consumer that must honor that semantics — the selection
+     * value/return fetch, the comparison chart, the bubble Performance view and the table footer — so
+     * that with no explicit selection the user still sees data for the whole visible lot set. An
+     * explicit (non-empty) selection narrows down to exactly those lots. */
+    let effectiveSelectionIds = $derived.by((): number[] => (selectedLotIds.length > 0 ? selectedLotIds : visibleLots.map((lot) => lot.lot_id)));
+
+    let effectiveSelectedLots = $derived.by((): LotSummarySchema[] => (selectedLotIds.length > 0 ? selectedLots : visibleLots));
 
     let xAxisRange = $derived.by((): DateRange | null => {
         if (!isAllPeriod) return {min: dateFrom, max: dateTo};
@@ -163,7 +186,7 @@
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
                 date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
-                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'PERFORMANCE_HISTORY'] as const,
+                requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'PERFORMANCE_HISTORY', 'INCOME_EVENTS'] as const,
             };
             const response = await zodiosApi.get_lots_analysis_api_v1_portfolio_lots_analysis_post(body);
             if (version !== fetchVersion) return; // stale response from a since-superseded open/asset change
@@ -181,6 +204,13 @@
             // Asset-wide ROI/TWRR (ignores selected_lot_ids, same broker scope as the WAC series
             // above) — feeds only the WAC/Price chart's percentage mode.
             performanceHistory = asArray<PerformanceHistoryPoint>(response.performance_history);
+            incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
+                type: event.type,
+                date: event.date,
+                broker_id: event.broker_id ?? null,
+                amount: event.amount,
+                lot_ids: event.lot_ids ?? [],
+            }));
             dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
 
             const metadata = response.calculation_metadata;
@@ -203,6 +233,7 @@
             cumulativeWacHistory = [];
             performanceHistory = [];
             dataQualityIssues = [];
+            incomeEvents = [];
         } finally {
             if (version === fetchVersion) loading = false;
         }
@@ -281,7 +312,7 @@
     });
 
     $effect(() => {
-        if (open && assetId != null) void loadSelectionHistories(assetId, brokerIds, selectedLotIds);
+        if (open && assetId != null) void loadSelectionHistories(assetId, brokerIds, effectiveSelectionIds);
     });
 
     $effect(() => {
@@ -320,15 +351,43 @@
         handleGotoTransaction(lot.opening_transaction_id);
     }
 
+    /** Reveal a lot before pulsing it in the Gantt: if the current Aperti|Chiusi filter hides it,
+     * turn its bucket back on (mirrors the pre-round-3 auto-switch to "Tutti"). */
+    function ensureLotVisible(lotId: number) {
+        if (visibleLots.some((lot) => lot.lot_id === lotId)) return;
+        const lot = lots.find((item) => item.lot_id === lotId);
+        if (!lot) return;
+        if (lotIsOpenish(lot)) lotStateFilter = {...lotStateFilter, open: true};
+        else lotStateFilter = {...lotStateFilter, closed: true};
+    }
+
     /** "Row -> lane" (table double-click, and now also the row context menu's "Go to lot in
      * Gantt" action) — scroll+pulse the matching Gantt lane. */
     function handleTableRowDoubleClick(lotId: number) {
+        ensureLotVisible(lotId);
         ganttRef?.pulseLot(lotId);
     }
 
     /** "Lane -> row" (Gantt double-click) — scroll+pulse the matching table row. */
     function handleGanttRowDoubleClick(lotId: number) {
         tableRef?.navigateToRowId(String(lotId));
+    }
+
+    /** First-chart event double-click (plan v3 §9): BUY -> the created lot; SELL/TRANSFER/SPLIT/ADJUSTMENT
+     * -> every lot/fragment touched by the same (or paired) transaction. Selects them and pulses the
+     * first involved lane in the Gantt. */
+    function handleEventDoubleClick(event: LotTimelineEventSchema) {
+        const txId = event.transaction_id;
+        const relatedId = event.related_transaction_id ?? null;
+        const involved = lotEvents.filter((row) => row.transaction_id === txId || (relatedId != null && row.transaction_id === relatedId) || (row.related_transaction_id != null && row.related_transaction_id === txId));
+        const lotIds = Array.from(new Set<number>([event.lot_id, ...involved.map((row) => row.lot_id)]));
+        if (lotIds.length === 0) return;
+        selectedLotIds = lotIds;
+        void (async () => {
+            await tick();
+            ensureLotVisible(lotIds[0]);
+            ganttRef?.pulseLot(lotIds[0]);
+        })();
     }
 
     function handleDataQualityAction(_action: string, _target: string | null, _issue: DataQualityIssue) {
@@ -382,12 +441,30 @@
                     </div>
                 </div>
             {:else}
-                <LotWacPriceChart {brokerWacHistory} {cumulativeWacHistory} {priceHistory} {lotEvents} {performanceHistory} {brokers} {currency} {xAxisRange} onZoomChange={handleZoomChange} externalZoomStart={sharedZoomStart} externalZoomEnd={sharedZoomEnd} />
+                <LotWacPriceChart
+                    lots={visibleLots}
+                    {selectedLotIds}
+                    {brokerWacHistory}
+                    {cumulativeWacHistory}
+                    {priceHistory}
+                    {lotEvents}
+                    {performanceHistory}
+                    {incomeEvents}
+                    {brokers}
+                    {currency}
+                    {xAxisRange}
+                    onZoomChange={handleZoomChange}
+                    externalZoomStart={sharedZoomStart}
+                    externalZoomEnd={sharedZoomEnd}
+                    onEventDoubleClick={handleEventDoubleClick}
+                    onSelectionChange={handleSelectionChange}
+                />
 
                 <LotGanttChart
                     bind:this={ganttRef}
                     lots={visibleLots}
                     segments={ganttSegments}
+                    events={lotEvents}
                     {brokers}
                     {currency}
                     {selectedLotIds}
@@ -397,8 +474,10 @@
                     externalZoomStart={sharedZoomStart}
                     externalZoomEnd={sharedZoomEnd}
                     onRowDoubleClick={handleGanttRowDoubleClick}
-                    filterMode={lotFilterMode}
-                    onFilterModeChange={(mode) => (lotFilterMode = mode)}
+                    openSelected={lotStateFilter.open}
+                    closedSelected={lotStateFilter.closed}
+                    onToggleOpen={() => (lotStateFilter = {...lotStateFilter, open: !lotStateFilter.open})}
+                    onToggleClosed={() => (lotStateFilter = {...lotStateFilter, closed: !lotStateFilter.closed})}
                 />
 
                 <UnifiedLotsTable
@@ -414,7 +493,7 @@
                     onRowDoubleClick={handleTableRowDoubleClick}
                 />
 
-                <LotComparisonChart {selectedLots} {valueHistory} {returnHistory} {priceHistory} {brokerWacHistory} {cumulativeWacHistory} {brokers} {currency} {xAxisRange} />
+                <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} {priceHistory} {brokerWacHistory} {cumulativeWacHistory} {incomeEvents} {brokers} {currency} {xAxisRange} />
             {/if}
         </div>
     </div>

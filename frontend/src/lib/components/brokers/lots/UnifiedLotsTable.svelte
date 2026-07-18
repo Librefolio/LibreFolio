@@ -4,7 +4,8 @@
     import {schemas} from '$lib/api';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {ColumnDef, EnumOption, HtmlCell, RowAction} from '$lib/components/table/types';
+    import type {ColumnDef, EnumOption, FooterCellContent, HtmlCell, RowAction} from '$lib/components/table/types';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {getBrokerIconCandidates, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -49,10 +50,10 @@
         quantityOriginal: number | null;
         openingValue: number | null;
         currentValue: number | null;
-        cumulativeProceeds: number | null;
-        pnl: number | null;
+        assetIncome: number | null;
+        totalPnl: number | null;
+        totalReturn: number | null;
         relativeReturn: number | null;
-        searchText: string;
     }
 
     const PRIMARY_STATE_ORDER: PrimaryLotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DEGRADED'];
@@ -63,7 +64,6 @@
     let {lots = [], currency, brokers = [], selectedLotIds = undefined, onSelectionChange, onCustodyCellClick, onViewGanttLot, onGotoOpeningTransaction, onRowDoubleClick}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
-    let searchQuery = $state('');
     let internalSelectedLotIds = $state<number[]>(untrack(() => selectedLotIds ?? []));
     let syncingSelection = $state(false);
     let appliedSelectionRowIds = $state<string[]>([]);
@@ -227,21 +227,12 @@
         };
     }
 
-    function signedAmountWithPercentCell(value: number | null, percent: number | null): HtmlCell | string {
+    function signedAmountCell(value: number | null): HtmlCell | string {
         if (value == null) return '—';
         const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
-        const percentHtml = percent == null ? '' : `<span class="text-xs ${classes}">${percent >= 0 ? '+' : ''}${(percent * 100).toFixed(2)}%</span>`;
         return {
             type: 'html',
-            html: `<div class="flex flex-col items-end"><span class="font-medium tabular-nums ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, currency, {showSign: value !== 0}))}</span>${percentHtml}</div>`,
-            tooltip:
-                percent == null
-                    ? undefined
-                    : {
-                          text: `${label('brokers.lots.openReturn', 'Open Return')}: ${formatPercent(percent)}`,
-                          position: 'top',
-                          maxWidth: '240px',
-                      },
+            html: `<span class="font-medium tabular-nums ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, currency, {showSign: value !== 0}))}</span>`,
         };
     }
 
@@ -315,7 +306,7 @@
             const openingUnitPrice = safeNum(lot.opening_unit_price);
             const quantityOpen = safeNum(lot.open_quantity);
             const quantityOriginal = safeNum(lot.original_quantity);
-            const openingValue = quantityOriginal != null && openingUnitPrice != null ? quantityOriginal * openingUnitPrice : null;
+            const openingValue = safeNum(lot.original_cost);
             const brokerFilterValues = Array.from(
                 new Set(
                     (currentCustody.length > 0 ? currentCustody : [{broker_id: lot.opening_broker_id, custody_type: 'BROKER', quantity: lot.open_quantity}]).flatMap((slice) => {
@@ -351,23 +342,16 @@
                 quantityOriginal,
                 openingValue,
                 currentValue: safeNum(lot.open_value),
-                cumulativeProceeds: safeNum(lot.cumulative_proceeds),
-                pnl: safeNum(lot.pnl),
+                assetIncome: safeNum(lot.asset_income),
+                totalPnl: safeNum(lot.total_pnl),
+                totalReturn: safeNum(lot.total_return),
                 relativeReturn: safeNum(lot.relative_return),
-                searchText: '',
             };
-            row.searchText = [row.rowId, row.openingDate, row.direction, directionLabel(row.direction), row.primaryState, stateLabel(row.primaryState), ...row.secondaryStates, ...row.secondaryStates.map((state) => stateLabel(state)), row.openingBrokerName, row.custodySearchText]
-                .join(' ')
-                .toLowerCase();
             return row;
         }),
     );
 
-    let visibleRows = $derived.by<DisplayRow[]>(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (!query) return rows;
-        return rows.filter((row) => row.searchText.includes(query));
-    });
+    let visibleRows = $derived(rows);
 
     let statusEnumOptions = $derived.by<EnumOption[]>(() =>
         STATUS_FILTER_VALUES.map((state) => ({
@@ -417,9 +401,69 @@
             label: () => label('brokers.lots.copyLotIdentifier', 'Copy lot identifier'),
             onClick: async (row) => {
                 await navigator.clipboard.writeText(String(row.lotId));
+                toasts.success(`${label('brokers.lots.lotIdentifierCopied', 'Lot identifier copied')}: ${row.lotId}. ${label('brokers.lots.lotIdentifierHelp', 'Stable technical identifier derived from the opening transaction, used for audit, support and API correlation.')}`);
             },
         },
     ]);
+
+    let hasDifferingStates = $derived.by(() => new Set(rows.map((row) => row.filterStates.join('|'))).size > 1);
+    let hasMixedDirections = $derived.by(() => new Set(rows.map((row) => row.direction)).size > 1);
+    let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => (row.assetIncome ?? 0) > 0));
+
+    function sumNumeric(footerRows: readonly DisplayRow[], getValue: (row: DisplayRow) => number | null): number | null {
+        let total = 0;
+        let count = 0;
+        for (const row of footerRows) {
+            const value = getValue(row);
+            if (value == null || !Number.isFinite(value)) continue;
+            total += value;
+            count += 1;
+        }
+        return count > 0 ? total : null;
+    }
+
+    function weightedAverage(footerRows: readonly DisplayRow[], getValue: (row: DisplayRow) => number | null, getWeight: (row: DisplayRow) => number | null): number | null {
+        let numerator = 0;
+        let denominator = 0;
+        for (const row of footerRows) {
+            const value = getValue(row);
+            const weight = getWeight(row);
+            if (value == null || weight == null || !Number.isFinite(value) || !Number.isFinite(weight) || weight === 0) continue;
+            const absWeight = Math.abs(weight);
+            numerator += value * absWeight;
+            denominator += absWeight;
+        }
+        return denominator > 0 ? numerator / denominator : null;
+    }
+
+    function buildFooterCells(footerRows: DisplayRow[]): Record<string, FooterCellContent> {
+        const totalPnl = sumNumeric(footerRows, (row) => row.totalPnl);
+        const openingValueSum = sumNumeric(footerRows, (row) => row.openingValue);
+        const totalReturn = totalPnl != null && openingValueSum != null && openingValueSum !== 0 ? totalPnl / openingValueSum : null;
+
+        return {
+            'opening-date': label('brokers.lots.footerTotals', label('assets.distribution.total', 'Totals')),
+            'total-pnl': signedAmountCell(totalPnl),
+            'total-return': signedPercentCell(totalReturn),
+            'asset-income': currencyCell(sumNumeric(footerRows, (row) => row.assetIncome)),
+            'current-value': currencyCell(sumNumeric(footerRows, (row) => row.currentValue)),
+            'open-quantity': quantityValueCell(sumNumeric(footerRows, (row) => row.quantityOpen)),
+            'opening-price': currencyCell(
+                weightedAverage(
+                    footerRows,
+                    (row) => row.openingUnitPrice,
+                    (row) => row.currentValue,
+                ),
+            ),
+            'open-return': signedPercentCell(
+                weightedAverage(
+                    footerRows,
+                    (row) => row.relativeReturn,
+                    (row) => row.currentValue,
+                ),
+            ),
+        };
+    }
 
     let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => [
         {
@@ -433,42 +477,90 @@
             getValue: (row) => row.openingDate,
         },
         {
-            id: 'direction',
-            header: () => label('brokers.lots.direction', 'Direction'),
-            cell: (row) => directionCell(row.direction),
-            type: 'enum',
-            width: 120,
-            minWidth: 110,
+            id: 'total-pnl',
+            header: () => label('brokers.lots.totalPnl', 'Total P&L'),
+            cell: (row) => signedAmountCell(row.totalPnl),
+            type: 'number',
+            align: 'right',
+            width: 170,
+            minWidth: 150,
             sortable: true,
-            enumOptions: [
-                {value: 'LONG', label: directionLabel('LONG')},
-                {value: 'SHORT', label: directionLabel('SHORT')},
-            ],
-            getValue: (row) => row.direction,
+            filterable: false,
+            getValue: (row) => row.totalPnl ?? Number.NEGATIVE_INFINITY,
         },
         {
-            id: 'status',
-            header: () => label('brokers.lots.status', 'Status'),
-            cell: (row) => statusCell(row),
-            type: 'multi-enum',
+            id: 'total-return',
+            header: () => label('brokers.lots.totalReturn', 'Total return'),
+            cell: (row) => signedPercentCell(row.totalReturn),
+            type: 'number',
+            align: 'right',
             width: 150,
-            minWidth: 120,
+            minWidth: 130,
             sortable: true,
-            enumOptions: statusEnumOptions,
-            getValue: (row) => PRIMARY_STATE_ORDER.indexOf(row.primaryState),
-            getMultiValue: (row) => row.filterStates,
+            filterable: false,
+            getValue: (row) => row.totalReturn ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'asset-income',
+            header: () => label('brokers.lots.assetIncome', 'Income'),
+            cell: (row) => currencyCell(row.assetIncome),
+            type: 'number',
+            align: 'right',
+            width: 160,
+            minWidth: 140,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: !hasPositiveAssetIncome,
+            getValue: (row) => row.assetIncome ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'current-value',
+            header: () => label('brokers.lots.currentValue', 'Current Value'),
+            cell: (row) => currencyCell(row.currentValue),
+            type: 'number',
+            align: 'right',
+            width: 170,
+            minWidth: 150,
+            sortable: true,
+            filterable: false,
+            getValue: (row) => row.currentValue ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'open-quantity',
+            header: () => label('brokers.lots.openQuantity', 'Open Quantity'),
+            cell: (row) => quantityCell(row),
+            type: 'number',
+            align: 'right',
+            width: 150,
+            minWidth: 130,
+            sortable: true,
+            filterable: false,
+            getValue: (row) => row.quantityOpen ?? 0,
         },
         {
             id: 'custody',
             header: () => label('brokers.lots.custody', 'Custody'),
             cell: (row) => custodyCell(row),
             type: 'multi-enum',
-            width: 160,
-            minWidth: 130,
+            width: 140,
+            minWidth: 96,
             sortable: true,
             enumOptions: brokerEnumOptions,
             getValue: (row) => row.custodySearchText || row.openingBrokerName,
             getMultiValue: (row) => row.brokerFilterValues,
+        },
+        {
+            id: 'status',
+            header: () => label('brokers.lots.status', 'Status'),
+            cell: (row) => statusCell(row),
+            type: 'multi-enum',
+            width: 120,
+            minWidth: 80,
+            sortable: true,
+            enumOptions: statusEnumOptions,
+            hiddenByDefault: !hasDifferingStates,
+            getValue: (row) => PRIMARY_STATE_ORDER.indexOf(row.primaryState),
+            getMultiValue: (row) => row.filterStates,
         },
         {
             id: 'opening-price',
@@ -476,23 +568,25 @@
             cell: (row) => currencyCell(row.openingUnitPrice),
             type: 'number',
             align: 'right',
-            width: 160,
-            minWidth: 150,
+            width: 150,
+            minWidth: 130,
             sortable: true,
             filterable: false,
+            hiddenByDefault: true,
             getValue: (row) => row.openingUnitPrice ?? Number.NEGATIVE_INFINITY,
         },
         {
-            id: 'quantity',
-            header: () => label('brokers.lots.openQuantity', 'Open Quantity'),
-            cell: (row) => quantityCell(row),
+            id: 'opening-value',
+            header: () => label('brokers.lots.openingValue', 'Opening Value'),
+            cell: (row) => currencyCell(row.openingValue),
             type: 'number',
             align: 'right',
-            width: 150,
-            minWidth: 140,
+            width: 170,
+            minWidth: 160,
             sortable: true,
             filterable: false,
-            getValue: (row) => row.quantityOpen ?? 0,
+            hiddenByDefault: true,
+            getValue: (row) => row.openingValue ?? Number.NEGATIVE_INFINITY,
         },
         {
             id: 'original-quantity',
@@ -508,43 +602,6 @@
             getValue: (row) => row.quantityOriginal ?? Number.NEGATIVE_INFINITY,
         },
         {
-            id: 'opening-value',
-            header: () => label('brokers.lots.openingValue', 'Opening Value'),
-            cell: (row) => currencyCell(row.openingValue),
-            type: 'number',
-            align: 'right',
-            width: 170,
-            minWidth: 160,
-            sortable: true,
-            filterable: false,
-            getValue: (row) => row.openingValue ?? Number.NEGATIVE_INFINITY,
-        },
-        {
-            id: 'current-value',
-            header: () => label('brokers.lots.currentValue', 'Current Value'),
-            cell: (row) => currencyCell(row.currentValue),
-            type: 'number',
-            align: 'right',
-            width: 170,
-            minWidth: 160,
-            sortable: true,
-            filterable: false,
-            getValue: (row) => row.currentValue ?? Number.NEGATIVE_INFINITY,
-        },
-        {
-            id: 'cumulative-proceeds',
-            header: () => label('brokers.lots.cumulativeProceeds', 'Cumulative proceeds'),
-            cell: (row) => currencyCell(row.cumulativeProceeds),
-            type: 'number',
-            align: 'right',
-            width: 190,
-            minWidth: 180,
-            sortable: true,
-            filterable: false,
-            hiddenByDefault: true,
-            getValue: (row) => row.cumulativeProceeds ?? Number.NEGATIVE_INFINITY,
-        },
-        {
             id: 'open-return',
             header: () => label('brokers.lots.openReturn', 'Open Return'),
             cell: (row) => signedPercentCell(row.relativeReturn),
@@ -558,16 +615,19 @@
             getValue: (row) => row.relativeReturn ?? Number.NEGATIVE_INFINITY,
         },
         {
-            id: 'fifo-pnl',
-            header: () => label('brokers.lots.fifoPnl', 'FIFO P&L'),
-            cell: (row) => signedAmountWithPercentCell(row.pnl, row.relativeReturn),
-            type: 'number',
-            align: 'right',
-            width: 210,
-            minWidth: 190,
+            id: 'direction',
+            header: () => label('brokers.lots.direction', 'Direction'),
+            cell: (row) => directionCell(row.direction),
+            type: 'enum',
+            width: 120,
+            minWidth: 110,
             sortable: true,
-            filterable: false,
-            getValue: (row) => row.pnl ?? Number.NEGATIVE_INFINITY,
+            enumOptions: [
+                {value: 'LONG', label: directionLabel('LONG')},
+                {value: 'SHORT', label: directionLabel('SHORT')},
+            ],
+            hiddenByDefault: !hasMixedDirections,
+            getValue: (row) => row.direction,
         },
     ]);
 
@@ -631,15 +691,6 @@
             </span>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-            <label class="sr-only" for="unified-lots-search">{label('common.search', 'Search')}</label>
-            <input
-                id="unified-lots-search"
-                type="search"
-                bind:value={searchQuery}
-                placeholder={label('brokers.lots.searchPlaceholder', 'Search lots...')}
-                class="w-52 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm outline-none transition focus:border-libre-green focus:ring-2 focus:ring-libre-green/20 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:focus:border-emerald-400 dark:focus:ring-emerald-400/20"
-                data-testid="unified-lots-search-input"
-            />
             <ColumnVisibilityToggle {tableRef} />
         </div>
     </div>
@@ -653,11 +704,13 @@
             getRowDisplayName={(row) => `${directionLabel(row.direction)} · ${row.openingDate}`}
             {getRowClass}
             getRowStyle={(row) => brokerStyle(row.openingBrokerId)}
-            storageKey="broker-unified-lots-v1"
+            storageKey="broker-unified-lots-v3"
             initialSelectedIds={effectiveSelectedRowIds}
             enableSelection={true}
             selectionMode="multi"
-            enableActions={false}
+            enableActions={true}
+            actionsLabel={label('brokers.lots.actions', 'Actions')}
+            actionsColumnWidth="72px"
             enablePagination={true}
             enableColumnVisibility={false}
             enableColumnFilters={true}
@@ -668,6 +721,7 @@
             tableLayout="fixed"
             defaultPageSize={25}
             {emptyMessage}
+            footerCells={buildFooterCells}
             onSelectionChange={handleTableSelectionChange}
             onRowClick={(row) => tableRef?.toggleRowSelectionById(row.rowId)}
             onRowDoubleClick={(row) => onRowDoubleClick?.(row.lotId)}

@@ -1755,6 +1755,7 @@
                                 onCurrencyChange={onWacCurrencyChange}
                                 availableCurrencies={wacAvailableCurrencies}
                                 onOpenFxSync={handleSyncFx}
+                                quantity={draft.quantity}
                             />
                         </div>
                     {/if}
@@ -1959,6 +1960,7 @@
                                 onCurrencyChange={onWacCurrencyChange}
                                 availableCurrencies={wacAvailableCurrencies}
                                 onOpenFxSync={handleSyncFx}
+                                quantity={draft.quantity}
                             />
                             {#if Number(draft.quantity) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
@@ -1991,6 +1993,7 @@
                         onCurrencyChange={onWacCurrencyChange}
                         availableCurrencies={wacAvailableCurrencies}
                         onOpenFxSync={handleSyncFx}
+                        quantity={draft.quantity}
                     />
                 </div>
             {/if}

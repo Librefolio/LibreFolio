@@ -619,6 +619,68 @@ class TestBrokerParserCoverageHelpers:
         assert fee_tx.cash is not None and fee_tx.cash.code == "USD" and fee_tx.cash.amount == Decimal("-1")
         assert sell_tx.asset_id in out.extracted_assets
 
+    def test_directa_parse_sample_links_tax_to_asset(self):
+        """TAX rows carrying ISIN (e.g. "Rit.cedola obb." bond withholding tax)
+        must resolve asset_id — the sample already contains such real rows.
+        """
+        out = DirectaBrokerProvider().parse(DIRECTA_SAMPLE, broker_id=1)
+
+        tax_txs = [tx for tx in out.transactions if tx.type == TransactionType.TAX]
+        assert tax_txs, "sample must contain at least one TAX row"
+
+        linked = [tx for tx in tax_txs if tx.asset_id is not None]
+        assert linked, "at least one TAX row in the sample has an ISIN and must resolve an asset"
+        for tx in linked:
+            assert tx.asset_id in out.extracted_assets
+            assert out.extracted_assets[tx.asset_id].extracted_isin is not None
+
+        # "Ritenuta su plusvalenza" is a generic capital-gains tax row with no
+        # ISIN/ticker in the source data — must stay unlinked, never a placeholder.
+        generic_tax = next((tx for tx in tax_txs if tx.description and "plusvalenza" in tx.description.lower()), None)
+        assert generic_tax is not None, "sample must contain the generic 'Ritenuta su plusvalenza' row"
+        assert generic_tax.asset_id is None
+
+    def test_schwab_parse_sample_links_adr_fee_and_tax_to_asset(self):
+        """FEE/TAX rows carrying Symbol (e.g. "ADR Mgmt Fee", "Foreign Tax Paid")
+        must resolve the same asset_id — the bundled sample already contains
+        both for ticker "IBN". Account-level "Advisor Fee" rows (no Symbol)
+        must remain unlinked — no regression on that existing behaviour.
+        """
+        out = SchwabBrokerProvider().parse(SAMPLE_DIR / "schwab-export.csv", broker_id=1)
+
+        adr_fee = next(tx for tx in out.transactions if tx.type == TransactionType.FEE and tx.description and "adr mgmt fee" in tx.description.lower())
+        foreign_tax = next(tx for tx in out.transactions if tx.type == TransactionType.TAX and tx.description and "foreign tax paid" in tx.description.lower())
+
+        assert adr_fee.asset_id is not None
+        assert foreign_tax.asset_id is not None
+        assert adr_fee.asset_id == foreign_tax.asset_id, "same underlying symbol (IBN) must resolve to the same asset"
+        assert out.extracted_assets[adr_fee.asset_id].extracted_symbol == "IBN"
+
+        advisor_fees = [tx for tx in out.transactions if tx.type == TransactionType.FEE and tx.description and "advisor fee" in tx.description.lower()]
+        assert advisor_fees, "sample must contain account-level Advisor Fee rows"
+        assert all(tx.asset_id is None for tx in advisor_fees)
+
+    def test_finpension_parse_sample_fee_without_asset_stays_unlinked(self):
+        """'Flat-rate administrative fee' is account-level in the bundled sample
+        (no ISIN/asset name) — regression lock proving the new asset_optional
+        branch never forces a placeholder.
+        """
+        out = FinpensionBrokerProvider().parse(FINPENSION_SAMPLE, broker_id=1)
+
+        fee_txs = [tx for tx in out.transactions if tx.type == TransactionType.FEE]
+        assert fee_txs, "sample must contain at least one FEE row"
+        assert all(tx.asset_id is None for tx in fee_txs)
+
+    def test_revolut_parse_sample_fee_without_asset_stays_unlinked(self):
+        """'Custody fee' is account-level in the bundled sample (no ticker) —
+        regression lock for the new asset_optional branch.
+        """
+        out = RevolutBrokerProvider().parse(SAMPLE_DIR / "revolut-invest-export.csv", broker_id=1)
+
+        fee_txs = [tx for tx in out.transactions if tx.type == TransactionType.FEE]
+        assert fee_txs, "sample must contain at least one FEE row"
+        assert all(tx.asset_id is None for tx in fee_txs)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
