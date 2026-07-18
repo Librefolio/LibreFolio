@@ -61,6 +61,9 @@
         incomeEvents?: ReadonlyArray<LotIncomeEvent>;
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
+        /** Asset quote_base_quantity (e.g. 100 for bonds priced per 100 nominal). Used to rescale
+         * per-quote opening_unit_price to the per-unit price axis (WAC/market lines). Defaults to 1. */
+        quoteBaseQuantity?: number;
         xAxisRange?: {min: string; max: string} | null;
         onZoomChange?: (start: number, end: number) => void;
         externalZoomStart?: number | null;
@@ -152,6 +155,7 @@
         incomeEvents = [],
         brokers = [],
         currency,
+        quoteBaseQuantity = 1,
         xAxisRange = null,
         onZoomChange,
         externalZoomStart = null,
@@ -163,6 +167,9 @@
     }: ComponentProps = $props();
 
     let displayMode = $state<DisplayMode>('absolute');
+    // #3: absolute Y axis — automatic (data-fit) or anchored at 0. Mirrors the LotComparisonChart
+    // value toggle and prevents the percentage-mode 0-clamp from leaking into abs on toggle-back.
+    let absYFromZero = $state(false);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let resizeObserver: ResizeObserver | null = null;
@@ -542,12 +549,16 @@
         const bubbleStateOpen = $_('brokers.lots.states.OPEN');
         const bubbleStatePartial = $_('brokers.lots.states.PARTIALLY_CLOSED');
         const bubbleStateClosed = $_('brokers.lots.states.CLOSED');
+        const yAuto = translatedOr('brokers.lots.yAxisAuto', 'Auto');
+        const yFromZero = translatedOr('brokers.lots.yAxisFromZero', 'From 0');
 
         return {
             wac: !pmc || pmc === 'dashboard.pmc' ? 'WAC' : pmc,
             marketPrice: !marketPrice || marketPrice === 'chart.marketPrice' ? 'Market Price' : marketPrice,
             abs: !abs || abs === 'dashboard.abs' ? 'ABS' : abs,
             pct: !pct || pct === 'dashboard.pct' ? '%' : pct,
+            yAuto,
+            yFromZero,
             combined: !combined || combined === 'brokers.lots.combined' ? 'Combined' : combined,
             noData: !noData || noData === 'common.noData' ? 'No data' : noData,
             broker: !broker || broker === 'common.broker' ? 'Broker' : broker,
@@ -959,6 +970,10 @@
      * non-selected bubbles are dimmed. */
     function buildLotBubbleSeries(): echarts.SeriesOption[] {
         const isAbsolute = displayMode === 'absolute';
+        // opening_unit_price is quoted per quote_base_quantity units (e.g. per 100 nominal for bonds),
+        // while the price axis (WAC / market lines) is per single unit. Rescale so ABS bubbles sit on the
+        // same axis as the opening (cost) line — for qbq=1 (stocks) this is a no-op.
+        const qbq = quoteBaseQuantity > 0 ? quoteBaseQuantity : 1;
         const renderable = lotBubblePoints
             .map((point) => {
                 if (point.totalReturn == null) return null;
@@ -968,7 +983,7 @@
                     // cost basis, so opening_unit_price * (1 + total_return) collapses to the current unit
                     // price → same-asset lots with no distributions land at the same height. It also lets
                     // price-less assets (transactions only) still show a bubble (they always have a cost).
-                    const baseY = point.openingUnitPrice;
+                    const baseY = point.openingUnitPrice == null ? null : point.openingUnitPrice / qbq;
                     if (baseY == null) return null;
                     // Closed lots have no open quantity — size them by the original quantity instead so
                     // they stay visible rather than collapsing to the minimum radius.
@@ -1388,7 +1403,16 @@
             yAxis: {
                 type: 'value',
                 scale: true,
-                ...(displayMode === 'percentage' ? {min: (v: {min: number}) => Math.min(0, v.min), max: (v: {max: number}) => Math.max(0, v.max)} : {}),
+                // Always set min/max explicitly: setOption merges yAxis, so omitting them lets the
+                // percentage-mode 0-clamp persist into absolute mode (user report). Runtime null =
+                // "auto" (ECharts clears the merged bound); cast keeps TS happy without changing it.
+                min:
+                    displayMode === 'percentage'
+                        ? (v: {min: number}) => Math.min(0, v.min)
+                        : absYFromZero
+                          ? 0
+                          : (null as unknown as number),
+                max: displayMode === 'percentage' ? (v: {max: number}) => Math.max(0, v.max) : (null as unknown as number),
                 axisLine: {show: false},
                 axisTick: {show: false},
                 splitLine: {
@@ -1421,7 +1445,7 @@
         resizeObserver.observe(chartContainer);
     }
 
-    function renderChart() {
+    function renderChart(opts?: {animate?: boolean}) {
         if (!chartContainer) return;
 
         syncTheme();
@@ -1465,7 +1489,13 @@
             return;
         }
 
-        chartInstance.setOption(buildOption(), CHART_SET_OPTION_OPTS);
+        const option = buildOption();
+        if (opts?.animate === false) {
+            // A selection-only change just re-tints bubbles/lines — don't replay the entry animation.
+            (option as {animation?: boolean}).animation = false;
+            (option as {animationDurationUpdate?: number}).animationDurationUpdate = 0;
+        }
+        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
@@ -1498,21 +1528,20 @@
         }
     });
 
+    let prevRenderDeps: unknown[] = [];
     $effect(() => {
-        void groupedChartData;
-        void displayMode;
-        void currency;
-        void labels;
-        void $currentLanguage;
-        void brokers;
-        void xAxisRange;
-        void eventStateSnapshots;
-        void lotBubblePoints;
+        const renderDeps: unknown[] = [groupedChartData, displayMode, absYFromZero, currency, labels, $currentLanguage, brokers, xAxisRange, eventStateSnapshots, lotBubblePoints];
         void selectedLotIds;
+
+        // Selection-only re-renders leave every geometry input referentially identical (the $derived
+        // inputs only get a new reference when their sources change) — suppress animation for those so
+        // a tap doesn't replay the whole chart's entry transition (see mobile Gantt tooltip fix).
+        const selectionOnly = prevRenderDeps.length > 0 && renderDeps.every((value, index) => value === prevRenderDeps[index]);
+        prevRenderDeps = renderDeps;
 
         if (!chartContainer) return;
         tick().then(() => {
-            renderChart();
+            renderChart(selectionOnly ? {animate: false} : undefined);
         });
     });
 
@@ -1539,29 +1568,54 @@
     <div class="mb-3 flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{labels.wac} / {labels.marketPrice}</h3>
 
-        <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600">
-            <button
-                type="button"
-                class="px-3 py-1 transition-colors {displayMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                onclick={() => (displayMode = 'absolute')}
-                aria-pressed={displayMode === 'absolute'}
-                data-testid="lot-wac-toggle-absolute"
-            >
-                {labels.abs}
-            </button>
-            <button
-                type="button"
-                class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {displayMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'} {!hasPercentData
-                    ? 'cursor-not-allowed opacity-50'
-                    : ''}"
-                onclick={() => hasPercentData && (displayMode = 'percentage')}
-                aria-pressed={displayMode === 'percentage'}
-                disabled={!hasPercentData}
-                title={!hasPercentData ? labels.noData : ''}
-                data-testid="lot-wac-toggle-percentage"
-            >
-                {labels.pct}
-            </button>
+        <div class="flex items-center gap-2">
+            {#if displayMode === 'absolute'}
+                <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-wac-yaxis-toggle">
+                    <button
+                        type="button"
+                        class="px-3 py-1 transition-colors {!absYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                        onclick={() => (absYFromZero = false)}
+                        aria-pressed={!absYFromZero}
+                        data-testid="lot-wac-yaxis-auto"
+                    >
+                        {labels.yAuto}
+                    </button>
+                    <button
+                        type="button"
+                        class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {absYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                        onclick={() => (absYFromZero = true)}
+                        aria-pressed={absYFromZero}
+                        data-testid="lot-wac-yaxis-zero"
+                    >
+                        {labels.yFromZero}
+                    </button>
+                </div>
+            {/if}
+
+            <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600">
+                <button
+                    type="button"
+                    class="px-3 py-1 transition-colors {displayMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                    onclick={() => (displayMode = 'absolute')}
+                    aria-pressed={displayMode === 'absolute'}
+                    data-testid="lot-wac-toggle-absolute"
+                >
+                    {labels.abs}
+                </button>
+                <button
+                    type="button"
+                    class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {displayMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'} {!hasPercentData
+                        ? 'cursor-not-allowed opacity-50'
+                        : ''}"
+                    onclick={() => hasPercentData && (displayMode = 'percentage')}
+                    aria-pressed={displayMode === 'percentage'}
+                    disabled={!hasPercentData}
+                    title={!hasPercentData ? labels.noData : ''}
+                    data-testid="lot-wac-toggle-percentage"
+                >
+                    {labels.pct}
+                </button>
+            </div>
         </div>
     </div>
 

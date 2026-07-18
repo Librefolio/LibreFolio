@@ -1283,3 +1283,75 @@ async def test_same_asset_open_value_scales_with_quantity_only(session, test_use
     assert total_quantity == Decimal("148")
     assert total_open_value == Decimal("1250.60")
     assert total_open_value == total_quantity * latest_price
+
+
+@pytest.mark.asyncio
+async def test_bond_quote_base_quantity_scales_open_value_and_pnl(session, test_user, broker):
+    """BTP-style bond: the raw quote is per 100 nominal (quote_base_quantity=100).
+
+    Reproduces the user report: a bond lot showed a +9000% P&L because open_value was
+    computed as quantity * raw_price (100000 * 102.5) instead of applying the base-100
+    scaling. With the fix, open_value = (quantity / 100) * price, so market value and P&L
+    stay on the same scale as the real money cost basis.
+    """
+    stamp = str(utcnow().timestamp()).replace(".", "")
+    bond = Asset(
+        display_name=f"BTP_{stamp}",
+        identifier_ticker=f"BTP{stamp[-4:]}",
+        currency="EUR",
+        asset_type=AssetType.BOND,
+        quote_base_quantity=100,
+    )
+    session.add(bond)
+    await session.flush()
+
+    # Buy 1000 nominal at quoted 98.00 -> real cost (1000/100)*98.00 = 980 EUR.
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=bond.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("1000"),
+                amount=Decimal("-980"),
+                currency="EUR",
+            ),
+            PriceHistory(asset_id=bond.id, date=date(2025, 1, 10), close=Decimal("98.00"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=bond.id, date=date(2025, 1, 15), close=Decimal("102.50"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=bond.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 15),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    # (1000 / 100) * 102.50 = 1025, NOT 102500.
+    assert lot.open_value == Decimal("1025.00")
+    assert lot.total_value == Decimal("1025.00")
+    assert lot.original_cost == Decimal("980")
+    assert lot.pnl == Decimal("45.00")
+    # 45 / 980 ~= 4.59%, a sane bond return (not +9000%).
+    assert lot.total_return is not None and lot.total_return < Decimal("0.10")
+
+    # Value history at the latest date carries the scaled market value.
+    value_points = _points_by_lot_date(result.value_history)
+    latest_value = value_points[(lot.lot_id, date(2025, 1, 15))]
+    assert latest_value.open_value == Decimal("1025.00")
+    assert latest_value.pnl == Decimal("45.00")
+
+    # Return history at the latest date is scaled the same way.
+    return_points = _points_by_lot_date(result.return_history)
+    latest_return = return_points[(lot.lot_id, date(2025, 1, 15))]
+    assert latest_return.total_return is not None and latest_return.total_return < Decimal("0.10")

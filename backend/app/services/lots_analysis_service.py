@@ -50,6 +50,7 @@ from backend.app.services.fifo_lot_engine import (
 from backend.app.services.fx import convert_bulk
 from backend.app.services.settings_service import get_global_setting
 from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
+from backend.app.utils.financial.valuation_utils import compute_holding_value, normalize_quote_base_quantity
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
 _WARNING_ISSUE_CODES = {
@@ -324,6 +325,7 @@ class LotsAnalysisService:
             )
         active_price_dates = history_dates if self._needs_market_series(normalized_analyses) else [actual_to]
         market_prices = self._build_market_price_map(price_lookup, fx_resolver, active_price_dates)
+        quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
         wac_context = self._build_wac_context(
             transactions=transactions,
             split_ratios_by_tx_id=split_ratios_by_tx_id,
@@ -344,6 +346,7 @@ class LotsAnalysisService:
                 closures_by_lot=closures_by_lot,
                 income_by_lot=income_by_lot,
                 estimated_mode=estimated_mode,
+                quote_base_quantity=quote_base_quantity,
             )
 
         gantt_segments = None
@@ -379,6 +382,7 @@ class LotsAnalysisService:
                     fx_resolver=fx_resolver,
                     income_prefix_by_lot=income_prefix_by_lot,
                     estimated_mode=estimated_mode,
+                    quote_base_quantity=quote_base_quantity,
                 ),
                 display_from,
                 actual_to,
@@ -398,6 +402,7 @@ class LotsAnalysisService:
                     closures_by_lot=closures_by_lot,
                     income_prefix_by_lot=income_prefix_by_lot,
                     estimated_mode=estimated_mode,
+                    quote_base_quantity=quote_base_quantity,
                 ),
                 display_from,
                 actual_to,
@@ -444,6 +449,7 @@ class LotsAnalysisService:
                     asset_currency=asset.currency,
                     fx_resolver=fx_resolver,
                     context=performance_context,
+                    quote_base_quantity=quote_base_quantity,
                 ),
                 display_from,
                 actual_to,
@@ -458,6 +464,7 @@ class LotsAnalysisService:
         return LotsAnalysisResponse(
             asset_id=asset_id,
             target_currency=target_currency,
+            quote_base_quantity=quote_base_quantity,
             calculation_status=engine_result.calculation_status,
             calculation_metadata=LotsAnalysisMetadata(
                 broker_ids=scope_broker_ids,
@@ -787,6 +794,7 @@ class LotsAnalysisService:
         asset_currency: str,
         fx_resolver: _FxRateResolver,
         context: _PerformanceSourceContext,
+        quote_base_quantity: int,
     ) -> list[PerformanceHistoryPoint]:
         scope_set = set(scope_broker_ids)
         scoped_fragments_by_lot = {lot_id: [fragment for fragment in fragments if self._fragment_in_scope(fragment, scope_set)] for lot_id, fragments in context.fragments_by_lot.items()}
@@ -800,7 +808,7 @@ class LotsAnalysisService:
             for _lot_id, fragments in scoped_fragments_by_lot.items():
                 if not fragments:
                     continue
-                nav_amount += self._open_value_on_date(fragments, market_price, current_date)
+                nav_amount += self._open_value_on_date(fragments, market_price, current_date, quote_base_quantity)
             nav_snapshots.append(NAVSnapshot(date=current_date, nav=nav_amount))
 
         cash_flows: list[CashFlowInput] = []
@@ -850,7 +858,7 @@ class LotsAnalysisService:
                 invalid_external_flow_from = event.date if invalid_external_flow_from is None else min(invalid_external_flow_from, event.date)
                 continue
             quantity = event.quantity or Decimal("0")
-            amount = quantity * market_price
+            amount = compute_holding_value(quantity, market_price, quote_base_quantity)
             cash_flows.append(CashFlowInput(date=event.date, amount=amount if source_in_scope else -amount))
 
         if invalid_external_flow_from is not None:
@@ -985,6 +993,7 @@ class LotsAnalysisService:
         closures_by_lot: dict[int, list[LotClosure]],
         income_by_lot: dict[int, Decimal],
         estimated_mode: bool,
+        quote_base_quantity: int,
     ) -> list[LotSummarySchema]:
         latest_market_price = market_prices.get(max(market_prices)) if market_prices else None
         out: list[LotSummarySchema] = []
@@ -1011,7 +1020,7 @@ class LotsAnalysisService:
             value_source: str | None = None
             if latest_market_price is not None:
                 value_source = "MARKET_PRICE"
-                open_value = lot.open_quantity * latest_market_price
+                open_value = compute_holding_value(lot.open_quantity, latest_market_price, quote_base_quantity)
                 proceeds = converted_proceeds or Decimal("0")
                 if lot.direction == "LONG":
                     total_value = open_value + proceeds
@@ -1335,6 +1344,7 @@ class LotsAnalysisService:
         fx_resolver: _FxRateResolver,
         income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
         estimated_mode: bool,
+        quote_base_quantity: int,
     ) -> list[LotValueHistoryPoint]:
         points: list[LotValueHistoryPoint] = []
         for lot_id in selected_ids:
@@ -1378,6 +1388,7 @@ class LotsAnalysisService:
                         current_date=current_date,
                         converted_original_cost=converted_original_cost,
                         converted_short_proceeds=converted_short_proceeds,
+                        quote_base_quantity=quote_base_quantity,
                     )
                 income = self._prefix_value_on_date(income_prefix, current_date)
                 points.append(
@@ -1407,6 +1418,7 @@ class LotsAnalysisService:
         closures_by_lot: dict[int, list[LotClosure]],
         income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
         estimated_mode: bool,
+        quote_base_quantity: int,
     ) -> list[LotReturnHistoryPoint]:
         points: list[LotReturnHistoryPoint] = []
         for lot_id in selected_ids:
@@ -1450,6 +1462,7 @@ class LotsAnalysisService:
                         current_date=current_date,
                         converted_original_cost=converted_original_cost,
                         converted_short_proceeds=converted_short_proceeds,
+                        quote_base_quantity=quote_base_quantity,
                     )
                     if converted_reference not in (None, Decimal("0")):
                         relative_return = (market_price / converted_reference) - Decimal("1")
@@ -1491,8 +1504,9 @@ class LotsAnalysisService:
         current_date: date_type,
         converted_original_cost: Decimal,
         converted_short_proceeds: Decimal,
+        quote_base_quantity: int,
     ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
-        open_value = self._open_value_on_date(fragments, market_price, current_date)
+        open_value = self._open_value_on_date(fragments, market_price, current_date, quote_base_quantity)
         proceeds = self._prefix_value_on_date(proceeds_by_day, current_date)
         if lot.direction == "LONG":
             total_value = open_value + proceeds
@@ -1605,8 +1619,8 @@ class LotsAnalysisService:
             return Decimal("0")
         return values_by_date[max(eligible_dates)]
 
-    def _open_value_on_date(self, fragments: Sequence[FragmentInterval], market_price: Decimal, query_date: date_type) -> Decimal:
-        return self._open_quantity_on_date(fragments, query_date) * market_price
+    def _open_value_on_date(self, fragments: Sequence[FragmentInterval], market_price: Decimal, query_date: date_type, quote_base_quantity: int) -> Decimal:
+        return compute_holding_value(self._open_quantity_on_date(fragments, query_date), market_price, quote_base_quantity)
 
     def _open_quantity_on_date(self, fragments: Sequence[FragmentInterval], query_date: date_type) -> Decimal:
         return sum((fragment.quantity for fragment in fragments if _fragment_active_on_date(fragment, query_date)), Decimal("0"))

@@ -734,6 +734,10 @@ class LotsAnalysisResponse(BaseModel):
 
     asset_id: int
     target_currency: str
+    quote_base_quantity: int = Field(
+        1,
+        description="Asset quote_base_quantity (e.g. 100 for bonds priced per 100 nominal). Lets the frontend rescale per-quote unit prices (opening_unit_price) to the per-unit axis used by WAC/value lines.",
+    )
     calculation_status: LotCalculationStatus
     calculation_metadata: LotsAnalysisMetadata
     data_quality: Optional[DataQualityReport] = None

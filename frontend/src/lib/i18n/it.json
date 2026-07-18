@@ -730,7 +730,6 @@
       "aggregateComprehensiveValue": "Valore complessivo",
       "aggregateOpeningValue": "Valore di apertura",
       "aggregateReturn": "Rendimento aggregato",
-      "aggregateReturnNotComputable": "Non calcolabile (valore di apertura <= 0)",
       "estimatedCurrentValue": "Valore corrente stimato",
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Da 0"

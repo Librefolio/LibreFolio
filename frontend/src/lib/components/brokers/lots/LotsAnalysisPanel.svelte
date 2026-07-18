@@ -103,6 +103,7 @@
     let brokerWacHistory = $state<BrokerWACHistoryPoint[]>([]);
     let cumulativeWacHistory = $state<CumulativeWACHistoryPoint[]>([]);
     let incomeEvents = $state<LotIncomeEvent[]>([]);
+    let quoteBaseQuantity = $state<number>(1);
     let dataQualityIssues = $state<DataQualityIssue[]>([]);
     let computedRange = $state<DateRange | null>(null);
 
@@ -195,6 +196,8 @@
             priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
             brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
             cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
+            const rawQbq = Number(response.quote_base_quantity);
+            quoteBaseQuantity = Number.isFinite(rawQbq) && rawQbq > 0 ? rawQbq : 1;
             incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
                 type: event.type,
                 date: event.date,
@@ -224,6 +227,7 @@
             cumulativeWacHistory = [];
             dataQualityIssues = [];
             incomeEvents = [];
+            quoteBaseQuantity = 1;
         } finally {
             if (version === fetchVersion) loading = false;
         }
@@ -441,6 +445,7 @@
                     {incomeEvents}
                     {brokers}
                     {currency}
+                    quoteBaseQuantity={quoteBaseQuantity}
                     {xAxisRange}
                     onZoomChange={handleZoomChange}
                     externalZoomStart={sharedZoomStart}
