@@ -61,8 +61,10 @@
         incomeEvents?: ReadonlyArray<LotIncomeEvent>;
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
-        /** Asset quote_base_quantity (e.g. 100 for bonds priced per 100 nominal). Used to rescale
-         * per-quote opening_unit_price to the per-unit price axis (WAC/market lines). Defaults to 1. */
+        /** Asset quote_base_quantity (e.g. 100 for bonds priced per 100 nominal). Used to rescale the
+         * per-single-unit WAC / opening_unit_price (cost ÷ raw quantity) UP to the per-quote market
+         * scale that price_history.close uses, so cost lines/bubbles align with the market line.
+         * Defaults to 1 (no-op for stocks). */
         quoteBaseQuantity?: number;
         xAxisRange?: {min: string; max: string} | null;
         onZoomChange?: (start: number, end: number) => void;
@@ -247,6 +249,19 @@
     function nullifyZeroWac(wac: number | null, poolQty: number | null): number | null {
         if (wac == null) return null;
         return wac === 0 || poolQty === 0 ? null : wac;
+    }
+
+    /** Positive quote_base_quantity scale factor (1 for stocks, e.g. 100 for bonds priced per 100
+     * nominal). */
+    const qbqScale = $derived(quoteBaseQuantity > 0 ? quoteBaseQuantity : 1);
+
+    /** Rescale a per-single-unit price (WAC / opening_unit_price = cost ÷ raw quantity) up to the
+     * per-quote_base_quantity market scale that price_history.close uses (e.g. ×100 → bond par ≈ 100),
+     * so cost lines, bubbles and the market line share one ABS price axis. No-op for qbq=1 (stocks).
+     * In % mode the constant factor cancels in the first-value normalisation, so callers may apply it
+     * unconditionally. */
+    function scaleUnitPrice(value: number | null): number | null {
+        return value == null ? null : value * qbqScale;
     }
 
     function toPercentSeries(points: Array<{date: string; value: number | null}>): ValuePoint[] {
@@ -620,7 +635,7 @@
             const brokerPoints = groupedBrokerPoints.get(point.broker_id) ?? [];
             brokerPoints.push({
                 date: point.date,
-                value: nullifyZeroWac(parseNumber(point.wac), parseNumber(point.pool_qty)),
+                value: scaleUnitPrice(nullifyZeroWac(parseNumber(point.wac), parseNumber(point.pool_qty))),
             });
             groupedBrokerPoints.set(point.broker_id, brokerPoints);
         }
@@ -641,7 +656,7 @@
                       null,
                       cumulativeWacHistory.map((point) => ({
                           date: point.date,
-                          value: nullifyZeroWac(parseNumber(point.wac), parseNumber(point.pool_qty)),
+                          value: scaleUnitPrice(nullifyZeroWac(parseNumber(point.wac), parseNumber(point.pool_qty))),
                       })),
                   )
                 : null;
@@ -791,7 +806,7 @@
     const openingUnitPriceByLot = $derived.by(() => {
         const map = new Map<number, number>();
         for (const lot of lots) {
-            const value = parseNumber(lot.opening_unit_price);
+            const value = scaleUnitPrice(parseNumber(lot.opening_unit_price));
             if (value != null) map.set(lot.lot_id, value);
         }
         return map;
@@ -970,10 +985,6 @@
      * non-selected bubbles are dimmed. */
     function buildLotBubbleSeries(): echarts.SeriesOption[] {
         const isAbsolute = displayMode === 'absolute';
-        // opening_unit_price is quoted per quote_base_quantity units (e.g. per 100 nominal for bonds),
-        // while the price axis (WAC / market lines) is per single unit. Rescale so ABS bubbles sit on the
-        // same axis as the opening (cost) line — for qbq=1 (stocks) this is a no-op.
-        const qbq = quoteBaseQuantity > 0 ? quoteBaseQuantity : 1;
         const renderable = lotBubblePoints
             .map((point) => {
                 if (point.totalReturn == null) return null;
@@ -983,7 +994,10 @@
                     // cost basis, so opening_unit_price * (1 + total_return) collapses to the current unit
                     // price → same-asset lots with no distributions land at the same height. It also lets
                     // price-less assets (transactions only) still show a bubble (they always have a cost).
-                    const baseY = point.openingUnitPrice == null ? null : point.openingUnitPrice / qbq;
+                    // opening_unit_price is per-single-unit (cost ÷ raw quantity); rescale it up to the
+                    // per-quote_base_quantity market scale used by the price/WAC lines (e.g. ×100 → bond
+                    // par ≈ 100) so the bubble sits on those lines. No-op for stocks (qbq=1).
+                    const baseY = scaleUnitPrice(point.openingUnitPrice);
                     if (baseY == null) return null;
                     // Closed lots have no open quantity — size them by the original quantity instead so
                     // they stay visible rather than collapsing to the minimum radius.

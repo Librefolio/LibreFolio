@@ -24,7 +24,7 @@
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
-    import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
+    import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {globalSettings} from '$lib/stores/app/globalSettings';
@@ -84,6 +84,14 @@
     $effect(() => {
         const paramAssetId = getAssetPanelAssetId($page.url.searchParams) ?? null;
         if (paramAssetId !== activeAssetId) activeAssetId = paramAssetId;
+    });
+
+    /** Reactive asset info for the open panel. Reading `$assetStoreVersion` re-evaluates once the async
+     * asset cache resolves, so on a hard reload (F5) the title/currency fill in when the store loads
+     * instead of staying stale (getAssetInfo alone is not reactive to the cache). */
+    const activeAsset = $derived.by(() => {
+        void $assetStoreVersion;
+        return activeAssetId != null ? getAssetInfo(activeAssetId) : undefined;
     });
 
     function openAssetPanel(assetId: number) {
@@ -612,8 +620,8 @@
                 dateFrom={dateRangeCtl.start}
                 dateTo={dateRangeCtl.end}
                 isAllPeriod={dateRangeCtl.activePreset === 'MAX'}
-                currency={activeAssetId != null ? (getAssetInfo(activeAssetId)?.currency ?? displayCurrency) : displayCurrency}
-                assetName={activeAssetId != null ? getAssetInfo(activeAssetId)?.display_name : null}
+                currency={activeAsset?.currency ?? displayCurrency}
+                assetName={activeAsset?.display_name ?? null}
                 onClose={closeAssetPanel}
             />
         </div>

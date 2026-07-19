@@ -1010,7 +1010,7 @@ class LotsAnalysisService:
             converted_proceeds = self._converted_cumulative_proceeds(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             converted_original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
             opening_unit_price = fx_resolver.convert(lot.opening_unit_price, lot.currency, lot.opening_date)
-            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup)
+            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup, quote_base_quantity)
             reference_unit_price = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
             realized_pnl = self._converted_realized_pnl(lot, closures_by_lot.get(lot_id, []), fx_resolver)
             asset_income = income_by_lot.get(lot_id, Decimal("0"))
@@ -1423,7 +1423,7 @@ class LotsAnalysisService:
         points: list[LotReturnHistoryPoint] = []
         for lot_id in selected_ids:
             lot = lots_by_id[lot_id]
-            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup)
+            raw_reference_price, raw_reference_currency, reference_date, reference_price_source = self._opening_reference_price(lot, price_lookup, quote_base_quantity)
             converted_reference = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
             last_date = self._lot_history_end_date(lot, closures_by_lot.get(lot_id, []), history_dates[-1], extend_closed=True)
             proceeds_by_day = self._closure_proceeds_prefix(lot, closures_by_lot.get(lot_id, []), fx_resolver)
@@ -1486,13 +1486,21 @@ class LotsAnalysisService:
         self,
         lot: FifoLot,
         price_lookup: _PriceHistoryLookup,
+        quote_base_quantity: int = 1,
     ) -> tuple[Decimal | None, str | None, date_type, ReferencePriceSource | None]:
         if lot.reference_unit_price is not None:
             resolved_reference = price_lookup.resolve(lot.opening_date)
             if resolved_reference is None:
                 return None, None, lot.opening_date, lot.reference_price_source
             return lot.reference_unit_price, resolved_reference.currency, resolved_reference.resolved_date, lot.reference_price_source
-        return lot.opening_unit_price, lot.currency, lot.opening_date, "exact"
+        # No market quote at the opening date (e.g. a bond bought at emission, before it started
+        # trading) → fall back to the lot's own buy price. opening_unit_price is per-single-unit
+        # (cost / raw quantity), whereas market_price is quoted per quote_base_quantity units, so
+        # scale it up to keep relative_return (= market_price / reference − 1) on one axis; otherwise
+        # a qbq=100 bond reports ~9687% instead of ~−2%. No-op for qbq=1 (stocks). The resolved
+        # branches above already return a per-quote market reference, so they need no scaling.
+        scale = quote_base_quantity if quote_base_quantity > 0 else 1
+        return lot.opening_unit_price * scale, lot.currency, lot.opening_date, "exact"
 
     def _value_snapshot_on_date(
         self,
