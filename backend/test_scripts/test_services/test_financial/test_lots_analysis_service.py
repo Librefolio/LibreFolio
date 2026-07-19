@@ -1355,3 +1355,66 @@ async def test_bond_quote_base_quantity_scales_open_value_and_pnl(session, test_
     return_points = _points_by_lot_date(result.return_history)
     latest_return = return_points[(lot.lot_id, date(2025, 1, 15))]
     assert latest_return.total_return is not None and latest_return.total_return < Decimal("0.10")
+
+
+@pytest.mark.asyncio
+async def test_bond_relative_return_scaled_when_opening_has_no_market_price(session, test_user, broker):
+    """BTP bought at emission: the opening date predates the first market quote, so the reference
+    price falls back to the lot's own buy price. That buy price is per-single-unit (cost / raw
+    quantity), while market_price is quoted per 100 nominal; without scaling the fallback by
+    quote_base_quantity, relative_return compared the two on different axes and reported ~+9700%
+    instead of the real ~-2% market move (user round-8 report)."""
+    stamp = str(utcnow().timestamp()).replace(".", "")
+    bond = Asset(
+        display_name=f"BTP_EMIT_{stamp}",
+        identifier_ticker=f"BTE{stamp[-4:]}",
+        currency="EUR",
+        asset_type=AssetType.BOND,
+        quote_base_quantity=100,
+    )
+    session.add(bond)
+    await session.flush()
+
+    # Buy 1000 nominal at par: amount -1000 -> per-single-unit cost 1.0. The first market quote
+    # appears only 5 days later, so the opening day (2025-01-10) has no price and the reference
+    # falls back to the buy price.
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=bond.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("1000"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            PriceHistory(asset_id=bond.id, date=date(2025, 1, 15), close=Decimal("98.00"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=bond.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 15),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "RETURN_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    # Fallback reference is the par buy price rescaled to the per-100 market axis (1.0 * 100 = 100),
+    # not the raw per-single-unit 1.0.
+    assert lot.reference_unit_price == Decimal("100")
+    # 98.00 / 100 - 1 = -0.02, a ~-2% market move, NOT +9700%.
+    assert lot.relative_return is not None and lot.relative_return == Decimal("-0.02")
+
+    # Return history uses the same scaled reference.
+    return_points = _points_by_lot_date(result.return_history)
+    latest_return = return_points[(lot.lot_id, date(2025, 1, 15))]
+    assert latest_return.relative_return is not None and latest_return.relative_return == Decimal("-0.02")
