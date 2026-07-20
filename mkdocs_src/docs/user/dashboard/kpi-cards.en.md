@@ -39,7 +39,7 @@ This line only appears once the history has at least two daily points.
 
 | Row | What it measures |
 |-----|-----------------|
-| **Unrealized change** | How much your open positions' [unrealized gain/loss](../../financial-theory/technical-analysis/performance-metrics/book-value.md) changed during the period |
+| **Unrealized change** | How much your open positions' [unrealized gain/loss](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md) changed during the period |
 | **Sales** | Realized gain or loss from positions closed during the period (sell price − average cost) |
 | **Dividends & interest** | Cash income from dividends, bond coupons, and P2P interest |
 | **Fees & taxes** | Commissions and taxes recorded as transactions |
@@ -48,7 +48,7 @@ This line only appears once the history has at least two daily points.
 
     All four rows add up to the Period P&L hero number (± small residuals from FX rounding).
 
-🔗 **Theory**: [Period P&L](../../financial-theory/technical-analysis/performance-metrics/period-pnl.md) · [Book Value / WAC](../../financial-theory/technical-analysis/performance-metrics/book-value.md)
+🔗 **Theory**: [Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) · [Book Value / WAC](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
 
 ---
 
@@ -81,16 +81,16 @@ It's a rough estimate of **today's** return — a quick pulse check. It is not t
 
 | Metric | Question it answers |
 |--------|---------------------|
-| **[ROI](../../financial-theory/technical-analysis/performance-metrics/roi.md)** | How much did I gain relative to my net invested capital? |
-| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/twrr.md)** | How did my asset choices perform, independent of when I deposited? |
-| **[MWRR cumulative](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)** | What is the cumulative money-weighted return for my actual cash flows? |
-| **[MWRR annualized](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)** | At what yearly compound rate did my capital actually grow? |
+| **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | How much did I gain relative to my net invested capital? |
+| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | How did my asset choices perform, independent of when I deposited? |
+| **[MWRR cumulative](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | What is the cumulative money-weighted return for my actual cash flows? |
+| **[MWRR annualized](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | At what yearly compound rate did my capital actually grow? |
 
 !!! note "TWRR vs. MWRR"
 
-    - **[TWRR](../../financial-theory/technical-analysis/performance-metrics/twrr.md)** measures the **asset strategy** — same as how a fund manager is evaluated.
-    - **[MWRR](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)** measures **your personal result** — including the timing of your deposits.
-    - The gap between them is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/timing-effect.md).
+    - **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** measures the **asset strategy** — same as how a fund manager is evaluated.
+    - **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** measures **your personal result** — including the timing of your deposits.
+    - The gap between them is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md).
 
 ---
 
@@ -113,16 +113,16 @@ Below the Net Worth value you'll find your **Total P&L**, with its percentage ch
 
 Note: "Net Capital Invested Since Inception" here is the sum of **all** deposits minus **all** withdrawals since you started using this scope — a different, larger figure than the "Deposited Capital" row below, which only counts movements within the selected period.
 
-🔗 **Theory**: [Deposited Capital, Total PnL and Cash Pools](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)
+🔗 **Theory**: [Deposited Capital, Total PnL and Cash Pools](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
 ### What the rows mean
 
 | Row | Definition |
 |-----|-----------|
-| **[Market Value](../../financial-theory/technical-analysis/performance-metrics/nav.md)** | Current market price × quantity for all held assets |
-| **[Book Value](../../financial-theory/technical-analysis/performance-metrics/book-value.md)** | What you paid for your open positions (average cost × qty) |
+| **[Market Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Current market price × quantity for all held assets |
+| **[Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)** | What you paid for your open positions (average cost × qty) |
 | **Cash** | Liquid balance held in broker accounts |
-| **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)** | Net external capital contributed to this scope |
+| **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Net external capital contributed to this scope |
 
 ### The Deposited Capital bar
 
@@ -142,10 +142,10 @@ The hero number shows the net balance (deposited − withdrawn).
 
 ## 🔗 Related
 
-- 💼 **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/nav.md)**
-- 📚 **[Book Value](../../financial-theory/technical-analysis/performance-metrics/book-value.md)**
-- 📊 **[Period P&L](../../financial-theory/technical-analysis/performance-metrics/period-pnl.md)**
-- 💸 **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)**
-- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/twrr.md)**
-- 📈 **[MWRR](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)**
-- ⏱️ **[Timing Effect](../../financial-theory/technical-analysis/performance-metrics/timing-effect.md)**
+- 💼 **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
+- 📚 **[Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)**
+- 📊 **[Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)**
+- 💸 **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
+- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)**
+- 📈 **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)**
+- ⏱️ **[Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**

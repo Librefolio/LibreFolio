@@ -185,7 +185,7 @@ Practical implication:
 
 ---
 
-## 💸 Income Allocation Across Lots
+## 💸 Income Allocation Across Lots {: #income-allocation-across-lots }
 
 Dividends and interest linked to an asset are allocated **pro-rata across all LONG lots that are open on the income date**.
 

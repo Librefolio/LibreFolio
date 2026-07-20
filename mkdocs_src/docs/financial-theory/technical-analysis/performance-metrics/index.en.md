@@ -17,18 +17,38 @@ These two actors can have vastly different performances. You might pick an excel
 
 ## 📚 Topics in this Chapter
 
+LibreFolio's performance metrics are organized around three calculation engines. Each has its own overview page with the full mathematical model.
+
+### ⚙️ Portfolio Engine
+
+Aggregate, WAC-based accounting for the whole portfolio (or any broker/asset scope).
+
 | Metric / Concept | Description |
 |------------------|-------------|
-| **[Net Asset Value (NAV)](nav.md)** | Total market valuation of the portfolio (assets + cash + in-transit). Uses the valuation chain: Market Price → Last Buy Price → Missing. |
-| **[Book Value](book-value.md)** | Historical accounting cost of open positions (WAC × qty) plus cash. Difference from NAV = unrealized P&L. |
-| **[Period P&L](period-pnl.md)** | Cash-flow adjusted monetary profit/loss in a window. Decomposes into: unrealized delta + realized + income − fees. Includes per-asset contribution attribution. |
-| **[Deposited Capital & Total P&L](deposited-capital.md)** | Net external capital since inception. Documents the **3-pool event-driven** cash decomposition model (K, R, W) with formal transaction-level update rules. |
-| **[Timing Effect](timing-effect.md)** | Difference between Cumulative MWRR and Cumulative TWRR — quantifies the impact of cash flow timing on returns. |
-| **[Simple ROI](roi.md)** | Percentage return relative to net invested capital. Simple but subject to cash flow dilution. |
-| **[TWRR](twrr.md)** | Time-Weighted Rate of Return. Pure asset/strategy performance, neutralizing deposit/withdrawal timing. |
-| **[MWRR (XIRR)](mwrr.md)** | Money-Weighted Rate of Return. Personal investor performance accounting for cash flow timing. Annualized and Cumulative forms. |
+| **[Portfolio Engine Overview](portfolio-engine/index.md)** | Complete mathematical model: valuation chain, WAC, aggregation, 3-pool model, contribution, pre-frame/frame architecture. |
+| **[Net Asset Value (NAV)](portfolio-engine/nav.md)** | Total market valuation of the portfolio (assets + cash + in-transit). Uses the valuation chain: Market Price → Last Buy Price → Missing. |
+| **[Book Value](portfolio-engine/book-value.md)** | Historical accounting cost of open positions (WAC × qty) plus cash. Difference from NAV = unrealized P&L. |
+| **[Period P&L](portfolio-engine/period-pnl.md)** | Cash-flow adjusted monetary profit/loss in a window. Decomposes into: unrealized delta + realized + income − fees. Includes per-asset contribution attribution. |
+| **[Deposited Capital & Total P&L](portfolio-engine/deposited-capital.md)** | Net external capital since inception. Documents the **3-pool event-driven** cash decomposition model (K, R, W) with formal transaction-level update rules. |
+| **[Timing Effect](portfolio-engine/timing-effect.md)** | Difference between Cumulative MWRR and Cumulative TWRR — quantifies the impact of cash flow timing on returns. |
+| **[Simple ROI](portfolio-engine/roi.md)** | Percentage return relative to net invested capital. Simple but subject to cash flow dilution. |
+| **[TWRR](portfolio-engine/twrr.md)** | Time-Weighted Rate of Return. Pure asset/strategy performance, neutralizing deposit/withdrawal timing. |
+| **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Money-Weighted Rate of Return. Personal investor performance accounting for cash flow timing. Annualized and Cumulative forms. |
+
+### 🔬 FIFO Engine
+
+Per-lot accounting: tracks each acquisition batch through its own lifecycle instead of blending it into one average.
+
+| Metric / Concept | Description |
+|------------------|-------------|
+| **[FIFO Engine Overview](fifo-engine/index.md)** | Lot lifecycle states, chronological event processing, FIFO matching, splits, and transfers between brokers. |
+| **[FIFO Lot Analysis](fifo-engine/fifo-lot-analysis.md)** | Per-lot complement to WAC: tracks each acquisition batch through its own lifecycle, matches sells in FIFO order, and computes open/total return per lot. |
+
+### Weighted Average Cost
+
+| Metric / Concept | Description |
+|------------------|-------------|
 | **[Weighted Average Cost](weighted-average-cost.md)** | Inventory-aware iterative WAC per position (broker, asset). Computed inline during the engine's daily loop. |
-| **[Portfolio Engine](portfolio-engine.md)** | Complete mathematical model: valuation chain, WAC, aggregation, 3-pool model, contribution, pre-frame/frame architecture. |
 
 ---
 
@@ -36,42 +56,42 @@ These two actors can have vastly different performances. You might pick an excel
 
 To help you choose the right metric for your analysis, use this comparison guide:
 
-### 1. [Net Asset Value (NAV) / Net Worth](nav.md)
+### 1. [Net Asset Value (NAV) / Net Worth](portfolio-engine/nav.md)
 * **Core Question:** "How much is the portfolio in the selected scope worth right now?"
 * **Formula Concept:** $\text{Market Value} + \text{Cash} + \text{In Transit Assets}$ at end of period.
 * **Best Use Case:** Snapshot of absolute wealth on the selected end date (`date_to`).
 
-### 2. [Book Value](book-value.md)
+### 2. [Book Value](portfolio-engine/book-value.md)
 * **Core Question:** "How much did my current portfolio cost to build?"
 * **Formula Concept:** $\text{Open Cost Basis} + \text{Cash} + \text{In Transit Book Value}$ using Weighted Average Cost (WAC).
 * **Best Use Case:** Evaluating acquisition costs and comparing with current market value (NAV) to find latent gains.
 
-### 3. [Period P&L](period-pnl.md)
+### 3. [Period P&L](portfolio-engine/period-pnl.md)
 * **Core Question:** "How much money did I actually earn or lose during this period?"
 * **Formula Concept:** $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net External Flows}$.
 * **Best Use Case:** Measuring period gains in absolute currency, independent of investor cash injections/withdrawals.
 
-### 4. [Timing Effect](timing-effect.md)
+### 4. [Timing Effect](portfolio-engine/timing-effect.md)
 * **Core Question:** "How did the timing and size of my cash flows affect my overall return compared to a buy-and-hold strategy?"
 * **Formula Concept:** $\text{MWRR}_{\text{cumulative}} - \text{TWRR}_{\text{cumulative}}$.
 * **Best Use Case:** Diagnosing whether deposits and withdrawals added value ($>0$ pp) or dragged down performance ($<0$ pp).
 
-### 5. [Simple ROI](roi.md)
+### 5. [Simple ROI](portfolio-engine/roi.md)
 * **Core Question:** "How much did I gain relative to the net capital I invested?"
 * **Formula Denominator:** Weighted Average Cost (WAC).
 * **Limitations:** Does not account for *when* cash flows occurred, leading to cash flow dilution when subsequently buying more of an asset.
 
-### 6. [TWRR (Time-Weighted Rate of Return)](twrr.md)
+### 6. [TWRR (Time-Weighted Rate of Return)](portfolio-engine/twrr.md)
 * **Core Question:** "How did my chosen asset allocation/strategy perform, ignoring my cash timing?"
 * **Formula Concept:** Breaks the timeline at each cash flow, calculates sub-period returns, and multiplies them.
 * **Best Use Case:** Comparing your performance with external benchmarks (like the S&P 500) or evaluating the pure performance of the assets.
 
-### 7. [Annualized MWRR (Money-Weighted Rate of Return)](mwrr.md#annualized-mwrr)
+### 7. [Annualized MWRR (Money-Weighted Rate of Return)](portfolio-engine/mwrr.md#annualized-mwrr)
 * **Core Question:** "At what compound annual rate did my actual capital grow, considering my deposits and withdrawals?"
 * **Formula Concept:** Solves for the internal rate of return ($r$) that brings the net present value of all cash flows to zero.
 * **Best Use Case:** Comparing your personal performance against long-term interest rates or evaluating compound growth over long horizons. Can be highly volatile on short windows.
 
-### 8. [Cumulative MWRR](mwrr.md#cumulative-mwrr)
+### 8. [Cumulative MWRR](portfolio-engine/mwrr.md#cumulative-mwrr)
 * **Core Question:** "What is the equivalent money-weighted cumulative return over this selected time window?"
 * **Formula Concept:** Compounds the annualized MWRR for the actual number of days elapsed.
 * **Best Use Case:** Serial charts and dashboard widgets to compare visual performance trends side-by-side with TWRR and ROI.
@@ -139,11 +159,11 @@ By placing TWRR and MWRR next to each other on your Dashboard, LibreFolio gives 
 
 To aid navigation, the LibreFolio dashboard features help icons and links adjacent to each metric. Clicking these links redirects you directly to the relevant financial theory chapter:
 
-* **Net Worth (NAV)** widgets link directly to the [NAV / Net Worth Page](nav.md).
-* **Book Value** fields link directly to the [Book Value Page](book-value.md).
-* **Period P&L** widgets link directly to the [Period P&L Page](period-pnl.md).
-* **Timing Effect** widgets link directly to the [Timing Effect Page](timing-effect.md).
-* **ROI** widgets link directly to the [Simple ROI Page](roi.md).
-* **TWRR** widgets link directly to the [TWRR Page](twrr.md).
-* **MWRR** widgets link directly to the [MWRR Page](mwrr.md).
-* **Deposited Capital / Total P&L** (Growth Chart tooltip) links to the [Deposited Capital & Total P&L Page](deposited-capital.md).
+* **Net Worth (NAV)** widgets link directly to the [NAV / Net Worth Page](portfolio-engine/nav.md).
+* **Book Value** fields link directly to the [Book Value Page](portfolio-engine/book-value.md).
+* **Period P&L** widgets link directly to the [Period P&L Page](portfolio-engine/period-pnl.md).
+* **Timing Effect** widgets link directly to the [Timing Effect Page](portfolio-engine/timing-effect.md).
+* **ROI** widgets link directly to the [Simple ROI Page](portfolio-engine/roi.md).
+* **TWRR** widgets link directly to the [TWRR Page](portfolio-engine/twrr.md).
+* **MWRR** widgets link directly to the [MWRR Page](portfolio-engine/mwrr.md).
+* **Deposited Capital / Total P&L** (Growth Chart tooltip) links to the [Deposited Capital & Total P&L Page](portfolio-engine/deposited-capital.md).
