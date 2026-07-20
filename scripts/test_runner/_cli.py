@@ -367,6 +367,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
+    parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
 
     subparsers = parser.add_subparsers(dest="category", help="Test category to run", required=False)
 
@@ -403,6 +404,7 @@ def register_subparser(parent_subparsers):
     test_parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     test_parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     test_parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
+    test_parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
 
     test_subparsers = test_parser.add_subparsers(dest="category", title="Test categories", metavar="")
 
@@ -488,6 +490,18 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
 
 
 def _dispatch_test_command(args):
+    """Dispatch test command from dev.py, optionally teeing the full log to a file."""
+    log_file = getattr(args, "log_file", None)
+    if log_file:
+        with _common.tee_output(log_file):
+            print_info(f"📝 Full run log → {log_file}")
+            rc = _dispatch_test_command_body(args)
+            print_info(f"📝 Full run log saved to {log_file}")
+        return rc
+    return _dispatch_test_command_body(args)
+
+
+def _dispatch_test_command_body(args):
     """Dispatch test command from dev.py."""
     if not args.category:
         # Handle --run-status without category
@@ -563,12 +577,24 @@ def _dispatch_test_command(args):
 
 
 def main():
-    """Main entry point."""
+    """Main entry point, optionally teeing the full log to a file."""
     parser = create_parser()
 
     argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
+    log_file = getattr(args, "log_file", None)
+    if log_file:
+        with _common.tee_output(log_file):
+            print_info(f"📝 Full run log → {log_file}")
+            rc = _main_body(parser, args)
+            print_info(f"📝 Full run log saved to {log_file}")
+        return rc
+    return _main_body(parser, args)
+
+
+def _main_body(parser, args):
+    """Actual main logic (wrapped by main() for optional log teeing)."""
     # Handle --run-status without category
     if getattr(args, "run_status", False):
         print(_cache_show_status())

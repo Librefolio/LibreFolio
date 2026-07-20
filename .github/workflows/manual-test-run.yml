@@ -75,12 +75,13 @@ jobs:
       - name: Run Complete Test Suite
         id: run_tests
         timeout-minutes: 180
-        run: pipenv run ./dev.py test --fresh-run --quiet all
+        run: pipenv run ./dev.py test --fresh-run --quiet --log-file /tmp/test-run-cache/full-run.log all
 
       # Copy the cache to a plain (non-dotfile) name in a dedicated folder before
       # upload. This sidesteps any glob/dotfile-matching quirk in the upload-artifact
       # action and gives a clear, visible log line confirming whether the runner
       # actually produced scripts/test_runner/.run_cache.json.
+      # The full run log (--log-file above) already lands in /tmp/test-run-cache/.
       - name: Prepare test run cache for upload
         if: always()
         run: |
@@ -93,16 +94,23 @@ jobs:
             echo "⚠️  scripts/test_runner/.run_cache.json does not exist — nothing to upload."
             ls -la scripts/test_runner/ || true
           fi
+          if [ -f /tmp/test-run-cache/full-run.log ]; then
+            echo "✅ Full run log present ($(wc -l < /tmp/test-run-cache/full-run.log) lines):"
+            tail -n 40 /tmp/test-run-cache/full-run.log || true
+          else
+            echo "⚠️  /tmp/test-run-cache/full-run.log missing — the run may have crashed before producing it."
+          fi
 
-      # Upload resume cache on both pass/fail so dev can download file, place it at
-      # scripts/test_runner/.run_cache.json locally, then run:
+      # Upload resume cache + full log on both pass/fail so dev can download them,
+      # place .run_cache.json at scripts/test_runner/.run_cache.json locally, then run:
       #   ./dev.py test --resume all
+      # and read full-run.log to see exactly how/where the run stopped.
       # if: always() matters because normal step failures would otherwise skip upload.
       - name: Upload test run cache
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: test-run-cache-${{ github.run_id }}
-          path: /tmp/test-run-cache/run_cache.json
+          path: /tmp/test-run-cache/
           if-no-files-found: warn
           retention-days: 14

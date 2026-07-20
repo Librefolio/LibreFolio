@@ -104,3 +104,6 @@ LibreFolio_devWiki/graphify-out/.graphify_*
 LibreFolio_devWiki/corpus/.graphify_*
 # corpus/graphify-out is now a symlink → ../graphify-out (tracked in git)
 # graphify-out/cache/ IS committed: enables cheap --update (no LLM re-extraction on unchanged files)
+
+# Stray debug artifacts (e.g. saved error pages from failed chart/screenshot runs)
+chart-error-page.html

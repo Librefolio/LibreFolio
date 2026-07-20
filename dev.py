@@ -319,26 +319,40 @@ def cmd_server(args):
         if workers > 1:
             uvicorn_cmd.extend(["--workers", str(workers)])
         else:
-            uvicorn_cmd.append("--reload")
-            # Exclude the git directory and the configured data directory
-            uvicorn_cmd.extend([
-                "--reload-exclude", "**/.git/**",
-            ])
-            try:
-                data_dir_path = get_data_dir(test_mode=test_mode).resolve()
-                try:
-                    rel_data_dir = data_dir_path.relative_to(PROJECT_ROOT)
-                except ValueError:
-                    rel_data_dir = data_dir_path
+            # --reload is only safe/useful when 'watchfiles' is installed. Without
+            # it uvicorn falls back to StatReload, which IGNORES --reload-exclude
+            # (uvicorn logs a warning to that effect) and polls the *entire* tree —
+            # including files the app writes at runtime (test DB, logs, mkdocs
+            # site/). On CI (watchfiles not in Pipfile.lock) this produced an
+            # endless reload loop: the server kept shutting down/restarting, so the
+            # Playwright webServer never became ready → gallery/E2E 120s timeout.
+            # An ephemeral test server needs no reload anyway, so only enable it
+            # when watchfiles is present; otherwise run a plain, stable server.
+            import importlib.util
+            if importlib.util.find_spec("watchfiles") is not None:
+                uvicorn_cmd.append("--reload")
+                # Exclude the git directory and the configured data directory
                 uvicorn_cmd.extend([
-                    "--reload-exclude", f"**/{rel_data_dir}/**",
+                    "--reload-exclude", "**/.git/**",
                 ])
-            except Exception:
-                pass
-            # Always exclude the default backend/data folder recursively as well
-            uvicorn_cmd.extend([
-                "--reload-exclude", "**/backend/data/**",
-            ])
+                try:
+                    data_dir_path = get_data_dir(test_mode=test_mode).resolve()
+                    try:
+                        rel_data_dir = data_dir_path.relative_to(PROJECT_ROOT)
+                    except ValueError:
+                        rel_data_dir = data_dir_path
+                    uvicorn_cmd.extend([
+                        "--reload-exclude", f"**/{rel_data_dir}/**",
+                    ])
+                except Exception:
+                    pass
+                # Always exclude the default backend/data folder recursively as well
+                uvicorn_cmd.extend([
+                    "--reload-exclude", "**/backend/data/**",
+                ])
+            else:
+                print(f"{Colors.YELLOW}⚠️  watchfiles not installed → running WITHOUT --reload "
+                      f"(StatReload ignores --reload-exclude and can reload-loop).{Colors.NC}")
 
         return run_command_live(uvicorn_cmd, env=env)
 

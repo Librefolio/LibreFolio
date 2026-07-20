@@ -8,6 +8,9 @@ import inspect
 import os
 import shutil
 import subprocess
+import sys
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable
 
@@ -29,6 +32,77 @@ _COVERAGE_MODE = False
 _COVERAGE_SOURCE = None
 # Global flag for resume mode (set by main())
 _RESUME_MODE = False
+
+
+@contextmanager
+def tee_output(log_path):
+    """
+    Tee ALL output written to the stdout/stderr file descriptors (fd 1 & 2) to a
+    log file, while still printing to the console.
+
+    Unlike a plain ``sys.stdout`` redirect, this works at the OS file-descriptor
+    level, so it also captures output from child processes launched with
+    ``capture_output=False`` (e.g. ``npm run build``, ``pytest``, ``playwright``),
+    which inherit fd 1/2. This is what lets a CI artifact contain the *full* log
+    (including the vite build error) and not just the high-level summary.
+
+    ANSI color codes are preserved verbatim in the log file.
+    """
+    log_path = Path(log_path)
+    if log_path.parent and not log_path.parent.exists():
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Flush Python-level buffers before swapping the underlying fds.
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    log_fh = open(log_path, "wb")
+    saved_out = os.dup(1)
+    saved_err = os.dup(2)
+    out_r, out_w = os.pipe()
+    err_r, err_w = os.pipe()
+
+    def _pump(read_fd, console_fd):
+        try:
+            while True:
+                data = os.read(read_fd, 65536)
+                if not data:
+                    break
+                os.write(console_fd, data)
+                log_fh.write(data)
+                log_fh.flush()
+        except OSError:
+            pass
+
+    threads = [
+        threading.Thread(target=_pump, args=(out_r, saved_out), daemon=True),
+        threading.Thread(target=_pump, args=(err_r, saved_err), daemon=True),
+    ]
+
+    # Point fd 1/2 at the pipe write ends; children inherit these.
+    os.dup2(out_w, 1)
+    os.dup2(err_w, 2)
+    for t in threads:
+        t.start()
+
+    try:
+        yield log_path
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        # Restore the real console fds.
+        os.dup2(saved_out, 1)
+        os.dup2(saved_err, 2)
+        # Close the pipe write ends so the pump threads see EOF and drain.
+        os.close(out_w)
+        os.close(err_w)
+        for t in threads:
+            t.join(timeout=5)
+        os.close(out_r)
+        os.close(err_r)
+        os.close(saved_out)
+        os.close(saved_err)
+        log_fh.close()
 
 
 def _run_test_suite(
