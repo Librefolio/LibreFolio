@@ -138,6 +138,13 @@ jobs:
         # The Dockerfile installs dependencies from a native requirements.txt
         run: pipenv requirements > requirements.txt
 
+      - name: Generate VERSION file for Docker
+        # The Dockerfile COPYs a VERSION file (gitignored build artifact) so the
+        # image can report its version at runtime — the image has no .git/, so
+        # git describe cannot run there. Freeze it here on the host (fetch-depth:0
+        # gives us tags) reusing the same get_git_version() the app uses.
+        run: pipenv run python -c "from pathlib import Path; from backend.app.utils.version import get_git_version; get_git_version.cache_clear(); Path('VERSION').write_text(get_git_version())"
+
       # ==========================================
       # 4. DOCKER BUILD & PUSH (Single Image)
       # ==========================================
