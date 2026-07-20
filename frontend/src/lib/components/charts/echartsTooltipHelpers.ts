@@ -155,7 +155,15 @@ export function buildGridColors(isDark: boolean): ChartGridColors {
  *
  * Use as: `tooltip: { position: tooltipPositionAboveFinger, ... }`
  */
-export function tooltipPositionAboveFinger(point: [number, number], _params: unknown, _dom: unknown, _rect: unknown, size: {contentSize: [number, number]; viewSize: [number, number]}): [number, number] {
+export function tooltipPositionAboveFinger(
+    point: [number, number],
+    _params: unknown,
+    _dom: unknown,
+    _rect: unknown,
+    size: {contentSize: [number, number]; viewSize: [number, number]},
+    opts?: {clampTop?: boolean},
+): [number, number] {
+    const {clampTop = true} = opts ?? {};
     const tooltipW = size.contentSize[0];
     const tooltipH = size.contentSize[1];
     const viewW = size.viewSize[0];
@@ -167,7 +175,7 @@ export function tooltipPositionAboveFinger(point: [number, number], _params: unk
     const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     const gap = isTouch ? 80 : 30;
     let y = point[1] - tooltipH - gap;
-    if (y < 0) y = 0;
+    if (clampTop && y < 0) y = 0;
 
     // Clamp horizontal to viewport
     if (x < 8) x = 8;

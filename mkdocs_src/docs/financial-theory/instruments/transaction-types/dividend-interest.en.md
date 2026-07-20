@@ -83,6 +83,7 @@ The withheld amount is typically recorded as a separate `TAX` transaction in Lib
 
 - 💰 **[Dividend Events](../asset-events/dividend.md)** — How dividends affect asset prices
 - 📈 **[Interest Events](../asset-events/interest.md)** — Accrual and coupon mechanics
+- 🔬 **[FIFO Lot Analysis](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md#income-allocation-across-lots)** — How income is allocated pro-rata across open lots
 - 💰 **[Taxation](../../fundamentals/taxation.md)** — Tax treatment of yield
 - 🏛️ **[Bonds](../asset-types/bonds.md)** — The primary interest-bearing asset
 - 📈 **[Stocks](../asset-types/stocks.md)** — The primary dividend-paying asset class

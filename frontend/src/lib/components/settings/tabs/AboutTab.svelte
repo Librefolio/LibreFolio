@@ -1,12 +1,17 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import {LOCALE_NAMES, type SupportedLocale} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {onMount} from 'svelte';
-    import {Check, ChevronDown, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Monitor, Scale, Tag} from 'lucide-svelte';
+    import {onDestroy, onMount} from 'svelte';
+    import {AppWindow, Check, ChevronDown, Container, Copy, ExternalLink, Github, Globe, HardDrive, Heart, Info, Languages, Layers, Maximize2, Monitor, Scale, SunMoon, Tag} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import {getCurrentResolvedTheme, getStoredThemePreference, type ThemePreference} from '$lib/stores/app/themeStore';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
     const githubUrl = 'https://github.com/Librefolio/LibreFolio';
-    const websiteUrl = 'https://librefolio.io'; // Placeholder for now
+    const websiteUrl = 'https://librefolio.github.io/LibreFolio/';
 
     interface DependencyInfo {
         name: string;
@@ -19,9 +24,17 @@
         os_name: string;
         os_version: string;
         platform: string;
+        deployment_mode: string;
         backend_dependencies: DependencyInfo[];
         frontend_dependencies: DependencyInfo[];
     }
+
+    // i18n key + English label (for the always-English "Copy for Issue" text) per theme preference
+    const THEME_LABELS: Record<ThemePreference, {key: string; en: string}> = {
+        light: {key: 'settings.themeLight', en: 'Light'},
+        dark: {key: 'settings.themeDark', en: 'Dark'},
+        auto: {key: 'settings.themeAuto', en: 'Auto'},
+    };
 
     interface ProviderInfo {
         code: string;
@@ -40,7 +53,30 @@
     let fxProviders: ProviderInfo[] = [];
     let importPlugins: ProviderInfo[] = [];
 
+    // Client-side diagnostic fields (no backend round-trip needed) — useful for UI bug reports.
+    let viewportWidth = 0;
+    let viewportHeight = 0;
+    let devicePixelRatio = 1;
+    let userAgent = '';
+    let themePreference: ThemePreference = 'auto';
+    let themeResolved: 'light' | 'dark' = 'light';
+    let currentLocale: SupportedLocale = 'en';
+
+    function updateViewport() {
+        viewportWidth = window.innerWidth;
+        viewportHeight = window.innerHeight;
+        devicePixelRatio = window.devicePixelRatio;
+    }
+
     onMount(async () => {
+        updateViewport();
+        window.addEventListener('resize', updateViewport);
+
+        userAgent = navigator.userAgent;
+        themePreference = getStoredThemePreference();
+        themeResolved = getCurrentResolvedTheme();
+        currentLocale = (localStorage.getItem('librefolio-locale') as SupportedLocale) || 'en';
+
         try {
             const [sysInfo, assetProv, fxProv, brimPlugins] = await Promise.all([
                 zodiosApi.get_system_info_api_v1_system_info_get(),
@@ -59,6 +95,12 @@
         }
     });
 
+    onDestroy(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('resize', updateViewport);
+        }
+    });
+
     function getDocsUrl(p: ProviderInfo): string | null {
         if (!p.docs_url) return null;
         const lang = localStorage.getItem('librefolio-locale') || 'en';
@@ -73,12 +115,22 @@
     async function copySystemInfo() {
         if (!systemInfo) return;
 
+        const deploymentModeLabel = systemInfo.deployment_mode === 'docker' ? 'Docker' : 'Local';
+        const themeLabel = THEME_LABELS[themePreference].en + (themePreference === 'auto' ? ` (${THEME_LABELS[themeResolved].en})` : '');
+        const languageLabel = `${LOCALE_NAMES[currentLocale]} (${currentLocale})`;
+
         const info = `LibreFolio System Info
 ========================
 App Version: ${systemInfo.app_version}
 Python: ${systemInfo.python_version}
 OS: ${systemInfo.os_name} ${systemInfo.os_version}
 Platform: ${systemInfo.platform}
+Deployment Mode: ${deploymentModeLabel}
+Browser: ${userAgent}
+Viewport: ${viewportWidth}x${viewportHeight}
+Device Pixel Ratio: ${devicePixelRatio}x
+Theme: ${themeLabel}
+Language: ${languageLabel}
 ========================
 
 Backend Dependencies:
@@ -205,9 +257,63 @@ Generated: ${new Date().toISOString()}
                 </div>
                 <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
                     <HardDrive size={18} class="text-orange-500 mt-0.5 shrink-0" />
-                    <div>
+                    <div class="flex-1 min-w-0">
                         <p class="text-gray-500 text-xs">{$_('settings.platform')}</p>
-                        <p class="font-medium text-gray-700 text-xs truncate" title={systemInfo.platform}>{systemInfo.platform}</p>
+                        <p use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-gray-700 text-xs" title={systemInfo.platform}>{systemInfo.platform}</p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <Container size={18} class="text-cyan-600 mt-0.5 shrink-0" />
+                    <div>
+                        <p class="text-gray-500 text-xs">{$_('settings.deploymentMode')}</p>
+                        <p class="font-medium text-gray-700">
+                            {systemInfo.deployment_mode === 'docker' ? $_('settings.deploymentModeDocker') : $_('settings.deploymentModeLocal')}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <AppWindow size={18} class="text-sky-500 mt-0.5 shrink-0" />
+                    <div class="flex-1 min-w-0">
+                        <p class="text-gray-500 text-xs">{$_('settings.browser')}</p>
+                        <p use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-gray-700 text-xs" title={userAgent}>{userAgent}</p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <Maximize2 size={18} class="text-teal-500 mt-0.5 shrink-0" />
+                    <div>
+                        <p class="text-gray-500 text-xs">{$_('settings.viewport')}</p>
+                        <p class="font-medium text-gray-700">{viewportWidth} × {viewportHeight}</p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <Layers size={18} class="text-indigo-500 mt-0.5 shrink-0" />
+                    <div>
+                        <p class="text-gray-500 text-xs flex items-center gap-1">
+                            {$_('settings.devicePixelRatio')}
+                            <Tooltip text={$_('settings.devicePixelRatioHint')} position="top">
+                                <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                            </Tooltip>
+                        </p>
+                        <p class="font-medium text-gray-700">{devicePixelRatio}x</p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <SunMoon size={18} class="text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                        <p class="text-gray-500 text-xs">{$_('settings.theme')}</p>
+                        <p class="font-medium text-gray-700">
+                            {$_(THEME_LABELS[themePreference].key)}
+                            {#if themePreference === 'auto'}
+                                <span class="text-gray-400">({$_(THEME_LABELS[themeResolved].key)})</span>
+                            {/if}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <Languages size={18} class="text-rose-500 mt-0.5 shrink-0" />
+                    <div>
+                        <p class="text-gray-500 text-xs">{$_('settings.language')}</p>
+                        <p class="font-medium text-gray-700">{LOCALE_NAMES[currentLocale]}</p>
                     </div>
                 </div>
             </div>

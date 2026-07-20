@@ -7,6 +7,9 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
+    import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
+    import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, computeDensity, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
+    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
@@ -23,8 +26,14 @@
     type DisplayMode = 'absolute' | 'percentage';
     type EventMarkerSeriesKind = 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split';
 
+    // Bidirectional "back-and-forth" arrow (custom path renders identically in chart + legend,
+    // unlike a rotated built-in which the legend icon ignores).
     const TRANSFER_MARKER_SYMBOL = 'path://M1 10 L6 5 L6 8 L14 8 L14 5 L19 10 L14 15 L14 12 L6 12 L6 15 Z';
-    const SPLIT_MARKER_SYMBOL = 'path://M8 1 H12 V8 H16 V12 H12 V19 H8 V12 H4 V8 H8 Z';
+    // Buy ▲ / Sell ▽ as explicit mirrored paths: the ECharts legend icon ignores `symbolRotate`,
+    // so a rotated built-in triangle would show upward in the legend for BOTH buy and sell.
+    const BUY_MARKER_SYMBOL = 'path://M0 17 L20 17 L10 0 Z';
+    const SELL_MARKER_SYMBOL = 'path://M0 0 L20 0 L10 17 Z';
+    const SPLIT_MARKER_SYMBOL = 'diamond';
     const MARKER_VERTICAL_OFFSET_STEP = 12;
     // Per-lot performance bubbles (plan v3 round-2 §5/§6): opening-marker overlay migrated here from
     // the removed LotPerformanceBubbleChart. Radius scales sqrt-proportionally to a per-mode metric
@@ -32,7 +41,7 @@
     const LOT_BUBBLE_MIN_RADIUS = 7;
     const LOT_BUBBLE_MAX_RADIUS = 22;
     const LOT_BUBBLE_ZERO_EPS = 0.0005;
-    // Income (dividend/interest) "|" markers share this series id so it can be filtered out of the legend.
+    // Income (dividend/interest) "|" markers share this series id so the ECharts series stays stable.
     const LOT_INCOME_MARKER_SERIES_ID = 'lot-income-markers';
     // Fixed (non-containLabel) grid bounds shared byte-for-byte with LotGanttChart.svelte so the
     // two charts' X axes are pixel-perfect aligned regardless of how wide either chart's Y-axis
@@ -91,6 +100,13 @@
         date: string;
         absolute: number | null;
         percent: number | null;
+    }
+
+    type ValueKey = 'absolute' | 'percent';
+
+    interface LogicalRange {
+        startDate: string;
+        endDate: string;
     }
 
     interface BrokerSeries {
@@ -181,6 +197,11 @@
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
     let needsInitialLayoutStabilityPass = false;
+    let currentResolution: ChartResolution = $state('daily');
+    let shouldPickInitialResolution = true;
+    let resolutionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let dataZoomResolutionCleanup: (() => void) | null = null;
+    let lastResolutionInputRefs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], LotPriceHistoryPoint[]] | null = null;
 
     function escapeHtml(value: string): string {
         return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -246,6 +267,14 @@
         return a.localeCompare(b);
     }
 
+    const lineSeriesDates = $derived.by(() => {
+        const dateSet = new Set<string>();
+        for (const point of brokerWacHistory) dateSet.add(point.date);
+        for (const point of cumulativeWacHistory) dateSet.add(point.date);
+        for (const point of priceHistory) dateSet.add(point.date);
+        return Array.from(dateSet).sort(sortDates);
+    });
+
     function nullifyZeroWac(wac: number | null, poolQty: number | null): number | null {
         if (wac == null) return null;
         return wac === 0 || poolQty === 0 ? null : wac;
@@ -308,6 +337,185 @@
 
     function syncTheme() {
         isDark = document.documentElement.classList.contains('dark');
+    }
+
+    function resetResolutionIfInputsChanged() {
+        const refs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], LotPriceHistoryPoint[]] = [brokerWacHistory, cumulativeWacHistory, priceHistory];
+        if (lastResolutionInputRefs && refs.every((ref, index) => ref === lastResolutionInputRefs?.[index])) return;
+
+        lastResolutionInputRefs = refs;
+        currentResolution = 'daily';
+        shouldPickInitialResolution = true;
+    }
+
+    function isoDateToUtcMs(date: string): number {
+        const [year, month, day] = date.split('-').map(Number);
+        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return Number.NaN;
+        return Date.UTC(year, month - 1, day);
+    }
+
+    function utcMsToIsoDate(ms: number): string {
+        const date = new Date(ms);
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function getFullLineRange(): LogicalRange | null {
+        if (lineSeriesDates.length === 0) return null;
+        return {
+            startDate: lineSeriesDates[0],
+            endDate: lineSeriesDates[lineSeriesDates.length - 1],
+        };
+    }
+
+    function getXAxisBounds(): {min: string; max: string} | null {
+        const min = xAxisRange?.min ?? groupedChartData.minDate ?? lineSeriesDates[0] ?? null;
+        const max = xAxisRange?.max ?? groupedChartData.maxDate ?? lineSeriesDates[lineSeriesDates.length - 1] ?? null;
+        if (!min || !max) return null;
+        return min <= max ? {min, max} : {min: max, max: min};
+    }
+
+    function getAxisLogicalRange(): LogicalRange | null {
+        const bounds = getXAxisBounds();
+        return bounds ? {startDate: bounds.min, endDate: bounds.max} : getFullLineRange();
+    }
+
+    function getPlotWidthPx(): number {
+        if (!chartInstance) return 1;
+        return Math.max(chartInstance.getWidth() - GRID_LEFT_PX - GRID_RIGHT_PX, 1);
+    }
+
+    function computeLineBucketCounts(range: LogicalRange): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
+        let dailyCount = 0;
+        const weekly = new Set<string>();
+        const monthly = new Set<string>();
+
+        for (const date of lineSeriesDates) {
+            if (date < range.startDate || date > range.endDate) continue;
+            dailyCount += 1;
+            weekly.add(mapDateToBucket(date, 'weekly').bucketEnd);
+            monthly.add(mapDateToBucket(date, 'monthly').bucketEnd);
+        }
+
+        return {
+            dailyCount,
+            weeklyCount: weekly.size,
+            monthlyCount: monthly.size,
+        };
+    }
+
+    function getZoomPercent(): {start: number; end: number} {
+        if (!chartInstance) return {start: 0, end: 100};
+
+        try {
+            const option = chartInstance.getOption() as {dataZoom?: Array<{start?: number; end?: number}>};
+            const zoom = option.dataZoom?.[0];
+            const start = typeof zoom?.start === 'number' ? zoom.start : 0;
+            const end = typeof zoom?.end === 'number' ? zoom.end : 100;
+            return {
+                start: Math.min(100, Math.max(0, start)),
+                end: Math.min(100, Math.max(0, end)),
+            };
+        } catch (_) {
+            return {start: 0, end: 100};
+        }
+    }
+
+    function getVisibleLogicalRangeFromChart(): LogicalRange | null {
+        const axisRange = getAxisLogicalRange();
+        if (!axisRange) return null;
+
+        const minMs = isoDateToUtcMs(axisRange.startDate);
+        const maxMs = isoDateToUtcMs(axisRange.endDate);
+        if (!Number.isFinite(minMs) || !Number.isFinite(maxMs) || maxMs <= minMs) return axisRange;
+
+        const zoom = getZoomPercent();
+        const startPercent = Math.min(zoom.start, zoom.end);
+        const endPercent = Math.max(zoom.start, zoom.end);
+        const spanMs = maxMs - minMs;
+
+        return {
+            startDate: utcMsToIsoDate(minMs + spanMs * (startPercent / 100)),
+            endDate: utcMsToIsoDate(minMs + spanMs * (endPercent / 100)),
+        };
+    }
+
+    function pickInitialResolution() {
+        if (!shouldPickInitialResolution) return;
+        shouldPickInitialResolution = false;
+
+        const fullRange = getFullLineRange();
+        if (!fullRange) {
+            currentResolution = 'daily';
+            return;
+        }
+
+        const counts = computeLineBucketCounts(fullRange);
+        const plotWidthPx = getPlotWidthPx();
+        currentResolution = computeDensity(counts.dailyCount, plotWidthPx) === 0 ? 'daily' : chooseInitialResolution(counts, plotWidthPx);
+    }
+
+    function syncResolutionToViewport() {
+        if (!chartInstance || lineSeriesDates.length === 0) return;
+
+        const range = getVisibleLogicalRangeFromChart() ?? getFullLineRange();
+        if (!range) return;
+
+        const counts = computeLineBucketCounts(range);
+        const plotWidthPx = getPlotWidthPx();
+        if (computeDensity(counts.dailyCount, plotWidthPx) === 0) return;
+
+        const nextResolution = cascadeResolution(currentResolution, counts, plotWidthPx);
+        if (nextResolution === currentResolution) return;
+
+        currentResolution = nextResolution;
+        chartInstance.dispatchAction({type: 'hideTip'});
+        renderChart({animate: false});
+    }
+
+    function scheduleResolutionSync() {
+        if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
+        resolutionDebounceTimer = setTimeout(() => {
+            resolutionDebounceTimer = null;
+            syncResolutionToViewport();
+        }, 200);
+    }
+
+    function aggregateValuePoints(points: ValuePoint[], valueKey: ValueKey): ReturnType<typeof namedPoint>[] {
+        const source: LineDataPoint[] = points.map((point) => ({
+            date: point.date,
+            value: point[valueKey] ?? Number.NaN,
+        }));
+        return aggregateLineSeries(source, currentResolution).map((point) => namedPoint(point.date, Number.isFinite(point.value) ? point.value : null));
+    }
+
+    function computeAbsoluteAutoYAxisBounds(): {min: number; max: number} | null {
+        const values: number[] = [];
+        const collectValues = (points: ValuePoint[]) => {
+            for (const point of aggregateValuePoints(points, 'absolute')) {
+                const value = point.value[1];
+                if (value == null || value === 0 || !Number.isFinite(value)) continue;
+                values.push(value);
+            }
+        };
+
+        for (const brokerSeries of groupedChartData.realSeries) {
+            if (brokerSeries.hasAbsoluteData) collectValues(brokerSeries.points);
+        }
+        if (groupedChartData.combinedSeries?.hasAbsoluteData) collectValues(groupedChartData.combinedSeries.points);
+        if (groupedChartData.marketPricePoints.some((point) => point.absolute != null)) collectValues(groupedChartData.marketPricePoints);
+
+        if (values.length === 0) return null;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const span = max - min;
+        const padding = span > 0 ? span * 0.04 : Math.max(Math.abs(min), Math.abs(max)) * 0.04;
+        return {
+            min: min - padding,
+            max: max + padding,
+        };
     }
 
     function eventKey(event: LotTimelineEventSchema): string {
@@ -475,24 +683,23 @@
             {
                 key: 'buy',
                 label: labels.markerLegend.buy,
-                symbol: 'triangle',
+                symbol: BUY_MARKER_SYMBOL,
                 symbolSize: 12,
                 color: isDark ? '#86efac' : '#16a34a',
             },
             {
                 key: 'sell',
                 label: labels.markerLegend.sell,
-                symbol: 'triangle',
+                symbol: SELL_MARKER_SYMBOL,
                 symbolSize: 12,
-                symbolRotate: 180,
                 color: isDark ? '#fca5a5' : '#dc2626',
             },
             {
                 key: 'transfer',
                 label: labels.markerLegend.transfer,
                 symbol: TRANSFER_MARKER_SYMBOL,
-                symbolSize: 15,
-                color: isDark ? '#93c5fd' : '#2563eb',
+                symbolSize: 16,
+                color: isDark ? '#93c5fd' : '#1d4ed8',
             },
             {
                 key: 'adjustment',
@@ -530,6 +737,7 @@
         const markerLegendTransfer = $_('brokers.lots.chartMarkers.legend.transfer');
         const markerLegendAdjustment = $_('brokers.lots.chartMarkers.legend.adjustment');
         const markerLegendSplit = $_('brokers.lots.chartMarkers.legend.split');
+        const markerLegendIncome = $_('brokers.lots.chartMarkers.legend.income');
         const eventTypeBuy = $_('brokers.lots.chartMarkers.eventType.BUY');
         const eventTypeSell = $_('brokers.lots.chartMarkers.eventType.SELL');
         const eventTypeAdjustmentIn = $_('brokers.lots.chartMarkers.eventType.ADJUSTMENT_IN');
@@ -616,6 +824,7 @@
                 transfer: !markerLegendTransfer || markerLegendTransfer === 'brokers.lots.chartMarkers.legend.transfer' ? 'Transfers' : markerLegendTransfer,
                 adjustment: !markerLegendAdjustment || markerLegendAdjustment === 'brokers.lots.chartMarkers.legend.adjustment' ? 'Adjustments' : markerLegendAdjustment,
                 split: !markerLegendSplit || markerLegendSplit === 'brokers.lots.chartMarkers.legend.split' ? 'Split' : markerLegendSplit,
+                income: !markerLegendIncome || markerLegendIncome === 'brokers.lots.chartMarkers.legend.income' ? 'Dividend / interest' : markerLegendIncome,
             },
             eventType: {
                 BUY: !eventTypeBuy || eventTypeBuy === 'brokers.lots.chartMarkers.eventType.BUY' ? 'Buy' : eventTypeBuy,
@@ -776,9 +985,8 @@
         return '';
     });
 
-    function incomeEventColor(type: LotIncomeEvent['type']): string {
-        if (type === 'DIVIDEND') return isDark ? '#2dd4bf' : '#0f766e';
-        return isDark ? '#a78bfa' : '#6d28d9';
+    function incomeMarkerColor(): string {
+        return isDark ? '#c4b5fd' : '#7c3aed';
     }
 
     function incomeEventTypeLabel(type: LotIncomeEvent['type']): string {
@@ -792,7 +1000,7 @@
         const theme = buildTooltipTheme(isDark);
         const amount = Number.parseFloat(event.amount);
         const rows = [
-            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerType')), escapeHtml(incomeEventTypeLabel(event.type)), incomeEventColor(event.type)),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerType')), escapeHtml(incomeEventTypeLabel(event.type)), incomeMarkerColor()),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatShortDate(event.date))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerBroker')), escapeHtml(brokerName(event.broker_id))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, currency) : String(event.amount))),
@@ -823,7 +1031,7 @@
     }
 
     /** Income markers as short vertical "|" glyphs (rect 2×16px) sitting at the price line on the
-     * distribution date, coloured by type (dividend/interest). Only meaningful on the price axis, so
+     * distribution date. Only meaningful on the price axis, so
      * rendered in ABS mode; returns undefined otherwise or when there are no income events. */
     function buildIncomeMarkerSeries(): echarts.SeriesOption | undefined {
         if (displayMode !== 'absolute' || incomeMarkerEvents.length === 0) return undefined;
@@ -834,17 +1042,18 @@
                 return {
                     value: [event.date, y],
                     incomeEvent: event,
-                    itemStyle: {color: incomeEventColor(event.type), opacity: 0.95},
+                    itemStyle: {color: incomeMarkerColor(), opacity: 0.95},
                 };
             })
             .filter((entry): entry is {value: (string | number)[]; incomeEvent: LotIncomeEvent; itemStyle: {color: string; opacity: number}} => entry != null);
         if (data.length === 0) return undefined;
         return {
             id: LOT_INCOME_MARKER_SERIES_ID,
-            name: LOT_INCOME_MARKER_SERIES_ID,
+            name: labels.markerLegend.income,
             type: 'scatter',
             symbol: 'rect',
             symbolSize: [2, 16],
+            itemStyle: {color: incomeMarkerColor(), opacity: 0.95},
             clip: true,
             z: 5,
             data,
@@ -1088,11 +1297,29 @@
             tooltip: {show: false},
         } as echarts.SeriesOption);
 
+        // Legend-only keys explaining the bubble-centre state glyphs (open ● / partial ◆ / closed ▮).
+        // Empty-data series so nothing is plotted; listed only for states actually present in the period.
+        const presentStates = (['OPEN', 'PARTIAL', 'CLOSED'] as LotDisplayState[]).filter((state) =>
+            renderable.some((entry) => entry.point.state === state),
+        );
+        for (const state of presentStates) {
+            series.push({
+                name: lotBubbleStateLabel(state),
+                type: 'scatter',
+                data: [],
+                symbol: lotStateSymbol(state),
+                symbolSize: 10,
+                silent: true,
+                itemStyle: {color: lotStateColor(state, isDark)},
+                tooltip: {show: false},
+            } as echarts.SeriesOption);
+        }
+
         return series;
     }
 
     function buildSeries(): echarts.SeriesOption[] {
-        const valueKey = displayMode === 'absolute' ? 'absolute' : 'percent';
+        const valueKey: ValueKey = displayMode === 'absolute' ? 'absolute' : 'percent';
         const series: echarts.SeriesOption[] = [];
 
         for (const brokerSeries of groupedChartData.realSeries) {
@@ -1102,7 +1329,7 @@
             series.push({
                 name: `${labels.wac} — ${brokerSeries.name}`,
                 type: 'line',
-                data: brokerSeries.points.map((point) => namedPoint(point.date, point[valueKey])),
+                data: aggregateValuePoints(brokerSeries.points, valueKey),
                 showSymbol: false,
                 symbol: 'circle',
                 connectNulls: false,
@@ -1120,7 +1347,7 @@
                 series.push({
                     name: `${labels.wac} — ${combinedSeries.name}`,
                     type: 'line',
-                    data: combinedSeries.points.map((point) => namedPoint(point.date, point[valueKey])),
+                    data: aggregateValuePoints(combinedSeries.points, valueKey),
                     showSymbol: false,
                     symbol: 'circle',
                     connectNulls: false,
@@ -1136,7 +1363,7 @@
             series.push({
                 name: labels.marketPrice,
                 type: 'line',
-                data: groupedChartData.marketPricePoints.map((point) => namedPoint(point.date, point[valueKey])),
+                data: aggregateValuePoints(groupedChartData.marketPricePoints, valueKey),
                 showSymbol: false,
                 symbol: 'circle',
                 connectNulls: false,
@@ -1148,7 +1375,7 @@
 
         for (const definition of buildMarkerSeriesDefinitions()) {
             const markerSeries = groupedChartData.markerSeries.find((seriesGroup) => seriesGroup.category === definition.key);
-            if (!markerSeries) continue;
+            if (!markerSeries || markerSeries.points.length === 0) continue;
 
             series.push({
                 name: definition.label,
@@ -1317,8 +1544,8 @@
     }
 
     /** Legend names, excluding internal helper series that shouldn't appear as toggles: the per-lot
-     * bubble→baseline connectors, the bubble state centre markers and the income "|" markers. Keeps the
-     * real WAC/market lines, event markers and the single "lot-performance-bubbles" entry. */
+     * bubble→baseline connectors and the bubble state centre markers. Keeps the real WAC/market lines,
+     * event markers, income markers and the single "lot-performance-bubbles" entry. */
     function collectLegendNames(series: echarts.SeriesOption[]): string[] {
         const names: string[] = [];
         for (const item of series) {
@@ -1327,7 +1554,6 @@
             if (name.startsWith('__')) continue;
             if (name.startsWith('lot-bubble-connector-')) continue;
             if (name === 'lot-performance-bubble-centers') continue;
-            if (name === LOT_INCOME_MARKER_SERIES_ID) continue;
             names.push(name);
         }
         return names;
@@ -1337,6 +1563,8 @@
         const theme = buildTooltipTheme(isDark);
         const gridColors = buildGridColors(isDark);
         const series = attachIncomeMarkers(buildSeries());
+        const xAxisBounds = getXAxisBounds();
+        const absoluteAutoYBounds = displayMode === 'absolute' && !absYFromZero ? computeAbsoluteAutoYAxisBounds() : null;
 
         // In percentage mode, emphasise the 0% baseline so gains/losses read against a clear zero.
         if (displayMode === 'percentage') {
@@ -1402,7 +1630,7 @@
             },
             xAxis: {
                 type: 'time',
-                ...(xAxisRange ? {min: xAxisRange.min, max: xAxisRange.max} : {}),
+                ...(xAxisBounds ? {min: xAxisBounds.min, max: xAxisBounds.max} : {}),
                 axisLine: {
                     lineStyle: {color: gridColors.gridColor},
                 },
@@ -1425,8 +1653,8 @@
                         ? (v: {min: number}) => Math.min(0, v.min)
                         : absYFromZero
                           ? 0
-                          : (null as unknown as number),
-                max: displayMode === 'percentage' ? (v: {max: number}) => Math.max(0, v.max) : (null as unknown as number),
+                          : ((absoluteAutoYBounds?.min ?? null) as unknown as number),
+                max: displayMode === 'percentage' ? (v: {max: number}) => Math.max(0, v.max) : ((absoluteAutoYBounds?.max ?? null) as unknown as number),
                 axisLine: {show: false},
                 axisTick: {show: false},
                 splitLine: {
@@ -1455,7 +1683,10 @@
 
     function setupResizeObserver() {
         if (!chartContainer || resizeObserver) return;
-        resizeObserver = new ResizeObserver(() => chartInstance?.resize());
+        resizeObserver = new ResizeObserver(() => {
+            chartInstance?.resize();
+            scheduleResolutionSync();
+        });
         resizeObserver.observe(chartContainer);
     }
 
@@ -1463,6 +1694,7 @@
         if (!chartContainer) return;
 
         syncTheme();
+        resetResolutionIfInputsChanged();
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
@@ -1472,6 +1704,8 @@
             dataZoomTouchPanHandle = null;
             dataZoomSyncHandle?.dispose();
             dataZoomSyncHandle = null;
+            dataZoomResolutionCleanup?.();
+            dataZoomResolutionCleanup = null;
             chartInstance.dispose();
             chartInstance = undefined;
         }
@@ -1484,6 +1718,10 @@
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
             dataZoomSyncHandle = attachDataZoomSync(chartInstance, (start, end) => onZoomChange?.(start, end));
+            const zoomInstance = chartInstance;
+            const onDataZoom = () => scheduleResolutionSync();
+            zoomInstance.on('dataZoom', onDataZoom);
+            dataZoomResolutionCleanup = () => zoomInstance.off('dataZoom', onDataZoom);
             chartInstance.on('dblclick', (params: any) => {
                 const event = (params?.seriesType === 'scatter' ? (params?.data?.meta as EventMarkerDatum | undefined)?.event : undefined) ?? null;
                 if (event) onEventDoubleClick?.(event);
@@ -1499,9 +1737,13 @@
         }
 
         if (!showChart) {
+            currentResolution = 'daily';
+            shouldPickInitialResolution = true;
             chartInstance.clear();
             return;
         }
+
+        pickInitialResolution();
 
         const option = buildOption();
         if (opts?.animate === false) {
@@ -1525,6 +1767,7 @@
         darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
 
         return () => {
+            if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
@@ -1532,6 +1775,8 @@
             dataZoomTouchPanHandle = null;
             dataZoomSyncHandle?.dispose();
             dataZoomSyncHandle = null;
+            dataZoomResolutionCleanup?.();
+            dataZoomResolutionCleanup = null;
             chartInstance?.dispose();
         };
     });
@@ -1575,6 +1820,7 @@
         const end = externalZoomEnd;
         if (start == null || end == null) return;
         dataZoomSyncHandle?.applyExternal(start, end);
+        scheduleResolutionSync();
     });
 </script>
 
@@ -1634,6 +1880,10 @@
     </div>
 
     <div class="relative h-72 w-full">
+        <div class="absolute left-2 top-2 z-10 pointer-events-none">
+            <ResolutionBadge resolution={currentResolution} />
+        </div>
+
         {#if emptyMessage}
             <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
                 {emptyMessage}

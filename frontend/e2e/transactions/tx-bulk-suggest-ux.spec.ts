@@ -54,10 +54,13 @@ async function selectRow(page: Page, rowId: string) {
     await checkbox.click();
 }
 
-/** Hover a BulkModal row and click the action button by its stable data-action-id. */
+/** Hover a BulkModal row and click its action via the kebab menu (row-actions-{id} → context-menu-action-{actionId}). */
 async function clickBulkRowAction(page: Page, rowLocator: ReturnType<Page['locator']>, actionId: string) {
     await rowLocator.hover();
-    const btn = rowLocator.locator(`[data-action-id="${actionId}"]`);
+    const kebabBtn = rowLocator.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 2_000});
+    await kebabBtn.click();
+    const btn = page.getByTestId(`context-menu-action-${actionId}`);
     await expect(btn).toBeVisible({timeout: 2_000});
     await btn.click();
 }
@@ -97,20 +100,23 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         }
         await page.waitForTimeout(300);
 
-        // Find a row in the bulk table and click its split action
+        // Find a row in the bulk table and click its split action via the kebab menu
         const bulkRows = page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]');
         const rowCount = await bulkRows.count();
         let splitDone = false;
         for (let i = 0; i < rowCount; i++) {
             const row = bulkRows.nth(i);
-            const splitAction = row.locator('[data-action-id="split"]');
-            // Check if split action is visible (need to hover first)
             await row.hover();
+            const kebabBtn = row.getByTestId(/^row-actions-/);
+            if ((await kebabBtn.count()) === 0) continue;
+            await kebabBtn.click();
+            const splitAction = page.getByTestId('context-menu-action-split');
             if (await splitAction.isVisible({timeout: 500}).catch(() => false)) {
                 await splitAction.click();
                 splitDone = true;
                 break;
             }
+            await page.keyboard.press('Escape');
         }
 
         if (splitDone) {
@@ -181,13 +187,14 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         const rowId = await findRowId(page, ['delete-safe']);
         if (!rowId) throw new Error('No delete-safe paired row found — check populate_mock_data.py');
 
-        // Click the row's split action in the main table (need to hover)
+        // Click the row's split action in the main table via the kebab menu
         const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="${rowId}"]`);
         await row.hover();
         await page.waitForTimeout(200);
-        const splitBtn = row.locator('button[data-action-id="split"]');
+        const splitBtn = row.getByTestId(/^row-actions-/);
         await expect(splitBtn).toBeVisible({timeout: 2_000});
         await splitBtn.click();
+        await page.getByTestId('context-menu-action-split').click();
 
         // Wait for the ActionModal
         const actionModal = page.getByTestId('tx-action-modal');

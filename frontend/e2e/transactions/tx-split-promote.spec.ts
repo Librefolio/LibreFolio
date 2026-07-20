@@ -20,7 +20,8 @@
  * - Row: tr[data-row-id="tx-{id}"] or tr[data-row-id="ghost-{id}"]
  * - Checkbox: .checkbox-btn inside td.td-select
  * - Link indicator: button.tx-link-icon[data-tx-link="{id}"]
- * - Row actions: button[data-action-id="split"], button[data-action-id="edit"], etc.
+ * - Row actions: kebab button [data-testid^="row-actions-"] → opens context menu with
+ *   items at [data-testid="context-menu-action-{id}"] (e.g. "split", "edit", "view").
  */
 import {expect, test, type Page} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -112,9 +113,15 @@ test.describe('Split & Promote', () => {
         await row.hover();
         await page.waitForTimeout(200);
 
-        // Split action should NOT be visible (visible function filters paired-only)
-        const splitAction = row.locator('button[data-action-id="split"]');
-        await expect(splitAction).not.toBeVisible({timeout: 1_000});
+        // Split action should NOT be visible (visible function filters paired-only) —
+        // check via kebab menu since actions are no longer inline buttons
+        const kebabBtn = row.getByTestId(/^row-actions-/);
+        if ((await kebabBtn.count()) === 0) return; // no actions at all — split is a fortiori hidden
+        await kebabBtn.click();
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 3_000});
+        await expect(menu.locator('[data-testid="context-menu-action-split"]')).toHaveCount(0);
+        await page.keyboard.press('Escape');
     });
 
     test('Split from Main Table → confirm modal appears', async ({page}) => {
@@ -132,9 +139,10 @@ test.describe('Split & Promote', () => {
         await row.hover();
         await page.waitForTimeout(200);
 
-        const splitAction = row.locator('button[data-action-id="split"]');
+        const splitAction = row.getByTestId(/^row-actions-/);
         await expect(splitAction).toBeVisible({timeout: 2_000});
         await splitAction.click();
+        await page.getByTestId('context-menu-action-split').click();
         await page.waitForTimeout(300);
 
         // A confirmation modal should appear (TransactionActionModal testId="tx-action-modal")
@@ -203,8 +211,13 @@ test.describe('Split & Promote', () => {
         await row.hover();
         await page.waitForTimeout(200);
 
-        const editAction = row.locator('button[data-action-id="edit"]');
-        const viewAction = row.locator('button[data-action-id="view"]');
+        const kebabBtn = row.getByTestId(/^row-actions-/);
+        await expect(kebabBtn).toBeVisible({timeout: 2_000});
+        await kebabBtn.click();
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 2_000});
+        const editAction = menu.locator('[data-testid="context-menu-action-edit"]');
+        const viewAction = menu.locator('[data-testid="context-menu-action-view"]');
         const editVisible = await editAction.isVisible({timeout: 1_000}).catch(() => false);
         const viewVisible = await viewAction.isVisible({timeout: 1_000}).catch(() => false);
         expect(editVisible || viewVisible, 'First row must have edit or view action — check populate_mock_data.py').toBeTruthy();
@@ -279,9 +292,10 @@ test.describe('Split & Promote', () => {
         const bulkRow = bulkModal.locator('tr[data-row-id]').first();
         await bulkRow.hover();
         await page.waitForTimeout(300);
-        const splitBtn = bulkModal.locator('button[data-action-id="split"]').first();
+        const splitBtn = bulkRow.getByTestId(/^row-actions-/);
         await expect(splitBtn).toBeVisible({timeout: 2_000});
         await splitBtn.click();
+        await page.getByTestId('context-menu-action-split').click();
         await page.waitForTimeout(500);
 
         // Verify split-queued badge appears in the header summary

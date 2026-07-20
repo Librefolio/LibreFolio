@@ -30,7 +30,7 @@ All transactions, reports, and import data are tied to a broker. You need at lea
 Once you select a broker from the list, the interface is split into four primary tabs:
 
 1. **Overview**: Display of net worth, return metrics, growth history, and allocation charts scoped exclusively to this broker account (see **[Dashboard Overview](../dashboard/index.md)**).
-2. **Positions**: List of open positions, asset weights, and performance metrics within this broker, with access to the FIFO Lots slide-over (see **[Dashboard Positions](../dashboard/positions.md)**).
+2. **Positions**: List of open positions, asset weights, and performance metrics within this broker, with access to the inline FIFO Lots Analysis panel (see **[Dashboard Positions](../dashboard/positions.md)**).
 3. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Importing Transactions](import.md)**).
 4. **Info**: Broker metadata, cash overdraft/shorting configurations, AI Export, and inline sharing controls (see **[Configuration & Info](info.md)**).
 
@@ -59,7 +59,7 @@ The **Positions** tab lists all active assets currently held under this broker. 
 </div>
 
 - **Toggles & Layouts**: You can toggle between **Holdings** (quantities, values, weights) and **Performance** (unrealized P&L, ROI %) metrics, and choose between a **Table** or **Map** (treemap) layout.
-- **FIFO Analysis**: Click on any asset row or card to open the **FIFO Lots Analysis** slide-over panel. (See **[FIFO Lots Analysis](../dashboard/positions.md#fifo-lots-analysis)** for detailed matching rules).
+- **FIFO Analysis**: Click on any asset row or card to expand the **FIFO Lots Analysis** panel inline below the list. (See **[FIFO Lots Analysis](../dashboard/positions.md#fifo-lots-analysis)** for detailed matching rules).
 
 ---
 

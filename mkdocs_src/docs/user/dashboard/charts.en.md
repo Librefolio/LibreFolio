@@ -28,8 +28,8 @@ The chart uses a **stacked area + overlay lines** design:
 | Area — **Asset Cost** | Blue | Cost basis of all open positions (average cost × quantity) |
 | Area — **Returns** | Emerald | Portfolio returns sitting as liquid cash (interest, realized gains not yet reinvested) |
 | Area — **Capital** | Grey-green | Undeployed deposits sitting in cash |
-| Line — **[NAV](../../financial-theory/technical-analysis/performance-metrics/nav.md)** | Dark green solid | Total portfolio value at current market prices |
-| Line — **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)** | Grey dashed | Net external capital contributed over time |
+| Line — **[NAV](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Dark green solid | Total portfolio value at current market prices |
+| Line — **[Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Grey dashed | Net external capital contributed over time |
 
 **The gap between the NAV line and the Deposited Capital line = Total P&L** — all gains ever generated, including unrealized gains, realized gains, interest, and dividends, minus fees and taxes.
 
@@ -48,7 +48,7 @@ When you hover over the chart, the tooltip shows:
 
     When you reinvest all returns into new assets, the Returns area stays near zero, and the earned income ends up embedded in the Asset Cost area. This is mathematically correct: your cost basis grew because you reinvested profit.
 
-🔗 **Theory**: [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#three-pool-cash-model)
+🔗 **Theory**: [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
 
 ### % mode — rate of return
 
@@ -56,11 +56,11 @@ All series start at 0% at the beginning of the selected period and show how each
 
 | Series | What it shows |
 |--------|--------------|
-| **[MWRR cumulative](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)** | Your personal money-weighted return including deposit timing |
-| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/twrr.md)** | Pure asset strategy return, ignoring when you deposited |
-| **[ROI](../../financial-theory/technical-analysis/performance-metrics/roi.md)** | Raw return on net invested capital |
+| **[MWRR cumulative](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | Your personal money-weighted return including deposit timing |
+| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | Pure asset strategy return, ignoring when you deposited |
+| **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | Raw return on net invested capital |
 
-The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/timing-effect.md).
+The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md).
 
 !!! note "MWRR unavailable"
 
@@ -119,6 +119,6 @@ The allocation panel shows how your portfolio is distributed at the current poin
 ## 🔗 Related
 
 - 💰 **[KPI Cards](kpi-cards.md)** — Net Worth, Period P&L, Returns
-- 💼 **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/nav.md)**
-- 💸 **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)**
-- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)** · **[Timing Effect](../../financial-theory/technical-analysis/performance-metrics/timing-effect.md)**
+- 💼 **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
+- 💸 **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
+- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** · **[Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**

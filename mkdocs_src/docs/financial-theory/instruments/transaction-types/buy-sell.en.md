@@ -51,6 +51,7 @@ $$
 ## 🔗 Related
 
 - 📊 **[Weighted Average Cost (WAC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Average cost per unit across multiple buys
+- 🔬 **[FIFO Lot Analysis](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Per-lot drill-down into the FIFO matching introduced above
 - 💰 **[Taxation](../../fundamentals/taxation.md)** — Capital gains, matching methods, loss carry-forward
 - 📈 **[Returns](../../fundamentals/returns.md)** — Measuring investment performance
 

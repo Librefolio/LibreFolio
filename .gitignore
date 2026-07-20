@@ -53,6 +53,9 @@ frontend/build/
 
 # Generated for Docker (from Pipfile.lock via dev.py docker build)
 requirements.txt
+
+# Generated for Docker (from git describe via dev.py docker build)
+VERSION
 LibreFolio-data/
 
 # Node.js

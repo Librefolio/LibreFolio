@@ -10,7 +10,7 @@
  *
  * Prerequisites: backend in test mode (port 6041), mock data populated.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page, type Locator} from '@playwright/test';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 
@@ -39,6 +39,34 @@ async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
     await page.waitForTimeout(500);
+}
+
+/** Check whether a row's kebab menu contains the given action id (opens + closes the menu). */
+async function rowHasKebabAction(row: Locator, actionId: string): Promise<boolean> {
+    const page = row.page();
+    await row.hover();
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    if ((await kebabBtn.count()) === 0) return false;
+    await kebabBtn.click();
+    const menu = page.locator('[data-testid="context-menu"]');
+    const found = await menu
+        .locator(`[data-testid="context-menu-action-${actionId}"]`)
+        .isVisible({timeout: 500})
+        .catch(() => false);
+    await page.keyboard.press('Escape');
+    return found;
+}
+
+/** Click a row's action via its kebab menu (row-actions-{id} → context-menu-action-{actionId}). */
+async function clickKebabRowAction(row: Locator, actionId: string) {
+    const page = row.page();
+    await row.hover();
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 2_000});
+    await kebabBtn.click();
+    const btn = page.getByTestId(`context-menu-action-${actionId}`);
+    await expect(btn).toBeVisible({timeout: 2_000});
+    await btn.click();
 }
 
 async function openCreateFlow(page: Page) {
@@ -411,8 +439,7 @@ test.describe('Edit + Commit', () => {
             const row = rows.nth(i);
             const rowId = await row.getAttribute('data-row-id');
             // Check if row has edit action (= OWNER/EDITOR)
-            const editBtn = row.locator('[data-action-id="edit"]');
-            if (await editBtn.isVisible({timeout: 300}).catch(() => false)) {
+            if (await rowHasKebabAction(row, 'edit')) {
                 if (rowId) ids.push(rowId.replace('tx-', ''));
             }
         }
@@ -494,8 +521,7 @@ test.describe('Delete + Commit', () => {
         let targetId = '';
         for (let i = 0; i < count; i++) {
             const row = rows.nth(i);
-            const editBtnRow = row.locator('[data-action-id="edit"]');
-            if (await editBtnRow.isVisible({timeout: 300}).catch(() => false)) {
+            if (await rowHasKebabAction(row, 'edit')) {
                 targetId = (await row.getAttribute('data-row-id'))?.replace('tx-', '') ?? '';
                 break;
             }
@@ -524,9 +550,7 @@ test.describe('Delete + Commit', () => {
 
         // Mark for deletion
         const bulkRow = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]').first();
-        const deleteAction = bulkRow.locator('[data-action-id="mark-delete"]');
-        await expect(deleteAction).toBeVisible({timeout: 2_000});
-        await deleteAction.click();
+        await clickKebabRowAction(bulkRow, 'mark-delete');
         await page.waitForTimeout(300);
 
         const {payload} = await commitBulkModal(page);
@@ -553,8 +577,7 @@ test.describe('Delete + Commit', () => {
         let targetRowId = '';
         for (let i = 0; i < Math.min(count, 10); i++) {
             const row = rows.nth(i);
-            const delBtn = row.locator('[data-action-id="delete"]');
-            if (await delBtn.isVisible({timeout: 300}).catch(() => false)) {
+            if (await rowHasKebabAction(row, 'delete')) {
                 targetRowId = (await row.getAttribute('data-row-id')) ?? '';
                 break;
             }
@@ -563,9 +586,8 @@ test.describe('Delete + Commit', () => {
 
         const targetRow = page.locator(`tr[data-row-id="${targetRowId}"]`);
 
-        // Click the inline delete button on the row
-        const deleteBtn = targetRow.locator('[data-action-id="delete"]');
-        await deleteBtn.click();
+        // Click the delete action via the row's kebab menu
+        await clickKebabRowAction(targetRow, 'delete');
         await page.waitForTimeout(500);
 
         // TransactionDeleteModal should appear

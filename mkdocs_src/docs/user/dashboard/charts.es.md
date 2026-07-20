@@ -1,8 +1,8 @@
 # 📊 Gráficos
 
-*[⬅️ Volver a la Descripción General del Panel de Control](index.md)*
+*[⬅️ Volver a la Descripción General del Panel](index.md)*
 
-La sección de gráficos se encuentra debajo de las tarjetas KPI y te ofrece una **vista histórica y estructural** de tu cartera durante el período de tiempo seleccionado.
+La sección de gráficos se encuentra debajo de las tarjetas KPI y te proporciona una **vista histórica y estructural** de tu cartera durante el período de tiempo seleccionado.
 
 ---
 
@@ -14,8 +14,8 @@ El gráfico de crecimiento muestra cómo evolucionó el valor de tu cartera dura
  <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Modo Absoluto" alt="Gráfico de Crecimiento — Modo Absoluto">
  <img class="gallery-img" data-category="dashboard" data-name="main" alt="Gráfico de Crecimiento — Modo Absoluto">
  </div>
- <div class="lf-screenshot-carousel-item chart-crop-container" data-title="📈 Modo Porcentaje" alt="Gráfico de Crecimiento — Modo Porcentaje">
- <img class="gallery-img" data-category="dashboard" data-name="main-pct" alt="Gráfico de Crecimiento — Modo Porcentaje">
+ <div class="lf-screenshot-carousel-item chart-crop-container" data-title="📈 Modo Porcentual" alt="Gráfico de Crecimiento — Modo Porcentual">
+ <img class="gallery-img" data-category="dashboard" data-name="main-pct" alt="Gráfico de Crecimiento — Modo Porcentual">
  </div>
 </div>
 
@@ -24,47 +24,47 @@ El gráfico de crecimiento muestra cómo evolucionó el valor de tu cartera dura
 El gráfico utiliza un diseño de **área apilada + líneas superpuestas**:
 
 | Elemento | Color | Significado |
-|---------|-------|---------|
-| Área — **Costo de Activos** | Azul | Base de costo de todas las posiciones abiertas (costo promedio × cantidad) |
-| Área — **Rendimientos** | Esmeralda | Rendimientos de la cartera en efectivo líquido (intereses, ganancias realizadas aún no reinvertidas) |
-| Área — **Capital** | Gris-verde | Depósitos no desplegados en efectivo líquido |
-| Línea — **[NAV](../../financial-theory/technical-analysis/performance-metrics/nav.md)** | Verde oscuro sólido | Valor total de la cartera a precios de mercado actuales |
-| Línea — **[Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)** | Gris discontinuo | Capital externo neto contribuido a lo largo del tiempo |
+|----------|-------|-------------|
+| Área — **Costo de Activos** | Azul | Base del costo de todas las posiciones abiertas (costo promedio × cantidad) |
+| Área — **Rendimientos** | Esmeralda | Rendimientos de la cartera como efectivo líquido (intereses, ganancias realizadas aún no reinvertidas) |
+| Área — **Capital** | Gris-verde | Depósitos no utilizados en efectivo |
+| Línea — **[NAV](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)** | Verde oscuro sólido | Valor total de la cartera a precios de mercado actuales |
+| Línea — **[Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Gris discontinua | Capital externo neto aportado a lo largo del tiempo |
 
-**La brecha entre la línea NAV y la línea de Capital Depositado = PyG Total** — todas las ganancias generadas alguna vez, incluyendo ganancias no realizadas, ganancias realizadas, intereses y dividendos, menos comisiones e impuestos.
+**La brecha entre la línea de NAV y la línea de Capital Depositado = PyG Total** — todas las ganancias generadas, incluyendo plusvalías no realizadas, plusvalías realizadas, intereses y dividendos, menos comisiones e impuestos.
 
 #### Desglose de la información emergente
 
 Al pasar el cursor sobre el gráfico, la información emergente muestra:
 
 - **NAV** — valor total de la cartera en esa fecha
-- **Capital Depositado** — capital neto que contribuiste hasta esa fecha
+- **Capital Depositado** — capital neto que aportaste hasta esa fecha
 - **PyG Total** — la diferencia (NAV − Capital Depositado)
 - **Costo de Activos** / **Rendimientos** / **Capital** — los tres componentes de efectivo
 
-!!! tip "Interpretación de carteras basadas en ingresos (P2P, bonos)"
+!!! tip "Lectura de carteras basadas en ingresos (P2P, bonos)"
 
-    Para carteras como préstamos P2P donde los activos se valoran a su precio de compra (sin precio de mercado en vivo), NAV ≈ Costo de Activos. La brecha entre NAV y Capital Depositado puede no ser visible como una brecha en el gráfico — pero el **PyG Total** de la información emergente muestra el valor correcto.
+    En carteras como préstamos P2P donde los activos se valoran a su precio de compra (sin precio de mercado en vivo), NAV ≈ Costo de Activos. Es posible que la brecha entre NAV y Capital Depositado no sea visible como una brecha en el gráfico, pero el **PyG Total** en la información emergente muestra el valor correcto.
 
-    Cuando reinviertes todos los rendimientos en nuevos activos, el área de Rendimientos se mantiene cerca de cero, y los ingresos ganados terminan incrustados en el área de Costo de Activos. Esto es matemáticamente correcto: tu base de costo creció porque reinvertiste las ganancias.
+    Cuando reinviertes todos los rendimientos en nuevos activos, el área de Rendimientos se mantiene cerca de cero, y los ingresos obtenidos quedan incorporados en el área de Costo de Activos. Esto es matemáticamente correcto: tu base del costo creció porque reinvertiste las ganancias.
 
-🔗 **Teoría**: [Capital Depositado y PyG Total](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) · [Descomposición de Efectivo](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md#three-pool-cash-model)
+🔗 **Teoría**: [Capital Depositado y PyG Total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) · [Descomposición de Efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
 
 ### Modo % — tasa de rendimiento
 
 Todas las series comienzan en 0% al inicio del período seleccionado y muestran cómo evolucionó cada métrica de rendimiento:
 
-| Series | Qué muestra |
-|--------|--------------|
-| **[MWRR acumulado](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)** | Tu rendimiento personal ponderado por dinero, incluyendo el momento de los depósitos |
-| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/twrr.md)** | Rendimiento puro de la estrategia de activos, ignorando cuándo depositaste |
-| **[ROI](../../financial-theory/technical-analysis/performance-metrics/roi.md)** | Rendimiento simple sobre el capital neto invertido |
+| Serie | Qué muestra |
+|-------|-------------|
+| **[MWRR acumulado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** | Tu rendimiento personal ponderado por dinero, incluyendo el momento de los depósitos |
+| **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | Rendimiento puro de la estrategia de activos, ignorando cuándo depositaste |
+| **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | Rendimiento bruto sobre el capital neto invertido |
 
-La brecha entre MWRR y TWRR es el [Efecto de Momento](../../financial-theory/technical-analysis/performance-metrics/timing-effect.md).
+La brecha entre MWRR y TWRR es el [Efecto del Momento de las Aportaciones](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md).
 
 !!! note "MWRR no disponible"
 
-    Si aparece un **banner de Calidad de Datos** que indica que MWRR no es confiable, la serie MWRR se oculta del gráfico %. El problema ocurre típicamente cuando el período tiene flujos de efectivo muy grandes en relación con el tamaño inicial de la cartera, lo que hace que el solucionador matemático sea inestable. ROI y TWRR siempre se muestran.
+    Si aparece un banner de **Calidad de Datos** indicando que MWRR no es fiable, la serie de MWRR se oculta del gráfico %. El problema generalmente ocurre cuando el período tiene flujos de efectivo muy grandes en relación con el tamaño inicial de la cartera, lo que hace que el solucionador matemático sea inestable. ROI y TWRR siempre se muestran.
 
 ---
 
@@ -96,29 +96,29 @@ El panel de asignación muestra cómo está distribuida tu cartera en el momento
 ### Tres dimensiones
 
 | Dimensión | Qué muestra |
-|-----------|--------------|
+|-----------|-------------|
 | **Tipo** | ETF, Acción, Bono, Cripto, Bienes Raíces, Liquidez (efectivo) |
 | **Sector** | Sector industrial: 💻 Tecnología, 🏦 Financiero, 💊 Salud, etc. |
 | **Geografía** | País o región de la cotización principal de cada activo |
 
 ### Pestañas Ahora vs. Historial
 
-- **Ahora** — Gráfico de dona de la asignación actual en `date_to`. Pasa el cursor sobre cualquier porción para ver el porcentaje exacto y el valor absoluto.
-- **Historial** — Gráfico de área apilada al 100% que muestra cómo cambió la asignación a lo largo del tiempo. Útil para visualizar el rebalanceo de la cartera a través de meses o años.
+- **Ahora** — Gráfico de donut de la asignación actual en `date_to`. Pasa el cursor sobre cualquier porción para ver el porcentaje exacto y el valor absoluto.
+- **Historial** — Gráfico de área apilada al 100% que muestra cómo cambió la asignación con el tiempo. Útil para visualizar el reequilibrio de la cartera a lo largo de meses o años.
 
 ### Efectivo como Liquidez
 
-**Efectivo** (tu saldo del bróker) siempre aparece como la porción de **Liquidez** tanto en las vistas de Tipo como de Sector. En el mapa de Geografía, el efectivo no está asignado a ningún país y no aparece.
+**Efectivo** (tu saldo del bróker) siempre aparece como la porción de **Liquidez** tanto en las vistas de Tipo como de Sector. En el mapa geográfico, el efectivo no está asignado a ningún país y no aparece.
 
 !!! info "Ámbito del bróker"
 
-    Cuando filtras por brókers específicos, la asignación muestra solo los activos y el efectivo dentro de esos brókers.
+    Cuando filtras por brókeres específicos, la asignación muestra solo los activos y el efectivo dentro de esos brókeres.
 
 ---
 
 ## 🔗 Relacionado
 
 - 💰 **[Tarjetas KPI](kpi-cards.md)** — Patrimonio Neto, PyG del Período, Rendimientos
-- 💼 **[NAV / Patrimonio Neto](../../financial-theory/technical-analysis/performance-metrics/nav.md)**
-- 💸 **[Capital Depositado y PyG Total](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)**
-- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/mwrr.md)** · **[Efecto de Momento](../../financial-theory/technical-analysis/performance-metrics/timing-effect.md)**
+- 💼 **[NAV / Patrimonio Neto](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
+- 💸 **[Capital Depositado y PyG Total](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
+- 📈 **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** · **[MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)** · **[Efecto del Momento de las Aportaciones](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)**

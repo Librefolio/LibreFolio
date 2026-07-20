@@ -22,6 +22,7 @@ The library is split into two architectural layers: **Core UI** (generic atoms a
 | **[Settings](features/settings.md)** | `SettingsLayout`, `PreferencesTab`, `GlobalSettingsTab`. |
 | **[Authentication](features/auth.md)** | `LoginCard`, `RegisterCard`, `ForgotPasswordCard`. |
 | **[Live Ticker](features/live-ticker.md)** | Real-time asset price badges with polling and dynamic colors. |
+| **[Lots Analysis](features/lots-analysis.md)** | `LotsAnalysisPanel` and its chart/table/modal group: per-lot WAC vs market price, custody Gantt, unified lots table, value/return comparison, custody drill-down modal. |
 
 ## 📏 Component Guidelines
 

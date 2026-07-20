@@ -14,7 +14,8 @@
  *   → editor panel opens (data-testid="asset-detail-editor-panel")
  *   → click Events tab (data-testid="asset-editor-events-tab")
  *   → DataEditor shows event rows (data-row-id={eventId})
- *   → row action delete button (data-action-id="delete")
+ *   → row action: kebab button (data-testid="row-actions-{rowId}") → context menu item
+ *     (data-testid="context-menu-action-delete")
  *   → click Save (data-testid="asset-editor-save-btn")
  */
 import {expect, test, type Page} from '@playwright/test';
@@ -45,6 +46,17 @@ async function openEventsEditor(page: Page) {
 /** Get visible event rows in the DataEditor table */
 function getEventRows(page: Page) {
     return page.locator('[data-testid="asset-detail-editor-panel"] tbody tr[data-row-id]');
+}
+
+/**
+ * Trigger the "delete" row action via the DataTable kebab menu: click the
+ * "row-actions-{rowId}" button, then the "context-menu-action-delete" item
+ * (see DataTable.svelte / ContextMenu.svelte).
+ */
+async function clickDeleteRowAction(page: Page, row: import('@playwright/test').Locator) {
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    await kebabBtn.click();
+    await page.getByTestId('context-menu-action-delete').click();
 }
 
 // ---------------------------------------------------------------------------
@@ -89,9 +101,7 @@ test.describe('Asset Event Delete', () => {
         // Apple has 3 DIVIDEND events; the 2 most recent are linked to transactions.
         // Only the oldest (270 days ago) is unlinked and safe to delete.
         const targetRow = eventRows.first();
-        const deleteBtn = targetRow.locator('button[data-action-id="delete"]');
-        await expect(deleteBtn).toBeVisible({timeout: 3_000});
-        await deleteBtn.click();
+        await clickDeleteRowAction(page, targetRow);
 
         // The save button should become enabled (dirty count > 0)
         const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
@@ -137,9 +147,9 @@ test.describe('Asset Event Delete', () => {
         // Mark ALL events for deletion (one of them is linked → will be blocked)
         for (let i = 0; i < count; i++) {
             const row = eventRows.nth(i);
-            const deleteBtn = row.locator('button[data-action-id="delete"]');
-            if (await deleteBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-                await deleteBtn.click();
+            const kebabBtn = row.getByTestId(/^row-actions-/);
+            if (await kebabBtn.isVisible({timeout: 1_000}).catch(() => false)) {
+                await clickDeleteRowAction(page, row);
                 await page.waitForTimeout(200);
             }
         }

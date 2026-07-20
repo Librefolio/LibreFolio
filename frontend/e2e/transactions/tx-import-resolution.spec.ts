@@ -45,13 +45,12 @@ async function goToTransactions(page: Page) {
 
 /** Open BulkModal → click Import → ImportWizard opens */
 async function openImportWizard(page: Page) {
-    const editBtn = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first().getByRole('button', {name: /edit/i});
-    if (await editBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-        await editBtn.click();
-    } else {
-        await page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first().hover();
-        await page.getByRole('button', {name: /edit/i}).first().click();
-    }
+    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
+    await firstRow.hover();
+    const kebabBtn = firstRow.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 3_000});
+    await kebabBtn.click();
+    await page.getByTestId('context-menu-action-edit').click();
     await page.getByTestId('tx-bulk-modal-root').waitFor({state: 'visible', timeout: 6_000});
 
     // The BulkModal may auto-open a FormModal for the selected paired transaction.

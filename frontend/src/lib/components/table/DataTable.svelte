@@ -5,7 +5,7 @@
   - User-defined columns with full control over content
   - Row selection with bulk actions
   - Column sorting, filtering (Excel-style), resizing
-  - Sticky select/actions columns
+  - Sticky header and select/actions columns
   - Pagination with floating balloon
   - Preferences saved to localStorage
   - Dark mode support
@@ -72,6 +72,8 @@
         enableTouchSelection?: boolean;
         /** Whether the actions column is sticky (default: true) */
         stickyActions?: boolean;
+        /** Whether the header sticks to the top of the vertical scroll viewport (default: true) */
+        stickyHeader?: boolean;
         /** Enable right-click/long-press context menu on rows (default: true) */
         enableContextMenu?: boolean;
         /**
@@ -147,6 +149,7 @@
         disabledRowTooltip,
         enableTouchSelection = false,
         stickyActions = true,
+        stickyHeader = true,
         enableContextMenu = true,
         onSortChange,
         onShowSelectedOnlyChange,
@@ -1141,7 +1144,7 @@
         }}
     >
         <table class="datatable {tableLayout === 'auto' ? 'layout-auto' : ''}">
-            <thead>
+            <thead class={stickyHeader ? 'sticky-header' : undefined}>
                 <tr>
                     <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
                     {#if effectiveSelectionMode === 'multi'}
@@ -1719,6 +1722,17 @@
     :global(.dark) th {
         color: #94a3b8;
         border-bottom-color: #334155;
+    }
+
+    thead.sticky-header th {
+        position: sticky;
+        top: 0;
+        z-index: 15;
+        background: inherit;
+    }
+
+    thead.sticky-header .th-fixed {
+        z-index: 25;
     }
 
     .th-fixed {

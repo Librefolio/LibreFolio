@@ -9,6 +9,9 @@
     import {buildDataZoom, getChartZoomWindow} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
+    import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, computeDensity, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
+    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 
@@ -17,6 +20,7 @@
     type LotReturnHistoryPoint = z.infer<typeof schemas.LotReturnHistoryPoint>;
     type ChartMode = 'value' | 'return';
     type LotValueSource = 'MARKET_PRICE' | 'ESTIMATED_AT_COST';
+    type ReturnUnit = 'abs' | 'pct';
 
     export type LotIncomeEvent = {
         type: 'DIVIDEND' | 'INTEREST';
@@ -71,6 +75,30 @@
         openingValue: number;
         pnlWithIncome: number;
     }
+
+    interface BucketInfo {
+        date: string;
+        bucketStart: string;
+        bucketEnd: string;
+        resolution: ChartResolution;
+    }
+
+    interface AutoYAxisRange {
+        min: number;
+        max: number;
+    }
+
+    interface StackAccumulator {
+        positive: Map<string, number>;
+        negative: Map<string, number>;
+    }
+
+    type ChartSeriesPoint = ReturnType<typeof namedPoint> & {
+        bucketStart?: string;
+        bucketEnd?: string;
+        resolution?: ChartResolution;
+        sourcePointCount?: number;
+    };
 
     const LOT_COMPARISON_SET_OPTION_OPTS: {notMerge: boolean; replaceMerge: string[]} = {
         notMerge: false,
@@ -129,8 +157,10 @@
     let {selectedLots = [], valueHistory = [], returnHistory = [], brokers = [], currency, xAxisRange = null, incomeEvents = []}: Props = $props();
 
     let mode = $state<ChartMode>('value');
-    // C2: Value chart Y axis — automatic (data-fit) or anchored at 0.
     let valueYFromZero = $state(false);
+    let returnYFromZero = $state(false);
+    let returnUnit = $state<ReturnUnit>('abs');
+    let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let resizeObserver: ResizeObserver | null = null;
@@ -143,6 +173,8 @@
     let needsInitialLayoutStabilityPass = false;
     let lastHoverDotAxisValue: number | null = null;
     let zoomWindow = $state<{start: number; end: number} | null>(null);
+    let resolutionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastResolutionSourceSignature: string | null = null;
 
     function safeScalar<T>(value: T | Array<T | null> | null | undefined): T | null {
         if (Array.isArray(value)) return value[0] ?? null;
@@ -226,6 +258,13 @@
         return `${sign}${normalized.toFixed(2)}%`;
     }
 
+    function formatAxisPercent(value: number): string {
+        const normalized = normalizeZero(value);
+        const abs = Math.abs(normalized);
+        const decimals = abs < 10 && abs % 1 !== 0 ? 2 : 1;
+        return `${normalized.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: decimals})}%`;
+    }
+
     function formatAxisNumber(value: number): string {
         const normalized = normalizeZero(value);
         const abs = Math.abs(normalized);
@@ -233,6 +272,21 @@
             return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(normalized);
         }
         return normalized.toLocaleString(undefined, {minimumFractionDigits: abs < 10 && abs % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2});
+    }
+
+    function formatAxisCurrency(value: number): string {
+        const normalized = normalizeZero(value);
+        try {
+            return new Intl.NumberFormat(undefined, {
+                style: 'currency',
+                currency,
+                currencyDisplay: 'narrowSymbol',
+                notation: 'compact',
+                maximumFractionDigits: 1,
+            }).format(normalized);
+        } catch (_) {
+            return `${formatAxisNumber(normalized)} ${currency}`;
+        }
     }
 
     function lotColor(lotId: number): string {
@@ -336,7 +390,7 @@
         const fromId = lotIdFromSeriesId(param, 'return-');
         if (fromId != null) return fromId;
         const name = String(param?.seriesName ?? '');
-        return visibleLots.find((lot) => lot.label === name)?.lotId ?? null;
+        return visibleLots.find((lot) => lot.label === name || name === returnSeriesName(lot.label))?.lotId ?? null;
     }
 
     function isInternalTooltipSeries(param: any): boolean {
@@ -348,6 +402,262 @@
         if (!chartInstance) return;
         const window = getChartZoomWindow(chartInstance);
         if (window) zoomWindow = window;
+    }
+
+    function resetResolutionState(): void {
+        currentResolution = 'daily';
+        zoomWindow = null;
+    }
+
+    function lineDataPoint(date: string, value: number | null | undefined): LineDataPoint | null {
+        if (value == null || !Number.isFinite(value)) return null;
+        return {date, value};
+    }
+
+    function pointBucketMeta(point: LineDataPoint): {bucketStart: string; bucketEnd: string; resolution: ChartResolution; sourcePointCount?: number} {
+        const meta = point as Partial<{bucketStart: string; bucketEnd: string; resolution: ChartResolution; sourcePointCount: number}>;
+        return {
+            bucketStart: typeof meta.bucketStart === 'string' ? meta.bucketStart : point.date,
+            bucketEnd: typeof meta.bucketEnd === 'string' ? meta.bucketEnd : point.date,
+            resolution: meta.resolution ?? 'daily',
+            sourcePointCount: meta.sourcePointCount,
+        };
+    }
+
+    function toChartSeriesPoints(points: LineDataPoint[], resolution: ChartResolution = currentResolution): ChartSeriesPoint[] {
+        return aggregateLineSeries(points, resolution).map((point) => {
+            const meta = pointBucketMeta(point);
+            return {
+                ...namedPoint(point.date, point.value),
+                ...meta,
+            };
+        });
+    }
+
+    function finiteChartNumber(value: unknown): number | null {
+        return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    }
+
+    function chartSeriesPointValue(raw: unknown, index: number): {key: string; value: number | null} | null {
+        const source = Array.isArray(raw) ? raw : raw && typeof raw === 'object' && 'value' in raw ? (raw as {value?: unknown}).value : raw;
+
+        if (Array.isArray(source)) {
+            const x = source[0];
+            if (typeof x !== 'string' && typeof x !== 'number') return null;
+            const y = source[1];
+            return {key: String(x), value: y == null ? null : finiteChartNumber(y)};
+        }
+
+        const value = source == null ? null : finiteChartNumber(source);
+        return value == null ? null : {key: `__index_${index}`, value};
+    }
+
+    function paddedAutoYAxisRange(min: number, max: number): AutoYAxisRange {
+        const range = max - min;
+        const magnitude = Math.max(Math.abs(min), Math.abs(max));
+        const padding = range > 0 ? range * 0.05 : Math.max(magnitude * 0.05, Number.EPSILON);
+        let paddedMin = min - padding;
+        let paddedMax = max + padding;
+
+        if (min > 0 && paddedMin <= 0) paddedMin = min * 0.95;
+        if (max < 0 && paddedMax >= 0) paddedMax = max * 0.95;
+
+        return {min: paddedMin, max: paddedMax};
+    }
+
+    function computeAutoYAxisRange(series: echarts.SeriesOption[]): AutoYAxisRange | null {
+        let min: number | null = null;
+        let max: number | null = null;
+        const stackTotals = new Map<string, StackAccumulator>();
+
+        for (const item of series) {
+            const data = (item as {data?: unknown[]}).data;
+            if (!Array.isArray(data)) continue;
+
+            const stack = (item as {stack?: unknown}).stack;
+            const stackKey = typeof stack === 'string' && stack.trim() !== '' ? stack : null;
+            let accumulator: StackAccumulator | null = null;
+            if (stackKey) {
+                accumulator = stackTotals.get(stackKey) ?? {positive: new Map<string, number>(), negative: new Map<string, number>()};
+                stackTotals.set(stackKey, accumulator);
+            }
+
+            for (const [index, raw] of data.entries()) {
+                const point = chartSeriesPointValue(raw, index);
+                if (!point || point.value == null) continue;
+
+                let plottedValue = point.value;
+                if (accumulator) {
+                    const totals = plottedValue >= 0 ? accumulator.positive : accumulator.negative;
+                    plottedValue = (totals.get(point.key) ?? 0) + plottedValue;
+                    totals.set(point.key, plottedValue);
+                }
+
+                if (plottedValue === 0) continue;
+                min = min == null ? plottedValue : Math.min(min, plottedValue);
+                max = max == null ? plottedValue : Math.max(max, plottedValue);
+            }
+        }
+
+        return min == null || max == null ? null : paddedAutoYAxisRange(min, max);
+    }
+
+    function buildBucketInfos(sourceDates: string[], resolution: ChartResolution): BucketInfo[] {
+        if (resolution === 'daily') {
+            return sourceDates.map((date) => ({date, bucketStart: date, bucketEnd: date, resolution}));
+        }
+
+        const buckets: BucketInfo[] = [];
+        let lastBucketEnd: string | null = null;
+
+        for (const date of sourceDates) {
+            const {bucketStart, bucketEnd} = mapDateToBucket(date, resolution);
+            if (bucketEnd === lastBucketEnd) continue;
+
+            buckets.push({date: bucketEnd, bucketStart, bucketEnd, resolution});
+            lastBucketEnd = bucketEnd;
+        }
+
+        return buckets;
+    }
+
+    function computeBucketCounts(startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
+        let dailyCount = 0;
+        const weekly = new Set<string>();
+        const monthly = new Set<string>();
+
+        for (const date of resolutionSourceDates) {
+            if (date < startDate || date > endDate) continue;
+            dailyCount += 1;
+            weekly.add(mapDateToBucket(date, 'weekly').bucketEnd);
+            monthly.add(mapDateToBucket(date, 'monthly').bucketEnd);
+        }
+
+        return {dailyCount, weeklyCount: weekly.size, monthlyCount: monthly.size};
+    }
+
+    function plotWidthPx(): number {
+        return chartInstance?.getWidth() ?? chartContainer?.clientWidth ?? 0;
+    }
+
+    function getLogicalRangeFromChart(): {startDate: string; endDate: string} | null {
+        if (resolutionSourceDates.length === 0) return null;
+        const buckets = buildBucketInfos(resolutionSourceDates, currentResolution);
+        if (buckets.length === 0) return null;
+
+        const window = chartInstance ? getChartZoomWindow(chartInstance) : zoomWindow;
+        if (window) zoomWindow = window;
+        const start = window?.start ?? 0;
+        const end = window?.end ?? 100;
+        const maxIndex = Math.max(buckets.length - 1, 0);
+        const startIndex = Math.max(0, Math.min(maxIndex, Math.floor((start / 100) * maxIndex)));
+        const endIndex = Math.max(startIndex, Math.min(maxIndex, Math.ceil((end / 100) * maxIndex)));
+        const startBucket = buckets[startIndex];
+        const endBucket = buckets[endIndex];
+
+        return {
+            startDate: startBucket.bucketStart,
+            endDate: endBucket.bucketEnd,
+        };
+    }
+
+    function buildZoomWindowForRange(resolution: ChartResolution, startDate: string, endDate: string): {start: number; end: number} {
+        const buckets = buildBucketInfos(resolutionSourceDates, resolution);
+        if (buckets.length <= 1) return {start: 0, end: 100};
+
+        const startIndex = Math.max(
+            0,
+            buckets.findIndex((bucket) => bucket.bucketEnd >= startDate),
+        );
+        const endIndex = Math.max(
+            startIndex,
+            buckets.findLastIndex((bucket) => bucket.bucketStart <= endDate),
+        );
+        const denominator = buckets.length - 1;
+
+        return {
+            start: (startIndex / denominator) * 100,
+            end: (endIndex / denominator) * 100,
+        };
+    }
+
+    function syncInitialResolution(): void {
+        if (currentResolution !== 'daily' || zoomWindow || resolutionSourceDates.length === 0) return;
+
+        const startDate = resolutionSourceDates[0];
+        const endDate = resolutionSourceDates[resolutionSourceDates.length - 1];
+        const counts = computeBucketCounts(startDate, endDate);
+        const width = plotWidthPx();
+        if (computeDensity(counts.dailyCount, width) <= 0) return;
+
+        currentResolution = chooseInitialResolution(counts, width);
+    }
+
+    function syncResolutionToViewport(): void {
+        if (!chartInstance || resolutionSourceDates.length === 0) return;
+
+        const logicalRange = getLogicalRangeFromChart();
+        if (!logicalRange) return;
+
+        const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
+        const width = plotWidthPx();
+        if (computeDensity(counts.dailyCount, width) <= 0) return;
+
+        const targetResolution = cascadeResolution(currentResolution, counts, width);
+        if (targetResolution === currentResolution) return;
+
+        currentResolution = targetResolution;
+        zoomWindow = buildZoomWindowForRange(targetResolution, logicalRange.startDate, logicalRange.endDate);
+        renderChart();
+    }
+
+    function scheduleResolutionSync(): void {
+        if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
+        resolutionDebounceTimer = setTimeout(() => {
+            resolutionDebounceTimer = null;
+            syncResolutionToViewport();
+        }, 200);
+    }
+
+    function handleDataZoom(): void {
+        applyCurrentZoomWindow();
+        scheduleResolutionSync();
+    }
+
+    function formatTooltipMonth(date: string): string {
+        const [year, month] = date.split('-').map(Number);
+        return new Intl.DateTimeFormat($currentLanguage || undefined, {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+        }).format(new Date(Date.UTC(year, month - 1, 1)));
+    }
+
+    function tooltipBucketInfo(params: any[]): BucketInfo | null {
+        for (const param of params) {
+            const data = param?.data;
+            if (!data || typeof data !== 'object') continue;
+            const bucketStart = typeof data.bucketStart === 'string' ? data.bucketStart : null;
+            const bucketEnd = typeof data.bucketEnd === 'string' ? data.bucketEnd : null;
+            const resolution = data.resolution === 'weekly' || data.resolution === 'monthly' || data.resolution === 'daily' ? data.resolution : null;
+            if (bucketStart && bucketEnd && resolution) return {date: bucketEnd, bucketStart, bucketEnd, resolution};
+        }
+        return null;
+    }
+
+    function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
+        const bucket = tooltipBucketInfo(params);
+        if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatLongDate(fallbackDate)), theme.textColor);
+
+        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(bucket.bucketEnd)}}))}</div>`;
+        if (bucket.resolution === 'weekly') {
+            const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(bucket.bucketStart), end: formatLongDate(bucket.bucketEnd)}});
+            return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
+        }
+
+        const month = formatTooltipMonth(bucket.bucketEnd);
+        const label = $_('chart.tooltip.monthLabel', {values: {month}});
+        return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
     }
 
     const modeLabels = $derived.by(() => ({
@@ -364,8 +674,12 @@
         aggregateReturn: tr('brokers.lots.aggregateReturn', 'Aggregate return'),
         fifoPnl: tr('brokers.lots.fifoPnl', 'FIFO P&L'),
         totalPnl: tr('brokers.lots.tooltip.totalPnl', 'Total P&L'),
+        totalReturn: tr('brokers.lots.totalReturn', 'Total return'),
         yAuto: tr('brokers.lots.yAxisAuto', 'Auto'),
         yFromZero: tr('brokers.lots.yAxisFromZero', 'From 0'),
+        returnUnitAbs: tr('brokers.lots.returnUnitAbs', 'Abs'),
+        returnUnitPercent: tr('brokers.lots.returnUnitPercent', '%'),
+        returnPctUndefined: tr('brokers.lots.returnPctUndefined', 'Not definable (opening value ≤ 0)'),
         openReturn: tr('brokers.lots.openReturn', 'Open Return'),
         selectLots: tr('brokers.lots.selectLotsToCompare', 'Select one or more lots to compare'),
         noVisibleLots: tr('brokers.lots.noVisibleLots', 'No visible lots in chart'),
@@ -477,17 +791,46 @@
         return grouped;
     });
 
-    const returnLotsWithData = $derived.by(() => visibleLots.filter((lot) => returnPointsByLotId.get(lot.lotId)?.some((point) => point.totalReturn != null)));
+    const lotOpeningValueById = $derived.by(() => {
+        const values = new Map<number, number>();
+        for (const lot of visibleLots) {
+            const firstValuePoint = valuePointsByLotId.get(lot.lotId)?.[0];
+            values.set(lot.lotId, firstValuePoint?.originalCost ?? 0);
+        }
+        return values;
+    });
+
+    const returnAbsLotsWithData = $derived.by(() => visibleLots.filter((lot) => (valuePointsByLotId.get(lot.lotId)?.length ?? 0) > 0));
+
+    const returnPctLotsWithData = $derived.by(() =>
+        visibleLots.filter((lot) => {
+            const openingValue = lotOpeningValueById.get(lot.lotId) ?? 0;
+            return openingValue > 0 && (returnPointsByLotId.get(lot.lotId)?.some((point) => point.totalReturn != null) ?? false);
+        }),
+    );
+
+    const returnPctUndefinedLots = $derived.by(() =>
+        visibleLots.filter((lot) => {
+            const hasData = (valuePointsByLotId.get(lot.lotId)?.length ?? 0) > 0 || (returnPointsByLotId.get(lot.lotId)?.length ?? 0) > 0;
+            return hasData && (lotOpeningValueById.get(lot.lotId) ?? 0) <= 0;
+        }),
+    );
+
+    const activeReturnLotsWithData = $derived.by(() => (returnUnit === 'pct' ? returnPctLotsWithData : returnAbsLotsWithData));
 
     const aggregateReturnPoints = $derived.by(() => {
-        if (returnLotsWithData.length < 1) return [] satisfies AggregateReturnPoint[];
+        if (returnAbsLotsWithData.length < 1 && returnPctLotsWithData.length < 1) return [] satisfies AggregateReturnPoint[];
 
-        const totals = new Map<string, {date: string; pnlWithIncome: number; openingValue: number}>();
-        for (const lot of returnLotsWithData) {
+        const pctEligibleLotIds = new Set(returnPctLotsWithData.map((lot) => lot.lotId));
+        const totals = new Map<string, {date: string; pnlWithIncome: number; pctPnlWithIncome: number; pctOpeningValue: number}>();
+        for (const lot of returnAbsLotsWithData) {
             for (const point of valuePointsByLotId.get(lot.lotId) ?? []) {
-                const current = totals.get(point.date) ?? {date: point.date, pnlWithIncome: 0, openingValue: 0};
+                const current = totals.get(point.date) ?? {date: point.date, pnlWithIncome: 0, pctPnlWithIncome: 0, pctOpeningValue: 0};
                 current.pnlWithIncome += point.pnl + point.income;
-                current.openingValue += point.originalCost;
+                if (pctEligibleLotIds.has(lot.lotId) && point.originalCost > 0) {
+                    current.pctPnlWithIncome += point.pnl + point.income;
+                    current.pctOpeningValue += point.originalCost;
+                }
                 totals.set(point.date, current);
             }
         }
@@ -495,14 +838,46 @@
         return Array.from(totals.values())
             .map((point) => ({
                 date: point.date,
-                totalReturn: point.openingValue > 0 ? point.pnlWithIncome / point.openingValue : null,
-                openingValue: point.openingValue,
+                totalReturn: point.pctOpeningValue > 0 ? point.pctPnlWithIncome / point.pctOpeningValue : null,
+                openingValue: point.pctOpeningValue,
                 pnlWithIncome: point.pnlWithIncome,
             }))
             .sort((left, right) => left.date.localeCompare(right.date)) satisfies AggregateReturnPoint[];
     });
 
-    const showAggregateReturn = $derived(returnLotsWithData.length >= 1 && aggregateReturnPoints.length > 0);
+    const aggregateReturnSeriesPoints = $derived.by(() =>
+        aggregateReturnPoints
+            .map((point) => lineDataPoint(point.date, returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome))
+            .filter((point): point is LineDataPoint => point != null),
+    );
+
+    const showAggregateReturn = $derived(activeReturnLotsWithData.length >= 1 && aggregateReturnSeriesPoints.length > 0);
+
+    const resolutionSourceDates = $derived.by(() => {
+        const dates = new Set<string>();
+
+        if (mode === 'value') {
+            for (const point of aggregatedValuePoints) dates.add(point.date);
+        } else if (returnUnit === 'pct') {
+            for (const point of aggregateReturnPoints) {
+                if (point.totalReturn != null) dates.add(point.date);
+            }
+            for (const lot of returnPctLotsWithData) {
+                for (const point of returnPointsByLotId.get(lot.lotId) ?? []) {
+                    if (point.totalReturn != null) dates.add(point.date);
+                }
+            }
+        } else {
+            for (const point of aggregateReturnPoints) dates.add(point.date);
+            for (const lot of returnAbsLotsWithData) {
+                for (const point of valuePointsByLotId.get(lot.lotId) ?? []) dates.add(point.date);
+            }
+        }
+
+        return Array.from(dates).sort((left, right) => left.localeCompare(right));
+    });
+
+    const resolutionSourceSignature = $derived(`${mode}|${returnUnit}|${xAxisRange?.min ?? ''}|${xAxisRange?.max ?? ''}|${resolutionSourceDates.join('|')}`);
 
     const emptyMessage = $derived.by(() => {
         if (selectedLots.length === 0) return modeLabels.selectLots;
@@ -512,7 +887,7 @@
             return aggregatedValuePoints.length > 0 ? '' : modeLabels.noData;
         }
 
-        return returnLotsWithData.length > 0 ? '' : modeLabels.noData;
+        return activeReturnLotsWithData.length > 0 ? '' : modeLabels.noData;
     });
 
     const chartTitle = $derived.by(() => {
@@ -537,6 +912,29 @@
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(incomeEventTypeLabel(event.type)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
+    function returnSeriesUnitLabel(): string {
+        return returnUnit === 'pct' ? modeLabels.returnUnitPercent : modeLabels.returnUnitAbs;
+    }
+
+    function returnSeriesName(label: string): string {
+        return `${label} (${returnSeriesUnitLabel()})`;
+    }
+
+    function returnDisplayValue(value: number): string {
+        return returnUnit === 'pct' ? formatPercent(value) : formatCurrencyAmountPlain(value, currency, {showSign: true});
+    }
+
+    function returnValueForLotAt(lotId: number, timestampMs: number): number | null {
+        if (returnUnit === 'pct') {
+            if ((lotOpeningValueById.get(lotId) ?? 0) <= 0) return null;
+            const point = findPointAtOrBefore(returnPointsByLotId.get(lotId) ?? [], timestampMs);
+            return point?.totalReturn == null ? null : point.totalReturn * 100;
+        }
+
+        const point = findPointAtOrBefore(valuePointsByLotId.get(lotId) ?? [], timestampMs);
+        return point ? point.pnl + point.income : null;
+    }
+
     /** Income "|" markers (rect 2×16px) sitting on the relevant line at each distribution date:
      *  - value mode: one marker on the aggregate comprehensive-value line.
      *  - return mode: one marker per involved lot at its total-return line height.
@@ -553,9 +951,9 @@
             } else if (mode === 'return') {
                 for (const lotId of event.lot_ids ?? []) {
                     if (!visibleLots.some((lot) => lot.lotId === lotId)) continue;
-                    const vp = findPointAtOrBefore(valuePointsByLotId.get(lotId) ?? [], timestamp);
-                    if (!vp) continue;
-                    data.push({value: [event.date, vp.pnl + vp.income], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
+                    const y = returnValueForLotAt(lotId, timestamp);
+                    if (y == null) continue;
+                    data.push({value: [event.date, y], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
                 }
             }
         }
@@ -663,21 +1061,32 @@
     }
 
     function buildReturnIndividualTooltipRows(timestampMs: number, excludedLotIds: ReadonlySet<number>): string[] {
-        return returnLotsWithData
+        const rows = activeReturnLotsWithData
             .map((lot) => {
                 if (excludedLotIds.has(lot.lotId)) return null;
-                const vp = findPointAtOrBefore(valuePointsByLotId.get(lot.lotId) ?? [], timestampMs);
-                if (!vp) return null;
-                return buildTooltipRow(escapeHtml(lot.label), escapeHtml(formatCurrencyAmountPlain(vp.pnl + vp.income, currency, {showSign: true})), lotColor(lot.lotId));
+                const value = returnValueForLotAt(lot.lotId, timestampMs);
+                if (value == null) return null;
+                return buildTooltipRow(escapeHtml(lot.label), escapeHtml(returnDisplayValue(value)), lotColor(lot.lotId));
             })
             .filter((row): row is string => row != null);
+
+        if (returnUnit === 'pct') {
+            for (const lot of returnPctUndefinedLots) {
+                if (excludedLotIds.has(lot.lotId)) continue;
+                rows.push(buildTooltipRow(escapeHtml(lot.label), escapeHtml(modeLabels.returnPctUndefined), isDark ? '#94a3b8' : '#64748b'));
+            }
+        }
+
+        return rows;
     }
 
     function buildAggregateReturnTooltipRows(timestampMs: number): string[] {
         if (!showAggregateReturn) return [];
         const point = findPointAtOrBefore(aggregateReturnPoints, timestampMs);
         if (!point) return [];
-        const value = formatCurrencyAmountPlain(point.pnlWithIncome, currency, {showSign: true});
+        const rawValue = returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome;
+        if (rawValue == null) return [];
+        const value = returnDisplayValue(rawValue);
         return [buildTooltipRow(escapeHtml(modeLabels.aggregateReturn), escapeHtml(value), aggregateReturnColor())];
     }
 
@@ -695,7 +1104,7 @@
             .filter((row): row is string => row != null);
 
         if (axisRows.length === 0) return '';
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatLongDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${axisRows.join('')}</div>`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipBucketHeader(params, rawDate, theme)}${buildTooltipDivider(theme.border)}${axisRows.join('')}</div>`;
     }
 
     function buildReturnTooltip(params: any[]): string {
@@ -707,33 +1116,38 @@
         const excludedLotIds = new Set(realParams.map(returnTooltipLotId).filter((lotId): lotId is number => lotId != null));
         const blocks = realParams
             .map((param) => {
-                const value = seriesValue(param);
-                if (value == null) return null;
                 const lotId = returnTooltipLotId(param);
                 const lot = lotId == null ? null : visibleLots.find((item) => item.lotId === lotId);
                 if (!lot) return null;
+                const value = seriesValue(param);
+                if (value == null) return null;
                 const paramTimestamp = parseTimeMs(tooltipXValue(param));
-                const returnPoint = paramTimestamp == null ? null : findPointAtOrBefore(returnPointsByLotId.get(lot.lotId) ?? [], paramTimestamp);
-                if (!returnPoint || returnPoint.totalReturn == null) return null;
+                if (paramTimestamp == null) return null;
 
                 const color = typeof param.color === 'string' ? param.color : lotColor(lot.lotId);
-                const valuePoint = valuePointByLotDate.get(pointKey(lot.lotId, returnPoint.date));
-                const headlineLabel = modeLabels.totalPnl;
-                const headlineValue = formatCurrencyAmountPlain(value, currency, {showSign: true});
+                const returnPoint = findPointAtOrBefore(returnPointsByLotId.get(lot.lotId) ?? [], paramTimestamp);
+                const valuePoint = findPointAtOrBefore(valuePointsByLotId.get(lot.lotId) ?? [], paramTimestamp);
+                if (returnUnit === 'pct' && (!returnPoint || returnPoint.totalReturn == null)) return null;
+                if (returnUnit === 'abs' && !valuePoint) return null;
+
+                const pointDate = (returnUnit === 'pct' ? returnPoint?.date : valuePoint?.date) ?? String(tooltipXValue(param));
+                const exactValuePoint = valuePointByLotDate.get(pointKey(lot.lotId, pointDate)) ?? valuePoint;
+                const headlineLabel = returnUnit === 'pct' ? modeLabels.totalReturn : modeLabels.totalPnl;
+                const headlineValue = returnDisplayValue(value);
                 const rows: string[] = [buildTooltipRow(escapeHtml(headlineLabel), escapeHtml(headlineValue), color)];
 
-                if (returnPoint.relativeReturn != null) {
+                if (returnPoint?.relativeReturn != null) {
                     rows.push(buildTooltipRow(escapeHtml(modeLabels.openReturn), escapeHtml(formatPercent(returnPoint.relativeReturn * 100))));
                 }
-                if (valuePoint) {
-                    rows.push(buildTooltipRow(escapeHtml(modeLabels.residualValue), escapeHtml(formatCurrencyAmountPlain(valuePoint.openValue, currency))));
-                    rows.push(buildTooltipRow(escapeHtml(modeLabels.saleProceeds), escapeHtml(formatCurrencyAmountPlain(valuePoint.proceeds, currency))));
+                if (exactValuePoint) {
+                    rows.push(buildTooltipRow(escapeHtml(modeLabels.residualValue), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.openValue, currency))));
+                    rows.push(buildTooltipRow(escapeHtml(modeLabels.saleProceeds), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.proceeds, currency))));
                     rows.push(
-                        buildTooltipRow(escapeHtml(modeLabels.fifoPnl), `<span style="color:${valuePoint.pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626'}">${escapeHtml(formatCurrencyAmountPlain(valuePoint.pnl, currency, {showSign: true}))}</span>`),
+                        buildTooltipRow(escapeHtml(modeLabels.fifoPnl), `<span style="color:${exactValuePoint.pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626'}">${escapeHtml(formatCurrencyAmountPlain(exactValuePoint.pnl, currency, {showSign: true}))}</span>`),
                     );
                 }
 
-                return `${buildTooltipHeader(escapeHtml(`${lot.label} · ${formatLongDate(returnPoint.date)}`), theme.textColor)}${rows.join('')}`;
+                return `${buildTooltipHeader(escapeHtml(`${lot.label} · ${formatLongDate(pointDate)}`), theme.textColor)}${rows.join('')}`;
             })
             .filter((block): block is string => block != null);
         const aggregateRows = timestamp == null ? [] : buildAggregateReturnTooltipRows(timestamp);
@@ -741,7 +1155,7 @@
         const tooltipBlocks = [...(aggregateRows.length > 0 ? [aggregateRows.join('')] : []), ...blocks, ...(individualRows.length > 0 ? [individualRows.join('')] : [])];
 
         if (tooltipBlocks.length === 0) return '';
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatLongDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${tooltipBlocks.join(buildTooltipDivider(theme.border))}</div>`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipBucketHeader(params, rawDate, theme)}${buildTooltipDivider(theme.border)}${tooltipBlocks.join(buildTooltipDivider(theme.border))}</div>`;
     }
 
     function buildValueSeries(): echarts.SeriesOption[] {
@@ -754,6 +1168,11 @@
         const residualSeriesName = hasEstimatedAtCostLots ? modeLabels.residualValueEstimatedAtCost : modeLabels.residualValue;
         const aggregateTotalColor = hasEstimatedAtCostLots ? estimatedValueColor : isDark ? '#e2e8f0' : '#0f172a';
         const aggregateLineType = hasEstimatedAtCostLots ? 'dashed' : 'solid';
+        const residualData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue)).filter((point): point is LineDataPoint => point != null));
+        const proceedsData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.proceeds)).filter((point): point is LineDataPoint => point != null));
+        const incomeData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.income)).filter((point): point is LineDataPoint => point != null));
+        const comprehensiveData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue + point.proceeds + point.income)).filter((point): point is LineDataPoint => point != null));
+        const openingData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.originalCost)).filter((point): point is LineDataPoint => point != null));
 
         const series: echarts.SeriesOption[] = [
             {
@@ -761,7 +1180,7 @@
                 name: residualSeriesName,
                 type: 'line',
                 stack: 'value-aggregate',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.openValue)),
+                data: residualData,
                 showSymbol: false,
                 symbol: 'none',
                 connectNulls: false,
@@ -779,7 +1198,7 @@
                 name: modeLabels.saleProceeds,
                 type: 'line',
                 stack: 'value-aggregate',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.proceeds)),
+                data: proceedsData,
                 showSymbol: false,
                 symbol: 'none',
                 connectNulls: false,
@@ -797,7 +1216,7 @@
                 name: modeLabels.cumulativeIncome,
                 type: 'line',
                 stack: 'value-aggregate',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.income)),
+                data: incomeData,
                 showSymbol: false,
                 symbol: 'none',
                 connectNulls: false,
@@ -814,7 +1233,7 @@
                 id: 'value-comprehensive',
                 name: modeLabels.comprehensiveValue,
                 type: 'line',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.openValue + point.proceeds + point.income)),
+                data: comprehensiveData,
                 showSymbol: false,
                 connectNulls: false,
                 smooth: false,
@@ -829,7 +1248,7 @@
                 id: 'value-opening',
                 name: modeLabels.aggregateOpeningValue,
                 type: 'line',
-                data: aggregatedValuePoints.map((point) => namedPoint(point.date, point.originalCost)),
+                data: openingData,
                 showSymbol: false,
                 connectNulls: false,
                 smooth: false,
@@ -852,9 +1271,9 @@
             const color = aggregateReturnColor();
             series.push({
                 id: AGGREGATE_RETURN_SERIES_ID,
-                name: modeLabels.aggregateReturn,
+                name: returnSeriesName(modeLabels.aggregateReturn),
                 type: 'line',
-                data: aggregateReturnPoints.map((point) => namedPoint(point.date, point.pnlWithIncome)),
+                data: toChartSeriesPoints(aggregateReturnSeriesPoints),
                 showSymbol: false,
                 symbol: 'none',
                 connectNulls: false,
@@ -871,14 +1290,18 @@
 
         // Individual lot lines only when 2+ lots are plotted; with a single lot we show the
         // aggregate area alone (R7.5) so the shape reads the P&L from 0 instead of a lone flat line.
-        if (returnLotsWithData.length >= 2) {
-            for (const lot of returnLotsWithData) {
+        if (activeReturnLotsWithData.length >= 2) {
+            for (const lot of activeReturnLotsWithData) {
                 const color = lotColor(lot.lotId);
+                const data =
+                    returnUnit === 'pct'
+                        ? toChartSeriesPoints((returnPointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, point.totalReturn == null ? null : point.totalReturn * 100)).filter((point): point is LineDataPoint => point != null))
+                        : toChartSeriesPoints((valuePointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, point.pnl + point.income)).filter((point): point is LineDataPoint => point != null));
                 series.push({
                     id: `return-${lot.lotId}`,
-                    name: lot.label,
+                    name: returnSeriesName(lot.label),
                     type: 'line',
-                    data: (valuePointsByLotId.get(lot.lotId) ?? []).map((point) => namedPoint(point.date, point.pnl + point.income)),
+                    data,
                     showSymbol: false,
                     connectNulls: false,
                     smooth: false,
@@ -895,15 +1318,19 @@
         return attachIncomeMarkers(series);
     }
 
+    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(mode === 'value' ? buildValueSeries() : buildReturnSeries()));
+
+    const autoYAxisRange = $derived.by(() => computeAutoYAxisRange(plottedBaseSeries));
+
     /** Position dots for return-mode per-lot lines at a hovered date (r3 fix5). */
     function buildPerLotHoverDotData(axisValueMs: number): Array<{value: [number, number]; itemStyle: {color: string}}> {
         const dots: Array<{value: [number, number]; itemStyle: {color: string}}> = [];
-        if (mode !== 'return' || returnLotsWithData.length < 2) return dots;
+        if (mode !== 'return' || activeReturnLotsWithData.length < 2) return dots;
 
-        for (const lot of returnLotsWithData) {
-            const vp = findPointAtOrBefore(valuePointsByLotId.get(lot.lotId) ?? [], axisValueMs);
-            if (!vp) continue;
-            dots.push({value: [axisValueMs, vp.pnl + vp.income], itemStyle: {color: lotColor(lot.lotId)}});
+        for (const lot of activeReturnLotsWithData) {
+            const y = returnValueForLotAt(lot.lotId, axisValueMs);
+            if (y == null) continue;
+            dots.push({value: [axisValueMs, y], itemStyle: {color: lotColor(lot.lotId)}});
         }
         return dots;
     }
@@ -949,10 +1376,11 @@
 
     function buildOption(): echarts.EChartsOption | null {
         if (emptyMessage) return null;
+        syncInitialResolution();
 
         const theme = buildTooltipTheme(isDark);
         const gridColors = buildGridColors(isDark);
-        const baseSeries = ensureAxisTriggerAnchor(mode === 'value' ? buildValueSeries() : buildReturnSeries());
+        const baseSeries = plottedBaseSeries;
         const legendData = baseSeries.map((item) => (item as {name?: unknown}).name).filter((name): name is string => typeof name === 'string' && name !== AXIS_TRIGGER_ANCHOR_ID && name !== PER_LOT_HOVER_DOTS_ID && name !== LOT_INCOME_MARKER_SERIES_ID);
         return {
             ...CHART_ANIMATION_CONFIG,
@@ -1013,15 +1441,17 @@
                 type: 'value',
                 ...(mode === 'value' && valueYFromZero
                     ? {min: 0, scale: false}
-                    : mode === 'return'
+                    : mode === 'return' && returnYFromZero
                       ? {min: (v: {min: number}) => Math.min(0, v.min), max: (v: {max: number}) => Math.max(0, v.max), scale: true}
-                      : {scale: true}),
+                      : autoYAxisRange
+                        ? {min: autoYAxisRange.min, max: autoYAxisRange.max, scale: true}
+                        : {scale: true}),
                 axisLine: {show: false},
                 axisTick: {show: false},
                 splitLine: {lineStyle: {color: gridColors.gridColor}},
                 axisLabel: {
                     color: gridColors.textColor,
-                    formatter: (value: number) => formatAxisNumber(value),
+                    formatter: (value: number) => (mode === 'return' ? (returnUnit === 'pct' ? formatAxisPercent(value) : formatAxisCurrency(value)) : formatAxisNumber(value)),
                 },
             },
             series: [...baseSeries, emptyHoverDotsSeries()],
@@ -1055,6 +1485,7 @@
                 resizeAnimationFrame = null;
                 if (!chartInstance || !lastObservedChartSize) return;
                 chartInstance.resize(lastObservedChartSize);
+                scheduleResolutionSync();
             });
         });
         resizeObserver.observe(chartContainer);
@@ -1072,7 +1503,7 @@
             resetResizeObserverState();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
-            chartInstance.off('datazoom', applyCurrentZoomWindow);
+            chartInstance.off('datazoom', handleDataZoom);
             chartInstance.off('updateAxisPointer', handleUpdateAxisPointer);
             chartInstance.getZr()?.off('globalout', handleChartGlobalOut);
             chartInstance.dispose();
@@ -1086,7 +1517,7 @@
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
-            chartInstance.on('datazoom', applyCurrentZoomWindow);
+            chartInstance.on('datazoom', handleDataZoom);
             chartInstance.on('updateAxisPointer', handleUpdateAxisPointer);
             chartInstance.getZr().on('globalout', handleChartGlobalOut);
         }
@@ -1120,7 +1551,9 @@
             resetResizeObserverState();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
-            chartInstance?.off('datazoom', applyCurrentZoomWindow);
+            if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
+            resolutionDebounceTimer = null;
+            chartInstance?.off('datazoom', handleDataZoom);
             chartInstance?.off('updateAxisPointer', handleUpdateAxisPointer);
             chartInstance?.getZr()?.off('globalout', handleChartGlobalOut);
             chartInstance?.dispose();
@@ -1136,6 +1569,9 @@
         void incomeEvents;
         void mode;
         void valueYFromZero;
+        void returnYFromZero;
+        void returnUnit;
+        void currentResolution;
         void xAxisRange;
         void lotModels;
         void visibleLots;
@@ -1144,11 +1580,25 @@
         void valuePointsByLotId;
         void aggregatedValuePoints;
         void returnPointsByLotId;
-        void returnLotsWithData;
+        void lotOpeningValueById;
+        void returnAbsLotsWithData;
+        void returnPctLotsWithData;
+        void returnPctUndefinedLots;
+        void activeReturnLotsWithData;
         void aggregateReturnPoints;
+        void aggregateReturnSeriesPoints;
         void showAggregateReturn;
+        void plottedBaseSeries;
+        void autoYAxisRange;
+        void resolutionSourceDates;
+        void resolutionSourceSignature;
         void emptyMessage;
         void $currentLanguage;
+
+        if (resolutionSourceSignature !== lastResolutionSourceSignature) {
+            lastResolutionSourceSignature = resolutionSourceSignature;
+            resetResolutionState();
+        }
 
         if (!chartContainer) return;
 
@@ -1164,31 +1614,75 @@
             {chartTitle}
         </h3>
 
-        <div class="flex flex-wrap items-center gap-2">
-            {#if mode === 'value'}
-                <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-value-yaxis-toggle">
-                    <button
-                        type="button"
-                        class="px-3 py-1 transition-colors {!valueYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                        onclick={() => (valueYFromZero = false)}
-                        aria-pressed={!valueYFromZero}
-                        data-testid="lot-comparison-value-yaxis-auto"
-                    >
-                        {modeLabels.yAuto}
-                    </button>
-                    <button
-                        type="button"
-                        class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {valueYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                        onclick={() => (valueYFromZero = true)}
-                        aria-pressed={valueYFromZero}
-                        data-testid="lot-comparison-value-yaxis-zero"
-                    >
-                        {modeLabels.yFromZero}
-                    </button>
-                </div>
-            {/if}
+        <div class="ml-auto flex w-full flex-col items-end gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+            <div class="order-last flex flex-wrap items-center justify-end gap-2 sm:order-none">
+                {#if mode === 'value'}
+                    <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-value-yaxis-toggle">
+                        <button
+                            type="button"
+                            class="px-3 py-1 transition-colors {!valueYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            onclick={() => (valueYFromZero = false)}
+                            aria-pressed={!valueYFromZero}
+                            data-testid="lot-comparison-value-yaxis-auto"
+                        >
+                            {modeLabels.yAuto}
+                        </button>
+                        <button
+                            type="button"
+                            class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {valueYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            onclick={() => (valueYFromZero = true)}
+                            aria-pressed={valueYFromZero}
+                            data-testid="lot-comparison-value-yaxis-zero"
+                        >
+                            {modeLabels.yFromZero}
+                        </button>
+                    </div>
+                {:else}
+                    <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-return-abs-pct-toggle">
+                        <button
+                            type="button"
+                            class="px-3 py-1 transition-colors {returnUnit === 'abs' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            onclick={() => (returnUnit = 'abs')}
+                            aria-pressed={returnUnit === 'abs'}
+                            data-testid="lot-comparison-return-abs"
+                        >
+                            {modeLabels.returnUnitAbs}
+                        </button>
+                        <button
+                            type="button"
+                            class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {returnUnit === 'pct' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            onclick={() => (returnUnit = 'pct')}
+                            aria-pressed={returnUnit === 'pct'}
+                            data-testid="lot-comparison-return-pct"
+                        >
+                            {modeLabels.returnUnitPercent}
+                        </button>
+                    </div>
 
-            <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-mode-toggle">
+                    <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-return-yaxis-toggle">
+                        <button
+                            type="button"
+                            class="px-3 py-1 transition-colors {!returnYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            onclick={() => (returnYFromZero = false)}
+                            aria-pressed={!returnYFromZero}
+                            data-testid="lot-comparison-return-yaxis-auto"
+                        >
+                            {modeLabels.yAuto}
+                        </button>
+                        <button
+                            type="button"
+                            class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {returnYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            onclick={() => (returnYFromZero = true)}
+                            aria-pressed={returnYFromZero}
+                            data-testid="lot-comparison-return-yaxis-zero"
+                        >
+                            {modeLabels.yFromZero}
+                        </button>
+                    </div>
+                {/if}
+            </div>
+
+            <div class="order-first flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600 sm:order-none" data-testid="lot-comparison-mode-toggle">
                 <button
                     type="button"
                     class="px-3 py-1 transition-colors {mode === 'value' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
@@ -1217,6 +1711,9 @@
         </div>
     {:else}
         <div class="relative h-80 w-full">
+            <div class="pointer-events-none absolute left-2 top-2 z-10">
+                <ResolutionBadge resolution={currentResolution} />
+            </div>
             {#if emptyMessage}
                 <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
                     {emptyMessage}

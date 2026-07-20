@@ -55,19 +55,29 @@ async function findRow(page: Page, ...substrings: string[]): Promise<Locator | n
     return null;
 }
 
-/** Click the delete action (🗑 = red danger button) on a row. */
+/** Click the delete action (kebab menu → "Remove"/delete item) on a row. */
 async function clickDeleteOnRow(row: Locator) {
+    const page = row.page();
     await row.hover();
-    const deleteBtn = row.locator('button.action-btn.danger');
-    await expect(deleteBtn).toBeVisible({timeout: 3_000});
-    await deleteBtn.click();
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 3_000});
+    await kebabBtn.click();
+    await page.getByTestId('context-menu-action-delete').click();
 }
 
-/** Count visible action buttons on a row (hover first to reveal). */
+/** Count visible row actions by opening the kebab's context menu (hover first to reveal the kebab). */
 async function countVisibleActions(row: Locator): Promise<number> {
+    const page = row.page();
     await row.hover();
-    await row.page().waitForTimeout(300);
-    return row.locator('button.action-btn').count();
+    await page.waitForTimeout(300);
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    if ((await kebabBtn.count()) === 0) return 0;
+    await kebabBtn.click();
+    const menu = page.locator('[data-testid="context-menu"]');
+    await expect(menu).toBeVisible({timeout: 3_000});
+    const count = await menu.locator('[data-testid^="context-menu-action-"]').count();
+    await page.keyboard.press('Escape');
+    return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,8 +189,13 @@ test.describe('TransactionDeleteModal', () => {
 
         await row!.hover();
         await page.waitForTimeout(300);
-        const deleteBtn = row!.locator('button.action-btn.danger');
-        await expect(deleteBtn).toHaveCount(0);
+        const kebabBtn = row!.getByTestId(/^row-actions-/);
+        if ((await kebabBtn.count()) === 0) return; // no actions at all — delete is a fortiori hidden
+        await kebabBtn.click();
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 3_000});
+        await expect(menu.locator('[data-testid="context-menu-action-delete"]')).toHaveCount(0);
+        await page.keyboard.press('Escape');
     });
 
     test('A5: delete button hidden on hidden broker paired rows (Asym-d)', async ({page}) => {
@@ -189,8 +204,13 @@ test.describe('TransactionDeleteModal', () => {
 
         await row!.hover();
         await page.waitForTimeout(300);
-        const deleteBtn = row!.locator('button.action-btn.danger');
-        await expect(deleteBtn).toHaveCount(0);
+        const kebabBtn = row!.getByTestId(/^row-actions-/);
+        if ((await kebabBtn.count()) === 0) return; // no actions at all — delete is a fortiori hidden
+        await kebabBtn.click();
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 3_000});
+        await expect(menu.locator('[data-testid="context-menu-action-delete"]')).toHaveCount(0);
+        await page.keyboard.press('Escape');
     });
 
     // === committed:false → error banner ===

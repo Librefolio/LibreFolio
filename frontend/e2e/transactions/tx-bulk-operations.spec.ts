@@ -54,9 +54,19 @@ async function getEditableRowIds(page: Page, n: number): Promise<string[]> {
         // Skip paired types — editing these triggers balance or pair validation
         const pairedTypeImg = row.locator('img[alt="Asset Transfer"], img[alt="Currency Exchange"]');
         if ((await pairedTypeImg.count()) > 0) continue;
-        // Skip rows without Edit button (view-only access)
-        const editBtn = row.getByRole('button', {name: 'Edit'});
-        if ((await editBtn.count()) === 0) continue;
+        // Skip rows without an Edit action (view-only access) — check via kebab menu
+        await row.hover();
+        const kebabBtn = row.getByTestId(/^row-actions-/);
+        if ((await kebabBtn.count()) === 0) continue;
+        await kebabBtn.click();
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 2_000});
+        const hasEdit = await menu
+            .locator('[data-testid="context-menu-action-edit"]')
+            .isVisible({timeout: 500})
+            .catch(() => false);
+        await page.keyboard.press('Escape');
+        if (!hasEdit) continue;
         const rowId = await row.getAttribute('data-row-id');
         if (rowId) ids.push(rowId);
     }
@@ -80,14 +90,18 @@ async function closeModals(page: Page) {
     }
 }
 
-/** Hover a BulkModal row and click the action button by its stable data-action-id. */
+/** Hover a BulkModal row and click its action via the kebab menu (row-actions-{id} → context-menu-action-{actionId}). */
 async function clickRowAction(row: Locator, actionId: string) {
+    const page = row.page();
     await row.hover();
-    await row.page().waitForTimeout(200);
-    const btn = row.locator(`[data-action-id="${actionId}"]`);
+    await page.waitForTimeout(200);
+    const kebabBtn = row.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 2_000});
+    await kebabBtn.click();
+    const btn = page.getByTestId(`context-menu-action-${actionId}`);
     await expect(btn).toBeVisible({timeout: 2_000});
     await btn.click();
-    await row.page().waitForTimeout(300);
+    await page.waitForTimeout(300);
 }
 
 /** Close FormModal if it auto-opened (single-row edit). */
@@ -376,10 +390,10 @@ test.describe('Transaction Bulk Operations', () => {
         const pickerCount = await pickerRows.count();
         expect(pickerCount).toBeGreaterThan(0);
 
-        // Hover over first row — should NOT show action buttons
+        // Hover over first row — should NOT show a row-actions kebab button
         await pickerRows.first().hover();
         await page.waitForTimeout(300);
-        const actionBtns = pickerRows.first().locator('button.action-btn');
+        const actionBtns = pickerRows.first().getByTestId(/^row-actions-/);
         const actionCount = await actionBtns.count();
         expect(actionCount).toBe(0);
 
@@ -508,16 +522,9 @@ test.describe('Transaction Bulk Operations', () => {
         const countAfterAdd = await bulkRows.count();
         expect(countAfterAdd).toBe(countBefore + 1);
 
-        // The last row is the picker-added one — hover to see "remove-from-batch" action
+        // The last row is the picker-added one — remove it via its kebab menu action
         const addedRow = bulkRows.last();
-        await addedRow.hover();
-        await page.waitForTimeout(200);
-        const removeBtn = addedRow.locator('[data-action-id="remove-from-batch"]');
-        await expect(removeBtn).toBeVisible({timeout: 2_000});
-
-        // Click remove
-        await removeBtn.click();
-        await page.waitForTimeout(300);
+        await clickRowAction(addedRow, 'remove-from-batch');
 
         // Row should be gone
         const countAfterRemove = await bulkRows.count();

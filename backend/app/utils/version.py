@@ -1,7 +1,8 @@
 """
 Version utilities for LibreFolio.
 
-Gets version information from git tags.
+Gets version information from git tags, or from a pre-generated VERSION file
+when git is not available (e.g. inside the Docker image, which has no .git/).
 """
 
 import subprocess
@@ -12,14 +13,30 @@ from pathlib import Path
 @lru_cache(maxsize=1)
 def get_git_version() -> str:
     """
-    Get version from git describe.
+    Get version from a pre-generated VERSION file, falling back to git describe.
+
+    The Docker image has no .git/ (by design, to keep it small), so `git describe`
+    can never succeed at container runtime. `./dev.py docker build`/`rebuild`
+    freezes the version into a VERSION file on the host (where .git/ exists)
+    before the image is built, and the Dockerfile COPYs it in. Local dev has no
+    VERSION file, so it always falls through to `git describe` as before.
 
     Returns:
         Version string like 'v1.2.3' (on tag) or 'v1.2.3-5-gabcdef-dirty' (commits after tag)
-        or 'unknown' if git is not available.
+        or 'unknown' if neither source is available.
     """
+    project_root = Path(__file__).parent.parent.parent.parent
+
+    version_file = project_root / "VERSION"
     try:
-        project_root = Path(__file__).parent.parent.parent.parent
+        if version_file.exists():
+            content = version_file.read_text().strip()
+            if content:
+                return content
+    except Exception:
+        pass
+
+    try:
         result = subprocess.run(["git", "describe", "--tags", "--always", "--dirty"], capture_output=True, text=True, cwd=project_root, timeout=5)
         if result.returncode != 0:
             return "unknown"

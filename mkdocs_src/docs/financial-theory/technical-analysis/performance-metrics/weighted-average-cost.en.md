@@ -153,7 +153,7 @@ When a portfolio contains acquisitions in different currencies, LibreFolio:
 
 !!! warning "WAC is never used for asset valuation"
 
-    WAC is an accounting construct for cost basis. The valuation chain for market value uses: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. See [NAV](nav.md).
+    WAC is an accounting construct for cost basis. The valuation chain for market value uses: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. See [NAV](portfolio-engine/nav.md).
 
 ## ⚙️ Implementation: Position-Level Scope
 
@@ -174,3 +174,9 @@ $$
 $$
 
 This prevents transient negative quantities and ensures SELL always reads the correct WAC that includes same-day BUYs.
+
+## 🔗 Related
+
+- 🔬 **[FIFO Lot Analysis](fifo-engine/fifo-lot-analysis.md)** — Per-lot complement: tracks each acquisition batch individually instead of blending them into one average
+- 🔁 **[Buy & Sell](../../instruments/transaction-types/buy-sell.md)** — Transactions that feed the WAC pool
+- 📈 **[NAV / Net Worth](portfolio-engine/nav.md)** — How WAC-based book value differs from market-price NAV

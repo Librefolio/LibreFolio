@@ -1213,3 +1213,24 @@ LibreFolio-product knowledge) — recorded here in the log only.
 
 
 
+## [2026-07-20] file | Docker System Info fix + macOS entrypoint GID collision
+Fixed Settings → About "Copy for Issue" showing `App Version: unknown` and empty
+Backend/Frontend Dependencies when running from the Docker image (root cause: `.git/`,
+`Pipfile`, and `frontend/package.json` were never copied into the runtime-only image).
+Mirrored the existing `requirements.txt` generated-artifact pattern with a new `VERSION`
+file written fresh by `dev.py` before each `docker build`. Bonus fix: `parse_pipfile()`
+regex couldn't match quoted Pipfile keys, so "Borsa Italiana Scraping" was invisible in
+Backend Dependencies in *both* environments. Added a new `deployment_mode` field
+(docker/local) plus 6 new About-tab diagnostic fields (viewport, DPR, browser UA, theme,
+language) with full i18n. While verifying the Docker fix, discovered and flagged (not
+fixed, per user's own-review-first workflow preference) a separate, still-open bug:
+`entrypoint.sh`'s `chown` fails on macOS hosts because GID 20 (macOS default first-user
+GID) collides with Debian's pre-existing `dialout` group, so `groupadd -g 20 librefolio`
+silently no-ops and the literal group name never exists.
+Filed: [[problems/docker-system-info-missing-deps]], [[problems/docker-entrypoint-gid20-collision]].
+Graph updated (scoped, not a full rebuild): +2 nodes, +3 edges (both new problem nodes
+cross-reference each other and [[decisions/single-docker-image]]); 6850 pre-existing nodes/edges/
+communities left untouched. Manifest stamped only for these 2 files. Deferred: 126 unrelated
+files still show as changed in `detect_incremental` (concurrent uncommitted work — mkdocs
+restructuring, chart components, DataTable, etc., none of it mine) — left for a dedicated full
+catch-up pass, same precedent as the 2026-07-01 entry above.
