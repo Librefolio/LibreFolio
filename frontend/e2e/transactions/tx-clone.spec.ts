@@ -290,12 +290,17 @@ test.describe('Transaction Clone', () => {
         await row.hover();
         await page.waitForTimeout(300);
 
-        // View-only rows should NOT show "danger" (delete) action buttons
-        const dangerBtns = await row.locator('button.action-btn.danger').count();
-        expect(dangerBtns).toBe(0);
-
-        // Edit action (pencil icon) should not be present for viewer
-        const editBtns = await row.locator('button.action-btn.edit, button.action-btn[title*="Edit"]').count();
-        expect(editBtns).toBe(0);
+        // View-only rows should NOT show delete/edit actions in the kebab menu
+        const kebabBtn = row.getByTestId(/^row-actions-/);
+        if ((await kebabBtn.count()) === 0) {
+            // No actions at all — delete/edit are a fortiori hidden
+            return;
+        }
+        await kebabBtn.click();
+        const menu = page.locator('[data-testid="context-menu"]');
+        await expect(menu).toBeVisible({timeout: 3_000});
+        await expect(menu.locator('[data-testid="context-menu-action-delete"]')).toHaveCount(0);
+        await expect(menu.locator('[data-testid="context-menu-action-edit"]')).toHaveCount(0);
+        await page.keyboard.press('Escape');
     });
 });

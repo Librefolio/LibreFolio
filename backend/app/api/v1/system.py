@@ -9,6 +9,7 @@ import platform
 import re
 import sys
 from importlib.metadata import version as pkg_version
+from pathlib import Path
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -34,6 +35,7 @@ class SystemInfoResponse(BaseModel):
     os_name: str
     os_version: str
     platform: str
+    deployment_mode: str
     backend_dependencies: list[DependencyInfo]
     frontend_dependencies: list[DependencyInfo]
 
@@ -93,8 +95,11 @@ def parse_pipfile() -> list[str]:
                     # Any other section ends [packages]
                     break
                 elif in_packages and line and not line.startswith("#"):
-                    # Parse package name (before =)
-                    match = re.match(r"^([a-zA-Z0-9_-]+)\s*=", line)
+                    # Parse package name (before =). Handles both plain
+                    # (fastapi = "*") and quoted names, including a stray
+                    # trailing space inside the quotes (e.g.
+                    # "borsa-italiana-scraping " = {git = ...}).
+                    match = re.match(r'^"?([a-zA-Z0-9_-]+)\s*"?\s*=', line)
                     if match:
                         pkg_name = match.group(1).lower()
                         packages.append(pkg_name)
@@ -153,6 +158,15 @@ def get_frontend_deps() -> list[DependencyInfo]:
     return deps
 
 
+def get_deployment_mode() -> str:
+    """Detect whether the app is running inside the Docker image.
+
+    /.dockerenv is created by the Docker runtime itself in every container,
+    regardless of base image — the standard, dependency-free way to detect it.
+    """
+    return "docker" if Path("/.dockerenv").exists() else "local"
+
+
 @router.get("/info", response_model=SystemInfoResponse)
 async def get_system_info() -> SystemInfoResponse:
     """
@@ -166,6 +180,7 @@ async def get_system_info() -> SystemInfoResponse:
         os_name=platform.system(),
         os_version=platform.release(),
         platform=platform.platform(),
+        deployment_mode=get_deployment_mode(),
         backend_dependencies=get_backend_deps(),
         frontend_dependencies=get_frontend_deps(),
     )

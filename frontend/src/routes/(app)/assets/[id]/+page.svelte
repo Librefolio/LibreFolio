@@ -1603,8 +1603,9 @@
                 >
             </div>
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="asset-detail-edit-btn"
+                disabled={!assetInfo}
                 onclick={() => {
                     editDataForModal = buildEditData();
                     editModalOpen = true;
@@ -1836,7 +1837,8 @@
                                 {$t('fxDetail.insertManually')}
                             </button>
                             <button
-                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={!assetInfo}
                                 onclick={() => {
                                     editDataForModal = buildEditData();
                                     editModalOpen = true;
@@ -1848,7 +1850,8 @@
                     {:else if isParametric}
                         <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('assetDetail.noDataScheduled')}</p>
                         <button
-                            class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors"
+                            class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!assetInfo}
                             onclick={() => {
                                 editDataForModal = buildEditData();
                                 editModalOpen = true;
@@ -2112,7 +2115,8 @@
                     {/if}
 
                     <button
-                        class="text-xs text-libre-green hover:underline"
+                        class="text-xs text-libre-green hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!assetInfo}
                         onclick={() => {
                             editDataForModal = buildEditData();
                             editModalOpen = true;

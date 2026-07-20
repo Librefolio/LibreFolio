@@ -190,6 +190,8 @@
 | [[problems/datatable-column-resize-noop]] | DataTable.svelte column-resize handle icon shows but click has no effect in some tables — root cause not yet determined | open | frontend, datatable, ui, unresolved |
 | [[problems/portfolio-asset-history-regression-restored]] | `GET /portfolio/asset-history` accidentally removed in a legacy-endpoint cleanup (commit `3184a969`), restored (commit `1a734008`) | resolved | backend, api, portfolio, regression |
 | [[problems/ai-export-name-not-ticker]] | AI export used ticker/ISIN as the primary asset label instead of `name` in several renderer/builder call sites | resolved | frontend, ai-export, naming |
+| [[problems/docker-system-info-missing-deps]] | System Info showed `App Version: unknown` + 0 deps in Docker — `.git/`/`Pipfile`/`package.json` never copied into image | resolved | docker, deployment, system-info, pipfile |
+| [[problems/docker-entrypoint-gid20-collision]] | `entrypoint.sh` chown fails on macOS — host GID 20 collides with Debian's pre-existing `dialout` group | open | docker, macos, entrypoint, gid, permissions |
 
 ## Entities
 

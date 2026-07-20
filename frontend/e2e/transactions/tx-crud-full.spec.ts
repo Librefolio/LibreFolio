@@ -201,9 +201,10 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         // Hover to reveal actions, click split
         await pairedRow!.hover();
         await page.waitForTimeout(200);
-        const splitBtn = pairedRow!.locator('button[data-action-id="split"]');
+        const splitBtn = pairedRow!.getByTestId(/^row-actions-/);
         await expect(splitBtn).toBeVisible({timeout: 2_000});
         await splitBtn.click();
+        await page.getByTestId('context-menu-action-split').click();
 
         // ActionModal should show tabular layout with before/after tables
         const modal = page.locator('[data-testid="tx-action-modal"]');
