@@ -17,8 +17,25 @@ from ._backend_db import db_populate
 
 
 def _ensure_frontend_build() -> bool:
-    """Ensure frontend is built and up to date."""
-    result = auto_build_frontend(debug=False)
+    """Ensure frontend is built and up to date.
+
+    Reuses dev.py's canonical build (``cmd_fe_build``) as the build function, so a
+    rebuild also syncs the API types first (export openapi.json → generate the
+    Zodios client ``generated.ts``). Both files are gitignored, so on a fresh
+    checkout (e.g. CI) a plain ``npm run build`` fails with
+    ``Could not resolve "./generated" from src/lib/api/index.ts``. Routing the
+    build through ``cmd_fe_build`` — the same path ``dev.py server --force`` uses —
+    regenerates them first. ``auto_build_frontend`` still only rebuilds when the
+    sources actually changed.
+    """
+    from types import SimpleNamespace
+
+    from dev import cmd_fe_build
+
+    result = auto_build_frontend(
+        debug=False,
+        build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
+    )
     if result is None or result == 0:
         return True
     else:
