@@ -19,6 +19,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {truncateName} from '$lib/utils/text';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -109,6 +110,13 @@
     // room — the container can be narrower than the viewport (dashboard padding/
     // sidebar) or the same, but it's always the real constraint either way.
     const NARROW_CONTAINER_THRESHOLD = 480;
+    // Tunable: mobile label must stay before the status badge (~72% row width) and right-side net value.
+    const MOBILE_ASSET_NAME_MAX = 26;
+    const TEXT_WIDTH_ESTIMATE_EM = 0.6;
+    const DESKTOP_NET_LABEL_GAP = 8;
+    const DESKTOP_NET_LABEL_FONT_SIZE = 14;
+    const MOBILE_NET_LABEL_FONT_SIZE = 11;
+    const MOBILE_NET_AVAILABLE_START_RATIO = 0.8;
     let isMobile = $state(false);
     let narrowResizeObserver: ResizeObserver | null = null;
     $effect(() => {
@@ -181,9 +189,69 @@
         return `${amount < 0 ? '-' : ''}${compact}`;
     }
 
+    function formatSignedPercent(value: number): string {
+        const normalized = Object.is(value, -0) ? 0 : value;
+        const sign = normalized > 0 ? '+' : '';
+        return `${sign}${normalized.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}%`;
+    }
+
+    function openingPctSuffix(value: number, openingValue: number): string {
+        if (!(openingValue > 0)) return '';
+        const pct = (value / openingValue) * 100;
+        if (!Number.isFinite(pct)) return '';
+        return ` <span style="font-size:10px;opacity:0.75">(${escapeHtml(formatSignedPercent(pct))})</span>`;
+    }
+
+    function openingPctPlainSuffix(value: number, openingValue: number): string {
+        if (!(openingValue > 0)) return '';
+        const pct = (value / openingValue) * 100;
+        if (!Number.isFinite(pct)) return '';
+        return ` (${formatSignedPercent(pct)})`;
+    }
+
+    function signedMoneyWithOpeningPct(value: number, openingValue: number): string {
+        return `${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: true}))}${openingPctSuffix(value, openingValue)}`;
+    }
+
+    function signedMoneyWithOpeningPctHtml(value: number, openingValue: number, themeDark: boolean): string {
+        return `<span style="color:${signValueColor(value, themeDark)}">${signedMoneyWithOpeningPct(value, openingValue)}</span>`;
+    }
+
     function trimLabel(value: string, max = 31): string {
         if (value.length <= max) return value;
         return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+    }
+
+    function estimatedCanvasTextWidth(text: string, fontSize: number): number {
+        return text.length * fontSize * TEXT_WIDTH_ESTIMATE_EM;
+    }
+
+    let netLabelMeasureCtx: CanvasRenderingContext2D | null = null;
+
+    /** Accurate proportional-font width (the 0.6em estimate above wildly over-counts digits,
+     *  which kept the optional "(pct)" suffix from ever fitting). Falls back to the estimate
+     *  when no canvas is available (SSR). Font mirrors the ECharts net-label style (bold sans). */
+    function measuredTextWidth(text: string, fontSize: number): number {
+        if (typeof document === 'undefined') return estimatedCanvasTextWidth(text, fontSize);
+        if (!netLabelMeasureCtx) netLabelMeasureCtx = document.createElement('canvas').getContext('2d');
+        if (!netLabelMeasureCtx) return estimatedCanvasTextWidth(text, fontSize);
+        netLabelMeasureCtx.font = `700 ${fontSize}px sans-serif`;
+        return netLabelMeasureCtx.measureText(text).width;
+    }
+
+    function desktopNetValueAvailableWidth(coordSys: {x: number; width: number}): number {
+        const chartWidth = chartContainer?.clientWidth ?? 0;
+        if (chartWidth > 0) return Math.max(0, chartWidth - (coordSys.x + coordSys.width + DESKTOP_NET_LABEL_GAP));
+        return Math.max(0, 90 - DESKTOP_NET_LABEL_GAP);
+    }
+
+    function netValueText(row: ChartRow, fontSize: number, availableWidth: number): string {
+        const absolute = shortMoney(row.net, displayCurrency, true);
+        const suffix = row.kind === 'asset' ? openingPctPlainSuffix(row.net, row.startValue) : '';
+        if (!suffix) return absolute;
+
+        const combined = `${absolute}${suffix}`;
+        return measuredTextWidth(combined, fontSize) <= availableWidth ? combined : absolute;
     }
 
     function palette(themeDark: boolean) {
@@ -225,11 +293,11 @@
         return description;
     }
 
-    function netColor(amount: number, themeDark: boolean): string {
+    function signValueColor(amount: number, themeDark: boolean): string {
         const colors = palette(themeDark);
         if (amount > 0) return colors.positive;
         if (amount < 0) return colors.negative;
-        return colors.neutral;
+        return themeDark ? '#e2e8f0' : '#0f172a';
     }
 
     let labels = $derived.by(() => ({
@@ -420,7 +488,13 @@
         if (row.kind === 'section') return `{section|${escapeRichText(row.label)}}`;
         // Full-width label row on mobile has much more room than the desktop 220px
         // gutter (axisRowLabel below stays at the default 28 for that narrower case).
-        const name = row.kind === 'other' ? otherEffectDescriptionLabel(row.label) : row.label;
+        if (row.kind === 'asset') {
+            const name = truncateName(row.label, MOBILE_ASSET_NAME_MAX);
+            const label = row.assetTicker ? `${name} (${row.assetTicker})` : name;
+            return `{name|${escapeRichText(label)}}`;
+        }
+
+        const name = otherEffectDescriptionLabel(row.label);
         return `{name|${escapeRichText(trimLabel(name, 42))}}`;
     }
 
@@ -439,7 +513,7 @@
         const theme = buildTooltipTheme(themeDark);
 
         if (row.kind === 'other') {
-            const pnlHtml = `<span style="color:${netColor(row.net, themeDark)}">${escapeHtml(formatCurrencyAmountPlain(row.net, displayCurrency, {showSign: true}))}</span>`;
+            const pnlHtml = `<span style="color:${signValueColor(row.net, themeDark)}">${escapeHtml(formatCurrencyAmountPlain(row.net, displayCurrency, {showSign: true}))}</span>`;
             let html = buildTooltipHeader(escapeHtml(otherEffectDescriptionLabel(row.label)), theme.textColor);
             html += buildTooltipRow(labels.category, escapeHtml(categoryLabel(row.category)));
             html += buildTooltipRow(labels.periodPnl, pnlHtml, otherEffectColor(row.category, themeDark));
@@ -452,7 +526,8 @@
         const statusText = row.isFullySold ? labels.closedLong : labels.openLong;
         const statusBg = row.isFullySold ? (themeDark ? '#475569' : '#64748b') : themeDark ? '#166534' : '#16a34a';
         const statusHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${statusBg};color:#fff;font-weight:700">${escapeHtml(statusText)}</span>`;
-        const title = row.assetTicker ? `${row.label} (${row.assetTicker})` : row.label;
+        const titleName = truncateName(row.label);
+        const title = row.assetTicker ? `${titleName} (${row.assetTicker})` : titleName;
         const colors = palette(themeDark);
         const componentRows: Array<{label: string; value: number; color: string}> = [
             {label: labels.unrealized, value: row.components.unrealized, color: colors.unrealized},
@@ -463,16 +538,32 @@
 
         let html = buildTooltipHeader(escapeHtml(title), theme.textColor);
         html += buildTooltipRow(labels.status, statusHtml);
-        html += buildTooltipRow(labels.periodPnl, `<span style="color:${netColor(row.net, themeDark)}">${escapeHtml(formatCurrencyAmountPlain(row.net, displayCurrency, {showSign: true}))}</span>`);
+        html += buildTooltipRow(labels.periodPnl, signedMoneyWithOpeningPctHtml(row.net, row.startValue, themeDark));
         html += buildTooltipDivider(theme.border);
         for (const component of componentRows) {
-            html += buildTooltipRow(component.label, escapeHtml(formatCurrencyAmountPlain(component.value, displayCurrency, {showSign: true})), component.color);
+            html += buildTooltipRow(component.label, signedMoneyWithOpeningPctHtml(component.value, row.startValue, themeDark), component.color);
         }
         html += buildTooltipDivider(theme.border);
         html += buildTooltipRow(labels.startValue, escapeHtml(formatCurrencyAmountPlain(row.startValue, displayCurrency)));
         html += buildTooltipRow(labels.endValue, escapeHtml(formatCurrencyAmountPlain(row.endValue, displayCurrency)));
         html += buildTooltipRow(labels.broker, escapeHtml(row.brokerName || '—'));
         return `<div style="font-size:11px;color:${theme.textColor}">${html}</div>`;
+    }
+
+    $effect(() => {
+        if (!scrollWrapper) return;
+        const wrapper = scrollWrapper;
+        const hideTooltipOnScroll = () => chartInstance?.dispatchAction({type: 'hideTip'});
+        wrapper.addEventListener('scroll', hideTooltipOnScroll, {passive: true});
+        return () => wrapper.removeEventListener('scroll', hideTooltipOnScroll);
+    });
+
+    function visibleBottomInChartCoords(): number | null {
+        if (!scrollWrapper || !chartContainer || !enableScroll) return null;
+        const wrapperRect = scrollWrapper.getBoundingClientRect();
+        const chartRect = chartContainer.getBoundingClientRect();
+        const bottom = wrapperRect.bottom - chartRect.top;
+        return Number.isFinite(bottom) ? bottom : null;
     }
 
     /** Local variant of the shared `tooltipPositionSide` helper (echartsTooltipHelpers.ts,
@@ -505,10 +596,11 @@
         const gapAboveBar = 16;
         let y = point[1] - tooltipH - gapAboveBar;
 
-        // Only clamp the BOTTOM edge — never pushed back down below the tap point —
-        // so it doesn't fall past the visible scrolled window on a tall chart.
-        if (scrollWrapper && enableScroll) {
-            const visibleBottom = scrollWrapper.scrollTop + scrollWrapper.clientHeight;
+        // Only clamp the BOTTOM edge — never pushed back down below the tap point.
+        // Measure current DOM rects each time: appendTo(document.body) needs fresh
+        // chart-vs-scroll-window geometry after internal scrolls.
+        const visibleBottom = visibleBottomInChartCoords();
+        if (visibleBottom != null) {
             if (y + tooltipH > visibleBottom - 8) y = visibleBottom - tooltipH - 8;
         }
 
@@ -736,15 +828,16 @@
                 if (!entry || entry.row.kind === 'section' || entry.slot !== 'full') return null;
                 const [, y] = api.coord([0, rowIndex]);
                 const coordSys = params.coordSys as {x: number; width: number};
+                const availableWidth = desktopNetValueAvailableWidth(coordSys);
                 return {
                     type: 'text',
-                    x: coordSys.x + coordSys.width + 8,
+                    x: coordSys.x + coordSys.width + DESKTOP_NET_LABEL_GAP,
                     y,
                     silent: true,
                     style: {
-                        text: shortMoney(entry.row.net, displayCurrency, true),
-                        fill: netColor(entry.row.net, themeDark),
-                        fontSize: 14,
+                        text: netValueText(entry.row, DESKTOP_NET_LABEL_FONT_SIZE, availableWidth),
+                        fill: signValueColor(entry.row.net, themeDark),
+                        fontSize: DESKTOP_NET_LABEL_FONT_SIZE,
                         fontWeight: 700,
                         textAlign: 'left',
                         textVerticalAlign: 'middle',
@@ -776,6 +869,7 @@
                 const [, y] = api.coord([0, rowIndex]);
                 const coordSys = params.coordSys as {x: number; width: number};
                 const rich = buildAxisRich(themeDark);
+                const mobileNetAvailableWidth = coordSys.width * (1 - MOBILE_NET_AVAILABLE_START_RATIO);
 
                 if (entry.row.kind === 'section') {
                     return {
@@ -802,9 +896,9 @@
                         y,
                         silent: true,
                         style: {
-                            text: shortMoney(entry.row.net, displayCurrency, true),
-                            fill: netColor(entry.row.net, themeDark),
-                            fontSize: 11,
+                            text: netValueText(entry.row, MOBILE_NET_LABEL_FONT_SIZE, mobileNetAvailableWidth),
+                            fill: signValueColor(entry.row.net, themeDark),
+                            fontSize: MOBILE_NET_LABEL_FONT_SIZE,
                             fontWeight: 700,
                             textAlign: 'right',
                             textVerticalAlign: 'middle',
@@ -846,7 +940,7 @@
                   }
                 : {
                       left: 260,
-                      right: 90,
+                      right: 150,
                       top: 12,
                       bottom: 24,
                   },

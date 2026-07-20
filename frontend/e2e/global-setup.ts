@@ -22,11 +22,14 @@ export default async function globalSetup() {
     console.log('\n🔧 [global-setup] Ensuring test DB is populated...');
 
     try {
-        // 1. Populate test DB with mock data (--force recreates if needed)
-        execSync('pipenv run python -m backend.test_scripts.test_db.populate_mock_data --force', {
+        // 1. Populate test DB with mock data (--force recreates if needed).
+        //    --with-reports seeds sample BRIM import files so broker import-history
+        //    E2E tests (e.g. brokers-detail "import files modal") have data to show;
+        //    without it the modal is empty and those tests fail on a clean checkout.
+        execSync('pipenv run python -m backend.test_scripts.test_db.populate_mock_data --force --with-reports', {
             cwd: PROJECT_ROOT,
             stdio: 'pipe',
-            timeout: 60_000,
+            timeout: 90_000,
         });
         console.log('   ✅ Test DB populated');
     } catch (e: unknown) {

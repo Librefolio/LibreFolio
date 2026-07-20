@@ -8,8 +8,19 @@ Covers:
 
 from types import SimpleNamespace
 
+import pytest
+
 import backend.app.utils.version as version_utils
 from backend.app.utils.version import get_git_version, get_version_info
+
+
+@pytest.fixture
+def no_version_file(monkeypatch):
+    """Force get_git_version past the pre-generated VERSION file so the git-describe
+    branch is exercised. A leftover VERSION build artifact (created by
+    `./dev.py docker build`) would otherwise short-circuit the function and mask the
+    monkeypatched subprocess.run."""
+    monkeypatch.setattr(version_utils.Path, "exists", lambda self: False)
 
 
 class TestGetGitVersion:
@@ -22,7 +33,7 @@ class TestGetGitVersion:
         version = get_git_version()
         assert version.startswith("v") or version == "unknown"
 
-    def test_returns_tagged_version_from_git_describe(self, monkeypatch):
+    def test_returns_tagged_version_from_git_describe(self, monkeypatch, no_version_file):
         get_git_version.cache_clear()
         monkeypatch.setattr(
             version_utils.subprocess,
@@ -35,7 +46,7 @@ class TestGetGitVersion:
         assert version == "v1.2.3"
         get_git_version.cache_clear()
 
-    def test_normalizes_hash_only_output(self, monkeypatch):
+    def test_normalizes_hash_only_output(self, monkeypatch, no_version_file):
         get_git_version.cache_clear()
         monkeypatch.setattr(
             version_utils.subprocess,
@@ -48,7 +59,7 @@ class TestGetGitVersion:
         assert version == "v0.0.0-gabcdef0"
         get_git_version.cache_clear()
 
-    def test_returns_unknown_when_git_describe_fails(self, monkeypatch):
+    def test_returns_unknown_when_git_describe_fails(self, monkeypatch, no_version_file):
         get_git_version.cache_clear()
         monkeypatch.setattr(
             version_utils.subprocess,
@@ -59,6 +70,22 @@ class TestGetGitVersion:
         version = get_git_version()
 
         assert version == "unknown"
+        get_git_version.cache_clear()
+
+    def test_version_file_takes_precedence_over_git(self, monkeypatch):
+        """A present VERSION file (Docker/frozen build) wins over git describe."""
+        get_git_version.cache_clear()
+        monkeypatch.setattr(version_utils.Path, "exists", lambda self: True)
+        monkeypatch.setattr(version_utils.Path, "read_text", lambda self, *args, **kwargs: "v9.9.9\n")
+        monkeypatch.setattr(
+            version_utils.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="v0.0.0-should-not-be-used\n"),
+        )
+
+        version = get_git_version()
+
+        assert version == "v9.9.9"
         get_git_version.cache_clear()
 
 

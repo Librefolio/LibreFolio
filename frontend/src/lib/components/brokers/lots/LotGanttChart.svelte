@@ -141,6 +141,8 @@
     const LANE_CHART_MIN_HEIGHT = 160;
     const GRID_LEFT_PX = 56;
     const GRID_RIGHT_PX = 18;
+    const INITIAL_ZOOM_START = 0;
+    const INITIAL_ZOOM_END = 100;
 
     let {
         lots = [],
@@ -172,6 +174,7 @@
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let activeTooltipDataIndex: number | null = null;
+    let lastPointerViewPos: [number, number] | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let axisDataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
@@ -1113,7 +1116,7 @@
             },
             tooltip: {
                 trigger: 'item',
-                position: tooltipPositionAboveFinger,
+                position: positionTooltipAbovePointer,
                 appendTo: 'body',
                 backgroundColor: theme.bg,
                 borderColor: theme.border,
@@ -1163,13 +1166,15 @@
         };
     }
 
-    /** Preserve the shared zoom window across re-renders (both the lane instance and the sticky
-     * axis instance), so a data/theme re-render does not silently reset dataZoom to 0-100 and
-     * desync the Gantt from the WAC/price chart. setOption does not re-emit a 'dataZoom' event,
-     * so this cannot cause a sync ping-pong. */
+    /** Preserve the shared zoom window across re-renders; before the first user zoom, force the
+     * same full-domain 0-100 window that LotWacPriceChart starts with. Without explicit start/end,
+     * ECharts can keep a merged stale Gantt window after range changes. setOption does not re-emit
+     * a 'dataZoom' event, so this cannot cause a sync ping-pong. */
     function applySharedZoomWindow<T extends {start?: number; end?: number}>(zooms: T[]): T[] {
-        if (externalZoomStart == null || externalZoomEnd == null) return zooms;
-        return zooms.map((zoom) => ({...zoom, start: externalZoomStart as number, end: externalZoomEnd as number}));
+        if (externalZoomStart != null && externalZoomEnd != null) {
+            return zooms.map((zoom) => ({...zoom, start: externalZoomStart, end: externalZoomEnd}));
+        }
+        return zooms.map((zoom) => ({...zoom, start: INITIAL_ZOOM_START, end: INITIAL_ZOOM_END}));
     }
 
     /** Gantt bars are custom-series items whose x-value is the segment START. With the default
@@ -1297,20 +1302,46 @@
         return index >= 0 ? index : null;
     }
 
+    /** ECharts tooltip `position` callback for the Gantt. Because the tooltip is driven via
+     * dispatchAction(showTip, {dataIndex}) (the overlay swallows real hover), ECharts anchors
+     * `point` to the segment's START (rect origin), which can be scrolled off-screen to the left.
+     * We instead prefer the real pointer position captured from the overlay hover so the tooltip
+     * sits above the finger/cursor on the hovered row, not above the lot opening. Falls back to the
+     * data anchor for keyboard focus (no pointer). */
+    function positionTooltipAbovePointer(
+        point: [number, number],
+        params: unknown,
+        dom: unknown,
+        rect: unknown,
+        size: {contentSize: [number, number]; viewSize: [number, number]},
+    ): [number, number] {
+        const anchor = lastPointerViewPos ?? point;
+        return tooltipPositionAboveFinger(anchor, params, dom, rect, size, {clampTop: false});
+    }
+
     /** Overlay hover -> native ECharts tooltip. The overlay's own `pointer-events:auto` (needed
      * for click/dblclick/keyboard selection) sits on top of the canvas and blocks the browser's
      * hit-testing from ever reaching it, so `tooltip.trigger:'item'` never fires on a real mouse
      * hover. Driving the SAME tooltip via dispatchAction with the exact dataIndex this overlay
-     * represents sidesteps that entirely — no coordinate-guessing needed. */
-    function showSegmentTooltip(rect: OverlayRect) {
+     * represents sidesteps that entirely — no coordinate-guessing needed. When a pointer event is
+     * available we record the cursor position (chart-container-relative) so the tooltip is placed
+     * above the finger rather than above the (possibly off-screen) lot opening. */
+    function showSegmentTooltip(rect: OverlayRect, event?: MouseEvent) {
         const seriesIndex = segmentsSeriesIndex();
         if (seriesIndex == null) return;
+        if (event && chartContainer) {
+            const bounds = chartContainer.getBoundingClientRect();
+            lastPointerViewPos = [event.clientX - bounds.left, event.clientY - bounds.top];
+        } else {
+            lastPointerViewPos = null;
+        }
         activeTooltipDataIndex = rect.dataIndex;
         chartInstance?.dispatchAction({type: 'showTip', seriesIndex, dataIndex: rect.dataIndex});
     }
 
     function hideSegmentTooltip() {
         activeTooltipDataIndex = null;
+        lastPointerViewPos = null;
         chartInstance?.dispatchAction({type: 'hideTip'});
     }
 
@@ -1447,7 +1478,11 @@
     $effect(() => {
         const start = externalZoomStart;
         const end = externalZoomEnd;
-        if (start == null || end == null) return;
+        if (start == null || end == null) {
+            dataZoomSyncHandle?.applyExternal(INITIAL_ZOOM_START, INITIAL_ZOOM_END);
+            axisDataZoomSyncHandle?.applyExternal(INITIAL_ZOOM_START, INITIAL_ZOOM_END);
+            return;
+        }
         dataZoomSyncHandle?.applyExternal(start, end);
         axisDataZoomSyncHandle?.applyExternal(start, end);
     });
@@ -1552,8 +1587,8 @@
                                 toggleLotSelection(rect.lotId);
                             }}
                             ondblclick={() => handleLaneDoubleClick(rect.lotId)}
-                            onmouseenter={() => showSegmentTooltip(rect)}
-                            onmousemove={() => showSegmentTooltip(rect)}
+                            onmouseenter={(event) => showSegmentTooltip(rect, event)}
+                            onmousemove={(event) => showSegmentTooltip(rect, event)}
                             onmouseleave={hideSegmentTooltip}
                             onfocus={() => showSegmentTooltip(rect)}
                             onblur={hideSegmentTooltip}

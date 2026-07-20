@@ -923,6 +923,7 @@
         <button
             type="button"
             bind:this={coreBadgeRefs[i]}
+            data-testid="date-preset-{preset.key.toLowerCase()}"
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -936,6 +937,7 @@
     {#each durationFillPresets.slice(0, extrasToShowDuration) as preset}
         <button
             type="button"
+            data-testid="date-preset-{preset.key.toLowerCase()}"
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -948,6 +950,7 @@
     {#each periodFillPresets.slice(0, extrasToShowPeriod) as preset}
         <button
             type="button"
+            data-testid="date-preset-{preset.key.toLowerCase()}"
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -960,6 +963,7 @@
         <button
             type="button"
             bind:this={trailingBadgeRefs[i]}
+            data-testid="date-preset-{preset.key.toLowerCase()}"
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
