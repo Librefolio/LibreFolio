@@ -113,7 +113,7 @@ This custody history — which broker (or in transit) held a lot's open quantity
 
 ---
 
-## ⚠️ Data Quality: Best-Effort, Not All-or-Nothing
+## ⚠️ Data Quality: Best-Effort, Not All-or-Nothing {: #data-quality-best-effort-not-all-or-nothing }
 
 If the transaction history contains something the engine cannot fully resolve — for example a closing transaction with no matching open lot on that broker, or a transfer whose paired leg is missing — LibreFolio does **not** abort the whole calculation. It records the specific issue, marks the affected lot(s) as degraded, and continues processing the rest of the history with the best available data.
 

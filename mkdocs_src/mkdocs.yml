@@ -124,6 +124,8 @@ plugins:
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
+            "FIFO Lot Engine": "FIFO Lot Engine"
+            "Lots Analysis Service": "Lots Analysis Service"
             "Split & Promote": "Split & Promote"
             Balance Validation: Balance Validation
             "🧩 Misc": "🧩 Varie"
@@ -192,7 +194,9 @@ plugins:
             Linear Growth: Crescita Lineare
             Compound Growth: Crescita Composta
             Sine Wave: Onda Sinusoidale
-            "🏆 Performance Metrics": "🏆 Metriche di Performance"
+            "⚡ Engine": "⚡ Motore di Calcolo"
+            "⚙️ Portfolio Engine": "⚙️ Motore del Portafoglio"
+            "🔬 FIFO Engine": "🔬 Motore FIFO"
             "📖 Fundamentals": "📖 Fondamenti"
             Day Count Conventions: Convenzioni di Conteggio Giorni
             "Returns & Growth Rates": "Rendimenti & Tassi di Crescita"
@@ -206,6 +210,7 @@ plugins:
             Max Drawdown: Massimo Drawdown
             Volatility: Volatilità
             Weighted Average Cost: Costo Medio Ponderato
+            FIFO Lot Analysis: Analisi Lotti FIFO
             NAV / Net Worth: NAV / Net Worth
             Book Value: Valore Contabile
             Period P&L: P&L del Periodo
@@ -270,6 +275,8 @@ plugins:
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
+            "FIFO Lot Engine": "FIFO Lot Engine"
+            "Lots Analysis Service": "Lots Analysis Service"
             "Split & Promote": "Split & Promote"
             Balance Validation: Balance Validation
             "🧩 Misc": "🧩 Divers"
@@ -339,7 +346,9 @@ plugins:
             Linear Growth: Croissance Linéaire
             Compound Growth: Croissance Composée
             Sine Wave: Onde Sinusoïdale
-            "🏆 Performance Metrics": "🏆 Métriques de Performance"
+            "⚡ Engine": "⚡ Moteur de Calcul"
+            "⚙️ Portfolio Engine": "⚙️ Moteur du Portefeuille"
+            "🔬 FIFO Engine": "🔬 Moteur FIFO"
             "📖 Fundamentals": "📖 Fondamentaux"
             Day Count Conventions: Conventions de Décompte des Jours
             "Returns & Growth Rates": "Rendements & Taux de Croissance"
@@ -353,6 +362,7 @@ plugins:
             Max Drawdown: Drawdown Maximum
             Volatility: Volatilité
             Weighted Average Cost: Coût Moyen Pondéré
+            FIFO Lot Analysis: Analyse des Lots FIFO
             NAV / Net Worth: NAV / Net Worth
             Book Value: Valeur Comptable
             Period P&L: P&L de la Période
@@ -417,6 +427,8 @@ plugins:
             # Developer transaction section — kept in English per dev-manual policy
             Service Architecture: Service Architecture
             "WAC & Cost Basis": "WAC & Cost Basis"
+            "FIFO Lot Engine": "FIFO Lot Engine"
+            "Lots Analysis Service": "Lots Analysis Service"
             "Split & Promote": "Split & Promote"
             Balance Validation: Balance Validation
             "🧩 Misc": "🧩 Varios"
@@ -486,7 +498,9 @@ plugins:
             Linear Growth: Crecimiento Lineal
             Compound Growth: Crecimiento Compuesto
             Sine Wave: Onda Sinusoidal
-            "🏆 Performance Metrics": "🏆 Métricas de Rendimiento"
+            "⚡ Engine": "⚡ Motor de Cálculo"
+            "⚙️ Portfolio Engine": "⚙️ Motor del Portafolio"
+            "🔬 FIFO Engine": "🔬 Motor FIFO"
             "📖 Fundamentals": "📖 Fundamentos"
             Day Count Conventions: Convenciones de Conteo de Días
             "Returns & Growth Rates": "Rendimientos & Tasas de Crecimiento"
@@ -500,6 +514,7 @@ plugins:
             Max Drawdown: Drawdown Máximo
             Volatility: Volatilidad
             Weighted Average Cost: Coste Medio Ponderado
+            FIFO Lot Analysis: Análisis de Lotes FIFO
             NAV / Net Worth: NAV / Net Worth
             Book Value: Valor Contable
             Period P&L: P&L del Periodo
@@ -667,17 +682,21 @@ nav:
               - Linear Growth: financial-theory/technical-analysis/synthetic-benchmarks/linear.md
               - Compound Growth: financial-theory/technical-analysis/synthetic-benchmarks/compound.md
               - Sine Wave: financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.md
-          - 🏆 Performance Metrics:
+          - ⚡ Engine:
               - Overview: financial-theory/technical-analysis/performance-metrics/index.md
-              - Portfolio Engine: financial-theory/technical-analysis/performance-metrics/portfolio-engine.md
-              - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/nav.md
-              - Book Value: financial-theory/technical-analysis/performance-metrics/book-value.md
-              - Period P&L: financial-theory/technical-analysis/performance-metrics/period-pnl.md
-              - Deposited Capital & Total P&L: financial-theory/technical-analysis/performance-metrics/deposited-capital.md
-              - Timing Effect: financial-theory/technical-analysis/performance-metrics/timing-effect.md
-              - ROI: financial-theory/technical-analysis/performance-metrics/roi.md
-              - TWRR: financial-theory/technical-analysis/performance-metrics/twrr.md
-              - MWRR: financial-theory/technical-analysis/performance-metrics/mwrr.md
+              - ⚙️ Portfolio Engine:
+                  - Overview: financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md
+                  - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md
+                  - Book Value: financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md
+                  - Period P&L: financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md
+                  - Deposited Capital & Total P&L: financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md
+                  - Timing Effect: financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md
+                  - ROI: financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md
+                  - TWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md
+                  - MWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md
+              - 🔬 FIFO Engine:
+                  - Overview: financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md
+                  - FIFO Lot Analysis: financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md
               - Weighted Average Cost: financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md
           - ⚠️ Risk Metrics:
               - Overview: financial-theory/technical-analysis/risk-metrics/index.md
@@ -726,6 +745,8 @@ nav:
           - "💸 Transactions (User Data)":
               - Service Architecture: developer/backend/transactions/service.md
               - "WAC & Cost Basis": developer/backend/transactions/wac.md
+              - "FIFO Lot Engine": developer/backend/transactions/fifo_lot_engine.md
+              - "Lots Analysis Service": developer/backend/transactions/lots_analysis_service.md
               - "Split & Promote": developer/backend/transactions/split_promote.md
               - Balance Validation: developer/backend/transactions/balance_validation.md
               - 📥 Import (BRIM):
@@ -785,6 +806,7 @@ nav:
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
                   - Live Ticker: developer/frontend/components/features/live-ticker.md
+                  - Lots Analysis: developer/frontend/components/features/lots-analysis.md
                   - Charts & Animations: developer/frontend/components/charts.md
                   - 🏦 Brokers:
                       - Overview: developer/frontend/components/features/brokers/index.md

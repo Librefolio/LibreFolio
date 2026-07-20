@@ -1868,7 +1868,8 @@ def run_translate(args) -> int:
         return 0
 
     # Show plan
-    print(f"\n📋 Translation Plan: {len(plan)} file(s) × language(s)")
+    plan_files = len({cache_key for cache_key, _, _ in plan})
+    print(f"\n📋 Translation Plan: {plan_files} file(s) × {len(target_langs)} language(s) = {len(plan)} translation(s)")
     print(f"   Target languages: {', '.join(target_langs)}")
     print(f"   Source files: {len(sources)}")
     print(f"   Cache: {HASH_FILE}")
@@ -2428,7 +2429,7 @@ def run_check(args) -> int:
       2. .env file exists with OPENROUTER_API_KEY
       3. Target languages detected from frontend
       4. Translatable files detected from mkdocs.yml nav
-      5. Quick API connectivity test (OpenRouter /models endpoint)
+      5. Quick API connectivity test (OpenRouter/Doubleword /models endpoint, or Ollama)
     """
     ok = True
     local = _is_local_mode()
@@ -2449,6 +2450,7 @@ def run_check(args) -> int:
         print("2️⃣  Backend + API key ...", end=" ", flush=True)
         dw_key = _load_env_var("DOUBLEWORD_API_KEY", "")
         if dw_key:
+            api_key = dw_key
             masked = dw_key[:8] + "..." + dw_key[-4:]
             print(f"✅ 🦋 Doubleword ({base_url}) — autobatcher flex queue")
             print(f"   Key: {masked}")
@@ -2548,6 +2550,29 @@ def run_check(args) -> int:
             print(f"❌ Ollama non raggiungibile: {e}")
             print(f"   ➜  Avvia Ollama con: ollama serve")
             ok = False
+    elif _is_doubleword_mode():
+        print("8️⃣  Doubleword API ...", end=" ", flush=True)
+        if ok:  # only if we have an API key
+            try:
+                import urllib.request
+                import urllib.error
+                models_url = f"{base_url.rstrip('/')}/models" if base_url else ""
+                req = urllib.request.Request(
+                    models_url,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status == 200:
+                        print("✅ connessione OK")
+                    else:
+                        print(f"⚠️  status {resp.status}")
+            except urllib.error.HTTPError as e:
+                print(f"❌ HTTP {e.code} — chiave non valida?")
+                ok = False
+            except Exception as e:
+                print(f"⚠️  errore di rete: {e}")
+        else:
+            print("⏭️  saltato (fix errori precedenti)")
     else:
         print("8️⃣  OpenRouter API ...", end=" ", flush=True)
         if ok:  # only if we have an API key

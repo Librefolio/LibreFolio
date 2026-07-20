@@ -5,7 +5,7 @@
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> VENTA' alt="Venta">
 </div>
 
-Los tipos de transacciones más fundamentales: **comprar** aumenta tus posiciones y disminuye el efectivo; **vender** hace lo contrario y realiza una plusvalía o minusvalía.
+Los tipos de transacción más fundamentales: **comprar** aumenta tus posiciones y disminuye el efectivo; **vender** hace lo contrario y realiza una plusvalía o pérdida.
 
 ---
 
@@ -16,7 +16,7 @@ Los tipos de transacciones más fundamentales: **comprar** aumenta tus posicione
 | **Código** | `BUY` | `SELL` |
 | **Efecto en efectivo** | ⬇️ Disminuye | ⬆️ Aumenta |
 | **Efecto en activos** | ⬆️ Aumenta posiciones | ⬇️ Disminuye posiciones |
-| **Evento fiscal** | No | Sí (realiza plusvalía/minusvalía) |
+| **Evento fiscal** | No | Sí (realiza plusvalía/pérdida) |
 
 ---
 
@@ -48,8 +48,9 @@ $$
 
 ---
 
-## 🔗 Relacionados
+## 🔗 Relacionado
 
-- 📊 **[Precio Medio Ponderado (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo promedio por unidad a través de múltiples compras
+- 📊 **[Precio Medio Ponderado (PMP)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo promedio por unidad entre múltiples compras
+- 🔬 **[Análisis de Lotes FIFO](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Desglose por lote del emparejamiento FIFO presentado anteriormente
 - 💰 **[Impuestos](../../fundamentals/taxation.md)** — Plusvalías, métodos de emparejamiento, arrastre de pérdidas
 - 📈 **[Rendimientos](../../fundamentals/returns.md)** — Medición del rendimiento de inversiones
