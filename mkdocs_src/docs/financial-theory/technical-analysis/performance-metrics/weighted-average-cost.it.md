@@ -58,38 +58,38 @@ Quando più transazioni avvengono nella stessa data:
 
 ??? example "Esempio 1: Due Acquisti — Il PMC sale"
 
- | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
- |------|------|------|----------------|-----------|-----|
- | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
- | 15 Apr | ACQUISTO | 5 | 180 $ | 15 | 160,00 $ |
+    | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
+    |------|------|------|----------------|-----------|-----|
+    | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
+    | 15 Apr | ACQUISTO | 5 | 180 $ | 15 | 160,00 $ |
 
- $$
- PMC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160,00
- $$
+    $$
+    PMC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160,00
+    $$
 
- Il secondo acquisto a un prezzo più alto **spinge il PMC verso l'alto**.
+    Il secondo acquisto a un prezzo più alto **spinge il PMC verso l'alto**.
 
 ??? example "Esempio 2: Acquisto poi Vendita — PMC invariato"
 
- | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
- |------|------|------|----------------|-----------|-----|
- | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
- | 15 Apr | VENDITA | -5 | (al PMC) | 5 | 150,00 $ |
+    | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
+    |------|------|------|----------------|-----------|-----|
+    | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
+    | 15 Apr | VENDITA | -5 | (al PMC) | 5 | 150,00 $ |
 
- La VENDITA rimuove unità al PMC corrente (150 $). Il PMC rimane **invariato** — solo il pool si riduce.
+    La VENDITA rimuove unità al PMC corrente (150 $). Il PMC rimane **invariato** — solo il pool si riduce.
 
 ??? example "Esempio 3: Acquisizione a Costo Zero — Diluizione"
 
- | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
- |------|------|------|----------------|-----------|-----|
- | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
- | 1 Mag | RETTIFICA | +5 | 0 $ | 15 | 100,00 $ |
+    | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
+    |------|------|------|----------------|-----------|-----|
+    | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
+    | 1 Mag | RETTIFICA | +5 | 0 $ | 15 | 100,00 $ |
 
- $$
- PMC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100,00
- $$
+    $$
+    PMC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100,00
+    $$
 
- Il PMC viene **diluito** perché 5 unità sono entrate a costo zero (es. frazionamento, airdrop, donazione).
+    Il PMC viene **diluito** perché 5 unità sono entrate a costo zero (es. frazionamento, airdrop, donazione).
 
 ## 🔄 Override della Base di Costo
 
@@ -120,17 +120,17 @@ $$
 
 ??? example "Esempio 4: Trasferimento in Modalità Auto — PMC invariato"
 
- | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
- |------|------|------|----------------|-----------|-----|
- | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
- | 15 Apr | ACQUISTO | 5 | 180 $ | 15 | 160,00 $ |
- | 1 Mag | TRASFERIMENTO (auto) | +3 | 160 $ (=PMC) | 18 | 160,00 $ |
+    | Data | Tipo | Q.tà | Costo Unitario | Q.tà Pool | PMC |
+    |------|------|------|----------------|-----------|-----|
+    | 1 Apr | ACQUISTO | 10 | 150 $ | 10 | 150,00 $ |
+    | 15 Apr | ACQUISTO | 5 | 180 $ | 15 | 160,00 $ |
+    | 1 Mag | TRASFERIMENTO (auto) | +3 | 160 $ (=PMC) | 18 | 160,00 $ |
 
- $$
- PMC = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160,00
- $$
+    $$
+    PMC = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160,00
+    $$
 
- Il destinatario del trasferimento in **modalità auto** eredita il PMC corrente come costo unitario. Il pool cresce ma il PMC rimane **invariato**.
+    Il destinatario del trasferimento in **modalità auto** eredita il PMC corrente come costo unitario. Il pool cresce ma il PMC rimane **invariato**.
 
 ## 🌍 Gestione Multi-Valuta
 

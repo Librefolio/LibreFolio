@@ -223,72 +223,72 @@ La ligne **Revenu de l'Actif** dans la fenêtre modale des détails du lot est e
 
 ??? example "Exemple : deux lots, un dividende, un cours de marché"
 
- Supposons la même action, la même devise, `qbq = 1`.
+    Supposons la même action, la même devise, `qbq = 1`.
 
- | Date | Événement | Lot A Qté Ouverte | Lot B Qté Ouverte | Notes |
- |------|-----------|-------------------|-------------------|-------|
- | 2 janv. | ACHAT 100 @ 10 $ | 100 | 0 | Le lot A s'ouvre avec un coût initial de 1 000 $ |
- | 10 févr. | ACHAT 50 @ 14 $ | 100 | 50 | Le lot B s'ouvre avec un coût initial de 700 $ |
- | 15 mars | DIVIDENDE 30 $ | 100 | 50 | Les deux lots sont encore ouverts |
- | 1er avril | Cours du marché = 16 $ | 100 | 50 | Évaluer les deux lots |
+    | Date | Événement | Lot A Qté Ouverte | Lot B Qté Ouverte | Notes |
+    |------|-----------|-------------------|-------------------|-------|
+    | 2 janv. | ACHAT 100 @ 10 $ | 100 | 0 | Le lot A s'ouvre avec un coût initial de 1 000 $ |
+    | 10 févr. | ACHAT 50 @ 14 $ | 100 | 50 | Le lot B s'ouvre avec un coût initial de 700 $ |
+    | 15 mars | DIVIDENDE 30 $ | 100 | 50 | Les deux lots sont encore ouverts |
+    | 1er avril | Cours du marché = 16 $ | 100 | 50 | Évaluer les deux lots |
 
- **Étape 1 — Allouer le dividende au prorata**
+    **Étape 1 — Allouer le dividende au prorata**
 
- $$
- w_A = \frac{100}{100 + 50} = \frac{2}{3}
- \qquad
- w_B = \frac{50}{100 + 50} = \frac{1}{3}
- $$
+    $$
+    w_A = \frac{100}{100 + 50} = \frac{2}{3}
+    \qquad
+    w_B = \frac{50}{100 + 50} = \frac{1}{3}
+    $$
 
- $$
- \text{Income}_A = 30 \times \frac{2}{3} = 20
- \qquad
- \text{Income}_B = 30 \times \frac{1}{3} = 10
- $$
+    $$
+    \text{Income}_A = 30 \times \frac{2}{3} = 20
+    \qquad
+    \text{Income}_B = 30 \times \frac{1}{3} = 10
+    $$
 
- **Étape 2 — Rendement Ouvert pour chaque lot**
+    **Étape 2 — Rendement Ouvert pour chaque lot**
 
- $$
- \text{RelativeReturn}_A = \frac{16}{10} - 1 = 60,00\%
- $$
+    $$
+    \text{RelativeReturn}_A = \frac{16}{10} - 1 = 60,00\%
+    $$
 
- $$
- \text{RelativeReturn}_B = \frac{16}{14} - 1 \approx 14,29\%
- $$
+    $$
+    \text{RelativeReturn}_B = \frac{16}{14} - 1 \approx 14,29\%
+    $$
 
- **Étape 3 — Valeur de marché et Rendement Total**
+    **Étape 3 — Valeur de marché et Rendement Total**
 
- $$
- \text{OpenValue}_A = 100 \times 16 = 1 600
- \qquad
- \text{OpenValue}_B = 50 \times 16 = 800
- $$
+    $$
+    \text{OpenValue}_A = 100 \times 16 = 1 600
+    \qquad
+    \text{OpenValue}_B = 50 \times 16 = 800
+    $$
 
- Comme aucune action n'a encore été vendue, les produits et le P&L réalisé sont tous deux nuls.
+    Comme aucune action n'a encore été vendue, les produits et le P&L réalisé sont tous deux nuls.
 
- $$
- \text{TotalPnL}_A = (1 600 - 1 000) + 20 = 620
- $$
+    $$
+    \text{TotalPnL}_A = (1 600 - 1 000) + 20 = 620
+    $$
 
- $$
- \text{TotalReturn}_A = \frac{620}{1 000} = 62,00\%
- $$
+    $$
+    \text{TotalReturn}_A = \frac{620}{1 000} = 62,00\%
+    $$
 
- $$
- \text{TotalPnL}_B = (800 - 700) + 10 = 110
- $$
+    $$
+    \text{TotalPnL}_B = (800 - 700) + 10 = 110
+    $$
 
- $$
- \text{TotalReturn}_B = \frac{110}{700} \approx 15,71\%
- $$
+    $$
+    \text{TotalReturn}_B = \frac{110}{700} \approx 15,71\%
+    $$
 
- **Étape 4 — Rendement agrégé sur les lots affichés**
+    **Étape 4 — Rendement agrégé sur les lots affichés**
 
- $$
- \text{AggregateReturn} = \frac{620 + 110}{1 000 + 700} = \frac{730}{1 700} \approx 42,94\%
- $$
+    $$
+    \text{AggregateReturn} = \frac{620 + 110}{1 000 + 700} = \frac{730}{1 700} \approx 42,94\%
+    $$
 
- Même si les deux lots appartiennent au même actif, leurs rendements diffèrent car ils ont été ouverts à des prix différents.
+    Même si les deux lots appartiennent au même actif, leurs rendements diffèrent car ils ont été ouverts à des prix différents.
 
 ---
 

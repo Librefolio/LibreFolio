@@ -58,38 +58,38 @@ Lorsque plusieurs transactions ont lieu à la même date :
 
 ??? example "Exemple 1 : Deux achats — le PMP augmente"
 
- | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
- | 15 avril | ACHAT | 5 | 180 $ | 15 | 160,00 $ |
+    | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
+    | 15 avril | ACHAT | 5 | 180 $ | 15 | 160,00 $ |
 
- $$
- PMP = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160,00
- $$
+    $$
+    PMP = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160,00
+    $$
 
- Le deuxième achat à un prix plus élevé **fait monter le PMP**.
+    Le deuxième achat à un prix plus élevé **fait monter le PMP**.
 
 ??? example "Exemple 2 : Achat puis vente — le PMP inchangé"
 
- | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
- | 15 avril | VENTE | -5 | (au PMP) | 5 | 150,00 $ |
+    | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
+    | 15 avril | VENTE | -5 | (au PMP) | 5 | 150,00 $ |
 
- La VENTE retire des unités au PMP actuel (150 $). Le PMP reste **inchangé** — seul le pool diminue.
+    La VENTE retire des unités au PMP actuel (150 $). Le PMP reste **inchangé** — seul le pool diminue.
 
 ??? example "Exemple 3 : Acquisition à coût nul — Dilution"
 
- | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
- | 1er mai | AJUSTEMENT | +5 | 0 $ | 15 | 100,00 $ |
+    | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
+    | 1er mai | AJUSTEMENT | +5 | 0 $ | 15 | 100,00 $ |
 
- $$
- PMP = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100,00
- $$
+    $$
+    PMP = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100,00
+    $$
 
- Le PMP est **dilué** car 5 unités sont entrées à coût nul (ex. division d'actions, airdrop, don).
+    Le PMP est **dilué** car 5 unités sont entrées à coût nul (ex. division d'actions, airdrop, don).
 
 ## 🔄 Surcharge du coût de base
 
@@ -120,17 +120,17 @@ $$
 
 ??? example "Exemple 4 : Transfert en mode Auto — le PMP inchangé"
 
- | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
- | 15 avril | ACHAT | 5 | 180 $ | 15 | 160,00 $ |
- | 1er mai | TRANSFERT (auto) | +3 | 160 $ (=PMP) | 18 | 160,00 $ |
+    | Date | Type | Qté | Coût unitaire | Qté du pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1er avril | ACHAT | 10 | 150 $ | 10 | 150,00 $ |
+    | 15 avril | ACHAT | 5 | 180 $ | 15 | 160,00 $ |
+    | 1er mai | TRANSFERT (auto) | +3 | 160 $ (=PMP) | 18 | 160,00 $ |
 
- $$
- PMP = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160,00
- $$
+    $$
+    PMP = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160,00
+    $$
 
- Le destinataire du transfert en **mode auto** hérite du PMP actuel comme coût unitaire. Le pool augmente mais le PMP reste **inchangé**.
+    Le destinataire du transfert en **mode auto** hérite du PMP actuel comme coût unitaire. Le pool augmente mais le PMP reste **inchangé**.
 
 ## 🌍 Gestion multi-devises
 

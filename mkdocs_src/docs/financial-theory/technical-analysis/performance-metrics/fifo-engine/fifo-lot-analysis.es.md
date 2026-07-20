@@ -223,72 +223,72 @@ La fila **Ingreso del Activo** del modal de detalle del lote es exactamente $\te
 
 ??? example "Ejemplo: dos lotes, un dividendo, un precio de mercado"
 
- Supongamos la misma acción, la misma moneda, `qbq = 1`.
+    Supongamos la misma acción, la misma moneda, `qbq = 1`.
 
- | Fecha | Evento | Cant. Abierta Lote A | Cant. Abierta Lote B | Notes |
- |------|-------|----------------|----------------|-------|
- | Ene 2 | COMPRA 100 @ $10 | 100 | 0 | El lote A se abre con costo original $1,000 |
- | Feb 10 | COMPRA 50 @ $14 | 100 | 50 | El lote B se abre con costo original $700 |
- | Mar 15 | DIVIDENDO $30 | 100 | 50 | Ambos lotes aún están abiertos |
- | Abr 1 | Precio de mercado = $16 | 100 | 50 | Evaluar ambos lotes |
+    | Fecha | Evento | Cant. Abierta Lote A | Cant. Abierta Lote B | Notes |
+    |------|-------|----------------|----------------|-------|
+    | Ene 2 | COMPRA 100 @ $10 | 100 | 0 | El lote A se abre con costo original $1,000 |
+    | Feb 10 | COMPRA 50 @ $14 | 100 | 50 | El lote B se abre con costo original $700 |
+    | Mar 15 | DIVIDENDO $30 | 100 | 50 | Ambos lotes aún están abiertos |
+    | Abr 1 | Precio de mercado = $16 | 100 | 50 | Evaluar ambos lotes |
 
- **Paso 1 — Asignar dividendo prorrateado**
+    **Paso 1 — Asignar dividendo prorrateado**
 
- $$
- w_A = \frac{100}{100 + 50} = \frac{2}{3}
- \qquad
- w_B = \frac{50}{100 + 50} = \frac{1}{3}
- $$
+    $$
+    w_A = \frac{100}{100 + 50} = \frac{2}{3}
+    \qquad
+    w_B = \frac{50}{100 + 50} = \frac{1}{3}
+    $$
 
- $$
- \text{Ingreso}_A = 30 \times \frac{2}{3} = 20
- \qquad
- \text{Ingreso}_B = 30 \times \frac{1}{3} = 10
- $$
+    $$
+    \text{Ingreso}_A = 30 \times \frac{2}{3} = 20
+    \qquad
+    \text{Ingreso}_B = 30 \times \frac{1}{3} = 10
+    $$
 
- **Paso 2 — Rendimiento Abierto para cada lote**
+    **Paso 2 — Rendimiento Abierto para cada lote**
 
- $$
- \text{RendimientoRelativo}_A = \frac{16}{10} - 1 = 60.00\%
- $$
+    $$
+    \text{RendimientoRelativo}_A = \frac{16}{10} - 1 = 60.00\%
+    $$
 
- $$
- \text{RendimientoRelativo}_B = \frac{16}{14} - 1 \approx 14.29\%
- $$
+    $$
+    \text{RendimientoRelativo}_B = \frac{16}{14} - 1 \approx 14.29\%
+    $$
 
- **Paso 3 — Valor de mercado y Rendimiento Total**
+    **Paso 3 — Valor de mercado y Rendimiento Total**
 
- $$
- \text{ValorAbierto}_A = 100 \times 16 = 1,600
- \qquad
- \text{ValorAbierto}_B = 50 \times 16 = 800
- $$
+    $$
+    \text{ValorAbierto}_A = 100 \times 16 = 1,600
+    \qquad
+    \text{ValorAbierto}_B = 50 \times 16 = 800
+    $$
 
- Como aún no se han vendido acciones, los productos y GyP realizados son ambos cero.
+    Como aún no se han vendido acciones, los productos y GyP realizados son ambos cero.
 
- $$
- \text{GyPTotal}_A = (1,600 - 1,000) + 20 = 620
- $$
+    $$
+    \text{GyPTotal}_A = (1,600 - 1,000) + 20 = 620
+    $$
 
- $$
- \text{RendimientoTotal}_A = \frac{620}{1,000} = 62.00\%
- $$
+    $$
+    \text{RendimientoTotal}_A = \frac{620}{1,000} = 62.00\%
+    $$
 
- $$
- \text{GyPTotal}_B = (800 - 700) + 10 = 110
- $$
+    $$
+    \text{GyPTotal}_B = (800 - 700) + 10 = 110
+    $$
 
- $$
- \text{RendimientoTotal}_B = \frac{110}{700} \approx 15.71\%
- $$
+    $$
+    \text{RendimientoTotal}_B = \frac{110}{700} \approx 15.71\%
+    $$
 
- **Paso 4 — Rendimiento agregado entre los lotes mostrados**
+    **Paso 4 — Rendimiento agregado entre los lotes mostrados**
 
- $$
- \text{RendimientoAgregado} = \frac{620 + 110}{1,000 + 700} = \frac{730}{1,700} \approx 42.94\%
- $$
+    $$
+    \text{RendimientoAgregado} = \frac{620 + 110}{1,000 + 700} = \frac{730}{1,700} \approx 42.94\%
+    $$
 
- Aunque ambos lotes pertenecen al mismo activo, sus rendimientos difieren porque se abrieron a diferentes precios.
+    Aunque ambos lotes pertenecen al mismo activo, sus rendimientos difieren porque se abrieron a diferentes precios.
 
 ---
 

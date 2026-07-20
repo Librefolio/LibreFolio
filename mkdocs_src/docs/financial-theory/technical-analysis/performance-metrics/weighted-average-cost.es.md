@@ -58,38 +58,38 @@ Cuando ocurren múltiples transacciones en la misma fecha:
 
 ??? example "Ejemplo 1: Dos Compras — el PMP aumenta"
 
- | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
- | 15 Abr | BUY | 5 | $180 | 15 | $160.00 |
+    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
+    | 15 Abr | BUY | 5 | $180 | 15 | $160.00 |
 
- $$
- WAC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
- $$
+    $$
+    WAC = \frac{150 \times 10 + 180 \times 5}{10 + 5} = \frac{2400}{15} = 160.00
+    $$
 
- La segunda compra a un precio más alto **eleva el PMP**.
+    La segunda compra a un precio más alto **eleva el PMP**.
 
 ??? example "Ejemplo 2: Compra luego Venta — el PMP no cambia"
 
- | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
- | 15 Abr | SELL | -5 | (al PMP) | 5 | $150.00 |
+    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
+    | 15 Abr | SELL | -5 | (al PMP) | 5 | $150.00 |
 
- La SELL elimina unidades al PMP actual ($150). El PMP permanece **sin cambios** — solo se reduce el pool.
+    La SELL elimina unidades al PMP actual ($150). El PMP permanece **sin cambios** — solo se reduce el pool.
 
 ??? example "Ejemplo 3: Adquisición de Coste Cero — Dilución"
 
- | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
- | 1 May | ADJUSTMENT | +5 | $0 | 15 | $100.00 |
+    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
+    | 1 May | ADJUSTMENT | +5 | $0 | 15 | $100.00 |
 
- $$
- WAC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
- $$
+    $$
+    WAC = \frac{150 \times 10 + 0 \times 5}{10 + 5} = \frac{1500}{15} = 100.00
+    $$
 
- El PMP se **diluye** porque 5 unidades entraron a coste cero (por ejemplo, split de acciones, airdrop, regalo).
+    El PMP se **diluye** porque 5 unidades entraron a coste cero (por ejemplo, split de acciones, airdrop, regalo).
 
 ## 🔄 Anulación de la Base de Coste
 
@@ -120,17 +120,17 @@ $$
 
 ??? example "Ejemplo 4: Transferencia en Modo Automático — el PMP no cambia"
 
- | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
- |------|------|-----|-----------|----------|-----|
- | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
- | 15 Abr | BUY | 5 | $180 | 15 | $160.00 |
- | 1 May | TRANSFER (auto) | +3 | $160 (=PMP) | 18 | $160.00 |
+    | Fecha | Tipo | Cantidad | Coste Unitario | Cantidad en Pool | PMP |
+    |------|------|-----|-----------|----------|-----|
+    | 1 Abr | BUY | 10 | $150 | 10 | $150.00 |
+    | 15 Abr | BUY | 5 | $180 | 15 | $160.00 |
+    | 1 May | TRANSFER (auto) | +3 | $160 (=PMP) | 18 | $160.00 |
 
- $$
- WAC = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160.00
- $$
+    $$
+    WAC = \frac{160 \times 15 + 160 \times 3}{15 + 3} = \frac{2880}{18} = 160.00
+    $$
 
- El receptor de la transferencia en **modo automático** hereda el PMP actual como su coste unitario. El pool crece pero el PMP permanece **sin cambios**.
+    El receptor de la transferencia en **modo automático** hereda el PMP actual como su coste unitario. El pool crece pero el PMP permanece **sin cambios**.
 
 ## 🌍 Manejo de Múltiples Monedas
 

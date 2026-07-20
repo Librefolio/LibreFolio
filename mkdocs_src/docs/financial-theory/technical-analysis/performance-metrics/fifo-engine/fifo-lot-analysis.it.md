@@ -223,72 +223,72 @@ La riga **Reddito Asset** della modale di dettaglio del lotto è esattamente $\t
 
 ??? example "Esempio: due lotti, un dividendo, un prezzo di mercato"
 
- Supponiamo stessa azione, stessa valuta, `qbq = 1`.
+    Supponiamo stessa azione, stessa valuta, `qbq = 1`.
 
- | Data | Evento | Q.tà Aperta Lotto A | Q.tà Aperta Lotto B | Note |
- |------|-------|----------------|----------------|-------|
- | 2 Gen | ACQUISTO 100 @ $10 | 100 | 0 | Il lotto A si apre con costo originale $1.000 |
- | 10 Feb | ACQUISTO 50 @ $14 | 100 | 50 | Il lotto B si apre con costo originale $700 |
- | 15 Mar | DIVIDENDO $30 | 100 | 50 | Entrambi i lotti sono ancora aperti |
- | 1 Apr | Prezzo mercato = $16 | 100 | 50 | Valuta entrambi i lotti |
+    | Data | Evento | Q.tà Aperta Lotto A | Q.tà Aperta Lotto B | Note |
+    |------|-------|----------------|----------------|-------|
+    | 2 Gen | ACQUISTO 100 @ $10 | 100 | 0 | Il lotto A si apre con costo originale $1.000 |
+    | 10 Feb | ACQUISTO 50 @ $14 | 100 | 50 | Il lotto B si apre con costo originale $700 |
+    | 15 Mar | DIVIDENDO $30 | 100 | 50 | Entrambi i lotti sono ancora aperti |
+    | 1 Apr | Prezzo mercato = $16 | 100 | 50 | Valuta entrambi i lotti |
 
- **Passo 1 — Alloca dividendo pro-rata**
+    **Passo 1 — Alloca dividendo pro-rata**
 
- $$
- w_A = \frac{100}{100 + 50} = \frac{2}{3}
- \qquad
- w_B = \frac{50}{100 + 50} = \frac{1}{3}
- $$
+    $$
+    w_A = \frac{100}{100 + 50} = \frac{2}{3}
+    \qquad
+    w_B = \frac{50}{100 + 50} = \frac{1}{3}
+    $$
 
- $$
- \text{Reddito}_A = 30 \times \frac{2}{3} = 20
- \qquad
- \text{Reddito}_B = 30 \times \frac{1}{3} = 10
- $$
+    $$
+    \text{Reddito}_A = 30 \times \frac{2}{3} = 20
+    \qquad
+    \text{Reddito}_B = 30 \times \frac{1}{3} = 10
+    $$
 
- **Passo 2 — Rendimento Non Realizzato per ogni lotto**
+    **Passo 2 — Rendimento Non Realizzato per ogni lotto**
 
- $$
- \text{RendimentoRelativo}_A = \frac{16}{10} - 1 = 60,00\%
- $$
+    $$
+    \text{RendimentoRelativo}_A = \frac{16}{10} - 1 = 60,00\%
+    $$
 
- $$
- \text{RendimentoRelativo}_B = \frac{16}{14} - 1 \approx 14,29\%
- $$
+    $$
+    \text{RendimentoRelativo}_B = \frac{16}{14} - 1 \approx 14,29\%
+    $$
 
- **Passo 3 — Valore di mercato e Rendimento Totale**
+    **Passo 3 — Valore di mercato e Rendimento Totale**
 
- $$
- \text{ValoreCorrente}_A = 100 \times 16 = 1.600
- \qquad
- \text{ValoreCorrente}_B = 50 \times 16 = 800
- $$
+    $$
+    \text{ValoreCorrente}_A = 100 \times 16 = 1.600
+    \qquad
+    \text{ValoreCorrente}_B = 50 \times 16 = 800
+    $$
 
- Poiché nessuna azione è stata ancora venduta, ricavi e P&L realizzato sono entrambi zero.
+    Poiché nessuna azione è stata ancora venduta, ricavi e P&L realizzato sono entrambi zero.
 
- $$
- \text{PnL Totale}_A = (1.600 - 1.000) + 20 = 620
- $$
+    $$
+    \text{PnL Totale}_A = (1.600 - 1.000) + 20 = 620
+    $$
 
- $$
- \text{RendimentoTotale}_A = \frac{620}{1.000} = 62,00\%
- $$
+    $$
+    \text{RendimentoTotale}_A = \frac{620}{1.000} = 62,00\%
+    $$
 
- $$
- \text{PnL Totale}_B = (800 - 700) + 10 = 110
- $$
+    $$
+    \text{PnL Totale}_B = (800 - 700) + 10 = 110
+    $$
 
- $$
- \text{RendimentoTotale}_B = \frac{110}{700} \approx 15,71\%
- $$
+    $$
+    \text{RendimentoTotale}_B = \frac{110}{700} \approx 15,71\%
+    $$
 
- **Passo 4 — Rendimento aggregato tra i lotti visualizzati**
+    **Passo 4 — Rendimento aggregato tra i lotti visualizzati**
 
- $$
- \text{RendimentoAggregato} = \frac{620 + 110}{1.000 + 700} = \frac{730}{1.700} \approx 42,94\%
- $$
+    $$
+    \text{RendimentoAggregato} = \frac{620 + 110}{1.000 + 700} = \frac{730}{1.700} \approx 42,94\%
+    $$
 
- Anche se entrambi i lotti appartengono allo stesso asset, i loro rendimenti differiscono perché sono stati aperti a prezzi diversi.
+    Anche se entrambi i lotti appartengono allo stesso asset, i loro rendimenti differiscono perché sono stati aperti a prezzi diversi.
 
 ---
 
