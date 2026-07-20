@@ -131,3 +131,4 @@ class WACPreviewResultItem:
 
 - 🏗️ **[Transaction Service](service.md)** — How WAC is invoked in the batch pipeline
 - 📖 **[Weighted Average Cost Theory](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** — Financial methodology
+- 🧠 **[FIFO Lot Engine](fifo_lot_engine.md)** — Per-lot alternative that tracks individual acquisition batches instead of a blended average

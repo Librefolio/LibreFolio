@@ -287,12 +287,22 @@ test.describe('Gallery Screenshots', () => {
     }
 
     async function selectMaxDateRange(page: Page) {
-        const maxBtn = page.getByRole('button', {name: 'MAX'});
-        const y2Btn = page.getByRole('button', {name: '2Y'});
+        const maxBtn = page.getByTestId('date-preset-max');
+        const y2Btn = page.getByTestId('date-preset-2y');
         if (await maxBtn.isVisible({timeout: 500}).catch(() => false)) {
             await maxBtn.click();
         } else if (await y2Btn.isVisible({timeout: 500}).catch(() => false)) {
             await y2Btn.click();
+        }
+    }
+
+    // Non-FIFO screenshots use a fixed 1-year window (deterministic, not the ambient
+    // 3-month sessionStorage default) — FIFO screenshots use selectMaxDateRange() instead
+    // so the engine auto-centers on the lots' full lifecycle.
+    async function selectOneYearDateRange(page: Page) {
+        const y1Btn = page.getByTestId('date-preset-1y');
+        if (await y1Btn.isVisible({timeout: 500}).catch(() => false)) {
+            await y1Btn.click();
         }
     }
 
@@ -363,6 +373,50 @@ test.describe('Gallery Screenshots', () => {
         }
     }
 
+    const LOTS_SCREENSHOT_VARIANTS = [
+        {testId: 'lot-wac-price-chart', name: 'fifo-lots-wac-chart'},
+        {testId: 'lot-gantt-chart', name: 'fifo-lots-gantt-chart'},
+        {testId: 'unified-lots-table', name: 'fifo-lots-table'},
+        {testId: 'lot-comparison-chart', name: 'fifo-lots-comparison-chart'},
+    ] as const;
+
+    async function captureLotsAnalysisScreenshots(
+        page: Page,
+        viewport: 'desktop' | 'mobile',
+        lang: Language,
+        theme: Theme,
+        category: string
+    ) {
+        const panel = page.getByTestId('lots-analysis-panel');
+        await expect(panel).toBeVisible({timeout: 5_000});
+        await panel.evaluate((el) => el.scrollIntoView({block: 'start'}));
+        await page.waitForTimeout(800);
+        await screenshot(page, viewport, lang, theme, category, 'fifo-lots-panel');
+
+        for (const variant of LOTS_SCREENSHOT_VARIANTS) {
+            const block = page.getByTestId(variant.testId);
+            await expect(block).toBeVisible({timeout: 10_000});
+            await block.scrollIntoViewIfNeeded();
+            await page.waitForTimeout(300);
+            await screenshot(page, viewport, lang, theme, category, variant.name);
+        }
+
+        const comparisonReturnToggle = page.getByTestId('lot-comparison-mode-return');
+        if (await comparisonReturnToggle.isVisible({timeout: 2_000}).catch(() => false)) {
+            await comparisonReturnToggle.click();
+            await page.waitForTimeout(300);
+            await screenshot(page, viewport, lang, theme, category, 'fifo-lots-comparison-chart-return');
+        }
+
+        const table = page.getByTestId('unified-lots-table');
+        await clickRowAction(page, table, 'lot-view-details-action');
+        await expect(page.getByTestId('lot-custody-modal')).toBeVisible({timeout: 5_000});
+        await page.waitForTimeout(300);
+        await screenshot(page, viewport, lang, theme, category, 'fifo-lots-custody-modal');
+        await page.getByTestId('lot-custody-modal-close').click();
+        await expect(page.getByTestId('lot-custody-modal')).toBeHidden({timeout: 5_000});
+    }
+
     test.describe('Dashboard', () => {
         test.beforeEach(async ({page}) => {
             // Use TEST_ADMIN since db populate assigns brokers to admin
@@ -376,7 +430,7 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectMaxDateRange(page);
+                await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
 
@@ -429,7 +483,7 @@ test.describe('Gallery Screenshots', () => {
                     // Navigate fresh to dashboard for each combo (ensures clean state)
                     await page.goto('/dashboard');
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
-                    await selectMaxDateRange(page);
+                    await selectOneYearDateRange(page);
                     await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await freezeAnimations(page);
 
@@ -455,7 +509,7 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectMaxDateRange(page);
+                await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
 
@@ -520,7 +574,7 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectMaxDateRange(page);
+                await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
 
@@ -588,11 +642,11 @@ test.describe('Gallery Screenshots', () => {
                         .getByTestId('lot-wac-price-chart')
                         .isVisible({timeout: 10_000})
                         .catch(() => false);
-                    const bubbleTimelineVisible = await page
+                    const ganttChartVisible = await page
                         .getByTestId('lot-gantt-chart')
                         .isVisible({timeout: 10_000})
                         .catch(() => false);
-                    if (!wacChartVisible || !bubbleTimelineVisible) {
+                    if (!wacChartVisible || !ganttChartVisible) {
                         if (attempt === 2) {
                             await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 10_000});
                             await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10_000});
@@ -601,12 +655,7 @@ test.describe('Gallery Screenshots', () => {
                     }
 
                     panelReady = true;
-                    // The panel opens below the positions table and can be taller than the
-                    // viewport — scroll its top edge into view so the Bubble Timeline / WAC
-                    // chart (not just the header) are actually captured in the screenshot.
-                    await page.getByTestId('lots-analysis-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
-                    await page.waitForTimeout(800);
-                    await screenshot(page, viewport, lang, theme, 'dashboard', 'fifo-lots-panel');
+                    await captureLotsAnalysisScreenshots(page, viewport, lang, theme, 'dashboard');
 
                     await page.getByTestId('lots-analysis-panel-close').click();
                     await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: 5_000});
@@ -620,7 +669,7 @@ test.describe('Gallery Screenshots', () => {
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await page.goto('/dashboard');
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
-                await selectMaxDateRange(page);
+                await selectOneYearDateRange(page);
                 await page.waitForLoadState('networkidle', {timeout: 20_000});
                 await freezeAnimations(page);
 
@@ -1471,6 +1520,8 @@ test.describe('Gallery Screenshots', () => {
                     await waitForNetworkSettled(page);
 
                     await openBrokerCardByName(page, 'Coinbase');
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.getByTestId('broker-tab-posizioni').click();
                     await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
                     await screenshotPositionsVariants(page, viewport, lang, theme, 'brokers');
@@ -1490,6 +1541,8 @@ test.describe('Gallery Screenshots', () => {
                     await waitForNetworkSettled(page);
 
                     await openBrokerCardByName(page, 'Coinbase');
+                    await selectMaxDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 20_000});
                     await page.getByTestId('broker-tab-posizioni').click();
                     await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5_000});
                     await setPositionsView(page, 'holdings', 'table');
@@ -1499,12 +1552,7 @@ test.describe('Gallery Screenshots', () => {
                     await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5_000});
                     await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible({timeout: 10_000});
                     await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10_000});
-                    // Scroll the panel's top edge into view — it opens below the positions
-                    // table and can be taller than the viewport (see also the analogous fix
-                    // in the "dashboard fifo lots panel" test).
-                    await page.getByTestId('lots-analysis-panel').evaluate((el) => el.scrollIntoView({block: 'start'}));
-                    await page.waitForTimeout(800);
-                    await screenshot(page, viewport, lang, theme, 'brokers', 'fifo-lots-panel');
+                    await captureLotsAnalysisScreenshots(page, viewport, lang, theme, 'brokers');
 
                     await page.getByTestId('lots-analysis-panel-close').click();
                     await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: 5_000});
@@ -1956,6 +2004,8 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await goToFxPage(page);
+                await selectOneYearDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                 await freezeAnimations(page);
                 // Wait for charts (canvas) to render
                 await page.waitForTimeout(2000);
@@ -2191,6 +2241,8 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await goToFxDetailPage(page, 'EUR-USD');
+                await selectOneYearDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                 await freezeAnimations(page);
                 // Wait for ECharts canvas to render
                 await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
@@ -2205,6 +2257,8 @@ test.describe('Gallery Screenshots', () => {
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
                     await goToFxDetailPage(page, 'EUR-USD');
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
@@ -2236,6 +2290,8 @@ test.describe('Gallery Screenshots', () => {
             for (const lang of SUPPORTED_LANGUAGES) {
                 for (const theme of THEMES) {
                     await goToFxDetailPage(page, 'EUR-USD');
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await setLanguage(page, lang);
                     await setTheme(page, theme);
                     await freezeAnimations(page);
@@ -2394,6 +2450,8 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 await goToAssetsPage(page);
+                await selectOneYearDateRange(page);
+                await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                 await freezeAnimations(page);
                 await page.waitForTimeout(1500);
                 await screenshot(page, viewport, lang, theme, 'assets', 'list');
@@ -2453,6 +2511,8 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(500);
                     // Screenshot 1: line chart (default)
@@ -2487,6 +2547,8 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
 
                     // Toggle signals panel
                     const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
@@ -2510,6 +2572,8 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(1000);
 
@@ -2552,6 +2616,8 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(1000);
 
@@ -2591,6 +2657,8 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(1000);
 
@@ -2630,6 +2698,8 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(1000);
 
@@ -2671,6 +2741,8 @@ test.describe('Gallery Screenshots', () => {
                     await freezeAnimations(page);
 
                     await navigateToAssetByName(page, GALLERY_ASSET);
+                    await selectOneYearDateRange(page);
+                    await page.waitForLoadState('networkidle', {timeout: 10_000}).catch(() => {});
                     await page.waitForSelector('canvas', {timeout: 5000}).catch(() => null);
                     await page.waitForTimeout(1000);
 

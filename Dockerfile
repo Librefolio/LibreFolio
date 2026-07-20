@@ -5,6 +5,9 @@
 #   ./dev.py front build
 #   ./dev.py mkdocs build
 #   docker build -t librefolio .
+#
+# Prefer `./dev.py docker build` — it also regenerates requirements.txt and
+# VERSION (used below) automatically, on top of the above.
 # =============================================================================
 
 FROM python:3.13-slim
@@ -38,6 +41,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
 COPY dev.py ./
+
+# Copy manifests used by the "System Info" endpoint (backend/frontend dependency
+# listing shown in Settings > About) — NOT node_modules, just the small source
+# files. See dev.py::_docker_ensure_assets_built() for VERSION generation.
+COPY Pipfile ./
+COPY frontend/package.json ./frontend/package.json
+COPY VERSION ./
 
 # Copy pre-built frontend (must run ./dev.py front build on host first)
 COPY frontend/build/ ./frontend/build/

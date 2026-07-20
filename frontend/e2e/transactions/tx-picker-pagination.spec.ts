@@ -226,7 +226,7 @@ test.describe('Delete Validation Banner', () => {
     });
 
     test('P4-validate: DeleteModal shows validate button and responds to click', async ({page}) => {
-        // Find a standalone (non-paired) row with a delete button visible
+        // Find a standalone (non-paired) row with a delete action available (via kebab menu)
         const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
         const count = await rows.count();
         let targetRow = null;
@@ -238,17 +238,26 @@ test.describe('Delete Validation Banner', () => {
 
             await row.hover();
             await page.waitForTimeout(200);
-            const deleteBtn = row.locator('button.action-btn.danger');
-            if (await deleteBtn.isVisible({timeout: 800}).catch(() => false)) {
+            const kebabBtn = row.getByTestId(/^row-actions-/);
+            if (!(await kebabBtn.isVisible({timeout: 800}).catch(() => false))) continue;
+            await kebabBtn.click();
+            const hasDelete = await page
+                .getByTestId('context-menu-action-delete')
+                .isVisible({timeout: 800})
+                .catch(() => false);
+            await page.keyboard.press('Escape');
+            if (hasDelete) {
                 targetRow = row;
                 break;
             }
         }
         expect(targetRow, 'Deletable TX must exist — check populate_mock_data.py').toBeTruthy();
 
-        // Open delete modal
-        const deleteBtn = targetRow!.locator('button.action-btn.danger');
-        await deleteBtn.click();
+        // Open delete modal via kebab menu
+        await targetRow!.hover();
+        const kebabBtn = targetRow!.getByTestId(/^row-actions-/);
+        await kebabBtn.click();
+        await page.getByTestId('context-menu-action-delete').click();
 
         const modal = page.getByTestId('tx-delete-modal');
         await expect(modal).toBeVisible({timeout: 5_000});

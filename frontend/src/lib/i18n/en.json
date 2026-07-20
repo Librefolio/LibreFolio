@@ -261,7 +261,8 @@
     },
     "status": {
       "archived": "Archived"
-    }
+    },
+    "lastPrice": "Last Price"
   },
   "auth": {
     "login": "Login",
@@ -542,7 +543,8 @@
       "roleViewerShort": "Viewer",
       "ownerDesc": "Full control + ownership %",
       "editorDesc": "Can modify transactions",
-      "viewerDesc": "Read only"
+      "viewerDesc": "Read only",
+      "lastOwnerWarning": "Cannot remove the last owner."
     },
     "lots": {
       "unifiedLots": "Lots",
@@ -586,7 +588,8 @@
           "sell": "Sales",
           "transfer": "Transfers",
           "adjustment": "Adjustments",
-          "split": "Split"
+          "split": "Split",
+          "income": "Dividend / interest"
         },
         "eventType": {
           "BUY": "Buy",
@@ -979,7 +982,10 @@
     "assets": "Assets",
     "deselectAll": "Deselect All",
     "discardImport": "Discard import?",
-    "category": "Category"
+    "category": "Category",
+    "errorOccurred": "An error occurred",
+    "uploading": "Uploading...",
+    "user": "User"
   },
   "csvImport": {
     "title": "Import CSV Data",
@@ -1598,9 +1604,21 @@
           "details": "Details…",
           "configure": "Configure…",
           "configSummary": "Every {freq}min · {times} · {days}"
-        }
+        },
+        "timezone": "Timezone",
+        "timezoneHint": "Times below are displayed in this timezone. Stored in UTC."
       }
-    }
+    },
+    "devicePixelRatioHint": "Ratio between physical device pixels and CSS pixels. 1x = standard display, 2x+ = Retina/HiDPI display.",
+    "viewport": "Viewport",
+    "devicePixelRatio": "Device Pixel Ratio",
+    "browser": "Browser",
+    "deploymentMode": "Deployment Mode",
+    "deploymentModeDocker": "Docker",
+    "deploymentModeLocal": "Local",
+    "lock": "Lock",
+    "selectLanguage": "Select language",
+    "unlock": "Unlock"
   },
   "sharedResource": {
     "syncAll": "Sync All",
@@ -1651,7 +1669,8 @@
       "success": "Pair unlinked successfully",
       "noPartner": "Cannot split: partner not found",
       "paired": "paired",
-      "standalone": "standalone"
+      "standalone": "standalone",
+      "failed": "Split failed"
     },
     "promoteSuggest": {
       "detected": "Complementary transactions detected:",
@@ -1917,7 +1936,9 @@
       "toastDeletedPaired": "Pair deleted:",
       "toastOnBroker": "on",
       "deleteAbortedTitle": "Deletion cancelled",
-      "deleteAbortedDetail": "The operation was rolled back because it would violate balance rules:"
+      "deleteAbortedDetail": "The operation was rolled back because it would violate balance rules:",
+      "failed": "Delete failed",
+      "validateFailed": "Validation failed"
     },
     "picker": {
       "title": "Select transactions to add",
@@ -2013,12 +2034,24 @@
     "confirmBulkDelete": {
       "title": "Delete files",
       "message": "Delete {n} file(s)? This action cannot be undone."
-    }
+    },
+    "size": "Size",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
   },
   "donationPopup": {
     "title": "LibreFolio grows thanks to users like you!",
     "message": "If you enjoy the project and use it regularly, consider a small donation to support its development.",
     "laterButton": "Maybe later",
     "donationNote": "☕ Even the price of a coffee can make a difference."
+  },
+  "date": {
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "files": {
+    "deleteFailed": "Failed to delete file",
+    "loadFailed": "Failed to load files",
+    "uploadFailed": "Failed to upload file"
   }
 }

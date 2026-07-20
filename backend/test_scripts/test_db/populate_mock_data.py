@@ -2455,6 +2455,90 @@ def link_transactions_to_events(session: Session):
         print(f"  🔗 [Asym-f] CASH_TRANSFER EUR Hidden(none)→IB(OWNER) = LOCKED receiver (#{tx_asym_f_in.id} ↔ #{tx_asym_f_out.id})")
 
 
+def create_split_transaction(session: Session):
+    """Inject a 2:1 forward SPLIT on the isolated eToro AAPL lot so the split marker
+    (◆) is visible/testable in the FIFO lots chart (LotWacPriceChart).
+
+    A split is modelled as an ADJUSTMENT transaction linked to an AssetEvent of type
+    SPLIT. The two engines read it differently and MUST stay consistent:
+      • fifo_lot_engine multiplies the fragment quantity by AssetEvent.value (ratio),
+      • portfolio_engine adds the transaction quantity to the WAC pool (increment).
+    So for a 2:1 split of an N-share open position: value=2 AND tx quantity=+N. eToro
+    holds a single, isolated AAPL lot (no sells/transfers) which keeps N stable, so the
+    injected split does not desync the ratio-based vs increment-based engines.
+    """
+    print("\n🪓 Creating SPLIT test transaction (eToro AAPL 2:1)...")
+    print("-" * 60)
+
+    apple = session.exec(select(Asset).where(Asset.display_name == "Apple Inc.")).first()
+    if apple is None:
+        print("  ⚠️  Apple asset not found — skipping split fixture")
+        return
+
+    etoro_buy = session.exec(
+        select(Transaction).where(
+            Transaction.asset_id == apple.id,
+            Transaction.type == TransactionType.BUY,
+            Transaction.description == "Copy trade - AAPL",
+        )
+    ).first()
+    if etoro_buy is None:
+        print("  ⚠️  eToro AAPL buy not found — skipping split fixture")
+        return
+
+    split_date = etoro_buy.date + timedelta(days=8)
+
+    # Net open quantity on the eToro broker at the split date (isolated single lot ⇒ 5).
+    broker_txs = session.exec(
+        select(Transaction).where(
+            Transaction.asset_id == apple.id,
+            Transaction.broker_id == etoro_buy.broker_id,
+            Transaction.date <= split_date,
+        )
+    ).all()
+    open_qty = Decimal("0")
+    for tx in broker_txs:
+        if tx.type == TransactionType.BUY:
+            open_qty += tx.quantity or Decimal("0")
+        elif tx.type == TransactionType.SELL:
+            open_qty -= tx.quantity or Decimal("0")
+    if open_qty <= 0:
+        print("  ⚠️  eToro AAPL open quantity ≤ 0 — skipping split fixture")
+        return
+
+    split_event = AssetEvent(
+        asset_id=apple.id,
+        date=split_date,
+        type=AssetEventType.SPLIT,
+        value=Decimal("2"),  # 2:1 forward split
+        currency=etoro_buy.currency or "USD",
+        notes="2:1 forward split (test marker)",
+    )
+    session.add(split_event)
+    session.flush()
+
+    split_tx = Transaction(
+        broker_id=etoro_buy.broker_id,
+        asset_id=apple.id,
+        type=TransactionType.ADJUSTMENT,
+        date=split_date,
+        quantity=open_qty,  # +N so the portfolio increment matches the FIFO ×2 ratio
+        amount=Decimal("0"),
+        currency=etoro_buy.currency or "USD",
+        asset_event_id=split_event.id,
+        cost_basis_override=Decimal("0"),  # split adds no cost; also satisfies the qty>0 integrity check
+        cost_basis_currency=etoro_buy.currency or "USD",  # invariant: set together with cost_basis_override
+        description="[split-test] AAPL 2:1 split on eToro",
+    )
+    session.add(split_tx)
+    session.commit()
+
+    print(f"  ✅ SPLIT AssetEvent #{split_event.id} (value=2) + ADJUSTMENT #{split_tx.id} " f"(+{open_qty} AAPL on broker #{etoro_buy.broker_id}, {split_date})")
+    print("\n  🧪 Testing tip — split marker (◆):")
+    print(f"     • Open Asset detail for 'Apple Inc.' (asset_id={apple.id}) → tab Posizioni → Analizza Lotti")
+    print(f"     • In 'PMC / Prezzo di mercato' the eToro lot shows a ◆ split marker on {split_date}")
+
+
 def populate_fx_rates(session: Session):
     """Populate FX rates from the earliest transaction date to today.
 
@@ -3330,6 +3414,7 @@ def main():
             populate_wac_test_transactions(session)
             populate_asset_events(session)
             link_transactions_to_events(session)
+            create_split_transaction(session)
             add_balance_safe_cash_prefunds(session)
             populate_fx_rates(session)
             populate_fx_currency_pair_sources(session)

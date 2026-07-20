@@ -5,7 +5,7 @@
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="transactions" data-name="form-modal-sell" data-title='<img src="/LibreFolio/static/icons/transactions/sell.png" style="width:24px; vertical-align:-5px; margin-right:6px;"> VENDITA' alt="Vendita">
 </div>
 
-I tipi di transazione più fondamentali: **l'acquisto** aumenta le tue partecipazioni e diminuisce la liquidità; **la vendita** fa l'opposto e realizza un profitto o una perdita.
+I tipi di transazione più fondamentali: **l'acquisto** aumenta le tue posizioni e riduce la liquidità; **la vendita** fa il contrario e realizza un profitto o una perdita.
 
 ---
 
@@ -15,8 +15,8 @@ I tipi di transazione più fondamentali: **l'acquisto** aumenta le tue partecipa
 |-----------|----------|---------|
 | **Codice** | `BUY` | `SELL` |
 | **Effetto sulla liquidità** | ⬇️ Diminuisce | ⬆️ Aumenta |
-| **Effetto sul patrimonio** | ⬆️ Aumenta le partecipazioni | ⬇️ Diminuisce le partecipazioni |
-| **Evento fiscale** | No | Sì (realizza plusvalenza/minusvalenza) |
+| **Effetto sul patrimonio** | ⬆️ Aumenta le posizioni | ⬇️ Riduce le posizioni |
+| **Evento fiscale** | No | Sì (realizza guadagno/perdita) |
 
 ---
 
@@ -24,7 +24,7 @@ I tipi di transazione più fondamentali: **l'acquisto** aumenta le tue partecipa
 
 ### 🛒 Acquisto
 
-Quando acquisti un'attività, viene creato un **lotto** con:
+Quando acquisti un asset, viene creato un **lotto** con:
 
 - **Data**: Quando è avvenuto l'acquisto
 - **Quantità**: Numero di azioni/unità acquistate
@@ -37,19 +37,20 @@ Quando acquisti un'attività, viene creato un **lotto** con:
 Quando vendi, LibreFolio abbina la vendita ai lotti esistenti utilizzando il metodo **FIFO** (First In, First Out) per determinare:
 
 $$
-\text{Plusvalenza}~\text{Minusvalenza} = (P_{vendita} \times Q) - (P_{acquisto} \times Q) - \text{Commissioni}
+\text{Plusvalenza} = (P_{vendita} \times Q) - (P_{acquisto} \times Q) - \text{Commissioni}
 $$
 
 <div id="fifo-matching"></div>
 
 !!! info "Abbinamento FIFO"
 
-    LibreFolio calcola l'abbinamento dei lotti a **runtime** — non viene salvato nel database. Ciò consente un'analisi flessibile di scenari "what-if" e un potenziale supporto futuro per altri metodi di abbinamento (LIFO, identificazione specifica).
+    LibreFolio calcola l'abbinamento dei lotti **in fase di esecuzione** — non viene persistito nel database. Ciò consente un'analisi flessibile del tipo "what-if" e un potenziale supporto futuro per altri metodi di abbinamento (LIFO, identificazione specifica).
 
 ---
 
 ## 🔗 Correlati
 
 - 📊 **[Prezzo Medio di Carico (PMC)](../../technical-analysis/performance-metrics/weighted-average-cost.md)** — Costo medio per unità su più acquisti
+- 🔬 **[Analisi dei Lotti FIFO](../../technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Analisi dettagliata per lotto dell'abbinamento FIFO introdotto sopra
 - 💰 **[Tassazione](../../fundamentals/taxation.md)** — Plusvalenze, metodi di abbinamento, riporto delle perdite
 - 📈 **[Rendimenti](../../fundamentals/returns.md)** — Misurazione della performance degli investimenti

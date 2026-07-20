@@ -50,7 +50,7 @@ At the top right of the dashboard, you have several controls to customize your v
 
 !!! tip "Scope matters"
 
-    When you filter to a single broker, cash transfers *to other brokers* become external flows for that scope. This affects [Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md) and [P&L](../../financial-theory/technical-analysis/performance-metrics/period-pnl.md) calculations.
+    When you filter to a single broker, cash transfers *to other brokers* become external flows for that scope. This affects [Deposited Capital](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) and [P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md) calculations.
 
 ---
 
@@ -68,8 +68,8 @@ If any prices or FX rates are missing on the end date, a banner appears at the t
 
 ## 🔗 Related theory
 
-- **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/nav.md)**
-- **[Book Value](../../financial-theory/technical-analysis/performance-metrics/book-value.md)**
-- **[Period P&L](../../financial-theory/technical-analysis/performance-metrics/period-pnl.md)**
-- **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/deposited-capital.md)**
+- **[NAV / Net Worth](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md)**
+- **[Book Value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)**
+- **[Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)**
+- **[Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)**
 - **[Performance Metrics overview](../../financial-theory/technical-analysis/performance-metrics/index.md)**

@@ -88,10 +88,16 @@ Recent transactions right on the dashboard, no need to navigate away.
 
 ### 🔬 FIFO Lots Analysis
 
-Inspect the bubble timeline, WAC-price chart, and open/closed lots tables for a single asset.
+Drill into a single asset's FIFO lots — WAC vs. market price, custody timeline, unified table, and value/return comparison.
 
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="dashboard" data-name="fifo-lots-panel" alt="Dashboard FIFO Lots Analysis">
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-12" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔍 Overview" alt="Dashboard FIFO Lots Analysis — Overview">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-wac-chart" data-title="📈 WAC / Market Price" alt="Dashboard FIFO Lots Analysis — WAC and Market Price Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-gantt-chart" data-title="🕒 Lot Life & Custody" alt="Dashboard FIFO Lots Analysis — Lot Life and Custody Gantt Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-table" data-title="📋 Unified Lots Table" alt="Dashboard FIFO Lots Analysis — Unified Lots Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-comparison-chart" data-title="💰 Value Comparison" alt="Dashboard FIFO Lots Analysis — Value Comparison Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-comparison-chart-return" data-title="📊 Return Comparison" alt="Dashboard FIFO Lots Analysis — Return Comparison Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="fifo-lots-custody-modal" data-title="🧾 Lot Detail Modal" alt="Dashboard FIFO Lots Analysis — Lot Detail Modal">
 </div>
 
 ### 🌱 Empty State
@@ -375,10 +381,16 @@ Metadata and inline sharing controls stay accessible in the Info tab, optimized 
 
 ### 🔬 FIFO Lots Analysis
 
-Bubble timeline, WAC-price chart, and open/closed lots tables remain readable on smaller screens.
+The same FIFO lot drill-down — WAC/price chart, custody timeline, unified table, value/return comparison — stays readable on smaller screens.
 
-<div class="screenshot-container mobile">
-    <img class="gallery-img" data-category="brokers" data-name="fifo-lots-panel" alt="Broker FIFO Lots Analysis">
+<div class="lf-screenshot-carousel" data-carousel="carousel-mobile-13" data-carousel-interval="6000" data-show-titles="true" style="width: 100%; margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="fifo-lots-panel" data-title="🔍 Overview" alt="Broker FIFO Lots Analysis — Overview">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="fifo-lots-wac-chart" data-title="📈 WAC / Market Price" alt="Broker FIFO Lots Analysis — WAC and Market Price Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="fifo-lots-gantt-chart" data-title="🕒 Lot Life & Custody" alt="Broker FIFO Lots Analysis — Lot Life and Custody Gantt Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="fifo-lots-table" data-title="📋 Unified Lots Table" alt="Broker FIFO Lots Analysis — Unified Lots Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="fifo-lots-comparison-chart" data-title="💰 Value Comparison" alt="Broker FIFO Lots Analysis — Value Comparison Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="fifo-lots-comparison-chart-return" data-title="📊 Return Comparison" alt="Broker FIFO Lots Analysis — Return Comparison Chart">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="fifo-lots-custody-modal" data-title="🧾 Lot Detail Modal" alt="Broker FIFO Lots Analysis — Lot Detail Modal">
 </div>
 
 ---

@@ -1,149 +1,169 @@
-# 📈 Indicateurs de Performance
+# 📈 Métriques de Performance
 
-Lorsqu'on évalue le succès d'un portefeuille d'investissement, regarder uniquement le solde total ou le profit absolu ne suffit pas. Pour vraiment comprendre la performance, vous avez besoin d'indicateurs standardisés qui répondent à différentes questions : « Comment mes actifs se sont-ils comportés ? », « Mon timing a-t-il été bon ? » et « Quel est le rendement de cette transaction spécifique ? ».
-
----
-
-## 🎭 Les deux acteurs de votre portefeuille
-
-Pour comprendre pourquoi il existe plusieurs indicateurs, imaginez que deux « acteurs » différents gèrent votre patrimoine :
-
-1. **Le Marché (Les Actifs) :** Fait varier à la hausse ou à la baisse le cours des actifs que vous détenez.
-2. **Vous (L'Investisseur) :** Décidez *quand* déposer ou retirer des capitaux du portefeuille.
-
-Ces deux acteurs peuvent obtenir des performances très différentes. Vous pouvez choisir un excellent actif (le Marché se comporte bien), mais l'acheter au plus haut juste avant un krach (vos résultats personnels sont mauvais). LibreFolio utilise différents indicateurs pour isoler ces deux comportements.
+Lors de l'évaluation du succès d'un portefeuille d'investissement, regarder uniquement le solde total ou le profit absolu ne suffit pas. Pour véritablement comprendre la performance, vous avez besoin de métriques standardisées qui répondent à différentes questions : « Comment mes actifs ont-ils performé ? », « Quelle a été la qualité de mon timing ? », et « Quel est le rendement de cette opération spécifique ? ».
 
 ---
 
-## 📚 Sujets traités dans ce chapitre
+## 🎭 Les Deux Acteurs de Votre Portefeuille
 
-| Indicateur / Concept | Description |
-|----------------------|-------------|
-| **[Net Asset Value (NAV)](nav.md)** | Net Worth / Net Asset Value. La valorisation boursière totale du portefeuille (actifs + liquidités) à la fin de la fenêtre de temps sélectionnée. |
-| **[Book Value](book-value.md)** | Le coût historique d'acquisition des positions ouvertes plus la liquidité. Utilisé pour comparer le coût d'achat à la valeur de marché. |
-| **[P&L de la Période](period-pnl.md)** | Le profit ou la perte monétaire absolu généré par votre portefeuille au cours de la période sélectionnée, ajusté des flux de trésorerie. |
-| **[Capital Déposé & P&L Total](deposited-capital.md)** | Capital externe net versé depuis l'origine ; l'ancrage pour le calcul du P&L Total et l'algorithme de décomposition des liquidités à **3 pools**. |
-| **[Effet de timing](timing-effect.md)** | Différence entre le MWRR cumulé et le TWRR cumulé. Indique à quel point le moment et le montant de vos flux de trésorerie ont influencé votre rendement global. |
-| **[ROI Simple](roi.md)** | Rendement en pourcentage absolu généré par un investissement par rapport à son coût. Idéal pour évaluer des positions individuelles. |
-| **[TWRR](twrr.md)** | Taux de rendement pondéré par le temps (Time-Weighted Rate of Return). Mesure la performance pure des actifs sous-jacents, en ignorant le timing des flux de trésorerie. |
-| **[MWRR (XIRR)](mwrr.md)** | Taux de rendement pondéré par les capitaux (Money-Weighted Rate of Return). Mesure votre performance personnelle en tant qu'investisseur, en tenant compte du timing des flux de trésorerie. Comprend à la fois la forme Annualisée et la forme Cumulative. |
-| **[Coût Moyen Pondéré](weighted-average-cost.md)** | Le coût unitaire moyen d'un actif dans un portefeuille, pondéré par les quantités acquises. |
-| **[Portfolio Engine](portfolio-engine.md)** | Modèle mathématique complet : chaîne de valorisation, PMP, agrégation, modèle à 3 pools, contribution, architecture pre-frame/frame. |
+Pour comprendre pourquoi plusieurs métriques existent, imaginez qu'il y a deux « acteurs » différents qui gèrent votre patrimoine :
+
+1. **Le Marché (Les Actifs) :** Fait varier (à la hausse ou à la baisse) le prix des actifs que vous possédez.
+2. **Vous (L'Investisseur) :** Décide *quand* déposer ou retirer de l'argent du portefeuille.
+
+Ces deux acteurs peuvent avoir des performances très différentes. Vous pourriez choisir une excellente action (Le Marché performe bien), mais vous pourriez l'acheter au sommet juste avant un krach (Vous performez mal). LibreFolio utilise différentes métriques pour isoler ces deux comportements.
 
 ---
 
-## ⚖️ Guide de comparaison des indicateurs
+## 📚 Sujets de ce Chapitre
 
-Pour vous aider à choisir le bon indicateur pour votre analyse, utilisez ce guide comparatif :
+Les métriques de performance de LibreFolio sont organisées autour de trois moteurs de calcul. Chacun a sa propre page d'aperçu avec le modèle mathématique complet.
 
-### 1. [Net Asset Value (NAV) / Valeur Nette](nav.md)
-* **Question centrale :** « Combien vaut le portefeuille dans le périmètre sélectionné en ce moment précis ? »
-* **Concept de la formule :** $\text{Valeur de Marché} + \text{Liquidité} + \text{Actifs en Transit}$ à la fin de la période.
-* **Meilleur cas d'utilisation :** Instantané du patrimoine absolu à la date de fin sélectionnée (`date_to`).
+### ⚙️ Moteur de Portefeuille
 
-### 2. [Valeur Comptable (Book Value)](book-value.md)
-* **Question centrale :** « Combien la construction de mon portefeuille actuel a-t-elle coûté ? »
-* **Concept de la formule :** $\text{Coût Positions Ouvertes} + \text{Liquidité} + \text{Coût en Transit}$ en utilisant le Prix Moyen Pondéré (PMP).
-* **Meilleur cas d'utilisation :** Évaluer le capital engagé et le comparer à la valeur actuelle du marché (NAV) pour déterminer les plus-values latentes.
+Comptabilité agrégée basée sur le PMP pour l'ensemble du portefeuille (ou toute portée courtier/actif).
 
-### 3. [P&L de la Période](period-pnl.md)
-* **Question centrale :** « Combien d'argent ai-je réellement gagné ou perdu au cours de cette période ? »
-* **Concept de la formule :** $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Flux Externes Nets}$.
-* **Meilleur cas d'utilisation :** Mesurer les gains absolus de la période en devise réelle, indépendamment des dépôts et retraits de l'investisseur.
+| Métrique / Concept | Description |
+|------------------|-------------|
+| **[Aperçu du Moteur de Portefeuille](portfolio-engine/index.md)** | Modèle mathématique complet : chaîne d'évaluation, PMP, agrégation, modèle à 3 pools, contribution, architecture pré-cadre/cadre. |
+| **[Valeur Liquidative (NAV)](portfolio-engine/nav.md)** | Valorisation boursière totale du portefeuille (actifs + cash + en transit). Utilise la chaîne d'évaluation : Prix du Marché → Dernier Prix d'Achat → Manquant. |
+| **[Valeur Comptable](portfolio-engine/book-value.md)** | Coût historique comptable des positions ouvertes (PMP × qté) plus le cash. La différence avec la NAV = P&L latent. |
+| **[P&L de Période](portfolio-engine/period-pnl.md)** | Profit/perte monétaire ajusté des flux de trésorerie sur une fenêtre. Se décompose en : delta latent + réalisé + revenus − frais. Inclut l'attribution de contribution par actif. |
+| **[Capital Déposé & P&L Total](portfolio-engine/deposited-capital.md)** | Capital externe net depuis la création. Documente le modèle de décomposition de trésorerie **basé sur les événements à 3 pools** (K, R, W) avec des règles de mise à jour formelles au niveau des transactions. |
+| **[Effet de Timing](portfolio-engine/timing-effect.md)** | Différence entre le MWRR Cumulé et le TWRR Cumulé — quantifie l'impact du timing des flux de trésorerie sur les rendements. |
+| **[ROI Simple](portfolio-engine/roi.md)** | Rendement en pourcentage par rapport au capital net investi. Simple mais sujet à la dilution des flux de trésorerie. |
+| **[TWRR](portfolio-engine/twrr.md)** | Taux de Rendement Pondéré dans le Temps. Performance pure des actifs/stratégies, neutralisant le timing des dépôts/retraits. |
+| **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Taux de Rendement Pondéré par l'Argent. Performance personnelle de l'investisseur tenant compte du timing des flux de trésorerie. Formes annualisées et cumulatives. |
 
-### 4. [Effet de timing](timing-effect.md)
-* **Question centrale :** « Comment le moment et le montant de mes flux de trésorerie ont-ils affecté mon rendement global par rapport à une stratégie passive ? »
-* **Concept de la formule :** $\text{MWRR}_{\text{cumulé}} - \text{TWRR}_{\text{cumulé}}$.
-* **Meilleur cas d'utilisation :** Diagnostiquer si les dépôts et retraits ont apporté de la valeur ($>0$ pp) ou pesé sur la performance ($<0$ pp).
+### 🔬 Moteur FIFO
 
-### 5. [ROI Simple](roi.md)
-* **Question centrale :** « Combien ai-je gagné par rapport au capital net que j'ai investi ? »
-* **Dénominateur de la formule :** Prix de Revient Moyen (PRM).
-* **Limites :** Ne prend pas en compte le *moment* où les flux de trésorerie ont eu lieu, ce qui entraîne une dilution du ROI en cas d'achats successifs du même actif.
+Comptabilité par lot : suit chaque lot d'acquisition à travers son propre cycle de vie au lieu de le fusionner en une seule moyenne.
 
-### 6. [TWRR (Taux de Rendement Pondéré par le Temps)](twrr.md)
-* **Question centrale :** « Comment ma stratégie ou mon allocation d'actifs s'est-elle comportée, sans tenir compte du timing de mon épargne ? »
-* **Concept de la formule :** Découpe la période à chaque flux de trésorerie, calcule les rendements des sous-périodes et les multiplie.
-* **Meilleur cas d'utilisation :** Comparer votre performance à des indices de référence externes (comme le S&P 500) ou évaluer la performance intrinsèque des actifs choisis.
+| Métrique / Concept | Description |
+|------------------|-------------|
+| **[Aperçu du Moteur FIFO](fifo-engine/index.md)** | États du cycle de vie des lots, traitement chronologique des événements, appariement FIFO, divisions et transferts entre courtiers. |
+| **[Analyse des Lots FIFO](fifo-engine/fifo-lot-analysis.md)** | Complément par lot au PMP : suit chaque lot d'acquisition à travers son propre cycle de vie, apparie les ventes dans l'ordre FIFO et calcule le rendement ouvert/total par lot. |
 
-### 6. [MWRR Annualisé (Taux de Rendement Pondéré par les Capitaux)](mwrr.md#annualized-mwrr)
-* **Question centrale :** « À quel taux annuel composé mon capital réel a-t-il progressé, compte tenu de mes dépôts et retraits ? »
-* **Concept de la formule :** Détermine le taux de rendement interne ($r$) qui annule la valeur actuelle nette de tous les flux de trésorerie.
-* **Meilleur cas d'utilisation :** Comparer votre performance personnelle à des taux d'intérêt à long terme ou évaluer la croissance composée sur de longues périodes. Peut être très volatile sur des périodes courtes.
+### Prix Moyen Pondéré (PMP)
 
-### 7. [MWRR Cumulatif](mwrr.md#cumulative-mwrr)
-* **Question centrale :** « Quel est le rendement cumulatif équivalent pondéré par les capitaux pour la période sélectionnée ? »
-* **Concept de la formule :** Capitalise le MWRR annualisé sur le nombre réel de jours écoulés.
-* **Meilleur cas d'utilisation :** Graphiques temporels et widgets du tableau de bord pour comparer visuellement les tendances de performance côte à côte avec le TWRR et le ROI.
+| Métrique / Concept | Description |
+|------------------|-------------|
+| **[Prix Moyen Pondéré (PMP)](weighted-average-cost.md)** | PMP itératif tenant compte des stocks par position (courtier, actif). Calculé en ligne pendant la boucle quotidienne du moteur. |
+
+---
+
+## ⚖️ Guide de Comparaison des Métriques
+
+Pour vous aider à choisir la métrique appropriée pour votre analyse, utilisez ce guide de comparaison :
+
+### 1. [Valeur Liquidative (NAV) / Valeur Nette](portfolio-engine/nav.md)
+* **Question Centrale :** « Quelle est la valeur actuelle du portefeuille dans la portée sélectionnée ? »
+* **Concept de Formule :** $\text{Valeur de Marché} + \text{Cash} + \text{Actifs en Transit}$ à la fin de la période.
+* **Meilleur Cas d'Utilisation :** Instantané de la richesse absolue à la date de fin sélectionnée (`date_to`).
+
+### 2. [Valeur Comptable](portfolio-engine/book-value.md)
+* **Question Centrale :** « Combien a coûté la construction de mon portefeuille actuel ? »
+* **Concept de Formule :** $\text{Base de Coût Ouvert} + \text{Cash} + \text{Valeur Comptable en Transit}$ en utilisant le prix moyen pondéré (PMP).
+* **Meilleur Cas d'Utilisation :** Évaluation des coûts d'acquisition et comparaison avec la valeur de marché actuelle (NAV) pour trouver les gains latents.
+
+### 3. [P&L de Période](portfolio-engine/period-pnl.md)
+* **Question Centrale :** « Combien d'argent ai-je réellement gagné ou perdu pendant cette période ? »
+* **Concept de Formule :** $\text{NAV}_{\text{fin}} - \text{NAV}_{\text{début}} - \text{Flux Externes Nets}$.
+* **Meilleur Cas d'Utilisation :** Mesure des gains de période en devise absolue, indépendamment des injections/retraits de cash de l'investisseur.
+
+### 4. [Effet de Timing](portfolio-engine/timing-effect.md)
+* **Question Centrale :** « Comment le timing et la taille de mes flux de trésorerie ont-ils affecté mon rendement global par rapport à une stratégie d'achat et de détention ? »
+* **Concept de Formule :** $\text{MWRR}_{\text{cumulé}} - \text{TWRR}_{\text{cumulé}}$.
+* **Meilleur Cas d'Utilisation :** Diagnostiquer si les dépôts et retraits ont ajouté de la valeur ($>0$ pp) ou freiné la performance ($<0$ pp).
+
+### 5. [ROI Simple](portfolio-engine/roi.md)
+* **Question Centrale :** « Combien ai-je gagné par rapport au capital net que j'ai investi ? »
+* **Dénominateur de la Formule :** Prix moyen pondéré (PMP).
+* **Limitations :** Ne tient pas compte du *moment* où les flux de trésorerie ont eu lieu, conduisant à une dilution des flux de trésorerie lors de l'achat ultérieur de plus d'un actif.
+
+### 6. [TWRR (Taux de Rendement Pondéré dans le Temps)](portfolio-engine/twrr.md)
+* **Question Centrale :** « Comment ma stratégie/allocation d'actifs choisie a-t-elle performé, sans tenir compte de mon timing de cash ? »
+* **Concept de Formule :** Divise la chronologie à chaque flux de trésorerie, calcule les rendements des sous-périodes et les multiplie.
+* **Meilleur Cas d'Utilisation :** Comparer votre performance avec des indices de référence externes (comme le S&P 500) ou évaluer la performance pure des actifs.
+
+### 7. [MWRR Annualisé (Money-Weighted Rate of Return)](portfolio-engine/mwrr.md#annualized-mwrr)
+* **Question Centrale :** « À quel taux annuel composé mon capital réel a-t-il augmenté, en tenant compte de mes dépôts et retraits ? »
+* **Concept de Formule :** Résout le taux de rendement interne ($r$) qui ramène la valeur actuelle nette de tous les flux de trésorerie à zéro.
+* **Meilleur Cas d'Utilisation :** Comparer votre performance personnelle aux taux d'intérêt à long terme ou évaluer la croissance composée sur de longs horizons. Peut être très volatil sur de courtes fenêtres.
+
+### 8. [MWRR Cumulé](portfolio-engine/mwrr.md#cumulative-mwrr)
+* **Question Centrale :** « Quel est le rendement cumulé équivalent pondéré par l'argent sur cette fenêtre temporelle sélectionnée ? »
+* **Concept de Formule :** Compose le MWRR annualisé pour le nombre réel de jours écoulés.
+* **Meilleur Cas d'Utilisation :** Graphiques en série et widgets de tableau de bord pour comparer visuellement les tendances de performance côte à côte avec le TWRR et le ROI.
 
 ---
 
 ## 💡 L'Exemple Pratique (TWRR vs MWRR vs ROI)
 
-Voyons un exemple extrême pour comprendre comment le TWRR, le MWRR et le ROI Simple racontent des histoires différentes, mais mathématiquement correctes.
+Regardons un exemple extrême pour voir comment le TWRR, le MWRR et le ROI Simple racontent des histoires différentes, mais mathématiquement correctes.
 
 * **Mois 1 :** Vous achetez **1 000 €** d'une action. Le mois suivant, l'action double (+100 %). Vous avez maintenant **2 000 €**.
-* **Mois 2 :** Vous déposez **100 000 €** de plus sur cette même action. Vous avez maintenant 102 000 € investis.
-* **Mois 3 :** L'action baisse de **-10 %**. Votre capital total tombe à **91 800 €**.
+* **Mois 2 :** Vous déposez **100 000 €** supplémentaires dans la même action. Vous avez maintenant 102 000 € investis.
+* **Mois 3 :** L'action chute de **-10 %**. Votre capital total tombe à **91 800 €**.
 
 Voici ce que LibreFolio calculera pour ce scénario :
 
 ### TWRR Cumulé : +80,00 %
-Les actifs que vous avez choisis ont grimpé de +100 %, puis ont baissé de -10 %. Mathématiquement :
+Les actifs que vous avez choisis ont augmenté de +100 %, puis ont chuté de -10 %. Mathématiquement :
 
 $$
-(1 + 1{,}00) \times (1 - 0{,}10) - 1 = +80{,}00\%
+(1 + 1,00) \times (1 - 0,10) - 1 = +80,00\%
 $$
 
-Cela isole la performance pure de l'action. Votre sélection d'actifs (*asset picking*) était excellente. Si vous aviez investi tout votre capital au premier jour, vous auriez obtenu un rendement de 80 %.
+Cela isole la performance pure de l'action. Votre *sélection d'actifs* était excellente. Si vous aviez investi tout votre argent le premier jour, vous auriez réalisé un rendement de 80 %.
 
 ### ROI Simple : -9,11 %
-Vous avez déposé un total de 101 000 € de votre poche (1 000 € + 100 000 €), mais vous ne détenez plus que 91 800 € aujourd'hui :
+Vous avez déposé un total de 101 000 € de votre propre poche (1 000 € + 100 000 €), mais vous détenez actuellement 91 800 € :
 
 $$
-ROI = \frac{91 800 - 101 000}{101 000} = -9{,}11\%
+ROI = \frac{91 800 - 101 000}{101 000} = -9,11\%
 $$
 
-Cela représente la perte ou le gain réel de votre portefeuille par rapport à votre capital net investi.
+Cela représente votre gain/perte réel et brut par rapport à votre capital net investi.
 
 ### MWRR Cumulé : -16,99 %
-Comme vous avez déposé 100 000 € juste au sommet avant une baisse, votre timing a lourdement pénalisé votre rendement :
+Parce que vous avez déposé 100 000 € juste au sommet avant une chute, votre timing a considérablement freiné votre rendement :
 
 $$
-\text{MWRR}_{\text{cumulatif}} \approx -16{,}99\%
+\text{MWRR}_{\text{cumulé}} \approx -16,99\%
 $$
 
-Ce rendement cumulé pondéré par les capitaux représente la performance d'un « euro théorique » soumis au timing de vos flux réels.
+Ce rendement cumulé pondéré par l'argent représente la performance d'un « euro théorique » sous votre timing de flux de trésorerie réel.
 
 ### MWRR Annualisé : -67,19 %
-Puisque la baisse substantielle s'est produite sur une fenêtre de temps très courte (31 jours) sur une base de capital énorme (100 000 €), le taux annuel composé de perte est extrêmement élevé :
+Étant donné que la baisse substantielle s'est produite sur une très courte fenêtre temporelle (31 jours) sur une base de capital massive (100 000 €), le taux de perte annuel composé est très élevé :
 
 $$
-\text{MWRR}_{\text{annualisé}} \approx -67{,}19\%
+\text{MWRR}_{\text{annualisé}} \approx -67,19\%
 $$
 
-Cela représente la vitesse annualisée de perte de capital sur cette fenêtre spécifique.
+Cela représente la vitesse annualisée de la perte de capital sur cette fenêtre spécifique.
 
 ---
 
 ## ⚖️ Pourquoi LibreFolio affiche les deux côte à côte
 
-En plaçant le TWRR et le MWRR l'un à côté de l'autre sur votre tableau de bord, LibreFolio vous donne un diagnostic comportemental immédiat :
+En plaçant le TWRR et le MWRR l'un à côté de l'autre sur votre Tableau de Bord, LibreFolio vous donne un diagnostic comportemental immédiat :
 
-* **TWRR > MWRR :** *« Vous choisissez de bons investissements, mais votre timing est mauvais. Vous achetez probablement au plus haut (FOMO) et faites baisser vos rendements personnels. »*
-* **MWRR > TWRR :** *« Vous avez un excellent timing ! Vous achetez des actifs avec une décote lorsque le marché chute, augmentant vos rendements personnels au-dessus de la moyenne du marché. »*
+* **TWRR > MWRR :** *« Vous choisissez de bons investissements, mais votre timing est mauvais. Vous achetez probablement au sommet (FOMO) et freinez vos rendements personnels. »*
+* **MWRR > TWRR :** *« Vous avez un excellent timing ! Vous achetez des actifs à prix réduit lorsque le marché baisse, ce qui booste vos rendements personnels au-dessus de la moyenne du marché. »*
 
 ---
 
-## 🔗 Intégration UI et liens d'aide du tableau de bord
+## 🔗 Intégration UI & Liens d'Aide du Tableau de Bord
 
-Pour faciliter la navigation, le tableau de bord de LibreFolio propose des icônes et des liens d'aide à côté de chaque indicateur. Cliquer sur ces liens vous redirige directement vers le chapitre d'explication financière correspondant :
+Pour faciliter la navigation, le tableau de bord de LibreFolio propose des icônes d'aide et des liens à côté de chaque métrique. Cliquer sur ces liens vous redirige directement vers le chapitre de théorie financière pertinent :
 
-* Les widgets de la **Valeur Nette (NAV)** renvoient directement à la [Page du NAV / Net Worth](nav.md).
-* Les champs de la **Valeur Comptable** renvoient directement à la [Page de la Valeur Comptable](book-value.md).
-* Les widgets du **P&L de la Période** renvoient directement à la [Page du P&L de la Période](period-pnl.md).
-* Les widgets de l'**Effet de timing** renvoient directement à la [Page de l'Effet de timing](timing-effect.md).
-* Les widgets du **ROI** renvoient directement à la [Page du ROI Simple](roi.md).
-* Les widgets du **TWRR** renvoient directement à la [Page du TWRR](twrr.md).
-* Les widgets du **MWRR** renvoient directement à la [Page du MWRR](mwrr.md).
-* **Capital Déposé / P&L Total** (infobulle du Graphique de Croissance) renvoie à la [Page Capital Déposé & P&L Total](deposited-capital.md).
+* Les widgets **Valeur Nette (NAV)** sont liés directement à la [Page NAV / Valeur Nette](portfolio-engine/nav.md).
+* Les champs **Valeur Comptable** sont liés directement à la [Page Valeur Comptable](portfolio-engine/book-value.md).
+* Les widgets **P&L de Période** sont liés directement à la [Page P&L de Période](portfolio-engine/period-pnl.md).
+* Les widgets **Effet de Timing** sont liés directement à la [Page Effet de Timing](portfolio-engine/timing-effect.md).
+* Les widgets **ROI** sont liés directement à la [Page ROI Simple](portfolio-engine/roi.md).
+* Les widgets **TWRR** sont liés directement à la [Page TWRR](portfolio-engine/twrr.md).
+* Les widgets **MWRR** sont liés directement à la [Page MWRR](portfolio-engine/mwrr.md).
+* **Capital Déposé / P&L Total** (infobulle du Graphique de Croissance) est lié à la [Page Capital Déposé & P&L Total](portfolio-engine/deposited-capital.md).

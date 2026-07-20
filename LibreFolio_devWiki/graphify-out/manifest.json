@@ -6529,31 +6529,6 @@
     "ast_hash": "bf575e2da01d9185a633b735c59c0cb1",
     "semantic_hash": "bf575e2da01d9185a633b735c59c0cb1"
   },
-  "corpus/frontend-lib/components/brokers/lots/AssetWacPriceChart.svelte": {
-    "mtime": 1783970687.5374403,
-    "ast_hash": "4713ff16f693abeda61a2064c5a90556",
-    "semantic_hash": "4713ff16f693abeda61a2064c5a90556"
-  },
-  "corpus/frontend-lib/components/brokers/lots/BubbleLotTimeline.svelte": {
-    "mtime": 1783968220.3342202,
-    "ast_hash": "b341682e2a9fbec71771321865ddcf8d",
-    "semantic_hash": "b341682e2a9fbec71771321865ddcf8d"
-  },
-  "corpus/frontend-lib/components/brokers/lots/ClosedLotsTable.svelte": {
-    "mtime": 1783960100.1504562,
-    "ast_hash": "dc4fcc4ebde433b6f25501d6021ef03a",
-    "semantic_hash": "dc4fcc4ebde433b6f25501d6021ef03a"
-  },
-  "corpus/frontend-lib/components/brokers/lots/FIFOLotsPanel.svelte": {
-    "mtime": 1783968714.2653837,
-    "ast_hash": "1f3f4220c47a7be2b703edda0a359abc",
-    "semantic_hash": "1f3f4220c47a7be2b703edda0a359abc"
-  },
-  "corpus/frontend-lib/components/brokers/lots/OpenLotsTable.svelte": {
-    "mtime": 1783960092.594187,
-    "ast_hash": "1f27a7c3d88fef1235a5ae48c42bcb41",
-    "semantic_hash": "1f27a7c3d88fef1235a5ae48c42bcb41"
-  },
   "corpus/frontend-lib/components/charts/ResolutionBadge.svelte": {
     "mtime": 1783668619.517028,
     "ast_hash": "759a92dfddf07ecd8749dedf3d5897ef",
@@ -7164,11 +7139,6 @@
     "ast_hash": "89830a73da1f30c6466eae2bb23714ad",
     "semantic_hash": "89830a73da1f30c6466eae2bb23714ad"
   },
-  "corpus/frontend-lib/features/ai-export/clipboardWriter.ts": {
-    "mtime": 1784128417.021301,
-    "ast_hash": "ececb68b738ce75a8c4ccec0722c1353",
-    "semantic_hash": "ececb68b738ce75a8c4ccec0722c1353"
-  },
   "corpus/frontend-lib/features/ai-export/promptCatalog.ts": {
     "mtime": 1784128243.852884,
     "ast_hash": "e3cc3726c3d038baae241c29e7b87387",
@@ -7198,26 +7168,6 @@
     "mtime": 1784108392.524671,
     "ast_hash": "ebeaa2b222c6cf2e3c1f7a3e1e8edcf4",
     "semantic_hash": "ebeaa2b222c6cf2e3c1f7a3e1e8edcf4"
-  },
-  "corpus/roadmap/fifo-engine/hig-level-plan_v2.md": {
-    "mtime": 1784190346.8387442,
-    "ast_hash": "439579c27d24e73470e0e325802b095e",
-    "semantic_hash": "439579c27d24e73470e0e325802b095e"
-  },
-  "corpus/roadmap/fifo-engine/high-level-plan_v1-feasibility-report.md": {
-    "mtime": 1784125806.7585816,
-    "ast_hash": "15b85f930033b75be43d54ff93525601",
-    "semantic_hash": "15b85f930033b75be43d54ff93525601"
-  },
-  "corpus/roadmap/fifo-engine/high-level-plan_v1-open-questions.md": {
-    "mtime": 1784128327.5469825,
-    "ast_hash": "1561faac39eeb320d0a7c63a46b08cea",
-    "semantic_hash": "1561faac39eeb320d0a7c63a46b08cea"
-  },
-  "corpus/roadmap/fifo-engine/high-level-plan_v1.md": {
-    "mtime": 1784124696.3339643,
-    "ast_hash": "7d3bbf0d7ddee022b377b4254d9acb13",
-    "semantic_hash": "7d3bbf0d7ddee022b377b4254d9acb13"
   },
   "corpus/roadmap/fifo-engine/portfolio-engine-cache-analysis.md": {
     "mtime": 1784117043.5770233,
@@ -7593,5 +7543,25 @@
     "mtime": 1768326310.8377664,
     "ast_hash": "a76ca0f50daf7d4696fa4a805d7426d1",
     "semantic_hash": "a76ca0f50daf7d4696fa4a805d7426d1"
+  },
+  "corpus/wiki/problems/docker-entrypoint-gid20-collision.md": {
+    "mtime": 1784536283.0260198,
+    "ast_hash": "65436bf730c6d9ef4086490742666970",
+    "semantic_hash": "65436bf730c6d9ef4086490742666970"
+  },
+  "corpus/wiki/problems/docker-system-info-missing-deps.md": {
+    "mtime": 1784536262.5884883,
+    "ast_hash": "93f024d4efeaca07bfdf85640da6be0b",
+    "semantic_hash": "93f024d4efeaca07bfdf85640da6be0b"
+  },
+  "wiki/problems/docker-entrypoint-gid20-collision.md": {
+    "mtime": 1784536283.0260198,
+    "ast_hash": "65436bf730c6d9ef4086490742666970",
+    "semantic_hash": "65436bf730c6d9ef4086490742666970"
+  },
+  "wiki/problems/docker-system-info-missing-deps.md": {
+    "mtime": 1784536262.5884883,
+    "ast_hash": "93f024d4efeaca07bfdf85640da6be0b",
+    "semantic_hash": "93f024d4efeaca07bfdf85640da6be0b"
   }
 }

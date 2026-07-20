@@ -29,6 +29,7 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+    import {truncateName} from '$lib/utils/text';
 
     // =========================================================================
     // Props
@@ -450,14 +451,14 @@
 
         // Build header label (asset name + icon + currency)
         const tooltipHeaderHtml = (() => {
-            let label = mainSeriesLabel || currency || 'Price';
+            const label = truncateName(mainSeriesLabel || currency || 'Price');
             let suffix = '';
             if (displayCurrencyProp && mainCurrencyProp && displayCurrencyProp !== mainCurrencyProp) {
                 suffix = ` <span style="font-size:10px">(${displayCurrencyFlag || ''} ${displayCurrencyProp})</span>`;
             } else if (mainCurrencyProp) {
                 suffix = ` <span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
             }
-            return signalLabelToHtml({label, iconUrl: mainIconUrl, assetType: mainAssetType, isCrown: true}, 15) + suffix;
+            return signalLabelToHtml({label, iconUrl: mainIconUrl, assetType: mainAssetType, isCrown: true}) + suffix;
         })();
 
         const tooltipFormatter = (params: any) => {
@@ -504,7 +505,7 @@
 
                 // Overlay signal line
                 if (p.value !== null && p.value !== undefined) {
-                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${p.seriesName}: ${typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></div>`;
+                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${truncateName(String(p.seriesName ?? ''))}: ${typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></div>`;
                 }
             }
 

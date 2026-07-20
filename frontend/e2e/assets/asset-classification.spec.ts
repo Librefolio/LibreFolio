@@ -165,11 +165,14 @@ test.describe('Asset Classification Round-Trip', () => {
         // Confirm entry exists (total badge visible)
         await expect(page.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 3000});
 
-        // Delete the entry via row action (click the X/delete button in the row)
+        // Delete the entry via row action. DataTable rows expose a "row-actions-{id}" kebab
+        // button that opens a ContextMenu with "context-menu-action-{actionId}" items (see
+        // DataTable.svelte / ContextMenu.svelte; same pattern as brokers-detail.spec.ts).
         const geoEditor = page.getByTestId('distribution-editor-geographic');
-        const deleteBtn = geoEditor.locator('button[title="Remove"], button:has(svg)').last();
-        if (await deleteBtn.isVisible({timeout: 2000}).catch(() => false)) {
-            await deleteBtn.click();
+        const rowActionsBtn = geoEditor.getByTestId(/^row-actions-/).first();
+        if (await rowActionsBtn.isVisible({timeout: 2000}).catch(() => false)) {
+            await rowActionsBtn.click();
+            await page.getByTestId('context-menu-action-delete').click();
             await page.waitForTimeout(300);
         }
 
