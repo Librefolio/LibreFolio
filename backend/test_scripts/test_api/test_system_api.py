@@ -16,11 +16,25 @@ from backend.app.api.v1.system import (
     BACKEND_NAME_MAP,
     FRONTEND_NAME_MAP,
     get_backend_deps,
+    get_deployment_mode,
     get_display_name,
     get_frontend_deps,
     get_system_info,
     parse_pipfile,
 )
+
+
+class _FakePath:
+    """Minimal stand-in for pathlib.Path(...).exists() used by get_deployment_mode."""
+
+    def __init__(self, exists_value: bool):
+        self._exists_value = exists_value
+
+    def __call__(self, *_args, **_kwargs):
+        return self
+
+    def exists(self) -> bool:
+        return self._exists_value
 
 
 class TestGetDisplayName:
@@ -57,6 +71,28 @@ class TestParsePipfile:
         packages = parse_pipfile()
         for pkg in packages:
             assert pkg == pkg.lower(), f"Package name should be lowercase: {pkg}"
+
+    def test_real_pipfile_contains_quoted_package(self):
+        """Regression: Pipfile has '"borsa-italiana-scraping " = {git = ...}' (quoted
+        name with a trailing space inside the quotes) which the old plain
+        `^([a-zA-Z0-9_-]+)\\s*=` regex could never match."""
+        packages = parse_pipfile()
+        assert "borsa-italiana-scraping" in packages
+
+    def test_quoted_name_with_trailing_space(self, tmp_path, monkeypatch):
+        pipfile = tmp_path / "Pipfile"
+        pipfile.write_text(
+            "[packages]\n"
+            'fastapi = "*"\n'
+            '"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n'
+            "[dev-packages]\n"
+            'pytest = "*"\n'
+        )
+        monkeypatch.setattr(system_module, "PROJECT_ROOT", tmp_path)
+
+        packages = parse_pipfile()
+
+        assert packages == ["fastapi", "borsa-italiana-scraping"]
 
 
 class TestGetBackendDeps:
@@ -103,6 +139,16 @@ class TestGetFrontendDeps:
             assert dep.version, f"Dependency {dep.name} has no version"
 
 
+class TestGetDeploymentMode:
+    def test_local_when_dockerenv_absent(self, monkeypatch):
+        monkeypatch.setattr(system_module, "Path", _FakePath(False))
+        assert get_deployment_mode() == "local"
+
+    def test_docker_when_dockerenv_present(self, monkeypatch):
+        monkeypatch.setattr(system_module, "Path", _FakePath(True))
+        assert get_deployment_mode() == "docker"
+
+
 class TestGetSystemInfoEndpoint:
     """Test the get_system_info async endpoint function directly."""
 
@@ -112,5 +158,6 @@ class TestGetSystemInfoEndpoint:
         assert result.app_version
         assert result.python_version
         assert result.os_name
+        assert result.deployment_mode in ("local", "docker")
         assert len(result.backend_dependencies) > 0
         assert len(result.frontend_dependencies) > 0

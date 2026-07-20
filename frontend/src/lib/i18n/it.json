@@ -261,7 +261,8 @@
     },
     "status": {
       "archived": "Archiviato"
-    }
+    },
+    "lastPrice": "Ultimo Prezzo"
   },
   "auth": {
     "login": "Accedi",
@@ -542,7 +543,8 @@
       "roleViewerShort": "Visualizzatore",
       "ownerDesc": "Controllo totale + % possesso",
       "editorDesc": "Può modificare transazioni",
-      "viewerDesc": "Sola lettura"
+      "viewerDesc": "Sola lettura",
+      "lastOwnerWarning": "Non è possibile rimuovere l'ultimo proprietario."
     },
     "lots": {
       "buyDate": "Data Acquisto",
@@ -556,7 +558,8 @@
           "sell": "Vendite",
           "transfer": "Trasferimenti",
           "adjustment": "Rettifiche",
-          "split": "Split"
+          "split": "Split",
+          "income": "Dividendo / interesse"
         },
         "eventType": {
           "BUY": "Acquisto",
@@ -979,7 +982,10 @@
     "assets": "Asset",
     "deselectAll": "Deseleziona tutto",
     "discardImport": "Annullare l'importazione?",
-    "category": "Categoria"
+    "category": "Categoria",
+    "errorOccurred": "Si è verificato un errore",
+    "uploading": "Caricamento in corso...",
+    "user": "Utente"
   },
   "csvImport": {
     "title": "Importa dati CSV",
@@ -1598,9 +1604,21 @@
           "details": "Dettagli…",
           "configure": "Configura…",
           "configSummary": "Ogni {freq}min · {times} · {days}"
-        }
+        },
+        "timezone": "Fuso orario",
+        "timezoneHint": "Gli orari sottostanti sono visualizzati in questo fuso orario. Salvati in UTC."
       }
-    }
+    },
+    "devicePixelRatioHint": "Rapporto tra i pixel fisici del dispositivo e i pixel CSS. 1x = schermo standard, 2x+ = schermo Retina/HiDPI.",
+    "viewport": "Viewport",
+    "devicePixelRatio": "Rapporto pixel del dispositivo",
+    "browser": "Browser",
+    "deploymentMode": "Modalità di deployment",
+    "deploymentModeDocker": "Docker",
+    "deploymentModeLocal": "Locale",
+    "lock": "Blocca",
+    "selectLanguage": "Seleziona lingua",
+    "unlock": "Sblocca"
   },
   "sharedResource": {
     "syncAll": "Sinc. Tutto",
@@ -1644,7 +1662,8 @@
       "success": "Coppia scollegata",
       "noPartner": "Impossibile separare: partner non trovato",
       "paired": "Accoppiata",
-      "standalone": "Indipendenti"
+      "standalone": "Indipendenti",
+      "failed": "Divisione fallita"
     },
     "promoteSuggest": {
       "detected": "Transazioni complementari rilevate:",
@@ -1917,7 +1936,9 @@
       "toastDeletedPaired": "Coppia eliminata:",
       "toastOnBroker": "su",
       "deleteAbortedTitle": "Eliminazione annullata",
-      "deleteAbortedDetail": "L'operazione è stata annullata perché violerebbe le regole di saldo:"
+      "deleteAbortedDetail": "L'operazione è stata annullata perché violerebbe le regole di saldo:",
+      "failed": "Eliminazione fallita",
+      "validateFailed": "Validazione fallita"
     },
     "picker": {
       "title": "Seleziona transazioni da aggiungere",
@@ -2013,12 +2034,24 @@
     "confirmBulkDelete": {
       "title": "Elimina file",
       "message": "Eliminare {n} file? L'azione non è reversibile."
-    }
+    },
+    "size": "Dimensione",
+    "zoomIn": "Zoom avanti",
+    "zoomOut": "Zoom indietro"
   },
   "donationPopup": {
     "title": "LibreFolio cresce grazie agli utenti come te!",
     "message": "Se apprezzi il progetto e lo usi regolarmente, considera una piccola donazione per sostenerne lo sviluppo.",
     "laterButton": "La prossima volta",
     "donationNote": "☕ Anche il prezzo di un caffè può fare la differenza."
+  },
+  "date": {
+    "today": "Oggi",
+    "yesterday": "Ieri"
+  },
+  "files": {
+    "deleteFailed": "Impossibile eliminare il file",
+    "loadFailed": "Impossibile caricare i file",
+    "uploadFailed": "Impossibile caricare il file"
   }
 }

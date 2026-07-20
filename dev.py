@@ -1306,7 +1306,7 @@ def _check_env_file():
 
 
 def _docker_ensure_assets_built():
-    """Ensure frontend, docs and JS cache are built/up-to-date before Docker image build.
+    """Ensure frontend, docs, JS cache, requirements.txt and VERSION are ready before Docker build.
 
     Uses the same staleness checks as the 'server' command so that
     ``dev.py docker build`` always produces an image with fresh assets.
@@ -1380,6 +1380,23 @@ def _docker_ensure_assets_built():
         print_success("requirements.txt generated")
     else:
         print(Colors.info("ℹ️  requirements.txt is up to date"))
+
+    # --- 5. VERSION file for Docker (no .git/ in the runtime image) -----------
+    # The image has no .git/, so get_git_version()'s `git describe` can't run at
+    # container runtime. Freeze the version now (on the host, where .git/ exists)
+    # into a plain file that gets COPYed into the image.
+    from backend.app.utils.version import get_git_version
+
+    # get_git_version() prefers an existing VERSION file over `git describe` (so
+    # it works with no .git/ inside the container). Remove any stale VERSION file
+    # from a previous build first, so this recomputes a true fresh value instead
+    # of just re-reading what's already there.
+    version_file = PROJECT_ROOT / "VERSION"
+    version_file.unlink(missing_ok=True)
+    get_git_version.cache_clear()
+    version = get_git_version()
+    version_file.write_text(version)
+    print_success(f"VERSION file generated ({version})")
 
     return 0
 

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "5850ad3095585379571b4ef675ad721a87ab701ac3486887e5924ec3b6e82ee2"
+            "sha256": "52eff99878083f03292263c6e86c95f69b3ffda4405647a17e927baa3a8a4b6c"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -2116,6 +2116,15 @@
             "index": "pypi",
             "markers": "python_version >= '3.10'",
             "version": "==16.0"
+        },
+        "xlrd": {
+            "hashes": [
+                "sha256:08b5e25de58f21ce71dc7db3b3b8106c1fa776f3024c54e45b45b374e89234c9",
+                "sha256:ea762c3d29f4cca48d82df517b6d89fbce4db3107f9d78713e48cd321d5c9aa9"
+            ],
+            "index": "pypi",
+            "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5'",
+            "version": "==2.0.2"
         },
         "yfinance": {
             "hashes": [

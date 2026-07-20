@@ -36,15 +36,13 @@ async function goToTransactions(page: Page) {
 
 /** Open BulkModal via the Edit modal "Import" button or action menu. */
 async function openBulkModalAndImport(page: Page) {
-    // Find and click "Edit" to open BulkModal
-    const editBtn = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first().getByRole('button', {name: /edit/i});
-    if (await editBtn.isVisible({timeout: 2_000}).catch(() => false)) {
-        await editBtn.click();
-    } else {
-        // Fallback: click first row → BulkModal via action
-        await page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first().hover();
-        await page.getByRole('button', {name: /edit/i}).first().click();
-    }
+    // Find and click "Edit" via the row's kebab action menu to open BulkModal
+    const firstRow = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first();
+    await firstRow.hover();
+    const kebabBtn = firstRow.getByTestId(/^row-actions-/);
+    await expect(kebabBtn).toBeVisible({timeout: 3_000});
+    await kebabBtn.click();
+    await page.getByTestId('context-menu-action-edit').click();
     await page.getByTestId('tx-bulk-modal-root').waitFor({state: 'visible', timeout: 6_000});
 
     // The BulkModal may auto-open a FormModal for the selected paired transaction.
