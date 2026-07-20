@@ -22,6 +22,7 @@
     import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+    import {truncateName} from '$lib/utils/text';
 
     // =========================================================================
     // Types
@@ -752,7 +753,7 @@
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisNote = axisIdx === 1 ? ` <span style="font-size:10px;color:#94a3b8">[RSI]</span>` : axisIdx === 2 ? ` <span style="font-size:10px;color:#a78bfa">[MACD]</span>` : '';
-                              html += `<br/>${colorDot}${p.seriesName}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                              html += `<br/>${colorDot}${truncateName(String(p.seriesName ?? ''))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
 
                               // For band signals, also show upper/lower in the tooltip
                               const bandSignal = activeOverlaySignals.find((s) => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData);

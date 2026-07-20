@@ -22,6 +22,7 @@
     import {brokerStoreVersion, ensureBrokersLoaded, getBrokerInfo} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded, getBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
     import {attachTreemapZoomGuard, resetTreemapView, panTreemapBy, type TreemapZoomGuardHandle} from '$lib/components/charts/echartsTreemapZoomGuard';
+    import {truncateName} from '$lib/utils/text';
 
     interface Holding {
         asset_id: number;
@@ -597,7 +598,7 @@
                         const meta = params.data?._meta;
                         if (!meta) return params.name;
                         let html = buildTooltipHeader(meta.broker, theme.textColor);
-                        html += buildTooltipRow($_('common.asset'), meta.assetId ? (meta.name ?? '') : params.name);
+                        html += buildTooltipRow($_('common.asset'), meta.assetId ? truncateName(meta.name ?? '') : params.name);
                         html += buildTooltipRow($_('common.type'), meta.type);
                         html += buildTooltipRow($_('common.value'), formatCurrencyAmountPlain(meta.value, displayCurrency));
                         if (meta.weight != null) html += buildTooltipRow($_('dashboard.navWeight'), `${meta.weight.toFixed(1)}%`);

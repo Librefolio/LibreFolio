@@ -22,6 +22,7 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
+    import {truncateName} from '$lib/utils/text';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
 
@@ -882,7 +883,7 @@
 
             if (marker.assetLabel) {
                 const sigDot = marker.signalColor ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${marker.signalColor};margin-right:3px;"></span>` : '';
-                html += `<br/>🔗 ${sigDot}${marker.assetLabel}`;
+                html += `<br/>🔗 ${sigDot}${truncateName(marker.assetLabel)}`;
             }
 
             return html;
@@ -1078,7 +1079,7 @@
                         let labelHtml: string;
                         let isGhostRow = false;
                         if (isGhost) {
-                            // Ghost label: "💱 Name (flag CUR)" — truncate Name to same length as main (15)
+                            // Ghost label: "💱 Name (flag CUR)" — keep currency suffix visible.
                             const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                             // Extract name part from ghostLabel format "💱 Name (flag CUR)"
                             const nameMatch = ghostLabel.match(/^💱\s*(.+?)\s*(\([^)]+\))$/);
@@ -1086,10 +1087,10 @@
                             if (nameMatch) {
                                 const name = nameMatch[1];
                                 const currPart = nameMatch[2];
-                                const truncName = name.length > 15 ? name.slice(0, 15) + '…' : name;
+                                const truncName = truncateName(name);
                                 truncatedGhost = `💱 ${truncName} ${currPart}`;
                             } else {
-                                truncatedGhost = ghostLabel.length > 30 ? ghostLabel.slice(0, 30) + '…' : ghostLabel;
+                                truncatedGhost = truncateName(ghostLabel);
                             }
                             labelHtml = `${ghostDot}<span title="${ghostLabel}">${truncatedGhost}</span>`;
                             isGhostRow = true;
@@ -1099,7 +1100,7 @@
                                 // Append (flag currency) to overlay signal labels
                                 // Skip for ghost signals — currency is already embedded in their label
                                 const currSuffix = sigInfo.currency && !sigInfo.isGhost ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>` : '';
-                                labelHtml = signalLabelToHtml(sigInfo, 15) + currSuffix;
+                                labelHtml = signalLabelToHtml({...sigInfo, label: truncateName(sigInfo.label)}) + currSuffix;
                                 if (sigInfo.isGhost) isGhostRow = true;
                             } else if (p.seriesName === mainSeriesName) {
                                 // Main signal: 💱(flag currency) when conversion active, (flag currency) when not
@@ -1117,16 +1118,15 @@
                                 labelHtml =
                                     signalLabelToHtml(
                                         {
-                                            label: mainLabel,
+                                            label: truncateName(mainLabel),
                                             iconUrl: mainIconUrl,
                                             assetType: mainAssetType,
                                             isCrown: true,
                                         },
-                                        15,
                                     ) + currSuffix;
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                                labelHtml = `${colorDot}${p.seriesName}`;
+                                labelHtml = `${colorDot}${truncateName(String(p.seriesName ?? ''))}`;
                             }
                         }
                         let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
