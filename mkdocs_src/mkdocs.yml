@@ -133,6 +133,10 @@ plugins:
             "💸 Transactions": "💸 Transazioni"
             Transaction Form: Modulo Transazione
             "📥 Import from Broker": "📥 Importa da Broker"
+            "📈 Stocks & ETFs": "📈 Azioni & ETF"
+            "🏦 Banks & Neobrokers": "🏦 Banche & Neobroker"
+            "🪙 Crypto": "🪙 Crypto"
+            "🧩 Other & Generic": "🧩 Altri & Generico"
             How to Import: Come Importare
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
@@ -284,6 +288,10 @@ plugins:
             "💸 Transactions": "💸 Transactions"
             Transaction Form: Formulaire de Transaction
             "📥 Import from Broker": "📥 Importer depuis le Courtier"
+            "📈 Stocks & ETFs": "📈 Actions & ETF"
+            "🏦 Banks & Neobrokers": "🏦 Banques & Néocourtiers"
+            "🪙 Crypto": "🪙 Crypto"
+            "🧩 Other & Generic": "🧩 Autres & Générique"
             How to Import: Comment Importer
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
@@ -436,6 +444,10 @@ plugins:
             "💸 Transactions": "💸 Transacciones"
             Transaction Form: Formulario de Transacción
             "📥 Import from Broker": "📥 Importar desde el Bróker"
+            "📈 Stocks & ETFs": "📈 Acciones & ETF"
+            "🏦 Banks & Neobrokers": "🏦 Bancos & Neobrókers"
+            "🪙 Crypto": "🪙 Cripto"
+            "🧩 Other & Generic": "🧩 Otros & Genérico"
             How to Import: Cómo Importar
             Interactive Brokers (IBKR): Interactive Brokers (IBKR)
             Degiro: Degiro
@@ -568,17 +580,37 @@ nav:
           - 📥 Import from Broker:
               - Overview: user/transactions/import/index.md
               - How to Import: user/transactions/import/how-to.md
-              - Interactive Brokers (IBKR): user/transactions/import/ibkr.md
-              - Degiro: user/transactions/import/degiro.md
-              - eToro: user/transactions/import/etoro.md
-              - Directa SIM: user/transactions/import/directa.md
-              - Charles Schwab: user/transactions/import/schwab.md
-              - Revolut: user/transactions/import/revolut.md
-              - Coinbase: user/transactions/import/coinbase.md
-              - Freetrade: user/transactions/import/freetrade.md
-              - Finpension: user/transactions/import/finpension.md
-              - Trading212: user/transactions/import/trading212.md
-              - Generic CSV: user/transactions/import/generic-csv.md
+              - 📈 Stocks & ETFs:
+                  - Interactive Brokers (IBKR): user/transactions/import/ibkr.md
+                  - Degiro: user/transactions/import/degiro.md
+                  - eToro: user/transactions/import/etoro.md
+                  - Directa SIM: user/transactions/import/directa.md
+                  - Charles Schwab: user/transactions/import/schwab.md
+                  - Freetrade: user/transactions/import/freetrade.md
+                  - Trading212: user/transactions/import/trading212.md
+                  - Avanza: user/transactions/import/avanza.md
+                  - Disnat: user/transactions/import/disnat.md
+                  - InvestEngine: user/transactions/import/investengine.md
+                  - Trade Republic: user/transactions/import/traderepublic.md
+                  - XTB: user/transactions/import/xtb.md
+                  - Saxo: user/transactions/import/saxo.md
+                  - Swissquote: user/transactions/import/swissquote.md
+                  - Investimental: user/transactions/import/investimental.md
+              - 🏦 Banks & Neobrokers:
+                  - Revolut: user/transactions/import/revolut.md
+                  - BUX: user/transactions/import/bux.md
+                  - Rabobank: user/transactions/import/rabobank.md
+              - 🪙 Crypto:
+                  - Coinbase: user/transactions/import/coinbase.md
+                  - Bitvavo: user/transactions/import/bitvavo.md
+                  - Crypto.com: user/transactions/import/cryptocom.md
+                  - Relai: user/transactions/import/relai.md
+                  - CoinTracking: user/transactions/import/cointracking.md
+                  - Delta: user/transactions/import/delta.md
+              - 🧩 Other & Generic:
+                  - Finpension: user/transactions/import/finpension.md
+                  - Parqet: user/transactions/import/parqet.md
+                  - Generic CSV: user/transactions/import/generic-csv.md
       - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md

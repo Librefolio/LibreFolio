@@ -108,11 +108,9 @@ def get_sample_files_for_plugin(plugin: BRIMProvider) -> List[Path]:
 
 def _first_sample_for_plugin(plugin: BRIMProvider) -> Path | None:
     """Pick a single representative sample for this plugin (pattern-based or any parseable)."""
-    pattern = plugin.test_file_pattern
-    if pattern:
-        for candidate in SAMPLE_DIR.iterdir():
-            if candidate.is_file() and pattern in candidate.name.lower():
-                return candidate
+    samples = _all_samples_for_plugin(plugin)
+    if samples:
+        return samples[0]
     if plugin.provider_code == "broker_generic_csv":
         sample = SAMPLE_DIR / "generic_simple.csv"
         if sample.exists():
@@ -125,6 +123,36 @@ def _first_sample_for_plugin(plugin: BRIMProvider) -> Path | None:
             except Exception:
                 continue
     return None
+
+
+def _all_samples_for_plugin(plugin: BRIMProvider) -> List[Path]:
+    """Return every sample this plugin owns via its ``test_file_patterns``.
+
+    A plugin may declare several format variants (e.g. Revolut invest + crypto);
+    the representative-sample tests loop over all of them so each variant is
+    exercised, not just the first. Falls back to an empty list when the plugin
+    declares no patterns (generic fallback).
+    """
+    patterns = [p.lower() for p in plugin.test_file_patterns]
+    if not patterns:
+        return []
+    matches: list[Path] = []
+    for candidate in sorted(SAMPLE_DIR.iterdir()):
+        if not (candidate.is_file() and candidate.suffix.lower() == ".csv"):
+            continue
+        name = candidate.name.lower()
+        if any(pat in name for pat in patterns):
+            matches.append(candidate)
+    return matches
+
+
+def _representative_samples(plugin: BRIMProvider) -> List[Path]:
+    """All samples to exercise for a plugin: every declared variant, else one fallback."""
+    samples = _all_samples_for_plugin(plugin)
+    if samples:
+        return samples
+    single = _first_sample_for_plugin(plugin)
+    return [single] if single else []
 
 
 # =============================================================================
@@ -223,34 +251,37 @@ class TestBRIMPlugin:
     # --- Parse behaviour ---
 
     def test_parse_returns_brim_parse_output(self, code: str, plugin: BRIMProvider):
-        sample = _first_sample_for_plugin(plugin)
-        if sample is None:
+        samples = _representative_samples(plugin)
+        if not samples:
             pytest.skip(f"No compatible sample report for {code}")
-        out = plugin.parse(sample, broker_id=1)
-        assert isinstance(out, BRIMParseOutput)
-        assert isinstance(out.transactions, list)
-        assert isinstance(out.warnings, list)
-        assert isinstance(out.extracted_assets, dict)
+        for sample in samples:
+            out = plugin.parse(sample, broker_id=1)
+            assert isinstance(out, BRIMParseOutput), f"{code} [{sample.name}]"
+            assert isinstance(out.transactions, list)
+            assert isinstance(out.warnings, list)
+            assert isinstance(out.extracted_assets, dict)
 
     def test_parse_produces_transactions(self, code: str, plugin: BRIMProvider):
-        sample = _first_sample_for_plugin(plugin)
-        if sample is None:
+        samples = _representative_samples(plugin)
+        if not samples:
             pytest.skip(f"No compatible sample report for {code}")
-        out = plugin.parse(sample, broker_id=1)
-        assert len(out.transactions) > 0, f"No transactions parsed from {sample.name}"
-        assert all(isinstance(tx, TXCreateItem) for tx in out.transactions)
+        for sample in samples:
+            out = plugin.parse(sample, broker_id=1)
+            assert len(out.transactions) > 0, f"No transactions parsed from {sample.name}"
+            assert all(isinstance(tx, TXCreateItem) for tx in out.transactions)
 
     def test_extracted_assets_consistent_with_transactions(self, code: str, plugin: BRIMProvider):
-        sample = _first_sample_for_plugin(plugin)
-        if sample is None:
+        samples = _representative_samples(plugin)
+        if not samples:
             pytest.skip(f"No compatible sample report for {code}")
-        out = plugin.parse(sample, broker_id=1)
-        for fake_id, info in out.extracted_assets.items():
-            assert isinstance(fake_id, int)
-            assert isinstance(info, BRIMExtractedAssetInfo)
-        tx_asset_ids = {tx.asset_id for tx in out.transactions if tx.asset_id is not None}
-        missing = tx_asset_ids - set(out.extracted_assets.keys())
-        assert not missing, f"{code}: transaction asset_ids not in extracted_assets: {missing}"
+        for sample in samples:
+            out = plugin.parse(sample, broker_id=1)
+            for fake_id, info in out.extracted_assets.items():
+                assert isinstance(fake_id, int)
+                assert isinstance(info, BRIMExtractedAssetInfo)
+            tx_asset_ids = {tx.asset_id for tx in out.transactions if tx.asset_id is not None}
+            missing = tx_asset_ids - set(out.extracted_assets.keys())
+            assert not missing, f"{code} [{sample.name}]: transaction asset_ids not in extracted_assets: {missing}"
 
     def test_parse_is_idempotent(self, code: str, plugin: BRIMProvider):
         """Same input → same output. Required for plugin_version-driven caching.
@@ -258,21 +289,23 @@ class TestBRIMPlugin:
         Compares ``.model_dump(mode="json")`` of BRIMParseOutput to avoid
         false negatives from object identity.
         """
-        sample = _first_sample_for_plugin(plugin)
-        if sample is None:
+        samples = _representative_samples(plugin)
+        if not samples:
             pytest.skip(f"No compatible sample report for {code}")
-        out1 = plugin.parse(sample, broker_id=1)
-        out2 = plugin.parse(sample, broker_id=1)
-        assert out1.model_dump(mode="json") == out2.model_dump(mode="json"), f"{code}: parse() is not idempotent on {sample.name}"
+        for sample in samples:
+            out1 = plugin.parse(sample, broker_id=1)
+            out2 = plugin.parse(sample, broker_id=1)
+            assert out1.model_dump(mode="json") == out2.model_dump(mode="json"), f"{code}: parse() is not idempotent on {sample.name}"
 
     def test_parse_produces_valid_fake_ids(self, code: str, plugin: BRIMProvider):
         """Every asset_id key in extracted_assets must be a recognized fake id."""
-        sample = _first_sample_for_plugin(plugin)
-        if sample is None:
+        samples = _representative_samples(plugin)
+        if not samples:
             pytest.skip(f"No compatible sample report for {code}")
-        out = plugin.parse(sample, broker_id=1)
-        for fake_id in out.extracted_assets.keys():
-            assert is_fake_asset_id(fake_id), f"{code}: extracted_assets key {fake_id} is not a valid fake id"
+        for sample in samples:
+            out = plugin.parse(sample, broker_id=1)
+            for fake_id in out.extracted_assets.keys():
+                assert is_fake_asset_id(fake_id), f"{code} [{sample.name}]: extracted_assets key {fake_id} is not a valid fake id"
 
     def test_broker_id_propagated_on_all_samples_and_all_tx(self, code: str, plugin: BRIMProvider):
         """broker_id must be propagated on every TX of every compatible sample."""

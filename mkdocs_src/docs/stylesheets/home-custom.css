@@ -255,7 +255,7 @@
     padding: 0 !important;
     text-align: center;
     color: var(--md-default-fg-color);
-    font-size: clamp(2.35rem, 4.6vw, 3.75rem);
+    font-size: clamp(1.6rem, 4.6vw, 3.75rem);
     line-height: 1.1;
     letter-spacing: -0.045em;
 }
@@ -395,10 +395,10 @@
     display: inline-block;
     background: var(--md-primary-fg-color);
     color: white !important;
-    padding: 0.75rem 1.5rem;
+    padding: clamp(0.55rem, 1.4vw + 0.15rem, 0.75rem) clamp(0.9rem, 3vw + 0.2rem, 1.5rem);
     border-radius: 8px;
     font-weight: 600;
-    font-size: clamp(0.875rem, 3vw, 1rem);
+    font-size: clamp(0.72rem, 2vw + 0.25rem, 1rem);
     text-decoration: none;
     transition: background 0.2s, transform 0.2s;
     white-space: nowrap;
@@ -414,10 +414,10 @@
     background: transparent;
     color: var(--md-default-fg-color) !important;
     border: 1px solid var(--md-default-fg-color--light);
-    padding: 0.5rem 1.25rem;
+    padding: clamp(0.45rem, 1vw + 0.15rem, 0.5rem) clamp(0.8rem, 2.6vw + 0.2rem, 1.25rem);
     border-radius: 8px;
     font-weight: 600;
-    font-size: clamp(0.875rem, 3vw, 1rem);
+    font-size: clamp(0.72rem, 2vw + 0.25rem, 1rem);
     text-decoration: none;
     transition: all 0.2s;
     white-space: nowrap;
@@ -438,27 +438,49 @@
 
 /* Mobile adjustments */
 @media (max-width: 768px) {
+    /* Inline padding in the HTML overrides the stylesheet, so force it down here. */
     .lf-quick-install-docker, .lf-quick-install-dev {
         flex-direction: column;
         align-items: flex-start;
         text-align: left;
+        padding: 1.25rem !important;
+        gap: 1.25rem;
     }
-    
+
     .lf-quick-install-card {
-        padding: 1.5rem;
+        padding: 1.25rem;
+        gap: 1.25rem;
     }
 
     .lf-quick-install-docker {
-        padding: 2rem 1.5rem 1.5rem;
+        padding: 1.75rem 1.25rem 1.25rem !important;
     }
 
     .lf-quick-install-eyebrow {
-        left: 1.5rem;
+        left: 1.25rem;
     }
 
+    .lf-quick-install-heading {
+        gap: 0.55rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .lf-quick-install-icon {
+        width: 2rem;
+        height: 2rem;
+        min-width: 2rem;
+    }
+
+    .lf-quick-install-icon svg {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    /* Let long button labels wrap instead of forcing horizontal overflow. */
     .lf-btn-primary, .lf-btn-secondary {
         text-align: center;
         box-sizing: border-box;
+        white-space: normal;
     }
 }
 
@@ -986,6 +1008,36 @@
   line-height: 1.4;
 }
 
+/* Heading cards: icon inline with the title only; paragraph spans full width below. */
+.lf-fit-heading-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 0.35rem;
+  min-width: 0;
+}
+
+.lf-fit-heading-card > .lf-fit-heading-icon {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.lf-fit-heading-card > .lf-fit-heading-content {
+  display: contents;
+}
+
+.lf-fit-heading-card > .lf-fit-heading-content > h3 {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.lf-fit-heading-card > .lf-fit-heading-content > p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+}
+
 .lf-fit-icon,
 .lf-fit-heading-icon {
   flex: 0 0 auto;
@@ -1078,10 +1130,33 @@
 }
 
 .lf-fit-cell-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 0.3rem;
   min-width: 0;
+}
+
+/* Icon sits inline with the title only; paragraph spans the full width below. */
+.lf-fit-cell-main > .lf-fit-icon {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.lf-fit-cell-main > .lf-fit-cell-content {
+  display: contents;
+}
+
+.lf-fit-cell-main > .lf-fit-cell-content > h4 {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.lf-fit-cell-main > .lf-fit-cell-content > p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
 }
 
 .lf-fit-mobile-badge {
@@ -1193,7 +1268,7 @@
   }
 
   .lf-fit-cell-main {
-    gap: 0.9rem;
+    column-gap: 0.9rem;
   }
   
   .lf-fit-heading-card,
