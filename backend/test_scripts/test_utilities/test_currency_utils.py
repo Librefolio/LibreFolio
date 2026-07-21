@@ -4,13 +4,13 @@ Tests for currency_utils: list_currencies, flag mapping, and validation consiste
 Ensures:
 - list_currencies() uses pycountry (no historic currencies)
 - Every listed currency passes the backend validator
-- Crypto currencies are included
+- Crypto currency codes are excluded
 - Flag emoji are correctly assigned for major currencies
 - normalize_currency() resolves ISO / symbol / name / multi-match / not-found
   branches (Phase 7 Part 3 Closure_2 G-batch7 §1).
 """
 
-from backend.app.schemas.common import CRYPTO_CURRENCIES, _validate_currency_code_cached
+from backend.app.schemas.common import _validate_currency_code_cached
 from backend.app.utils.currency_utils import (
     _build_currency_to_flag_map,
     list_currencies,
@@ -22,9 +22,9 @@ class TestListCurrencies:
     """Tests for list_currencies() function."""
 
     def test_returns_sufficient_currencies(self):
-        """Should return at least 150 currencies (ISO 4217 active + crypto)."""
+        """Should return at least 140 ISO 4217 currencies."""
         currencies = list_currencies("en")
-        assert len(currencies) > 150, f"Expected 150+ currencies, got {len(currencies)}"
+        assert len(currencies) >= 140, f"Expected 140+ currencies, got {len(currencies)}"
 
     def test_all_listed_currencies_pass_validation(self):
         """Every code from list_currencies must be accepted by _validate_currency_code_cached."""
@@ -61,19 +61,17 @@ class TestListCurrencies:
         for h in historic:
             assert h not in codes, f"Historic currency {h} should not be in the list"
 
-    def test_crypto_currencies_included(self):
-        """Crypto currencies from CRYPTO_CURRENCIES should appear in the list."""
+    def test_crypto_currencies_excluded(self):
+        """Crypto asset codes should not appear in the currency list."""
         currencies = list_currencies("en")
         codes = {c["code"] for c in currencies}
-        for crypto_code in CRYPTO_CURRENCIES:
-            assert crypto_code in codes, f"Crypto {crypto_code} missing from list_currencies()"
+        assert "BTC" not in codes
+        assert "ETH" not in codes
 
-    def test_crypto_currencies_have_coin_emoji(self):
-        """Crypto currencies should have 🪙 as flag_emoji."""
+    def test_no_coin_emoji_entries(self):
+        """Currency list should not include crypto coin emoji entries."""
         currencies = list_currencies("en")
-        crypto_entries = [c for c in currencies if c["code"] in CRYPTO_CURRENCIES]
-        for c in crypto_entries:
-            assert c["flag_emoji"] == "🪙", f"{c['code']} should have 🪙, got {c['flag_emoji']}"
+        assert all(c["flag_emoji"] != "🪙" for c in currencies)
 
     def test_all_entries_have_required_fields(self):
         """Every entry must have code, name, symbol, flag_emoji."""
@@ -157,11 +155,11 @@ class TestCurrencyFlagMap:
             actual = fm.get(code, "?")
             assert actual == exp_flag, f"{code}: expected {exp_flag}, got {actual}"
 
-    def test_crypto_have_coin_emoji(self):
-        """All crypto currencies should map to 🪙."""
+    def test_crypto_codes_not_mapped(self):
+        """Crypto asset codes should not map to currency flags."""
         fm = _build_currency_to_flag_map()
-        for code in CRYPTO_CURRENCIES:
-            assert fm.get(code) == "🪙", f"Crypto {code} should map to 🪙"
+        assert "BTC" not in fm
+        assert "ETH" not in fm
 
     def test_eur_override_not_single_country(self):
         """EUR must map to 🇪🇺 (EU flag), not any single Eurozone country."""
@@ -195,6 +193,12 @@ class TestNormalizeCurrency:
         result = normalize_currency("eur")
         assert result["match_type"] == "exact"
         assert result["iso_codes"] == ["EUR"]
+
+    def test_crypto_code_returns_not_found(self):
+        """Crypto asset codes are not accepted by currency normalization."""
+        result = normalize_currency("BTC")
+        assert result["match_type"] == "not_found"
+        assert result["iso_codes"] == []
 
     def test_unique_symbol_match(self):
         """Symbol with a single mapping (€ → EUR) returns match_type=exact."""

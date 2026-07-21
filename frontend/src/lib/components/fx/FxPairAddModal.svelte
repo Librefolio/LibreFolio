@@ -26,6 +26,7 @@
     import {CurrencySearchSelect, FxProviderSelect} from '$lib/components/ui/select';
     import type {ChainStep} from '$lib/utils/currency/currencyGraph';
     import {getRegisteredPairs} from '$lib/stores/fxStoreRegistry';
+    import {ensureFxRoutesLoaded, getConfiguredPairSlugs, fxRoutesVersion} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
 
     // =========================================================================
@@ -97,6 +98,12 @@
         }
     });
 
+    // Load backend-configured routes when the modal opens so pair exclusion
+    // reflects the real backend state, not just the lazily-populated session cache.
+    $effect(() => {
+        if (open) void ensureFxRoutesLoaded();
+    });
+
     async function loadRoutesFromBackend() {
         if (!editMode || !editBase || !editQuote) return;
         loadingRoutes = true;
@@ -139,8 +146,22 @@
         // In create mode, dirty if anything is set
         return baseCurrency !== '' || quoteCurrency !== '' || selectedRoutes.length > 0;
     });
-    /** Slugs of already-configured FX pairs for sorting chain routes */
-    let configuredPairSlugs = $derived(getRegisteredPairs());
+    /** Slugs of already-configured FX pairs for sorting chain routes.
+     *  Merge backend routes (authoritative, via fxRoutesStore) with the session
+     *  registry so exclusion works even before the registry cache is populated. */
+    let configuredPairSlugs = $derived.by(() => {
+        void $fxRoutesVersion; // re-run when routes reload/invalidate
+        return [...new Set<string>([...getConfiguredPairSlugs(), ...getRegisteredPairs()])];
+    });
+
+    let pairAlreadyExists = $derived.by(() => {
+        void $fxRoutesVersion;
+        if (editMode || !baseCurrency || !quoteCurrency || baseCurrency === quoteCurrency) return false;
+        const base = baseCurrency.toUpperCase();
+        const quote = quoteCurrency.toUpperCase();
+        const slug = base < quote ? `${base}-${quote}` : `${quote}-${base}`;
+        return getConfiguredPairSlugs().has(slug);
+    });
 
     /**
      * Build a map: currency → Set of currencies it's already paired with.
@@ -158,21 +179,26 @@
         return map;
     });
 
-    /** Currencies the quote select must exclude: already paired with baseCurrency + baseCurrency itself */
+    /** Currencies the quote select must exclude: already paired with baseCurrency + baseCurrency itself.
+     *  The currently-selected quoteCurrency is never excluded, so a pre-filled/already-configured
+     *  pair (e.g. EUR/USD opened from a "missing pair" banner) stays visible and selectable. */
     let excludedForQuote = $derived.by(() => {
         if (!baseCurrency) return new Set<string>();
         const excluded = new Set<string>([baseCurrency]);
         const partners = pairedWith.get(baseCurrency);
         if (partners) for (const p of partners) excluded.add(p);
+        if (quoteCurrency) excluded.delete(quoteCurrency);
         return excluded;
     });
 
-    /** Currencies the base select must exclude: already paired with quoteCurrency + quoteCurrency itself */
+    /** Currencies the base select must exclude: already paired with quoteCurrency + quoteCurrency itself.
+     *  The currently-selected baseCurrency is never excluded (see excludedForQuote note). */
     let excludedForBase = $derived.by(() => {
         if (!quoteCurrency) return new Set<string>();
         const excluded = new Set<string>([quoteCurrency]);
         const partners = pairedWith.get(quoteCurrency);
         if (partners) for (const p of partners) excluded.add(p);
+        if (baseCurrency) excluded.delete(baseCurrency);
         return excluded;
     });
 
@@ -186,12 +212,16 @@
 
     async function handleSave() {
         if (!isValid) return;
-        saving = true;
-        error = null;
 
         // Normalize alphabetical order for storage
         const base = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? baseCurrency.toUpperCase() : quoteCurrency.toUpperCase();
         const quote = baseCurrency.toUpperCase() < quoteCurrency.toUpperCase() ? quoteCurrency.toUpperCase() : baseCurrency.toUpperCase();
+        if (!editMode) {
+            await ensureFxRoutesLoaded();
+            if (getConfiguredPairSlugs().has(`${base}-${quote}`)) return;
+        }
+        saving = true;
+        error = null;
 
         try {
             // Build the main pair routes
@@ -328,6 +358,9 @@
         baselineRoutesJson = '[]';
         error = null;
         showDiscardConfirm = false;
+        // Close the modal directly (open is $bindable). Callers that bind:open rely on this;
+        // onclose remains for callers that need a side-effect hook.
+        open = false;
         onclose?.();
     }
 </script>
@@ -400,6 +433,12 @@
                 </div>
             </div>
 
+            {#if pairAlreadyExists}
+                <InfoBanner variant="warning">
+                    {$_('fx.addPair.alreadyExists')}
+                </InfoBanner>
+            {/if}
+
             <!-- Info banner: explain provider role (always visible) -->
             <InfoBanner variant="info">
                 {$_('fx.addPair.providerInfoBanner')}
@@ -458,7 +497,7 @@
             <button
                 class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
                 data-testid="fx-add-pair-save"
-                disabled={!isValid || saving || syncing}
+                disabled={!isValid || pairAlreadyExists || saving || syncing}
                 onclick={handleSave}
                 type="button"
             >

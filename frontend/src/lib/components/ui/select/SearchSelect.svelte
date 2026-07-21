@@ -23,6 +23,8 @@
         loading?: boolean;
         /** Position of dropdown: 'top', 'bottom', or 'auto' (based on available space) */
         dropdownPosition?: 'top' | 'bottom' | 'auto';
+        /** Minimum dropdown width in px. When set, the fixed-position dropdown uses max(triggerWidth, dropdownMinWidth) and is clamped within the viewport. Defaults to 0 = exactly trigger width (current behavior). */
+        dropdownMinWidth?: number;
         /** Use inline search in trigger (like BrokerSelect) instead of separate search field */
         inlineSearch?: boolean;
         /** Maximum visible items in dropdown (default: 8) */
@@ -45,7 +47,24 @@
         onCreateNew?: () => void;
     }
 
-    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', inlineSearch = false, maxVisibleItems = 8, class: className = '', item, selectedItem, onchange, compact = false, createLabel = '', onCreateNew}: Props = $props();
+    let {
+        value = $bindable(''),
+        options,
+        placeholder = '',
+        disabled = false,
+        loading = false,
+        dropdownPosition = 'bottom',
+        dropdownMinWidth = 0,
+        inlineSearch = false,
+        maxVisibleItems = 8,
+        class: className = '',
+        item,
+        selectedItem,
+        onchange,
+        compact = false,
+        createLabel = '',
+        onCreateNew,
+    }: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
@@ -132,10 +151,12 @@
 
         // Compute fixed position style to escape overflow:hidden containers
         const totalDropdownHeight = dynamicMaxHeight + 50; // account for search bar
+        const w = Math.max(rect.width, dropdownMinWidth);
+        const left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8));
         if (computedPosition === 'bottom') {
-            dropdownStyle = `position:fixed; top:${rect.bottom + 4}px; left:${rect.left}px; width:${rect.width}px; z-index:9999;`;
+            dropdownStyle = `position:fixed; top:${rect.bottom + 4}px; left:${left}px; width:${w}px; z-index:9999;`;
         } else {
-            dropdownStyle = `position:fixed; bottom:${window.innerHeight - rect.top + 4}px; left:${rect.left}px; width:${rect.width}px; z-index:9999;`;
+            dropdownStyle = `position:fixed; bottom:${window.innerHeight - rect.top + 4}px; left:${left}px; width:${w}px; z-index:9999;`;
         }
     }
 

@@ -797,9 +797,7 @@
     }
 
     function latestLotEndDate(lotId: number): string | null {
-        const latest = (segmentModelsByLot.get(lotId) ?? [])
-            .filter((segment) => segment.endDate != null)
-            .sort((a, b) => b.endMs - a.endMs)[0];
+        const latest = (segmentModelsByLot.get(lotId) ?? []).filter((segment) => segment.endDate != null).sort((a, b) => b.endMs - a.endMs)[0];
         return latest?.endDate ?? null;
     }
 
@@ -832,13 +830,9 @@
         const valueField = isClosedLot ? lotDto?.original_cost : currentValue;
         const valueLabel = isClosedLot ? translatedOr('brokers.lots.tooltip.initialValue', 'Initial value') : translatedOr('brokers.lots.currentValue', 'Current value');
         const assetIncome = parseUnknownNumber(lotDto?.asset_income);
-        const quantityLine = isClosedLot
-            ? `${formatQuantity(originalQuantity)} → 0 ${translatedOr('brokers.lots.tooltip.shares', 'shares')}`
-            : `${formatQuantity(openQuantity)} ${translatedOr('brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${formatQuantity(originalQuantity)}`;
-        const closeDate = isClosedLot ? latestLotEndDate(meta.lotId) ?? meta.endDate : null;
-        const footer = isClosedLot
-            ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}`
-            : `${translatedOr('brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
+        const quantityLine = isClosedLot ? `${formatQuantity(originalQuantity)} → 0 ${translatedOr('brokers.lots.tooltip.shares', 'shares')}` : `${formatQuantity(openQuantity)} ${translatedOr('brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${formatQuantity(originalQuantity)}`;
+        const closeDate = isClosedLot ? (latestLotEndDate(meta.lotId) ?? meta.endDate) : null;
+        const footer = isClosedLot ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}` : `${translatedOr('brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
         let html = buildTooltipHeader(escapeHtml(lotLabel(openingDate)), theme.textColor);
         html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(brokerLabel)} · ${escapeHtml(meta.direction)} · ${escapeHtml(stateLabel)}</div>`;
         html += `<div style="margin-top:2px;color:${theme.mutedColor}">${escapeHtml(quantityLine)}</div>`;
@@ -1308,13 +1302,7 @@
      * We instead prefer the real pointer position captured from the overlay hover so the tooltip
      * sits above the finger/cursor on the hovered row, not above the lot opening. Falls back to the
      * data anchor for keyboard focus (no pointer). */
-    function positionTooltipAbovePointer(
-        point: [number, number],
-        params: unknown,
-        dom: unknown,
-        rect: unknown,
-        size: {contentSize: [number, number]; viewSize: [number, number]},
-    ): [number, number] {
+    function positionTooltipAbovePointer(point: [number, number], params: unknown, dom: unknown, rect: unknown, size: {contentSize: [number, number]; viewSize: [number, number]}): [number, number] {
         const anchor = lastPointerViewPos ?? point;
         return tooltipPositionAboveFinger(anchor, params, dom, rect, size, {clampTop: false});
     }

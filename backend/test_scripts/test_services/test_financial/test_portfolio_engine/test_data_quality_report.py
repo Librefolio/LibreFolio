@@ -8,8 +8,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 from backend.app.schemas.portfolio import (
     IssueCode,
     IssueSeverity,
@@ -49,9 +47,10 @@ def _make_stale_asset(asset_id: int = 2, name: str = "Stale Asset") -> StalePric
     )
 
 
-def _make_missing_fx(pair: str = "EUR-USD") -> WACMissingPairInfo:
+def _make_missing_fx(pair: str = "EUR-USD", dates: list[date] | None = None) -> WACMissingPairInfo:
     mock = MagicMock(spec=WACMissingPairInfo)
     mock.pair = pair
+    mock.dates = dates or [date(2025, 1, 1)]
     return mock
 
 
@@ -178,6 +177,51 @@ class TestMissingFxMarketIssue:
         report = views.build_data_quality_report(missing_fx_pairs_dto=[_make_missing_fx("EUR-USD")])
         issue = next(i for i in report.issues if i.code == IssueCode.MISSING_FX_MARKET)
         assert issue.cta_action == "add_fx_pair"
+
+    def test_configured_real_provider_missing_fx_produces_rates_issue(self):
+        views = _make_views()
+        report = views.build_data_quality_report(
+            missing_fx_pairs_dto=[_make_missing_fx("RON/EUR", [date(2025, 1, 1), date(2025, 1, 3)])],
+            configured_fx_pairs={"EUR-RON"},
+            real_provider_fx_pairs={"EUR-RON"},
+        )
+        issue = next(i for i in report.issues if i.code == IssueCode.MISSING_FX_RATES)
+        assert issue.cta_action == "sync_fx_pair"
+        assert issue.cta_target == "EUR-RON"
+        assert issue.message_i18n_key == "dataQuality.missingFxRates"
+        assert issue.message_params == {"count": 1, "date_from": "2025-01-01", "date_to": "2025-01-03", "dates_count": 2}
+        assert issue.affected_fx_pairs == ["EUR-RON"]
+        assert IssueCode.MISSING_FX_MARKET not in [i.code for i in report.issues]
+
+    def test_configured_manual_missing_fx_navigates_to_fx(self):
+        views = _make_views()
+        report = views.build_data_quality_report(
+            missing_fx_pairs_dto=[_make_missing_fx("RON/EUR")],
+            configured_fx_pairs={"EUR-RON"},
+            real_provider_fx_pairs=set(),
+        )
+        issue = next(i for i in report.issues if i.code == IssueCode.MISSING_FX_RATES)
+        assert issue.cta_action == "navigate_fx"
+        assert issue.cta_target == "EUR-RON"
+        assert issue.message_i18n_key == "dataQuality.missingFxRatesManual"
+
+    def test_missing_fx_can_split_into_three_buckets(self):
+        views = _make_views()
+        report = views.build_data_quality_report(
+            missing_fx_pairs_dto=[
+                _make_missing_fx("USD/EUR", [date(2025, 1, 1)]),
+                _make_missing_fx("RON/EUR", [date(2025, 1, 2)]),
+                _make_missing_fx("NOK/EUR", [date(2025, 1, 3)]),
+            ],
+            configured_fx_pairs={"EUR-RON", "EUR-NOK"},
+            real_provider_fx_pairs={"EUR-RON"},
+        )
+        market_issue = next(i for i in report.issues if i.group_key == "missing_fx")
+        real_issue = next(i for i in report.issues if i.group_key == "missing_fx_rates")
+        manual_issue = next(i for i in report.issues if i.group_key == "missing_fx_rates_manual")
+        assert market_issue.affected_fx_pairs == ["EUR-USD"]
+        assert real_issue.affected_fx_pairs == ["EUR-RON"]
+        assert manual_issue.affected_fx_pairs == ["EUR-NOK"]
 
 
 # =============================================================================

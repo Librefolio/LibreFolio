@@ -59,9 +59,11 @@
          * When undefined/empty → icon is hidden.
          */
         fxPairUrl?: string;
+        /** Opens the "create FX pair" modal from the currency selector's footer action. */
+        onCreateForex?: () => void;
     }
 
-    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, filtersStacked, maxWidth, livePriceConversionFailed = false, fxPairUrl}: Props = $props();
+    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, filtersStacked, maxWidth, livePriceConversionFailed = false, fxPairUrl, onCreateForex}: Props = $props();
 </script>
 
 <div class="flex flex-wrap {layoutMode === 'oneRow' ? 'flex-row items-center gap-4 px-3' : filtersStacked ? 'flex-col items-start gap-2 w-full' : 'flex-col items-center gap-2'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
@@ -106,7 +108,7 @@
                 {$t('assetDetail.displayCurrency')}
             </span>
             <div class="w-32 sm:w-36">
-                <CurrencySearchSelect bind:value={displayCurrency} compact={true} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
+                <CurrencySearchSelect bind:value={displayCurrency} compact={true} configuredOnly={true} createForexLabel={$t('common.createForex')} {onCreateForex} originalCurrency={assetCurrency} placeholder={$t('assetDetail.displayCurrency')} />
             </div>
         </div>
         {#if fxPairUrl}

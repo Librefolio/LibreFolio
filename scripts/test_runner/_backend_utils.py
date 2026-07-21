@@ -72,7 +72,7 @@ def utils_currency_utils(verbose: bool = False, test_names: list = None) -> bool
     """Test currency listing, flag mapping, and validation."""
     print_section("Utils: Currency Utils")
     print_info("Testing: backend/app/utils/currency_utils.py")
-    print_info("Tests: list_currencies (pycountry), flag_emoji mapping, crypto, validation consistency")
+    print_info("Tests: list_currencies (pycountry), flag_emoji mapping, validation consistency")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_currency_utils.py", test_names)
     return run_command(cmd, "Currency utils tests", verbose=verbose)
 
@@ -118,8 +118,8 @@ def utils_all(verbose: bool = False) -> bool:
         tests=_get_category_tests_for_all("utils", verbose),
         verbose=verbose,
         info_msgs=["Testing utility modules and helper functions"],
-            resume=_common._RESUME_MODE,
-        )
+        resume=_common._RESUME_MODE,
+    )
 
 
 def populate_registry(registry: dict) -> None:
@@ -134,18 +134,18 @@ Tests for utility modules and helper functions:
   • Geographic area normalization, Sector normalization
   • Currency utilities, Cache utilities
   • Provider core cache & thread isolation
-""")
+""",
+    )
     add_test(cat, "decimal-precision", utils_decimal_precision, name="Decimal Precision", desc="Model precision, truncation, edge cases")
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
     add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version, get_version_info")
     add_test(cat, "sector-normalization", utils_sector_normalization, name="Sector Normalization", desc="FinancialSector enum, aliases")
-    add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping, crypto")
+    add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
     registry["utils"] = cat
-

@@ -29,7 +29,7 @@ backend/app/schemas/
 The `common.py` module provides shared building blocks used across all subsystems:
 
 ### Currency
-- Validates codes against ISO 4217 (via pycountry) + crypto dictionary
+- Validates codes against ISO 4217 (via pycountry)
 - Supports arithmetic: `+`, `-`, negation, comparison (same currency only)
 - `Currency.validate_code(v)` — static method for use in `@field_validator` on any schema
 - Cached validation via `@lru_cache(256)` for performance
@@ -65,5 +65,4 @@ The `common.py` module provides shared building blocks used across all subsystem
 - **Decimal columns**: use `Decimal` type, serialize as string in JSON
 - **Date fields**: accept ISO string, `date`, or `datetime` via `parse_ISO_date()` validators
 - **Optional fields with `Field(None)`**: explicit about nullability
-- **No backward compatibility**: clean refactoring preferred over legacy support
-
+- **Legacy support decided case-by-case**: prefer migrating to the correct design over keeping an old/wrong path; retain backward compatibility only with a concrete reason (e.g. not breaking a released schema or API)

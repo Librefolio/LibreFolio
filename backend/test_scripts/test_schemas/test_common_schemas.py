@@ -6,7 +6,7 @@ Schema source: backend/app/schemas/common.py
 
 Tests cover:
 - Currency creation with valid ISO 4217 codes
-- Currency creation with crypto currencies
+- Crypto currency code rejection
 - Invalid currency code rejection
 - Arithmetic operations (add, sub, neg, abs)
 - Comparison operations
@@ -23,7 +23,6 @@ from decimal import Decimal
 import pytest
 
 from backend.app.schemas.common import (
-    CRYPTO_CURRENCIES,
     Currency,
     DateRangeModel,
     OldNew,
@@ -88,28 +87,22 @@ class TestCurrencyCreation:
 
 
 # ============================================================================
-# CRYPTO CURRENCY TESTS
+# CRYPTO CURRENCY REJECTION TESTS
 # ============================================================================
 
 
 class TestCryptoCurrencies:
-    """Test cryptocurrency support."""
+    """Test cryptocurrency codes are not valid currencies."""
 
-    def test_btc(self):
-        """BTC is valid."""
-        btc = Currency(code="BTC", amount=Decimal("0.5"))
-        assert btc.code == "BTC"
+    def test_btc_invalid(self):
+        """BTC raises ValueError because crypto is tracked as an asset, not a currency."""
+        with pytest.raises(ValueError, match="Invalid currency code"):
+            Currency(code="BTC", amount=Decimal("0.5"))
 
-    def test_eth(self):
-        """ETH is valid."""
-        eth = Currency(code="ETH", amount=Decimal("2.0"))
-        assert eth.code == "ETH"
-
-    def test_all_supported_cryptos(self):
-        """All cryptos in CRYPTO_CURRENCIES are valid."""
-        for code in CRYPTO_CURRENCIES.keys():
-            crypto = Currency(code=code, amount=Decimal("1"))
-            assert crypto.code == code
+    def test_eth_invalid(self):
+        """ETH raises ValueError because crypto is tracked as an asset, not a currency."""
+        with pytest.raises(ValueError, match="Invalid currency code"):
+            Currency(code="ETH", amount=Decimal("2.0"))
 
 
 # ============================================================================

@@ -985,7 +985,9 @@
     "category": "Categoria",
     "errorOccurred": "Si è verificato un errore",
     "uploading": "Caricamento in corso...",
-    "user": "Utente"
+    "user": "Utente",
+    "backToDefault": "Torna al default",
+    "createForex": "Crea forex…"
   },
   "csvImport": {
     "title": "Importa dati CSV",
@@ -1173,14 +1175,17 @@
     "cta": {
       "navigate_asset": "Vedi asset",
       "navigate_fx": "Vedi FX",
-      "add_fx_pair": "Aggiungi coppia FX"
+      "add_fx_pair": "Aggiungi coppia FX",
+      "sync_fx_pair": "Sincronizza"
     },
     "referencePriceFallback": "Prezzo di apertura del lotto non disponibile alla data esatta — usato come riferimento l'ultimo prezzo noto {reference_price} per il rendimento relativo",
     "referencePriceUnavailable": "Nessun prezzo di riferimento disponibile per l'apertura di un lotto — rendimento relativo non calcolabile",
     "shortTransferNotSupported": "Il trasferimento di una posizione short non è ancora supportato (broker {broker_id})",
     "shortAdjustmentNotSupported": "Una rettifica non può ancora aprire o chiudere una posizione short (broker {broker_id})",
     "fifoSourceQuantityMissing": "La transazione eccede la quantità disponibile di {missing_quantity} (broker {broker_id})",
-    "transferPairMissing": "Un trasferimento non ha la transazione abbinata, oppure la coppia non è valida"
+    "transferPairMissing": "Un trasferimento non ha la transazione abbinata, oppure la coppia non è valida",
+    "missingFxRates": "Mancano tassi FX per {count} coppia/e tra {date_from} e {date_to} ({dates_count} date) — sincronizza per completare i totali",
+    "missingFxRatesManual": "Mancano tassi FX per {count} coppia/e manuale/i — inserisci i tassi manualmente"
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",
@@ -1303,7 +1308,8 @@
       "createIntermediatePairs": "Crea anche le coppie intermedie",
       "createIntermediatePairsHint": "Ogni passaggio delle catene selezionate verrà salvato come coppia autonoma con il suo provider, così da poterle sincronizzare indipendentemente.",
       "titleEdit": "Modifica Provider Coppia",
-      "createFailed": "Creazione coppia FX fallita"
+      "createFailed": "Creazione coppia FX fallita",
+      "alreadyExists": "Questa coppia esiste già — sincronizza o modificala dalla pagina FX."
     },
     "sync": {
       "description": "Sincronizza i tassi di cambio dai provider configurati per l'intervallo di date selezionato.",
@@ -1316,7 +1322,9 @@
       "toastFailed": "{pair} sincronizzazione fallita",
       "legBreakdown": "Dettaglio per tratta",
       "legNoData": "0 date — nessun dato",
-      "legDates": "date"
+      "legDates": "date",
+      "inProgress": "Sincronizzazione tassi FX…",
+      "noNewData": "Nessun nuovo tasso disponibile dal provider per questo periodo"
     },
     "route": {
       "title": "Percorsi di Conversione",

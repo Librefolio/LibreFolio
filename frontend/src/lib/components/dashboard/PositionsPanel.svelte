@@ -19,6 +19,8 @@
     import {_} from '$lib/i18n';
     import {Table2, Grid2x2} from 'lucide-svelte';
     import {getUserStorageKey} from '$lib/utils/storage';
+    import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import type DataTable from '$lib/components/table/DataTable.svelte';
 
     import ExposureTable from './ExposureTable.svelte';
     import ExposureTreemap from './ExposureTreemap.svelte';
@@ -56,6 +58,9 @@
 
     type SemanticMode = 'holdings' | 'performance';
     type VisualMode = 'table' | 'map';
+    type DashboardTableComponent = {
+        getTableRef: () => DataTable<any> | undefined;
+    };
 
     const STORAGE_KEY_SEMANTIC = getUserStorageKey('dashboard-positions-semantic');
     const STORAGE_KEY_VISUAL = getUserStorageKey('dashboard-positions-visual');
@@ -79,6 +84,9 @@
 
     let semanticMode = $state<SemanticMode>(normalizeSemanticMode(loadPref(STORAGE_KEY_SEMANTIC, 'holdings')));
     let visualMode = $state<VisualMode>(loadPref(STORAGE_KEY_VISUAL, 'table'));
+    let exposureTableComponent: DashboardTableComponent | undefined = $state(undefined);
+    let contributionTableComponent: DashboardTableComponent | undefined = $state(undefined);
+    let activeTableRef = $derived.by<DataTable<any> | undefined>(() => (semanticMode === 'holdings' ? exposureTableComponent?.getTableRef() : contributionTableComponent?.getTableRef()));
 
     $effect(() => {
         try {
@@ -159,6 +167,12 @@
                 </button>
             </div>
 
+            {#if visualMode === 'table' && activeTableRef}
+                <div data-testid="positions-column-visibility-toggle">
+                    <ColumnVisibilityToggle tableRef={activeTableRef} />
+                </div>
+            {/if}
+
             <a href={assetsHref} class="text-xs text-libre-green dark:text-green-400 hover:underline font-medium ml-1" data-testid="positions-see-all">
                 {$_('dashboard.seeAllPositions')}
             </a>
@@ -183,11 +197,11 @@
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} />
+                <ExposureTable bind:this={exposureTableComponent} {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
                 <ExposureTreemap {holdings} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}
-                <ContributionTable positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} />
+                <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} />
                 <OtherPeriodEffectsTable effects={otherEffects} {displayCurrency} />
             {:else if semanticMode === 'performance' && visualMode === 'map' && contribution}
                 <PerformanceChart positions={contributionPositions} {otherEffects} {displayCurrency} {onAnalyze} />

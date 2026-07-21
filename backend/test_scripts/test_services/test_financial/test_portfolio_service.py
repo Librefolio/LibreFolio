@@ -842,6 +842,7 @@ class TestPortfolioServicePrivateHelpers:
             no_price_asset.id: 1,
         }
 
+
 # =============================================================================
 # TestTransactionImpliedDataQuality
 # =============================================================================

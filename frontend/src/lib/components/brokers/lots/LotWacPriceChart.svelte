@@ -1299,9 +1299,7 @@
 
         // Legend-only keys explaining the bubble-centre state glyphs (open ● / partial ◆ / closed ▮).
         // Empty-data series so nothing is plotted; listed only for states actually present in the period.
-        const presentStates = (['OPEN', 'PARTIAL', 'CLOSED'] as LotDisplayState[]).filter((state) =>
-            renderable.some((entry) => entry.point.state === state),
-        );
+        const presentStates = (['OPEN', 'PARTIAL', 'CLOSED'] as LotDisplayState[]).filter((state) => renderable.some((entry) => entry.point.state === state));
         for (const state of presentStates) {
             series.push({
                 name: lotBubbleStateLabel(state),
@@ -1648,12 +1646,7 @@
                 // Always set min/max explicitly: setOption merges yAxis, so omitting them lets the
                 // percentage-mode 0-clamp persist into absolute mode (user report). Runtime null =
                 // "auto" (ECharts clears the merged bound); cast keeps TS happy without changing it.
-                min:
-                    displayMode === 'percentage'
-                        ? (v: {min: number}) => Math.min(0, v.min)
-                        : absYFromZero
-                          ? 0
-                          : ((absoluteAutoYBounds?.min ?? null) as unknown as number),
+                min: displayMode === 'percentage' ? (v: {min: number}) => Math.min(0, v.min) : absYFromZero ? 0 : ((absoluteAutoYBounds?.min ?? null) as unknown as number),
                 max: displayMode === 'percentage' ? (v: {max: number}) => Math.max(0, v.max) : ((absoluteAutoYBounds?.max ?? null) as unknown as number),
                 axisLine: {show: false},
                 axisTick: {show: false},

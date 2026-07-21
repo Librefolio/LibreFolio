@@ -44,6 +44,7 @@
     import {signalFromConfig} from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -1265,6 +1266,7 @@
         const wasForComparison = !!fxPairCreateSlug;
         showFxPairAddModal = false;
         fxPairCreateSlug = '';
+        invalidateFxRoutes();
         await loadFxPairSlugs();
         // Only update display currency when creating the main asset's FX pair
         if (!wasForComparison) {
@@ -1583,7 +1585,7 @@
 
         {#snippet summary({layoutMode, filtersStacked})}
             {#if assetInfo}
-                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} />
+                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} onCreateForex={() => (showFxPairAddModal = true)} />
             {/if}
         {/snippet}
 

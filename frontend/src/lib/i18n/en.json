@@ -985,7 +985,9 @@
     "category": "Category",
     "errorOccurred": "An error occurred",
     "uploading": "Uploading...",
-    "user": "User"
+    "user": "User",
+    "backToDefault": "Back to default",
+    "createForex": "Create forex…"
   },
   "csvImport": {
     "title": "Import CSV Data",
@@ -1173,14 +1175,17 @@
     "cta": {
       "navigate_asset": "View asset",
       "navigate_fx": "View FX",
-      "add_fx_pair": "Add FX pair"
+      "add_fx_pair": "Add FX pair",
+      "sync_fx_pair": "Sync rates"
     },
     "referencePriceFallback": "Lot opening price unavailable on the exact date — using last known price {reference_price} as reference for relative return",
     "referencePriceUnavailable": "No reference price available for a lot opening — relative return cannot be computed",
     "shortTransferNotSupported": "Transfer of a short position is not supported yet (broker {broker_id})",
     "shortAdjustmentNotSupported": "Adjustment cannot open or close a short position yet (broker {broker_id})",
     "fifoSourceQuantityMissing": "Transaction exceeds available quantity by {missing_quantity} (broker {broker_id})",
-    "transferPairMissing": "A transfer is missing its paired transaction, or the pair is invalid"
+    "transferPairMissing": "A transfer is missing its paired transaction, or the pair is invalid",
+    "missingFxRates": "FX rates missing for {count} pair(s) between {date_from} and {date_to} ({dates_count} date(s)) — sync to complete totals",
+    "missingFxRatesManual": "FX rates missing for {count} manual pair(s) — add rates manually"
   },
   "dataEditor": {
     "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point.",
@@ -1303,7 +1308,8 @@
       "createIntermediatePairs": "Also create intermediate pairs",
       "createIntermediatePairsHint": "Each step of the selected chain routes will be saved as a standalone pair with its provider, so they can be synced independently.",
       "titleEdit": "Edit Pair Providers",
-      "createFailed": "Failed to create FX pair"
+      "createFailed": "Failed to create FX pair",
+      "alreadyExists": "This pair already exists — sync or edit it from the FX page."
     },
     "sync": {
       "description": "Synchronize exchange rates from configured providers for the selected date range.",
@@ -1316,7 +1322,9 @@
       "toastFailed": "{pair} sync failed",
       "legBreakdown": "Per-leg breakdown",
       "legNoData": "0 dates — no data",
-      "legDates": "dates"
+      "legDates": "dates",
+      "inProgress": "Syncing FX rates…",
+      "noNewData": "No new rates available from provider for this period"
     },
     "route": {
       "title": "Conversion Routes",

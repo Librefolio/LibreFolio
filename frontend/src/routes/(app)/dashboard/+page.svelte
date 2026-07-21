@@ -41,6 +41,7 @@
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
+    import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -66,6 +67,7 @@
     let summaryLoading = $derived(reportLoading && !summary);
     let historyLoading = $derived(reportLoading && history.length === 0);
     let syncLoading = $state(false);
+    let syncingCode = $state<string | null>(null);
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu */
     let aiExportLoading = $state(false);
@@ -102,6 +104,16 @@
         void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
     }
 
+    function normalizeToSlug(pair: string): string {
+        const parts = pair
+            .replace('/', '-')
+            .split('-')
+            .map((p) => p.trim().toUpperCase())
+            .filter(Boolean);
+        if (parts.length < 2) return pair.trim().toUpperCase();
+        return parts.slice(0, 2).sort().join('-');
+    }
+
     /** Debounce timer for broker filter changes. */
     let reloadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 
@@ -122,6 +134,7 @@
 
     /** Display currency override — always concrete, defaults to user base currency. */
     let targetCurrency = $state($globalSettings.default_currency || 'EUR');
+    let appliedCurrency = $state($globalSettings.default_currency || 'EUR');
     let targetCurrencyManuallySet = $state(false);
 
     /** Broker filter dropdown open state. */
@@ -142,7 +155,6 @@
     // =========================================================================
 
     const baseCurrency = $derived($globalSettings.default_currency || 'EUR');
-    const displayCurrency = $derived(targetCurrency || baseCurrency);
 
     $effect(() => {
         if (targetCurrencyManuallySet || targetCurrency === baseCurrency) return;
@@ -253,7 +265,7 @@
         }
     }
 
-    function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
+    async function handleBannerAction(action: string, target: string | null, _issue: DataQualityIssue) {
         if (action === 'navigate_asset' && target) {
             goto(`/assets/${target}`);
         } else if (action === 'navigate_fx' && target) {
@@ -263,6 +275,34 @@
             const pairs = _issue.affected_fx_pairs ?? [];
             fxPairCreateSlug = pairs[0] ?? '';
             showFxPairAddModal = true;
+        } else if (action === 'sync_fx_pair') {
+            const pairs = _issue.affected_fx_pairs?.length ? _issue.affected_fx_pairs : target ? [target] : [];
+            if (pairs.length === 0) return;
+            const slugs = [...new Set(pairs.map(normalizeToSlug))];
+            syncLoading = true;
+            syncingCode = _issue.code;
+            toasts.info($_('fx.sync.inProgress'));
+            try {
+                const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                    pairs: slugs,
+                    start: dateRangeCtl.start,
+                    end: dateRangeCtl.end,
+                });
+                const changed = ((response as any)?.results ?? []).reduce((sum: number, r: any) => sum + (r?.points_changed ?? r?.points_fetched ?? 0), 0);
+                if (changed === 0) {
+                    toasts.info($_('fx.sync.noNewData'));
+                } else {
+                    toasts.success(`${slugs.join(', ')} — ${$_('fx.sync.synced')} (${changed} pts)`);
+                }
+                invalidateFxRoutes();
+                invalidate();
+                await loadAll(true);
+            } catch (e: any) {
+                toasts.error(`FX sync failed: ${e?.message || 'unknown'}`);
+            } finally {
+                syncLoading = false;
+                syncingCode = null;
+            }
         }
     }
 
@@ -304,8 +344,9 @@
 
     async function loadAll(force = false) {
         reportLoading = true;
+        const requested = targetCurrency;
         try {
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, force);
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, force);
             // Cast from the Zodios union types to the concrete types the dashboard expects
             summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
             history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
@@ -313,6 +354,7 @@
             // Contribution data comes from the same report when requested
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
             resolveMaxStartFromHistory();
+            appliedCurrency = requested;
         } finally {
             reportLoading = false;
         }
@@ -322,10 +364,12 @@
     async function loadContribution() {
         if (positionsContribution || contributionLoading) return;
         contributionLoading = true;
+        const requested = targetCurrency;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, false, true, false, false, false);
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, true, false, false, false);
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
+            appliedCurrency = requested;
         } finally {
             contributionLoading = false;
         }
@@ -473,8 +517,16 @@
                         <CurrencySearchSelect
                             bind:value={targetCurrency}
                             compact={true}
+                            configuredOnly={true}
+                            defaultCurrency={baseCurrency}
+                            createForexLabel={$_('common.createForex')}
                             dropdownPosition="bottom"
                             placeholder={baseCurrency}
+                            onCreateForex={() => {
+                                // Prefill base = user default currency, quote left for the user to pick
+                                fxPairCreateSlug = baseCurrency ? `${baseCurrency}-` : '';
+                                showFxPairAddModal = true;
+                            }}
                             onchange={() => {
                                 targetCurrencyManuallySet = true;
                                 void loadAll();
@@ -570,11 +622,11 @@
         {/snippet}
     </PageToolbar>
 
-    <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
+    <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} busyCode={syncingCode} />
 
     {#if activeTab === 'panoramica'}
         <div class="space-y-4" data-testid="dashboard-overview-tab">
-            <KpiSection {summary} {history} loading={summaryLoading} {displayCurrency} />
+            <KpiSection {summary} {history} loading={summaryLoading} displayCurrency={appliedCurrency} />
 
             <!-- Cash Balances — same position as broker detail (right after the KPIs), using
                  summary.cash_balances which already aggregates by currency across all brokers
@@ -602,11 +654,11 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} loading={historyLoading} baseCurrency={displayCurrency} />
+                    <GrowthChart {history} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->
-                <AllocationPanel {summary} loading={summaryLoading} {displayCurrency} brokerIds={activeBrokerIds} currentLanguage={$currentLanguage} allocationHistory={allocationHistoryFromReport} />
+                <AllocationPanel {summary} loading={summaryLoading} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} currentLanguage={$currentLanguage} allocationHistory={allocationHistoryFromReport} />
             </div>
         </div>
     {:else if activeTab === 'posizioni'}
@@ -620,7 +672,7 @@
                 dateFrom={dateRangeCtl.start}
                 dateTo={dateRangeCtl.end}
                 isAllPeriod={dateRangeCtl.activePreset === 'MAX'}
-                currency={activeAsset?.currency ?? displayCurrency}
+                currency={activeAsset?.currency ?? appliedCurrency}
                 assetName={activeAsset?.display_name ?? null}
                 onClose={closeAssetPanel}
             />
@@ -657,7 +709,10 @@
         bind:open={showFxPairAddModal}
         initialBase={fxParts[0] ?? ''}
         initialQuote={fxParts[1] ?? ''}
+        dateStart={dateRangeCtl.start}
+        dateEnd={dateRangeCtl.end}
         oncreated={() => {
+            invalidateFxRoutes();
             invalidate();
             loadAll();
         }}

@@ -44,16 +44,24 @@ All models are in `backend/app/db/models.py`. Session management in `session.py`
 
 ## Alembic Migrations
 
-### Current Phase: Single Migration
+### Current Phase: Released — Incremental Migrations
 
-During early development, we use a **single migration** (`001_initial.py`) that is modified in-place:
+LibreFolio is **officially released**. Existing user installations carry real data, so schema changes
+MUST ship as **incremental Alembic migrations** that upgrade an existing DB in place. Do **not** edit
+`001_initial.py` for changes to already-shipped tables — that would silently break deployed databases.
 
 ```bash
-./dev.py db create-clean          # Drop + recreate prod DB from 001_initial.py
-./dev.py db create-clean --test   # Same for test DB
+./dev.py db migrate "describe change"   # Autogenerate a new migration from model changes
+./dev.py db upgrade                      # Apply pending migrations (runs on user installs too)
+./dev.py db downgrade                    # Revert last migration
 ```
 
-**Rule**: Do NOT create incremental Alembic migrations. Modify `001_initial.py` directly and recreate.
+**Rule**: model change → add an incremental migration with working `upgrade()` **and** `downgrade()`,
+tested against a populated DB. Only touch `001_initial.py` for the initial schema of a brand-new table
+that has never shipped.
+
+`./dev.py db create-clean` still rebuilds a DB from scratch for **fresh installs and test runs**, but is
+**no longer** the way to evolve an existing schema.
 
 ### Standard Commands
 
@@ -62,7 +70,7 @@ During early development, we use a **single migration** (`001_initial.py`) that 
 ./dev.py db current               # Show current revision
 ./dev.py db upgrade               # Apply pending migrations
 ./dev.py db downgrade             # Revert last migration
-./dev.py db migrate "message"     # Create new migration (future use)
+./dev.py db migrate "message"     # Create a new incremental migration
 ```
 
 ### Data Separation

@@ -6,7 +6,7 @@ All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
 - Timestamps in UTC (created_at, updated_at, fetched_at)
 - Daily-point policy: one record per day for prices and FX rates
 - Foreign keys enforced with PRAGMA foreign_keys=ON
-- Currency fields validated against ISO 4217 + crypto via Currency.validate_code()
+- Currency fields validated against ISO 4217 via Currency.validate_code()
 """
 
 import json
@@ -349,7 +349,7 @@ class UserSettings(SQLModel, table=True):
     @field_validator("base_currency", mode="before")
     @classmethod
     def validate_base_currency(cls, v: Any) -> str:
-        """Validate base_currency against ISO 4217 + crypto."""
+        """Validate base_currency against ISO 4217."""
         return _validate_currency_field(v)
 
 
@@ -522,7 +522,7 @@ class Asset(SQLModel, table=True):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Any) -> str:
-        """Validate currency against ISO 4217 + crypto."""
+        """Validate currency against ISO 4217."""
         return _validate_currency_field(v)
 
     @field_validator("identifier_isin", mode="before")
@@ -664,7 +664,7 @@ class Transaction(SQLModel, table=True):
         description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
     )
 
-    # Currency code for cost_basis_override (ISO 4217 / crypto).
+    # Currency code for cost_basis_override (ISO 4217).
     # Always set together with cost_basis_override (both null or both non-null).
     cost_basis_currency: Optional[str] = Field(default=None, max_length=3, description="Currency code for cost_basis_override.")
 
@@ -690,7 +690,7 @@ class Transaction(SQLModel, table=True):
     @field_validator("currency", "cost_basis_currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Any) -> Optional[str]:
-        """Validate currency against ISO 4217 + crypto. Allows None."""
+        """Validate currency against ISO 4217. Allows None."""
         return _validate_currency_field(v)
 
 
@@ -736,7 +736,7 @@ class PriceHistory(SQLModel, table=True):
     @field_validator("currency", mode="before")
     @classmethod
     def validate_currency(cls, v: Any) -> str:
-        """Validate currency against ISO 4217 + crypto."""
+        """Validate currency against ISO 4217."""
         return _validate_currency_field(v)
 
 
@@ -827,7 +827,7 @@ class FxRate(SQLModel, table=True):
     @field_validator("base", "quote", mode="before")
     @classmethod
     def validate_currencies(cls, v: Any) -> str:
-        """Validate base/quote against ISO 4217 + crypto."""
+        """Validate base/quote against ISO 4217."""
         return _validate_currency_field(v)
 
 
@@ -880,7 +880,7 @@ class FxConversionRoute(SQLModel, table=True):
     @field_validator("base", "quote", mode="before")
     @classmethod
     def validate_currencies(cls, v: Any) -> str:
-        """Validate base/quote against ISO 4217 + crypto."""
+        """Validate base/quote against ISO 4217."""
         return _validate_currency_field(v)
 
     @property

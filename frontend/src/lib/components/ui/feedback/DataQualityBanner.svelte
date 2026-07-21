@@ -16,7 +16,7 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, ArrowLeftRight, Coins, ArrowUpRight} from 'lucide-svelte';
+    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, ArrowLeftRight, Coins, ArrowUpRight, RefreshCw, Loader2} from 'lucide-svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 
     /** Matches backend DataQualityIssue DTO. Only fields that are actively populated. */
@@ -30,7 +30,7 @@
         affected_asset_ids?: number[];
         affected_asset_names?: string[];
         affected_fx_pairs?: string[];
-        /** CTA intent: 'add_fx_pair' | 'navigate_asset' | 'navigate_fx' */
+        /** CTA intent: 'add_fx_pair' | 'sync_fx_pair' | 'navigate_asset' | 'navigate_fx' */
         cta_action?: string | null;
         /** Target identifier — asset_id string or fx pair slug */
         cta_target?: string | null;
@@ -46,9 +46,11 @@
         mode?: 'grouped' | 'flat';
         /** Called when a CTA button is clicked. Parent handles modals/navigation. */
         onaction?: (action: string, target: string | null, issue: DataQualityIssue) => void;
+        /** Issue code currently performing its CTA action → shows spinner + disabled on that issue's CTA button. */
+        busyCode?: string | null;
     }
 
-    let {issues, mode = 'flat', onaction}: Props = $props();
+    let {issues, mode = 'flat', onaction, busyCode = null}: Props = $props();
 
     let expanded = $state(false);
 
@@ -100,6 +102,7 @@
     /** Select CTA icon based on action type */
     function getCtaIcon(action: string | null | undefined) {
         if (action === 'add_fx_pair') return Coins;
+        if (action === 'sync_fx_pair') return RefreshCw;
         return ArrowUpRight;
     }
 
@@ -182,8 +185,17 @@
                     </div>
                     <!-- CTA -->
                     {#if issue.cta_action}
-                        <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium text-[11px] shrink-0" onclick={() => handleCta(issue)} data-testid="data-quality-cta-{issue.code}">
-                            <CtaIcon size={11} />
+                        <button
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                            onclick={() => handleCta(issue)}
+                            disabled={busyCode === issue.code}
+                            data-testid="data-quality-cta-{issue.code}"
+                        >
+                            {#if busyCode === issue.code}
+                                <Loader2 size={11} class="animate-spin" />
+                            {:else}
+                                <CtaIcon size={11} />
+                            {/if}
                             {getCtaLabel(issue.cta_action)}
                         </button>
                     {/if}
@@ -238,8 +250,12 @@
             <!-- Right: CTA -->
             {#if issue.cta_action}
                 <div class="flex items-center gap-1 self-end sm:self-auto sm:ml-auto">
-                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium" onclick={() => handleCta(issue)} data-testid="data-quality-cta-{issue.code}">
-                        <CtaIcon size={13} />
+                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed" onclick={() => handleCta(issue)} disabled={busyCode === issue.code} data-testid="data-quality-cta-{issue.code}">
+                        {#if busyCode === issue.code}
+                            <Loader2 size={13} class="animate-spin" />
+                        {:else}
+                            <CtaIcon size={13} />
+                        {/if}
                         {getCtaLabel(issue.cta_action)}
                     </button>
                 </div>

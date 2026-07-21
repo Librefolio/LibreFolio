@@ -41,13 +41,13 @@ LibreFolio/
 
 - **Caveman mode ultra** — always active. Use `caveman` skill at `ultra` intensity. Max compression, abbrevs, arrows for causality (X → Y). Off only if user says "stop caveman" or "normal mode".
 - **ALWAYS use `./dev.py`** for complex operations — never manual commands
-- **No backward compatibility** — clean up instead of maintaining legacy
+- **Legacy support case-by-case** — tend to migrate to the correct design; keep an old path only with a concrete reason (e.g. not breaking released installs/APIs)
 - **Code in English** — comments, docstrings, variables, README
 - **Multilingual UI** — only the graphical interface in EN/IT/FR/ES
 - **Edit > Rewrite** — prefer targeted edits to avoid regressions
-- **No incremental Alembic migrations** — modify `001_initial.py` and recreate DB with `./dev.py db create-clean`
+- **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
-- **After modifying DB models** — run `./dev.py db create-clean`
+- **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
 - **NEVER run `git commit`** — the agent must only *propose* commit messages
   (e.g. write them to `/tmp/libreFolio_commit_*.txt` or print them inline).
   The user performs the actual commit manually. Staging (`git add`) and read-only

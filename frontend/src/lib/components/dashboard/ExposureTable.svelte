@@ -2,7 +2,7 @@
   ExposureTable — Holdings snapshot table for open positions at the selected end date.
 
   Shows open holdings only (snapshot at date_to).
-  Columns: Asset, Value, Weight, Unrealized P&L, P&L %, Quantity, Price, PMC, Broker.
+  Columns: Asset, Δ P&L 1D, Δ P&L % 1D, P&L, P&L %, Value, Weight, Quantity, Price (hidden), PMC (hidden), Broker.
   Sorted by value descending.
 
   Pattern: Svelte 5 Runes, DataTable, data-testid, dark mode.
@@ -70,6 +70,7 @@
     let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
+    let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
 
     onMount(async () => {
@@ -83,6 +84,10 @@
         if (!tableWrapperEl) return;
         return attachOverflowMarqueeToDescendants(tableWrapperEl);
     });
+
+    export function getTableRef() {
+        return tableRef;
+    }
 
     function safeNum(v: string | (string | null)[] | null | undefined): number | null {
         const s = Array.isArray(v) ? (v[0] ?? null) : v;
@@ -215,30 +220,32 @@
         return [
             assetColumn,
             {
-                id: 'value',
-                header: () => $_('common.value'),
+                id: 'pnl-change-1d',
+                header: () => $_('dashboard.pnlChange1d') || 'Δ P&L vs yesterday',
+                headerTooltip: () => $_('dashboard.pnlChange1dTooltip') || "Change in unrealized P&L vs yesterday, holding today's quantity constant.",
                 type: 'number',
                 align: 'right',
-                width: 180,
-                minWidth: 160,
-                maxWidth: 280,
+                width: 190,
+                minWidth: 170,
+                maxWidth: 300,
                 resizable: true,
                 sortable: true,
-                getValue: (row) => row.currentValue ?? 0,
-                cell: (row) => (row.currentValue == null ? '—' : formatCurrencyAmountPlain(row.currentValue, displayCurrency)),
+                getValue: (row) => row.gainLossChange1d ?? 0,
+                cell: (row) => signedAmountCell(row.gainLossChange1d),
             },
             {
-                id: 'weight',
-                header: () => $_('dashboard.navWeight') || 'Weight',
+                id: 'pnl-change-1d-percent',
+                header: () => $_('dashboard.pnlChange1dPercent') || 'Δ P&L %',
+                headerTooltip: () => $_('dashboard.pnlChange1dPercentTooltip') || "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L.",
                 type: 'number',
                 align: 'right',
-                width: 100,
-                minWidth: 90,
-                maxWidth: 160,
+                width: 120,
+                minWidth: 110,
+                maxWidth: 190,
                 resizable: true,
                 sortable: true,
-                getValue: (row) => row.navWeight ?? 0,
-                cell: (row) => (row.navWeight == null ? '—' : `${row.navWeight.toFixed(1)}%`),
+                getValue: (row) => row.gainLossChange1dPercent ?? 0,
+                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
             },
             {
                 id: 'pnl',
@@ -268,32 +275,30 @@
                 cell: (row) => percentChangeCell(row.unrealizedPnlPercent),
             },
             {
-                id: 'pnl-change-1d',
-                header: () => $_('dashboard.pnlChange1d') || 'Δ P&L vs yesterday',
-                headerTooltip: () => $_('dashboard.pnlChange1dTooltip') || "Change in unrealized P&L vs yesterday, holding today's quantity constant.",
+                id: 'value',
+                header: () => $_('common.value'),
                 type: 'number',
                 align: 'right',
-                width: 190,
-                minWidth: 170,
-                maxWidth: 300,
+                width: 180,
+                minWidth: 160,
+                maxWidth: 280,
                 resizable: true,
                 sortable: true,
-                getValue: (row) => row.gainLossChange1d ?? 0,
-                cell: (row) => signedAmountCell(row.gainLossChange1d),
+                getValue: (row) => row.currentValue ?? 0,
+                cell: (row) => (row.currentValue == null ? '—' : formatCurrencyAmountPlain(row.currentValue, displayCurrency)),
             },
             {
-                id: 'pnl-change-1d-percent',
-                header: () => $_('dashboard.pnlChange1dPercent') || 'Δ P&L %',
-                headerTooltip: () => $_('dashboard.pnlChange1dPercentTooltip') || "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L.",
+                id: 'weight',
+                header: () => $_('dashboard.navWeight') || 'Weight',
                 type: 'number',
                 align: 'right',
-                width: 120,
-                minWidth: 110,
-                maxWidth: 190,
+                width: 100,
+                minWidth: 90,
+                maxWidth: 160,
                 resizable: true,
                 sortable: true,
-                getValue: (row) => row.gainLossChange1dPercent ?? 0,
-                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
+                getValue: (row) => row.navWeight ?? 0,
+                cell: (row) => (row.navWeight == null ? '—' : `${row.navWeight.toFixed(1)}%`),
             },
             {
                 id: 'quantity',
@@ -318,6 +323,7 @@
                 maxWidth: 280,
                 resizable: true,
                 sortable: true,
+                hiddenByDefault: true,
                 getValue: (row) => row.price ?? 0,
                 cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency)),
             },
@@ -332,6 +338,7 @@
                 maxWidth: 280,
                 resizable: true,
                 sortable: true,
+                hiddenByDefault: true,
                 getValue: (row) => row.wacPerUnit ?? 0,
                 cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency)),
             },
@@ -363,15 +370,16 @@
 
 <div data-testid="exposure-table" bind:this={tableWrapperEl}>
     <DataTable
+        bind:this={tableRef}
         data={rows}
         {columns}
         getRowId={(row) => row.key}
-        storageKey="dashboard-holdings-v3"
+        storageKey="dashboard-holdings-v5"
         enableSelection={false}
         selectionMode="none"
         enableActions={true}
         enablePagination={false}
-        enableColumnVisibility={false}
+        enableColumnVisibility={true}
         enableColumnFilters={false}
         enableSorting={true}
         enableColumnResize={true}
