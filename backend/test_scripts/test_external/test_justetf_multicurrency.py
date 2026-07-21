@@ -2,8 +2,8 @@
 JustETF provider multi-currency tests.
 
 Validates that all 4 supported currencies (EUR, USD, CHF, GBP) work correctly:
-- EUR: current value ✅ + history ✅
-- USD/CHF/GBP: current value → NOT_SUPPORTED + history ✅
+- EUR: current value ✅ (gettex mid) + history ✅
+- USD/CHF/GBP: current value ✅ (daily latestQuote fallback) + history ✅
 - Search returns 4× results per ETF match with flag emojis
 """
 
@@ -36,7 +36,7 @@ def _get_provider():
 
 @pytest.mark.asyncio
 async def test_current_value_eur():
-    """EUR current value should succeed (gettex WebSocket)."""
+    """EUR current value should succeed (gettex mid quote)."""
     print_section("JustETF: Current Value EUR")
     provider = _get_provider()
 
@@ -48,16 +48,19 @@ async def test_current_value_eur():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("currency", NON_EUR_CURRENCIES)
-async def test_current_value_non_eur_rejected(currency: str):
-    """Non-EUR current value should raise NOT_SUPPORTED."""
-    print_section(f"JustETF: Current Value {currency} → NOT_SUPPORTED")
+async def test_current_value_non_eur(currency: str):
+    """Non-EUR current value should succeed via the daily latestQuote fallback.
+
+    The gettex real-time feed is EUR-only, so USD/CHF/GBP fall back to the
+    performance-chart ``latestQuote`` (daily, FX-converted by justETF).
+    """
+    print_section(f"JustETF: Current Value {currency} (chart fallback)")
     provider = _get_provider()
 
-    with pytest.raises(AssetSourceError) as exc_info:
-        await provider.get_current_value(ISIN, IdentifierType.ISIN, {"currency": currency})
-
-    assert "NOT_SUPPORTED" in str(exc_info.value) or "only available in EUR" in str(exc_info.value)
-    print_success(f"{currency} current correctly rejected")
+    result = await provider.get_current_value(ISIN, IdentifierType.ISIN, {"currency": currency})
+    assert result.value > 0
+    assert result.currency == currency
+    print_success(f"{currency} current: {result.value} {result.currency}")
 
 
 @pytest.mark.asyncio

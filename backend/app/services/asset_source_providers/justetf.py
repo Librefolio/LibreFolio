@@ -6,6 +6,7 @@ Uses the justetf-scraping library to fetch ETF data from justetf.com.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 from typing import Dict, List, Optional
@@ -33,6 +34,14 @@ try:
     import justetf_scraping
     import pandas as pd
     from justetf_scraping import get_etf_overview, iterate_live_quote, load_chart, load_live_quote, load_overview
+    from justetf_scraping.charts import load_raw_chart
+
+    # Intraday OHL helper — available only on newer library versions. Guarded so
+    # LibreFolio keeps working (without intraday enrichment) on older installs.
+    try:
+        from justetf_scraping import load_intraday_ohlc
+    except ImportError:
+        load_intraday_ohlc = None
 
     JUSTETF_AVAILABLE = True
 except ImportError:
@@ -41,6 +50,8 @@ except ImportError:
     load_live_quote = None
     iterate_live_quote = None
     load_chart = None
+    load_raw_chart = None
+    load_intraday_ohlc = None
     load_overview = None
     pd = None
     JUSTETF_AVAILABLE = False
@@ -234,14 +245,16 @@ class JustETFProvider(AssetSourceProvider):
         provider_params: Dict | None = None,
     ) -> FACurrentValue:
         """
-        Fetch current price from JustETF (gettex WebSocket, EUR only).
+        Fetch current price from JustETF.
 
         Strategy (fastest first):
-        1. Check _live_quote_store (instant, no I/O — populated by background WebSocket)
-        2. One-shot load_live_quote (opens WebSocket, reads first quote, closes)
-        3. Both paths also ensure a persistent live-feed is running for future calls
-
-        Raises NOT_SUPPORTED if currency ≠ EUR (gettex only provides EUR quotes).
+        1. EUR only: real-time gettex quote. Prefer the market-maker ``mid``
+           price (continuously updated) over ``last`` (last executed trade),
+           which is stale for thinly-traded ETFs — it stays stuck at the
+           opening-auction level all day.
+        2. Fallback for all currencies: the daily ``latestQuote`` from the
+           performance-chart API (this is how USD/CHF/GBP get a current price,
+           since the gettex feed only provides EUR).
         """
         self._check_availability()
         if identifier_type != IdentifierType.ISIN:
@@ -251,47 +264,47 @@ class JustETFProvider(AssetSourceProvider):
             )
 
         currency = self._get_currency(provider_params)
-        if currency != "EUR":
-            raise AssetSourceError(
-                f"Current price only available in EUR (gettex exchange). " f"For {currency} prices, only historical data is available.",
-                "NOT_SUPPORTED",
-                {"currency": currency, "supported_for_current": "EUR"},
-            )
 
         try:
-            # Ensure persistent WebSocket feed is running for this ISIN
-            _ensure_live_feed(identifier)
+            price: Decimal | None = None
+            value_currency = currency
+            as_of_date = date.today()
 
-            # 1. Try live store first (instant, no I/O)
-            quote = _live_quote_store.get(identifier)
+            # 1. Real-time gettex quote (EUR only), preferring mid over last.
+            if currency == "EUR":
+                _ensure_live_feed(identifier)
+                quote = _live_quote_store.get(identifier)
+                if quote is None:
+                    quote = await asyncio.to_thread(load_live_quote, identifier)
+                if quote is not None:
+                    q_price = quote.mid or quote.last
+                    if q_price is not None:
+                        price = Decimal(str(q_price))
+                        value_currency = quote.currency
+                        as_of_date = quote.timestamp.date() if quote.timestamp else date.today()
 
-            # 2. Fallback: one-shot fetch (first call before WS delivers)
-            if quote is None:
-                quote = load_live_quote(identifier)
-
-            if quote is None:
-                raise AssetSourceError(
-                    f"No gettex quote available for {identifier}",
-                    "NOT_FOUND",
-                )
-
-            # Extract price from Quote dataclass
-            price = quote.last or quote.mid
-            currency = quote.currency
-            timestamp = quote.timestamp
+            # 2. Fallback: daily latestQuote from the performance-chart API
+            #    (all supported currencies).
+            if price is None and load_raw_chart is not None:
+                raw_chart = await asyncio.to_thread(load_raw_chart, identifier, currency)
+                latest = raw_chart.get("latestQuote") if raw_chart else None
+                latest_raw = latest.get("raw") if latest else None
+                if latest_raw is not None:
+                    price = Decimal(str(latest_raw))
+                    value_currency = currency
+                    latest_date = raw_chart.get("latestQuoteDate")
+                    if latest_date:
+                        as_of_date = date.fromisoformat(latest_date)
 
             if price is None:
                 raise AssetSourceError(
-                    f"No price data in gettex quote for {identifier}",
+                    f"No current price available for {identifier} from JustETF",
                     "NOT_FOUND",
                 )
 
-            # Convert timestamp to date
-            as_of_date = timestamp.date() if timestamp else date.today()
-
             return FACurrentValue(
-                value=Decimal(str(price)),
-                currency=currency,
+                value=price,
+                currency=value_currency,
                 as_of_date=as_of_date,
                 source=self.provider_name,
             )
@@ -365,6 +378,25 @@ class JustETFProvider(AssetSourceProvider):
                         backward_fill_info=None,
                     )
                 )
+
+            # --- Enrich the current day with intraday OHL (gettex, EUR only) ---
+            # justETF only historizes the intraday gettex feed in EUR; other
+            # currencies / off-hours yield no series and this is a no-op. The
+            # daily close (latestQuote) is left untouched — we only add
+            # open/high/low, which the daily chart does not provide.
+            if add_current and currency == "EUR" and load_intraday_ohlc is not None:
+                try:
+                    ohlc = await asyncio.to_thread(load_intraday_ohlc, identifier)
+                    if ohlc:
+                        ohlc_date = date.fromisoformat(ohlc["date"])
+                        for pp in prices:
+                            if pp.date == ohlc_date:
+                                pp.open = Decimal(str(ohlc["open"]))
+                                pp.high = Decimal(str(ohlc["high"]))
+                                pp.low = Decimal(str(ohlc["low"]))
+                                break
+                except Exception as e:
+                    logger.debug(f"Could not enrich intraday OHL for {identifier}: {e}")
 
             # --- Parse dividend events from chart data ---
             # load_chart() returns a DataFrame with a 'dividends' column
