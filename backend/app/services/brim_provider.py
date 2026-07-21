@@ -341,8 +341,29 @@ class BRIMProvider(ABC):
 
         Example: "directa" for broker_directa plugin
         Returns None if no test pattern (e.g., generic fallback plugin).
+
+        For plugins that own several export formats (e.g. Revolut invest + crypto),
+        prefer overriding :attr:`test_file_patterns` with the full list.
         """
         return None
+
+    @property
+    def test_file_patterns(self) -> List[str]:
+        """Filename substrings for **every** sample this plugin owns.
+
+        A single plugin can handle several export layouts of the same broker
+        (variant detected by header inside :meth:`can_parse` / :meth:`parse`).
+        Register one sample per variant in ``sample_reports/`` and list each
+        filename substring here so the test suite exercises them all.
+
+        Default: derives from the single-value :attr:`test_file_pattern` shim,
+        so existing plugins keep working without changes. Returns ``[]`` when
+        neither is set (e.g. the generic fallback plugin).
+
+        Example: ``["revolut-invest", "revolut-crypto"]``.
+        """
+        single = self.test_file_pattern
+        return [single] if single else []
 
     def to_plugin_info(self) -> BRIMPluginInfo:
         """Convert provider to BRIMPluginInfo DTO."""

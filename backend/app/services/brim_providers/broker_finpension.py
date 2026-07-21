@@ -64,8 +64,12 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "sell": TransactionType.SELL,
     "interests": TransactionType.INTEREST,
     "dividend": TransactionType.DIVIDEND,
+    "dividend and interest distributions": TransactionType.DIVIDEND,
     "flat-rate administrative fee": TransactionType.FEE,
+    "flat-rate administration fee": TransactionType.FEE,
     "deposit": TransactionType.DEPOSIT,
+    "portfolio transaction": TransactionType.BUY,
+    "transfer vested benefits": TransactionType.DEPOSIT,
     "withdrawal": TransactionType.WITHDRAWAL,
 }
 
@@ -126,6 +130,10 @@ class FinpensionBrokerProvider(BRIMProvider):
     @property
     def icon_url(self) -> str:
         return "https://www.finpension.ch/favicon.ico"
+
+    @property
+    def plugin_version(self) -> str:
+        return "1.1.0"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Finpension format by checking for distinctive headers."""
@@ -285,3 +293,8 @@ class FinpensionBrokerProvider(BRIMProvider):
     def test_file_pattern(self) -> Optional[str]:
         """Filename pattern for auto-detection tests."""
         return "finpension"
+
+    @property
+    def test_file_patterns(self) -> List[str]:
+        """Filename patterns for all Finpension export variants."""
+        return ["finpension", "finpension-bvg"]
