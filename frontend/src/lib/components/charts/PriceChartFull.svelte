@@ -65,7 +65,6 @@
 
     interface ResolvedDataCacheEntry {
         lineData: LineDataPoint[];
-        candleData: LineDataPoint[];
     }
 
     interface BucketInfo {
@@ -369,21 +368,29 @@
         const cached = resolvedDataCache.get(currentResolution);
         if (cached) return cached;
 
-        const synthesizedDailyData = synthesizeDailyOHLC(data);
         const entry: ResolvedDataCacheEntry =
             currentResolution === 'daily'
                 ? {
                       lineData: displayData,
-                      candleData: synthesizedDailyData,
                   }
                 : {
                       lineData: aggregateLineSeries(displayData, currentResolution),
-                      candleData: aggregateOHLCV(synthesizedDailyData, currentResolution),
                   };
 
         resolvedDataCache.set(currentResolution, entry);
         return entry;
     }
+
+    // Candlestick series for the template binding. Uses $derived (not the
+    // getResolvedSeries manual cache) so it reactively depends on `data` and
+    // `resolution`: the cached function short-circuits before reading `data`,
+    // so a template call to it would NOT re-track `data` and the candlestick
+    // would freeze on time-range changes (line mode is unaffected — it renders
+    // imperatively from a $effect that depends on `data`).
+    let candleSeries = $derived.by(() => {
+        const synthesized = synthesizeDailyOHLC(data);
+        return resolution === 'daily' ? synthesized : aggregateOHLCV(synthesized, resolution);
+    });
 
     function getVisibleDailyPoints(range: LogicalVisibleRange | null): LineDataPoint[] {
         if (!range) return displayData;
@@ -1116,14 +1123,12 @@
                                     mainLabel = mainSeriesName;
                                 }
                                 labelHtml =
-                                    signalLabelToHtml(
-                                        {
-                                            label: truncateName(mainLabel),
-                                            iconUrl: mainIconUrl,
-                                            assetType: mainAssetType,
-                                            isCrown: true,
-                                        },
-                                    ) + currSuffix;
+                                    signalLabelToHtml({
+                                        label: truncateName(mainLabel),
+                                        iconUrl: mainIconUrl,
+                                        assetType: mainAssetType,
+                                        isCrown: true,
+                                    }) + currSuffix;
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
                                 labelHtml = `${colorDot}${truncateName(String(p.seriesName ?? ''))}`;
@@ -1224,7 +1229,7 @@
             <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode}></div>
         {:else}
             <CandlestickChart
-                data={getResolvedSeries(resolution).candleData}
+                data={candleSeries}
                 currency={currency || undefined}
                 height={chartHeight}
                 {showGridLines}
