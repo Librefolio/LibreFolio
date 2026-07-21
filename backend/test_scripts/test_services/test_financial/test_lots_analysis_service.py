@@ -1241,9 +1241,7 @@ async def test_same_asset_open_value_scales_with_quantity_only(session, test_use
                 currency="EUR",
             )
         )
-        rows.append(
-            PriceHistory(asset_id=asset.id, date=buy_date, close=unit_cost, currency="EUR", source_plugin_key="TEST")
-        )
+        rows.append(PriceHistory(asset_id=asset.id, date=buy_date, close=unit_cost, currency="EUR", source_plugin_key="TEST"))
     # Single latest market price shared by all lots.
     rows.append(PriceHistory(asset_id=asset.id, date=date(2026, 7, 2), close=latest_price, currency="EUR", source_plugin_key="TEST"))
     session.add_all(rows)

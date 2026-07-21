@@ -42,9 +42,10 @@ When `--coverage` is used, `dev.py` replaces itself via `os.execvpe()` with `cov
 ```
 
 ### Rules
-- **No incremental Alembic migrations** during early development
-- Modify `backend/alembic/versions/001_initial.py` directly
-- Then `./dev.py db create-clean` to recreate from scratch
+- **Released — use incremental Alembic migrations**: schema changes ship as new migrations to protect existing installs
+- Edit `backend/alembic/versions/001_initial.py` only for brand-new never-shipped tables
+- `./dev.py db create-clean` only for fresh installs / test DBs, not to evolve an existing schema
+- Every migration needs working `upgrade()` + `downgrade()`, tested on a populated DB
 - Test DB and prod DB are completely isolated (`backend/data/test/` vs `backend/data/prod/`)
 
 ### Populate test data

@@ -383,11 +383,8 @@
     {#if !disabled}
         <div class="flex items-center gap-1 text-[10px]" data-testid="{testid}-unit-toggle">
             <span class="text-gray-400 dark:text-gray-500">{$t('transactions.wacPreview.unitModeLabel') ?? 'Show as:'}</span>
-            <button
-                type="button"
-                class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                onclick={() => setUnitMode('total')}
-                data-testid="{testid}-unit-toggle-total">{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
+            <button type="button" class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={() => setUnitMode('total')} data-testid="{testid}-unit-toggle-total"
+                >{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
             >
             <span class="text-gray-300 dark:text-gray-600">|</span>
             <button

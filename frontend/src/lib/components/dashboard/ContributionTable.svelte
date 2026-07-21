@@ -61,6 +61,7 @@
 
     let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze}: Props = $props();
 
+    let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
 
     // Cells are rendered as raw HTML strings (see the 'name' column below), so `use:` actions
@@ -70,6 +71,10 @@
         if (!tableWrapperEl) return;
         return attachOverflowMarqueeToDescendants(tableWrapperEl);
     });
+
+    export function getTableRef() {
+        return tableRef;
+    }
 
     function safeNum(v: NumericLike | undefined): number | null {
         const s = Array.isArray(v) ? (v[0] ?? null) : v;
@@ -119,10 +124,10 @@
         status: PositionStatus;
         statusLabel: string;
         isFullySold: boolean;
-        assetId?: number;
+        assetId: number;
     }
 
-    let displayRows = $derived.by(() => {
+    let displayRows = $derived.by<DisplayRow[]>(() => {
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
         const holdingsByKey = new Map(
             holdings.map((holding) => [
@@ -265,6 +270,32 @@
                 },
             },
             {
+                id: 'pnl-change-1d',
+                header: () => label('dashboard.pnlChange1d', 'Δ P&L vs yesterday'),
+                headerTooltip: () => label('dashboard.pnlChange1dTooltip', "Change in unrealized P&L vs yesterday, holding today's quantity constant."),
+                type: 'number',
+                width: 190,
+                minWidth: 170,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.gainLossChange1d ?? 0,
+                cell: (row) => signedAmountCell(row.gainLossChange1d),
+            },
+            {
+                id: 'pnl-change-1d-percent',
+                header: () => label('dashboard.pnlChange1dPercent', 'Δ P&L %'),
+                headerTooltip: () => label('dashboard.pnlChange1dPercentTooltip', "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L."),
+                type: 'number',
+                width: 120,
+                minWidth: 110,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.gainLossChange1dPercent ?? 0,
+                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
+            },
+            {
                 id: 'pnl',
                 header: () => label('dashboard.periodPnl', 'Period P&L'),
                 headerTooltip: () => label('dashboard.periodPnlTooltip', 'Profit and loss generated during selected period.'),
@@ -326,72 +357,6 @@
                 cell: (row) => signedAmountCell(row.costs),
             },
             {
-                id: 'start-value',
-                header: () => label('dashboard.startValue', 'Start Value'),
-                type: 'number',
-                width: 170,
-                minWidth: 150,
-                sortable: true,
-                filterable: false,
-                align: 'right',
-                getValue: (row) => row.startValue ?? 0,
-                cell: (row) => amountCell(row.startValue),
-            },
-            {
-                id: 'end-value',
-                header: () => label('dashboard.endValue', 'End Value'),
-                type: 'number',
-                width: 170,
-                minWidth: 150,
-                sortable: true,
-                filterable: false,
-                align: 'right',
-                getValue: (row) => row.endValue ?? 0,
-                cell: (row) => amountCell(row.endValue),
-            },
-            {
-                id: 'pnl-change-1d',
-                header: () => label('dashboard.pnlChange1d', 'Δ P&L vs yesterday'),
-                headerTooltip: () => label('dashboard.pnlChange1dTooltip', "Change in unrealized P&L vs yesterday, holding today's quantity constant."),
-                type: 'number',
-                width: 190,
-                minWidth: 170,
-                sortable: true,
-                filterable: false,
-                align: 'right',
-                getValue: (row) => row.gainLossChange1d ?? 0,
-                cell: (row) => signedAmountCell(row.gainLossChange1d),
-            },
-            {
-                id: 'pnl-change-1d-percent',
-                header: () => label('dashboard.pnlChange1dPercent', 'Δ P&L %'),
-                headerTooltip: () => label('dashboard.pnlChange1dPercentTooltip', "Δ P&L vs yesterday as a percentage of yesterday's unrealized P&L."),
-                type: 'number',
-                width: 120,
-                minWidth: 110,
-                sortable: true,
-                filterable: false,
-                align: 'right',
-                getValue: (row) => row.gainLossChange1dPercent ?? 0,
-                cell: (row) => percentChangeCell(row.gainLossChange1dPercent != null ? row.gainLossChange1dPercent / 100 : null),
-            },
-            {
-                id: 'status',
-                header: () => label('dashboard.status', 'Status'),
-                type: 'enum',
-                width: 190,
-                minWidth: 180,
-                sortable: true,
-                filterable: true,
-                urlKey: 'status',
-                enumOptions: [
-                    {value: 'open_at_period_end', label: openStatusLabel},
-                    {value: 'closed_by_period_end', label: closedStatusLabel},
-                ],
-                getValue: (row) => row.status,
-                cell: (row) => statusCell(row),
-            },
-            {
                 id: 'broker',
                 header: () => label('transactions.table.broker', 'Broker'),
                 type: 'text',
@@ -414,21 +379,65 @@
                     };
                 },
             },
+            {
+                id: 'start-value',
+                header: () => label('dashboard.startValue', 'Start Value'),
+                type: 'number',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.startValue ?? 0,
+                cell: (row) => amountCell(row.startValue),
+            },
+            {
+                id: 'end-value',
+                header: () => label('dashboard.endValue', 'End Value'),
+                type: 'number',
+                width: 170,
+                minWidth: 150,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.endValue ?? 0,
+                cell: (row) => amountCell(row.endValue),
+            },
+            {
+                id: 'status',
+                header: () => label('dashboard.status', 'Status'),
+                type: 'enum',
+                width: 190,
+                minWidth: 180,
+                sortable: true,
+                filterable: true,
+                urlKey: 'status',
+                hiddenByDefault: true,
+                enumOptions: [
+                    {value: 'open_at_period_end', label: openStatusLabel},
+                    {value: 'closed_by_period_end', label: closedStatusLabel},
+                ],
+                getValue: (row) => row.status,
+                cell: (row) => statusCell(row),
+            },
         ];
     });
 </script>
 
 <div data-testid="contribution-table" bind:this={tableWrapperEl}>
     <DataTable
+        bind:this={tableRef}
         data={displayRows}
         {columns}
         getRowId={(row) => row.key}
-        storageKey="dashboard-performance"
+        storageKey="dashboard-performance-v2"
         enableSelection={false}
         selectionMode="none"
         enableActions={true}
         enablePagination={false}
-        enableColumnVisibility={false}
+        enableColumnVisibility={true}
         enableColumnFilters={true}
         enableSorting={true}
         enableColumnResize={true}

@@ -14,7 +14,6 @@ import structlog
 from babel.core import get_global
 from babel.numbers import get_currency_name, get_currency_symbol
 
-from backend.app.schemas.common import CRYPTO_CURRENCIES
 from backend.app.utils.geo_utils import iso2_to_flag_emoji
 from backend.app.utils.translation_utils import get_babel_locale
 
@@ -52,8 +51,6 @@ def _build_currency_to_flag_map() -> dict[str, str]:
     as legal tender, then converts country ISO-2 → flag emoji.
 
     Multi-country currencies (EUR, XAF, etc.) use explicit overrides.
-    Crypto currencies use 🪙.
-
     Babel territory_currencies format: dict[territory_iso2] → list of tuples
     Each tuple: (currency_code, start_date_tuple, end_date_tuple_or_None, is_tender)
     Example: ('USD', (1792, 1, 1), None, True)
@@ -84,10 +81,6 @@ def _build_currency_to_flag_map() -> dict[str, str]:
             # Don't override multi-country currencies already set
             if code not in currency_to_flag:
                 currency_to_flag[code] = iso2_to_flag_emoji(iso2)
-
-    # Add crypto
-    for code in CRYPTO_CURRENCIES:
-        currency_to_flag[code] = "🪙"
 
     return currency_to_flag
 
@@ -189,14 +182,14 @@ def normalize_currency(input_str: str, language: str = "en") -> dict:
     locale = get_babel_locale(language)
 
     # Try direct ISO code match — accept only **strict 3-letter alpha_3 codes**
-    # validated against pycountry's active list or the supported crypto set.
+    # validated against pycountry's active list.
     # NOTE: ``babel.numbers.get_currency_symbol`` echoes the input back for
     # unknown codes, so it cannot be used as a validator. Likewise
     # ``pycountry.currencies.lookup`` does fuzzy NAME matching ("SWISS FRANC"
     # → CHF) which would skip the dedicated symbol/name branches below.
     if len(input_clean) == 3 and input_clean.isalpha():
         is_iso = pycountry.currencies.get(alpha_3=input_clean) is not None
-        if is_iso or input_clean in CRYPTO_CURRENCIES:
+        if is_iso:
             return {
                 "query": input_str,
                 "iso_codes": [input_clean],
@@ -263,7 +256,6 @@ def list_currencies(language: str = "en") -> List[dict]:
 
     Source-of-truth: pycountry (only active ISO 4217 currencies).
     Babel is used only for localized names, symbols, and country name translations.
-    Crypto currencies from CRYPTO_CURRENCIES are appended at the end.
 
     Args:
         language: ISO 639-1 language code (default: 'en')
@@ -310,19 +302,6 @@ def list_currencies(language: str = "en") -> List[dict]:
                 "flag_emoji": flag_map.get(code, "🏳️"),
                 "country_codes": country_codes,
                 "country_names": country_names,
-            }
-        )
-
-    # 2. Crypto currencies (from CRYPTO_CURRENCIES dict)
-    for code, crypto_name in sorted(CRYPTO_CURRENCIES.items()):
-        currencies.append(
-            {
-                "code": code,
-                "name": crypto_name,
-                "symbol": code,
-                "flag_emoji": "🪙",
-                "country_codes": [],
-                "country_names": [],
             }
         )
 

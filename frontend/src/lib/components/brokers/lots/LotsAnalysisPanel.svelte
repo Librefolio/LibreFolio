@@ -445,7 +445,7 @@
                     {incomeEvents}
                     {brokers}
                     {currency}
-                    quoteBaseQuantity={quoteBaseQuantity}
+                    {quoteBaseQuantity}
                     {xAxisRange}
                     onZoomChange={handleZoomChange}
                     externalZoomStart={sharedZoomStart}

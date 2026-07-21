@@ -985,7 +985,9 @@
     "category": "Categoría",
     "errorOccurred": "Se produjo un error",
     "uploading": "Subiendo...",
-    "user": "Usuario"
+    "user": "Usuario",
+    "backToDefault": "Volver al predeterminado",
+    "createForex": "Crear forex…"
   },
   "csvImport": {
     "title": "Importar datos CSV",
@@ -1173,14 +1175,17 @@
     "cta": {
       "navigate_asset": "Ver activo",
       "navigate_fx": "Ver FX",
-      "add_fx_pair": "Añadir par FX"
+      "add_fx_pair": "Añadir par FX",
+      "sync_fx_pair": "Sincronizar"
     },
     "referencePriceFallback": "Precio de apertura del lote no disponible en la fecha exacta — se usa el último precio conocido {reference_price} como referencia para el rendimiento relativo",
     "referencePriceUnavailable": "No hay precio de referencia disponible para la apertura de un lote — no se puede calcular el rendimiento relativo",
     "shortTransferNotSupported": "La transferencia de una posición short aún no es compatible (bróker {broker_id})",
     "shortAdjustmentNotSupported": "Un ajuste todavía no puede abrir ni cerrar una posición short (bróker {broker_id})",
     "fifoSourceQuantityMissing": "La transacción supera la cantidad disponible en {missing_quantity} (bróker {broker_id})",
-    "transferPairMissing": "A una transferencia le falta su transacción emparejada, o el par no es válido"
+    "transferPairMissing": "A una transferencia le falta su transacción emparejada, o el par no es válido",
+    "missingFxRates": "Faltan tasas FX para {count} par(es) entre {date_from} y {date_to} ({dates_count} fecha(s)) — sincroniza para completar los totales",
+    "missingFxRatesManual": "Faltan tasas FX para {count} par(es) manual(es) — añade las tasas manualmente"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",
@@ -1303,7 +1308,8 @@
       "createIntermediatePairs": "Crear también los pares intermedios",
       "createIntermediatePairsHint": "Cada paso de las cadenas seleccionadas se guardará como par autónomo con su proveedor, para poder sincronizarlos de forma independiente.",
       "titleEdit": "Editar Proveedores del Par",
-      "createFailed": "Error al crear el par FX"
+      "createFailed": "Error al crear el par FX",
+      "alreadyExists": "Este par ya existe — sincronízalo o edítalo desde la página FX."
     },
     "sync": {
       "description": "Sincronizar tasas de cambio de los proveedores configurados para el rango de fechas seleccionado.",
@@ -1316,7 +1322,9 @@
       "toastFailed": "{pair} sincronización fallida",
       "legBreakdown": "Detalle por tramo",
       "legNoData": "0 fechas — sin datos",
-      "legDates": "fechas"
+      "legDates": "fechas",
+      "inProgress": "Sincronizando tasas FX…",
+      "noNewData": "No hay nuevas tasas disponibles del proveedor para este período"
     },
     "route": {
       "title": "Rutas de Conversión",

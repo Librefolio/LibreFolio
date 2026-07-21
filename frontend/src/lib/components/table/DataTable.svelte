@@ -1733,6 +1733,11 @@
 
     thead.sticky-header .th-fixed {
         z-index: 25;
+        background: #f8fafc;
+    }
+
+    :global(.dark) thead.sticky-header .th-fixed {
+        background: #1e293b;
     }
 
     .th-fixed {

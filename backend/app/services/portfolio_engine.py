@@ -48,6 +48,15 @@ logger = structlog.get_logger(__name__)
 # (user, brokers, currency, fingerprints). Range-aware: can be sliced or extended.
 _portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  # 24h
 
+
+def _normalize_fx_pair_slug(pair: str) -> str:
+    parts = [p.strip().upper() for p in pair.replace("/", "-").split("-") if p.strip()]
+    if len(parts) < 2:
+        return pair.strip().upper()
+    base, quote = sorted(parts[:2])
+    return f"{base}-{quote}"
+
+
 # Transaction types that are always external cash flows when unlinked
 _EXTERNAL_CASH_TYPES = {TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}
 
@@ -538,10 +547,7 @@ class DailyStateBuilder:
         # ── 5. PRE-FRAME: [date_from, frame_start) — accounting only ──
         # Process all transaction days before frame_start: update cash, qty, WAC, ECF.
         # No market evaluation, no DailyPortfolioState emission.
-        preframe_tx_dates = sorted(
-            d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys()))
-            if d < self.frame_start
-        )
+        preframe_tx_dates = sorted(d for d in (set(cash_deltas.keys()) | set(position_txs_by_date.keys()) | set(ecf_by_date.keys())) if d < self.frame_start)
         for day in preframe_tx_dates:
             cumulative_cash += cash_deltas.get(day, zero)
             cumulative_ecf += ecf_by_date.get(day, zero)
@@ -559,7 +565,7 @@ class DailyStateBuilder:
                     restore = min(amt, W)
                     R[bid] += restore
                     W -= restore
-                    K[bid] += (amt - restore)
+                    K[bid] += amt - restore
                 elif tx.type == TransactionType.WITHDRAWAL:
                     from_k = min(amt, max(K[bid], zero))
                     K[bid] -= from_k
@@ -577,7 +583,7 @@ class DailyStateBuilder:
                 elif tx.type == TransactionType.BUY and tx.asset_id:
                     from_r = min(amt, max(R[bid], zero))
                     R[bid] -= from_r
-                    K[bid] -= (amt - from_r)
+                    K[bid] -= amt - from_r
                 elif tx.type == TransactionType.SELL and tx.asset_id:
                     # Pre-frame sells: approximate all proceeds to K (WAC not tracked yet in pre-frame for sell cost basis)
                     K[bid] += amt
@@ -815,7 +821,7 @@ class DailyStateBuilder:
                     restore = min(amount_target, W)
                     R[bid] += restore
                     W -= restore
-                    K[bid] += (amount_target - restore)
+                    K[bid] += amount_target - restore
 
                 elif tx.type == TransactionType.WITHDRAWAL:
                     from_k = min(amount_target, max(K[bid], zero))
@@ -847,7 +853,7 @@ class DailyStateBuilder:
                 elif tx.type == TransactionType.BUY and tx.asset_id:
                     from_r = min(amount_target, max(R[bid], zero))
                     R[bid] -= from_r
-                    K[bid] -= (amount_target - from_r)
+                    K[bid] -= amount_target - from_r
 
                 elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
                     # Linked-internal: pool transfer between brokers
@@ -875,9 +881,7 @@ class DailyStateBuilder:
             for (asset_id, _broker_id), qty in cumulative_qty.items():
                 if qty <= 0:
                     continue
-                mv, price_found, is_stale, fx_missing, is_implied = self._market_value_for(
-                    asset_id, qty, current, wac_pool_qty, wac_pool_cost, _broker_id
-                )
+                mv, price_found, is_stale, fx_missing, is_implied = self._market_value_for(asset_id, qty, current, wac_pool_qty, wac_pool_cost, _broker_id)
                 if mv is not None:
                     market_value += mv
                     self._distribute_allocation(asset_id, mv, by_type, by_sector, by_geo)
@@ -894,9 +898,7 @@ class DailyStateBuilder:
             it_cash, it_asset_mv, it_asset_cb = self._compute_in_transit(current, missing_fx)
 
             # 4e. Open cost basis from inline WAC pool
-            open_cost_basis = self._compute_open_cost_basis_inline(
-                cumulative_qty, wac_pool_qty, wac_pool_cost, current, missing_fx
-            )
+            open_cost_basis = self._compute_open_cost_basis_inline(cumulative_qty, wac_pool_qty, wac_pool_cost, current, missing_fx)
 
             # 4f. Compose
             broker_nav = market_value + cumulative_cash
@@ -1000,7 +1002,7 @@ class DailyStateBuilder:
                 returns_pool=dict(R),
                 withdrawn_pool=W,
             ),
-            scope_broker_ids=list(set(ctxn.tx.broker_id for ctxn in self.classified_txs)),
+            scope_broker_ids=list({ctxn.tx.broker_id for ctxn in self.classified_txs}),
             target_currency=self.target_currency,
             date_from=self.date_from,
             date_to=self.date_to,
@@ -1033,9 +1035,7 @@ class DailyStateBuilder:
             cost_basis = ocb_local * rate if rate else ocb_local
 
         # Market value + valuation source
-        mv, price_found, _, _, is_lbp = self._market_value_for(
-            asset_id, qty, dt, wac_pool_qty, wac_pool_cost, broker_id
-        )
+        mv, price_found, _, _, is_lbp = self._market_value_for(asset_id, qty, dt, wac_pool_qty, wac_pool_cost, broker_id)
         if price_found:
             source = "MARKET_PRICE"
         elif is_lbp:
@@ -1487,8 +1487,6 @@ class DerivedViewsBuilder:
 
         Returns list of {date, components: [{name, value, amount}]} dicts.
         """
-        from datetime import date as date_type  # noqa: PLC0415
-
         attr_map = {"type": "by_type", "sector": "by_sector", "geography": "by_geography"}
         attr = attr_map.get(dimension, "by_type")
 
@@ -1545,6 +1543,8 @@ class DerivedViewsBuilder:
         transaction_implied_assets_dto: list | None = None,
         classifier_warnings: list[str] | None = None,
         mwrr_available: bool = True,
+        configured_fx_pairs: set[str] | None = None,
+        real_provider_fx_pairs: set[str] | None = None,
     ) -> DataQualityReport:
         """Aggregate per-day data quality into a DataQualityReport DTO.
 
@@ -1616,22 +1616,80 @@ class DerivedViewsBuilder:
                 )
             )
 
-        # MISSING_FX_MARKET — warning: FX pairs needed but missing
+        # MISSING_FX_MARKET / MISSING_FX_RATES — split missing route vs missing date data
         if missing_fx_pairs_dto:
-            pairs = list({p.pair for p in missing_fx_pairs_dto})
-            issues.append(
-                DataQualityIssue(
-                    domain=IssueDomain.PORTFOLIO,
-                    code=IssueCode.MISSING_FX_MARKET,
-                    severity=IssueSeverity.WARNING,
-                    message_i18n_key="dataQuality.missingFx",
-                    message_params={"count": len(pairs)},
-                    count=len(pairs),
-                    affected_fx_pairs=pairs,
-                    cta_action="add_fx_pair",
-                    group_key="missing_fx",
+            configured_slugs = {_normalize_fx_pair_slug(p) for p in (configured_fx_pairs or set())}
+            real_provider_slugs = {_normalize_fx_pair_slug(p) for p in (real_provider_fx_pairs or set())}
+            missing_by_slug: dict[str, set[date_type]] = defaultdict(set)
+            for item in missing_fx_pairs_dto:
+                slug = _normalize_fx_pair_slug(item.pair)
+                missing_by_slug[slug].update(getattr(item, "dates", []) or [])
+
+            not_configured_pairs: list[str] = []
+            configured_real_pairs: list[str] = []
+            configured_manual_pairs: list[str] = []
+            for slug in sorted(missing_by_slug):
+                if slug not in configured_slugs:
+                    not_configured_pairs.append(slug)
+                elif slug in real_provider_slugs:
+                    configured_real_pairs.append(slug)
+                else:
+                    configured_manual_pairs.append(slug)
+
+            if not_configured_pairs:
+                issues.append(
+                    DataQualityIssue(
+                        domain=IssueDomain.PORTFOLIO,
+                        code=IssueCode.MISSING_FX_MARKET,
+                        severity=IssueSeverity.WARNING,
+                        message_i18n_key="dataQuality.missingFx",
+                        message_params={"count": len(not_configured_pairs)},
+                        count=len(not_configured_pairs),
+                        affected_fx_pairs=not_configured_pairs,
+                        cta_action="add_fx_pair",
+                        group_key="missing_fx",
+                    )
                 )
-            )
+
+            if configured_real_pairs:
+                missing_dates = sorted({dt for slug in configured_real_pairs for dt in missing_by_slug[slug]})
+                date_from = missing_dates[0].isoformat() if missing_dates else ""
+                date_to = missing_dates[-1].isoformat() if missing_dates else ""
+                issues.append(
+                    DataQualityIssue(
+                        domain=IssueDomain.PORTFOLIO,
+                        code=IssueCode.MISSING_FX_RATES,
+                        severity=IssueSeverity.WARNING,
+                        message_i18n_key="dataQuality.missingFxRates",
+                        message_params={
+                            "count": len(configured_real_pairs),
+                            "date_from": date_from,
+                            "date_to": date_to,
+                            "dates_count": len(missing_dates),
+                        },
+                        count=len(configured_real_pairs),
+                        affected_fx_pairs=configured_real_pairs,
+                        cta_action="sync_fx_pair",
+                        cta_target=configured_real_pairs[0],
+                        group_key="missing_fx_rates",
+                    )
+                )
+
+            if configured_manual_pairs:
+                issues.append(
+                    DataQualityIssue(
+                        domain=IssueDomain.PORTFOLIO,
+                        code=IssueCode.MISSING_FX_RATES,
+                        severity=IssueSeverity.WARNING,
+                        message_i18n_key="dataQuality.missingFxRatesManual",
+                        message_params={"count": len(configured_manual_pairs)},
+                        count=len(configured_manual_pairs),
+                        affected_fx_pairs=configured_manual_pairs,
+                        cta_action="navigate_fx",
+                        cta_target=configured_manual_pairs[0],
+                        group_key="missing_fx_rates_manual",
+                    )
+                )
 
         # NAV_INCOMPLETE — info: some days had incomplete NAV
         if incomplete_nav:
@@ -1785,19 +1843,9 @@ class PortfolioCalculationEngine:
         # For valuation fallback: MARKET_PRICE → LAST_BUY_PRICE(V(u)) → MISSING
         # Load BUY txs from non-scope visible brokers (scope BUYs already in all_txs)
         extra_visible_ids = visible_broker_ids - scope_broker_ids
-        all_buy_txs: list[Transaction] = [
-            tx for tx in all_txs
-            if tx.type == TransactionType.BUY and tx.asset_id and tx.quantity and tx.quantity > 0
-        ]
+        all_buy_txs: list[Transaction] = [tx for tx in all_txs if tx.type == TransactionType.BUY and tx.asset_id and tx.quantity and tx.quantity > 0]
         if extra_visible_ids:
-            extra_buy_stmt = (
-                select(Transaction)
-                .where(Transaction.broker_id.in_(extra_visible_ids))
-                .where(Transaction.type == TransactionType.BUY)
-                .where(Transaction.quantity > 0)
-                .where(Transaction.asset_id.is_not(None))
-                .order_by(Transaction.date)
-            )
+            extra_buy_stmt = select(Transaction).where(Transaction.broker_id.in_(extra_visible_ids)).where(Transaction.type == TransactionType.BUY).where(Transaction.quantity > 0).where(Transaction.asset_id.is_not(None)).order_by(Transaction.date)
             extra_buy_result = await self.db.execute(extra_buy_stmt)
             all_buy_txs.extend(extra_buy_result.scalars().all())
 
@@ -1848,17 +1896,14 @@ class PortfolioCalculationEngine:
                 logger.debug("Portfolio blob cache hit (exact match)", user_id=user_id)
                 return cached_blob
             # Forward extension: blob covers from start but needs more days at end
-            if (blob_from <= actual_from and blob_to < actual_to
-                    and cached_blob.end_state is not None):
-                logger.debug("Portfolio blob cache forward extension",
-                            user_id=user_id, extending=f"{blob_to}..{actual_to}")
+            if blob_from <= actual_from and blob_to < actual_to and cached_blob.end_state is not None:
+                logger.debug("Portfolio blob cache forward extension", user_id=user_id, extending=f"{blob_to}..{actual_to}")
                 # Will proceed to full compute but with frame_start = blob_to + 1
                 # and initial accumulators from end_state
                 # (full extension with state resume deferred — for now recompute)
                 pass
             else:
-                logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id,
-                            blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
+                logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id, blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
 
         # ── 6. Preload prices (bulk) ──
         price_map: dict[int, list[tuple[date_type, Decimal, str]]] = {}
@@ -1929,8 +1974,7 @@ class PortfolioCalculationEngine:
 
         # ── 12. Store in blob cache ──
         _portfolio_blob_cache.set(blob_key, result)
-        logger.debug("Portfolio blob cache stored", user_id=user_id, n_states=len(result.daily_states),
-                    range=f"{actual_from}..{actual_to}")
+        logger.debug("Portfolio blob cache stored", user_id=user_id, n_states=len(result.daily_states), range=f"{actual_from}..{actual_to}")
 
         return result
 

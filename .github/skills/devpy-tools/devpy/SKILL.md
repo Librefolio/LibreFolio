@@ -45,7 +45,7 @@ dev.py [-h]
 | Test mode | `./dev.py server --test` |
 | Kill zombie + start | `./dev.py server --force` |
 | Frontend with HMR | T1: `./dev.py server` — T2: `./dev.py front dev` |
-| After modifying models | `./dev.py db create-clean` |
+| After modifying models | `./dev.py db migrate "…"` (incremental migration; `db create-clean` only for fresh/test DBs) |
 | After modifying API | `./dev.py api sync` |
 | Build frontend | `./dev.py front build` |
 | All tests | `./dev.py test all` |

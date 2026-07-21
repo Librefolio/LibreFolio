@@ -380,13 +380,7 @@ test.describe('Gallery Screenshots', () => {
         {testId: 'lot-comparison-chart', name: 'fifo-lots-comparison-chart'},
     ] as const;
 
-    async function captureLotsAnalysisScreenshots(
-        page: Page,
-        viewport: 'desktop' | 'mobile',
-        lang: Language,
-        theme: Theme,
-        category: string
-    ) {
+    async function captureLotsAnalysisScreenshots(page: Page, viewport: 'desktop' | 'mobile', lang: Language, theme: Theme, category: string) {
         const panel = page.getByTestId('lots-analysis-panel');
         await expect(panel).toBeVisible({timeout: 5_000});
         await panel.evaluate((el) => el.scrollIntoView({block: 'start'}));

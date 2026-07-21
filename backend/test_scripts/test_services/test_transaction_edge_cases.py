@@ -235,29 +235,16 @@ class TestCurrencyValidation:
         assert result.success_count == 2
 
     @pytest.mark.asyncio
-    async def test_currency_crypto_valid(self, session, test_broker):
-        """EDGE-011: Create tx with BTC, ETH should pass."""
-        service = TransactionService(session)
-
-        items = [
-            TXCreateItem(
-                broker_id=test_broker.id,
-                type=TransactionType.DEPOSIT,
-                date=date.today(),
-                cash=Currency(code="BTC", amount=Decimal("0.5")),
-            ),
-            TXCreateItem(
-                broker_id=test_broker.id,
-                type=TransactionType.DEPOSIT,
-                date=date.today(),
-                cash=Currency(code="ETH", amount=Decimal("2.0")),
-            ),
-        ]
-
-        result = await create_bulk(service, items)
-        await session.commit()
-
-        assert result.success_count == 2
+    async def test_currency_crypto_invalid(self, test_broker):
+        """EDGE-011: Create tx with BTC or ETH should fail at schema level."""
+        for code in ("BTC", "ETH"):
+            with pytest.raises(ValidationError, match="Invalid currency code"):
+                TXCreateItem(
+                    broker_id=test_broker.id,
+                    type=TransactionType.DEPOSIT,
+                    date=date.today(),
+                    cash=Currency(code=code, amount=Decimal("1")),
+                )
 
     def test_currency_invalid(self):
         """EDGE-012: Create tx with invalid currency code should fail at schema level."""

@@ -845,11 +845,7 @@
             .sort((left, right) => left.date.localeCompare(right.date)) satisfies AggregateReturnPoint[];
     });
 
-    const aggregateReturnSeriesPoints = $derived.by(() =>
-        aggregateReturnPoints
-            .map((point) => lineDataPoint(point.date, returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome))
-            .filter((point): point is LineDataPoint => point != null),
-    );
+    const aggregateReturnSeriesPoints = $derived.by(() => aggregateReturnPoints.map((point) => lineDataPoint(point.date, returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome)).filter((point): point is LineDataPoint => point != null));
 
     const showAggregateReturn = $derived(activeReturnLotsWithData.length >= 1 && aggregateReturnSeriesPoints.length > 0);
 
@@ -1142,9 +1138,7 @@
                 if (exactValuePoint) {
                     rows.push(buildTooltipRow(escapeHtml(modeLabels.residualValue), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.openValue, currency))));
                     rows.push(buildTooltipRow(escapeHtml(modeLabels.saleProceeds), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.proceeds, currency))));
-                    rows.push(
-                        buildTooltipRow(escapeHtml(modeLabels.fifoPnl), `<span style="color:${exactValuePoint.pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626'}">${escapeHtml(formatCurrencyAmountPlain(exactValuePoint.pnl, currency, {showSign: true}))}</span>`),
-                    );
+                    rows.push(buildTooltipRow(escapeHtml(modeLabels.fifoPnl), `<span style="color:${exactValuePoint.pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626'}">${escapeHtml(formatCurrencyAmountPlain(exactValuePoint.pnl, currency, {showSign: true}))}</span>`));
                 }
 
                 return `${buildTooltipHeader(escapeHtml(`${lot.label} · ${formatLongDate(pointDate)}`), theme.textColor)}${rows.join('')}`;

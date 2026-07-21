@@ -66,35 +66,6 @@ Usage::
 """
 
 # =============================================================================
-# CRYPTOCURRENCY SUPPORT
-# =============================================================================
-
-# Cryptocurrencies not in pycountry ISO 4217 database
-CRYPTO_CURRENCIES = {
-    "BTC": "Bitcoin",
-    "ETH": "Ethereum",
-    "USDT": "Tether",
-    "USDC": "USD Coin",
-    "BNB": "Binance Coin",
-    "XRP": "Ripple",
-    "ADA": "Cardano",
-    "SOL": "Solana",
-    "DOT": "Polkadot",
-    "DOGE": "Dogecoin",
-    "MATIC": "Polygon",
-    "AVAX": "Avalanche",
-    "LINK": "Chainlink",
-    "UNI": "Uniswap",
-    "ATOM": "Cosmos",
-    "LTC": "Litecoin",
-    "XLM": "Stellar",
-    "ALGO": "Algorand",
-    "VET": "VeChain",
-    "FIL": "Filecoin",
-}
-
-
-# =============================================================================
 # CACHED CURRENCY VALIDATION
 # =============================================================================
 
@@ -123,12 +94,8 @@ def _validate_currency_code_cached(code: str) -> str:
     except LookupError:
         pass
 
-    # Check crypto currencies
-    if code in CRYPTO_CURRENCIES:
-        return code
-
     # Invalid currency
-    raise ValueError(f"Invalid currency code: '{code}'. " f"Must be ISO 4217 currency or supported crypto.")
+    raise ValueError(f"Invalid currency code: '{code}'. Must be ISO 4217 currency.")
 
 
 # =============================================================================
@@ -140,12 +107,12 @@ class Currency(BaseModel):
     """
     Currency amount with validation and arithmetic operations.
 
-    Validates currency codes against ISO 4217 (via pycountry) + crypto dict.
+    Validates currency codes against ISO 4217 (via pycountry).
     Supports addition/subtraction only between same currencies.
     Amount can be negative.
 
     Attributes:
-        code: ISO 4217 currency code (USD, EUR) or crypto symbol (BTC, ETH)
+        code: ISO 4217 currency code (USD, EUR)
         amount: Decimal amount (can be negative)
 
     Examples:
@@ -156,17 +123,15 @@ class Currency(BaseModel):
         >>> eur = Currency(code="EUR", amount=Decimal("50"))
         >>> usd + eur  # ValueError: Cannot add USD and EUR
 
-        >>> btc = Currency(code="BTC", amount=Decimal("0.5"))  # Valid crypto
-
         >>> negative = -usd  # Currency(code="USD", amount=Decimal("-100.50"))
 
     Raises:
-        ValueError: If currency code is not valid ISO 4217 or supported crypto
+        ValueError: If currency code is not valid ISO 4217
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    code: str = Field(..., description="ISO 4217 currency code or crypto symbol")
+    code: str = Field(..., description="ISO 4217 currency code")
     amount: SafeDecimal = Field(..., description="Amount (can be negative)")
 
     @staticmethod

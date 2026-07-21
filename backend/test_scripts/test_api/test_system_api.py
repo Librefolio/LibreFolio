@@ -81,13 +81,7 @@ class TestParsePipfile:
 
     def test_quoted_name_with_trailing_space(self, tmp_path, monkeypatch):
         pipfile = tmp_path / "Pipfile"
-        pipfile.write_text(
-            "[packages]\n"
-            'fastapi = "*"\n'
-            '"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n'
-            "[dev-packages]\n"
-            'pytest = "*"\n'
-        )
+        pipfile.write_text("[packages]\n" 'fastapi = "*"\n' '"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n' "[dev-packages]\n" 'pytest = "*"\n')
         monkeypatch.setattr(system_module, "PROJECT_ROOT", tmp_path)
 
         packages = parse_pipfile()

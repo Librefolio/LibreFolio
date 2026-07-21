@@ -9,6 +9,7 @@ Validates the core architectural invariants:
 5. Period accumulators (realized, income, fees)
 6. Pre-frame / frame separation
 """
+
 from datetime import date
 from decimal import Decimal
 
@@ -26,9 +27,7 @@ from backend.app.services.portfolio_engine import (
 )
 
 
-def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY,
-         dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None,
-         currency="EUR", cbo=None, cbo_ccy=None):
+def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY, dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None, currency="EUR", cbo=None, cbo_ccy=None):
     tx = Transaction()
     tx.id = tx_id
     tx.broker_id = broker_id
@@ -49,9 +48,7 @@ def _c(tx, share=Decimal("1")):
     return ClassifiedTransaction(tx=tx, classification="normal", share=share)
 
 
-def _build(txs, asset_currencies=None, price_map=None, fx_rate_map=None,
-           last_buy_prices=None, frame_start=None,
-           date_from=date(2025, 1, 1), date_to=date(2025, 1, 10)):
+def _build(txs, asset_currencies=None, price_map=None, fx_rate_map=None, last_buy_prices=None, frame_start=None, date_from=date(2025, 1, 1), date_to=date(2025, 1, 10)):
     return DailyStateBuilder(
         classified_txs=txs,
         in_transit_intervals=[],
@@ -73,6 +70,7 @@ def _build(txs, asset_currencies=None, price_map=None, fx_rate_map=None,
 # =============================================================================
 # 1. INLINE WAC
 # =============================================================================
+
 
 class TestInlineWAC:
     """Verify WAC is computed correctly inline during daily loop."""
@@ -103,8 +101,7 @@ class TestInlineWAC:
         """SELL does not change WAC."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-3"),
-                   amount=Decimal("450"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-3"), amount=Decimal("450"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         ps = result.position_states_end
@@ -130,6 +127,7 @@ class TestInlineWAC:
 # =============================================================================
 # 2. LAST_BUY_PRICE FALLBACK
 # =============================================================================
+
 
 class TestLastBuyPrice:
     """Verify valuation: MARKET_PRICE → LAST_BUY_PRICE → MISSING."""
@@ -177,13 +175,13 @@ class TestLastBuyPrice:
 # 3. THREE-POOL (K, R, W) EVENT-DRIVEN
 # =============================================================================
 
+
 class TestThreePool:
     """Verify 3-pool cash decomposition."""
 
     def test_deposit_goes_to_capital(self):
         """DEPOSIT → K increases."""
-        txs = [_c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                      quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2)))]
+        txs = [_c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2)))]
         result = _build(txs)
         last = result.daily_states[-1]
         # After deposit: cash=1000, K=1000, R=0
@@ -193,10 +191,8 @@ class TestThreePool:
     def test_dividend_goes_to_returns(self):
         """DIVIDEND → R increases."""
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
-                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         last = result.daily_states[-1]
@@ -207,12 +203,9 @@ class TestThreePool:
     def test_buy_consumes_returns_first(self):
         """BUY → consumes R first, then K."""
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
-                   quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
-            _c(_tx(tx_id=3, tx_type=TransactionType.BUY, asset_id=1,
-                   quantity=Decimal("5"), amount=Decimal("-500"), dt=date(2025, 1, 4))),
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=3, tx_type=TransactionType.BUY, asset_id=1, quantity=Decimal("5"), amount=Decimal("-500"), dt=date(2025, 1, 4))),
         ]
         result = _build(txs)
         last = result.daily_states[-1]
@@ -231,12 +224,9 @@ class TestThreePool:
         making cost_basis=0 and putting ALL proceeds into R.
         """
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.BUY, asset_id=1,
-                   quantity=Decimal("1"), amount=Decimal("-1000"), dt=date(2025, 1, 3))),
-            _c(_tx(tx_id=3, tx_type=TransactionType.SELL, asset_id=1,
-                   quantity=Decimal("-1"), amount=Decimal("1005"), dt=date(2025, 1, 8))),
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.BUY, asset_id=1, quantity=Decimal("1"), amount=Decimal("-1000"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=3, tx_type=TransactionType.SELL, asset_id=1, quantity=Decimal("-1"), amount=Decimal("1005"), dt=date(2025, 1, 8))),
         ]
         result = _build(txs)
         last = result.daily_states[-1]
@@ -253,19 +243,14 @@ class TestThreePool:
     def test_withdrawal_moves_returns_to_w_then_deposit_restores(self):
         """WITHDRAWAL from R → W. Re-DEPOSIT restores from W to R first."""
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
-                   quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
             # Withdraw 300: from_K=min(300,1000)=300, K=700, no from_R
-            _c(_tx(tx_id=3, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("-300"), dt=date(2025, 1, 4))),
+            _c(_tx(tx_id=3, tx_type=TransactionType.WITHDRAWAL, asset_id=None, quantity=Decimal("0"), amount=Decimal("-300"), dt=date(2025, 1, 4))),
             # Withdraw 900: from_K=min(900,700)=700, K=0; from_R=min(200,200)=200, R=0, W=200
-            _c(_tx(tx_id=4, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("-900"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=4, tx_type=TransactionType.WITHDRAWAL, asset_id=None, quantity=Decimal("0"), amount=Decimal("-900"), dt=date(2025, 1, 5))),
             # Re-deposit 150: restore=min(150, W=200)=150 → R+=150, W=50; K += 0
-            _c(_tx(tx_id=5, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("150"), dt=date(2025, 1, 8))),
+            _c(_tx(tx_id=5, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("150"), dt=date(2025, 1, 8))),
         ]
         result = _build(txs)
         last = result.daily_states[-1]
@@ -279,6 +264,7 @@ class TestThreePool:
 # =============================================================================
 # 4. POSITION STATE EMISSION
 # =============================================================================
+
 
 class TestPositionStates:
     """Verify engine emits position snapshots at start and end of frame."""
@@ -297,8 +283,7 @@ class TestPositionStates:
         """Fully sold position does not appear in end states."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-10"),
-                   amount=Decimal("1500"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-10"), amount=Decimal("1500"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         assert len(result.position_states_end) == 0
@@ -321,6 +306,7 @@ class TestPositionStates:
 # 5. PERIOD ACCUMULATORS
 # =============================================================================
 
+
 class TestPeriodAccumulators:
     """Verify realized, income, fees accumulation during frame."""
 
@@ -328,8 +314,7 @@ class TestPeriodAccumulators:
         """SELL in frame → per_realized accumulated."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-5"),
-                   amount=Decimal("750"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-5"), amount=Decimal("750"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         # Realized = proceeds(750) - cost_basis(5 * WAC=100 = 500) = 250
@@ -340,10 +325,8 @@ class TestPeriodAccumulators:
     def test_income_attributed(self):
         """DIVIDEND with asset_id → per_income."""
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
-                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         assert result.per_income.get((1, 1)) == Decimal("50")
@@ -351,10 +334,8 @@ class TestPeriodAccumulators:
     def test_unallocated_fees(self):
         """FEE without asset_id → unalloc_fees."""
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.FEE, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("-10"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.FEE, asset_id=None, quantity=Decimal("0"), amount=Decimal("-10"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         assert result.unalloc_fees.get(1) == Decimal("10")
@@ -363,6 +344,7 @@ class TestPeriodAccumulators:
 # =============================================================================
 # 6. PRE-FRAME / FRAME SEPARATION
 # =============================================================================
+
 
 class TestPreframeFrame:
     """Verify pre-frame processes txs without market eval."""
@@ -380,8 +362,7 @@ class TestPreframeFrame:
     def test_preframe_accumulates_cash(self):
         """Pre-frame deposit is reflected in frame's cash value."""
         txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
         ]
         result = _build(txs, frame_start=date(2025, 1, 5))
         # First frame day should show cash=1000 from pre-frame deposit
@@ -400,16 +381,12 @@ class TestPerBrokerPools:
         """BUY on broker 1 does NOT consume R from broker 2."""
         txs = [
             # Broker 1: deposit 1000
-            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
             # Broker 2: deposit 500 + dividend 200 (R[2]=200)
-            _c(_tx(tx_id=2, broker_id=2, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("500"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=3, broker_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1,
-                   quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=2, broker_id=2, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("500"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=3, broker_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("200"), dt=date(2025, 1, 3))),
             # BUY on broker 1 for 800: should consume from R[1]=0, then K[1]
-            _c(_tx(tx_id=4, broker_id=1, tx_type=TransactionType.BUY, asset_id=1,
-                   quantity=Decimal("8"), amount=Decimal("-800"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=4, broker_id=1, tx_type=TransactionType.BUY, asset_id=1, quantity=Decimal("8"), amount=Decimal("-800"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         last = result.daily_states[-1]
@@ -424,13 +401,10 @@ class TestPerBrokerPools:
     def test_withdrawal_from_broker_with_returns_goes_to_w(self):
         """WITHDRAWAL from broker that has R → from_K first, then R → W."""
         txs = [
-            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("100"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, broker_id=1, tx_type=TransactionType.DIVIDEND, asset_id=1,
-                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("100"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, broker_id=1, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 3))),
             # Withdraw 120: from_K[1]=min(120,100)=100 → K[1]=0; from_R[1]=min(20,50)=20 → R[1]=30, W=20
-            _c(_tx(tx_id=3, broker_id=1, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("-120"), dt=date(2025, 1, 5))),
+            _c(_tx(tx_id=3, broker_id=1, tx_type=TransactionType.WITHDRAWAL, asset_id=None, quantity=Decimal("0"), amount=Decimal("-120"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         last = result.daily_states[-1]
@@ -444,16 +418,12 @@ class TestPerBrokerPools:
         """W is global: re-deposit on broker 2 restores from W (earned on broker 1)."""
         txs = [
             # Broker 1: deposit + dividend + full withdrawal (R goes to W)
-            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("100"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, broker_id=1, tx_type=TransactionType.DIVIDEND, asset_id=1,
-                   quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 3))),
+            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("100"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, broker_id=1, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 3))),
             # Withdraw all 150: K[1]=100→0, R[1]=50→0, W=50
-            _c(_tx(tx_id=3, broker_id=1, tx_type=TransactionType.WITHDRAWAL, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("-150"), dt=date(2025, 1, 4))),
+            _c(_tx(tx_id=3, broker_id=1, tx_type=TransactionType.WITHDRAWAL, asset_id=None, quantity=Decimal("0"), amount=Decimal("-150"), dt=date(2025, 1, 4))),
             # Re-deposit 30 on broker 2: restore=min(30, W=50)=30 → R[2]+=30, W=20
-            _c(_tx(tx_id=4, broker_id=2, tx_type=TransactionType.DEPOSIT, asset_id=None,
-                   quantity=Decimal("0"), amount=Decimal("30"), dt=date(2025, 1, 8))),
+            _c(_tx(tx_id=4, broker_id=2, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("30"), dt=date(2025, 1, 8))),
         ]
         result = _build(txs)
         last = result.daily_states[-1]

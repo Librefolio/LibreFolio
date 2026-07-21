@@ -33,6 +33,7 @@ from backend.app.db.models import (
     AssetEventType,
     Broker,
     BrokerUserAccess,
+    FxConversionRoute,
     PriceHistory,
     Transaction,
     TransactionType,
@@ -906,6 +907,30 @@ class PortfolioService:
         return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(merged.items())]
 
     @staticmethod
+    def _normalize_fx_pair_slug(base_or_pair: str, quote: str | None = None) -> str:
+        if quote is None:
+            parts = [p.strip().upper() for p in base_or_pair.replace("/", "-").split("-") if p.strip()]
+            if len(parts) < 2:
+                return base_or_pair.strip().upper()
+            base, quote = parts[:2]
+        else:
+            base = base_or_pair.strip().upper()
+            quote = quote.strip().upper()
+        first, second = sorted((base, quote))
+        return f"{first}-{second}"
+
+    async def _get_configured_fx_pair_sets(self) -> tuple[set[str], set[str]]:
+        routes = (await self.db.execute(select(FxConversionRoute))).scalars().all()
+        configured_pairs: set[str] = set()
+        real_provider_pairs: set[str] = set()
+        for route in routes:
+            slug = self._normalize_fx_pair_slug(route.base, route.quote)
+            configured_pairs.add(slug)
+            if any(str(step.get("provider", "")).strip().upper() != "MANUAL" for step in route.parsed_steps):
+                real_provider_pairs.add(slug)
+        return configured_pairs, real_provider_pairs
+
+    @staticmethod
     def _compute_period_summary_metrics(
         engine_result: Any,
         date_from: date_type | None,
@@ -1450,11 +1475,15 @@ class PortfolioService:
         manual_implied_ids = implied_asset_ids - assets_with_provider
         transaction_implied_assets = [a for a in transaction_implied_assets if a.asset_id not in manual_implied_ids]
 
+        configured_fx_pairs, real_provider_fx_pairs = await self._get_configured_fx_pair_sets()
+        merged_missing_fx_pairs = self._merge_missing_pairs(all_missing_pairs)
         data_quality = views.build_data_quality_report(
             missing_price_assets_dto=missing_price_assets,
-            missing_fx_pairs_dto=self._merge_missing_pairs(all_missing_pairs),
+            missing_fx_pairs_dto=merged_missing_fx_pairs,
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             mwrr_available=mwrr_result is not None,
+            configured_fx_pairs=configured_fx_pairs,
+            real_provider_fx_pairs=real_provider_fx_pairs,
         )
 
         return PortfolioSummary(
@@ -1498,7 +1527,7 @@ class PortfolioService:
             allocation_by_geography=_alloc_from_engine(alloc_geo),
             holdings=all_holdings,
             by_broker=by_broker_list if include_breakdown else None,
-            missing_fx_pairs=self._merge_missing_pairs(all_missing_pairs),
+            missing_fx_pairs=merged_missing_fx_pairs,
             missing_price_assets=missing_price_assets,
             data_quality=data_quality,
         )
@@ -2211,13 +2240,15 @@ class PortfolioService:
             )
 
         # ── 5. Data quality from engine (already computed if summary was built) ──
-        data_quality = (
-            summary.data_quality
-            if summary
-            else views.build_data_quality_report(
+        if summary:
+            data_quality = summary.data_quality
+        else:
+            configured_fx_pairs, real_provider_fx_pairs = await self._get_configured_fx_pair_sets()
+            data_quality = views.build_data_quality_report(
                 mwrr_available=False,
+                configured_fx_pairs=configured_fx_pairs,
+                real_provider_fx_pairs=real_provider_fx_pairs,
             )
-        )
 
         # Append MWRR series unreliable issue if needed
         if mwrr_series_unreliable and data_quality:

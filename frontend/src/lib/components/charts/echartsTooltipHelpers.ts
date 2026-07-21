@@ -155,14 +155,7 @@ export function buildGridColors(isDark: boolean): ChartGridColors {
  *
  * Use as: `tooltip: { position: tooltipPositionAboveFinger, ... }`
  */
-export function tooltipPositionAboveFinger(
-    point: [number, number],
-    _params: unknown,
-    _dom: unknown,
-    _rect: unknown,
-    size: {contentSize: [number, number]; viewSize: [number, number]},
-    opts?: {clampTop?: boolean},
-): [number, number] {
+export function tooltipPositionAboveFinger(point: [number, number], _params: unknown, _dom: unknown, _rect: unknown, size: {contentSize: [number, number]; viewSize: [number, number]}, opts?: {clampTop?: boolean}): [number, number] {
     const {clampTop = true} = opts ?? {};
     const tooltipW = size.contentSize[0];
     const tooltipH = size.contentSize[1];

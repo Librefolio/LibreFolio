@@ -985,7 +985,9 @@
     "category": "Catégorie",
     "errorOccurred": "Une erreur est survenue",
     "uploading": "Envoi en cours...",
-    "user": "Utilisateur"
+    "user": "Utilisateur",
+    "backToDefault": "Retour au défaut",
+    "createForex": "Créer un forex…"
   },
   "csvImport": {
     "title": "Importer des données CSV",
@@ -1173,14 +1175,17 @@
     "cta": {
       "navigate_asset": "Voir l'actif",
       "navigate_fx": "Voir FX",
-      "add_fx_pair": "Ajouter paire FX"
+      "add_fx_pair": "Ajouter paire FX",
+      "sync_fx_pair": "Synchroniser"
     },
     "referencePriceFallback": "Prix d'ouverture du lot indisponible à la date exacte — utilisation du dernier prix connu {reference_price} comme référence pour le rendement relatif",
     "referencePriceUnavailable": "Aucun prix de référence disponible pour l'ouverture d'un lot — rendement relatif impossible à calculer",
     "shortTransferNotSupported": "Le transfert d'une position short n'est pas encore pris en charge (courtier {broker_id})",
     "shortAdjustmentNotSupported": "Un ajustement ne peut pas encore ouvrir ou fermer une position short (courtier {broker_id})",
     "fifoSourceQuantityMissing": "La transaction dépasse la quantité disponible de {missing_quantity} (courtier {broker_id})",
-    "transferPairMissing": "Un transfert n'a pas de transaction associée, ou la paire n'est pas valide"
+    "transferPairMissing": "Un transfert n'a pas de transaction associée, ou la paire n'est pas valide",
+    "missingFxRates": "Taux FX manquants pour {count} paire(s) entre {date_from} et {date_to} ({dates_count} date(s)) — synchronisez pour compléter les totaux",
+    "missingFxRatesManual": "Taux FX manquants pour {count} paire(s) manuelle(s) — ajoutez les taux manuellement"
   },
   "dataEditor": {
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",
@@ -1303,7 +1308,8 @@
       "createIntermediatePairs": "Créer aussi les paires intermédiaires",
       "createIntermediatePairsHint": "Chaque étape des chaînes sélectionnées sera sauvegardée comme paire autonome avec son fournisseur, afin de pouvoir les synchroniser indépendamment.",
       "titleEdit": "Modifier les Fournisseurs",
-      "createFailed": "Échec de la création de la paire FX"
+      "createFailed": "Échec de la création de la paire FX",
+      "alreadyExists": "Cette paire existe déjà — synchronisez-la ou modifiez-la depuis la page FX."
     },
     "sync": {
       "description": "Synchroniser les taux de change des fournisseurs configurés pour la plage de dates sélectionnée.",
@@ -1316,7 +1322,9 @@
       "toastFailed": "{pair} échec de la synchronisation",
       "legBreakdown": "Détail par étape",
       "legNoData": "0 dates — aucune donnée",
-      "legDates": "dates"
+      "legDates": "dates",
+      "inProgress": "Synchronisation des taux FX…",
+      "noNewData": "Aucun nouveau taux disponible chez le fournisseur pour cette période"
     },
     "route": {
       "title": "Routes de Conversion",

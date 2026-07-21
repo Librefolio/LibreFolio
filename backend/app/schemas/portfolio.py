@@ -172,6 +172,7 @@ class IssueCode(StrEnum):
     TRANSACTION_IMPLIED = "TRANSACTION_IMPLIED"
     STALE_PRICE = "STALE_PRICE"
     MISSING_FX_MARKET = "MISSING_FX_MARKET"
+    MISSING_FX_RATES = "MISSING_FX_RATES"
     NAV_INCOMPLETE = "NAV_INCOMPLETE"
     MWRR_NOT_CALCULABLE = "MWRR_NOT_CALCULABLE"
     MWRR_SERIES_UNRELIABLE = "MWRR_SERIES_UNRELIABLE"
@@ -198,7 +199,7 @@ class DataQualityIssue(BaseModel):
 
     Fields populated depend on the issue type:
     - Portfolio issues: affected_asset_ids/names (MISSING_PRICE, STALE_PRICE),
-      affected_fx_pairs (MISSING_FX_MARKET), count + dates in message_params (NAV_INCOMPLETE).
+      affected_fx_pairs (MISSING_FX_MARKET, MISSING_FX_RATES), count + dates in message_params (NAV_INCOMPLETE, MISSING_FX_RATES).
     - Asset/FX issues: affected_fx_pairs (FX_PAIR_*), affected_asset_names (context).
     """
 
@@ -479,7 +480,7 @@ class LotsAnalysisQuery(BaseModel):
     asset_id: int = Field(..., description="Asset to analyze.")
     broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter. None = all accessible brokers.")
     date_range: Optional[OpenDateRangeModel] = Field(None, description="Optional date range filter for histories and visible intervals.")
-    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217 or supported crypto).")
+    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217).")
     selected_lot_ids: Optional[List[int]] = Field(None, description="Optional subset of lot_ids to project in lot-scoped analyses.")
     requested_analyses: List[LotAnalysisType] = Field(..., description="Non-empty list of analyses to compute.")
 
