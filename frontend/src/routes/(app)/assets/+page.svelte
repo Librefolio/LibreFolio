@@ -883,7 +883,7 @@
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$t('assets.subtitle')}</p>
         </div>
-        <div class="flex flex-wrap items-center gap-2 justify-end">
+        <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedAssetRows.length > 0}
                 <DataTableToolbar
                     selectedCount={selectedAssetRows.length}
