@@ -187,25 +187,38 @@ Implicación práctica:
 
 ## 💸 Asignación de Ingresos entre Lotes {: #income-allocation-across-lots }
 
-Los dividendos e intereses vinculados a un activo se asignan **de forma prorrateada entre todos los lotes LONG que están abiertos en la fecha del ingreso**.
+Los dividendos e intereses vinculados a un activo se asignan **de forma prorrateada entre los lotes LONG que son
+elegibles el día anterior a la fecha del ingreso (D-1)**, y solo entre los lotes mantenidos **en el bróker pagador**.
 
 Regla de asignación exacta:
 
 $$
-w_i(t) = \frac{\text{CantAbierta}_i(t)}{\sum_j \text{CantAbierta}_j(t)}
+w_i(D) = \frac{\text{CantElegible}_i(D)}{\sum_j \text{CantElegible}_j(D)}, \qquad
+\text{CantElegible}_i(D) = \text{CantAbierta}_i(D-1)
 $$
 
 $$
-\text{Ingreso}_i = \text{Convertir}(I, ccy, t)\cdot w_i(t)
+\text{Ingreso}_i = \text{Convertir}(I, ccy, D)\cdot w_i(D)
 $$
 
 Donde:
 
-- $I$ = monto del ingreso recibido
-- $\text{Convertir}(I, ccy, t)$ = ingreso convertido a la divisa de destino en la fecha $t$
-- solo los lotes LONG aún abiertos en el momento $t$ participan en el denominador
+- $I$ = monto del ingreso recibido en la fecha $D$
+- $\text{Convertir}(I, ccy, D)$ = ingreso convertido a la divisa de destino en la fecha $D$
+- $\text{CantElegible}_i(D)$ = cantidad del lote $i$ abierta en el **bróker pagador** en $D-1$ (la cantidad en
+  tránsito saliente de ese bróker sigue contando como originada allí)
+- solo los lotes LONG participan en el denominador
 
-Esto significa que los lotes abiertos más grandes reciben una parte mayor del dividendo o cupón, mientras que los lotes ya cerrados no reciben ninguno.
+La regla **D-1** mantiene limpia la fecha de registro: una compra realizada *en* la fecha del ingreso no genera
+esa distribución, y un lote vendido el día anterior tampoco. Los lotes elegibles más grandes reciben una parte
+mayor; los lotes mantenidos en otros brókeres, o aún no (o ya no) elegibles, no reciben nada.
+
+!!! warning "Modificado en FIFO v5"
+
+    Las versiones anteriores usaban la propia fecha del ingreso con **todos** los brókeres
+    ($\text{CantAbierta}_i(t)$ sobre cada lote). El motor actual usa la elegibilidad D-1 limitada al bróker
+    pagador. Si ningún lote es elegible, el ingreso se mantiene como **ingreso huérfano a nivel de activo**
+    (nunca se pierde, nunca se asigna al lote equivocado).
 
 !!! tip "Regla de conservación"
 
@@ -216,6 +229,61 @@ Esto significa que los lotes abiertos más grandes reciben una parte mayor del d
 </div>
 
 La fila **Ingreso del Activo** del modal de detalle del lote es exactamente $\text{Ingreso}_i$ de la fórmula anterior — la porción prorrateada que recibió este lote específico. Cuando el lote no tiene precio de mercado en vivo, el mismo modal también muestra la insignia **Estimado al Costo** de la sección anterior.
+
+---
+
+## 💸 Costes y Métricas Netas {: #costs-and-net-metrics }
+
+Las `FEE` y `TAX` vinculadas a un activo se asignan a los lotes mediante una **escalera determinista de
+emparejamiento con operaciones**, y luego se restan para producir las cifras **netas** junto con las brutas.
+
+### Asignación determinista de costes
+
+Un grupo de costes (mismo bróker, mismo día, mismo tipo) se empareja con el primer objetivo no vacío en este orden:
+
+| Coste | Orden de emparejamiento |
+|------|----------------|
+| `FEE` | operaciones del mismo día → operaciones del día anterior → posiciones abiertas → huérfano a nivel de activo |
+| `TAX` | ingreso del mismo día → operaciones del mismo día → ingreso del día anterior → operaciones del día anterior → posiciones abiertas → huérfano a nivel de activo |
+
+Dentro de una operación emparejada, el coste **pasa exactamente a los lotes que esa operación afectó** — el
+coste de una COMPRA recae en el lote que abrió, el coste de una VENTA recae en los lotes consumidos en FIFO —
+por lo que la atribución de costes nunca contradice el propio emparejamiento FIFO. Los importes se convierten a
+la divisa de destino y se almacenan como magnitudes positivas.
+
+!!! tip "Conservación"
+
+    Por grupo, $\sum_i \text{Coste}_i + \text{Huérfano} = \text{Convertir}(\text{grupo}, ccy, D)$. Un coste que
+    no encuentra ningún lote elegible (p. ej. una comisión registrada después de que la posición se haya cerrado
+    por completo) se convierte en **coste huérfano a nivel de activo** en lugar de descartarse o forzarse sobre
+    un lote no relacionado.
+
+### Bruto vs neto
+
+Con los costes atribuidos por lote, LibreFolio reporta tanto el rendimiento bruto como el neto:
+
+$$
+\text{GyPTotalNeto}_i = \text{GyPTotal}_i - \text{Comisiones}_i - \text{Impuestos}_i
+$$
+
+$$
+\text{RendimientoTotalNeto}_i = \frac{\text{GyPTotalNeto}_i}{\text{ValorApertura}_i}
+$$
+
+donde $\text{GyPTotal}_i$ ya **incluye** el ingreso (GyP de mercado + GyP realizado + ingreso del activo). La
+serie histórica de valor por lote reporta en cambio un GyP neto *solo de capital*,
+$\text{gyp}_i - \text{Comisiones}_i - \text{Impuestos}_i$, que **excluye** el ingreso — cada línea neta refleja
+su propia contraparte bruta menos los costes.
+
+!!! example "Números canónicos"
+
+    COMPRA 10×100, VENTA 4×120, precio actual 110, dividendo 50, comisiones 8, impuestos 5:
+    GyP Total Bruto $= 60 + 80 + 50 = 190$; GyP Total Neto $= 190 - 13 = 177$; sobre un valor de apertura de
+    1,000 eso equivale a un rendimiento total del **19%** bruto frente al **17.7%** neto.
+
+Los costes con `asset_id = null` **no** forman parte de esta vista a nivel de lote — son a nivel de cartera y
+los gestiona el [Portfolio Engine](../portfolio-engine/roi.md). Véase
+[Comisiones e Impuestos](../../../instruments/transaction-types/fee.md) para la teoría a nivel de instrumento.
 
 ---
 

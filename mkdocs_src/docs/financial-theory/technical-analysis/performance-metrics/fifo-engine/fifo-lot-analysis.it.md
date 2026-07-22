@@ -187,25 +187,39 @@ Implicazione pratica:
 
 ## 💸 Allocazione del Reddito tra i Lotti {: #income-allocation-across-lots }
 
-I dividendi e gli interessi collegati a un asset vengono allocati **pro-rata tra tutti i lotti in acquisto che sono aperti alla data del reddito**.
+I dividendi e gli interessi collegati a un asset vengono allocati **pro-rata tra i lotti in acquisto ammissibili
+al giorno precedente la data del reddito (D-1)**, e solo tra i lotti detenuti **presso il broker pagatore**.
 
 Regola di allocazione esatta:
 
 $$
-w_i(t) = \frac{\text{QtàAperta}_i(t)}{\sum_j \text{QtàAperta}_j(t)}
+w_i(D) = \frac{\text{QtàAmmissibile}_i(D)}{\sum_j \text{QtàAmmissibile}_j(D)}, \qquad
+\text{QtàAmmissibile}_i(D) = \text{QtàAperta}_i(D-1)
 $$
 
 $$
-\text{Reddito}_i = \text{Converti}(I, val, t)\cdot w_i(t)
+\text{Reddito}_i = \text{Converti}(I, val, D)\cdot w_i(D)
 $$
 
 Dove:
 
-- $I$ = importo del reddito ricevuto
-- $\text{Converti}(I, val, t)$ = reddito convertito nella valuta di destinazione alla data $t$
-- solo i lotti in acquisto ancora aperti al tempo $t$ partecipano al denominatore
+- $I$ = importo del reddito ricevuto alla data $D$
+- $\text{Converti}(I, val, D)$ = reddito convertito nella valuta di destinazione alla data $D$
+- $\text{QtàAmmissibile}_i(D)$ = quantità del lotto $i$ aperta presso il **broker pagatore** al $D-1$ (la quantità
+  in trasferimento in uscita da quel broker conta comunque come originata lì)
+- solo i lotti in acquisto partecipano al denominatore
 
-Ciò significa che i lotti aperti più grandi ricevono una quota maggiore del dividendo o della cedola, mentre i lotti già chiusi non ne ricevono alcuna.
+La regola **D-1** mantiene puntuale la data di rilevazione: un acquisto effettuato *nel* giorno del reddito non
+matura quella distribuzione, e nemmeno un lotto venduto il giorno precedente. I lotti ammissibili più grandi
+ricevono una quota maggiore; i lotti detenuti presso altri broker, o non ancora (o non più) ammissibili, non
+ricevono nulla.
+
+!!! warning "Modificato in FIFO v5"
+
+    Le versioni precedenti utilizzavano la data del reddito stessa con **tutti** i broker ($\text{QtàAperta}_i(t)$
+    su ogni lotto). Il motore attuale utilizza l'ammissibilità al D-1 limitata al broker pagatore. Se nessun lotto
+    è ammissibile, il reddito viene mantenuto come **reddito orfano a livello di asset** (mai perso, mai assegnato
+    al lotto sbagliato).
 
 !!! tip "Regola di conservazione"
 
@@ -216,6 +230,61 @@ Ciò significa che i lotti aperti più grandi ricevono una quota maggiore del di
 </div>
 
 La riga **Reddito Asset** della modale di dettaglio del lotto è esattamente $\text{Reddito}_i$ della formula sopra — la quota pro-rata che questo lotto specifico ha ricevuto. Quando il lotto non ha un prezzo di mercato in tempo reale, la stessa modale mostra anche il badge **Stimato al Costo** della sezione precedente.
+
+---
+
+## 💸 Costi e Metriche Nette {: #costs-and-net-metrics }
+
+Le `FEE` e `TAX` collegate a un asset vengono allocate ai lotti tramite una **scala deterministica di abbinamento
+alle operazioni**, per poi essere sottratte e produrre le cifre **nette** insieme a quelle lorde.
+
+### Allocazione deterministica dei costi
+
+Un pool di costo (stesso broker, stesso giorno, stesso tipo) viene abbinato al primo target non vuoto in questo ordine:
+
+| Costo | Ordine di abbinamento |
+|------|----------------|
+| `FEE` | operazioni dello stesso giorno → operazioni del giorno precedente → posizioni aperte → orfano a livello di asset |
+| `TAX` | reddito dello stesso giorno → operazioni dello stesso giorno → reddito del giorno precedente → operazioni del giorno precedente → posizioni aperte → orfano a livello di asset |
+
+All'interno di un'operazione abbinata, il costo **passa esattamente ai lotti toccati da quell'operazione** — il
+costo di un ACQUISTO finisce sul lotto che ha aperto, il costo di una VENDITA finisce sui lotti consumati in FIFO
+— quindi l'attribuzione del costo non contraddice mai l'abbinamento FIFO stesso. Gli importi vengono convertiti
+nella valuta di destinazione e memorizzati come magnitudini positive.
+
+!!! tip "Conservazione"
+
+    Per pool, $\sum_i \text{Costo}_i + \text{Orfano} = \text{Converti}(\text{pool}, val, D)$. Un costo che non
+    trova alcun lotto ammissibile (es. una commissione registrata dopo che la posizione è stata completamente
+    chiusa) diventa **costo orfano a livello di asset** invece di essere scartato o forzato su un lotto non
+    correlato.
+
+### Lordo vs netto
+
+Con i costi attribuiti per lotto, LibreFolio riporta sia la performance lorda che quella netta:
+
+$$
+\text{PnL Totale Netto}_i = \text{PnL Totale}_i - \text{Commissioni}_i - \text{Tasse}_i
+$$
+
+$$
+\text{RendimentoTotaleNetto}_i = \frac{\text{PnL Totale Netto}_i}{\text{ValoreIniziale}_i}
+$$
+
+dove $\text{PnL Totale}_i$ **include** già il reddito (PnL di mercato + PnL realizzato + reddito da asset). La
+serie storica del valore per lotto riporta invece un PnL netto *solo di capitale*,
+$\text{pnl}_i - \text{Commissioni}_i - \text{Tasse}_i$, che **esclude** il reddito — ogni riga netta rispecchia
+la propria controparte lorda meno i costi.
+
+!!! example "Numeri esemplificativi"
+
+    ACQUISTO 10×100, VENDITA 4×120, prezzo corrente 110, dividendo 50, commissioni 8, tasse 5:
+    P&L Totale Lordo $= 60 + 80 + 50 = 190$; P&L Totale Netto $= 190 - 13 = 177$; su un valore iniziale di 1.000
+    corrisponde a un rendimento totale del **19%** lordo contro il **17,7%** netto.
+
+I costi con `asset_id = null` **non** fanno parte di questa vista a livello di lotto — sono a livello di
+portafoglio e gestiti dal [Portfolio Engine](../portfolio-engine/roi.md). Vedi
+[Commissioni e Tasse](../../../instruments/transaction-types/fee.md) per la teoria a livello di strumento.
 
 ---
 

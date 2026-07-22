@@ -187,25 +187,38 @@ Implication pratique :
 
 ## 💸 Allocation des Revenus entre les Lots {: #income-allocation-across-lots }
 
-Les dividendes et l'intérêt liés à un actif sont alloués **au prorata de tous les lots LONG qui sont ouverts à la date du revenu**.
+Les dividendes et les intérêts liés à un actif sont alloués **au prorata des lots LONG éligibles à la date
+précédant la date du revenu (D-1)**, et uniquement parmi les lots détenus **chez le courtier payeur**.
 
 Règle d'allocation exacte :
 
 $$
-w_i(t) = \frac{\text{OpenQty}_i(t)}{\sum_j \text{OpenQty}_j(t)}
+w_i(D) = \frac{\text{EligibleQty}_i(D)}{\sum_j \text{EligibleQty}_j(D)}, \qquad
+\text{EligibleQty}_i(D) = \text{OpenQty}_i(D-1)
 $$
 
 $$
-\text{Income}_i = \text{Convert}(I, ccy, t)\cdot w_i(t)
+\text{Income}_i = \text{Convert}(I, ccy, D)\cdot w_i(D)
 $$
 
 Où :
 
-- $I$ = montant du revenu perçu
-- $\text{Convert}(I, ccy, t)$ = revenu converti dans la devise cible à la date $t$
-- seuls les lots LONG encore ouverts au moment $t$ participent au dénominateur
+- $I$ = montant du revenu perçu à la date $D$
+- $\text{Convert}(I, ccy, D)$ = revenu converti dans la devise cible à la date $D$
+- $\text{EligibleQty}_i(D)$ = quantité du lot $i$ ouverte chez le **courtier payeur** au $D-1$ (la quantité en
+  transit sortant de ce courtier est toujours considérée comme y étant originaire)
+- seuls les lots LONG participent au dénominateur
 
-Cela signifie que les lots ouverts les plus importants reçoivent une part plus importante du dividende ou du coupon, tandis que les lots déjà clos n'en reçoivent aucun.
+La règle **D-1** garde le jour d'enregistrement net : un achat effectué *le* jour du revenu ne génère pas cette
+distribution, et un lot vendu la veille non plus. Les lots éligibles les plus importants reçoivent une part plus
+grande ; les lots détenus chez d'autres courtiers, ou pas encore (ou plus) éligibles, ne reçoivent rien.
+
+!!! warning "Modifié dans FIFO v5"
+
+    Les versions antérieures utilisaient la date du revenu elle-même avec **tous** les courtiers
+    ($\text{OpenQty}_i(t)$ sur chaque lot). Le moteur actuel utilise l'éligibilité D-1 limitée au courtier payeur.
+    Si aucun lot n'est éligible, le revenu est conservé comme **revenu orphelin au niveau de l'actif** (jamais
+    perdu, jamais attribué au mauvais lot).
 
 !!! tip "Règle de conservation"
 
@@ -216,6 +229,60 @@ Cela signifie que les lots ouverts les plus importants reçoivent une part plus 
 </div>
 
 La ligne **Revenu de l'Actif** dans la fenêtre modale des détails du lot est exactement $\text{Income}_i$ de la formule ci-dessus — la part au prorata que ce lot spécifique a reçue. Lorsque le lot n'a pas de cours de marché en direct, la même fenêtre modale affiche également le badge **Estimation au Coût** de la section précédente.
+
+---
+
+## 💸 Coûts & Métriques Nettes {: #costs-and-net-metrics }
+
+Les `FEE` et `TAX` liées à un actif sont allouées aux lots via une **échelle déterministe d'appariement aux
+opérations**, puis soustraites pour produire les chiffres **nets** en complément des chiffres bruts.
+
+### Allocation déterministe des coûts
+
+Un pool de coûts (même courtier, même jour, même type) est apparié à la première cible non vide dans cet ordre :
+
+| Coût | Ordre d'appariement |
+|------|----------------|
+| `FEE` | opérations du même jour → opérations du jour précédent → positions ouvertes → orphelin au niveau de l'actif |
+| `TAX` | revenu du même jour → opérations du même jour → revenu du jour précédent → opérations du jour précédent → positions ouvertes → orphelin au niveau de l'actif |
+
+Au sein d'une opération appariée, le coût **se répercute exactement sur les lots touchés par cette opération** —
+le coût d'un ACHAT atterrit sur le lot qu'il a ouvert, le coût d'une VENTE atterrit sur les lots consommés en
+FIFO — l'attribution des coûts ne contredit donc jamais l'appariement FIFO lui-même. Les montants sont convertis
+dans la devise cible et stockés sous forme de magnitudes positives.
+
+!!! tip "Conservation"
+
+    Par pool, $\sum_i \text{Cost}_i + \text{Orphan} = \text{Convert}(\text{pool}, ccy, D)$. Un coût qui ne trouve
+    aucun lot éligible (par ex. des frais enregistrés après la clôture complète de la position) devient un
+    **coût orphelin au niveau de l'actif** plutôt que d'être abandonné ou imposé à un lot non lié.
+
+### Brut vs net
+
+Avec les coûts attribués par lot, LibreFolio rapporte à la fois la performance brute et nette :
+
+$$
+\text{NetTotalPnL}_i = \text{TotalPnL}_i - \text{Fees}_i - \text{Taxes}_i
+$$
+
+$$
+\text{NetTotalReturn}_i = \frac{\text{NetTotalPnL}_i}{\text{OpeningValue}_i}
+$$
+
+où $\text{TotalPnL}_i$ **inclut** déjà le revenu (P&L de marché + P&L réalisé + revenu de l'actif). La série
+d'historique de valeur par lot rapporte quant à elle un P&L net *capital uniquement*,
+$\text{pnl}_i - \text{Fees}_i - \text{Taxes}_i$, qui **exclut** le revenu — chaque ligne nette reflète sa propre
+contrepartie brute moins les coûts.
+
+!!! example "Exemple chiffré"
+
+    ACHAT 10×100, VENTE 4×120, prix actuel 110, dividende 50, frais 8, taxes 5 :
+    P&L Total Brut $= 60 + 80 + 50 = 190$ ; P&L Total Net $= 190 - 13 = 177$ ; sur une valeur d'ouverture de
+    1 000, cela représente un rendement total de **19%** brut contre **17,7%** net.
+
+Les coûts avec `asset_id = null` **ne font pas** partie de cette vue au niveau du lot — ils sont au niveau du
+portefeuille et gérés par le [Portfolio Engine](../portfolio-engine/roi.md). Voir
+[Frais & Taxes](../../../instruments/transaction-types/fee.md) pour la théorie au niveau de l'instrument.
 
 ---
 

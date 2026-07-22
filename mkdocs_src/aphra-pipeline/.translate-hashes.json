@@ -4036,11 +4036,11 @@
     }
   },
   "financial-theory/instruments/transaction-types/fee.en.md": {
-    "md5": "8eb28419dcca9404d2211568c8976a81",
+    "md5": "61add582d08ab33bdc0cc8d3d904945a",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-05-22T12:09:03.593289+00:00",
     "analysis": "[{\"name\": \"Spread\", \"keywords\": [\"financial spread bid ask price\"]}, {\"name\": \"Custody fee\", \"keywords\": [\"custody fee investment account maintenance\"]}, {\"name\": \"Management fee (TER)\", \"keywords\": [\"Total Expense Ratio ETF fund fees\"]}, {\"name\": \"NAV\", \"keywords\": [\"Net Asset Value investment\"]}, {\"name\": \"Capital gains tax\", \"keywords\": [\"capital gains tax definition\"]}, {\"name\": \"Withholding tax\", \"keywords\": [\"withholding tax dividends interest\"]}, {\"name\": \"Stamp duty\", \"keywords\": [\"stamp duty stock purchase tax\"]}, {\"name\": \"Financial transaction tax\", \"keywords\": [\"financial transaction tax Tobin tax\"]}, {\"name\": \"Gross return\", \"keywords\": [\"gross vs net return investing\"]}, {\"name\": \"Net return\", \"keywords\": [\"net return portfolio calculation\"]}, {\"name\": \"Compounding drag\", \"keywords\": [\"compounding drag investment fees\"]}, {\"name\": \"Realized profit\", \"keywords\": [\"realized vs unrealized gain\"]}]",
@@ -4055,7 +4055,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The glossary defines \"currency conversion\" as \"conversione valutaria\". The translation uses \"conversione FX\" in the table and \"Conversione FX\" in the links. Change \"Commissione di conversione FX\" to \"Commissione di conversione valutaria\" and \"Conversione FX\" to \"Conversione valutaria\".\n- **Terminology Consistency (Glossary):** The glossary defines \"holding\" as \"posizione\". The translation uses \"periodi di detenzione\" for \"holding periods\". While \"detenzione\" is common, to align with the glossary's conceptual mapping of \"holding\" $\\rightarrow$ \"posizione\", change \"Su lunghi periodi di detenzione\" to \"Su lunghi periodi di posizione\" or \"Su posizioni a lungo termine\".\n- **Technical Accuracy (Formula):** In the LaTeX formula for $R_{net}$, the terms $\\text{Fees}$ and $\\text{Taxes}$ remain in English. Since these are variable names within a mathematical expression and the table headers are now in Italian, these should be translated for consistency within the Italian documentation. Change $\\text{Fees} + \\text{Taxes}$ to $\\text{Commissioni} + \\text{Tasse}$.\n- **Terminology/Localization:** \"Compounding drag\" is left in English. While it is a technical term, it should be translated or accompanied by a translation for better readability in a technical guide. Change \"**compounding drag**\" to \"**effetto erosivo dell'interesse composto**\" or \"**trascinamento da compounding**\".\n- **Grammar/Naturality:** \"Imposta di bollo\" is described as \"Tassa di transazione (es. stamp duty UK)\". \"Stamp duty\" is a specific UK tax, whereas \"Imposta di bollo\" is a specific Italian tax. To be more accurate to the source \"Transaction tax (e.g., UK stamp duty)\", change the translation to \"Tassa di transazione (es. stamp duty del Regno Unito)\".\n- **Terminology Consistency:** \"Financial Transaction Tax\" is left in English. This should be translated for consistency with the other table entries. Change \"Financial Transaction Tax\" to \"Tassa sulle transazioni finanziarie\".\n- **Localization (Number Formatting):** In the \"example\" block, the translation uses \"$10.000\" and \"$76.123\". In Italian, the dot is used as a thousands separator, but the currency symbol ($) precedes the number. However, the source uses the dollar sign. To maintain consistency with Italian locale for numbers while keeping the currency, ensure the formatting is consistent. The current translation is acceptable, but ensure the space between the symbol and the number follows the project's style guide (usually no space in US English, but often a space in European locales). No change required unless a specific style guide for symbols is provided, but be mindful of the dot/comma distinction.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 140.2
+        "elapsed_s": 140.2,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-05-22T12:09:03.592795+00:00",
@@ -4066,7 +4068,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The translation uses \"conversion de devises\" and \"change de devises\". According to the glossary, \"currency conversion\" must be translated as \"conversion de devise\". \n    - Change \"Frais de conversion FX\" to \"Frais de conversion de devise FX\".\n    - Change \"Coût du change de devises\" to \"Coût de la conversion de devise\".\n- **Terminology Consistency (Glossary):** The translation uses \"échanges\" for \"trades\" in the Tax Types table. While not explicitly in the glossary, \"transaction\" is a mandatory mapping for \"transaction\". To maintain consistency with the glossary's focus on \"transaction\", \"trade\" should be handled consistently.\n    - Change \"Taxe sur les échanges\" to \"Taxe sur les transactions\".\n    - Change \"Au trade\" to \"À la transaction\".\n- **Non-translatable Elements (LaTeX):** The LaTeX formula in the \"Impact on Returns\" section contains English words inside the `\\text{}` command. These should remain in English to match the formula's variable logic or be updated if they are intended to be labels, but usually, in technical docs, if the variable is $R_{net}$, the text within the formula should remain consistent with the original source to avoid breaking mathematical rendering or logic.\n    - Keep `\\text{Fees} + \\text{Taxes}` as is (the current translation kept them, which is correct, but ensure no one attempts to translate them to `\\text{Frais} + \\text{Taxes}` as it changes the formula source).\n- **Semantic Accuracy/Terminology:** The term \"compounding drag\" is translated as \"frein composé\", and the translator added \"(compounding drag)\" in parentheses. The project forbids adding content not present in the source (like English clarifications in parentheses).\n    - Change \"frein composé (compounding drag)\" to \"frein composé\".\n- **Formatting (Numbers):** In the \"The 1% drag over 30 years\" example, the French translation uses a space as a thousands separator for the final results (e.g., \"76 123 $\") but uses a comma for the initial inputs (e.g., \"10,000\"). French typography requires a non-breaking space for thousands.\n    - Change \"10,000\" to \"10 000\" in all instances within the example block.\n- **Terminology Accuracy:** \"Spread\" is translated as \"Différence entre le prix d'achat et le prix de vente\". While correct, \"bid and ask price\" is more precisely \"prix demandé et prix offert\". \n    - Change \"prix d'achat et le prix de vente\" to \"prix offert et le prix demandé\".\n- **Markdown Preservation:** In the example block, the source uses `$(1.07)^{30}$`. The translation uses `$(1.07)^{30}$`. Note that in French, the decimal separator is a comma. To be mathematically consistent with French locale:\n    - Change `(1.07)` to `(1,07)` and `(1.06)` to `(1,06)`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 91.1
+        "elapsed_s": 91.1,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-05-22T12:09:03.593298+00:00",
@@ -4077,7 +4081,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The glossary defines \"capital gain\" as \"plusvalía\". The translation uses \"ganancias de capital\" in two instances. Change \"Impuesto sobre ganancias de capital\" to \"Impuesto sobre plusvalías\".\n- **Terminology Consistency (Glossary):** The glossary defines \"holding\" as \"posición\". The translation uses \"periodos de mantenimiento\" for \"holding periods\". Change \"periodos de mantenimiento prolongados\" to \"periodos de posición prolongados\" or \"plazos de posición prolongados\".\n- **Removal of Parenthetical English Terms:** The translation includes English terms in parentheses—e.g., \"(fees)\", \"(taxes)\", \"(Fee)\", \"(Tax)\", \"(compounding drag)\". These are not present in the source text and should be removed to maintain a clean translation.\n- **Formula Consistency:** In the formula $R_{net} = R_{gross} - \\frac{\\text{Fees} + \\text{Taxes}}{V_{start}}$, the labels inside the $\\text{LaTeX}$ block should be translated to Spanish to match the rest of the document. Change $\\text{Fees} + \\text{Taxes}$ to $\\text{Comisiones} + \\text{Impuestos}$.\n- **Terminology Accuracy:** \"Impuesto de timbre\" is a literal translation of \"Stamp duty\". While technically correct in some regions, \"Impuesto de timbre\" is less common in a financial context than \"Impuesto de timbre/sello\". However, to ensure clarity and professionalism in a technical guide, \"Impuesto de timbre\" is acceptable, but the reference to \"(ej. stamp duty en UK)\" should be simplified to \"(ej. stamp duty del Reino Unido)\" to avoid mixing languages.\n- **Grammar/Natural Flow:** \"lo que el mercado le dio\" and \"lo que realmente conserva\" are slightly too colloquial. Suggest changing \"lo que el mercado le dio\" to \"lo obtenido del mercado\" and \"lo que realmente conserva\" to \"lo que realmente se retiene\".\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 98.5
+        "elapsed_s": 98.5,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -5105,7 +5111,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "c7b82153f5c3a625b3f1991c6a6e4ae5",
+    "md5": "d917ba169e0795f2aee34c2e705737b6",
     "langs_done": [
       "es",
       "fr",
@@ -5125,7 +5131,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 143.7,
-        "stamped_at": "2026-07-15T08:31:33.062752+00:00",
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5138,7 +5144,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 138.4,
-        "stamped_at": "2026-07-15T08:31:33.062752+00:00",
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5151,7 +5157,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 138.3,
-        "stamped_at": "2026-07-15T08:31:33.062752+00:00",
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6615,11 +6621,11 @@
     }
   },
   "financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md": {
-    "md5": "2667b8034117b528447a09c6b4da5cfe",
+    "md5": "dc280ccb1c9dd953717f69c8f7103f71",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-07-20T10:35:56.359432+00:00",
     "analysis": "[{\"name\": \"Lot\", \"keywords\": [\"investment lot definition securities trading purchase batch\"]}, {\"name\": \"Weighted Average Cost (WAC)\", \"keywords\": [\"weighted average cost accounting method cost basis calculation\"]}, {\"name\": \"FIFO\", \"keywords\": [\"first in first out inventory accounting securities matching\"]}, {\"name\": \"Open / partially closed / fully closed\", \"keywords\": [\"lot lifecycle status securities trading terminology\"]}, {\"name\": \"Cost basis\", \"keywords\": [\"cost basis definition tax accounting securities valuation\"]}, {\"name\": \"Proceeds\", \"keywords\": [\"sale proceeds definition finance sale amount received\"]}, {\"name\": \"Return\", \"keywords\": [\"investment return percentage profit financial metric\"]}, {\"name\": \"Complement, not replacement\", \"keywords\": [\"complementary financial methods versus replacement translation\"]}, {\"name\": \"Open Return\", \"keywords\": [\"open return per lot price-only return financial metric\"]}, {\"name\": \"Total Return\", \"keywords\": [\"total return per lot full economic return including income\"]}, {\"name\": \"Reference Unit Price\", \"keywords\": [\"reference price valuation fallback financial data\"]}, {\"name\": \"Fallback\", \"keywords\": [\"fallback mechanism automatic replacement procedure data backup\"]}, {\"name\": \"qbq (quote base quantity)\", \"keywords\": [\"quote base quantity scaling factor bond pricing convention\"]}, {\"name\": \"Per 100 nominal\", \"keywords\": [\"per 100 face value bond quotation convention\"]}, {\"name\": \"Estimated-at-Cost\", \"keywords\": [\"valuation at cost no market price fallback estimation method\"]}, {\"name\": \"Income Allocation\", \"keywords\": [\"dividend interest allocation pro-rata across lots\"]}, {\"name\": \"Pro-rata\", \"keywords\": [\"pro-rata allocation proportional distribution finance\"]}, {\"name\": \"Worked Example\", \"keywords\": [\"worked example step by step calculation demonstration\"]}, {\"name\": \"Aggregate\", \"keywords\": [\"aggregate metrics summary rollup combined calculation finance\"]}, {\"name\": \"Building blocks\", \"keywords\": [\"building blocks fundamental components financial calculation decomposed\"]}, {\"name\": \"Economic attribution\", \"keywords\": [\"economic attribution return source explanation performance attribution\"]}, {\"name\": \"Lifecycle\", \"keywords\": [\"lot lifecycle stages timeline open close financial instrument\"]}, {\"name\": \"Custody / Custodian\", \"keywords\": [\"custodian broker holding securities safekeeping financial intermediary\"]}, {\"name\": \"Thickness proportional to held quantity\", \"keywords\": [\"proportional thickness visual chart representation quantity scaling\"]}, {\"name\": \"Unrealized volatility\", \"keywords\": [\"unrealized volatility temporary price fluctuation not yet realized financial\"]}, {\"name\": \"Badge\", \"keywords\": [\"badge UI element label indicator software interface\"]}, {\"name\": \"Modal\", \"keywords\": [\"modal dialog popup window interface element\"]}, {\"name\": \"Conservation rule\", \"keywords\": [\"conservation rule income allocation sum check verification finance\"]}, {\"name\": \"Scalar lot summary\", \"keywords\": [\"scalar summary single number per lot aggregate figure finance\"]}, {\"name\": \"OpenValue / OpenQuantity / OriginalQuantity\", \"keywords\": [\"open value quantity calculation current remaining position lot\"]}]",
@@ -6634,7 +6640,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n### 1. Terminologia Critica: `WAC` → `PMC` (obbligatoria per glossario)\n\n*   **Problema:** Il glossario impone la mappatura obbligatoria `WAC → PMC` e `weighted average cost → prezzo medio di carico (PMC)`. Nella traduzione, `WAC` è stato lasciato invariato come `WAC` in quasi tutte le occorrenze, violando la regola.\n*   **Testo problematico (esempi):**\n    *   \"Il WAC risponde:...\" (dovrebbe essere \"Il PMC risponde:...\")\n    *   \"[Costo Medio Ponderato (WAC)](../weighted-average-cost.md)\" (il titolo del link dovrebbe essere \"[Costo Medio Ponderato (PMC)](../weighted-average-cost.md)\")\n    *   Il titolo della sezione \"WAC / Market Price chart\" è stato tradotto come \"Grafico WAC / Prezzo di Mercato\" (dovrebbe essere \"Grafico PMC / Prezzo di Mercato\").\n    *   Il riferimento nel titolo della figura \"WAC / Market Price chart\" è stato tradotto come \"Grafico WAC / Prezzo di Mercato\" (dovrebbe essere \"Grafico PMC / Prezzo di Mercato\").\n*   **Correzione:** Sostituire ogni occorrenza di `WAC` (in inglese) con `PMC` (in italiano) in tutto il testo tradotto, inclusi titoli di sezioni, didascalie di immagini e link.\n\n### 2. Pagina di Riferimento: Link a `../weighted-average-cost.md`\n\n*   **Problema:** Il link `../weighted-average-cost.md` è presente sia nel testo originale che in quello tradotto. Tuttavia, dato che il termine `WAC` è stato sostituito con `PMC`, anche il testo del link dovrebbe riflettere questa modifica per coerenza interna. Anche se l'URL rimane invariato per motivi tecnici, il testo visualizzato (anchor text) deve essere aggiornato.\n*   **Testo problematico:** `[Costo Medio Ponderato (WAC)](../weighted-average-cost.md)`\n*   **Correzione:** Cambiare l'anchor text in `[Costo Medio Ponderato (PMC)](../weighted-average-cost.md)`.\n\n### 3. Traduzione di \"Performance\" (Terminologia non standard)\n\n*   **Problema:** Il verbo inglese \"performing\" è stato tradotto con \"performando\". La traduzione corretta e più naturale in italiano è \"sta performando\" (anglicismo accettato) o più elegantemente \"sta andando\".\n*   **Testo problematico:** \"Come sta performando ogni singolo lotto di acquisto nel tempo?\"\n*   **Correzione:** Modificare in: \"Come sta andando ogni singolo lotto di acquisto nel tempo?\" oppure \"Qual è la performance di ogni singolo lotto di acquisto nel tempo?\"\n\n### 4. Traduzione di \"Income\" (Terminologia)\n\n*   **Problema:** Il termine \"income\" è tradotto correttamente come \"reddito\" in molti punti, ma nelle formule matematiche e in un'occorrenza testuale viene lasciato in inglese come `AssetIncome` invece di tradurlo in `RedditoAsset`.\n*   **Testo problematico:**\n    *   Nella formula: `\\text{AssetIncome} = \\sum_t \\text{Income}_i(t)`\n    *   Nella descrizione della formula: `\\text{AssetIncome} = \\sum_t \\text{Reddito}_i(t)`\n*   **Correzione:** Allineare la formula alla traduzione italiana utilizzata nel resto del documento: `\\text{RedditoAsset} = \\sum_t \\text{Reddito}_i(t)`\n\n### 5. Traduzione di \"Retirement Income\" (Terminologia)\n\n*   **Problema:** Il testo originale menziona \"Income_i(t)\". Nella traduzione, questo è stato reso come `\\text{Income}_i(t)` a livello di formula, ma nel testo descrittivo è tradotto come `Reddito_i`. Per coerenza con la nuova nomenclatura `RedditoAsset`, sarebbe opportuno usare `\\text{Reddito}_i(t)` nella formula stessa.\n*   **Testo problematico:** Nella formula: `\\text{Income}_i(t)`\n*   **Correzione:** Sostituire con `\\text{Reddito}_i(t)`.\n\n### 6. Traduzione di \"Proceeds\" (Terminologia)\n\n*   **Problema:** Il termine \"proceeds\" è tradotto correttamente come \"ricavi\" in molte occorrenze, ma nel contesto della chiusura di un lotto (\"closure proceeds\"), una traduzione più precisa in ambito finanziario è \"proventi di chiusura\" o \"ricavi di chiusura\". La traduzione attuale \"Ricavi di Chiusura\" è accettabile, ma per coerenza con la formula `Proceeds(t)`, sarebbe meglio usare `Ricavi(t)` nella formula, come già fatto.\n*   **Correzione:** La formula `\\text{Proceeds}(t) = \\sum \\text{Closure Proceeds} \\text{ up to } t` è stata tradotta correttamente. Nessuna modifica necessaria.\n\n### 7. Traduzione di \"qbq\" (Terminologia)\n\n*   **Problema:** Il termine \"qbq\" è stato tradotto come \"quantità_base_quotazione\". Sebbene la spiegazione sia chiara, il termine tecnico maccheronico \"qbq\" (`quote_base_quantity`) viene solitamente lasciato invariato nei testi tecnici, anche in traduzione. La traduzione letterale può creare confusione con il codice sorgente.\n*   **Testo problematico:** `qbq` (`quantità_base_quotazione`).\n*   **Correzione:** Lasciare `qbq` come termine invariato e, se si vuole essere didattici, usare una nota tra parentesi: `qbq` (che sta per `quote_base_quantity` in inglese, quantità base di quotazione).\n\n### 8. Traduzione di \"LONG\" e \"SHORT\" (Terminologia)\n\n*   **Problema:** Il termine \"LONG\" è stato lasciato in inglese. In italiano, nel gergo finanziario, si utilizza comunemente \"posizione lunga\" o \"acquisto\". Lasciare \"LONG\" in inglese è comprensibile ma non è una traduzione. La scelta migliore è tradurlo.\n*   **Testo problematico:** \"tutti i lotti LONG\"\n*   **Correzione:** Sostituire con \"tutti i lotti in acquisto\" o \"tutte le posizioni lunghe\".\n\n### 9. Punteggiatura: Spazio prima della virgola\n\n*   **Problema:** In alcune frasi, è presente uno spazio prima della virgola, che non è corretto in italiano.\n*   **Testo problematico:** \"Se confronti direttamente `101,50` con una base di costo per singola unità come `0,992` , ottieni...\"\n*   **Correzione:** Rimuovere lo spazio prima della virgola: \"Se confronti direttamente `101,50` con una base di costo per singola unità come `0,992`, ottieni...\"\n\n### 10. Concordanza di Genere: \"un reddito\" (neutro maschile)\n\n*   **Problema:** La parola \"reddito\" è maschile. L'articolo \"una\" è una svista.\n*   **Testo problematico:** \"una reddito\"\n*   **Correzione:** Sostituire con \"un reddito\".\n\n### 11. Traduzione di \"Performance\" (Terminologia - secondo caso)\n\n*   **Problema:** Il verbo \"performing\" è stato nuovamente tradotto come \"performando\". Anche qui, meglio usare \"sta andando\".\n*   **Testo problematico:** \"Come sta performando ogni singolo...?\"\n*   **Correzione:** Modificare in: \"Come sta andando ogni singolo...?\"\n\n### 12. Traduzione di \"Realized PnL\" (Terminologia)\n\n*   **Problema:** Nella formula `\\text{RealizedPnL} = \\sum \\text{Closure Realized PnL}` la traduzione è `\\text{PnLRealizzato} = \\sum \\text{PnL Realizzato di Chiusura}`. La resa è corretta.\n\n### 13. Struttura: Codice Inline (Backtick)\n\n*   **Problema:** Non ci sono errori strutturali evidenti. Tutti i codici inline (`qbq`, `prezzo_unitario_riferimento`) sono stati correttamente racchiusi tra backtick.\n\n### 14. Traduzione di \"Open Return\" (Terminologia)\n\n*   **Problema:** Il termine \"Open Return\" è stato tradotto come \"Rendimento Aperto\". La traduzione è letterale, ma in italiano finanziario si usa più spesso \"Rendimento Lordo\" o \"Rendimento Non Realizzato\" per riferirsi al solo movimento di prezzo. \"Rendimento Aperto\" non è un termine standard.\n*   **Correzione:** Sostituire con \"Rendimento Non Realizzato\" in tutto il documento per coerenza.\n\n### 15. Traduzione di \"Relative Return\" (Terminologia)\n\n*   **Problema:** \"Relative Return\" è stato tradotto come \"Rendimento Relativo\". La traduzione è accurata e accettabile.\n\n### 16. Traduzione di \"Total Return\" (Terminologia)\n\n*   **Problema:** \"Total Return\" è stato tradotto come \"Rendimento Totale\". La traduzione è perfetta e standard.\n\n### 17. Traduzione di \"Open Value\" (Terminologia)\n\n*   **Problema:** \"Open Value\" è stato tradotto come \"Valore Aperto\". La traduzione è letterale e può creare confusione. In italiano, per indicare il valore corrente di una posizione ancora aperta, si usa più comunemente \"Valore Corrente\" o \"Valore di Mercato\".\n*   **Correzione:** Sostituire con \"Valore Corrente\" in tutto il documento.\n\n### 18. Traduzione di \"Opening Value\" (Terminologia)\n\n*   **Problema:** \"Opening Value\" è stato tradotto come \"Valore Apertura\". La traduzione è funzionale, ma per chiarezza e precisione, si potrebbe usare \"Valore Iniziale\" o \"Costo Iniziale\", che è più vicino al concetto di \"Original Cost\".\n*   **Correzione:** Sostituire con \"Valore Iniziale\" o mantenere \"Costo Originale\" se si vuole essere ridondanti. La scelta attuale è comunque accettabile.\n\n### 19. Traduzione di \"Unified Lots Table\" (Terminologia)\n\n*   **Problema:** \"Unified Lots Table\" è stato tradotto come \"Tabella Lotti Unificata\". La traduzione è corretta e chiara.\n\n### 20. Traduzione di \"Lot Life & Custody timeline\" (Terminologia)\n\n*   **Problema:** \"Lot Life & Custody timeline\" è stato tradotto come \"Cronologia Vita e Custodia Lotti\". La traduzione è corretta e descrittiva.\n\n### 21. Traduzione di \"WAC / Market Price chart\" (Terminologia)\n\n*   **Problema:** Come già evidenziato, `WAC` dovrebbe essere `PMC`. Quindi il titolo della figura dovrebbe essere \"Grafico PMC / Prezzo di Mercato\".\n*   **Correzione:** Sostituire con \"Grafico PMC / Prezzo di Mercato\".\n\n### 22. Traduzione di \"Value / Return comparison chart\" (Terminologia)\n\n*   **Problema:** \"Value / Return comparison chart\" è stato tradotto come \"Grafico di confronto Valore/Rendimento\". La traduzione è buona.\n\n### 23. Traduzione di \"Aggregate Return\" (Terminologia)\n\n*   **Problema:** \"Aggregate Return\" è stato tradotto come \"Rendimento Aggregato\". La traduzione è corretta.\n\n### 24. Traduzione di \"Reference Unit Price\" (Terminologia)\n\n*   **Problema:** \"Reference Unit Price\" è stato tradotto come \"Prezzo Unitario Riferimento\". La traduzione è letterale. In italiano finanziario, il termine più comune è \"Prezzo di Riferimento\".\n*   **Correzione:** Sostituire con \"Prezzo di Riferimento\" in tutto il documento.\n\n### 25. Traduzione di \"qbq scaling\" (Terminologia)\n\n*   **Problema:** \"qbq scaling\" è stato tradotto come \"Ridimensionamento qbq\". La traduzione è accettabile. Un'alternativa potrebbe essere \"Ridimensionamento per quantità base di quotazione\", ma la scelta attuale è chiara.\n\n### 26. Traduzione di \"Estimated-at-Cost\" (Terminologia)\n\n*   **Problema:** \"Estimated-at-Cost\" è stato tradotto come \"Stimato al Costo\". La traduzione è perfetta.\n\n### 27. Traduzione di \"Income Allocation Across Lots\" (Terminologia)\n\n*   **Problema:** \"Income Allocation Across Lots\" è stato tradotto come \"Allocazione del Reddito tra i Lotti\". La traduzione è corretta.\n\n### 28. Traduzione di \"Worked Example\" (Terminologia)\n\n*   **Problema:** \"Worked Example\" è stato tradotto come \"Esempio Pratico\". La traduzione è adeguata.\n\n### 29. Traduzione di \"From Lots to Aggregate Metrics\" (Terminologia)\n\n*   **Problema:** \"From Lots to Aggregate Metrics\" è stato tradotto come \"Dai Lotti alle Metriche Aggregate\". La traduzione è corretta.\n\n### 30. Traduzione di \"Related\" (Terminologia)\n\n*   **Problema:** \"Related\" è stato tradotto come \"Correlati\". La traduzione è corretta.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 184.2
+        "elapsed_s": 184.2,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-07-20T10:35:56.359279+00:00",
@@ -6645,7 +6653,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n1.  **Terminology Mismatch (Mandatory Glossary Entry)**\n    *   **Source term:** `Weighted Average Cost (WAC)`\n    *   **Mandatory French term:** `prix moyen pondéré (PMP)`\n    *   **Location in translation:** Lines 4, 10, 107, etc.\n    *   **Current French text:** `Coût Moyen Pondéré (WAC)`\n    *   **Correct French text:** `Prix Moyen Pondéré (PMP)`\n    *   **Issue:** The glossary explicitly maps \"weighted average cost\" to \"prix moyen pondéré\" and \"WAC\" to \"PMP\". The translation uses an incorrect term for the concept and keeps the English acronym (WAC) instead of the required French acronym (PMP). This is a mandatory change.\n\n2.  **Terminology Mismatch (Mandatory Glossary Entry)**\n    *   **Source term:** `buy`\n    *   **Mandatory French term:** `achat`\n    *   **Source text:** \"BUY\"\n    *   **French text:** `ACHAT` — **Correct** (using uppercase for emphasis per source).\n    *   **Source term:** `sell`\n    *   **Mandatory French term:** `vente`\n    *   **Source text:** \"SELL\", \"sells\"\n    *   **French text:** `VENTE`, `ventes` — **Correct**.\n\n3.  **Terminology Mismatch (Mandatory Glossary Entry)**\n    *   **Source term:** `interest`\n    *   **Mandatory French term:** `intérêt`\n    *   **Location in translation:** Lines 52, 57, 118, etc.\n    *   **Current French text:** `intérêts`\n    *   **Issue:** While plural is common in French, the English source uses singular (\"interest\"). The mandatory glossary term is the singular `intérêt`, so the translation must be changed to the singular form for strict compliance.\n\n4.  **Terminology Mismatch (Mandatory Glossary Entry)**\n    *   **Source term:** `taxation`\n    *   **Mandatory French term:** `taxe`\n    *   **Location in translation:** Line 268 (`Lien connexe`)\n    *   **Current French text:** `Fiscalité`\n    *   **Correct French text:** `Taxe`\n    *   **Issue:** The glossary maps \"taxation\" to \"taxe\", not \"Fiscalité\". This is a mandatory entry and must be changed for consistency.\n\n5.  **Terminology Mismatch (Mandatory Glossary Entry)**\n    *   **Source term:** `price sync`\n    *   **Mandatory French term:** `synchronisation des prix`\n    *   **Location in translation:** Line 251 (`# 💸 Dividende & Intérêt` link text)\n    *   **Current French text:** (The term does not appear directly in the text but the link label is not in the glossary)\n    *   **Issue:** No direct conflict found in the body text, but double-checking links is advised. This entry is noted as \"no issue\".\n\n6.  **Terminology Mismatch (Mandatory Glossary Entry)**\n    *   **Source term:** `viewer`\n    *   **Mandatory French term:** `lecteur`\n    *   **Location in translation:** Not used in text.\n\n7.  **Markdown Structural Error: Invalid Link Target**\n    *   **Source text:** `[Weighted Average Cost (WAC)](../weighted-average-cost.md)`\n    *   **French text:** `[Coût Moyen Pondéré (WAC)](../weighted-average-cost.md)`\n    *   **Issue:** The glossary mandates the acronym be `PMP`. The link text must also be updated to reflect the correct acronym, even though this is a per-document choice, the user-facing text must be consistent.\n    *   **Correct French text:** `[Prix Moyen Pondéré (PMP)](../weighted-average-cost.md)`\n\n8.  **Grammatical Error (Gender Agreement)**\n    *   **Source text:** \"tous les acquisitions\"\n    *   **French text:** `tous les acquisitions`\n    *   **Correct French text:** `toutes les acquisitions`\n    *   **Issue:** The word \"acquisitions\" is feminine in French. The masculine determiner \"tous\" is grammatically incorrect and must be changed to the feminine form \"toutes\".\n\n9.  **Grammatical Error (Number Agreement)**\n    *   **Source text:** \"This metric excludes dividends, interest, and realized sale proceeds.\"\n    *   **French text:** `Cette mesure exclut les dividendes, les intérêts et les produits de vente réalisés.`\n    *   **Issue:** The adjective `réalisés` should agree with the nearest and most relevant noun, \"produits\", which is masculine plural. However, the sentence structure is a list. A more precise translation would be: `Cette mesure exclut les dividendes, les intérêts et les produits de vente réalisés.` (This is actually correct).\n    *   **Re-evaluation:** The sentence is grammatically correct. No change is needed.\n\n10. **Structural Error: Math Variable Not Translatable**\n    *   **Source text:** $\\text{Convert}(I, ccy, t)$\n    *   **French text:** $\\text{Convertir}(I, dvv, t)$\n    *   **Issue:** In mathematical expressions, variable and function names are semantic tokens. The English function name `Convert` and the variable `ccy` (for currency) have been translated to `Convertir` and `dvv` (for \"devise\"). This breaks the readability of the formula across the two language docs and is not standard practice. The source elements should remain in their original form.\n    *   **Correct French text:** $\\text{Convert}(I, ccy, t)$\n\n11. **Structural Error: Link URL Incorrectly Modified**\n    *   **Source text:** `[Asset Income](../fundamentals/../weighted-average-cost.md)` (No change in link target)\n    *   **French text:** All internal links (e.g., `../weighted-average-cost.md`) correctly preserved. ✅\n    *   **Issue:** None found.\n\n12. **Formatting / Punctuation**\n    *   **Issue:** The document contains extensive French decimal and thousands formatting. This is correct for a French translation. ✅\n    *   **Recommendation:** None.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 147.8
+        "elapsed_s": 147.8,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-07-20T10:35:56.359436+00:00",
@@ -6656,16 +6666,18 @@
         "critique": "<translation_critique>\n<improvements>\n1.  **Terminología — WAC vs PMP:** El glosario especifica que \"WAC\" debe traducirse como \"PMP\" (\"precio medio ponderado\"). La traducción utiliza incorrectamente \"WAC\" o \"Costo Promedio Ponderado\".\n    - **Donde aparece:**\n        - Línea 1: \"Costo Promedio Ponderado (WAC)\"\n        - Línea 3: \"El WAC\"\n        - Línea 6: \"El WAC\"\n        - Línea 35: \"Gráfico WAC / Precio de Mercado\"\n        - Línea 36: \"El gráfico **WAC / Precio de Mercado**\"\n        - En el enlace del pie de página: \"Costo Promedio Ponderado (WAC)\"\n    - **Corrección requerida:** Reemplazar \"WAC\" con \"PMP\" y \"Costo Promedio Ponderado (WAC)\" con \"Precio Medio Ponderado (PMP)\" en todas las ocurrencias. El enlace `../weighted-average-cost.md` no debe traducirse, pero el texto del enlace sí.\n\n2.  **Terminología — Currency conversion:** El glosario especifica \"conversión de divisa\", no \"moneda objetivo\".\n    - **Donde aparece:** Línea 109: \"ingreso convertido a la moneda objetivo en la fecha $t$\"\n    - **Corrección requerida:** Cambiar por \"ingreso convertido a la divisa de destino en la fecha $t$\" o similar, usando \"divisa\" para mantener la consistencia con el glosario.\n\n3.  **Terminología — Fallback:** El glosario especifica mantener el término \"fallback\" en inglés.\n    - **Donde aparece:** Línea 44: \"Respaldo\"\n    - **Corrección requerida:** Cambiar por \"Fallback\" para mantener la consistencia con el glosario.\n\n4.  **Terminología — Buy/Sell:** El glosario especifica traducir \"buy\" como \"compra\" y \"sell\" como \"venta\", pero en el texto original aparecen como acciones (BUY, SELL). La traducción las escribe correctamente en mayúsculas (COMPRA, VENTA), lo cual es correcto. Sin embargo, se debe asegurar la consistencia en todo el documento, incluyendo el ejemplo práctico.\n    - **Donde aparece:** Línea 60, Paso 1 del ejemplo: \"COMPRA 100 @ $10\" y \"COMPRA 50 @ $14\". Esto es correcto.\n\n5.  **Consistencia de Abreviaturas:** La traducción utiliza \"GyP\" para \"PnL\" (Profit and Loss) y \"PMP\" para \"WAC\". Esto es correcto según el glosario para \"WAC\", pero \"GyP\" no está en el glosario.\n    - **Revisar consistencia:** Asegurar que el acrónimo \"GyP\" se defina en la primera aparición para que el lector lo entienda, ya que no está en el glosario original como una traducción directa de \"PnL\". En el glosario se proporcionan términos, no acrónimos. Se sugiere mantener la consistencia con la traducción de \"P&L\" o \"PnL\" a \"GyP\" en todo el documento para evitar confusiones. No hay cambio, es una verificación de consistencia.\n\n6.  **Error en etiqueta de fórmula:** En la línea 113, la fórmula usa `text{Convertir}(I, div, t)`. Esto parece un error de traducción directa de `\\text{Convert}(I, ccy, t)` donde `ccy` (currency) se ha traducido como `div` (divisa). Sin embargo, no se debe traducir el código LaTeX del nombre del argumento. Debe mantenerse como `ccy` o, si se traduce la descripción, la variable debe coincidir con la convención utilizada en otras partes del documento.\n    - **Donde aparece:** Línea 113: `\\text{Convertir}(I, div, t)`\n    - **Corrección requerida:** Reemplazar `div` por `ccy` para que coincida con la nomenclatura original y evitar inconsistencias en el código: `\\text{Convertir}(I, ccy, t)`.\n\n7.  **Error de traducción en ejemplo:** En la línea 139 del ejemplo práctico, en la fila \"Mar 15\", la columna \"Evento\" dice \"DIVIDENDO $30\". Esto es correcto. Sin embargo, la traducción no debe traducir el encabezado de la columna \"Notes\".\n    - **Donde aparece:** Línea 139: \"Notas\"\n    - **Corrección requerida:** Cambiar \"Notas\" por \"Notes\" para mantener la consistencia con el texto original en inglés.\n\n8.  **Inconsistencia en traducción de \"mode\":** En la línea 86, se traduce \"switched to **Return** mode\" como \"cambiado al modo **Rendimiento**\". Esto es correcto, pero se debe verificar la consistencia. Si en otro documento se tradujera como \"modo **Retorno**\", crearía una inconsistencia. En este documento es correcto.\n\n9.  **Consistencia en traducción de \"Open Value\":** En la línea 65 se traduce \"OpenValue\" como \"ValorAbierto\". En la línea 97 se traduce \"OpenValue\" como \"ValorAbierto\". Esto es correcto y consistente.\n    - **Revisar:** Asegurar que todas las instancias de \"OpenValue\" en las fórmulas se traduzcan como \"ValorAbierto\" para mantener la consistencia. Esto se cumple en el documento.\n\n10. **Espaciado en fórmula:** En la línea 64, la fórmula de \"ValorPosición\" tiene un espacio extra: `\\left(\\frac{qty}{qbq}\\right)\\cdot precio`. El original no tiene este espacio: `\\left(\\frac{qty}{qbq}\\right)\\cdot price`.\n    - **Donde aparece:** Línea 64: `\\left(\\frac{qty}{qbq}\\right)\\cdot precio`\n    - **Corrección requerida:** Eliminar el espacio extra para que coincida con el original: `\\left(\\frac{qty}{qbq}\\right)\\cdot precio`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 149.6
+        "elapsed_s": 149.6,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
   "financial-theory/technical-analysis/performance-metrics/fifo-engine/index.en.md": {
-    "md5": "38f115a882e3205b0c8cc26e10752f6f",
+    "md5": "a121e3ce556a783f43f95ccee7dbe2ac",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-07-20T10:35:39.346763+00:00",
     "analysis": "[{\"name\": \"FIFO engine\", \"keywords\": [\"FIFO inventory accounting method\", \"first-in first-out\", \"cost basis calculation\", \"financial lot matching algorithm\"]}, {\"name\": \"Lot\", \"keywords\": [\"financial lot definition\", \"acquisition batch\", \"securities lot\", \"tax lot\", \"cost basis lot\"]}, {\"name\": \"Lot lifecycle\", \"keywords\": [\"financial lot states\", \"lot status\", \"OPEN PARTIALLY_CLOSED CLOSED\", \"securities lot lifecycle\"]}, {\"name\": \"Matching\", \"keywords\": [\"FIFO matching\", \"lot matching algorithm\", \"sell matching\", \"opposite transaction matching\"]}, {\"name\": \"Weighted Average Cost (WAC)\", \"keywords\": [\"WAC accounting method\", \"average cost basis\", \"blended cost\", \"portfolio cost calculation\"]}, {\"name\": \"Position\", \"keywords\": [\"financial position definition\", \"portfolio position\", \"asset holding\", \"securities position\"]}, {\"name\": \"Acquisition batch\", \"keywords\": [\"batch purchase definition\", \"group of shares bought at same time\", \"lot formation\"]}, {\"name\": \"Cost basis\", \"keywords\": [\"cost basis definition\", \"tax cost basis\", \"original purchase cost\", \"securities cost basis\"]}, {\"name\": \"Open quantity\", \"keywords\": [\"remaining position quantity\", \"unconsumed lot portion\", \"unrealized lot quantity\"]}, {\"name\": \"Unit cost\", \"keywords\": [\"cost per share\", \"average unit cost\", \"lot unit cost\", \"price per unit\"]}, {\"name\": \"CLOSED\", \"keywords\": [\"closed lot\", \"fully realized lot\", \"completed lot status\", \"lot fully matched\"]}, {\"name\": \"PARTIALLY_CLOSED\", \"keywords\": [\"partially closed lot\", \"partially realized lot\", \"partially matched lot\", \"partial closure\"]}, {\"name\": \"IN_TRANSIT\", \"keywords\": [\"in transit lot\", \"transfer between brokers\", \"custody movement\", \"unsettled transfer\"]}, {\"name\": \"DISTRIBUTED\", \"keywords\": [\"distributed custody\", \"split across brokers\", \"multiple custody locations\", \"fragmented holding\"]}, {\"name\": \"DEGRADED\", \"keywords\": [\"data quality issue\", \"lot degradation\", \"incomplete data\", \"calculation warning\"]}, {\"name\": \"Event processing\", \"keywords\": [\"chronological event processing\", \"transaction ordering\", \"date ordering\", \"event dispatch\"]}, {\"name\": \"Adjustment in / out\", \"keywords\": [\"inventory adjustment\", \"quantity correction\", \"zero-cost adjustment\", \"position adjustment\"]}, {\"name\": \"SPLIT\", \"keywords\": [\"stock split\", \"reverse split\", \"share split\", \"split ratio\", \"quantity rescaling\", \"price rescaling\"]}, {\"name\": \"Transfer\", \"keywords\": [\"broker transfer\", \"custody transfer\", \"ACATS transfer\", \"account transfer\", \"securities transfer\"]}, {\"name\": \"Custody\", \"keywords\": [\"securities custody\", \"broker custody\", \"custody location\", \"custody fragment\", \"safekeeping\"]}, {\"name\": \"Lot fragment\", \"keywords\": [\"partial lot\", \"lot piece\", \"matched portion of lot\", \"partial matched quantity\"]}, {\"name\": \"Realized profit or loss\", \"keywords\": [\"realized P&L\", \"realized gain\", \"realized loss\", \"closed position P&L\", \"realized return\"]}, {\"name\": \"LotId\", \"keywords\": [\"lot identifier\", \"internal lot ID\", \"system lot identifier\", \"unique lot key\"]}, {\"name\": \"FIFO order\", \"keywords\": [\"FIFO ordering rule\", \"oldest lot first\", \"chronological lot matching\", \"first-in-first-out sequence\"]}, {\"name\": \"Consumes\", \"keywords\": [\"quantity consumption\", \"matching consumption\", \"lot depletion\", \"quantity used up\"]}, {\"name\": \"Exhausted\", \"keywords\": [\"fully consumed lot\", \"lot exhausted\", \"no remaining quantity\", \"lot completely matched\"]}, {\"name\": \"Blends\", \"keywords\": [\"WAC blending\", \"average calculation\", \"cost mixing\", \"combined cost\"]}, {\"name\": \"Opposite transaction\", \"keywords\": [\"opposite direction trade\", \"contra transaction\", \"matching trade\", \"closing trade\"]}, {\"name\": \"Time point\", \"keywords\": [\"point in time\", \"time snapshot\", \"historical moment\", \"specific date\"]}, {\"name\": \"Replaying\", \"keywords\": [\"transaction replay\", \"historical replay\", \"processing transactions\", \"event replay\"]}, {\"name\": \"Data-quality banner\", \"keywords\": [\"UI banner\", \"data quality indicator\", \"warning message\", \"data status notification\"]}, {\"name\": \"Best-effort\", \"keywords\": [\"best-effort processing\", \"graceful degradation\", \"partial computation\", \"non-blocking calculation\"]}, {\"name\": \"All-or-nothing\", \"keywords\": [\"all-or-nothing approach\", \"complete or fail\", \"binary success\", \"whole calculation abort\"]}]",
@@ -6682,7 +6694,9 @@
         "structural_issues": 1,
         "elapsed_s": 125.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#data-quality-best-effort-not-all-or-nothing', '../../../../user/dashboard/positions.md#fifo-lots-analysis']\n  Added in translation:   ['#qualità-dei-dati-al-meglio-delle-possibilità-non-tutto-o-nulla', '../../../../user/dashboard/positions.md#analisi-dei-lotti-fifo']\n\nSOURCE_OUTLINE (for reference):\n  # 🧬 FIFO Engine — Lot Lifecycle & Matching Model\n    ## 💡 Overview\n    ## 🧱 What is a Lot?\n    ## 🔁 Lot Lifecycle States\n    ## 📅 Chronological Event Processing\n    ## ⛏️ FIFO Matching\n    ## ✂️ Splits — Quantity/Price Rescaling\n    ## 🚚 Transfers — Custody Movement, Not a Sale\n    ## ⚠️ Data Quality: Best-Effort, Not All-or-Nothing\n    ## 🔗 Related",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-07-20T10:35:39.346299+00:00",
@@ -6693,7 +6707,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n1. **Structural issue: misconfigured anchor link (critical).**\n   The  `#data-quality-best-effort-not-all-or-nothing` anchor in the original English is **missing** from the translation. Instead you added the slug `#qualité-des-données-au-mieux-pas-de-tout-ou-rien`, which will cause a broken link. **Fix:** replace that link with the English anchor exactly: `#data-quality-best-effort-not-all-or-nothing`.\n\n   - **Affected occurrence (line ≈64):**  \n     `...voir [Qualité des Données](#qualité-des-données-au-mieux-pas-de-tout-ou-rien) ci-dessous`  \n     should be:  \n     `...voir [Qualité des Données](#data-quality-best-effort-not-all-or-nothing) ci-dessous`\n\n   - **Affected occurrence (line ≈85):**  \n     `...dans le [panneau d'Analyse des Lots FIFO](../../../../user/dashboard/positions.md#fifo-lots-analysis)`  \n     The anchor `#fifo-lots-analysis` is correct and must stay unchanged (it already is).\n\n2. **Terminology violation: “WAC” must be translated as “PMP” (mandatory).**\n   The glossary lists: `WAC → PMP` and `weighted average cost → prix moyen pondéré (PMP)`. In the translation, the second admonition box says `(basé sur le WAC)` — this must be `(basé sur le PMP)`.\n\n   - **Affected line:**  \n     `Le [Moteur de Portefeuille](../index.md) (basé sur le WAC) répond...`  \n     should be:  \n     `Le [Moteur de Portefeuille](../index.md) (basé sur le PMP) répond...`\n\n3. **Terminology violation: “Weighted Average Cost” in the title of the Related section must be “Prix Moyen Pondéré (PMP)”.**\n   The glossary mandates `weighted average cost → prix moyen pondéré (PMP)`. In the last line of the translation, the link reads: `**[Coût Moyen Pondéré](../weighted-average-cost.md)**`. This is incorrect; the French term must exactly match the glossary entry and the official product brand: `**Prix Moyen Pondéré (PMP)**` (keeping the link unchanged).\n\n4. **Terminology violation: “Weighted Average Cost” in the very first paragraph must be “Prix Moyen Pondéré (PMP)”.**\n   The glossary entry is mandatory. The sentence currently reads `Alors que le [Coût Moyen Pondéré](../weighted-average-cost.md) fusionne...`. Change it to:  \n   `Alors que le [Prix Moyen Pondéré (PMP)](../weighted-average-cost.md) fusionne...`.\n\n5. **Terminology violation: “Performance Metrics Overview” in the breadcrumb link should be “Aperçu des Métriques de Performance”.**\n   The glossary does not include a direct mapping for “performance metrics overview”, but the translation already uses `Aperçu des métriques de performance` in the document title, which is good. However the breadcrumb link text `Retour à l'aperçu des métriques de performance` is correct and acceptable — no change needed. This issue is a false alarm.\n\n6. **Terminology violation: “qbq scaling” — this acronym appears unchanged but is not in the glossary.**\n   The glossary does not define “qbq”, but it is an acronym that should remain untranslated (it is not a French word). The current rendering as `mise à l'échelle qbq` is fine; keep as-is.\n\n7. **Structural issue: heading table of contents might break due to differing anchor slugs.**\n   Because the original English uses all-lowercase hyphenated slugs for headings (e.g., `#data-quality-best-effort-not-all-or-nothing`, `#chronological-event-processing`), MkDocs generates them automatically. The translation must ensure that **every heading** uses the same English anchor as the original — the structural diff reported only one missing anchor. No other heading anchor mismatches were flagged. Verify programmatically that every `##` and `###` heading in the translation has the same lowercase-hyphenated slug as the original English. If any differs, the link in the table of contents or cross-references will break. The translation currently appears to keep the same headings so the slugs should be safe. No change needed.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#data-quality-best-effort-not-all-or-nothing']\n  Added in translation:   ['#qualité-des-données-au-mieux-pas-de-tout-ou-rien']\n\nSOURCE_OUTLINE (for reference):\n  # 🧬 FIFO Engine — Lot Lifecycle & Matching Model\n    ## 💡 Overview\n    ## 🧱 What is a Lot?\n    ## 🔁 Lot Lifecycle States\n    ## 📅 Chronological Event Processing\n    ## ⛏️ FIFO Matching\n    ## ✂️ Splits — Quantity/Price Rescaling\n    ## 🚚 Transfers — Custody Movement, Not a Sale\n    ## ⚠️ Data Quality: Best-Effort, Not All-or-Nothing\n    ## 🔗 Related",
         "structural_issues": 1,
-        "elapsed_s": 126.6
+        "elapsed_s": 126.6,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-07-20T10:35:39.346768+00:00",
@@ -6704,7 +6720,377 @@
         "critique": "<translation_critique>\n<improvements>\n\n1. **TERMINOLOGY GLOSSARY VIOLATION — \"broker\" → \"bróker\"**  \n   The glossary mandates \"broker\" → \"bróker\" (with acute accent). The translation erroneously uses \"corredor\" throughout (e.g. \"entre corredores\", \"corredor de origen\", \"corredor de destino\").  \n   **Correct every instance of \"corredor\" to \"bróker\".**  \n   Example: \"transferencias entre corredores\" → \"transferencias entre brókeres\"  \n   Example: \"el corredor de origen\" → \"el bróker de origen\"  \n   Example: \"corredor de destino\" → \"bróker de destino\"\n\n2. **TERMINOLOGY GLOSSARY VIOLATION — \"WAC\" → \"PMP\"**  \n   The glossary has `WAC → PMP` and `weighted average cost → precio medio ponderado (PMP)`.  \n   - In the Overview section: \"Costo Promedio Ponderado\" should become \"precio medio ponderado (PMP)\".  \n   - The related link also says \"Costo Promedio Ponderado\" → should consistently use \"Precio Medio Ponderado (PMP)\".  \n   - The fun fact admonition says \"(basado en CPP)\" — CPP is incorrect. It should say \"(basado en PMP)\" for \"WAC-based\".\n\n3. **LINK URL ANCHOR MISMATCH (Structural Issue)**  \n   The structural diff report shows the translation's anchor `#calidad-de-datos-el-mejor-esfuerzo-no-todo-o-nada` does NOT match the source anchor `#data-quality-best-effort-not-all-or-nothing`.  \n   **Fix the anchor for the \"Data Quality\" section header** so its ID matches the original English anchor (since internal cross-references still point to `#data-quality-best-effort-not-all-or-nothing`). This means preserving the original English anchor name in the translated heading.\n\n4. **TERMINOLOGY GLOSSARY VIOLATION — \"split\" → \"división\"**  \n   The glossary explicitly maps `split → división`. The translation uses \"desdoblamiento\" and \"desdoblamientos\" consistently instead of \"división/divisiones\".  \n   **Replace every instance of \"desdoblamiento(s)\" with \"división(es)\".**  \n   Example: \"desdoblamientos\" → \"divisiones\"  \n   Example: \"Un desdoblamiento de acciones\" → \"Una división de acciones\"\n\n5. **TERMINOLOGY GLOSSARY VIOLATION — \"buy\" → \"compra\"**  \n   Already correct (COMPRA), but the glossary requires lower-case \"compra\" when used generically. Keeping COMPRA in all-caps is acceptable because the Markdown table uses it as a column header/keyword in all-caps in the source. No change needed here.\n\n6. **TERMINOLOGY GLOSSARY VIOLATION — \"sell\" → \"venta\"**  \n   Same as above — VENTA in all-caps matches source style. No change needed.\n\n7. **Non-standard abbreviation \"CPP\" for WAC**  \n   In the table header row for what the WAC-based engine answers, the translation says \"(basado en CPP)\". The glossary does not define \"CPP\" as an abbreviation for WAC.  \n   **Replace \"CPP\" with \"PMP\"** (the mandated abbreviation).  \n   It should read: `[Motor de Cartera](../index.md) (basado en PMP)`\n\n8. **Link text inconsistency**  \n   The final related links section uses \"Costo Promedio Ponderado\" but the glossary mandates \"precio medio ponderado (PMP)\".  \n   **Change the link text to: \"Precio Medio Ponderado (PMP)\"** to match the glossary.\n\n9. **\"Cantidad y costo originales\" → gender agreement**  \n   Lines like \"Cantidad y costo originales\" are grammatically fine (masculine \"costo\" governs the adjective). However, in the table row for \"Original quantity & cost\", the translation says \"Cantidad y costo originales\" — this is fine. No change needed.\n\n10. **\"compra/ventas/ajustes ordinarios\" → comma separation**  \n    In the same-day ordering admonition: \"compras/ventas/ajustes ordinarios\" uses slashes. The source uses \"buys/sells/adjustments\" with slashes, so this is acceptable.\n\n</improvements>\n</translation_critique>",
         "structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['#data-quality-best-effort-not-all-or-nothing']\n  Added in translation:   ['#calidad-de-datos-el-mejor-esfuerzo-no-todo-o-nada']\n\nSOURCE_OUTLINE (for reference):\n  # 🧬 FIFO Engine — Lot Lifecycle & Matching Model\n    ## 💡 Overview\n    ## 🧱 What is a Lot?\n    ## 🔁 Lot Lifecycle States\n    ## 📅 Chronological Event Processing\n    ## ⛏️ FIFO Matching\n    ## ✂️ Splits — Quantity/Price Rescaling\n    ## 🚚 Transfers — Custody Movement, Not a Sale\n    ## ⚠️ Data Quality: Best-Effort, Not All-or-Nothing\n    ## 🔗 Related",
         "structural_issues": 1,
-        "elapsed_s": 121.2
+        "elapsed_s": 121.2,
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/avanza.en.md": {
+    "md5": "7c4024fef6282564c337cc38b8962ea2",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/bitvavo.en.md": {
+    "md5": "a022e6f3409ca0133d780e892ed798b6",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/bux.en.md": {
+    "md5": "95d9f32e253d8a61ebcabbf83499c0aa",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/cointracking.en.md": {
+    "md5": "fb2dd30f9ccf11b7e342908c63feb4f2",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/cryptocom.en.md": {
+    "md5": "385e80b3c92e7a95228e227232b831da",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/delta.en.md": {
+    "md5": "749076cee9b899bf2725b31266bb4f93",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/disnat.en.md": {
+    "md5": "5abc8c7d2c24428dab61d94564e3d061",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/investengine.en.md": {
+    "md5": "ed7f43354f177f1910de5c8ece565274",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/investimental.en.md": {
+    "md5": "c866c00f5df9b943631b37960b629f59",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/parqet.en.md": {
+    "md5": "bc1ab49910b8c573d3317e5e17e76d01",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/rabobank.en.md": {
+    "md5": "f08a4dd4ad6e9b1b52527b56d32af55a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/relai.en.md": {
+    "md5": "34688e75328b6668ed339f227134194a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/saxo.en.md": {
+    "md5": "26355b2b0e34e5f4f4c1f3ff4c03d80d",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/swissquote.en.md": {
+    "md5": "e059dfd853d133739944beca6e1dff33",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/traderepublic.en.md": {
+    "md5": "1f0f19842e0a5b3385241b2288f49e10",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      }
+    }
+  },
+  "user/transactions/import/xtb.en.md": {
+    "md5": "dfa375c34210ac107eda21f3a120920a",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-07-22T10:06:25.975277+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "fr": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
+      },
+      "es": {
+        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   }

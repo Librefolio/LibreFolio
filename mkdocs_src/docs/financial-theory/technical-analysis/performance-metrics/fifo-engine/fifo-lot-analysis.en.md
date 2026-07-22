@@ -187,25 +187,37 @@ Practical implication:
 
 ## 💸 Income Allocation Across Lots {: #income-allocation-across-lots }
 
-Dividends and interest linked to an asset are allocated **pro-rata across all LONG lots that are open on the income date**.
+Dividends and interest linked to an asset are allocated **pro-rata across the LONG lots that are eligible as
+of the day before the income date (D-1)**, and only across lots held **at the paying broker**.
 
 Exact allocation rule:
 
 $$
-w_i(t) = \frac{\text{OpenQty}_i(t)}{\sum_j \text{OpenQty}_j(t)}
+w_i(D) = \frac{\text{EligibleQty}_i(D)}{\sum_j \text{EligibleQty}_j(D)}, \qquad
+\text{EligibleQty}_i(D) = \text{OpenQty}_i(D-1)
 $$
 
 $$
-\text{Income}_i = \text{Convert}(I, ccy, t)\cdot w_i(t)
+\text{Income}_i = \text{Convert}(I, ccy, D)\cdot w_i(D)
 $$
 
 Where:
 
-- $I$ = income amount received
-- $\text{Convert}(I, ccy, t)$ = income converted into target currency on date $t$
-- only LONG lots still open at time $t$ participate in denominator
+- $I$ = income amount received on date $D$
+- $\text{Convert}(I, ccy, D)$ = income converted into target currency on date $D$
+- $\text{EligibleQty}_i(D)$ = quantity of lot $i$ open at the **paying broker** on $D-1$ (quantity that left
+  that broker in transit still counts as originating there)
+- only LONG lots participate in the denominator
 
-This means larger open lots receive a larger share of the dividend or coupon, while already closed lots receive none.
+The **D-1** rule keeps the day of record clean: a purchase made *on* the income date does not earn that
+distribution, and a lot sold the day before does not either. Larger eligible lots receive a larger share;
+lots held at other brokers, or not yet (or no longer) eligible, receive nothing.
+
+!!! warning "Changed in FIFO v5"
+
+    Earlier versions used the income date itself with **all** brokers ($\text{OpenQty}_i(t)$ over every lot).
+    The current engine uses D-1 eligibility scoped to the paying broker. If no lot is eligible, the income is
+    kept as **asset-level orphan income** (never dropped, never assigned to the wrong lot).
 
 !!! tip "Conservation rule"
 
@@ -216,6 +228,58 @@ This means larger open lots receive a larger share of the dividend or coupon, wh
 </div>
 
 The lot detail modal's **Asset Income** row is exactly $\text{Income}_i$ from the formula above — the pro-rata slice this specific lot received. When the lot has no live market price, the same modal also shows the **Estimated-at-Cost** badge from the previous section.
+
+---
+
+## 💸 Costs & Net Metrics {: #costs-and-net-metrics }
+
+Asset-linked `FEE` and `TAX` are allocated to lots with a **deterministic operation-matching ladder**, then
+subtracted to produce **net** figures alongside the gross ones.
+
+### Deterministic cost allocation
+
+A cost pool (same broker, same day, same type) is matched to the first non-empty target in this order:
+
+| Cost | Matching order |
+|------|----------------|
+| `FEE` | same-day trades → previous-day trades → open holdings → asset orphan |
+| `TAX` | same-day income → same-day trades → previous-day income → previous-day trades → open holdings → asset orphan |
+
+Within a matched trade the cost **crosses to the very lots that trade touched** — a BUY's cost lands on the
+lot it opened, a SELL's cost lands on the FIFO-consumed lots — so cost attribution never contradicts the FIFO
+matching itself. Amounts are converted to the target currency and stored as positive magnitudes.
+
+!!! tip "Conservation"
+
+    Per pool, $\sum_i \text{Cost}_i + \text{Orphan} = \text{Convert}(\text{pool}, ccy, D)$. A cost that finds
+    no eligible lot (e.g. a fee booked after the position is fully closed) becomes **asset-level orphan cost**
+    rather than being dropped or forced onto an unrelated lot.
+
+### Gross vs net
+
+With costs attributed per lot, LibreFolio reports both gross and net performance:
+
+$$
+\text{NetTotalPnL}_i = \text{TotalPnL}_i - \text{Fees}_i - \text{Taxes}_i
+$$
+
+$$
+\text{NetTotalReturn}_i = \frac{\text{NetTotalPnL}_i}{\text{OpeningValue}_i}
+$$
+
+where $\text{TotalPnL}_i$ already **includes** income (market P&L + realized P&L + asset income). The per-lot
+value-history series instead reports a *capital-only* net P&L, $\text{pnl}_i - \text{Fees}_i - \text{Taxes}_i$,
+which **excludes** income — each net line mirrors its own gross counterpart minus costs.
+
+!!! example "Canonical numbers"
+
+    BUY 10×100, SELL 4×120, current price 110, dividend 50, fees 8, taxes 5:
+    Gross Total P&L $= 60 + 80 + 50 = 190$; Net Total P&L $= 190 - 13 = 177$; on opening value 1000 that is a
+    **19%** gross vs **17.7%** net total return.
+
+Costs with `asset_id = null` are **not** part of this lot-level view — they are portfolio-level and handled
+by the [Portfolio Engine](../portfolio-engine/roi.md). See
+[Fee & Tax](../../../instruments/transaction-types/fee.md) for the instrument-level theory.
 
 ---
 
