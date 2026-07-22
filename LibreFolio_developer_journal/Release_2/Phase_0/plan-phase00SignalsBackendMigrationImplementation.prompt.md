@@ -239,6 +239,22 @@ Definire contratti Pydantic stabili prima di registry/service/plugin.
 - availability/result/error/warm-up metadata;
 - JSON-safe `float | None`, mai NaN/infinity.
 
+Semantica status:
+
+- `ok`: input completi, compute riuscito, warm-up completo, output valido;
+- `partial`: almeno un output visibile valido, warm-up incompleto o copertura temporale
+  parziale esplicitamente ammessa, warning obbligatorio;
+- `unavailable`: compute non avviabile per dominio, campi, coverage o storia minima;
+- `failed`: input sufficienti ma eccezione, output invalido o contract violation.
+
+Gap policy:
+
+- nessuna compattazione arbitraria delle date;
+- indice cronologico preservato;
+- gap e missing field inclusi nelle metriche di coverage;
+- default strict/contiguous;
+- porzione temporale parziale ammessa solo dalla policy del plugin.
+
 **Test**
 
 - `extra="forbid"`;
@@ -246,7 +262,10 @@ Definire contratti Pydantic stabili prima di registry/service/plugin.
 - params/catalog serialization;
 - invalid date/cardinality/status;
 - structured errors;
-- backward-compatible default-empty signal fields quando integrati.
+- backward-compatible default-empty signal fields quando integrati;
+- status matrix;
+- gap/coverage metadata;
+- partial con warning obbligatorio.
 
 **Dipendenze**: A1 per i campi warm-up candidate, non per la struttura generale.
 
@@ -400,6 +419,10 @@ Completare orchestration e availability prima dei plugin reali.
 - full/partial/unavailable/failed;
 - missing fields;
 - incomplete history;
+- complete/partial/insufficient coverage;
+- internal gap senza date compaction;
+- contiguous suffix ammesso/non ammesso;
+- warning obbligatorio per partial;
 - event load flag;
 - NaN/infinity;
 - invalid plugin output;
@@ -421,12 +444,72 @@ Completare orchestration e availability prima dei plugin reali.
 - dedup perde instance ID/stile;
 - warm-up calcolato su calendario invece che sulla serie effettiva.
 
+---
+
+### A6 — Primitive tecniche di annotazione
+
+**Obiettivo**
+
+Derivare on-demand eventi tecnici da price point e output canonici, senza logica
+specifica nel frontend.
+
+**File**
+
+- nuovo `backend/app/services/signal_annotations.py`;
+- nuovo `backend/test_scripts/test_services/test_signal_annotations.py`;
+- eventuali request/result option in `backend/app/schemas/signals.py`.
+
+**Comportamento atteso**
+
+- line crossover;
+- threshold crossing upward/downward;
+- equality/epsilon;
+- dedup e min-gap;
+- ordinamento per data;
+- missing points;
+- observed-only/data-policy filtering;
+- calcolo sull'output esteso;
+- slicing eventi sul range visibile;
+- limit/sampling opzionali.
+
+Le annotazioni vengono calcolate solo se il consumer invia `annotation_requests`.
+Le regole request-level riferiscono instance ID/series key e threshold o altra serie.
+I plugin non devono conoscere AI Export.
+
+**Test**
+
+- crossing esatto;
+- sopra/sotto;
+- uguaglianza soglia;
+- punti mancanti;
+- serie corta;
+- evento al bordo del range;
+- observed-only;
+- dedup/min-gap;
+- order;
+- limit.
+
+**Dipendenze**: A2, A5.
+
+**Accettazione**
+
+- price/EMA, EMA/EMA, RSI threshold e MACD histogram/zero rappresentabili;
+- nessuna dipendenza da librerie TA;
+- nessun calcolo annotation se non richiesto;
+- AI Export può dichiarare le proprie regole senza matematica frontend.
+
+**Rischi**
+
+- perdere un cross sul primo punto visibile se si annota dopo lo slicing;
+- confondere AssetEvent con annotation tecnica.
+
 ### Gate A — Framework backend
 
 Non iniziare B1 finché:
 
-- A1-A5 sono ✅;
+- A1-A6 sono ✅;
 - schema, registry, fixture e `SignalService` sono stabili;
+- primitive annotation sono testate;
 - test schema/services sono verdi;
 - fail-fast stack composito è dimostrato;
 - availability e slicing sono provati senza plugin production.
@@ -603,7 +686,13 @@ Provare uniformemente tutti i 17 plugin.
 - backend path 16+1;
 - warm-up policy per plugin.
 
-**Test**: matrice completa richiesta dal piano architetturale.
+**Test**: matrice completa richiesta dal piano architetturale, inclusi:
+
+- `ok|partial|unavailable|failed`;
+- complete/partial/insufficient coverage;
+- gap interno;
+- nessuna date compaction;
+- warning obbligatorio per `partial`.
 
 **Dipendenze**: B2-B4.
 
@@ -706,17 +795,21 @@ Integrare segnali nella pipeline prezzi senza rompere cache/store/client esisten
 - price cached/signal-only semantics;
 - target currency;
 - missing fields/history;
+- status matrix e coverage;
+- gap interno senza compattazione;
 - events not loaded;
 - partial plugin failure;
 - response payload cap/size.
 
-**Dipendenze**: Gate B, A5.
+**Dipendenze**: Gate B, A5-A6.
 
 **Accettazione**
 
 - vecchi client verdi;
 - signal result per instance;
 - un solo load esteso;
+- status/coverage conformi alla semantica A2;
+- nessuna compattazione arbitraria delle date;
 - errori segnale non compromettono prezzi.
 
 **Rischi**
@@ -748,7 +841,7 @@ Integrare i nove close-only mantenendo il contratto daily.
 - amount 1 sul range esteso;
 - identity esplicita → close 1;
 - non-identity → effective rate;
-- missing non-identity rate → unavailable/failed;
+- missing non-identity rate → `unavailable`;
 - grouped signal results per original request;
 - daily conversion results invariati;
 - availability dinamica nelle POST.
@@ -759,18 +852,21 @@ Integrare i nove close-only mantenendo il contratto daily.
 - direct/inverse;
 - backward fill;
 - missing rate;
+- status matrix e coverage;
+- gap/short history;
 - multi-pair;
 - 9 close-only;
 - rejection dei plugin OHLC/volume;
 - no duplication per giorno;
 - no-signal regression.
 
-**Dipendenze**: Gate B, A5.
+**Dipendenze**: Gate B, A5-A6.
 
 **Accettazione**
 
 - parity con Asset su serie close equivalente;
 - response daily invariata;
+- status/coverage conformi alla semantica A2;
 - grouped results stabili.
 
 **Rischi**
@@ -1168,7 +1264,9 @@ Detail”.
 
 **Comportamento atteso**
 
-- una bulk query per asset che richiedono prezzi e/o segnali;
+- una singola POST bulk contenente tutti gli asset che richiedono prezzi e/o segnali;
+- ogni item contiene le signal instance applicabili al relativo asset;
+- nessuna richiesta per asset, card o segnale;
 - se prezzi cached ma segnali richiesti: `include_price=false`;
 - worker preserva/valida signal results;
 - settings globali/per-card invariati;
@@ -1182,14 +1280,16 @@ Detail”.
 - global settings;
 - per-card settings;
 - multi-asset partial;
-- worker invalid payload.
+- worker invalid payload;
+- network interception: esattamente una POST `/api/v1/assets/prices/query` per refresh
+  della view.
 
 **Dipendenze**: E1.
 
 **Accettazione**
 
 - card non calcolano tecnici TS;
-- una POST bulk, non una per segnale/card;
+- esattamente una POST bulk, non una per asset/segnale/card;
 - UI resta responsiva.
 
 **Rischi**
@@ -1259,7 +1359,9 @@ Migrare card, settings globali/per-pair e bulk multi-pair.
 
 **Comportamento atteso**
 
-- una POST bulk per pair che richiedono dati/segnali;
+- una singola POST bulk contenente tutte le coppie FX che richiedono tassi e/o segnali;
+- ogni item contiene le signal instance applicabili alla relativa pair;
+- nessuna richiesta per pair, card o segnale;
 - price store e signal results separati;
 - global/per-pair settings;
 - 9 close-only;
@@ -1271,13 +1373,16 @@ Migrare card, settings globali/per-pair e bulk multi-pair.
 - cached rates + signals;
 - inversion;
 - settings globali/per-card;
-- partial pair failure.
+- partial pair failure;
+- network interception: esattamente una POST `/api/v1/fx/currencies/convert` per
+  refresh della view.
 
 **Dipendenze**: E3.
 
 **Accettazione**
 
 - card non calcolano tecnici TS;
+- esattamente una POST bulk, non una per pair/segnale/card;
 - nessuna duplicazione configuratore/renderer.
 
 **Rischi**
@@ -1315,6 +1420,8 @@ Eliminare il secondo calcolo tecnico frontend.
 **Comportamento atteso**
 
 - EMA20/50/200, RSI14, MACD backend;
+- `annotation_requests` esplicite per price/EMA, EMA/EMA, RSI threshold e MACD
+  histogram/zero;
 - observed-only;
 - annotations backend;
 - sampling/payload invariati.
@@ -1459,7 +1566,7 @@ responsive.
 ### Sequenziale obbligatorio
 
 ```text
-A1 → A2 → A3 → A4 → A5 → Gate A
+A1 → A2 → A3 → A4 → A5 → A6 → Gate A
 Gate A → B1 → Gate B1
 Gate B → C1-C4 → Gate C
 Gate C → D1-D6 → Gate D

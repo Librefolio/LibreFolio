@@ -416,6 +416,50 @@ i reference levels e le value regions effettivi, già risolti dai params del plu
 Questo permette a RSI, StochRSI, MFI e CCI di mantenere thresholds/zone dinamici senza
 logica frontend basata sul signal code. Il frontend assegna colori e stile alle regioni.
 
+### Semantica rigorosa degli status
+
+`ok`:
+
+- input richiesti disponibili;
+- calcolo completato;
+- warm-up completo;
+- output valido sull'intero range previsto.
+
+`partial`:
+
+- esiste almeno un output matematicamente valido nel range visibile;
+- l'output viene restituito;
+- warm-up incompleto oppure copertura temporale parziale ammessa esplicitamente dalla
+  policy del plugin;
+- almeno un warning è obbligatorio.
+
+`unavailable`:
+
+- il calcolo non può iniziare;
+- segnale incompatibile con il dominio;
+- campo obbligatorio assente;
+- copertura sotto la soglia minima;
+- storia insufficiente per produrre il primo valore valido.
+
+`failed`:
+
+- input teoricamente sufficienti;
+- eccezione inattesa della libreria/plugin;
+- output non finito o invalido;
+- violazione del contratto del plugin.
+
+### Gap e coverage
+
+- Le date non vengono mai compattate eliminando punti arbitrari.
+- La serie mantiene l'indice cronologico originale.
+- Missing field e gap entrano nelle metriche di coverage.
+- La policy di input del plugin dichiara se una copertura temporale parziale è
+  matematicamente ammessa.
+- Il default è strict/contiguous: un gap interno non viene cucito unendo date separate.
+- Una porzione continua più corta del range può produrre `partial` soltanto se la policy
+  del plugin lo consente e contiene abbastanza punti per un primo output valido.
+- Nessuna porzione valida sufficiente produce `unavailable`, non `failed`.
+
 ## Registry
 
 Il registry auto-discovered rimane coerente con il pattern provider:
@@ -570,6 +614,29 @@ Non deve:
 - normalizzare colonne specifiche di EMA/MACD/altro;
 - contenere switch per signal code;
 - applicare fallback tra backend computazionali.
+
+## Primitive tecniche di annotazione
+
+Le annotazioni non vengono calcolate sempre. Il consumer le richiede esplicitamente
+tramite opzioni/regole della POST bulk.
+
+Le primitive sono library-independent e operano sui price point e sulle serie canoniche:
+
+- line crossover;
+- threshold crossing upward/downward;
+- epsilon;
+- min gap/dedup;
+- ordinamento per data;
+- slicing sul range visibile;
+- observed-only/data-policy filtering;
+- limit/sampling richiesti dal consumer.
+
+Le regole sono request-level e possono riferirsi a instance ID e series key. Non
+richiedono che ogni plugin contenga logica AI Export.
+
+Le annotazioni vengono calcolate sull'output esteso prima dello slicing, così un cross
+avvenuto tra l'ultimo punto di warm-up e il primo punto visibile non viene perso. Solo
+gli eventi dentro il range richiesto vengono restituiti.
 
 ## Warm-up
 
@@ -777,8 +844,7 @@ Implementare:
 - per-signal error isolation;
 - NaN/infinity sanitization;
 - output/date validation;
-- slicing;
-- cross/threshold primitives library-independent.
+- slicing.
 
 Non aggiungere adapter o cache.
 
@@ -789,6 +855,35 @@ Non aggiungere adapter o cache.
 - failure isolata;
 - nessuna scelta libreria nel service;
 - availability ricalcolata anche al compute.
+
+> **Note implementazione**: da compilare immediatamente al completamento.
+
+## Step 2-bis — Primitive tecniche di annotazione
+
+**Stato**: ⏳
+
+Creare primitive generiche on-demand per:
+
+- line crossover;
+- threshold crossing upward/downward;
+- equality/epsilon;
+- missing points;
+- dedup/min gap;
+- ordinamento;
+- observed-only;
+- slicing coerente;
+- limit/sampling.
+
+Le primitive operano esclusivamente sui contratti LibreFolio e vengono richieste
+esplicitamente dal consumer. AI Export definisce le proprie regole senza riportare la
+matematica nel frontend.
+
+**Accettazione**:
+
+- EMA crossover, RSI threshold e MACD histogram crossover rappresentabili;
+- test su edge, gap, range boundary, dedup e order;
+- nessuna dipendenza da `pandas-ta-classic`/`TA-Lib`;
+- nessuna esecuzione quando il consumer non richiede annotations.
 
 > **Note implementazione**: da compilare immediatamente al completamento.
 
@@ -1067,6 +1162,15 @@ Non aggiungere cache.
 - errore specifico;
 - backend computazionale previsto.
 
+La matrice service/API deve inoltre verificare:
+
+- semantica `ok|partial|unavailable|failed`;
+- coverage completa/parziale/insufficiente;
+- nessuna compattazione arbitraria delle date;
+- gap interno;
+- contiguous suffix ammesso/non ammesso;
+- warning obbligatorio per `partial`.
+
 Per i 16 plugin `talib=True`:
 
 - spy/mock della chiamata per verificare `talib=True`;
@@ -1114,7 +1218,7 @@ Per Donchian:
 
 - Step 0 blocca plugin production e definisce warm-up/concurrency.
 - Step 1 blocca service, plugin e API.
-- Step 2 blocca l'integrazione di dominio Asset/FX e il cutover.
+- Step 2 e Step 2-bis bloccano l'integrazione di dominio Asset/FX e il cutover.
 - Step 3 blocca il cutover dei segnali già esistenti.
 - Step 4-6 possono procedere in parallelo dopo Step 1-2.
 - Step 7 e 8 possono procedere in parallelo dopo Step 2-3.
