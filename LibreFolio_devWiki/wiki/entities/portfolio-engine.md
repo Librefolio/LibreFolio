@@ -5,6 +5,7 @@ type: service
 tags: [backend, portfolio, engine, pipeline, daily-state, nav, twrr, mwrr, scope-aware, wac, fifo, inline-wac, 3-pool, pre-frame, blob-cache]
 related:
   - entities/portfolio-service
+  - entities/fifo-lot-engine
   - concepts/3-pool-cash-model
   - concepts/portfolio-report-unified
   - concepts/twrr-mwrr-algorithms
@@ -15,6 +16,7 @@ related:
   - decisions/mwrr-boundary-fix
   - decisions/mwrr-solver-newton-cap
   - decisions/portfolio-summary-direct-wiring
+  - decisions/fifo-v4-validation-and-scope
   - problems/test-transaction-implied-constructor-mismatch
   - features/F-054
   - features/F-055
@@ -170,6 +172,7 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 - **LAST_BUY_PRICE uses V(u) not S**: this is intentional — asset price is not broker-specific.
 - **Pre-frame has no daily states**: you cannot extract chart points for dates before t0 from a single run.
 - **`position_states_end` is the date-aware holdings snapshot**: computed by the engine exactly at `date_to`. `PortfolioService.get_summary()` reads this directly (see [[concepts/holdings-performance-panel]]) — the older "get_summary() wiring incomplete" gap is resolved as of commit `78aaa0a3` (2026-07-06).
+- **No reconciliation with [[entities/fifo-lot-engine]]'s per-lot fee/tax/income figures**: as of the FIFO v4 FEE/TAX work (2026-07-22), asset-linked costs/income are allocated per-lot inside the FIFO engine, while this engine still computes its own independent fee/tax/income accumulators for portfolio-level (assetless, `asset_id = null`) amounts. Cross-engine runtime reconciliation and new pre-share absolute accumulators were **deliberately deferred**, not implemented — this file has two existing accumulator paths and share-application logic scattered across multiple call sites, judged too risky to touch in the same release. No displayed value changes as a result, but the two engines' totals are not currently cross-checked against each other. See [[decisions/fifo-v4-validation-and-scope]].
 
 ## History
 
@@ -182,6 +185,7 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 | 2026-07-06 (78aaa0a3) | **Holdings/Performance panel refactor**: `get_summary()` rewired to `position_states_end` (date-aware, closes the "wiring incomplete" gap); `get_positions_contribution()` date-boundary fixes; `_compute_period_summary_metrics()` shared helper; `data_quality` now populated; TRANSACTION_IMPLIED fallback closes P2P/crowdfund valuation gap. See [[concepts/holdings-performance-panel]]. |
 | 2026-07-07 | Phase 09 Milestone 1 & 2 archived to `phases/phase-09-subplan/`; exhaustive verification confirms ~20 previously-open items resolved, ~7 resolved differently (see [[decisions/portfolio-summary-direct-wiring]], [[decisions/mwrr-solver-newton-cap]]), ~7 genuinely still open (low priority). See [[sources/phase09-m1-m2-archive-2026-07]]. |
 | 2026-07-15 | Phase 09 Milestone 3 (Broker UI v2 redesign) archived to `phases/phase-09-subplan/Milestone_3/`; reuses this engine's unified `/portfolio/report` output (`BrokerBreakdown.cash_balances` added natively, see [[decisions/broker-card-aggregation-no-n-plus-one]]) for per-broker cards — no engine-internals changes. See [[sources/phase09-m3-broker-redesign-2026-07]]. |
+| 2026-07-22 | FIFO v4 FEE/TAX integration landed in [[entities/fifo-lot-engine]] (per-lot economic allocation). This file was **not** part of that change — cross-engine reconciliation with FIFO's new per-lot fee/tax/income figures was explicitly scoped out/deferred. See [[decisions/fifo-v4-validation-and-scope]], [[sources/fifo-v4-fee-tax-integration]]. |
 
 ## Source files
 

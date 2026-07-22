@@ -140,7 +140,7 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | `implemented` | — |
+| [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | `implemented` | `fifo-lot-analysis.en.md` |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | `implemented` | — |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | `implemented` | — |
 

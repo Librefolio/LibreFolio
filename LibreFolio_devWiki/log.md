@@ -1234,3 +1234,133 @@ communities left untouched. Manifest stamped only for these 2 files. Deferred: 1
 files still show as changed in `detect_incremental` (concurrent uncommitted work — mkdocs
 restructuring, chart components, DataTable, etc., none of it mine) — left for a dedicated full
 catch-up pass, same precedent as the 2026-07-01 entry above.
+
+## [2026-07-22] ingest | FIFO Engine v4 — FEE/TAX Integration
+
+Ingested the completed `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/` plan chain (6 feasibility drafts,
+4 high-level-design drafts, implementation plan, recap, review checklist, post-implementation review — 14
+files, ~450KB) plus the 4 parent `fifo-engine/` background docs. This is the plan behind the mkdocs
+`fifo-lot-analysis.en.md`/`fee.en.md` translation-alignment work done earlier in this same session. Read via
+a dedicated extraction subagent (post-implementation-review-v5/recap/checklist/hig-level-analysis-v5/
+feasibility-v4.1/implementation-plan-v5 read in full; earlier drafts skimmed only for rejected pivots).
+
+Summary: v4 moved dividend/interest/FEE/TAX allocation into the FIFO domain via one canonical
+`FifoLotEngine.run()` path (the old service-level income allocator was deleted, not left coexisting). Income
+eligibility tightened to D-1, broker-scoped, transfer-aware. Asset-linked FEE/TAX route through distinct
+deterministic matching ladders (FEE trade-centric, TAX income-first); assetless costs never enter FIFO at all.
+Net metrics are always gross minus allocated costs, gross math untouched. Portfolio-Engine-side reconciliation
+was deliberately deferred as separate, higher-risk future work.
+
+Created: [[sources/fifo-v4-fee-tax-integration]], [[decisions/fifo-v4-income-eligibility-d1]],
+[[decisions/fifo-v4-cost-allocation-ladder]], [[decisions/fifo-v4-engine-architecture]],
+[[decisions/fifo-v4-gross-net-status-model]], [[decisions/fifo-v4-validation-and-scope]],
+[[entities/fifo-lot-engine]], [[entities/lots-analysis-service]], [[concepts/d1-income-eligibility-window]],
+[[concepts/deterministic-cost-matching-ladder]], [[concepts/asset-orphan-vs-portfolio-level-cost]],
+[[concepts/gross-net-dual-reporting]], [[problems/datatable-net-columns-hidden-override-model]],
+[[problems/transaction-update-bypassed-sign-validation]],
+[[problems/fifo-income-silently-dropped-after-full-close]].
+
+Updated: [[entities/portfolio-engine]] (deferred-reconciliation note), [[concepts/fifo-lot-tracking]] (v4
+evolution note), `wiki/features/registry.md` (F-056 mkdocs column).
+
+**Drift found and fixed** (not part of the plan itself, discovered while cross-linking): [[decisions/fifo-runtime-decision]]
+and [[features/F-056]] both referenced `backend/app/services/transaction_service.py` as "the FIFO engine" —
+verified stale via `grep -c fifo` across the three candidate files (`fifo_lot_engine.py` and
+`lots_analysis_service.py` are the real FIFO code now, `transaction_service.py` only has 2 incidental mentions).
+Corrected both pages' source-file tables and added a dated correction note rather than silently rewriting
+history.
+
+Next recommended: full `graphify --update` (immediately following, same session) to absorb these 18 new/updated
+wiki pages plus the outstanding backlog explicitly deferred in the 2026-07-20 entry above (126 files) and this
+session's mkdocs translation-alignment changes (fee.en.md/fifo-lot-analysis.en.md + it/fr/es).
+
+## [2026-07-22] update | graphify full incremental rebuild (18 devWiki pages + 214-file backlog catch-up)
+
+Ran `/graphify --update` on the devWiki corpus, catching up the entire backlog deferred since 2026-07-20 (126
+files) plus this session's own changes: `detect_incremental(Path('.'), follow_symlinks=True)` reported 214
+changed paths (89 unique documents once `corpus/wiki/*` vs `wiki/*` symlink duplicates were manually deduped
+to 194 real files, 125 code). Dispatched 10 parallel semantic-extraction subagents (chunked by directory,
+~20 files each) alongside AST extraction on the 125 code files; merged into the existing graph via
+`G_existing.update(G_new)` (no deletions this round).
+
+Graph: 6852→8276 nodes (+1424), 20239→23731 edges (+3492), 283→325 communities (325 re-labeled: ~20 hand-crafted
+for the FIFO/wiki-relevant clusters, the remaining ~225 sizable ones auto-labeled via a top-degree-node
+heuristic — lower quality than a full hand pass but functional; flagged as a candidate for a future dedicated
+labeling session). `graph.html` NOT regenerated — graph now exceeds the 5,000-node auto-viz cap (was already
+noted as an open item from the 2026-07-16 entry; still open, use Obsidian export if a fresh interactive view is
+needed). Token-reduction benchmark: 61.7x. Manifest re-saved via `save_manifest(files, root=Path('.'))` for all
+1617 corpus files, matching the follow_symlinks/root fix documented in the 2026-07-16 entry (verified
+self-consistent going forward).
+
+Notable new structure confirms the ingest landed correctly: dedicated hyperedges for "FIFO v4 FEE/TAX design
+decisions", "FIFO v4 economic-allocation concept cluster", "FIFO v4 post-implementation review bug fixes", and
+"FIFO runtime implementation surface" (the last one linking the corrected [[decisions/fifo-runtime-decision]]/
+[[features/F-056]] to the new [[entities/fifo-lot-engine]]/[[entities/lots-analysis-service]] — confirms the
+drift fix is graph-visible). Also surfaced code-level structure not part of this ingest: BRIM broker-provider
+family clusters (`Cashless Crypto Adjustment Importers`, `BRIM CSV Import Provider Family`, etc.) and a
+`Column Visibility Override Ecosystem` hyperedge matching the DataTable bug fix pattern.
+
+**Known limitations of this run** (methodology notes, not content problems):
+- Per-agent token usage wasn't available the way native graphify tooling exposes it, so `cost.json` recorded
+  0 input/0 output tokens for this run — cost tracking is under-counted from here, not accurate.
+- A handful of near-duplicate node IDs exist for the same real entity across different subagent chunks (e.g.
+  `F_056` vs `wiki_features_F-056`) — cosmetic, matches an existing pre-ingest pattern already flagged
+  elsewhere in the report as "surprising connections", not fixed.
+- `graphify`'s own `graph_diff()` helper compares the full old graph against only the incremental extraction
+  (not the full merged graph), so its "nodes/edges removed" output is not a real deletion count in `--update`
+  mode — only its "new_nodes"/"new_edges" figures are meaningful here (used above); this is a re-confirmation
+  of a diff-methodology quirk, not a new bug.
+
+## [2026-07-22] lint | Health check (post-ingest)
+
+Ran the wiki-lint workflow immediately after the ingest above.
+
+**Graph analysis**: God nodes unchanged in kind (`Currency`, `TransactionType`, `Transaction`, `User`, `Asset`
+still top 5) but `BRIMParseError`/`BRIMParseOutput` newly entered the top 10 (162/137 edges) as a direct result
+of this update's BRIM-provider semantic pass. Surprising connections list unchanged from before this ingest
+(same 5 pre-existing INFERRED pairs) — no new surprising/dubious edges introduced by this ingest's own content.
+
+**🔴 High priority**: none found specific to this ingest.
+
+**🟡 Medium priority**:
+1. **Orphan pages (81 total, pre-existing, not introduced by this ingest)** — corrected the orphan-check
+   script's own bug first (the literal `grep "\[\[$slug\]\]"` bare-slug pattern from the skill undercounts,
+   since `wiki/sources/` and `wiki/entities/` pages are conventionally linked with the qualified
+   `[[category/slug]]` form). With a basename-aware check, genuine orphans are ~81, concentrated in
+   `wiki/sources/*.md` (44 — mostly by design, linked only from `index.md`'s Sources table, consistent with the
+   2026-07-15 lint's precedent of treating this as accepted) and `wiki/domains/*.md`/`wiki/connections/*.md` (9,
+   likely the same pattern). Higher-signal subset worth a future pass: 7 orphaned `wiki/problems/*.md` pages
+   (`justetf-websocket-disconnect`, `sync-functions-dead-code`, `pydantic-422-preemption`,
+   `pytest-exit-swallows-failures`, `coverage-mode-stale-import`, `coverage-report-category-dest-collision`,
+   `brlistresponse-contract-drift`), 3 orphaned `wiki/decisions/*.md` (`port-6040-scheme`,
+   `provider-shutdown-generic`, `static-metadata-export`), plus `wiki/entities/devpy-cli.md` and
+   `wiki/concepts/responsive-4mode-layout.md`. None of this ingest's 15 new pages are orphaned.
+2. **Drift-registry false positives** — the standard `git diff {hash} HEAD -- {path}` drift check flagged 91
+   sources as ">5 lines changed", but 82 of those are `git mv`-archived plan files (Phase 06/07 → `phases/`
+   subfolders) where the recorded ingest hash predates the move, so git shows a spurious 100% "new file" diff
+   at the archived path — not real content drift. Refined check (excluding new/deleted-file-mode diffs) finds
+   only **9 genuine in-place stale sources**, most notably `backend/app/services/asset_source_providers/justetf.py`
+   (211 lines changed since hash `e8ab12a`), `.../scheduled_investment.py` (190 lines) and
+   `frontend/src/lib/stores/fxStoreRegistry.ts` (183 lines) — all three worth a dedicated re-ingest/refresh pass;
+   `backend/app/db/models.py` (47 lines, 2 registry rows) is a smaller but recurring one worth checking against
+   `wiki/entities/db-models.md`. `README.md`/`Dockerfile`/`TODO_FUTURI.md`/`phases/00-index.md` also flagged but
+   are expected-to-churn living documents, not concerning.
+3. **Concept debt (pre-existing, sampled pre-update)**: recurring un-paged concepts from `conceptually_related_to`
+   edges include "Semantic Zoom Chart Resolution" (15×) and "MWRR as XIRR" (10×) as the most citable candidates
+   for a dedicated `wiki/concepts/` page in a future session.
+
+**🟢 Low priority**:
+4. Index drift: none — every `wiki/**/*.md` page is already referenced in `index.md` (checked all 340 pages).
+5. Near-duplicate node IDs for the same entity (`F_056` vs `wiki_features_F-056`) noted above under the
+   graphify update entry — cosmetic only.
+
+**Repairs executed as part of this pass**: none beyond what the ingest above already did (the drift/orphan
+findings are reported for a future dedicated session, consistent with the deferral precedent set in the
+2026-07-01/2026-07-16/2026-07-20 entries above — this pass's own scope was the FIFO v4 ingest, not a general
+wiki cleanup).
+
+Next recommended: (a) re-ingest/refresh the 3 genuinely-stale backend/frontend sources above; (b) a dedicated
+orphan-linking pass for the 7 problem + 3 decision pages listed above; (c) hand-relabel the ~225 auto-labeled
+communities from this update if/when the graph is used for browsing rather than query.
+
+
