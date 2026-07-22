@@ -49,11 +49,11 @@ def run_fifo_lot_engine(
 - custody `fragment_intervals`
 - FIFO `closures`
 - `issues`
-- derived `calculation_status` (`COMPLETE` or `DEGRADED`)
+- derived `analysis_status` (`COMPLETE`, `DEGRADED`, or `FAILED`)
 
-!!! warning "Raw engine valuation is not presentation-ready"
+!!! warning "The engine does not compute market valuation"
 
-    `value_for_lot()` and `aggregate_value()` multiply `open_quantity * market_price` directly. They do **not** apply `quote_base_quantity`, target-currency FX, or estimated-at-cost fallback logic. Those presentation concerns live in `LotsAnalysisService`, not in this engine.
+    `FifoEngineResult` intentionally exposes **no** market-valuation helper. Market value (`open_quantity / quote_base_quantity * market_price`), target-currency FX, and estimated-at-cost fallback are presentation concerns owned by `LotsAnalysisService`, not this engine. Keeping them out of the engine avoids a latent ×`quote_base_quantity` valuation bug.
 
 ---
 
@@ -79,7 +79,7 @@ One FIFO lot. Usually opened by a `BUY`, by the remainder of an `ADJUSTMENT_IN`,
 | `realized_quantity` | Quantity already closed. |
 | `realized_pnl` | Cumulative realized P&L from closures. |
 | `cumulative_proceeds` | Cumulative sale proceeds for LONG lots, or opening proceeds for SHORT lots. |
-| `reference_unit_price` | Optional reference price used by `relative_return_for_lot()`. |
+| `reference_unit_price` | Optional reference price the engine resolves for a lot (e.g. when an `ADJUSTMENT_IN` opens a new LONG lot), consumed downstream by `LotsAnalysisService`. |
 | `reference_price_source` | `"exact"`, `"fallback"`, `"unavailable"`, or `None`. |
 
 ### 🧩 `FragmentInterval`
@@ -132,7 +132,7 @@ Returned snapshot of complete run.
 
 Useful helpers on result:
 
-- `calculation_status`: `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
+- `analysis_status`: `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"` (`"FAILED"` is reserved for non-isolable quantitative-replay errors)
 - `get_lot_states(lot_id)`: derives `LONG`/`SHORT`, `OPEN`/`PARTIALLY_CLOSED`/`CLOSED`, plus `IN_TRANSIT`, `DISTRIBUTED`, `DEGRADED`
 - `active_fragments(...)`: filter live custody fragments
 
@@ -320,7 +320,7 @@ Lot identity stays same across brokers, so frontend can render one lot life with
 
 !!! info "Issues degrade result instead of aborting run"
 
-    Missing source quantity, broken transfer pairs, and reference-price gaps are recorded in `issues`. `FifoEngineResult.calculation_status` becomes `DEGRADED`, but engine still returns best-effort lots/fragments/closures for the rest of input stream.
+    Missing source quantity, broken transfer pairs, and reference-price gaps are recorded in `issues`. `FifoEngineResult.analysis_status` becomes `DEGRADED`, but engine still returns best-effort lots/fragments/closures for the rest of input stream.
 
 ---
 

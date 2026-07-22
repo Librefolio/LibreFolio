@@ -192,6 +192,8 @@ class IssueCode(StrEnum):
     FIFO_SOURCE_QUANTITY_MISSING = "FIFO_SOURCE_QUANTITY_MISSING"
     TRANSFER_PAIR_MISSING = "TRANSFER_PAIR_MISSING"
     CURRENT_PRICE_ASSUMED_AT_COST = "CURRENT_PRICE_ASSUMED_AT_COST"
+    ASSET_INCOME_NO_ELIGIBLE_LOTS = "ASSET_INCOME_NO_ELIGIBLE_LOTS"
+    ASSET_COST_NO_ELIGIBLE_LOTS = "ASSET_COST_NO_ELIGIBLE_LOTS"
 
 
 class DataQualityIssue(BaseModel):
@@ -452,7 +454,12 @@ class PortfolioHistoryPoint(BaseModel):
 LotDirection = Literal["LONG", "SHORT"]
 LotCustodyType = Literal["BROKER", "IN_TRANSIT"]
 ReferencePriceSource = Literal["exact", "fallback", "unavailable"]
-LotCalculationStatus = Literal["COMPLETE", "DEGRADED", "UNAVAILABLE"]
+# Global analysis status (1:1 with FifoEngineResult.analysis_status). COMPLETE = fully reliable;
+# DEGRADED = isolable economic issue (orphan income/cost, FX gap, local pool failure) with gross
+# metrics intact; FAILED = non-isolable quantitative failure (unreliable replay).
+LotAnalysisStatus = Literal["COMPLETE", "DEGRADED", "FAILED"]
+# Per-lot net-metrics reliability, orthogonal to the global status.
+LotNetMetricsStatus = Literal["AVAILABLE", "UNAVAILABLE"]
 LotValueSource = Literal["MARKET_PRICE", "ESTIMATED_AT_COST"]
 
 
@@ -543,6 +550,11 @@ class LotSummarySchema(BaseModel):
     cash_yield: Optional[SafeDecimal] = Field(None, description="asset_income / opening_value, when opening_value > 0.")
     total_return: Optional[SafeDecimal] = Field(None, description="total_pnl / opening_value (opening_value = original_cost), when > 0.")
     value_source: Optional[LotValueSource] = Field(None, description="MARKET_PRICE when a real current price exists, else ESTIMATED_AT_COST (open value assumed at cost, market_pnl=0).")
+    allocated_fees: SafeDecimal = Field(default=0, description="Cumulative FEE allocated to this lot, target_currency (positive magnitude).")
+    allocated_taxes: SafeDecimal = Field(default=0, description="Cumulative TAX allocated to this lot, target_currency (positive magnitude).")
+    net_total_pnl: Optional[SafeDecimal] = Field(None, description="total_pnl - allocated_fees - allocated_taxes, in target_currency.")
+    net_total_return: Optional[SafeDecimal] = Field(None, description="net_total_pnl / opening_value, when opening_value > 0.")
+    net_metrics_status: LotNetMetricsStatus = Field("AVAILABLE", description="AVAILABLE when net metrics are reliable; UNAVAILABLE when the lot belongs to a degraded economic pool.")
 
     @field_validator("currency")
     @classmethod
@@ -620,6 +632,9 @@ class LotValueHistoryPoint(BaseModel):
     original_cost: SafeDecimal
     pnl: SafeDecimal
     income: SafeDecimal = Field(default=0, description="Cumulative asset-linked income (dividends+interest) allocated to this lot up to date, in target_currency.")
+    allocated_fees: SafeDecimal = Field(default=0, description="Cumulative FEE allocated to this lot up to date, in target_currency (positive magnitude).")
+    allocated_taxes: SafeDecimal = Field(default=0, description="Cumulative TAX allocated to this lot up to date, in target_currency (positive magnitude).")
+    net_pnl: SafeDecimal = Field(default=0, description="pnl - allocated_fees - allocated_taxes up to date, in target_currency.")
 
 
 class LotReturnHistoryPoint(BaseModel):
@@ -636,6 +651,7 @@ class LotReturnHistoryPoint(BaseModel):
     relative_return: Optional[SafeDecimal] = Field(None, description="None when reference price is unavailable or zero.")
     reference_price_source: Optional[ReferencePriceSource] = Field(None, description="Reference price resolution echoed for chart/tooltips.")
     income: SafeDecimal = Field(default=0, description="Cumulative asset-linked income allocated to this lot up to date, in target_currency.")
+    net_total_return: Optional[SafeDecimal] = Field(None, description="(total_value + income - allocated_fees - allocated_taxes)/original_cost - 1, when original_cost != 0.")
 
 
 class LotPriceHistoryPoint(BaseModel):
@@ -710,6 +726,66 @@ class LotIncomeEventSchema(BaseModel):
     lot_ids: List[int] = Field(default_factory=list, description="LONG lots the income was allocated to at transaction.date.")
 
 
+EconomicTypeLiteral = Literal["FEE", "TAX", "DIVIDEND", "INTEREST"]
+AllocationContextLiteral = Literal["OPENING", "CLOSURE", "INCOME", "HOLDING"]
+AllocationRuleLiteral = Literal[
+    "ASSET_INCOME_HOLDINGS",
+    "SAME_DAY_MIXED_TRADES",
+    "SAME_DAY_TRADES",
+    "SAME_DAY_INCOME",
+    "PREVIOUS_DAY_TRADES",
+    "PREVIOUS_DAY_INCOME",
+    "OPEN_LOTS_FALLBACK",
+]
+
+
+class EconomicLotAllocationSchema(BaseModel):
+    """Audit leaf: share of a target operation assigned to a single lot."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lot_id: int
+    weight: SafeDecimal
+    native_amount: SafeDecimal
+    target_amount: SafeDecimal
+
+
+class TargetOperationAllocationSchema(BaseModel):
+    """Audit mid-level: one target operation (opening/closure/income/holding).
+
+    The allocation context lives on the operation, not the group, so the same lot
+    can appear under multiple contexts (e.g. OPENING and CLOSURE) with its
+    breakdown preserved.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    context: AllocationContextLiteral
+    operation_transaction_id: Optional[int] = Field(None, description="Trade/income transaction the pool was matched against; None for HOLDING fallback.")
+    weight: SafeDecimal
+    lot_allocations: List[EconomicLotAllocationSchema] = Field(default_factory=list)
+
+
+class EconomicAllocationGroupSchema(BaseModel):
+    """Audit top-level: a pooled economic group (FEE/TAX/income) and its allocations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    economic_type: EconomicTypeLiteral
+    asset_id: int
+    broker_id: int
+    date: date_type
+    native_currency: Optional[str] = None
+    target_currency: str
+    rule: AllocationRuleLiteral
+    source_transaction_ids: List[int] = Field(default_factory=list)
+    native_pool_total: SafeDecimal
+    target_pool_total: SafeDecimal
+    operation_allocations: List[TargetOperationAllocationSchema] = Field(default_factory=list)
+    native_orphan: SafeDecimal = Field(default=0, description="Unallocated native residual (orphan pool).")
+    target_orphan: SafeDecimal = Field(default=0, description="Unallocated target residual (orphan pool).")
+
+
 class LotsAnalysisMetadata(BaseModel):
     """Metadata describing bulk lots-analysis computation."""
 
@@ -739,7 +815,7 @@ class LotsAnalysisResponse(BaseModel):
         1,
         description="Asset quote_base_quantity (e.g. 100 for bonds priced per 100 nominal). Lets the frontend rescale per-quote unit prices (opening_unit_price) to the per-unit axis used by WAC/value lines.",
     )
-    calculation_status: LotCalculationStatus
+    calculation_status: LotAnalysisStatus
     calculation_metadata: LotsAnalysisMetadata
     data_quality: Optional[DataQualityReport] = None
     lots: Optional[List[LotSummarySchema]] = Field(None, description="LOT_SUMMARY payload.")
@@ -759,6 +835,13 @@ class LotsAnalysisResponse(BaseModel):
         None,
         description="INCOME_EVENTS payload — asset-linked DIVIDEND/INTEREST allocated to LONG lots, for chart markers.",
     )
+    economic_allocation_groups: Optional[List[EconomicAllocationGroupSchema]] = Field(
+        None,
+        description="Inline one-shot economic audit (FEE/TAX/income pooling + allocations). Present with LOT_SUMMARY.",
+    )
+    asset_orphan_income: SafeDecimal = Field(default=0, description="Income with no eligible lot, in target_currency.")
+    asset_orphan_fees: SafeDecimal = Field(default=0, description="FEE with no eligible lot, in target_currency.")
+    asset_orphan_taxes: SafeDecimal = Field(default=0, description="TAX with no eligible lot, in target_currency.")
 
     @field_validator("target_currency")
     @classmethod

@@ -851,6 +851,21 @@
         }
         html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
         html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.totalReturn', 'Total return')), signedColorField(lotDto?.total_return, formatSignedPercentField, themeDark));
+        const allocatedFees = parseUnknownNumber(lotDto?.allocated_fees);
+        const allocatedTaxes = parseUnknownNumber(lotDto?.allocated_taxes);
+        const hasCosts = (allocatedFees != null && allocatedFees !== 0) || (allocatedTaxes != null && allocatedTaxes !== 0);
+        if (hasCosts) {
+            const costColor = themeDark ? '#f87171' : '#dc2626';
+            if (allocatedFees != null && allocatedFees !== 0) {
+                html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.allocatedFees', 'Fees')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedFees))}</span>`);
+            }
+            if (allocatedTaxes != null && allocatedTaxes !== 0) {
+                html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.allocatedTaxes', 'Taxes')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedTaxes))}</span>`);
+            }
+            const netUnavailable = safeUnknownString(lotDto?.net_metrics_status) === 'UNAVAILABLE';
+            const netValue = netUnavailable ? escapeHtml('\u2014') : signedColorField(lotDto?.net_total_pnl, formatSignedMoneyField, themeDark);
+            html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.netTotalPnl', 'Net P&L')), netValue);
+        }
         html += buildTooltipDivider(theme.border);
         html += `<div style="margin-top:4px;color:${theme.mutedColor}">${escapeHtml(footer)}</div>`;
 

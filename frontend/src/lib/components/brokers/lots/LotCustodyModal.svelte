@@ -285,6 +285,13 @@
     let lotTotalPnl = $derived.by(() => (lot ? parseNumber(lot.total_pnl) : null));
     let lotCashYield = $derived.by(() => (lot ? parseNumber(lot.cash_yield) : null));
     let lotTotalReturn = $derived.by(() => (lot ? parseNumber(lot.total_return) : null));
+    let lotAllocatedFees = $derived.by(() => (lot ? parseNumber(lot.allocated_fees) : null));
+    let lotAllocatedTaxes = $derived.by(() => (lot ? parseNumber(lot.allocated_taxes) : null));
+    let lotNetTotalPnl = $derived.by(() => (lot ? parseNumber(lot.net_total_pnl) : null));
+    let lotNetTotalReturn = $derived.by(() => (lot ? parseNumber(lot.net_total_return) : null));
+    let lotNetMetricsStatus = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.net_metrics_status) ?? 'AVAILABLE') : 'AVAILABLE'));
+    let lotHasNetCosts = $derived((lotAllocatedFees != null && lotAllocatedFees !== 0) || (lotAllocatedTaxes != null && lotAllocatedTaxes !== 0));
+    let lotNetAvailable = $derived(lotNetMetricsStatus !== 'UNAVAILABLE');
     let lotValueSource = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.value_source) ?? null) : null));
     let lotIsEstimated = $derived(lotValueSource === 'ESTIMATED_AT_COST');
     let lotHasIncome = $derived(lotAssetIncome != null && lotAssetIncome !== 0);
@@ -389,6 +396,43 @@
                         <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                             <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.totalReturn')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalReturn)}`} data-testid="lot-custody-modal-total-return">{formatPercent(lotTotalReturn)}</dd>
+                        </div>
+                    {/if}
+                    {#if lotHasNetCosts}
+                        <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70 sm:col-span-2" data-testid="lot-custody-modal-net-breakdown">
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.netBreakdown')}</dt>
+                            <dd class="mt-2 space-y-1 text-sm tabular-nums text-slate-900 dark:text-slate-100">
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.grossTotalPnl')}</span>
+                                    <span class={`font-medium ${signedToneClass(lotTotalPnl)}`}>{formatSignedCurrency(lotTotalPnl)}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-slate-500 dark:text-slate-400">− {$_('brokers.lots.modal.fees')}</span>
+                                    <span class="font-medium text-red-500 dark:text-red-400" data-testid="lot-custody-modal-allocated-fees">{formatPrice(lotAllocatedFees)}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="text-slate-500 dark:text-slate-400">− {$_('brokers.lots.modal.taxes')}</span>
+                                    <span class="font-medium text-red-500 dark:text-red-400" data-testid="lot-custody-modal-allocated-taxes">{formatPrice(lotAllocatedTaxes)}</span>
+                                </div>
+                                <div class="flex items-center justify-between gap-4 border-t border-slate-200 pt-1 dark:border-slate-700">
+                                    <span class="font-medium text-slate-600 dark:text-slate-300">{$_('brokers.lots.modal.netTotalPnl')}</span>
+                                    {#if lotNetAvailable}
+                                        <span class={`font-semibold ${signedToneClass(lotNetTotalPnl)}`} data-testid="lot-custody-modal-net-total-pnl">{formatSignedCurrency(lotNetTotalPnl)}</span>
+                                    {:else}
+                                        <span class="font-semibold text-slate-400 dark:text-slate-500" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-pnl">—</span>
+                                    {/if}
+                                </div>
+                                {#if lotNetTotalReturn != null || !lotNetAvailable}
+                                    <div class="flex items-center justify-between gap-4">
+                                        <span class="text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.netTotalReturn')}</span>
+                                        {#if lotNetAvailable}
+                                            <span class={`font-medium ${signedToneClass(lotNetTotalReturn)}`} data-testid="lot-custody-modal-net-total-return">{formatPercent(lotNetTotalReturn)}</span>
+                                        {:else}
+                                            <span class="font-medium text-slate-400 dark:text-slate-500" title={$_('brokers.lots.netMetricsUnavailable')} data-testid="lot-custody-modal-net-total-return">—</span>
+                                        {/if}
+                                    </div>
+                                {/if}
+                            </dd>
                         </div>
                     {/if}
                     {#if lotHasIncome && lotCashYield != null}

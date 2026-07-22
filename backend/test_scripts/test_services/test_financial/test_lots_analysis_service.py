@@ -879,6 +879,76 @@ async def test_dividend_allocated_pro_rata_to_open_long_lots(session, test_user,
 
 
 @pytest.mark.asyncio
+async def test_fee_and_tax_allocated_to_lot_and_net_metrics(session, test_user, asset, broker):
+    """Asset-linked FEE (same-day BUY) and TAX (same-day DIVIDEND) allocate to the lot; net metrics subtract them."""
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=date(2025, 1, 10), quantity=Decimal("0"), amount=Decimal("-30"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 15), quantity=Decimal("0"), amount=Decimal("50"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.TAX, date=date(2025, 1, 15), quantity=Decimal("0"), amount=Decimal("-10"), currency="EUR"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 15), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 15),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY"],
+    )
+
+    assert result.calculation_status == "COMPLETE"
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+
+    # FEE (positive magnitude) and TAX allocated to the single lot.
+    assert lot.allocated_fees == Decimal("30")
+    assert lot.allocated_taxes == Decimal("10")
+    assert lot.asset_income == Decimal("50")
+
+    # Gross: price==cost -> market_pnl 0; total_pnl == income.
+    assert lot.market_pnl == Decimal("0")
+    assert lot.total_pnl == Decimal("50")
+    assert lot.total_return == Decimal("50") / Decimal("1000")
+
+    # Net subtracts costs: net_total_pnl = 50 - 30 - 10 = 10.
+    assert lot.net_total_pnl == Decimal("10")
+    assert lot.net_total_return == Decimal("10") / Decimal("1000")
+    assert lot.net_metrics_status == "AVAILABLE"
+
+    # No orphan: every cost/income found an eligible lot.
+    assert result.asset_orphan_fees == Decimal("0")
+    assert result.asset_orphan_taxes == Decimal("0")
+    assert result.asset_orphan_income == Decimal("0")
+
+    # Inline economic audit surfaces one group per pool (FEE, DIVIDEND, TAX).
+    assert result.economic_allocation_groups is not None
+    group_types = sorted(group.economic_type for group in result.economic_allocation_groups)
+    assert group_types == ["DIVIDEND", "FEE", "TAX"]
+    for group in result.economic_allocation_groups:
+        allocated = sum((alloc.target_amount for op in group.operation_allocations for alloc in op.lot_allocations), Decimal("0"))
+        # Conservation per pool: allocated + orphan == native pool total (single currency EUR).
+        assert allocated + group.target_orphan == group.target_pool_total
+
+    # Net value/return history at date_to reflect cumulative costs.
+    v_by_date = _points_by_date([p for p in result.value_history if p.lot_id == lot.lot_id])
+    end_value = v_by_date[date(2025, 1, 15)]
+    assert end_value.allocated_fees == Decimal("30")
+    assert end_value.allocated_taxes == Decimal("10")
+    assert end_value.net_pnl == end_value.pnl - Decimal("30") - Decimal("10")
+    r_by_date = _points_by_date([p for p in result.return_history if p.lot_id == lot.lot_id])
+    assert r_by_date[date(2025, 1, 15)].net_total_return == Decimal("10") / Decimal("1000")
+
+
+@pytest.mark.asyncio
 async def test_income_events_payload_exposes_allocated_income_markers(session, test_user, asset, broker):
     """INCOME_EVENTS returns one marker per allocated income tx with total amount + involved lot ids (plan v3 §11)."""
     session.add_all(

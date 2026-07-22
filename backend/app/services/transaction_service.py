@@ -53,6 +53,7 @@ from backend.app.schemas.transactions import (
     TXValidationIssue,
     get_swap_group,
     tags_to_csv,
+    validate_transaction_business_rules,
 )
 from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.services.portfolio_service import compute_wac_iterative
@@ -1164,6 +1165,35 @@ class TransactionService:
                             raise ValueError("Cannot link asset_event_id: transaction has no asset_id")
                         await self._validate_asset_event_link(item.asset_event_id, tx.asset_id)
                         tx.asset_event_id = item.asset_event_id
+                # Fase 0.1 — final-state business-rule validation.
+                # UPDATE only validates id>0 at the DTO level (TXUpdateItem), so a
+                # bulk PATCH could otherwise persist an invalid final state (e.g. a
+                # FEE/TAX whose amount was flipped to >= 0, or a type swap that did
+                # not flip the cash sign). Re-run the shared per-type rules on the
+                # merged ORM state; any violation is reported as an issue, which
+                # prevents the whole batch from committing.
+                final_cash = Currency(code=tx.currency, amount=tx.amount) if tx.currency else None
+                rule_errors = validate_transaction_business_rules(
+                    tx_type=tx.type,
+                    asset_id=tx.asset_id,
+                    quantity=tx.quantity,
+                    cash=final_cash,
+                    asset_event_id=tx.asset_event_id,
+                    cost_basis_mode=item.cost_basis_mode,
+                )
+                if rule_errors:
+                    for rerr in rule_errors:
+                        issues.append(
+                            TXValidationIssue(
+                                operation="update",
+                                index=orig_idx,
+                                ref_id=item.id,
+                                error=rerr.message(),
+                                code=rerr.type,
+                                params=dict(rerr.context) if rerr.context else None,
+                            )
+                        )
+                    continue
                 tx.updated_at = utcnow()
                 prev = earliest_date_by_broker.get(tx.broker_id)
                 earliest_date_by_broker[tx.broker_id] = check_date if prev is None else min(prev, check_date)

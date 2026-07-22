@@ -83,6 +83,134 @@ def tags_to_csv(tags: Optional[List[str]]) -> Optional[str]:
     return ",".join(tags)
 
 
+def validate_transaction_business_rules(
+    *,
+    tx_type: TransactionType,
+    asset_id: Optional[int],
+    quantity: Decimal,
+    cash: Optional[Currency],
+    asset_event_id: Optional[int],
+    cost_basis_mode: Optional[str],
+) -> List[PydanticCustomError]:
+    """Per-type business rules (Rules 5-12) evaluated on the FINAL normalized
+    transaction state (type + asset_id + cash + quantity + asset_event_id +
+    cost_basis_mode).
+
+    Pure function: it *returns* the list of violations instead of raising, so
+    both the CREATE path (``TXCreateItem.validate_transaction_rules``) and the
+    UPDATE merge path (``TransactionService`` bulk-update loop) can enforce
+    identical semantics on the resulting transaction. It deliberately receives
+    the already-normalized final state (primitives + ``Currency``) rather than a
+    DTO, so CREATE and UPDATE stay decoupled.
+
+    Create-only concerns are NOT part of this shared function and remain in
+    ``TXCreateItem``: field-level positivity (broker_id / id) and the pairing
+    rules 1-4 (link_uuid, TRANSFER/FX_CONVERSION/CASH_TRANSFER shape).
+    """
+    t = tx_type.value  # shorthand for error params
+    errors: List[PydanticCustomError] = []
+    zero = Decimal("0")
+
+    # Rule 5: Asset REQUIRED for BUY, SELL, DIVIDEND, TRANSFER, ADJUSTMENT
+    asset_required_types = {
+        TransactionType.BUY,
+        TransactionType.SELL,
+        TransactionType.DIVIDEND,
+        TransactionType.TRANSFER,
+        TransactionType.ADJUSTMENT,
+    }
+    if tx_type in asset_required_types and not asset_id:
+        errors.append(PydanticCustomError("assetRequired", "{type} requires asset_id", {"type": t}))
+
+    # Rule 6: Asset OPTIONAL for INTEREST, FEE, TAX (no validation needed)
+
+    # Rule 7: Cash REQUIRED for all types except TRANSFER, ADJUSTMENT
+    cash_required_types = {
+        TransactionType.BUY,
+        TransactionType.SELL,
+        TransactionType.DIVIDEND,
+        TransactionType.INTEREST,
+        TransactionType.DEPOSIT,
+        TransactionType.WITHDRAWAL,
+        TransactionType.FEE,
+        TransactionType.TAX,
+        TransactionType.FX_CONVERSION,
+        TransactionType.CASH_TRANSFER,
+    }
+    if tx_type in cash_required_types:
+        if cash is None:
+            errors.append(PydanticCustomError("cashRequired", "{type} requires cash (amount + currency)", {"type": t}))
+
+    # Rule 8: ADJUSTMENT should not have cash
+    if tx_type == TransactionType.ADJUSTMENT:
+        if cash is not None and not cash.is_zero():
+            errors.append(PydanticCustomError("cashForbidden", "ADJUSTMENT should not have cash movement", {"type": t}))
+
+    # Rule 9: asset_event_id requires event-compatible type + asset_id present.
+    if asset_event_id is not None:
+        if tx_type not in EVENT_COMPATIBLE_TYPES:
+            allowed = sorted(tt.value for tt in EVENT_COMPATIBLE_TYPES)
+            errors.append(
+                PydanticCustomError(
+                    "eventTypeIncompatible",
+                    "{type} cannot be linked to an asset_event (only {allowed} can)",
+                    {"type": t, "allowed": ", ".join(allowed)},
+                )
+            )
+        if asset_id is None:
+            errors.append(PydanticCustomError("eventRequiresAsset", "asset_event_id requires asset_id", {"type": t}))
+
+    # Rule 10: Per-type quantity sign enforcement
+    if tx_type == TransactionType.BUY and quantity <= zero:
+        errors.append(PydanticCustomError("qtyPositive", "BUY requires quantity > 0", {"type": t}))
+    if tx_type == TransactionType.SELL and quantity >= zero:
+        errors.append(PydanticCustomError("qtyNegative", "SELL requires quantity < 0", {"type": t}))
+    if (
+        tx_type
+        in (
+            TransactionType.DIVIDEND,
+            TransactionType.INTEREST,
+            TransactionType.DEPOSIT,
+            TransactionType.WITHDRAWAL,
+            TransactionType.FEE,
+            TransactionType.TAX,
+            TransactionType.CASH_TRANSFER,
+        )
+        and quantity != zero
+    ):
+        errors.append(PydanticCustomError("qtyZero", "{type} requires quantity = 0", {"type": t}))
+    if tx_type == TransactionType.ADJUSTMENT and quantity == zero:
+        errors.append(PydanticCustomError("qtyNonzero", "ADJUSTMENT requires quantity != 0", {"type": t}))
+
+    # Rule 11: Per-type cash sign enforcement
+    if cash is not None and not cash.is_zero():
+        amt = cash.amount
+        if tx_type in (TransactionType.BUY, TransactionType.WITHDRAWAL, TransactionType.FEE, TransactionType.TAX) and amt >= zero:
+            errors.append(PydanticCustomError("cashSignNegative", "{type} requires cash.amount < 0", {"type": t}))
+        if tx_type in (TransactionType.SELL, TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT) and amt <= zero:
+            errors.append(PydanticCustomError("cashSignPositive", "{type} requires cash.amount > 0", {"type": t}))
+
+    # Rule 12: cost_basis_mode is only valid for:
+    #   - TRANSFER with quantity > 0 (receiver side)
+    #   - ADJUSTMENT with quantity > 0
+    if cost_basis_mode is not None:
+        cbm_valid = False
+        if tx_type == TransactionType.TRANSFER and quantity > zero:
+            cbm_valid = True
+        elif tx_type == TransactionType.ADJUSTMENT and quantity > zero:
+            cbm_valid = True
+        if not cbm_valid:
+            errors.append(
+                PydanticCustomError(
+                    "costBasisModeIncompatible",
+                    "cost_basis_mode is only valid for TRANSFER receiver (qty>0) or ADJUSTMENT (qty>0), got {type} qty={qty}",
+                    {"type": t, "qty": str(quantity)},
+                )
+            )
+
+    return errors
+
+
 # =============================================================================
 # TRANSACTION CREATE
 # =============================================================================
@@ -218,103 +346,20 @@ class TXCreateItem(BaseModel):
             if self.asset_id is not None:
                 errors.append(PydanticCustomError("assetForbidden", "{type} should not have asset_id", {"type": t}))
 
-        # Rule 5: Asset REQUIRED for BUY, SELL, DIVIDEND, TRANSFER, ADJUSTMENT
-        asset_required_types = {
-            TransactionType.BUY,
-            TransactionType.SELL,
-            TransactionType.DIVIDEND,
-            TransactionType.TRANSFER,
-            TransactionType.ADJUSTMENT,
-        }
-        if self.type in asset_required_types and not self.asset_id:
-            errors.append(PydanticCustomError("assetRequired", "{type} requires asset_id", {"type": t}))
-
-        # Rule 6: Asset OPTIONAL for INTEREST, FEE, TAX (no validation needed)
-
-        # Rule 7: Cash REQUIRED for all types except TRANSFER, ADJUSTMENT
-        cash_required_types = {
-            TransactionType.BUY,
-            TransactionType.SELL,
-            TransactionType.DIVIDEND,
-            TransactionType.INTEREST,
-            TransactionType.DEPOSIT,
-            TransactionType.WITHDRAWAL,
-            TransactionType.FEE,
-            TransactionType.TAX,
-            TransactionType.FX_CONVERSION,
-            TransactionType.CASH_TRANSFER,
-        }
-        if self.type in cash_required_types:
-            if self.cash is None:
-                errors.append(PydanticCustomError("cashRequired", "{type} requires cash (amount + currency)", {"type": t}))
-
-        # Rule 8: ADJUSTMENT should not have cash
-        if self.type == TransactionType.ADJUSTMENT:
-            if self.cash is not None and not self.cash.is_zero():
-                errors.append(PydanticCustomError("cashForbidden", "ADJUSTMENT should not have cash movement", {"type": t}))
-
-        # Rule 9: asset_event_id requires event-compatible type + asset_id present.
-        if self.asset_event_id is not None:
-            if self.type not in EVENT_COMPATIBLE_TYPES:
-                allowed = sorted(tt.value for tt in EVENT_COMPATIBLE_TYPES)
-                errors.append(
-                    PydanticCustomError(
-                        "eventTypeIncompatible",
-                        "{type} cannot be linked to an asset_event (only {allowed} can)",
-                        {"type": t, "allowed": ", ".join(allowed)},
-                    )
-                )
-            if self.asset_id is None:
-                errors.append(PydanticCustomError("eventRequiresAsset", "asset_event_id requires asset_id", {"type": t}))
-
-        # Rule 10: Per-type quantity sign enforcement
-        zero = Decimal("0")
-        if self.type == TransactionType.BUY and self.quantity <= zero:
-            errors.append(PydanticCustomError("qtyPositive", "BUY requires quantity > 0", {"type": t}))
-        if self.type == TransactionType.SELL and self.quantity >= zero:
-            errors.append(PydanticCustomError("qtyNegative", "SELL requires quantity < 0", {"type": t}))
-        if (
-            self.type
-            in (
-                TransactionType.DIVIDEND,
-                TransactionType.INTEREST,
-                TransactionType.DEPOSIT,
-                TransactionType.WITHDRAWAL,
-                TransactionType.FEE,
-                TransactionType.TAX,
-                TransactionType.CASH_TRANSFER,
+        # Rules 5-12 (per-type business rules on the final state) are shared with
+        # the UPDATE merge path via a module-level pure function, so CREATE and
+        # UPDATE enforce identical semantics. Rules 1-4 (pairing) and field-level
+        # positivity above remain create-only concerns.
+        errors.extend(
+            validate_transaction_business_rules(
+                tx_type=self.type,
+                asset_id=self.asset_id,
+                quantity=self.quantity,
+                cash=self.cash,
+                asset_event_id=self.asset_event_id,
+                cost_basis_mode=self.cost_basis_mode,
             )
-            and self.quantity != zero
-        ):
-            errors.append(PydanticCustomError("qtyZero", "{type} requires quantity = 0", {"type": t}))
-        if self.type == TransactionType.ADJUSTMENT and self.quantity == zero:
-            errors.append(PydanticCustomError("qtyNonzero", "ADJUSTMENT requires quantity != 0", {"type": t}))
-
-        # Rule 11: Per-type cash sign enforcement
-        if self.cash is not None and not self.cash.is_zero():
-            amt = self.cash.amount
-            if self.type in (TransactionType.BUY, TransactionType.WITHDRAWAL, TransactionType.FEE, TransactionType.TAX) and amt >= zero:
-                errors.append(PydanticCustomError("cashSignNegative", "{type} requires cash.amount < 0", {"type": t}))
-            if self.type in (TransactionType.SELL, TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT) and amt <= zero:
-                errors.append(PydanticCustomError("cashSignPositive", "{type} requires cash.amount > 0", {"type": t}))
-
-        # Rule 12: cost_basis_mode is only valid for:
-        #   - TRANSFER with quantity > 0 (receiver side)
-        #   - ADJUSTMENT with quantity > 0
-        if self.cost_basis_mode is not None:
-            cbm_valid = False
-            if self.type == TransactionType.TRANSFER and self.quantity > zero:
-                cbm_valid = True
-            elif self.type == TransactionType.ADJUSTMENT and self.quantity > zero:
-                cbm_valid = True
-            if not cbm_valid:
-                errors.append(
-                    PydanticCustomError(
-                        "costBasisModeIncompatible",
-                        "cost_basis_mode is only valid for TRANSFER receiver (qty>0) or ADJUSTMENT (qty>0), got {type} qty={qty}",
-                        {"type": t, "qty": str(self.quantity)},
-                    )
-                )
+        )
 
         # Pydantic v2 model_validator can only raise a single exception.
         # When there are multiple business-rule errors, we pack them ALL into

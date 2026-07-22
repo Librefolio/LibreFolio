@@ -187,8 +187,13 @@
         pageSize: getInitialPageSize(),
     });
 
-    // Column visibility
-    let columnVisibility = $state<VisibilityState>({});
+    // Column visibility — persist only EXPLICIT user overrides, never the full map. This
+    // way a column's dynamic `hiddenByDefault` (which can flip once data loads, e.g. the
+    // lots table's net-cost columns that appear only when an asset has FEE/TAX) is always
+    // honored as the live default, and a stale persisted value can't keep a should-be-visible
+    // column hidden. Reset clears the overrides and re-applies the current dynamic default.
+    let columnVisibilityOverrides = $state<VisibilityState>({});
+    let columnVisibility = $derived<VisibilityState>(Object.fromEntries(columns.map((c) => [c.id, c.id in columnVisibilityOverrides ? columnVisibilityOverrides[c.id] : !c.hiddenByDefault])));
 
     // Column widths
     let columnWidths = $state<ColumnWidthsState>({});
@@ -318,9 +323,6 @@
 
     // Default column order
     let defaultColumnOrder = $derived(columns.map((c) => c.id));
-
-    // Default column visibility (respects hiddenByDefault)
-    let defaultColumnVisibility = $derived(Object.fromEntries(columns.map((c) => [c.id, !c.hiddenByDefault])));
 
     // Default column widths
     let defaultColumnWidths = $derived(Object.fromEntries(columns.map((c) => [c.id, c.width ?? 150])));
@@ -863,17 +865,17 @@
     }
 
     function toggleColumnVisibility(columnId: string) {
-        const current = columnVisibility[columnId] ?? defaultColumnVisibility[columnId] ?? true;
-        columnVisibility = {...columnVisibility, [columnId]: !current};
-        saveToStorage(getStorageKey('columnVisibility'), columnVisibility);
+        const current = columnVisibility[columnId] ?? true;
+        columnVisibilityOverrides = {...columnVisibilityOverrides, [columnId]: !current};
+        saveToStorage(getStorageKey('columnVisibilityOverrides'), columnVisibilityOverrides);
     }
 
     function resetColumns() {
-        columnVisibility = {...defaultColumnVisibility};
+        columnVisibilityOverrides = {};
         columnWidths = {...defaultColumnWidths};
         columnOrder = [...defaultColumnOrder];
         columnFilters = {};
-        saveToStorage(getStorageKey('columnVisibility'), defaultColumnVisibility);
+        saveToStorage(getStorageKey('columnVisibilityOverrides'), {});
         saveToStorage(getStorageKey('columnWidths'), defaultColumnWidths);
         saveToStorage(getStorageKey('columnOrder'), defaultColumnOrder);
     }
@@ -937,22 +939,12 @@
         const storedPageSize = loadFromStorage<number>(getStorageKey('pageSize'), defaultPageSize);
         pagination = {...pagination, pageSize: storedPageSize === 0 ? 999999 : storedPageSize};
 
-        const storedVisibility = loadFromStorage<VisibilityState | null>(getStorageKey('columnVisibility'), null);
-        if (storedVisibility) {
-            // Merge: apply stored state, but force hiddenByDefault for columns not previously known
-            const merged = {...defaultColumnVisibility};
-            for (const [id, visible] of Object.entries(storedVisibility)) {
-                if (id in merged) merged[id] = visible;
-            }
-            // Force-hide columns with hiddenByDefault that weren't in the stored state
-            for (const col of columns) {
-                if (col.hiddenByDefault && !(col.id in storedVisibility)) {
-                    merged[col.id] = false;
-                }
-            }
-            columnVisibility = merged;
-        } else {
-            columnVisibility = {...defaultColumnVisibility};
+        // Load only explicit user overrides; effective visibility is derived from the
+        // live `hiddenByDefault` default merged with these overrides (see declaration).
+        const storedOverrides = loadFromStorage<VisibilityState | null>(getStorageKey('columnVisibilityOverrides'), null);
+        if (storedOverrides) {
+            const validIds = new Set(columns.map((c) => c.id));
+            columnVisibilityOverrides = Object.fromEntries(Object.entries(storedOverrides).filter(([id]) => validIds.has(id)));
         }
 
         columnWidths = loadFromStorage(getStorageKey('columnWidths'), defaultColumnWidths);
@@ -1016,18 +1008,21 @@
             columnOrder = filtered;
             saveToStorage(getStorageKey('columnOrder'), columnOrder);
 
-            // Set visibility for new columns (respect hiddenByDefault)
-            const updatedVisibility = {...columnVisibility};
-            for (const id of newIds) {
-                const col = columns.find((c) => c.id === id);
-                updatedVisibility[id] = col ? !col.hiddenByDefault : true;
+            // Visibility for new columns needs no handling here: it is derived from each
+            // column's live `hiddenByDefault` plus user overrides. We only prune overrides
+            // that belong to columns which no longer exist, to keep storage tidy.
+            const nextOverrides = {...columnVisibilityOverrides};
+            let prunedOverrides = false;
+            for (const id of Object.keys(nextOverrides)) {
+                if (!currentIds.has(id)) {
+                    delete nextOverrides[id];
+                    prunedOverrides = true;
+                }
             }
-            // Remove stale visibility entries
-            for (const id of Object.keys(updatedVisibility)) {
-                if (!currentIds.has(id)) delete updatedVisibility[id];
+            if (prunedOverrides) {
+                columnVisibilityOverrides = nextOverrides;
+                saveToStorage(getStorageKey('columnVisibilityOverrides'), columnVisibilityOverrides);
             }
-            columnVisibility = updatedVisibility;
-            saveToStorage(getStorageKey('columnVisibility'), columnVisibility);
 
             // Update widths for new columns
             const updatedWidths = {...columnWidths};
@@ -1044,9 +1039,6 @@
         // Initial fallback (first mount before localStorage loads)
         if (columnOrder.length === 0) {
             columnOrder = [...defaultColumnOrder];
-        }
-        if (Object.keys(columnVisibility).length === 0) {
-            columnVisibility = {...defaultColumnVisibility};
         }
         if (Object.keys(columnWidths).length === 0) {
             columnWidths = {...defaultColumnWidths};
