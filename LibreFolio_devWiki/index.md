@@ -67,6 +67,11 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/fifo-v4-income-eligibility-d1]] | FIFO v4 income eligibility uses D-1 open quantity, scoped to paying broker, transfer-aware | 2026-07-22 | backend, fifo, dividend, interest |
+| [[decisions/fifo-v4-cost-allocation-ladder]] | Distinct deterministic FEE/TAX matching ladders route asset-linked costs to lots | 2026-07-22 | backend, fifo, fee, tax |
+| [[decisions/fifo-v4-engine-architecture]] | One canonical FifoLotEngine path; native+target economic events; always-inline 3-level audit | 2026-07-22 | backend, fifo, architecture |
+| [[decisions/fifo-v4-gross-net-status-model]] | Gross metrics untouched, net is additive; split analysis_status/LotNetMetricsStatus reliability model | 2026-07-22 | backend, frontend, fifo, net-metrics |
+| [[decisions/fifo-v4-validation-and-scope]] | API-layer sign validation over DB CHECK; Portfolio Engine reconciliation deferred | 2026-07-22 | backend, validation, scope |
 | [[decisions/fx-sync-pair-based]] | FX sync redesigned from currency-list to pair-list (GET→POST) | 2026-03-06 | fx, api, breaking-change |
 | [[decisions/brim-broker-scoped]] | BRIM upload moved to broker scope for proper access control | 2026-01-22 | brim, brokers, multiuser |
 | [[decisions/provider-shutdown-generic]] | Generic shutdown() in ABCs replaces hardcoded JustETF cleanup | 2026-04-10 | backend, providers, lifecycle |
@@ -121,6 +126,10 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/d1-income-eligibility-window]] | Income eligibility = open quantity at end of D-1, never same-day state | backend, fifo, dividend |
+| [[concepts/deterministic-cost-matching-ladder]] | Ordered FEE/TAX target search (same-day trades → prev-day trades → open holdings → orphan) | backend, fifo, fee, tax |
+| [[concepts/asset-orphan-vs-portfolio-level-cost]] | Asset orphan (unmatched but asset-linked) vs assetless portfolio-level cost — different buckets | backend, fifo, data-quality |
+| [[concepts/gross-net-dual-reporting]] | Gross accumulators untouched; net = gross minus allocated fees/taxes, always additive | backend, frontend, fifo |
 | [[concepts/async-io-rule]] | **CRITICAL**: sync I/O in async handlers blocks uvicorn event loop | backend, async, performance |
 | [[concepts/daily-point-policy]] | One record per day for prices and FX rates (upsert semantics) | backend, db, prices |
 | [[concepts/single-migration-strategy]] | Modify 001_initial.py + recreate DB — no incremental migrations | backend, db, alembic |
@@ -162,6 +171,9 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/datatable-net-columns-hidden-override-model]] | DataTable visibility snapshot couldn't react to dynamic hasNetCosts default — switched to override model | resolved | frontend, datatable, fifo |
+| [[problems/transaction-update-bypassed-sign-validation]] | Transaction UPDATE could persist positive FEE/TAX — CREATE validated, PATCH didn't | resolved | backend, validation, transactions |
+| [[problems/fifo-income-silently-dropped-after-full-close]] | Pre-v4 income allocator silently skipped income when no lot was open — now becomes asset_orphan_income | resolved | backend, fifo, dividend, data-quality |
 | [[problems/event-loop-blocking]] | yfinance sync calls in async handlers freeze entire app | resolved | backend, async, performance |
 | [[problems/liveticker-header-crash]] | LiveTicker in Header.svelte crashed on navigation | resolved | frontend, navigation |
 | [[problems/flag-emoji-windows]] | Flag emoji blank on Windows — needs Noto Color Emoji font | resolved | frontend, emoji, windows |
@@ -197,6 +209,8 @@
 
 | Page | Summary |
 |------|---------|
+| [[entities/fifo-lot-engine]] | Canonical FIFO engine (backend/app/services/fifo_lot_engine.py) — quantitative replay + v4 economic allocation (income/fees/taxes, net metrics, 3-level audit) |
+| [[entities/lots-analysis-service]] | Orchestration service between API and FifoLotEngine — FX prep, economic event building, DTO mapping; no longer the income allocator of record |
 | [[entities/api-router]] | FastAPI router structure — all v1 API routes and their modules |
 | [[entities/backup-router]] | `/api/v1/backup` read-only export router (asset prices/events, FX rates) — Policy D pre-wipe snapshot |
 | [[entities/db-models]] | All SQLModel ORM models — tables, enums, constraints, design notes |
@@ -219,6 +233,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/fifo-v4-fee-tax-integration]] | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/` | 2026-07-22 | backend, fifo, fee, tax, dividend, cost-basis |
 | [[sources/roadmap-v1-summary]] | `RoadMapV1/01-Riassunto_generale.md` | 2026-04-24 | roadmap, architecture, history |
 | [[sources/todos]] | `TODO_Completati.md` + `TODO_FUTURI.md` | 2026-05-10 | todo, planning, roadmap, features |
 | [[sources/kb-03-documentation]] | `knowledge_base/03_documentation.md` | 2026-04-24 | mkdocs, documentation, i18n, aphra, gallery |
