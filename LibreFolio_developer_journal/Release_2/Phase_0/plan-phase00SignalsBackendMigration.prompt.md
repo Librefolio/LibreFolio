@@ -55,12 +55,13 @@ migration DB.
 - Nuovo `SignalService` indipendente da Asset, FX e librerie terze.
 - Nuovo `SignalPluginRegistry` auto-discovered.
 - Classe astratta `SignalPlugin` come unica astrazione comune.
-- Adapter di dominio Asset e FX dentro le API esistenti.
+- Integrazione di dominio Asset e FX dentro le API esistenti.
 - Input interno OHLCV-compatible più event points.
 - FX adattato allo stesso formato, con solo `close` valorizzato.
 - Stack production composito `pandas-ta-classic` + `TA-Lib`.
 - Catalogo backend di 17 segnali.
-- Cataloghi Asset e FX con disponibilità statica e dinamica.
+- Cataloghi Asset e FX esclusivamente statici; disponibilità dinamica verificata nelle
+  POST bulk.
 - Frontend schema-driven per parametri e output standard.
 - Cutover Asset e FX nello stesso ciclo.
 - AI Export alimentato dai risultati backend.
@@ -230,21 +231,30 @@ class SignalEventPoint(BaseModel):
 
 Asset adatta `FAPricePoint` e gli eventi esistenti.
 
-FX adatta ogni effective rate come:
+FX converte ogni risultato nei modelli neutrali con una condizione esplicita:
 
 ```python
-SignalPricePoint(
+if from_currency == to_currency:
+    effective_rate = Decimal("1")
+elif result.rate is not None:
+    effective_rate = result.rate
+else:
+    raise SignalInputUnavailable("FX rate missing for non-identity conversion")
+
+point = SignalPricePoint(
     date=result.conversion_date,
     open=None,
     high=None,
     low=None,
-    close=result.rate or Decimal("1"),
+    close=effective_rate,
     volume=None,
     backward_fill_info=result.backward_fill_info,
 )
 ```
 
-Le conversioni identità usano `close=1`.
+Una conversione non identità senza rate non viene mai trasformata implicitamente in
+`close=1`: resta un errore o un input indisponibile, coerentemente con il servizio FX
+esistente.
 
 ## Dipendenze e ambiente
 
@@ -396,9 +406,15 @@ Ogni serie dichiara:
 - axis role;
 - axis bounds opzionali;
 - reference levels opzionali;
+- value regions opzionali, definite semanticamente e senza colori;
 - view transform.
 
 Nessuno stile grafico proviene dal backend.
+
+Il catalogo descrive capability e default statici. Il risultato per instance restituisce
+i reference levels e le value regions effettivi, già risolti dai params del plugin.
+Questo permette a RSI, StochRSI, MFI e CCI di mantenere thresholds/zone dinamici senza
+logica frontend basata sul signal code. Il frontend assegna colori e stile alle regioni.
 
 ## Registry
 
@@ -432,44 +448,45 @@ Il catalogo comunica almeno:
 - schema parametri;
 - input richiesti;
 - output specs;
-- unità/assi/reference levels;
+- unità/assi/reference-level e value-region capability statiche;
 - compatibilità dominio.
 
-### Disponibilità statica
+I due endpoint sono cataloghi esclusivamente statici. Non ricevono asset, pair o range,
+non caricano storico e non calcolano disponibilità reale o warm-up concretamente
+disponibile.
+
+### Disponibilità statica nel catalogo
 
 Indica se il dominio può fornire in generale gli input richiesti:
 
 - FX: solo segnali close-only;
 - Asset: close-only, OHLC e volume secondo capability dichiarate.
 
-### Disponibilità dinamica
+### Disponibilità dinamica nelle POST bulk
 
-Indica se, per uno specifico asset/pair/range:
+`POST /api/v1/assets/prices/query` e
+`POST /api/v1/fx/currencies/convert` verificano, per ogni signal instance:
 
 - i campi richiesti sono presenti con copertura sufficiente;
 - la storia disponibile copre minimum + stabilization points;
 - il segnale può essere calcolato.
 
-I cataloghi accettano contesto opzionale:
+Il risultato per instance può includere:
 
-```text
-GET /assets/prices/signals?asset_id=...&start=...&end=...&target_currency=...
-GET /fx/currencies/signals?base=...&quote=...&start=...&end=...
-```
-
-Senza contesto restituiscono definizioni e compatibilità statica.
-
-Con contesto aggiungono:
-
+- `status`;
 - `availability`;
 - `missing_fields`;
+- `input_coverage`;
 - `available_points`;
 - `required_points`;
+- `warmup_complete`;
 - `reason_code`;
-- warning di warm-up.
+- `warnings`;
+- errore strutturato;
+- serie canoniche.
 
-Il frontend usa questi dati per disabilitare o limitare preventivamente le opzioni.
-Le API di calcolo ripetono sempre la validazione: il backend resta autorità finale.
+Non esiste una chiamata preventiva obbligatoria. Il frontend usa il catalogo statico per
+costruire la UI; la POST bulk è l'autorità finale sulla calcolabilità reale.
 
 ## Frontend schema-driven
 
@@ -509,12 +526,12 @@ come non renderizzabile finché viene aggiunto un nuovo primitivo UI.
 
 Il frontend:
 
-- carica catalogo e disponibilità;
+- carica il catalogo statico;
 - costruisce `SignalDefinition` generiche;
 - genera i controlli;
 - conserva `SignalConfig` session-local;
 - invia code, instance ID e params;
-- riceve contratti canonici;
+- riceve dalla POST bulk contratti canonici e disponibilità dinamica;
 - renderizza line/bar/band e serie composite;
 - applica stile, ordine, visibilità e view transform;
 - conserva config diventate temporaneamente unavailable, mostrandole disabilitate con
@@ -535,7 +552,8 @@ Deve:
 4. chiedere warm-up a ogni plugin;
 5. determinare il massimo richiesto;
 6. richiedere un solo range esteso;
-7. costruire una representation columnar/DataFrame condivisa quando utile;
+7. costruire, solo quando utile, una representation columnar/DataFrame condivisa come
+   ottimizzazione interna non contrattuale;
 8. validare copertura input;
 9. eseguire i plugin;
 10. isolare errori per segnale;
@@ -610,7 +628,8 @@ Pipeline:
 4. range esteso;
 5. bulk DB load;
 6. backward fill secondo data policy;
-7. eventi richiesti;
+7. caricare eventi solo se un plugin, una primitive di annotazione o il consumer li
+   richiede esplicitamente;
 8. target-currency conversion;
 9. mapping neutro;
 10. compute;
@@ -641,7 +660,8 @@ Pipeline:
 1. validazione close-only;
 2. warm-up massimo;
 3. conversione amount 1 sul range esteso;
-4. mapping rate → `close`;
+4. mapping esplicito: identità → `close=1`; non identità → effective rate; rate mancante
+   → errore/indisponibile;
 5. compute;
 6. slicing;
 7. daily conversion result invariati + signal results aggregati.
@@ -675,7 +695,7 @@ Pipeline:
 15. Verificare comportamento concorrente e stabilità, senza assumere GIL release o
     thread safety.
 16. Misurare delta dimensione immagine.
-17. Salvare risultati in un artefatto Phase 0.
+17. Salvare risultati e policy candidate in un artefatto Phase 0.
 18. Fissare i pin production di entrambe le librerie.
 
 Non usare come acceptance threshold fatti non misurati: speed-up 5–20x, overhead
@@ -685,12 +705,19 @@ Non usare come acceptance threshold fatti non misurati: speed-up 5–20x, overhe
 
 - entrambe le dipendenze nel lock production;
 - wheel/install validati sulle architetture disponibili;
+- avvio completo LibreFolio validato su ambiente dev e runtime supportati prima di
+  introdurre il fail-fast globale;
 - 17 segnali invocabili;
 - 16 delegation path verificati;
 - Donchian native path verificato;
 - silent fallback trasformato in errore evidente;
-- warm-up/tolleranza documentati per plugin;
+- minimum lookback, stabilization history e tolleranza candidate documentati per
+  indicatore, con dataset, misure, limiti e casi dubbi;
 - execution/concurrency policy basata sulle misure.
+
+Lo Step 0 non integra ancora le policy nei plugin production. Gli step plugin devono
+recepire la candidata, verificarla in `warmup_requirement()` e documentare ogni
+variazione.
 
 > **Note implementazione**: da compilare immediatamente al completamento.
 
@@ -713,6 +740,7 @@ Definire:
 - params JSON Schema metadata;
 - input requirements;
 - axes/units/reference levels;
+- reference levels e value regions risolti per instance;
 - warm-up metadata;
 - availability static/dynamic;
 - error model.
@@ -742,7 +770,7 @@ Implementare:
 - dedup;
 - warm-up aggregation;
 - range extension contract;
-- shared columnar/DataFrame preparation;
+- optional shared columnar/DataFrame preparation when useful;
 - field/history coverage;
 - static/dynamic availability;
 - plugin execution;
@@ -884,14 +912,16 @@ Aggiungere:
 
 - `signals` opzionali a query/result;
 - catalog endpoint Asset;
-- context-aware dynamic availability;
+- catalogo Asset statico;
+- disponibilità dinamica calcolata nella POST bulk e restituita per instance;
 - range esteso unico;
 - mapping neutro;
 - compute/slicing.
 
 **Accettazione**:
 
-- catalogo 17 segnali con static/dynamic availability;
+- catalogo statico con 17 segnali e compatibilità Asset;
+- risultati POST con disponibilità dinamica e motivazioni;
 - client senza signals invariati;
 - target-currency signals calcolati sui valori mostrati;
 - backend revalida disponibilità al compute.
@@ -913,8 +943,9 @@ Aggiungere:
 - `signals` opzionali a `FXConversionRequest`;
 - `signal_results` aggregati;
 - catalog endpoint FX;
-- context-aware history availability;
-- adapter rate → close.
+- catalogo FX statico;
+- disponibilità dinamica calcolata nella POST bulk;
+- conversione rate → close con semantica identity/non-identity esplicita.
 
 **Accettazione**:
 
@@ -1083,7 +1114,7 @@ Per Donchian:
 
 - Step 0 blocca plugin production e definisce warm-up/concurrency.
 - Step 1 blocca service, plugin e API.
-- Step 2 blocca adapter e cutover.
+- Step 2 blocca l'integrazione di dominio Asset/FX e il cutover.
 - Step 3 blocca il cutover dei segnali già esistenti.
 - Step 4-6 possono procedere in parallelo dopo Step 1-2.
 - Step 7 e 8 possono procedere in parallelo dopo Step 2-3.
@@ -1114,4 +1145,5 @@ Dopo ogni step:
   nei contratti pubblici.
 - **Cache in Phase 0** → rinviata a un piano successivo basato su benchmark.
 
-→ Follow-up implementativo: da creare solo dopo validazione esplicita di questa revisione.
+→ Piano applicativo:
+[plan-phase00SignalsBackendMigrationImplementation.prompt.md](./plan-phase00SignalsBackendMigrationImplementation.prompt.md)
