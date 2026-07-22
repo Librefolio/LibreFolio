@@ -50,3 +50,7 @@ Aggiunta di un nuovo strumento visivo per analizzare la persistenza del rendimen
     *   Creazione di un **2° Tab** (es. "Performance Rolling") nel blocco grafico della pagina `Asset Detail`.
     *   Aggiunta di un input/slider per permettere all'utente di variare il parametro N in modo reattivo.
     *   Supporto nativo per gli "asset di comparazione": il grafico mostrerà anche il rendimento rolling dell'asset di benchmark (es. S&P500) per capire chi batte chi con coerenza temporale.
+
+---
+
+→ Piano migrazione segnali: [plan-phase00SignalsBackendMigration.prompt.md](../Phase_0/plan-phase00SignalsBackendMigration.prompt.md)
