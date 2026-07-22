@@ -551,6 +551,7 @@
       "dateRange": "Intervallo",
       "detailTitle": "Dettaglio Lotti FIFO",
       "loadFailed": "Impossibile caricare i dati dei lotti",
+      "analysisFailed": "L'analisi dei lotti non è stata ricostruita in modo affidabile (quantità o trasferimenti incoerenti) — i valori potrebbero essere incompleti.",
       "combined": "Combinato",
       "chartMarkers": {
         "legend": {
@@ -637,6 +638,12 @@
         "totalPnl": "P&L complessivo",
         "cashYield": "Rendimento da proventi",
         "totalReturn": "Rendimento complessivo",
+        "netBreakdown": "Scomposizione netta",
+        "grossTotalPnl": "P&L totale lordo",
+        "fees": "Commissioni",
+        "taxes": "Imposte",
+        "netTotalPnl": "P&L totale netto",
+        "netTotalReturn": "Rendimento totale netto",
         "estimatedAtCost": "Valore stimato al costo",
         "fifoPnl": "P&L FIFO",
         "openReturn": "Rendimento aperto",
@@ -698,6 +705,11 @@
       "copyLotIdentifier": "Copia identificativo lotto",
       "actions": "Azioni",
       "assetIncome": "Proventi",
+      "allocatedFees": "Commissioni",
+      "allocatedTaxes": "Imposte",
+      "netTotalPnl": "P&L netto",
+      "netTotalReturn": "Rendimento netto",
+      "netMetricsUnavailable": "Metriche nette non disponibili: pool economico degradato",
       "categoryCost": "Costo",
       "categoryIncome": "Provento",
       "categoryOther": "Altro",
@@ -1185,7 +1197,9 @@
     "fifoSourceQuantityMissing": "La transazione eccede la quantità disponibile di {missing_quantity} (broker {broker_id})",
     "transferPairMissing": "Un trasferimento non ha la transazione abbinata, oppure la coppia non è valida",
     "missingFxRates": "Mancano tassi FX per {count} coppia/e tra {date_from} e {date_to} ({dates_count} date) — sincronizza per completare i totali",
-    "missingFxRatesManual": "Mancano tassi FX per {count} coppia/e manuale/i — inserisci i tassi manualmente"
+    "missingFxRatesManual": "Mancano tassi FX per {count} coppia/e manuale/i — inserisci i tassi manualmente",
+    "assetIncomeNoEligibleLots": "Nessun lotto aperto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — provento non allocato",
+    "assetCostNoEligibleLots": "Nessun lotto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — costo non allocato"
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",

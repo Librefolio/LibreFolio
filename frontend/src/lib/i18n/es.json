@@ -551,6 +551,7 @@
       "dateRange": "Rango",
       "detailTitle": "Detalle de Lotes FIFO",
       "loadFailed": "Error al cargar los datos de los lotes",
+      "analysisFailed": "El análisis de lotes no se pudo reconstruir de forma fiable (cantidades o transferencias incoherentes) — los valores pueden estar incompletos.",
       "combined": "Combinado",
       "chartMarkers": {
         "legend": {
@@ -637,6 +638,12 @@
         "totalPnl": "P&L total",
         "cashYield": "Rendimiento por ingresos",
         "totalReturn": "Rendimiento total",
+        "netBreakdown": "Desglose neto",
+        "grossTotalPnl": "P&L total bruto",
+        "fees": "Comisiones",
+        "taxes": "Impuestos",
+        "netTotalPnl": "P&L total neto",
+        "netTotalReturn": "Rendimiento total neto",
         "estimatedAtCost": "Valor estimado al coste",
         "fifoPnl": "P&L FIFO",
         "openReturn": "Rendimiento abierto",
@@ -698,6 +705,11 @@
       "copyLotIdentifier": "Copiar identificador del lote",
       "actions": "Acciones",
       "assetIncome": "Ingresos",
+      "allocatedFees": "Comisiones",
+      "allocatedTaxes": "Impuestos",
+      "netTotalPnl": "P&L neto",
+      "netTotalReturn": "Rendimiento neto",
+      "netMetricsUnavailable": "Métricas netas no disponibles: pool económico degradado",
       "categoryCost": "Coste",
       "categoryIncome": "Ingreso",
       "categoryOther": "Otro",
@@ -1185,7 +1197,9 @@
     "fifoSourceQuantityMissing": "La transacción supera la cantidad disponible en {missing_quantity} (bróker {broker_id})",
     "transferPairMissing": "A una transferencia le falta su transacción emparejada, o el par no es válido",
     "missingFxRates": "Faltan tasas FX para {count} par(es) entre {date_from} y {date_to} ({dates_count} fecha(s)) — sincroniza para completar los totales",
-    "missingFxRatesManual": "Faltan tasas FX para {count} par(es) manual(es) — añade las tasas manualmente"
+    "missingFxRatesManual": "Faltan tasas FX para {count} par(es) manual(es) — añade las tasas manualmente",
+    "assetIncomeNoEligibleLots": "Ningún lote abierto elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — ingreso sin asignar",
+    "assetCostNoEligibleLots": "Ningún lote elegible para {economic_type} de {target_amount} {target_currency} el {as_of_date} — coste sin asignar"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",

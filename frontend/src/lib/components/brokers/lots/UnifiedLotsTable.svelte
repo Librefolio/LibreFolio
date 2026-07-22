@@ -53,6 +53,11 @@
         assetIncome: number | null;
         totalPnl: number | null;
         totalReturn: number | null;
+        allocatedFees: number | null;
+        allocatedTaxes: number | null;
+        netTotalPnl: number | null;
+        netTotalReturn: number | null;
+        netMetricsStatus: 'AVAILABLE' | 'UNAVAILABLE';
         relativeReturn: number | null;
     }
 
@@ -245,6 +250,22 @@
         };
     }
 
+    function netUnavailableCell(): HtmlCell {
+        const tip = escapeHtml(label('brokers.lots.netMetricsUnavailable', 'Net metrics unavailable: degraded economic pool'));
+        return {
+            type: 'html',
+            html: `<span class="tabular-nums text-gray-400 dark:text-gray-500" title="${tip}">—</span>`,
+        };
+    }
+
+    function netAmountCell(row: DisplayRow): HtmlCell | string {
+        return row.netMetricsStatus === 'UNAVAILABLE' ? netUnavailableCell() : signedAmountCell(row.netTotalPnl);
+    }
+
+    function netReturnCell(row: DisplayRow): HtmlCell | string {
+        return row.netMetricsStatus === 'UNAVAILABLE' ? netUnavailableCell() : signedPercentCell(row.netTotalReturn);
+    }
+
     function buildCustodyTooltip(row: DisplayRow): string {
         if (row.custodySlices.length === 0) return '';
         const lines = row.custodySlices.map((slice) => {
@@ -345,6 +366,11 @@
                 assetIncome: safeNum(lot.asset_income),
                 totalPnl: safeNum(lot.total_pnl),
                 totalReturn: safeNum(lot.total_return),
+                allocatedFees: safeNum(lot.allocated_fees),
+                allocatedTaxes: safeNum(lot.allocated_taxes),
+                netTotalPnl: safeNum(lot.net_total_pnl),
+                netTotalReturn: safeNum(lot.net_total_return),
+                netMetricsStatus: lot.net_metrics_status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE',
                 relativeReturn: safeNum(lot.relative_return),
             };
             return row;
@@ -409,6 +435,7 @@
     let hasDifferingStates = $derived.by(() => new Set(rows.map((row) => row.filterStates.join('|'))).size > 1);
     let hasMixedDirections = $derived.by(() => new Set(rows.map((row) => row.direction)).size > 1);
     let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => (row.assetIncome ?? 0) > 0));
+    let hasNetCosts = $derived.by(() => rows.some((row) => (row.allocatedFees ?? 0) !== 0 || (row.allocatedTaxes ?? 0) !== 0));
 
     function sumNumeric(footerRows: readonly DisplayRow[], getValue: (row: DisplayRow) => number | null): number | null {
         let total = 0;
@@ -440,12 +467,18 @@
         const totalPnl = sumNumeric(footerRows, (row) => row.totalPnl);
         const openingValueSum = sumNumeric(footerRows, (row) => row.openingValue);
         const totalReturn = totalPnl != null && openingValueSum != null && openingValueSum !== 0 ? totalPnl / openingValueSum : null;
+        const netTotalPnl = sumNumeric(footerRows, (row) => row.netTotalPnl);
+        const netTotalReturn = netTotalPnl != null && openingValueSum != null && openingValueSum !== 0 ? netTotalPnl / openingValueSum : null;
 
         return {
             'opening-date': label('brokers.lots.footerTotals', label('assets.distribution.total', 'Totals')),
             'total-pnl': signedAmountCell(totalPnl),
             'total-return': signedPercentCell(totalReturn),
             'asset-income': currencyCell(sumNumeric(footerRows, (row) => row.assetIncome)),
+            'allocated-fees': currencyCell(sumNumeric(footerRows, (row) => row.allocatedFees)),
+            'allocated-taxes': currencyCell(sumNumeric(footerRows, (row) => row.allocatedTaxes)),
+            'net-total-pnl': signedAmountCell(netTotalPnl),
+            'net-total-return': signedPercentCell(netTotalReturn),
             'current-value': currencyCell(sumNumeric(footerRows, (row) => row.currentValue)),
             'open-quantity': quantityValueCell(sumNumeric(footerRows, (row) => row.quantityOpen)),
             'opening-price': currencyCell(
@@ -512,6 +545,58 @@
             filterable: false,
             hiddenByDefault: !hasPositiveAssetIncome,
             getValue: (row) => row.assetIncome ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'allocated-fees',
+            header: () => label('brokers.lots.allocatedFees', 'Fees'),
+            cell: (row) => currencyCell(row.allocatedFees),
+            type: 'number',
+            align: 'right',
+            width: 150,
+            minWidth: 130,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: !hasNetCosts,
+            getValue: (row) => row.allocatedFees ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'allocated-taxes',
+            header: () => label('brokers.lots.allocatedTaxes', 'Taxes'),
+            cell: (row) => currencyCell(row.allocatedTaxes),
+            type: 'number',
+            align: 'right',
+            width: 150,
+            minWidth: 130,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: !hasNetCosts,
+            getValue: (row) => row.allocatedTaxes ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'net-total-pnl',
+            header: () => label('brokers.lots.netTotalPnl', 'Net P&L'),
+            cell: (row) => netAmountCell(row),
+            type: 'number',
+            align: 'right',
+            width: 170,
+            minWidth: 150,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: !hasNetCosts,
+            getValue: (row) => row.netTotalPnl ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'net-total-return',
+            header: () => label('brokers.lots.netTotalReturn', 'Net return'),
+            cell: (row) => netReturnCell(row),
+            type: 'number',
+            align: 'right',
+            width: 150,
+            minWidth: 130,
+            sortable: true,
+            filterable: false,
+            hiddenByDefault: !hasNetCosts,
+            getValue: (row) => row.netTotalReturn ?? Number.NEGATIVE_INFINITY,
         },
         {
             id: 'current-value',

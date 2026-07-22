@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Callable, Literal, Protocol, Sequence
 
@@ -24,7 +25,22 @@ IssueCode = Literal[
     "SHORT_ADJUSTMENT_NOT_SUPPORTED",
     "FIFO_SOURCE_QUANTITY_MISSING",
     "TRANSFER_PAIR_MISSING",
+    "ASSET_INCOME_NO_ELIGIBLE_LOTS",
+    "ASSET_COST_NO_ELIGIBLE_LOTS",
 ]
+# Issue codes that indicate a non-isolable quantitative replay failure (incoherent
+# quantities, invalid fragment topology, or unreconstructable transfers). Their
+# presence makes the whole FIFO reconstruction unreliable -> analysis_status FAILED.
+# Economic issues (orphan income/cost, reference-price, FX) stay DEGRADED: they are
+# isolable to a single pool/lot and never invalidate the quantitative replay.
+_QUANTITATIVE_FAILURE_CODES: frozenset[str] = frozenset(
+    {
+        "SHORT_TRANSFER_NOT_SUPPORTED",
+        "SHORT_ADJUSTMENT_NOT_SUPPORTED",
+        "FIFO_SOURCE_QUANTITY_MISSING",
+        "TRANSFER_PAIR_MISSING",
+    }
+)
 EventKind = Literal[
     "BUY",
     "SELL",
@@ -33,6 +49,21 @@ EventKind = Literal[
     "SPLIT",
     "TRANSFER_DEPART",
     "TRANSFER_ARRIVE",
+]
+
+# --- Economic stage contract (FEE/TAX/income allocation, target-currency aware) ---
+# Following the module convention (Direction/CustodyType/EventKind), economic
+# taxonomies are Literal aliases rather than Enum classes.
+EconomicType = Literal["FEE", "TAX", "DIVIDEND", "INTEREST"]
+AllocationContext = Literal["OPENING", "CLOSURE", "INCOME", "HOLDING"]
+AllocationRule = Literal[
+    "ASSET_INCOME_HOLDINGS",
+    "SAME_DAY_MIXED_TRADES",
+    "SAME_DAY_TRADES",
+    "SAME_DAY_INCOME",
+    "PREVIOUS_DAY_TRADES",
+    "PREVIOUS_DAY_INCOME",
+    "OPEN_LOTS_FALLBACK",
 ]
 
 
@@ -63,6 +94,8 @@ class FifoInputTransaction:
     cost_basis_override: Decimal | None = None
     cost_basis_currency: str | None = None
     related_transaction_id: int | None = None
+    target_amount: Decimal | None = None
+    target_currency: str | None = None
 
     @classmethod
     def from_transaction(cls, tx: TransactionLike) -> FifoInputTransaction:
@@ -169,21 +202,84 @@ class FifoLot:
 
 
 @dataclass(frozen=True, slots=True)
-class LotValuation:
-    open_value: Decimal
-    proceeds: Decimal
-    total_value: Decimal
-    original_cost: Decimal
-    pnl: Decimal
+class EconomicEvent:
+    """Non-quantitative economic input (FEE/TAX/DIVIDEND/INTEREST) fed to the engine.
+
+    Carries both the native amount (as stored on the source transaction) and the
+    target-currency amount pre-resolved by the service (Option B: engine is
+    target-value aware, FX-mechanism agnostic). The engine never performs FX I/O.
+    """
+
+    transaction_id: int
+    broker_id: int
+    asset_id: int
+    date: date
+    economic_type: EconomicType
+    native_amount: Decimal
+    native_currency: str | None
+    target_amount: Decimal
+    target_currency: str
 
 
 @dataclass(frozen=True, slots=True)
-class AggregatedLotValuation:
-    open_value: Decimal
-    proceeds: Decimal
-    total_value: Decimal
-    original_cost: Decimal
-    pnl: Decimal
+class EconomicLotAllocation:
+    """Audit leaf: share of a target operation assigned to a single lot."""
+
+    lot_id: int
+    weight: Decimal
+    native_amount: Decimal
+    target_amount: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class TargetOperationAllocation:
+    """Audit mid-level: one target operation (opening/closure/income/holding).
+
+    The allocation context lives on the target operation, not the group, so the
+    same lot can appear under multiple contexts (e.g. OPENING and CLOSURE) with
+    its breakdown preserved.
+    """
+
+    context: AllocationContext
+    operation_transaction_id: int | None
+    weight: Decimal
+    lot_allocations: tuple[EconomicLotAllocation, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EconomicAllocationGroup:
+    """Audit top-level: a pooled economic group and its resolved allocations."""
+
+    economic_type: EconomicType
+    asset_id: int
+    broker_id: int
+    date: date
+    native_currency: str | None
+    target_currency: str
+    rule: AllocationRule
+    source_transaction_ids: tuple[int, ...]
+    native_pool_total: Decimal
+    target_pool_total: Decimal
+    operation_allocations: tuple[TargetOperationAllocation, ...] = ()
+    native_orphan: Decimal = Decimal("0")
+    target_orphan: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True, slots=True)
+class LotEconomicAccumulators:
+    """Per-lot economic accumulators (gross + allocated costs), target currency.
+
+    Kept separate from the quantitative lot structures: economic values never
+    mutate quantities, fragments or closures.
+    """
+
+    lot_id: int
+    original_cost: Decimal = Decimal("0")
+    sale_proceeds: Decimal = Decimal("0")
+    gross_income: Decimal = Decimal("0")
+    allocated_fees: Decimal = Decimal("0")
+    allocated_taxes: Decimal = Decimal("0")
+    open_value: Decimal = Decimal("0")
 
 
 @dataclass(slots=True)
@@ -194,10 +290,19 @@ class FifoEngineResult:
     fragment_intervals: list[FragmentInterval]
     closures: list[LotClosure]
     issues: list[FifoDataQualityIssue]
+    economic_allocation_groups: list[EconomicAllocationGroup] = field(default_factory=list)
+    economic_accumulators_by_lot: dict[int, LotEconomicAccumulators] = field(default_factory=dict)
+    asset_orphan_income: Decimal = Decimal("0")
+    asset_orphan_fees: Decimal = Decimal("0")
+    asset_orphan_taxes: Decimal = Decimal("0")
 
     @property
-    def calculation_status(self) -> Literal["COMPLETE", "DEGRADED"]:
-        return "DEGRADED" if self.issues else "COMPLETE"
+    def analysis_status(self) -> Literal["COMPLETE", "DEGRADED", "FAILED"]:
+        if not self.issues:
+            return "COMPLETE"
+        if any(issue.code in _QUANTITATIVE_FAILURE_CODES for issue in self.issues):
+            return "FAILED"
+        return "DEGRADED"
 
     def get_lot(self, lot_id: int) -> FifoLot:
         for lot in self.lots:
@@ -241,51 +346,6 @@ class FifoEngineResult:
             total += sign * fragment.quantity
         return total
 
-    def value_for_lot(self, lot_id: int, market_price: Decimal) -> LotValuation:
-        lot = self.get_lot(lot_id)
-        open_value = lot.open_quantity * market_price
-        proceeds = lot.cumulative_proceeds
-        if lot.direction == "LONG":
-            total_value = open_value + proceeds
-            pnl = total_value - lot.original_cost
-        else:
-            total_value = proceeds - open_value
-            pnl = total_value
-        return LotValuation(
-            open_value=open_value,
-            proceeds=proceeds,
-            total_value=total_value,
-            original_cost=lot.original_cost,
-            pnl=pnl,
-        )
-
-    def aggregate_value(self, lot_ids: Sequence[int], market_price: Decimal) -> AggregatedLotValuation:
-        open_value = Decimal("0")
-        proceeds = Decimal("0")
-        total_value = Decimal("0")
-        original_cost = Decimal("0")
-        pnl = Decimal("0")
-        for lot_id in lot_ids:
-            lot_value = self.value_for_lot(lot_id, market_price)
-            open_value += lot_value.open_value
-            proceeds += lot_value.proceeds
-            total_value += lot_value.total_value
-            original_cost += lot_value.original_cost
-            pnl += lot_value.pnl
-        return AggregatedLotValuation(
-            open_value=open_value,
-            proceeds=proceeds,
-            total_value=total_value,
-            original_cost=original_cost,
-            pnl=pnl,
-        )
-
-    def relative_return_for_lot(self, lot_id: int, market_price: Decimal) -> Decimal | None:
-        lot = self.get_lot(lot_id)
-        if lot.reference_unit_price is None or lot.reference_unit_price == Decimal("0"):
-            return None
-        return (market_price / lot.reference_unit_price) - Decimal("1")
-
 
 @dataclass(slots=True)
 class _PendingTransferPiece:
@@ -296,6 +356,17 @@ class _PendingTransferPiece:
     quantity: Decimal
     transit_fragment_id: str | None
     unit_price: Decimal
+
+
+@dataclass(slots=True)
+class _EconomicStageResult:
+    """Internal carrier for the post-replay economic allocation outputs."""
+
+    groups: list[EconomicAllocationGroup] = field(default_factory=list)
+    accumulators: dict[int, LotEconomicAccumulators] = field(default_factory=dict)
+    orphan_income: Decimal = Decimal("0")
+    orphan_fees: Decimal = Decimal("0")
+    orphan_taxes: Decimal = Decimal("0")
 
 
 class FifoLotEngine:
@@ -318,6 +389,8 @@ class FifoLotEngine:
         *,
         split_ratios_by_tx_id: dict[int, Decimal] | None = None,
         reference_price_lookup: ReferencePriceLookup | None = None,
+        economic_events: Sequence[EconomicEvent] = (),
+        target_currency: str = "",
     ) -> None:
         normalized = [tx if isinstance(tx, FifoInputTransaction) else FifoInputTransaction.from_transaction(tx) for tx in transactions]
         if not normalized:
@@ -330,6 +403,8 @@ class FifoLotEngine:
         self.broker_shorting = broker_shorting
         self.split_ratios_by_tx_id = split_ratios_by_tx_id or {}
         self.reference_price_lookup = reference_price_lookup
+        self.economic_events = tuple(economic_events)
+        self.target_currency = target_currency
         self._tx_by_id = {tx.id: tx for tx in normalized}
         self._issues: list[FifoDataQualityIssue] = []
         self._lots: dict[int, FifoLot] = {}
@@ -357,6 +432,7 @@ class FifoLotEngine:
                 self._apply_transfer_arrive(event)
             elif event.kind == "SPLIT":
                 self._apply_split(event)
+        economic = self._allocate_economics()
         return FifoEngineResult(
             asset_id=self.asset_id,
             classified_events=events,
@@ -364,6 +440,11 @@ class FifoLotEngine:
             fragment_intervals=sorted(self._intervals, key=lambda fragment: (fragment.start_date, fragment.fragment_id, fragment.quantity)),
             closures=sorted(self._closures, key=lambda closure: (closure.close_date, closure.transaction_id, closure.lot_id)),
             issues=self._issues,
+            economic_allocation_groups=economic.groups,
+            economic_accumulators_by_lot=economic.accumulators,
+            asset_orphan_income=economic.orphan_income,
+            asset_orphan_fees=economic.orphan_fees,
+            asset_orphan_taxes=economic.orphan_taxes,
         )
 
     def classify_events(self) -> list[FifoEvent]:
@@ -952,6 +1033,458 @@ class FifoLotEngine:
             )
         )
 
+    # ------------------------------------------------------------------
+    # Economic allocation stage (post-replay): income now, FEE/TAX later.
+    # Quantities, fragments and closures are never mutated here.
+    # ------------------------------------------------------------------
+
+    def _allocate_economics(self) -> _EconomicStageResult:
+        stage = _EconomicStageResult()
+        if not self.economic_events:
+            return stage
+        fragments_by_lot: dict[int, list[FragmentInterval]] = defaultdict(list)
+        for fragment in self._intervals:
+            fragments_by_lot[fragment.lot_id].append(fragment)
+        mutable_accumulators: dict[int, dict[str, Decimal]] = {}
+
+        income_events = [event for event in self.economic_events if event.economic_type in ("DIVIDEND", "INTEREST")]
+        stage.orphan_income += self._allocate_income_pools(income_events, fragments_by_lot, stage.groups, mutable_accumulators)
+
+        fee_events = [event for event in self.economic_events if event.economic_type == "FEE"]
+        stage.orphan_fees += self._allocate_cost_pools(fee_events, "FEE", "allocated_fees", fragments_by_lot, stage.groups, mutable_accumulators)
+
+        tax_events = [event for event in self.economic_events if event.economic_type == "TAX"]
+        stage.orphan_taxes += self._allocate_cost_pools(tax_events, "TAX", "allocated_taxes", fragments_by_lot, stage.groups, mutable_accumulators)
+
+        stage.accumulators = {lot_id: LotEconomicAccumulators(lot_id=lot_id, **values) for lot_id, values in mutable_accumulators.items()}
+        return stage
+
+    def _allocate_income_pools(
+        self,
+        income_events: Sequence[EconomicEvent],
+        fragments_by_lot: dict[int, list[FragmentInterval]],
+        groups: list[EconomicAllocationGroup],
+        accumulators: dict[int, dict[str, Decimal]],
+    ) -> Decimal:
+        """Allocate DIVIDEND/INTEREST to lots eligible as of D-1 within the paying broker.
+
+        Pool key = (broker, date, economic_type, native_currency, target_currency). Eligibility
+        (open LONG quantity on ``date - 1``) is shared across DIVIDEND and INTEREST since it is a
+        function of holdings, but the two remain distinct audit groups by economic_type. A pool is
+        allocated entirely (running-remainder conserves the total) or, when no lot is eligible,
+        recorded entirely as orphan income (returned to the caller for the asset-level total).
+        """
+        orphan_total = Decimal("0")
+        pools: dict[tuple[int, date, str, str | None, str], list[EconomicEvent]] = defaultdict(list)
+        for event in income_events:
+            pools[(event.broker_id, event.date, event.economic_type, event.native_currency, event.target_currency)].append(event)
+        for key in sorted(pools, key=lambda item: (item[1], item[0], str(item[2]), str(item[3] or ""))):
+            broker_id, event_date, economic_type, native_currency, target_currency = key
+            pool_events = pools[key]
+            cutoff = event_date - timedelta(days=1)
+            eligible: list[tuple[int, Decimal]] = []
+            for lot_id, lot in self._lots.items():
+                if lot.direction != "LONG":
+                    continue
+                quantity = self._eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
+                if quantity > Decimal("0"):
+                    eligible.append((lot_id, quantity))
+            eligible.sort(key=lambda item: item[0])
+            native_pool = sum((abs(event.native_amount) for event in pool_events), Decimal("0"))
+            target_pool = sum((abs(event.target_amount) for event in pool_events), Decimal("0"))
+            source_ids = tuple(sorted(event.transaction_id for event in pool_events))
+            if not eligible:
+                orphan_total += target_pool
+                self._issues.append(
+                    FifoDataQualityIssue(
+                        code="ASSET_INCOME_NO_ELIGIBLE_LOTS",
+                        transaction_id=source_ids[0] if source_ids else None,
+                        broker_id=broker_id,
+                        params={
+                            "economic_type": economic_type,
+                            "as_of_date": event_date.isoformat(),
+                            "target_amount": target_pool,
+                            "target_currency": target_currency,
+                        },
+                    )
+                )
+                groups.append(
+                    EconomicAllocationGroup(
+                        economic_type=economic_type,
+                        asset_id=self.asset_id,
+                        broker_id=broker_id,
+                        date=event_date,
+                        native_currency=native_currency,
+                        target_currency=target_currency,
+                        rule="ASSET_INCOME_HOLDINGS",
+                        source_transaction_ids=source_ids,
+                        native_pool_total=native_pool,
+                        target_pool_total=target_pool,
+                        operation_allocations=(),
+                        native_orphan=native_pool,
+                        target_orphan=target_pool,
+                    )
+                )
+                continue
+            total_quantity = sum((quantity for _lot_id, quantity in eligible), Decimal("0"))
+            lot_allocations: list[EconomicLotAllocation] = []
+            remaining_target = target_pool
+            remaining_native = native_pool
+            for index, (lot_id, quantity) in enumerate(eligible):
+                if index == len(eligible) - 1:
+                    allocated_target = remaining_target
+                    allocated_native = remaining_native
+                else:
+                    allocated_target = target_pool * quantity / total_quantity
+                    allocated_native = native_pool * quantity / total_quantity
+                    remaining_target -= allocated_target
+                    remaining_native -= allocated_native
+                accumulator = accumulators.setdefault(lot_id, _new_economic_accumulator())
+                accumulator["gross_income"] += allocated_target
+                lot_allocations.append(
+                    EconomicLotAllocation(
+                        lot_id=lot_id,
+                        weight=quantity / total_quantity,
+                        native_amount=allocated_native,
+                        target_amount=allocated_target,
+                    )
+                )
+            groups.append(
+                EconomicAllocationGroup(
+                    economic_type=economic_type,
+                    asset_id=self.asset_id,
+                    broker_id=broker_id,
+                    date=event_date,
+                    native_currency=native_currency,
+                    target_currency=target_currency,
+                    rule="ASSET_INCOME_HOLDINGS",
+                    source_transaction_ids=source_ids,
+                    native_pool_total=native_pool,
+                    target_pool_total=target_pool,
+                    operation_allocations=(
+                        TargetOperationAllocation(
+                            context="HOLDING",
+                            operation_transaction_id=None,
+                            weight=Decimal("1"),
+                            lot_allocations=tuple(lot_allocations),
+                        ),
+                    ),
+                )
+            )
+        return orphan_total
+
+    @staticmethod
+    def _eligible_income_quantity(fragments: Sequence[FragmentInterval], broker_id: int, cutoff: date) -> Decimal:
+        """Open quantity attributable to ``broker_id`` as of ``cutoff`` (transfer-aware).
+
+        Broker-custodied fragments count for their broker; in-transit fragments count for their
+        SOURCE broker (the payer of record during transit), never the destination — which only
+        becomes eligible once the arrival fragment exists on/after the arrival date.
+        """
+        total = Decimal("0")
+        for fragment in fragments:
+            if not (fragment.start_date <= cutoff and (fragment.end_date is None or cutoff < fragment.end_date)):
+                continue
+            if fragment.custody_type == "BROKER" and fragment.broker_id == broker_id:
+                total += fragment.quantity
+            elif fragment.custody_type == "IN_TRANSIT" and fragment.source_broker_id == broker_id:
+                total += fragment.quantity
+        return total
+
+    # ------------------------------------------------------------------
+    # FEE/TAX allocation (asset-linked costs). Deterministic matching order
+    # (§4.3): FEE  = same-day trades -> previous-day trades -> holdings fallback -> orphan;
+    #         TAX  = same-day income -> same-day trades -> previous-day income ->
+    #                previous-day trades -> holdings fallback -> orphan.
+    # Native and target totals are conserved by running-remainder at every split.
+    # ------------------------------------------------------------------
+
+    def _allocate_cost_pools(
+        self,
+        cost_events: Sequence[EconomicEvent],
+        economic_type: EconomicType,
+        accumulator_field: str,
+        fragments_by_lot: dict[int, list[FragmentInterval]],
+        groups: list[EconomicAllocationGroup],
+        accumulators: dict[int, dict[str, Decimal]],
+    ) -> Decimal:
+        """Allocate FEE or TAX pools; returns the orphaned target total (unallocatable pools)."""
+        orphan_total = Decimal("0")
+        pools: dict[tuple[int, date, str | None, str], list[EconomicEvent]] = defaultdict(list)
+        for event in cost_events:
+            pools[(event.broker_id, event.date, event.native_currency, event.target_currency)].append(event)
+        for key in sorted(pools, key=lambda item: (item[1], item[0], str(item[2] or ""))):
+            broker_id, event_date, native_currency, target_currency = key
+            pool_events = pools[key]
+            native_pool = sum((abs(event.native_amount) for event in pool_events), Decimal("0"))
+            target_pool = sum((abs(event.target_amount) for event in pool_events), Decimal("0"))
+            source_ids = tuple(sorted(event.transaction_id for event in pool_events))
+            operations, rule = self._match_cost_operations(
+                economic_type=economic_type,
+                broker_id=broker_id,
+                event_date=event_date,
+                native_pool=native_pool,
+                target_pool=target_pool,
+                fragments_by_lot=fragments_by_lot,
+            )
+            if operations is None:
+                orphan_total += target_pool
+                self._issues.append(
+                    FifoDataQualityIssue(
+                        code="ASSET_COST_NO_ELIGIBLE_LOTS",
+                        transaction_id=source_ids[0] if source_ids else None,
+                        broker_id=broker_id,
+                        params={
+                            "economic_type": economic_type,
+                            "as_of_date": event_date.isoformat(),
+                            "target_amount": target_pool,
+                            "target_currency": target_currency,
+                        },
+                    )
+                )
+                groups.append(
+                    EconomicAllocationGroup(
+                        economic_type=economic_type,
+                        asset_id=self.asset_id,
+                        broker_id=broker_id,
+                        date=event_date,
+                        native_currency=native_currency,
+                        target_currency=target_currency,
+                        rule=rule,
+                        source_transaction_ids=source_ids,
+                        native_pool_total=native_pool,
+                        target_pool_total=target_pool,
+                        operation_allocations=(),
+                        native_orphan=native_pool,
+                        target_orphan=target_pool,
+                    )
+                )
+                continue
+            for operation in operations:
+                for allocation in operation.lot_allocations:
+                    accumulator = accumulators.setdefault(allocation.lot_id, _new_economic_accumulator())
+                    accumulator[accumulator_field] += allocation.target_amount
+            groups.append(
+                EconomicAllocationGroup(
+                    economic_type=economic_type,
+                    asset_id=self.asset_id,
+                    broker_id=broker_id,
+                    date=event_date,
+                    native_currency=native_currency,
+                    target_currency=target_currency,
+                    rule=rule,
+                    source_transaction_ids=source_ids,
+                    native_pool_total=native_pool,
+                    target_pool_total=target_pool,
+                    operation_allocations=tuple(operations),
+                )
+            )
+        return orphan_total
+
+    def _match_cost_operations(
+        self,
+        *,
+        economic_type: EconomicType,
+        broker_id: int,
+        event_date: date,
+        native_pool: Decimal,
+        target_pool: Decimal,
+        fragments_by_lot: dict[int, list[FragmentInterval]],
+    ) -> tuple[list[TargetOperationAllocation] | None, AllocationRule]:
+        """Resolve a pool to target operations following the matching order (§4.3).
+
+        Returns ``(operations, rule)``; ``operations is None`` means the pool is orphan and
+        ``rule`` records the level that failed (e.g. ``SAME_DAY_INCOME`` when a taxed income pool
+        was itself orphan -> the whole TAX pool is orphan, no mixed allocated/orphan).
+        """
+        previous_day = event_date - timedelta(days=1)
+        if economic_type == "TAX":
+            if self._income_on(broker_id, event_date):
+                # TAX follows the income it taxes: same D-1 holding weights (§4.2). If that income
+                # was orphan (no eligible lot) the whole TAX pool is orphan -> stop here.
+                ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "INCOME")
+                return ops, "SAME_DAY_INCOME"
+            same_day_trades = self._trades_on(broker_id, event_date)
+            if same_day_trades:
+                ops = self._trade_operations(same_day_trades, native_pool, target_pool)
+                if ops is not None:
+                    return ops, self._trade_rule(same_day_trades)
+            if self._income_on(broker_id, previous_day):
+                ops = self._holding_operations(broker_id, previous_day - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "INCOME")
+                return ops, "PREVIOUS_DAY_INCOME"
+            previous_day_trades = self._trades_on(broker_id, previous_day)
+            if previous_day_trades:
+                ops = self._trade_operations(previous_day_trades, native_pool, target_pool)
+                if ops is not None:
+                    return ops, "PREVIOUS_DAY_TRADES"
+            ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "HOLDING")
+            return ops, "OPEN_LOTS_FALLBACK"
+
+        # FEE
+        same_day_trades = self._trades_on(broker_id, event_date)
+        if same_day_trades:
+            ops = self._trade_operations(same_day_trades, native_pool, target_pool)
+            if ops is not None:
+                return ops, self._trade_rule(same_day_trades)
+        previous_day_trades = self._trades_on(broker_id, previous_day)
+        if previous_day_trades:
+            ops = self._trade_operations(previous_day_trades, native_pool, target_pool)
+            if ops is not None:
+                return ops, "PREVIOUS_DAY_TRADES"
+        ops = self._holding_operations(broker_id, event_date - timedelta(days=1), native_pool, target_pool, fragments_by_lot, "HOLDING")
+        return ops, "OPEN_LOTS_FALLBACK"
+
+    def _income_on(self, broker_id: int, on_date: date) -> bool:
+        return any(event.economic_type in ("DIVIDEND", "INTEREST") and event.broker_id == broker_id and event.date == on_date for event in self.economic_events)
+
+    def _trades_on(self, broker_id: int, on_date: date) -> list[FifoInputTransaction]:
+        """BUY/SELL of the broker on ``on_date`` (ADJUSTMENT/TRANSFER excluded), sorted by id."""
+        return sorted(
+            (tx for tx in self.transactions if tx.broker_id == broker_id and tx.date == on_date and tx.type in ("BUY", "SELL")),
+            key=lambda tx: tx.id,
+        )
+
+    @staticmethod
+    def _trade_rule(trades: Sequence[FifoInputTransaction]) -> AllocationRule:
+        kinds = {tx.type for tx in trades}
+        return "SAME_DAY_MIXED_TRADES" if "BUY" in kinds and "SELL" in kinds else "SAME_DAY_TRADES"
+
+    @staticmethod
+    def _trade_target_value(tx: FifoInputTransaction) -> Decimal:
+        """Target-currency controvalue used as the pooling weight (§3.5).
+
+        Falls back to the native amount when the service did not resolve a target (single-currency
+        pools -> weights are ratios, so native and target give identical shares).
+        """
+        return abs(tx.target_amount) if tx.target_amount is not None else abs(tx.amount)
+
+    def _trade_operations(
+        self,
+        trades: Sequence[FifoInputTransaction],
+        native_pool: Decimal,
+        target_pool: Decimal,
+    ) -> list[TargetOperationAllocation] | None:
+        """Distribute a cost pool over trades by target controvalue, then split each trade's quota
+        into its OPENING and CLOSURE lots (crossing-safe). ``None`` when total trade value is zero."""
+        values = [(tx, self._trade_target_value(tx)) for tx in trades]
+        total_value = sum((value for _tx, value in values), Decimal("0"))
+        if total_value <= Decimal("0"):
+            return None
+        operations: list[TargetOperationAllocation] = []
+        remaining_native = native_pool
+        remaining_target = target_pool
+        for index, (tx, value) in enumerate(values):
+            if index == len(values) - 1:
+                trade_native = remaining_native
+                trade_target = remaining_target
+            else:
+                trade_target = target_pool * value / total_value
+                trade_native = native_pool * value / total_value
+                remaining_target -= trade_target
+                remaining_native -= trade_native
+            operations.extend(self._split_trade_cost(tx, trade_native, trade_target, target_pool))
+        return operations
+
+    def _split_trade_cost(
+        self,
+        tx: FifoInputTransaction,
+        native_share: Decimal,
+        target_share: Decimal,
+        pool_target: Decimal,
+    ) -> list[TargetOperationAllocation]:
+        """Split one trade's cost quota between the lots it opened (OPENING) and closed (CLOSURE).
+
+        ``q = q_close + q_open`` (§5): ``Cost_close = share * q_close / q`` to closed lots by closed
+        quantity; ``Cost_open`` (remainder) to opened lots by original quantity. Pure BUY -> OPENING
+        only; pure SELL -> CLOSURE only; a crossing trade splits across both.
+        """
+        closed_by_lot: dict[int, Decimal] = defaultdict(Decimal)
+        for closure in self._closures:
+            if closure.transaction_id == tx.id:
+                closed_by_lot[closure.lot_id] += closure.quantity
+        opened_by_lot: dict[int, Decimal] = defaultdict(Decimal)
+        for lot in self._lots.values():
+            if lot.opening_transaction_id == tx.id:
+                opened_by_lot[lot.lot_id] += lot.original_quantity
+        q_close = sum(closed_by_lot.values(), Decimal("0"))
+        q_open = sum(opened_by_lot.values(), Decimal("0"))
+        total_q = q_close + q_open
+        operations: list[TargetOperationAllocation] = []
+        if total_q <= Decimal("0"):
+            return operations
+        open_target = target_share * q_open / total_q
+        open_native = native_share * q_open / total_q
+        close_target = target_share - open_target
+        close_native = native_share - open_native
+        if q_open > Decimal("0"):
+            operations.append(self._lot_operation("OPENING", tx.id, sorted(opened_by_lot.items()), open_native, open_target, pool_target))
+        if q_close > Decimal("0"):
+            operations.append(self._lot_operation("CLOSURE", tx.id, sorted(closed_by_lot.items()), close_native, close_target, pool_target))
+        return operations
+
+    def _holding_operations(
+        self,
+        broker_id: int,
+        cutoff: date,
+        native_pool: Decimal,
+        target_pool: Decimal,
+        fragments_by_lot: dict[int, list[FragmentInterval]],
+        context: AllocationContext,
+    ) -> list[TargetOperationAllocation] | None:
+        """Distribute the whole pool over LONG lots open at ``cutoff`` (D-1 holdings). ``None`` when
+        no lot is eligible (orphan). Reused for the FEE/TAX holdings fallback and for TAX-on-income
+        (same D-1 eligibility as the income, ``context=INCOME``)."""
+        eligible: list[tuple[int, Decimal]] = []
+        for lot_id, lot in self._lots.items():
+            if lot.direction != "LONG":
+                continue
+            quantity = self._eligible_income_quantity(fragments_by_lot.get(lot_id, ()), broker_id, cutoff)
+            if quantity > Decimal("0"):
+                eligible.append((lot_id, quantity))
+        if not eligible:
+            return None
+        eligible.sort(key=lambda item: item[0])
+        return [self._lot_operation(context, None, eligible, native_pool, target_pool, target_pool)]
+
+    def _lot_operation(
+        self,
+        context: AllocationContext,
+        operation_transaction_id: int | None,
+        lot_weights: Sequence[tuple[int, Decimal]],
+        native_share: Decimal,
+        target_share: Decimal,
+        pool_target: Decimal,
+    ) -> TargetOperationAllocation:
+        """Build one audit operation, distributing ``*_share`` over lots by weight (running-remainder)."""
+        total_weight = sum((weight for _lot_id, weight in lot_weights), Decimal("0"))
+        lot_allocations: list[EconomicLotAllocation] = []
+        remaining_native = native_share
+        remaining_target = target_share
+        for index, (lot_id, weight) in enumerate(lot_weights):
+            if index == len(lot_weights) - 1 or total_weight <= Decimal("0"):
+                allocated_target = remaining_target
+                allocated_native = remaining_native
+            else:
+                allocated_target = target_share * weight / total_weight
+                allocated_native = native_share * weight / total_weight
+                remaining_target -= allocated_target
+                remaining_native -= allocated_native
+            lot_allocations.append(
+                EconomicLotAllocation(
+                    lot_id=lot_id,
+                    weight=(weight / total_weight) if total_weight > Decimal("0") else Decimal("0"),
+                    native_amount=allocated_native,
+                    target_amount=allocated_target,
+                )
+            )
+        operation_weight = (target_share / pool_target) if pool_target and pool_target != Decimal("0") else Decimal("1")
+        return TargetOperationAllocation(
+            context=context,
+            operation_transaction_id=operation_transaction_id,
+            weight=operation_weight,
+            lot_allocations=tuple(lot_allocations),
+        )
+
 
 # ----------------------------------------------------------------------------
 # Public helpers
@@ -964,12 +1497,16 @@ def run_fifo_lot_engine(
     *,
     split_ratios_by_tx_id: dict[int, Decimal] | None = None,
     reference_price_lookup: ReferencePriceLookup | None = None,
+    economic_events: Sequence[EconomicEvent] = (),
+    target_currency: str = "",
 ) -> FifoEngineResult:
     return FifoLotEngine(
         transactions=transactions,
         broker_shorting=broker_shorting,
         split_ratios_by_tx_id=split_ratios_by_tx_id,
         reference_price_lookup=reference_price_lookup,
+        economic_events=economic_events,
+        target_currency=target_currency,
     ).run()
 
 
@@ -982,6 +1519,17 @@ def _unit_price(amount: Decimal, quantity: Decimal) -> Decimal:
     if quantity == Decimal("0"):
         raise ValueError("Unit price requires non-zero quantity")
     return abs(amount) / abs(quantity)
+
+
+def _new_economic_accumulator() -> dict[str, Decimal]:
+    return {
+        "original_cost": Decimal("0"),
+        "sale_proceeds": Decimal("0"),
+        "gross_income": Decimal("0"),
+        "allocated_fees": Decimal("0"),
+        "allocated_taxes": Decimal("0"),
+        "open_value": Decimal("0"),
+    }
 
 
 def _require_id(value: int | None) -> int:

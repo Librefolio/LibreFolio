@@ -581,6 +581,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "FIFO Lot Detail",
       "loadFailed": "Failed to load lot data",
+      "analysisFailed": "Lot analysis could not be reconstructed reliably (inconsistent quantities or transfers) — figures may be incomplete.",
       "combined": "Combined",
       "chartMarkers": {
         "legend": {
@@ -645,6 +646,12 @@
         "totalPnl": "Total P&L",
         "cashYield": "Cash yield",
         "totalReturn": "Total return",
+        "netBreakdown": "Net breakdown",
+        "grossTotalPnl": "Gross total P&L",
+        "fees": "Fees",
+        "taxes": "Taxes",
+        "netTotalPnl": "Net total P&L",
+        "netTotalReturn": "Net total return",
         "estimatedAtCost": "Estimated at cost",
         "fifoPnl": "FIFO P&L",
         "openReturn": "Open Return",
@@ -698,6 +705,11 @@
       "copyLotIdentifier": "Copy lot identifier",
       "actions": "Actions",
       "assetIncome": "Income",
+      "allocatedFees": "Fees",
+      "allocatedTaxes": "Taxes",
+      "netTotalPnl": "Net P&L",
+      "netTotalReturn": "Net return",
+      "netMetricsUnavailable": "Net metrics unavailable: degraded economic pool",
       "categoryCost": "Cost",
       "categoryIncome": "Income",
       "categoryOther": "Other",
@@ -1185,7 +1197,9 @@
     "fifoSourceQuantityMissing": "Transaction exceeds available quantity by {missing_quantity} (broker {broker_id})",
     "transferPairMissing": "A transfer is missing its paired transaction, or the pair is invalid",
     "missingFxRates": "FX rates missing for {count} pair(s) between {date_from} and {date_to} ({dates_count} date(s)) — sync to complete totals",
-    "missingFxRatesManual": "FX rates missing for {count} manual pair(s) — add rates manually"
+    "missingFxRatesManual": "FX rates missing for {count} manual pair(s) — add rates manually",
+    "assetIncomeNoEligibleLots": "No open lot eligible for {economic_type} of {target_amount} {target_currency} on {as_of_date} — income left unallocated",
+    "assetCostNoEligibleLots": "No lot eligible for {economic_type} of {target_amount} {target_currency} on {as_of_date} — cost left unallocated"
   },
   "dataEditor": {
     "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point.",

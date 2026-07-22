@@ -551,6 +551,7 @@
       "dateRange": "Intervalle",
       "detailTitle": "Détail des Lots FIFO",
       "loadFailed": "Échec du chargement des données de lots",
+      "analysisFailed": "L'analyse des lots n'a pas pu être reconstruite de manière fiable (quantités ou transferts incohérents) — les valeurs peuvent être incomplètes.",
       "combined": "Combiné",
       "chartMarkers": {
         "legend": {
@@ -637,6 +638,12 @@
         "totalPnl": "P&L total",
         "cashYield": "Rendement des revenus",
         "totalReturn": "Rendement total",
+        "netBreakdown": "Décomposition nette",
+        "grossTotalPnl": "P&L total brut",
+        "fees": "Frais",
+        "taxes": "Taxes",
+        "netTotalPnl": "P&L total net",
+        "netTotalReturn": "Rendement total net",
         "estimatedAtCost": "Estimé au coût",
         "fifoPnl": "P&L FIFO",
         "openReturn": "Rendement ouvert",
@@ -698,6 +705,11 @@
       "copyLotIdentifier": "Copier l'identifiant du lot",
       "actions": "Actions",
       "assetIncome": "Revenus",
+      "allocatedFees": "Frais",
+      "allocatedTaxes": "Taxes",
+      "netTotalPnl": "P&L net",
+      "netTotalReturn": "Rendement net",
+      "netMetricsUnavailable": "Métriques nettes indisponibles : pool économique dégradé",
       "categoryCost": "Coût",
       "categoryIncome": "Revenu",
       "categoryOther": "Autre",
@@ -1185,7 +1197,9 @@
     "fifoSourceQuantityMissing": "La transaction dépasse la quantité disponible de {missing_quantity} (courtier {broker_id})",
     "transferPairMissing": "Un transfert n'a pas de transaction associée, ou la paire n'est pas valide",
     "missingFxRates": "Taux FX manquants pour {count} paire(s) entre {date_from} et {date_to} ({dates_count} date(s)) — synchronisez pour compléter les totaux",
-    "missingFxRatesManual": "Taux FX manquants pour {count} paire(s) manuelle(s) — ajoutez les taux manuellement"
+    "missingFxRatesManual": "Taux FX manquants pour {count} paire(s) manuelle(s) — ajoutez les taux manuellement",
+    "assetIncomeNoEligibleLots": "Aucun lot ouvert éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — revenu non alloué",
+    "assetCostNoEligibleLots": "Aucun lot éligible pour {economic_type} de {target_amount} {target_currency} le {as_of_date} — coût non alloué"
   },
   "dataEditor": {
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",

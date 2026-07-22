@@ -105,6 +105,7 @@
     let incomeEvents = $state<LotIncomeEvent[]>([]);
     let quoteBaseQuantity = $state<number>(1);
     let dataQualityIssues = $state<DataQualityIssue[]>([]);
+    let calculationStatus = $state<string | null>(null);
     let computedRange = $state<DateRange | null>(null);
 
     let selectedLotIds = $state<number[]>([]);
@@ -206,6 +207,7 @@
                 lot_ids: event.lot_ids ?? [],
             }));
             dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
+            calculationStatus = typeof response.calculation_status === 'string' ? response.calculation_status : null;
 
             const metadata = response.calculation_metadata;
             const computedFrom = asObject<string>(metadata?.computed_date_from);
@@ -226,6 +228,7 @@
             brokerWacHistory = [];
             cumulativeWacHistory = [];
             dataQualityIssues = [];
+            calculationStatus = null;
             incomeEvents = [];
             quoteBaseQuantity = 1;
         } finally {
@@ -419,6 +422,12 @@
         <div class="p-4 space-y-4">
             {#if dataQualityIssues.length > 0}
                 <DataQualityBanner issues={dataQualityIssues} mode="flat" onaction={handleDataQualityAction} />
+            {/if}
+
+            {#if calculationStatus === 'FAILED'}
+                <div class="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300" role="alert" data-testid="lots-analysis-panel-failed">
+                    {$_('brokers.lots.analysisFailed')}
+                </div>
             {/if}
 
             {#if error}
