@@ -315,9 +315,18 @@ Creare un assistente AI basato su MCP server chiamato "QuarkAI".
 ---
 
 
-### 📊 Grafico Asset con rendimento a N
+## 📊 Grafico Asset con rendimento a N
+
+**Data aggiunta**: 22 Luglio 2026 (Promosso)
+**Status**: 📋 PIANIFICATO (Fase 0.1)
+**Priorità**: Media
+
+### Contesto
 Con i dati degli asset ha senso mostrare i grafici oltre che per abs e % da P0, anche il rendimento a N (anni o giorni, parametrico) con il significato che ogni punto rappresenta il guadagno/perdita di valore percentuale dell'asset se vosse stato comprato N giorni prima e venduto nel giorno attuale.
 Questo da applicare sia all'asset principale che a quelli di confronto messi nel grafico, da mettere nella pagina di detail per le analisi di dettaglio.
+
+### Azione Futura
+Vedere il file `LibreFolio_developer_journal/Release_2/Ai_ideas/phase_0_detailed_roadmap.md` per i dettagli di implementazione e posizionamento UI.
 
 ---
 

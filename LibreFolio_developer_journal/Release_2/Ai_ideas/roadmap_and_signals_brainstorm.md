@@ -10,23 +10,25 @@ La roadmap è organizzata in 6 fasi incrementali. Il diagramma mostra la sequenz
 
 ```mermaid
 graph TD
-    A[Fase 0: Migrazione Segnali al Backend] --> B[Fase 1: Server MCP & Provisioning]
+    A[Fase 0: Migrazione Segnali al Backend] --> A1[Fase 0.1: Risk Metrics & Monte Carlo]
+    A1 --> B[Fase 1: Server MCP & Provisioning]
     B --> C[Fase 2: Harness AI nel Backend]
     C --> D[Fase 3: UI Chat Sidebar & SSE]
-    D --> E[Fase 4: Monte Carlo & Risk UI]
-    E --> F[Fase 5: Workflow Consulente Finanziario]
+    D --> E[Fase 4: Workflow Consulente Finanziario]
 
     style A fill:#f9f,stroke:#333,stroke-width:2px
+    style A1 fill:#f9f,stroke:#333,stroke-width:2px
     style B fill:#bbf,stroke:#333,stroke-width:1px
     style C fill:#bbf,stroke:#333,stroke-width:1px
     style D fill:#dfd,stroke:#333,stroke-width:1px
-    style E fill:#dfd,stroke:#333,stroke-width:1px
-    style F fill:#fdd,stroke:#333,stroke-width:2px
+    style E fill:#fdd,stroke:#333,stroke-width:2px
 ```
 
 ---
 
 ## 2. Dettaglio di Tutte le Fasi della Roadmap
+
+> **Nota:** Per un livello di dettaglio maggiore sulle implementazioni architetturali (integrazione Riskfolio, UI Monte Carlo, Watchlist, Grafici) della Fase 0 e 0.1, consultare il documento dedicato: `phase_0_detailed_roadmap.md`.
 
 ### 🔴 Fase 0: Migrazione ed Unificazione dei Segnali al Backend
 Spostamento del calcolo degli indicatori tecnici (EMA, RSI, MACD, Bollinger Bands) da TypeScript nel browser dell'utente al backend Python.
@@ -35,6 +37,20 @@ Spostamento del calcolo degli indicatori tecnici (EMA, RSI, MACD, Bollinger Band
 * **Potenziamento del `POST /query`:** Invece di creare endpoint `GET`, estendiamo la chiamata esistente `POST /api/v1/assets/prices/query` consentendo al frontend di richiedere esplicitamente i parametri degli indicatori desiderati.
 * **AI Export Migrato:** L'attuale funzionalità di esportazione dati per l'AI prenderà i dati pre-calcolati direttamente dal backend.
 * **4° Sistema di Plugin:** Creazione di una classe base `SignalPlugin` per consentire agli sviluppatori di implementare nuovi indicatori in Python.
+
+---
+
+### 🔴 Fase 0.1: Monte Carlo & Risk Metrics Engine (Core & UI)
+Implementazione dei tool matematici del rischio nel backend e relative dashboard visive, costruendo le fondamenta per le future analisi dell'agente.
+
+* **Monte Carlo Engine:** Algoritmo in Python (NumPy/Pandas) che proietta 10.000 scenari stocastici di portafoglio basandosi su rendimento medio, inflazione e deviazione standard storica degli asset detenuti.
+* **Advanced Risk Metrics Engine:** Sviluppo in backend del calcolo per metriche di rischio istituzionali:
+  * **Value at Risk (VaR):** Stima della perdita massima attesa su vari orizzonti temporali.
+  * **Max Drawdown Storico:** Calcolo del crollo massimo dal picco per valutare la tolleranza al rischio.
+  * **Risk-Adjusted Returns:** Implementazione dello Sharpe Ratio e Sortino Ratio.
+  * **Matrice di Correlazione:** Analisi della diversificazione reale del portafoglio (Beta e correlazioni interne).
+  * **Stress Testing:** Simulazione dell'impatto di scenari storici avversi (es. Crisi Finanziaria 2008, COVID-19).
+* **Risk Control Dashboard (UI):** Componente grafico in SvelteKit per visualizzare i risultati delle simulazioni (curve di ventaglio) e le metriche di rischio, integrato in LibreFolio indipendentemente dall'IA.
 
 ---
 
@@ -47,6 +63,7 @@ Integrazione di `fastmcp` per esporre le funzionalità e i dati finanziari di Li
   * `add_asset`: creazione asset con associazione provider (es. yfinance) e parametri relativi.
   * `add_broker`: inserimento nuovo intermediario/broker.
   * `configure_fx_pair`: impostazione valute e tassi di conversione.
+  * `run_monte_carlo`, `get_risk_metrics`, `run_stress_test`: esposizione dei motori di rischio sviluppati in Fase 0.1 all'agente AI.
 * **Avvio CLI:** Integrazione in `dev.py` del comando `python dev.py mcp-start`.
 
 ---
@@ -72,16 +89,7 @@ Sviluppo dell'interfaccia utente finale per dialogare con l'agente all'interno d
 
 ---
 
-### 🟢 Fase 4: Monte Carlo & Risk UI Interactives
-Implementazione dei tool di analisi matematica del rischio e sviluppo delle relative interfacce di interazione.
-
-* **Monte Carlo Engine:** Algoritmo in Python (NumPy) che proietta 10.000 scenari stocastici di portafoglio basandosi su rendimento medio, inflazione e deviazione standard storica degli asset detenuti.
-* **Tool MCP per il Rischio:** Creazione del tool `run_monte_carlo` che l'agente può invocare per fare calcoli stocastici personalizzati richiesti in chat.
-* **Risk Control Dashboard (UI):** Componente grafico in SvelteKit per visualizzare i risultati delle simulazioni Monte Carlo (es. curve di ventaglio, probabilità di successo FIRE). L'utente potrà interagire con degli slider (tasso di prelievo annuale, anni di simulazione, variazione asset mix) che aggiorneranno istantaneamente i grafici inviando query veloci al backend.
-
----
-
-### 🔴 Fase 5: Workflow Agentici (Il Consulente Finanziario)
+### 🔴 Fase 4: Workflow Agentici (Il Consulente Finanziario)
 Definizione di workflow agentici complessi (sub-agenti dedicati) coordinati dall'Harness centrale.
 
 * **Rebalancing Agent:** Workflow che confronta l'allocazione attuale con il target desiderato, calcola la deviazione ed elabora un report con l'elenco esatto delle operazioni di acquisto e vendita necessarie.
