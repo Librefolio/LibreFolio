@@ -70,9 +70,11 @@ Top-level fields always present:
 | `asset_id` | Requested asset |
 | `target_currency` | Final response currency |
 | `quote_base_quantity` | Asset qbq, needed by frontend price/WAC axis |
-| `calculation_status` | `COMPLETE`, `DEGRADED`, or `UNAVAILABLE` |
+| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`) |
 | `calculation_metadata` | Broker scope, selection, requested/computed date bounds, generation date |
 | `data_quality` | FIFO/data-quality issues mapped to UI-friendly DTOs |
+| `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) mapped from the engine, `None` unless `LOT_SUMMARY` requested |
+| `asset_orphan_income` / `asset_orphan_fees` / `asset_orphan_taxes` | Amounts that belonged to no eligible lot, kept at asset level (never dropped, never double-counted) |
 
 All analysis payload sections are `None` unless explicitly requested.
 
@@ -102,7 +104,7 @@ High-level flow:
 2. Build `reference_price_lookup()` and run `run_fifo_lot_engine(...)`.
 3. Resolve selected lots.
 4. Collect needed FX pairs with `_collect_fx_needs()` / `_collect_performance_fx_needs()`, then batch-load rates through `_FxRateResolver`.
-5. Allocate dividends/interest with `_allocate_asset_income()`.
+5. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `_extract_income_outputs()` and `_extract_cost_outputs()` (allocation itself happens inside the engine, not here).
 6. Build qbq-aware market price map and WAC context.
 7. Emit only requested DTO sections.
 
@@ -154,43 +156,63 @@ That multiplication is **only** for fallback Scenario B. Real market quotes alre
 
 ---
 
-## 💸 Income Allocation
+## 💸 Economic Stage — Income, FEE/TAX & Net Metrics
 
-`_allocate_asset_income(...)` handles asset-linked `DIVIDEND` / `INTEREST` transactions, which are excluded from FIFO engine input because they have no quantity.
+Since FIFO v5 the **allocation** of asset-linked income (`DIVIDEND` / `INTEREST`) and asset-linked cost
+(`FEE` / `TAX`) happens **inside the engine's economic stage** (see
+[FIFO Lot Engine](fifo_lot_engine.md)), not in the service. The service only **extracts** the already-computed
+per-lot accumulators and audit groups:
 
-Rule:
+- `_extract_income_outputs(engine_result, ...)` reads `engine_result.economic_accumulators_by_lot[*].gross_income`
+- `_extract_cost_outputs(engine_result, ...)` reads `.allocated_fees` / `.allocated_taxes`
+- `_map_economic_groups(...)` maps the 3-level audit into `economic_allocation_groups`
 
-```text
-weight_i(t) = open_qty_i(t) / Σ open_qty_j(t)
-allocated_i = converted_income(t) * weight_i(t)
-```
+!!! warning "Allocation rule moved and changed"
 
-Details:
+    The pre-v5 same-day rule `w_i(t) = OpenQty_i(t) / Σ OpenQty_j(t)` no longer applies. Income eligibility
+    is now **D-1** (`OpenQty_i(D-1)`) and **broker-scoped** to the paying broker, and FEE/TAX use a
+    deterministic operation-matching ladder. The math lives in the engine; see the theory page
+    [FIFO Lot Analysis](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md).
 
-- only LONG lots participate
-- lot must be open on `tx.date`
-- income amount is converted to `target_currency` first
-- lots are sorted by `lot_id`
-- last lot absorbs running remainder so allocated sum exactly matches converted transaction amount
-- if no LONG lot is open that day, service skips allocation here
-
-Illustrative excerpt:
-
-```python
-for idx, (lot_id, qty) in enumerate(open_lots):
-    if idx == len(open_lots) - 1:
-        allocated = remaining
-    else:
-        allocated = remaining * qty / remaining_qty
-        remaining -= allocated
-        remaining_qty -= qty
-```
-
-Outputs:
+### Extracted outputs
 
 - `income_by_lot` → scalar cumulative income for `LotSummarySchema.asset_income`
 - `income_prefix_by_lot` → per-date cumulative prefixes for value/return histories
 - `income_events` → chart markers with source tx and affected lot ids
+- `fees_by_lot` / `taxes_by_lot` → scalar `allocated_fees` / `allocated_taxes`, plus per-date prefixes for history
+
+### Net metrics (`LotSummarySchema`)
+
+FEE/TAX are stored as **positive magnitudes** already converted to `target_currency`, and net metrics are
+derived only when they can be meaningful:
+
+```text
+net_total_pnl    = total_pnl - allocated_fees - allocated_taxes          # total_pnl INCLUDES income
+net_total_return = net_total_pnl / opening_value       (opening_value > 0)
+```
+
+History builders expose their own net lines: `_build_value_history()` emits
+`net_pnl = pnl - allocated_fees - allocated_taxes` (**pnl excludes income**), while `_build_return_history()`
+emits an income-inclusive `net_total_return`. The asymmetry is intentional — each net line mirrors its gross
+counterpart minus costs.
+
+!!! note "`net_metrics_status`"
+
+    Every processed lot is emitted with `net_metrics_status = "AVAILABLE"`. Because a missing FX rate falls
+    back to the native amount, the net of an existing lot is always mathematically determined, so no path
+    currently emits `"UNAVAILABLE"`.
+
+### Orphans & conservation
+
+When income or FEE/TAX has no eligible lot (e.g. a cost after the position is fully closed), the amount is
+**not dropped**: it is returned at asset level as `asset_orphan_income` / `asset_orphan_fees` /
+`asset_orphan_taxes` and surfaced as a `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS`
+data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == converted pool total`.
+
+!!! info "Costs without an asset"
+
+    `FEE` / `TAX` with `asset_id = null` never enter the FIFO/lots analysis at all — they are handled by the
+    Portfolio Engine. Only asset-linked costs can produce allocated net figures here.
 
 ---
 

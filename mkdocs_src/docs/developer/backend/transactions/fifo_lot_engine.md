@@ -129,10 +129,13 @@ Returned snapshot of complete run.
 | `fragment_intervals` | All custody intervals sorted by start date. |
 | `closures` | All FIFO closures sorted by close date. |
 | `issues` | Data-quality / unsupported-scenario issues. |
+| `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) with source tx, rule, weights, native+target amounts. |
+| `economic_accumulators_by_lot` | Per-lot `gross_income`, `allocated_fees`, `allocated_taxes` (target currency, positive magnitudes). |
+| `asset_orphan_income` / `asset_orphan_fees` / `asset_orphan_taxes` | Amounts with no eligible lot, kept at asset level. |
 
 Useful helpers on result:
 
-- `analysis_status`: `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"` (`"FAILED"` is reserved for non-isolable quantitative-replay errors)
+- `analysis_status`: `"FAILED"` if any issue is a non-isolable quantitative-replay error (see `_QUANTITATIVE_FAILURE_CODES`), else `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
 - `get_lot_states(lot_id)`: derives `LONG`/`SHORT`, `OPEN`/`PARTIALLY_CLOSED`/`CLOSED`, plus `IN_TRANSIT`, `DISTRIBUTED`, `DEGRADED`
 - `active_fragments(...)`: filter live custody fragments
 
@@ -308,6 +311,62 @@ Lot identity stays same across brokers, so frontend can render one lot life with
 
 ---
 
+## 💸 Economic Allocation Stage
+
+After the replay loop, `run()` calls `_allocate_economics()`. This stage is **read-only** with respect to
+inventory: quantities, fragments and closures are **never mutated**. It consumes `economic_events`
+(`DIVIDEND` / `INTEREST` / `FEE` / `TAX`, each carrying a `native_amount` and a `target_amount`) and produces
+per-lot accumulators, an audit trail, and asset-level orphans.
+
+### 💵 Income (`DIVIDEND` / `INTEREST`)
+
+`_allocate_income_pools()` groups income by pool key
+`(broker, date, economic_type, native_currency, target_currency)` and allocates it to eligible lots:
+
+- **Eligibility = D-1**: a lot is eligible if it has open **LONG** quantity as of `date - 1`
+  (`_eligible_income_quantity(...)`), **scoped to the paying broker** (including quantity that left that
+  broker as `IN_TRANSIT`). A BUY made on the income date is therefore not eligible; a lot already closed by
+  end of `date - 1` is not either.
+- weight `w_i = EligibleQty_i / Σ EligibleQty_j`, distributed with a running remainder so the pool total is
+  conserved exactly;
+- **no eligible lot** → the whole pool becomes `asset_orphan_income`, with an `ASSET_INCOME_NO_ELIGIBLE_LOTS`
+  issue and an audit group tagged `ASSET_INCOME_HOLDINGS`.
+
+### 💸 FEE / TAX
+
+`_allocate_cost_pools()` pools asset-linked cost and matches it to operations with a deterministic ladder
+(`_match_cost_operations`), weighting by `target_amount`:
+
+| Cost | Matching order (first non-empty wins) |
+|------|----------------------------------------|
+| `FEE` | same-day trades → previous-day trades → holdings fallback → orphan |
+| `TAX` | same-day income → same-day trades → previous-day income → previous-day trades → holdings fallback → orphan |
+
+The chosen rule is recorded per group (`SAME_DAY_MIXED_TRADES`, `SAME_DAY_TRADES`, `PREVIOUS_DAY_TRADES`,
+`OPEN_LOTS_FALLBACK`, income-linked variants). Allocation to a matched trade **crosses** to the lots that
+trade touched (BUY → the opened lot; SELL → the FIFO-consumed lots), so a cost follows the same lots the FIFO
+algorithm already selected. A cost with no eligible target becomes `asset_orphan_fees` / `asset_orphan_taxes`.
+
+!!! tip "Per-pool conservation (locked by tests)"
+
+    For every pool: `Σ allocated_to_lots + orphan == converted pool total`. `TestEconomicConservation`
+    asserts this invariant, so allocated FEE/TAX/income can never be silently lost or double-counted.
+
+### 🔎 Three-level audit
+
+Each pool emits an `EconomicAllocationGroup` (level 1) → `operation_allocations` (level 2, one per matched
+BUY/SELL/income) → `lot_allocations` (level 3, one per lot), all carrying `source_transaction_ids`, `rule`,
+`weight`, and both `native_*` and `target_*` amounts. The service maps these to
+`economic_allocation_groups` for the response; the frontend does not yet render the provenance (only the
+numeric net breakdown).
+
+!!! info "Costs without an asset are out of scope here"
+
+    `FEE` / `TAX` with `asset_id = null` are excluded from `economic_events` entirely — the Portfolio Engine
+    accounts for them. Only asset-linked cost reaches this stage.
+
+---
+
 ## ⚠️ Known Constraints and Gotchas
 
 !!! warning "SHORT support is intentionally partial"
@@ -320,7 +379,11 @@ Lot identity stays same across brokers, so frontend can render one lot life with
 
 !!! info "Issues degrade result instead of aborting run"
 
-    Missing source quantity, broken transfer pairs, and reference-price gaps are recorded in `issues`. `FifoEngineResult.analysis_status` becomes `DEGRADED`, but engine still returns best-effort lots/fragments/closures for the rest of input stream.
+    Missing source quantity, broken transfer pairs, and reference-price gaps are recorded in `issues`; the
+    replay loop never raises, so the engine still returns best-effort lots/fragments/closures for the rest of
+    the input stream. `analysis_status` then becomes `DEGRADED` for isolable (economic) issues, or `FAILED`
+    for quantity-topology breakages (oversell, broken transfer, short-not-supported) that cannot be isolated
+    because they change which lots later events consume via FIFO order.
 
 ---
 
