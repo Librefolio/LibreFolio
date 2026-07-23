@@ -14,7 +14,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {zodiosApi} from '$lib/api';
-import {ensureFxRangeLoaded, getFxStore, getRegisteredPairs, removeFxStore} from '../fxStoreRegistry';
+import {apiResultsToCanonicalFxDataPoints, ensureFxRangeLoaded, getFxStore, getRegisteredPairs, loadFxRatesAndSignalsBulk, removeFxStore} from '../fxStoreRegistry';
 
 const mockConvert = vi.mocked(zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post);
 
@@ -55,6 +55,138 @@ describe('ensureFxRangeLoaded', () => {
         expect(result).toHaveLength(3);
         expect(result[0].date).toBe('2024-01-01');
         expect(result[2].date).toBe('2024-01-03');
+    });
+
+    describe('apiResultsToCanonicalFxDataPoints', () => {
+        const result = {
+            conversion_date: '2024-01-02',
+            rate: '0.8',
+            backward_fill_info: {
+                actual_rate_date: '2024-01-01',
+                days_back: 1,
+            },
+        };
+
+        it('keeps direct and identity rates unchanged', () => {
+            expect(apiResultsToCanonicalFxDataPoints([result], false)[0]).toMatchObject({
+                rate: 0.8,
+                backwardFillInfo: {
+                    actualRateDate: '2024-01-01',
+                    daysBack: 1,
+                },
+            });
+            expect(apiResultsToCanonicalFxDataPoints([{...result, rate: '1'}], false)[0].rate).toBe(1);
+        });
+
+        it('inverts displayed reverse-orientation rates before caching canonically', () => {
+            expect(apiResultsToCanonicalFxDataPoints([result], true)[0].rate).toBe(1.25);
+        });
+    });
+
+    describe('loadFxRatesAndSignalsBulk', () => {
+        it('uses one POST for all pairs and groups signals by request index', async () => {
+            mockConvert.mockResolvedValueOnce({
+                success_count: 2,
+                results: [
+                    {
+                        from_amount: {code: 'EUR', amount: '1'},
+                        to_amount: {code: 'USD', amount: '1.2'},
+                        conversion_date: '2024-01-01',
+                        rate: '1.2',
+                        backward_fill_info: null,
+                    },
+                    {
+                        from_amount: {code: 'USD', amount: '1'},
+                        to_amount: {code: 'GBP', amount: '0.8'},
+                        conversion_date: '2024-01-01',
+                        rate: '0.8',
+                        backward_fill_info: null,
+                    },
+                ],
+                signal_results: [
+                    {
+                        request_index: 0,
+                        signals: [
+                            {
+                                instance_id: 'eur-ema',
+                                signal_code: 'EMA',
+                                status: 'unavailable',
+                            },
+                        ],
+                    },
+                    {
+                        request_index: 1,
+                        signals: [
+                            {
+                                instance_id: 'gbp-ema',
+                                signal_code: 'EMA',
+                                status: 'unavailable',
+                            },
+                        ],
+                    },
+                ],
+            } as any);
+
+            const result = await loadFxRatesAndSignalsBulk([
+                {
+                    slug: 'EUR-USD',
+                    start: '2024-01-01',
+                    end: '2024-01-01',
+                    displayedInverted: false,
+                    signals: [{instance_id: 'eur-ema', signal_code: 'EMA', params: {period: 20}}],
+                },
+                {
+                    slug: 'GBP-USD',
+                    start: '2024-01-01',
+                    end: '2024-01-01',
+                    displayedInverted: true,
+                    signals: [{instance_id: 'gbp-ema', signal_code: 'EMA', params: {period: 20}}],
+                },
+            ]);
+
+            expect(mockConvert).toHaveBeenCalledOnce();
+            const requests = mockConvert.mock.calls[0][0] as any[];
+            expect(requests).toHaveLength(2);
+            expect(requests[0]).toMatchObject({
+                from_amount: {code: 'EUR', amount: '1'},
+                to: 'USD',
+                signals: [{instance_id: 'eur-ema', signal_code: 'EMA'}],
+            });
+            expect(requests[1]).toMatchObject({
+                from_amount: {code: 'USD', amount: '1'},
+                to: 'GBP',
+            });
+            expect(result.dataBySlug.get('EUR-USD')?.[0].rate).toBe(1.2);
+            expect(result.dataBySlug.get('GBP-USD')?.[0].rate).toBe(1.25);
+            expect(result.signalsBySlug.get('EUR-USD')?.[0].instance_id).toBe('eur-ema');
+            expect(result.signalsBySlug.get('GBP-USD')?.[0].instance_id).toBe('gbp-ema');
+        });
+
+        it('still requests signals when rates are fully cached', async () => {
+            getFxStore('EUR-USD').merge([{date: '2024-01-01', rate: 1.2, backwardFillInfo: null}]);
+            mockConvert.mockResolvedValueOnce({
+                success_count: 1,
+                results: [],
+                signal_results: [
+                    {
+                        request_index: 0,
+                        signals: [],
+                    },
+                ],
+            } as any);
+
+            await loadFxRatesAndSignalsBulk([
+                {
+                    slug: 'EUR-USD',
+                    start: '2024-01-01',
+                    end: '2024-01-01',
+                    displayedInverted: false,
+                    signals: [{instance_id: 'ema-1', signal_code: 'EMA', params: {period: 20}}],
+                },
+            ]);
+
+            expect(mockConvert).toHaveBeenCalledOnce();
+        });
     });
 
     // =========================================================================

@@ -29,8 +29,7 @@
      * Svelte 5 runes.
      */
     import type {Snippet} from 'svelte';
-    import katex from 'katex';
-    import 'katex/dist/katex.min.css';
+    import {escapeHtml, renderInlineMath} from '$lib/utils/inlineMath';
 
     interface Props {
         text?: string;
@@ -267,32 +266,13 @@
     }
 
     /**
-     * Replace $...$ inline LaTeX delimiters with KaTeX-rendered HTML.
-     * Uses non-greedy matching to handle multiple formulas in one string.
-     */
-    function renderMathInline(content: string): string {
-        return content.replace(/\$([^$]+)\$/g, (_, formula) => {
-            try {
-                return katex.renderToString(formula, {throwOnError: false, displayMode: false});
-            } catch {
-                return formula;
-            }
-        });
-    }
-
-    /** Escape HTML entities for safe rendering when using plain text */
-    function escapeHtml(str: string): string {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    /**
      * Compute the final tooltip content as HTML string.
      * Priority: html prop > text prop. If math=true, process LaTeX.
      */
     let renderedContent = $derived.by(() => {
         let content = html || escapeHtml(text);
         if (math) {
-            content = renderMathInline(content);
+            content = renderInlineMath(content);
         }
         return content;
     });

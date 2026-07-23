@@ -50,9 +50,10 @@
         onrefresh?: (info: {slug: string}) => void;
         onsync?: (info: {slug: string; base: string; quote: string}) => void;
         onsettings?: (info: {slug: string}) => void;
+        oninversionchange?: (info: {slug: string; inverted: boolean}) => void;
     }
 
-    let {base, quote, slug, data = [], loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings}: Props = $props();
+    let {base, quote, slug, data = [], loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings, oninversionchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -185,6 +186,7 @@
                         stop(e);
                         inverted = !inverted;
                         setCardInverted(slug, inverted);
+                        oninversionchange?.({slug, inverted});
                     }}
                     title={$t('common.swapDirection')}
                 >

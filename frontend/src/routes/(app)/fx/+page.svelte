@@ -26,9 +26,9 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, ensureFxRangeLoaded, ensureFxRangeLoadedBulk, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -37,6 +37,7 @@
     import {buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
+    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
 
     // =========================================================================
     // Types
@@ -113,6 +114,12 @@
     let settingsTargetSlug = $state<string | null>(null);
     /** Settings to pass to the modal (global or pair-specific) */
     let settingsForModal = $derived(settingsTargetSlug ? getSettingsForPair(settingsTargetSlug, 'fx') : getGlobalSettings('fx'));
+    let signalDefinitions = $state<SignalDefinition[]>([]);
+    let signalResultsByPair = $state(new Map<string, SignalInstanceResult[]>());
+    let signalCatalogFailed = $state(false);
+    let signalRequestFailed = $state(false);
+    const signalResultStates = new Map<string, SignalResultState>();
+    let signalBackendError = $derived(signalCatalogFailed ? $_('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $_('chartSettings.signalResultsUnavailable') : null);
 
     // Asset list for cross-domain signal selection (loaded lazily)
     let availableAssetsList = $state<Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>>([]);
@@ -130,6 +137,8 @@
     // =========================================================================
     // Derived
     // =========================================================================
+
+    let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
     // Delta periods for table columns
     const DELTA_PERIODS = [
@@ -220,9 +229,43 @@
     // Lifecycle
     // =========================================================================
 
+    async function loadFxSignalDefinitions(force = false) {
+        try {
+            signalDefinitions = await signalCatalogStore.load('fx', force);
+            signalCatalogFailed = false;
+        } catch (catalogError) {
+            console.error('Failed to load FX signal catalog:', catalogError);
+            signalDefinitions = getLocalSignalDefinitions();
+            signalCatalogFailed = true;
+        }
+    }
+
+    function resultStateForPair(slug: string): SignalResultState {
+        let state = signalResultStates.get(slug);
+        if (!state) {
+            state = new SignalResultState();
+            signalResultStates.set(slug, state);
+        }
+        return state;
+    }
+
+    function backendRequestFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            buildBackendSignalRequestPlan(configs, signalDefinitions)
+                .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
+                .sort(),
+        );
+    }
+
+    async function retryBackendSignals() {
+        await loadFxSignalDefinitions(true);
+        await fetchAllPairData();
+    }
+
     onMount(async () => {
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
+        await loadFxSignalDefinitions();
         await loadPairSources();
         // Load asset list for cross-domain signal selection
         loadAssetList();
@@ -319,35 +362,92 @@
 
     async function fetchAllPairData() {
         if (pairs.length === 0) return;
+        void getSettingsVersion();
 
-        // Separate fully cached pairs from those needing fetch
+        const bulkRequests: Array<{
+            slug: string;
+            start: string;
+            end: string;
+            signals: ReturnType<typeof buildBackendSignalRequestPlan>['requests'];
+            displayedInverted: boolean;
+        }> = [];
         const needFetch: Array<{index: number; slug: string}> = [];
+        const requestContexts = new Map<
+            string,
+            {
+                configs: SignalConfig[];
+                plan: ReturnType<typeof buildBackendSignalRequestPlan>;
+                requestVersion: number;
+            }
+        >();
+        const nextSignalResults = new Map(signalResultsByPair);
+
         for (let i = 0; i < pairs.length; i++) {
             const pair = pairs[i];
             const store = getFxStore(pair.config.slug);
-            if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
+            const configs = getSettingsForPair(pair.config.slug, 'fx').signals;
+            const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+            const state = resultStateForPair(pair.config.slug);
+            const requestVersion = state.beginRequest();
+            requestContexts.set(pair.config.slug, {
+                configs,
+                plan,
+                requestVersion,
+            });
+
+            const needsRates = store.getMissingIntervals(dateStart, dateEnd).length > 0;
+            if (!needsRates) {
                 // Fast path: already cached — update data without loading indicator
                 pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data};
             } else {
                 needFetch.push({index: i, slug: pair.config.slug});
                 pairs[i] = {...pair, loading: true};
             }
+
+            if (needsRates || plan.requests.length > 0) {
+                bulkRequests.push({
+                    slug: pair.config.slug,
+                    start: dateStart,
+                    end: dateEnd,
+                    signals: plan.requests,
+                    displayedInverted: isCardInverted(pair.config.slug),
+                });
+            } else {
+                const mapped = mapSignalInstanceResults(configs, plan, []);
+                if (state.apply(requestVersion, mapped)) {
+                    nextSignalResults.set(pair.config.slug, [...state.values()]);
+                }
+            }
         }
 
-        if (needFetch.length === 0) {
+        if (bulkRequests.length === 0) {
+            signalResultsByPair = nextSignalResults;
+            signalRequestFailed = false;
             resolveMaxStartFromPairs();
             return;
         }
 
-        // Single bulk call for all pairs with gaps
+        // Exactly one bulk call for every pair needing rates and/or signals.
+        signalRequestFailed = false;
         try {
-            const bulkResults = await ensureFxRangeLoadedBulk(needFetch.map((nf) => ({slug: nf.slug, start: dateStart, end: dateEnd})));
-            for (const nf of needFetch) {
-                const data = bulkResults.get(nf.slug) ?? [];
-                pairs[nf.index] = {...pairs[nf.index], data, loading: false};
+            const bulkResult = await loadFxRatesAndSignalsBulk(bulkRequests);
+            for (const [slug, context] of requestContexts) {
+                const state = resultStateForPair(slug);
+                const mapped = mapSignalInstanceResults(context.configs, context.plan, bulkResult.signalsBySlug.get(slug) ?? []);
+                if (state.apply(context.requestVersion, mapped)) {
+                    nextSignalResults.set(slug, [...state.values()]);
+                }
             }
+            signalResultsByPair = nextSignalResults;
+            pairs = pairs.map((pair) => ({
+                ...pair,
+                data: bulkResult.dataBySlug.get(pair.config.slug) ?? getFxStore(pair.config.slug).getRange(dateStart, dateEnd).data,
+                loading: false,
+            }));
             resolveMaxStartFromPairs();
-        } catch {
+        } catch (requestError) {
+            console.error('Failed to fetch FX rates/signals bulk:', requestError);
+            signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // Fallback: update with whatever is cached
             for (const nf of needFetch) {
                 const existingData = getFxStore(nf.slug).getRange(dateStart, dateEnd).data;
@@ -359,21 +459,47 @@
     async function fetchPairData(index: number) {
         const pair = pairs[index];
         if (!pair) return;
-
-        // Fast path: data fully cached — update without showing loading spinner
         const store = getFxStore(pair.config.slug);
-        if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
+        const configs = getSettingsForPair(pair.config.slug, 'fx').signals;
+        const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+        const state = resultStateForPair(pair.config.slug);
+        const requestVersion = state.beginRequest();
+        const needsRates = store.getMissingIntervals(dateStart, dateEnd).length > 0;
+
+        if (!needsRates && plan.requests.length === 0) {
             pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
+            const mapped = mapSignalInstanceResults(configs, plan, []);
+            if (state.apply(requestVersion, mapped)) {
+                signalResultsByPair = new Map(signalResultsByPair).set(pair.config.slug, [...state.values()]);
+            }
             return;
         }
 
-        pairs[index] = {...pair, loading: true};
+        pairs[index] = {...pair, loading: needsRates};
 
         try {
-            const loaded = await ensureFxRangeLoaded(pair.config.slug, dateStart, dateEnd);
-            pairs[index] = {...pair, data: loaded, loading: false};
+            const result = await loadFxRatesAndSignalsBulk([
+                {
+                    slug: pair.config.slug,
+                    start: dateStart,
+                    end: dateEnd,
+                    signals: plan.requests,
+                    displayedInverted: isCardInverted(pair.config.slug),
+                },
+            ]);
+            const mapped = mapSignalInstanceResults(configs, plan, result.signalsBySlug.get(pair.config.slug) ?? []);
+            if (state.apply(requestVersion, mapped)) {
+                signalResultsByPair = new Map(signalResultsByPair).set(pair.config.slug, [...state.values()]);
+            }
+            pairs[index] = {
+                ...pair,
+                data: result.dataBySlug.get(pair.config.slug) ?? store.getRange(dateStart, dateEnd).data,
+                loading: false,
+            };
+            signalRequestFailed = false;
         } catch (e: any) {
-            const existingData = getFxStore(pair.config.slug).getRange(dateStart, dateEnd).data;
+            signalRequestFailed = plan.requests.length > 0;
+            const existingData = store.getRange(dateStart, dateEnd).data;
             pairs[index] = {...pair, data: existingData, loading: false};
             if (e?.response?.status !== 404) {
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
@@ -396,10 +522,14 @@
     }
 
     function handleSettingsSave(s: ChartSettings) {
+        const shouldReloadBackend = backendRequestFingerprint(settingsForModal.signals) !== backendRequestFingerprint(s.signals);
         if (settingsTargetSlug) {
             setPairSettings(settingsTargetSlug, s);
         } else {
             setGlobalSettings(s, 'fx');
+        }
+        if (shouldReloadBackend) {
+            void fetchAllPairData();
         }
     }
 
@@ -430,6 +560,8 @@
         if (!settings.signals.length) return [];
         const rendered: RenderedSignal[] = [];
         for (const cfg of settings.signals) {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (!definition || definition.source === 'backend') continue;
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
 
@@ -462,7 +594,31 @@
                 if (result.data.length > 0) rendered.push(result);
             }
         }
+
+        for (const item of signalResultsByPair.get(slug) ?? []) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
+            const outcome = renderBackendSignalResult(item.result, currentConfig, {
+                baseData: absoluteData,
+                viewMode: vm,
+                translate: (key) => $_(key),
+            });
+            rendered.push(...outcome.signals);
+        }
         return rendered;
+    }
+
+    function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
+        if (!settingsTargetSlug) return [];
+        const pair = pairs.find((item) => item.config.slug === settingsTargetSlug);
+        if (!pair?.data.length) return [];
+        const inverted = isCardInverted(settingsTargetSlug);
+        const absoluteData = pair.data.map((point) => ({
+            date: point.date,
+            value: inverted && point.rate !== 0 ? 1 / point.rate : point.rate,
+            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+        }));
+        return getRenderedSignals(settingsTargetSlug, absoluteData, viewMode);
     }
 
     // =========================================================================
@@ -905,6 +1061,7 @@
                     onrefresh={handleRefreshPair}
                     onsync={handleSyncPair}
                     onsettings={handleCardSettings}
+                    oninversionchange={() => void fetchAllPairData()}
                 />
             {/each}
         </div>
@@ -920,6 +1077,7 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
+            oninversionchange={() => void fetchAllPairData()}
             onselectionchange={(rows) => {
                 selectedFxRows = rows;
             }}
@@ -967,6 +1125,10 @@
 <ChartSettingsModal
     availableAssets={availableAssetsList}
     availablePairs={pairs.map((p) => `${p.config.base}-${p.config.quote}`)}
+    {signalDefinitions}
+    {signalBackendError}
+    onretrySignalBackend={retryBackendSignals}
+    backendPreviewSignalResolver={settingsTargetSlug ? resolveSettingsBackendPreview : undefined}
     open={settingsModalOpen}
     mode={settingsTargetSlug ? 'pair' : 'global'}
     onclose={() => {

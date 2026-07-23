@@ -44,6 +44,7 @@ export interface ProcessedAssetResult {
     assetId: number;
     mappedPoints: AssetPricePoint[];
     derived: DerivedPriceState;
+    signals: Array<z.infer<typeof schemas.SignalResult>>;
 }
 
 export interface PriceProcessingResponse {
@@ -60,7 +61,7 @@ export interface PriceProcessingResponse {
 type FAPriceQueryResult = z.infer<typeof schemas.FAPriceQueryResult>;
 const FAPriceQueryResultSchema: z.ZodType<FAPriceQueryResult> = schemas.FAPriceQueryResult;
 
-function processRequest(request: PriceProcessingRequest): PriceProcessingResponse {
+export function processPriceRequest(request: PriceProcessingRequest): PriceProcessingResponse {
     const results: ProcessedAssetResult[] = [];
     const invalidItemErrors: string[] = [];
 
@@ -77,24 +78,27 @@ function processRequest(request: PriceProcessingRequest): PriceProcessingRespons
             assetId: item.asset_id,
             mappedPoints: apiPricesToAssetPricePoints(prices),
             derived: computeDerivedPriceState(prices),
+            signals: item.signals ?? [],
         });
     }
 
     return {results, invalidItemErrors};
 }
 
-self.onmessage = (event: MessageEvent<WorkerRequestMessage<PriceProcessingRequest>>) => {
-    const {id, payload} = event.data;
+if (typeof self !== 'undefined') {
+    self.onmessage = (event: MessageEvent<WorkerRequestMessage<PriceProcessingRequest>>) => {
+        const {id, payload} = event.data;
 
-    try {
-        const result = processRequest(payload);
-        const response: WorkerResponseMessage<PriceProcessingResponse> = {id, result};
-        (self as unknown as Worker).postMessage(response);
-    } catch (error) {
-        const response: WorkerResponseMessage<PriceProcessingResponse> = {
-            id,
-            error: error instanceof Error ? error.message : 'Unknown error while processing price chunk.',
-        };
-        (self as unknown as Worker).postMessage(response);
-    }
-};
+        try {
+            const result = processPriceRequest(payload);
+            const response: WorkerResponseMessage<PriceProcessingResponse> = {id, result};
+            (self as unknown as Worker).postMessage(response);
+        } catch (error) {
+            const response: WorkerResponseMessage<PriceProcessingResponse> = {
+                id,
+                error: error instanceof Error ? error.message : 'Unknown error while processing price chunk.',
+            };
+            (self as unknown as Worker).postMessage(response);
+        }
+    };
+}

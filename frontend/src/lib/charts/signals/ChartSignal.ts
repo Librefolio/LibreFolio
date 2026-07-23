@@ -27,12 +27,17 @@ export interface SignalParamDescriptor {
     /**
      * Input type for rendering:
      *  - 'number': <input type="number"> with min/max/step/suffix
+     *  - 'boolean': checkbox/toggle
      *  - 'select': <select> with static options or dynamicOptionsKey
      *  - 'string': <input type="text">
      */
-    type: 'number' | 'string' | 'select';
+    type: 'number' | 'boolean' | 'string' | 'select';
     /** Default value for new instances */
     default: unknown;
+    /** Whether the backend schema requires this parameter. */
+    required?: boolean;
+    /** Whether numeric input must be an integer. */
+    integer?: boolean;
     // ── For type === 'number' ──
     min?: number;
     max?: number;
@@ -53,6 +58,33 @@ export interface SignalParamDescriptor {
      * e.g. 'chartSettings.tooltips.period'
      */
     tooltip?: string;
+}
+
+export type SignalDomain = 'asset' | 'fx';
+export type SignalDefinitionSource = 'local' | 'backend';
+export type SignalIndicatorGroup = 'trend' | 'momentum' | 'volatility' | 'volume';
+export type SignalInputField = 'open' | 'high' | 'low' | 'close' | 'volume';
+
+/**
+ * Selector/configuration metadata. Unlike SignalConfig, this describes a signal
+ * type rather than one saved instance.
+ */
+export interface SignalDefinition {
+    type: string;
+    displayName: string;
+    displayNameKey?: string;
+    descriptionKey?: string;
+    icon: string;
+    category: 'indicator' | 'comparison' | 'benchmark' | 'measure';
+    paramDescriptors: SignalParamDescriptor[];
+    docsPath?: string;
+    source: SignalDefinitionSource;
+    backendSignalCode?: string;
+    indicatorGroup?: SignalIndicatorGroup;
+    inputPriceFields?: SignalInputField[];
+    compatibleDomains?: SignalDomain[];
+    paramsSchema?: Record<string, unknown>;
+    defaultParams?: Record<string, unknown>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -132,6 +164,17 @@ export interface RenderedSignal {
     markerEnd: MarkerType;
     /** Y-axis index: 0 = primary (right), 1 = secondary (left). Default 0. */
     yAxisIndex?: number;
+    /** Canonical backend axis identity used to allocate independent axes. */
+    axisKey?: string;
+    /** Canonical semantic axis role. */
+    axisRole?: 'price' | 'independent' | 'volume';
+    /** Optional canonical axis bounds. */
+    axisMinimum?: number;
+    axisMaximum?: number;
+    /** Short axis label shown next to independent values. */
+    axisLabel?: string;
+    /** Canonical output unit. */
+    unit?: 'price' | 'percentage' | 'index' | 'volume' | 'none';
     /**
      * Series rendering type:
      * - 'line' (default): standard line series
@@ -159,6 +202,21 @@ export interface RenderedSignal {
     currency?: string;
     /** Flag emoji for the currency (e.g. "🇪🇺") */
     currencyFlag?: string;
+    /** Horizontal semantic levels supplied by the backend. */
+    referenceLevels?: Array<{
+        key: string;
+        label: string;
+        semantic: string;
+        value: number;
+    }>;
+    /** Semantic background regions supplied by the backend. */
+    valueRegions?: Array<{
+        key: string;
+        label: string;
+        semantic: string;
+        lower?: number;
+        upper?: number;
+    }>;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

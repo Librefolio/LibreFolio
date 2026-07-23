@@ -877,7 +877,26 @@
     },
     "macdLineColor": "Colore Linea MACD",
     "noDataAvailable": "Nessun dato disponibile. Prova a sincronizzare questo asset/coppia.",
-    "conversionFailed": "Conversione valuta fallita — dati non mostrati (coppia FX non configurata)"
+    "conversionFailed": "Conversione valuta fallita — dati non mostrati (coppia FX non configurata)",
+    "backendPreviewRealTarget": "L'anteprima degli indicatori tecnici è disponibile su un asset o una coppia valutaria reale.",
+    "backendPreviewApply": "L'anteprima degli indicatori backend mostra le ultime impostazioni applicate. Applica le modifiche per aggiornarla.",
+    "backendPreviewUnavailable": "L'anteprima degli indicatori backend appare dopo il caricamento dei risultati per questo asset o coppia.",
+    "signalCatalogUnavailable": "Il catalogo dei segnali tecnici non è disponibile. Confronti e benchmark locali restano disponibili.",
+    "signalResultsUnavailable": "Non è stato possibile aggiornare i segnali tecnici. I dati dei prezzi restano disponibili.",
+    "signalProblems": {
+      "missingInputFields": "Mancano i campi prezzo richiesti: {fields}. Le date presenti non bastano; sincronizza con un provider che fornisca questi valori OHLCV.",
+      "incompleteInputCoverage": "I campi prezzo richiesti sono incompleti: {fields}. Punti utilizzabili: {available}/{requested}.",
+      "insufficientHistory": "Storico utilizzabile insufficiente per questi parametri: {available} punti disponibili, {required} necessari.",
+      "incompleteWarmup": "Il segnale è utilizzabile ma non completamente stabilizzato: disponibili {used}/{required} punti di warm-up.",
+      "dataGaps": "Lo storico richiesto contiene lacune: mancano {missing} punti su {requested} (copertura {coverage}%).",
+      "missingEvents": "Mancano gli eventi richiesti: {events}.",
+      "incompatibleDomain": "Questo indicatore non è compatibile con questo grafico.",
+      "calculationFailed": "Calcolo del segnale non riuscito: {message}",
+      "resultMissing": "Il backend non ha restituito un risultato per questo segnale. Riprova la richiesta dei segnali.",
+      "partialResult": "Questo segnale è disponibile solo parzialmente con i dati attuali.",
+      "unavailable": "Questo segnale non può essere calcolato con i dati disponibili.",
+      "partialContiguousSegment": "Segnale calcolato sul segmento contiguo completo {start}–{end}. Esclusi {excluded} punti caricati perché date o campi richiesti erano incompleti. Input completo: {available}/{requested} ({coverage}%, warm-up incluso)."
+    }
   },
   "common": {
     "addMeasure": "Aggiungi misura",
@@ -2075,5 +2094,93 @@
     "deleteFailed": "Impossibile eliminare il file",
     "loadFailed": "Impossibile caricare i file",
     "uploadFailed": "Impossibile caricare il file"
+  },
+  "signals": {
+    "groups": {
+      "trend": "Trend",
+      "momentum": "Momentum",
+      "volatility": "Volatilità",
+      "volume": "Volume"
+    },
+    "dataUsed": "Dati",
+    "dataFields": {
+      "open": "Apertura",
+      "high": "Massimo",
+      "low": "Minimo",
+      "close": "Chiusura",
+      "volume": "Volume"
+    },
+    "selector": {
+      "searchPlaceholder": "Cerca indicatori",
+      "noMatches": "Nessun indicatore corrispondente"
+    },
+    "ema": {
+      "name": "EMA",
+      "description": "Trend pesato sui prezzi recenti"
+    },
+    "sma": {
+      "name": "SMA",
+      "description": "Media semplice delle chiusure"
+    },
+    "rsi": {
+      "name": "RSI",
+      "description": "Pressione di acquisto e vendita"
+    },
+    "macd": {
+      "name": "MACD",
+      "description": "Momentum tra medie mobili"
+    },
+    "bollinger": {
+      "name": "Bande di Bollinger",
+      "description": "Volatilità attorno alla media mobile"
+    },
+    "roc": {
+      "name": "ROC",
+      "description": "Velocità della variazione prezzo"
+    },
+    "stochRsi": {
+      "name": "RSI Stocastico",
+      "description": "Posizione RSI nel suo intervallo"
+    },
+    "kama": {
+      "name": "KAMA",
+      "description": "Trend adattivo al rumore di mercato"
+    },
+    "ppo": {
+      "name": "PPO",
+      "description": "Momentum percentuale tra medie"
+    },
+    "atr": {
+      "name": "ATR",
+      "description": "Volatilità assoluta del prezzo"
+    },
+    "adx": {
+      "name": "ADX",
+      "description": "Forza del trend"
+    },
+    "natr": {
+      "name": "NATR",
+      "description": "Volatilità percentuale del prezzo"
+    },
+    "aroon": {
+      "name": "Aroon",
+      "description": "Recenza di massimi e minimi"
+    },
+    "donchian": {
+      "name": "Canali di Donchian",
+      "description": "Canale massimo-minimo del periodo"
+    },
+    "cci": {
+      "name": "CCI",
+      "description": "Scostamento dal prezzo medio"
+    },
+    "obv": {
+      "name": "OBV",
+      "description": "Pressione prezzo-volume"
+    },
+    "mfi": {
+      "name": "MFI",
+      "description": "Momentum ponderato per volume"
+    }
   }
 }

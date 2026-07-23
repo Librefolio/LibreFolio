@@ -426,6 +426,7 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
             itemStyle: {color: bandColor},
             emphasis: {focus: 'none'},
             z: 1,
+            ...buildSignalReferencePrimitives(signal, isDark),
         },
     ];
 }
@@ -454,7 +455,57 @@ export function buildBarSeries(signal: RenderedSignal, signalSeriesData: any[], 
         itemStyle: {color: signal.color},
         emphasis: {focus: 'none'},
         z: 0,
+        ...buildSignalReferencePrimitives(signal, isDark),
     };
+}
+
+/** Build library-independent ECharts primitives for canonical levels and regions. */
+export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: boolean): {markLine?: Record<string, unknown>; markArea?: Record<string, unknown>} {
+    const primitives: {markLine?: Record<string, unknown>; markArea?: Record<string, unknown>} = {};
+
+    if (signal.referenceLevels?.length) {
+        primitives.markLine = {
+            silent: true,
+            symbol: 'none',
+            lineStyle: {
+                color: signal.color,
+                opacity: isDark ? 0.55 : 0.45,
+                type: 'dashed',
+                width: 1,
+            },
+            label: {
+                show: true,
+                color: isDark ? '#cbd5e1' : '#64748b',
+                fontSize: 9,
+                formatter: (params: {name?: string}) => params.name ?? '',
+            },
+            data: signal.referenceLevels.map((level) => ({
+                name: level.label,
+                yAxis: level.value,
+            })),
+        };
+    }
+
+    if (signal.valueRegions?.length) {
+        primitives.markArea = {
+            silent: true,
+            itemStyle: {
+                color: hexToRgba(signal.color, isDark ? 0.08 : 0.06),
+            },
+            label: {show: false},
+            data: signal.valueRegions.map((region) => [
+                {
+                    name: region.label,
+                    yAxis: region.lower ?? 'min',
+                },
+                {
+                    yAxis: region.upper ?? 'max',
+                },
+            ]),
+        };
+    }
+
+    return primitives;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

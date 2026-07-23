@@ -202,4 +202,21 @@ test.describe('FX List Page', () => {
         const syncBtn = page.getByTestId('fx-sync-all-button');
         await expect(syncBtn).toBeVisible();
     });
+
+    test('loads all FX cards through exactly one bulk conversion request', async ({page}) => {
+        const bulkRequests: Array<{postData: unknown}> = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST') return;
+            if (new URL(request.url()).pathname !== '/api/v1/fx/currencies/convert') return;
+            bulkRequests.push({postData: request.postDataJSON()});
+        });
+
+        await goToFxPage(page);
+        await expect(page.getByTestId('fx-page')).toBeVisible({timeout: 8_000});
+        await page.waitForLoadState('networkidle');
+
+        expect(bulkRequests).toHaveLength(1);
+        expect(Array.isArray(bulkRequests[0].postData)).toBe(true);
+        expect((bulkRequests[0].postData as unknown[]).length).toBeGreaterThan(0);
+    });
 });

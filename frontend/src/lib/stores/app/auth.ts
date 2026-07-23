@@ -16,6 +16,7 @@ import {isAxiosError} from 'axios';
 import {currentLanguage} from '$lib/stores/app/language';
 import {userSettings} from '$lib/stores/app/settings';
 import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
+import {transitionClientSession} from '$lib/stores/app/clientSession';
 
 // Re-export types for backward compatibility
 export type {AuthUser, AuthState} from '$lib/types';
@@ -32,6 +33,14 @@ const initialState: AuthState = {
  */
 function createAuthStore() {
     const {subscribe, set, update} = writable<AuthState>(initialState);
+    let authOperationGeneration = 0;
+
+    const beginAuthOperation = (): number => {
+        authOperationGeneration += 1;
+        return authOperationGeneration;
+    };
+
+    const isCurrentAuthOperation = (generation: number): boolean => generation === authOperationGeneration;
 
     return {
         subscribe,
@@ -40,6 +49,7 @@ function createAuthStore() {
          * Login with username/email and password
          */
         login: async (username: string, password: string): Promise<boolean> => {
+            const operationGeneration = beginAuthOperation();
             update((state) => ({...state, isLoading: true, error: null}));
 
             try {
@@ -49,6 +59,8 @@ function createAuthStore() {
                     password,
                 });
                 debug.log('AuthStore', 'Login response:', response);
+                if (!isCurrentAuthOperation(operationGeneration)) return false;
+                transitionClientSession(response.user.id);
 
                 update((state) => ({
                     ...state,
@@ -90,6 +102,8 @@ function createAuthStore() {
 
                 return true;
             } catch (error) {
+                if (!isCurrentAuthOperation(operationGeneration)) return false;
+                transitionClientSession(null);
                 debug.log('AuthStore', 'Login error:', error);
                 let errorMessage = 'Login failed';
 
@@ -121,7 +135,8 @@ function createAuthStore() {
          * Logout current user
          */
         logout: async (): Promise<void> => {
-            update((state) => ({...state, isLoading: true}));
+            const operationGeneration = beginAuthOperation();
+            update((state) => ({...state, isLoading: true, error: null}));
 
             try {
                 await zodiosApi.logout_api_v1_auth_logout_post(undefined);
@@ -130,6 +145,8 @@ function createAuthStore() {
                 console.warn('Logout error:', error);
             }
 
+            if (!isCurrentAuthOperation(operationGeneration)) return;
+            transitionClientSession(null);
             set({
                 user: null,
                 isLoading: false,
@@ -147,6 +164,7 @@ function createAuthStore() {
          * Check if user is authenticated (verify session with server)
          */
         checkAuth: async (): Promise<boolean> => {
+            const operationGeneration = beginAuthOperation();
             debug.log('AuthStore', 'checkAuth started');
             update((state) => ({...state, isLoading: true}));
 
@@ -154,6 +172,8 @@ function createAuthStore() {
                 const response = await zodiosApi.get_me_api_v1_auth_me_get();
 
                 debug.log('AuthStore', 'checkAuth success', response.user?.username);
+                if (!isCurrentAuthOperation(operationGeneration)) return false;
+                transitionClientSession(response.user.id);
                 update((state) => ({
                     ...state,
                     user: response.user,
@@ -164,6 +184,8 @@ function createAuthStore() {
 
                 return true;
             } catch (error) {
+                if (!isCurrentAuthOperation(operationGeneration)) return false;
+                transitionClientSession(null);
                 debug.log('AuthStore', 'checkAuth failed', error);
                 update((state) => ({
                     ...state,
@@ -188,6 +210,8 @@ function createAuthStore() {
          * Reset store to initial state
          */
         reset: () => {
+            beginAuthOperation();
+            transitionClientSession(null);
             set(initialState);
         },
     };

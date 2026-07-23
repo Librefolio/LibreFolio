@@ -12,6 +12,7 @@
     import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {refreshAllBrokers, getAllBrokers, getAccessibleBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {Broker} from '$lib/types';
 
     type CurrencyLike = {code: string; amount: number | string};
@@ -237,9 +238,11 @@
     async function confirmDelete(event: CustomEvent<{force: boolean}>) {
         if (!deletingBroker) return;
 
+        const sessionGeneration = getClientSessionGeneration();
         deleteLoading = true;
         try {
             await zodiosApi.delete_brokers_api_v1_brokers_delete(undefined, {queries: {ids: [deletingBroker.id], force: event.detail.force}});
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             invalidateBroker(deletingBroker.id);
             deleteDialogOpen = false;
             deletingBroker = null;
