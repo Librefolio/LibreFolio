@@ -4,6 +4,10 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-07-23] file | Backend plugin signals and OpenAPI discriminator workaround
+
+Recorded the Phase 0 technical-signal architecture (pure Python plugins, canonical outputs, one Asset/FX bulk request, local-only comparisons/benchmarks) and the `openapi-zod-client` discriminator type-erasure workaround. Updated the signals domain page. Filed: [[decisions/signal-backend-plugin-architecture]], [[problems/openapi-zod-discriminator-type-erasure]].
+
 ## [2026-07-01] ingest | Phase 09 — Portfolio Engine 3-Pool Refactor (commit 39106380)
 
 Source: `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/Milestone_2/portfolio_engine/` @ HEAD:`d27902b7`.
@@ -1362,5 +1366,4 @@ wiki cleanup).
 Next recommended: (a) re-ingest/refresh the 3 genuinely-stale backend/frontend sources above; (b) a dedicated
 orphan-linking pass for the 7 problem + 3 decision pages listed above; (c) hand-relabel the ~225 auto-labeled
 communities from this update if/when the graph is used for browsing rather than query.
-
 

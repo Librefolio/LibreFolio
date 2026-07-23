@@ -17,7 +17,11 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import FxConversionRoute, FxRate, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.common import (
+    BackwardFillInfo,
+    Currency,
+    DateRangeModel,
+)
 from backend.app.schemas.fx import (
     FXBulkDeleteResponse,
     FXBulkUpsertResponse,
@@ -40,11 +44,19 @@ from backend.app.schemas.fx import (
     FXProviderInfo,
     # Route models (replaces pair-source models)
     FXRouteStep,
+    FXSignalQueryResult,
     # Rate upsert models
     FXUpsertItem,
     FXUpsertResult,
 )
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
+from backend.app.schemas.signals import (
+    SignalCadence,
+    SignalCatalogResponse,
+    SignalDomain,
+    SignalExecutionContext,
+    SignalPricePoint,
+)
 from backend.app.services.fx import (
     FXServiceError,
     convert_bulk,
@@ -53,7 +65,14 @@ from backend.app.services.fx import (
     upsert_rates_bulk,
 )
 from backend.app.services.fx_providers.manual import MANUAL_PRIORITY
-from backend.app.services.provider_registry import FXProviderRegistry
+from backend.app.services.provider_registry import (
+    FXProviderRegistry,
+    SignalPluginRegistry,
+)
+from backend.app.services.signal_service import (
+    SignalExecutionPlan,
+    SignalService,
+)
 
 logger = get_logger(__name__)
 fx_router = APIRouter(prefix="/fx", tags=["FX (Forex)"])
@@ -436,6 +455,7 @@ async def delete_rates_endpoint(
 import re
 
 _RATE_NOT_FOUND_RE = re.compile(r"^Conversion \d+: No FX rate found for (\S+) on or before (\S+)\. (.+)$")
+_CONVERSION_ERROR_INDEX_RE = re.compile(r"^Conversion (\d+)(?::| failed:)")
 
 
 def _compress_convert_errors(errors: list[str]) -> list[str]:
@@ -470,6 +490,32 @@ def _compress_convert_errors(errors: list[str]) -> list[str]:
     return compressed + other_errors
 
 
+def _convert_errors_for_kind(
+    errors: list[str],
+    metadata: list[dict],
+    kind: str,
+) -> list[str]:
+    selected: list[str] = []
+    for error in errors:
+        match = _CONVERSION_ERROR_INDEX_RE.match(error)
+        if not match:
+            if kind == "daily":
+                selected.append(error)
+            continue
+        index = int(match.group(1))
+        if index < len(metadata) and metadata[index]["kind"] == kind:
+            selected.append(error)
+    return selected
+
+
+@router_currencies.get("/signals", response_model=SignalCatalogResponse)
+async def list_fx_signal_catalog(
+    _current_user: User = Depends(get_current_user),
+) -> SignalCatalogResponse:
+    """Return static signal definitions compatible with FX close rates."""
+    return SignalCatalogResponse(items=[definition for definition in SignalPluginRegistry.list_definitions() if SignalDomain.FX in definition.compatible_domains])
+
+
 @router_currencies.post("/convert", response_model=FXConvertResponse)
 async def convert_currency_bulk(
     request: List[FXConversionRequest],
@@ -497,90 +543,164 @@ async def convert_currency_bulk(
         Conversion results with rate information for each conversion (one result per day)
     """
 
-    # Prepare bulk conversions, expanding date ranges
+    signal_service = SignalService()
+    signal_plans: dict[int, SignalExecutionPlan] = {}
     bulk_conversions = []
-    conversion_metadata = []  # Track which original conversion each bulk conversion belongs to
+    conversion_metadata: list[dict] = []
 
     for conv_idx, conversion in enumerate(request):
         to_cur = conversion.to_currency
+        requested_end = conversion.date_range.end or conversion.date_range.start
 
-        # Validate date range
-        if conversion.date_range.end and conversion.date_range.start > conversion.date_range.end:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Conversion {conv_idx}: start date must be before or equal to end date",
+        current_date = conversion.date_range.start
+        while current_date <= requested_end:
+            bulk_conversions.append(
+                (
+                    conversion.from_amount,
+                    to_cur,
+                    current_date,
+                )
             )
-
-        # Expand date range into individual days
-        # Now using new signature: (Currency, to_currency, date)
-        if conversion.date_range.end:
-            # Multi-day conversion: process each day in range
-            current_date = conversion.date_range.start
-            while current_date <= conversion.date_range.end:
-                bulk_conversions.append((conversion.from_amount, to_cur, current_date))
-                conversion_metadata.append({"original_idx": conv_idx, "conversion": conversion, "date": current_date})
-                current_date += timedelta(days=1)
-        else:
-            # Single-day conversion
-            bulk_conversions.append((conversion.from_amount, to_cur, conversion.date_range.start))
             conversion_metadata.append(
                 {
+                    "kind": "daily",
                     "original_idx": conv_idx,
                     "conversion": conversion,
-                    "date": conversion.date_range.start,
+                    "date": current_date,
                 }
             )
+            current_date += timedelta(days=1)
 
-    # Call convert_bulk with raise_on_error=False to get partial results
-    bulk_results, bulk_errors = await convert_bulk(session, bulk_conversions, raise_on_error=False)
+        if conversion.signals:
+            context = SignalExecutionContext(
+                domain=SignalDomain.FX,
+                requested_range=conversion.date_range,
+                cadence=SignalCadence.DAILY,
+                source_reference=(f"fx:{conversion.from_amount.code}/" f"{conversion.to_currency}"),
+            )
+            plan = signal_service.prepare_plan(
+                conversion.signals,
+                context,
+                conversion.annotation_requests,
+            )
+            warmup_days = min(
+                plan.max_history_points_before_visible,
+                (conversion.date_range.start - date.min).days,
+            )
+            signal_start = conversion.date_range.start - timedelta(days=warmup_days)
+            signal_plans[conv_idx] = plan
+            signal_amount = Currency(
+                code=conversion.from_amount.code,
+                amount=Decimal("1"),
+            )
+            current_date = signal_start
+            while current_date <= requested_end:
+                bulk_conversions.append(
+                    (
+                        signal_amount,
+                        to_cur,
+                        current_date,
+                    )
+                )
+                conversion_metadata.append(
+                    {
+                        "kind": "signal",
+                        "original_idx": conv_idx,
+                        "conversion": conversion,
+                        "date": current_date,
+                    }
+                )
+                current_date += timedelta(days=1)
+
+    bulk_results, bulk_errors = await convert_bulk(
+        session,
+        bulk_conversions,
+        raise_on_error=False,
+    )
 
     results = []
+    signal_points: dict[int, list[SignalPricePoint]] = {index: [] for index in signal_plans}
 
-    # Process results
-    for _idx, (metadata, bulk_result) in enumerate(zip(conversion_metadata, bulk_results, strict=True)):
+    for metadata, bulk_result in zip(
+        conversion_metadata,
+        bulk_results,
+        strict=True,
+    ):
         if bulk_result is None:
-            # This conversion failed (error already in bulk_errors)
             continue
 
-        # bulk_result is now (Currency, rate_date, backward_fill_applied)
         converted_currency, actual_rate_date, backward_fill_applied = bulk_result
         conversion = metadata["conversion"]
         on_date = metadata["date"]
         from_cur = conversion.from_amount.code
         to_cur = conversion.to_currency
 
-        # Calculate effective rate (for display purposes)
+        backward_fill_info = None
+        if backward_fill_applied:
+            backward_fill_info = BackwardFillInfo(
+                actual_rate_date=actual_rate_date,
+                days_back=(on_date - actual_rate_date).days,
+            )
+
+        if metadata["kind"] == "signal":
+            close = Decimal("1") if from_cur == to_cur else converted_currency.amount
+            signal_points[metadata["original_idx"]].append(
+                SignalPricePoint(
+                    date=on_date,
+                    close=close,
+                    backward_fill_info=backward_fill_info,
+                )
+            )
+            continue
+
         rate = None
         if from_cur != to_cur:
             rate = converted_currency.amount / conversion.from_amount.amount
-
-        # Build backward-fill info if applicable
-        backward_fill_info = None
-        if backward_fill_applied:
-            days_back = (on_date - actual_rate_date).days
-            backward_fill_info = BackwardFillInfo(actual_rate_date=actual_rate_date, days_back=days_back)
-
         results.append(
             FXConversionResult(
                 from_amount=conversion.from_amount,
-                to_amount=converted_currency,  # Already a Currency object
+                to_amount=converted_currency,
                 conversion_date=on_date.isoformat(),
                 rate=rate,
                 backward_fill_info=backward_fill_info,
             )
         )
 
-    # Compress repeated errors (e.g. same pair missing for N dates → single message)
-    compressed_errors = _compress_convert_errors(bulk_errors) if bulk_errors else []
+    signal_results = []
+    for request_index, plan in signal_plans.items():
+        conversion = request[request_index]
+        signal_results.append(
+            FXSignalQueryResult(
+                request_index=request_index,
+                from_currency=conversion.from_amount.code,
+                to_currency=conversion.to_currency,
+                date_range=conversion.date_range,
+                signals=await signal_service.execute(
+                    plan,
+                    signal_points[request_index],
+                    events_loaded=False,
+                ),
+            )
+        )
 
-    # If all conversions failed, return 404
-    if bulk_errors and not results:
-        raise HTTPException(status_code=404, detail=f"All conversions failed: {'; '.join(compressed_errors)}")
+    daily_errors = _convert_errors_for_kind(
+        bulk_errors,
+        conversion_metadata,
+        "daily",
+    )
+    compressed_errors = _compress_convert_errors(daily_errors) if daily_errors else []
+
+    if daily_errors and not results and not signal_results:
+        raise HTTPException(
+            status_code=404,
+            detail=("All conversions failed: " f"{'; '.join(compressed_errors)}"),
+        )
 
     return FXConvertResponse(
         results=results,
-        success_count=len([r for r in results if r.to_amount is not None]),
+        success_count=len([result for result in results if result.to_amount is not None]),
         errors=compressed_errors,
+        signal_results=signal_results,
     )
 
 

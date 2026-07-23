@@ -74,6 +74,30 @@ def api_assets_price(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Assets Price API tests", verbose=verbose)
 
 
+def api_signal_catalogs(verbose: bool = False, test_names: list = None) -> bool:
+    """Run static Asset/FX signal catalog API tests."""
+    print_section("Signal Catalog API Tests")
+    print_info("Testing authenticated static Asset 17 / FX 9 catalogs without DB/history lookup")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_signal_catalogs.py", test_names)
+    return run_command(cmd, "Signal catalog API tests", verbose=verbose)
+
+
+def api_asset_signals(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Asset signal query API tests."""
+    print_section("Asset Signal API Tests")
+    print_info("Testing legacy, signal-only, isolation, annotations and structural validation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_signals_api.py", test_names)
+    return run_command(cmd, "Asset signal API tests", verbose=verbose)
+
+
+def api_fx_signals(verbose: bool = False, test_names: list = None) -> bool:
+    """Run grouped FX signal conversion tests."""
+    print_section("FX Signal API Tests")
+    print_info("Testing combined bulk conversion, identity/rate mapping, grouping and legacy daily output")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_fx_signals_api.py", test_names)
+    return run_command(cmd, "FX signal API tests", verbose=verbose)
+
+
 def api_assets_provider(verbose: bool = False, test_names: list = None) -> bool:
     """Run Assets Provider API endpoint tests."""
     print_section("Assets Provider API Endpoint Tests")
@@ -539,6 +563,9 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync")
+    add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
+    add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
+    add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(api, "assets-metadata", api_assets_metadata, name="Assets Metadata API", desc="PATCH metadata, bulk read, refresh")
     add_test(api, "assets-events", api_assets_events, name="Assets Events API", desc="Bulk upsert, delete, query")

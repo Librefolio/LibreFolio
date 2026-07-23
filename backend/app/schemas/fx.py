@@ -32,9 +32,15 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -45,6 +51,13 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     SafeDecimal,
+)
+from backend.app.schemas.signals import (
+    SignalAnnotationRequest,
+    SignalLineCrossoverRequest,
+    SignalOutputValueSource,
+    SignalRequest,
+    SignalResult,
 )
 from backend.app.utils.datetime_utils import parse_ISO_date
 
@@ -94,11 +107,37 @@ class FXConversionRequest(BaseModel):
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
     date_range: DateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day)")
+    signals: List[SignalRequest] = Field(
+        default_factory=list,
+        description="Technical signal instances computed on effective FX rates",
+    )
+    annotation_requests: List[SignalAnnotationRequest] = Field(
+        default_factory=list,
+        description="Optional cross/threshold rules evaluated on extended signal output",
+    )
 
     @field_validator("to_currency", mode="before")
     @classmethod
     def validate_to_currency(cls, v):
         return Currency.validate_code(v)
+
+    @model_validator(mode="after")
+    def validate_signal_references(self) -> FXConversionRequest:
+        instance_ids = [signal.instance_id for signal in self.signals]
+        if len(instance_ids) != len(set(instance_ids)):
+            raise ValueError("signal instance_id values must be unique")
+        annotation_keys = [annotation.key for annotation in self.annotation_requests]
+        if len(annotation_keys) != len(set(annotation_keys)):
+            raise ValueError("annotation request keys must be unique")
+        known_instances = set(instance_ids)
+        for annotation in self.annotation_requests:
+            if annotation.attach_to_instance_id not in known_instances:
+                raise ValueError(f"annotation target '{annotation.attach_to_instance_id}' is not in signals")
+            sources = (annotation.left, annotation.right) if isinstance(annotation, SignalLineCrossoverRequest) else (annotation.source,)
+            for source in sources:
+                if isinstance(source, SignalOutputValueSource) and source.instance_id not in known_instances:
+                    raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
+        return self
 
 
 class FXConversionResult(BaseModel):
@@ -129,12 +168,27 @@ class FXConversionResult(BaseModel):
         return self.conversion_date.isoformat()
 
 
+class FXSignalQueryResult(BaseModel):
+    """Signal results for one original (pre-daily-expansion) FX request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_index: int = Field(..., ge=0)
+    from_currency: str = Field(..., min_length=3, max_length=3)
+    to_currency: str = Field(..., min_length=3, max_length=3)
+    date_range: DateRangeModel
+    signals: List[SignalResult] = Field(default_factory=list)
+
+
 class FXConvertResponse(BaseBulkResponse[FXConversionResult]):
     """Response model for bulk currency conversion."""
 
     # Inherits: results, success_count, errors
     # Note: success_count should be populated by service layer
-    pass
+    signal_results: List[FXSignalQueryResult] = Field(
+        default_factory=list,
+        description="Signal results grouped by original conversion request",
+    )
 
 
 # ============================================================================

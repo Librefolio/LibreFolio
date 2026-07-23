@@ -44,9 +44,10 @@
         onrefresh?: (info: {base: string; quote: string; slug: string}) => void;
         ondelete?: (info: {base: string; quote: string; slug: string}) => void;
         onselectionchange?: (rows: FxRow[]) => void;
+        oninversionchange?: () => void;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange, oninversionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
 
@@ -72,6 +73,7 @@
         const current = isCardInverted(slug);
         setCardInverted(slug, !current);
         inversionVersion++;
+        oninversionchange?.();
     }
 
     /** Bulk-toggle inversion for multiple slugs (called by parent for bulk actions). */
@@ -81,6 +83,7 @@
             setCardInverted(slug, !current);
         }
         inversionVersion++;
+        oninversionchange?.();
     }
 
     function getDisplayBase(row: FxRow): string {

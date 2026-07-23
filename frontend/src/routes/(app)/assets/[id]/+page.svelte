@@ -15,6 +15,7 @@
     import {onMount, tick} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
+    import {debug, isDebugEnabled} from '$lib/debug';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {zodiosApi} from '$lib/api';
@@ -40,8 +41,21 @@
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
-    import {signalFromConfig} from '$lib/charts/signals';
+    import {
+        backendSignalSchemas,
+        buildBackendSignalRequestPlan,
+        getSignalProblem,
+        getLocalSignalDefinitions,
+        mapSignalInstanceResults,
+        renderBackendSignalResult,
+        signalFromConfig,
+        SignalResultState,
+        type BackendSignalResult,
+        type RenderedSignal,
+        type SignalConfig,
+        type SignalDefinition,
+        type SignalInstanceResult,
+    } from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
@@ -67,6 +81,7 @@
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {copyAssetAiExport} from '$lib/features/ai-export/asset/assetExportClipboard';
     import {ASSET_PROMPT_CATALOG, type AssetPromptId} from '$lib/features/ai-export/asset/assetPromptCatalog';
+    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
 
     // =========================================================================
     // Page data
@@ -151,6 +166,12 @@
     // Chart settings
     let settings = $derived(getSettingsForPair(`asset-${data.assetId}`, 'assets'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    let signalDefinitions = $state<SignalDefinition[]>([]);
+    let signalInstanceResults = $state<SignalInstanceResult[]>([]);
+    let signalCatalogFailed = $state(false);
+    let signalRequestFailed = $state(false);
+    const signalResultState = new SignalResultState();
+    let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
     // Measure panel
     let measureMode = $state(false);
@@ -559,11 +580,30 @@
         return buildIdentifiersList(assetInfo as Record<string, unknown>);
     });
 
+    let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
+
+    let backendOverlaySignals: RenderedSignal[] = $derived.by(() => {
+        const rendered: RenderedSignal[] = [];
+        for (const item of signalInstanceResults) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const currentConfig = signals.find((config) => config.id === item.config.id) ?? item.config;
+            const outcome = renderBackendSignalResult(item.result, currentConfig, {
+                baseData: lineData,
+                viewMode,
+                translate: (key) => $t(key),
+            });
+            rendered.push(...outcome.signals);
+        }
+        return rendered;
+    });
+
     // Overlay signals
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion;
         const rendered: RenderedSignal[] = [];
         for (const cfg of signals) {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (!definition || definition.source === 'backend') continue;
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
 
@@ -593,7 +633,7 @@
                 if (result.data.length > 0) rendered.push(result);
             }
         }
-        return rendered;
+        return [...rendered, ...backendOverlaySignals];
     });
 
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
@@ -681,8 +721,19 @@
     let signalSummaries: Map<string, SignalDataSummary> = $derived.by(() => {
         void overlayDataVersion; // recompute when overlay data changes (e.g. after sync)
         const result = new Map<string, SignalDataSummary>();
+        const instanceById = new Map(signalInstanceResults.map((item) => [item.config.id, item]));
         for (const cfg of signals) {
-            if (cfg.signalType === 'asset-comparison') {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (definition?.source === 'backend') {
+                const rendered = backendOverlaySignals.filter((signal) => signal.id === cfg.id || signal.id.startsWith(`${cfg.id}:`));
+                const dates = rendered.flatMap((signal) => signal.data.map((point) => point.date)).sort();
+                result.set(cfg.id, {
+                    pointCount: rendered.reduce((maximum, signal) => Math.max(maximum, signal.data.length), 0),
+                    eventCounts: {},
+                    firstDate: dates[0] ?? null,
+                    problem: getSignalProblem(instanceById.get(cfg.id)) ?? undefined,
+                });
+            } else if (cfg.signalType === 'asset-comparison') {
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
                 const resolvedData = cfg.params._resolvedData as Array<{date: string; value: number}> | undefined;
@@ -720,6 +771,69 @@
     // Lifecycle
     // =========================================================================
 
+    async function loadAssetSignalDefinitions(force = false) {
+        try {
+            signalDefinitions = await signalCatalogStore.load('asset', force);
+            signalCatalogFailed = false;
+        } catch (catalogError) {
+            console.error('Failed to load Asset signal catalog:', catalogError);
+            signalDefinitions = getLocalSignalDefinitions();
+            signalCatalogFailed = true;
+        }
+    }
+
+    function parseBackendSignalResults(value: unknown): BackendSignalResult[] {
+        if (!Array.isArray(value)) return [];
+        return value.map((item) => backendSignalSchemas.result.parse(item));
+    }
+
+    function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
+        const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+        const mapped = mapSignalInstanceResults(configs, plan, results);
+        if (signalResultState.apply(requestVersion, mapped)) {
+            signalInstanceResults = [...signalResultState.values()];
+            if (isDebugEnabled()) {
+                const assetLabel = assetInfo?.display_name ?? `Asset #${data.assetId}`;
+                for (const item of mapped) {
+                    const problem = getSignalProblem(item);
+                    if (!problem) continue;
+                    debug.warn('AssetSignals', `${assetLabel} (#${data.assetId}) · ${item.result?.signal_code ?? item.config.signalType} · ${item.status}`, {
+                        asset: {
+                            id: data.assetId,
+                            name: assetLabel,
+                            ticker: assetInfo?.identifier_ticker ?? null,
+                        },
+                        signal: {
+                            instanceId: item.config.id,
+                            type: item.config.signalType,
+                            code: item.result?.signal_code ?? null,
+                            params: item.config.params,
+                        },
+                        status: item.status,
+                        warningMessages: item.result?.warnings?.map((warning) => warning.message) ?? [],
+                        problem,
+                        availability: item.result?.availability ?? null,
+                        warmup: item.result?.warmup ?? null,
+                        error: item.result?.error ?? item.error,
+                    });
+                }
+            }
+        }
+    }
+
+    function backendRequestFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            buildBackendSignalRequestPlan(configs, signalDefinitions)
+                .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
+                .sort(),
+        );
+    }
+
+    async function retryBackendSignals() {
+        await loadAssetSignalDefinitions(true);
+        await loadChartData(false);
+    }
+
     /** Full page reload: fetches all data for the current assetId */
     async function reloadPage() {
         loading = true;
@@ -729,6 +843,8 @@
         providerAssignment = null;
         chartData = [];
         events = [];
+        signalInstanceResults = [];
+        signalRequestFailed = false;
         comparisonEvents = new Map();
         currentLivePrice = null;
         livePriceConversionFailed = false;
@@ -738,7 +854,8 @@
         classificationLoaded = false;
         providerIconUrl = null;
 
-        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), ensureAssetProvidersCached(), loadAssetInfo(), loadProviderAssignment(), loadChartData(), loadFxPairSlugs(), loadAssetList()]);
+        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), ensureAssetProvidersCached(), loadAssetInfo(), loadProviderAssignment(), loadAssetSignalDefinitions(), loadFxPairSlugs(), loadAssetList()]);
+        await loadChartData();
         // Resolve provider icon after data loads (use local ref to avoid TS narrowing)
         const info = assetInfo as AssetDetail | null;
         if (info?.provider_code) {
@@ -911,9 +1028,12 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(force = false) {
+    async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals) {
         const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
+        const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
+        const requestVersion = signalResultState.beginRequest();
+        let pricesFromCache = false;
 
         // Cache-first: check if the price store already covers this range
         if (!force && effectiveCurrency) {
@@ -939,36 +1059,49 @@
                     error = null;
                 }
                 resolveMaxStartFromChartData();
-                return;
+                pricesFromCache = true;
+                if (requestPlan.requests.length === 0) {
+                    applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
+                    signalRequestFailed = false;
+                    loading = false;
+                    return;
+                }
             }
         }
 
-        // Cache miss or force — full fetch with loading spinner
-        loading = true;
+        // Cache miss fetches prices + signals; cache hit requests signals only.
+        loading = !pricesFromCache;
         error = null;
+        signalRequestFailed = false;
         try {
             const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post([
                 {
                     asset_id: data.assetId,
                     date_range: {start: dateStart, end: dateEnd},
+                    include_price: !pricesFromCache,
                     include_events: true,
                     target_currency: targetCurrency,
+                    signals: requestPlan.requests,
                 },
             ]);
             const result = (response as any)?.items?.[0];
             if (result) {
-                chartData = result.prices ?? [];
+                if (!pricesFromCache) {
+                    chartData = result.prices ?? [];
+                }
                 events = result.events ?? [];
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(result.signals));
                 // Populate the price cache (derive currency from response if not known yet)
                 const cacheCurrency = effectiveCurrency || chartData[0]?.currency || '';
-                if (cacheCurrency && chartData.length > 0) {
+                if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
                     const store = getAssetPriceStore(data.assetId, cacheCurrency);
                     store.merge(apiPricesToAssetPricePoints(chartData));
                     store.markFetched(dateStart, dateEnd);
                 }
             } else {
-                chartData = [];
+                if (!pricesFromCache) chartData = [];
                 events = [];
+                applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
             }
             if (chartData.length === 0 && !error) {
                 error = '_i18n:assetDetail.noData';
@@ -976,6 +1109,7 @@
             resolveMaxStartFromChartData();
         } catch (e: any) {
             console.error('Failed to load chart data:', e);
+            signalRequestFailed = requestPlan.requests.length > 0;
             if (chartData.length === 0) error = e?.message || 'Failed to load prices';
         } finally {
             loading = false;
@@ -1308,8 +1442,12 @@
     }
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
+        const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
+        if (shouldReloadBackend) {
+            void loadChartData(false, newSignals);
+        }
     }
 
     async function handleSyncAsset(assetId: number, opts: {silent?: boolean} = {}) {
@@ -1643,23 +1781,29 @@
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <div bind:this={signalsHeaderRef} class="w-full flex items-center gap-1 px-2 py-1.5">
-            <button class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
-                <TrendingUp class="text-blue-500" size={15} />
-                {$t('common.signals')}
-            </button>
-            <div class="flex-1"></div>
-            <div class="shrink-0">
-                <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
+        <div class="relative">
+            <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
+            <div bind:this={signalsHeaderRef} class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5">
+                <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+                    <TrendingUp class="text-blue-500" size={15} />
+                    {$t('common.signals')}
+                </span>
+                <div class="flex-1"></div>
+                <div class="pointer-events-auto shrink-0">
+                    <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
+                </div>
+                <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
+                    <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
+                </span>
             </div>
-            <button class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="asset-detail-signals-chevron" onclick={() => (showSignals = !showSignals)} aria-label={$t('common.signals')}>
-                <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-            </button>
         </div>
         {#if showSignals}
             <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
                     signals={[...signals]}
+                    definitions={signalDefinitions}
+                    backendError={signalBackendError}
+                    onretrybackend={retryBackendSignals}
                     availablePairs={allConfiguredFxSlugs}
                     availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
                     mainPairSlug={`asset-${data.assetId}`}

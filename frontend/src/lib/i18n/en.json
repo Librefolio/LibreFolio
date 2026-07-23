@@ -877,7 +877,26 @@
     },
     "macdLineColor": "MACD Line Color",
     "noDataAvailable": "No data available. Try syncing this asset/pair.",
-    "conversionFailed": "Currency conversion failed — data not shown (FX pair not configured)"
+    "conversionFailed": "Currency conversion failed — data not shown (FX pair not configured)",
+    "backendPreviewRealTarget": "Technical indicator preview is available on a real asset or currency pair.",
+    "backendPreviewApply": "Backend indicator preview shows the last applied settings. Apply changes to update it.",
+    "backendPreviewUnavailable": "Backend indicator preview appears after this asset or pair loads signal results.",
+    "signalCatalogUnavailable": "The technical signal catalog is unavailable. Local comparisons and benchmarks remain available.",
+    "signalResultsUnavailable": "Technical signals could not be updated. Price data remains available.",
+    "signalProblems": {
+      "missingInputFields": "Missing required price fields: {fields}. Existing dates are not enough; sync with a provider that supplies these OHLCV values.",
+      "incompleteInputCoverage": "Required price fields are incomplete: {fields}. Usable points: {available}/{requested}.",
+      "insufficientHistory": "Not enough usable history for these parameters: {available} points available, {required} needed.",
+      "incompleteWarmup": "The signal is usable but not fully stabilized: {used}/{required} warm-up points available.",
+      "dataGaps": "The required history contains gaps: {missing} of {requested} points are missing ({coverage}% coverage).",
+      "missingEvents": "Missing required events: {events}.",
+      "incompatibleDomain": "This indicator is not compatible with this chart.",
+      "calculationFailed": "Signal calculation failed: {message}",
+      "resultMissing": "No backend result was returned for this signal. Retry the signal request.",
+      "partialResult": "This signal is only partially available with the current data.",
+      "unavailable": "This signal cannot be calculated with the available data.",
+      "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up)."
+    }
   },
   "common": {
     "addMeasure": "Add measurement",
@@ -2075,5 +2094,93 @@
     "deleteFailed": "Failed to delete file",
     "loadFailed": "Failed to load files",
     "uploadFailed": "Failed to upload file"
+  },
+  "signals": {
+    "groups": {
+      "trend": "Trend",
+      "momentum": "Momentum",
+      "volatility": "Volatility",
+      "volume": "Volume"
+    },
+    "dataUsed": "Data",
+    "dataFields": {
+      "open": "Open",
+      "high": "High",
+      "low": "Low",
+      "close": "Close",
+      "volume": "Volume"
+    },
+    "selector": {
+      "searchPlaceholder": "Search indicators",
+      "noMatches": "No matching indicators"
+    },
+    "ema": {
+      "name": "EMA",
+      "description": "Recent-price weighted trend"
+    },
+    "sma": {
+      "name": "SMA",
+      "description": "Simple average of closing prices"
+    },
+    "rsi": {
+      "name": "RSI",
+      "description": "Buying and selling pressure"
+    },
+    "macd": {
+      "name": "MACD",
+      "description": "Momentum between moving averages"
+    },
+    "bollinger": {
+      "name": "Bollinger Bands",
+      "description": "Volatility around the moving average"
+    },
+    "roc": {
+      "name": "ROC",
+      "description": "Speed of price change"
+    },
+    "stochRsi": {
+      "name": "Stochastic RSI",
+      "description": "RSI position within its range"
+    },
+    "kama": {
+      "name": "KAMA",
+      "description": "Trend adapting to market noise"
+    },
+    "ppo": {
+      "name": "PPO",
+      "description": "Percentage momentum between averages"
+    },
+    "atr": {
+      "name": "ATR",
+      "description": "Absolute price volatility"
+    },
+    "adx": {
+      "name": "ADX",
+      "description": "Trend strength"
+    },
+    "natr": {
+      "name": "NATR",
+      "description": "Percentage price volatility"
+    },
+    "aroon": {
+      "name": "Aroon",
+      "description": "Recency of highs and lows"
+    },
+    "donchian": {
+      "name": "Donchian Channels",
+      "description": "Period high-low channel"
+    },
+    "cci": {
+      "name": "CCI",
+      "description": "Distance from the average price"
+    },
+    "obv": {
+      "name": "OBV",
+      "description": "Price-volume pressure"
+    },
+    "mfi": {
+      "name": "MFI",
+      "description": "Volume-weighted momentum"
+    }
   }
 }

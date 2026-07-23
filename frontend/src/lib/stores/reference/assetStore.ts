@@ -29,6 +29,7 @@
 import {zodiosApi} from '$lib/api';
 import {createEntityStore} from '../core/entityStore';
 import {derived} from 'svelte/store';
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ============================================================================
 // TYPES
@@ -125,6 +126,11 @@ export const ensureAssetsLoaded = store.ensureLoaded;
 
 /** Force reload — discards the cache and re-fetches. Use behind a manual ↻ button. */
 export const refreshAllAssets = store.refreshAll;
+
+/** Clear the cached entity list when the authenticated account changes. */
+export const resetAssetStore = store.reset;
+
+registerClientSessionReset('assetStore', resetAssetStore);
 
 /**
  * Sync lookup. Returns null if the cache hasn't loaded the id yet.

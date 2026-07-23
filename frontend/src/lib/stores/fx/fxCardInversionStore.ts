@@ -6,6 +6,8 @@
  * Plain Map (non-reactive) — each card reads on mount and writes on toggle.
  */
 
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
+
 const invertedCards = new Map<string, boolean>();
 
 /** Check if a card is inverted (default: false) */
@@ -21,3 +23,9 @@ export function setCardInverted(slug: string, inverted: boolean): void {
         invertedCards.delete(slug);
     }
 }
+
+export function clearCardInversions(): void {
+    invertedCards.clear();
+}
+
+registerClientSessionReset('fxCardInversionStore', clearCardInversions);

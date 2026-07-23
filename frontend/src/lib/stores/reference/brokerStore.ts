@@ -23,6 +23,7 @@ import {createEntityStore} from '../core/entityStore';
 import {derived} from 'svelte/store';
 import {canEditWithRole, getRoleRank, type PairedAccessLevel} from '$lib/utils/broker/brokerRoleHelpers';
 import {ensurePluginIconsLoaded, normalizeBrokerIconField} from '$lib/utils/broker/brokerHelpers';
+import {getClientSessionGeneration, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ============================================================================
 // TYPES
@@ -144,6 +145,14 @@ export const refreshAllBrokers = async (): Promise<void> => {
     ensurePluginIconsLoaded(); // fire-and-forget — keeps plugin icon cache fresh
 };
 
+/** Clear user-scoped broker data without starting another request. */
+export const resetBrokerStore = (): void => {
+    iconFieldLoaders.clear();
+    store.reset();
+};
+
+registerClientSessionReset('brokerStore', resetBrokerStore);
+
 /** Sync lookup. Returns null if id is null/undefined or not cached. */
 export const getBrokerInfo = store.get;
 
@@ -163,17 +172,20 @@ export async function ensureBrokerIconFieldsLoaded(brokerId: number | null | und
     const inFlight = iconFieldLoaders.get(brokerId);
     if (inFlight) return inFlight;
 
+    const sessionGeneration = getClientSessionGeneration();
     const loader = (async () => {
         try {
             const broker = (await zodiosApi.get_broker_api_v1_brokers__broker_id__get({
                 params: {broker_id: brokerId},
             } as never)) as Record<string, unknown>;
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             store.merge([broker]);
         } catch (e) {
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             // eslint-disable-next-line no-console
             console.error('[brokerStore] Failed to hydrate broker icon fields:', e);
         } finally {
-            iconFieldLoaders.delete(brokerId);
+            if (isClientSessionCurrent(sessionGeneration)) iconFieldLoaders.delete(brokerId);
         }
     })();
 

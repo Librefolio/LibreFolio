@@ -36,13 +36,26 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import type {RenderedSignal, SignalConfig} from '$lib/charts/signals';
-    import {signalFromConfig} from '$lib/charts/signals';
+    import {
+        backendSignalSchemas,
+        buildBackendSignalRequestPlan,
+        getSignalProblem,
+        getLocalSignalDefinitions,
+        mapSignalInstanceResults,
+        renderBackendSignalResult,
+        signalFromConfig,
+        SignalResultState,
+        type BackendSignalResult,
+        type RenderedSignal,
+        type SignalConfig,
+        type SignalDefinition,
+        type SignalInstanceResult,
+    } from '$lib/charts/signals';
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {apiResultsToCanonicalFxDataPoints, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -57,6 +70,7 @@
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {copyFxAiExport} from '$lib/features/ai-export/fx/fxExportClipboard';
     import {FX_PROMPT_CATALOG, type FxPromptId} from '$lib/features/ai-export/fx/fxPromptCatalog';
+    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
 
     // =========================================================================
     // Page data
@@ -151,6 +165,12 @@
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
     let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    let signalDefinitions = $state<SignalDefinition[]>([]);
+    let signalInstanceResults = $state<SignalInstanceResult[]>([]);
+    let signalCatalogFailed = $state(false);
+    let signalRequestFailed = $state(false);
+    const signalResultState = new SignalResultState();
+    let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
     // Measure panel
     let measureMode = $state(false);
@@ -277,11 +297,30 @@
     // True when no real provider is configured (MANUAL sentinel is already filtered out)
     let isManualOnly = $derived(providers.length === 0);
 
+    let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
+
+    let backendOverlaySignals: RenderedSignal[] = $derived.by(() => {
+        const rendered: RenderedSignal[] = [];
+        for (const item of signalInstanceResults) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const currentConfig = signals.find((config) => config.id === item.config.id) ?? item.config;
+            const outcome = renderBackendSignalResult(item.result, currentConfig, {
+                baseData: lineData,
+                viewMode,
+                translate: (key) => $t(key),
+            });
+            rendered.push(...outcome.signals);
+        }
+        return rendered;
+    });
+
     // Computed overlay signals from settings
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion; // trigger recomputation when overlay data changes
         const rendered: RenderedSignal[] = [];
         for (const cfg of signals) {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (!definition || definition.source === 'backend') continue;
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
 
@@ -318,7 +357,7 @@
                 if (result.data.length > 0) rendered.push(result);
             }
         }
-        return rendered;
+        return [...rendered, ...backendOverlaySignals];
     });
 
     /** Combined overlay signals: computed from settings + measure signals */
@@ -380,8 +419,19 @@
     let signalSummaries: Map<string, SignalDataSummary> = $derived.by(() => {
         void overlayDataVersion; // recompute when overlay data changes (e.g. after sync)
         const result = new Map<string, SignalDataSummary>();
+        const instanceById = new Map(signalInstanceResults.map((item) => [item.config.id, item]));
         for (const cfg of signals) {
-            if (cfg.signalType === 'asset-comparison') {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (definition?.source === 'backend') {
+                const rendered = backendOverlaySignals.filter((signal) => signal.id === cfg.id || signal.id.startsWith(`${cfg.id}:`));
+                const dates = rendered.flatMap((signal) => signal.data.map((point) => point.date)).sort();
+                result.set(cfg.id, {
+                    pointCount: rendered.reduce((maximum, signal) => Math.max(maximum, signal.data.length), 0),
+                    eventCounts: {},
+                    firstDate: dates[0] ?? null,
+                    problem: getSignalProblem(instanceById.get(cfg.id)) ?? undefined,
+                });
+            } else if (cfg.signalType === 'asset-comparison') {
                 const targetId = Number(cfg.params.assetId);
                 if (!targetId) continue;
                 const resolvedData = cfg.params._resolvedData as Array<{date: string; value: number}> | undefined;
@@ -424,15 +474,66 @@
     // Lifecycle
     // =========================================================================
 
+    async function loadFxSignalDefinitions(force = false) {
+        try {
+            signalDefinitions = await signalCatalogStore.load('fx', force);
+            signalCatalogFailed = false;
+        } catch (catalogError) {
+            console.error('Failed to load FX signal catalog:', catalogError);
+            signalDefinitions = getLocalSignalDefinitions();
+            signalCatalogFailed = true;
+        }
+    }
+
+    function parseBackendSignalResults(value: unknown): BackendSignalResult[] {
+        if (!Array.isArray(value)) return [];
+        return value.map((item) => backendSignalSchemas.result.parse(item));
+    }
+
+    function applyBackendSignalResults(configs: SignalConfig[], requestVersion: number, results: BackendSignalResult[]) {
+        const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+        const mapped = mapSignalInstanceResults(configs, plan, results);
+        if (signalResultState.apply(requestVersion, mapped)) {
+            signalInstanceResults = [...signalResultState.values()];
+        }
+    }
+
+    function backendRequestFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            buildBackendSignalRequestPlan(configs, signalDefinitions)
+                .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
+                .sort(),
+        );
+    }
+
+    async function retryBackendSignals() {
+        await loadFxSignalDefinitions(true);
+        await loadChartData();
+    }
+
     onMount(async () => {
         // Persist the inversion state from the URL so FxCard reflects it on back-navigation
         setCardInverted(data.canonicalSlug, data.inverted);
 
+        await loadFxSignalDefinitions();
         await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), loadChartData(), loadProviders(), loadAvailableProviders(), loadAssetList()]);
         // Force flag reactivity after currencies load
         flagVersion++;
         // Load comparison asset data after initial data is ready
         await maybeLoadComparison();
+    });
+
+    let previousDisplayOrientation = $state('');
+    $effect(() => {
+        const orientation = `${data.urlBase}-${data.urlQuote}`;
+        if (!previousDisplayOrientation) {
+            previousDisplayOrientation = orientation;
+            return;
+        }
+        if (orientation !== previousDisplayOrientation) {
+            previousDisplayOrientation = orientation;
+            void loadChartData();
+        }
     });
 
     // =========================================================================
@@ -471,32 +572,76 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData() {
+    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals) {
         error = null;
-
-        // Fast path: data fully cached — update without showing loading state
         const store = getFxStore(data.canonicalSlug);
-        if (store.getMissingIntervals(dateStart, dateEnd).length === 0) {
+        const hasCachedRange = store.getMissingIntervals(dateStart, dateEnd).length === 0;
+        const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
+        const requestVersion = signalResultState.beginRequest();
+
+        if (hasCachedRange) {
             chartData = store.getRange(dateStart, dateEnd).data;
             if (chartData.length === 0) error = '_i18n:fxDetail.noData';
             resolveMaxStartFromChartData();
+        }
+
+        if (requestPlan.requests.length === 0) {
+            if (!hasCachedRange) {
+                loading = true;
+                try {
+                    chartData = await ensureFxRangeLoaded(data.canonicalSlug, dateStart, dateEnd);
+                    if (chartData.length === 0 && !error) {
+                        error = '_i18n:fxDetail.noData';
+                    }
+                    resolveMaxStartFromChartData();
+                } finally {
+                    loading = false;
+                }
+            }
+            applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
+            signalRequestFailed = false;
             return;
         }
 
-        loading = true;
+        loading = !hasCachedRange;
+        signalRequestFailed = false;
         try {
-            chartData = await ensureFxRangeLoaded(data.canonicalSlug, dateStart, dateEnd);
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
+                {
+                    from_amount: {
+                        code: data.urlBase,
+                        amount: '1',
+                    },
+                    to: data.urlQuote,
+                    date_range: {
+                        start: dateStart,
+                        end: dateEnd,
+                    },
+                    signals: requestPlan.requests,
+                },
+            ]);
+            const dailyResults = (response as any)?.results ?? [];
+            const canonicalPoints = apiResultsToCanonicalFxDataPoints(dailyResults, data.inverted);
+            if (canonicalPoints.length > 0) {
+                store.merge(canonicalPoints);
+            }
+            store.markFetched(dateStart, dateEnd);
+            chartData = store.getRange(dateStart, dateEnd).data;
+
+            const signalGroup = ((response as any)?.signal_results ?? []).find((group: any) => group.request_index === 0);
+            applyBackendSignalResults(requestedSignalConfigs, requestVersion, parseBackendSignalResults(signalGroup?.signals));
             if (chartData.length === 0 && !error) {
                 error = '_i18n:fxDetail.noData';
             }
             resolveMaxStartFromChartData();
         } catch (e: any) {
-            const existingData = getFxStore(data.canonicalSlug).getRange(dateStart, dateEnd).data;
+            signalRequestFailed = true;
+            const existingData = store.getRange(dateStart, dateEnd).data;
             if (existingData.length > 0) {
                 chartData = existingData;
             } else if (e?.response?.status === 404) {
                 chartData = [];
-                getFxStore(data.canonicalSlug).invalidateRange(dateStart, dateEnd);
+                store.invalidateRange(dateStart, dateEnd);
                 error = '_i18n:fxDetail.noData';
             } else {
                 console.error('Failed to load chart data:', e);
@@ -662,8 +807,12 @@
     }
 
     function handleSignalsChange(newSignals: SignalConfig[]) {
+        const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         maybeLoadComparison(); // fire-and-forget: load data for newly added comparison signals
+        if (shouldReloadBackend) {
+            void loadChartData(newSignals);
+        }
     }
 
     async function handleSyncPair(slug: string) {
@@ -879,23 +1028,29 @@
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-        <div bind:this={signalsHeaderRef} class="w-full flex items-center gap-1 px-2 py-1.5">
-            <button class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="fx-detail-signals-toggle" onclick={() => (showSignals = !showSignals)}>
-                <TrendingUp class="text-blue-500" size={15} />
-                {$t('common.signals')}
-            </button>
-            <div class="flex-1"></div>
-            <div class="shrink-0">
-                <AiExportMenu entries={fxAiExportEntries} loading={fxAiExportLoading} triggerLabel={$t('fxDetail.aiExport')} loadingLabel={$t('fxDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleFxAiExport(id as FxPromptId)} />
+        <div class="relative">
+            <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="fx-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
+            <div bind:this={signalsHeaderRef} class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5">
+                <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+                    <TrendingUp class="text-blue-500" size={15} />
+                    {$t('common.signals')}
+                </span>
+                <div class="flex-1"></div>
+                <div class="pointer-events-auto shrink-0">
+                    <AiExportMenu entries={fxAiExportEntries} loading={fxAiExportLoading} triggerLabel={$t('fxDetail.aiExport')} loadingLabel={$t('fxDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleFxAiExport(id as FxPromptId)} />
+                </div>
+                <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="fx-detail-signals-chevron">
+                    <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
+                </span>
             </div>
-            <button class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-lg" data-testid="fx-detail-signals-chevron" onclick={() => (showSignals = !showSignals)} aria-label={$t('common.signals')}>
-                <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-            </button>
         </div>
         {#if showSignals}
             <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
                 <ChartSignalsSection
                     signals={[...signals]}
+                    definitions={signalDefinitions}
+                    backendError={signalBackendError}
+                    onretrybackend={retryBackendSignals}
                     availablePairs={allConfiguredSlugs}
                     availableAssets={allAssets}
                     mainPairSlug={data.canonicalSlug}

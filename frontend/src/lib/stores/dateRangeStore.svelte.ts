@@ -12,6 +12,8 @@
  * @module stores/dateRangeStore
  */
 
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
+
 const STORAGE_KEY = 'librefolio_dateRange';
 
 function defaultRange(): {start: string; end: string} {
@@ -96,6 +98,18 @@ export function setDateRange(start: string, end: string) {
     _end = end;
     saveToStorage(start, end);
 }
+
+/** Reset account-local navigation state when the authenticated user changes. */
+export function resetDateRange(): void {
+    const range = defaultRange();
+    _start = range.start;
+    _end = range.end;
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(STORAGE_KEY);
+    }
+}
+
+registerClientSessionReset('dateRangeStore', resetDateRange);
 
 /**
  * Seed the store from URL params (call on `enter` navigation only).

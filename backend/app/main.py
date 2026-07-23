@@ -40,9 +40,11 @@ from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     BRIMProviderRegistry,
     FXProviderRegistry,
+    SignalPluginRegistry,
 )
 from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.settings_service import initialize_global_settings
+from backend.app.services.signal_runtime import validate_signal_runtime
 from backend.app.services.static_uploads import seed_default_avatars
 from backend.app.utils.cache_utils import close_all_caches
 from backend.app.utils.version import get_git_version
@@ -154,6 +156,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         version=git_version,
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
+    )
+
+    signal_runtime = validate_signal_runtime()
+    SignalPluginRegistry.auto_discover()
+    logger.info(
+        "Signal plugin runtime ready",
+        pandas_ta_classic_version=signal_runtime.pandas_ta_classic_version,
+        talib_version=signal_runtime.talib_version,
+        plugin_count=len(SignalPluginRegistry.list_plugin_codes()),
     )
 
     # Ensure all data directories exist (prod or test based on mode)

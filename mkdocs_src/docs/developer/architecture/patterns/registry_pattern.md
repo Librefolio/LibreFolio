@@ -1,14 +1,14 @@
 # 🧩 Registry Pattern and Plugin System
 
-LibreFolio uses a **Registry Pattern** to create a flexible and extensible plugin system. This allows new functionality—such as support for new brokers, asset pricing sources, or FX providers—to be added without modifying the core application code.
+LibreFolio uses a **Registry Pattern** to create a flexible and extensible plugin system. This allows new functionality—such as support for new brokers, asset pricing sources, FX providers, or technical signals—to be added without modifying the core application code.
 
 ## ⚙️ How it Works
 
 The system is based on three key components:
 
-1. **Abstract Base Class (ABC)**: A template class that defines the interface a plugin must implement (e.g., `AssetSourceProvider`, `BRIMProvider`, `FXRateProvider`).
-2. **Provider Registry**: A central class that discovers and stores all available plugins (e.g., `AssetProviderRegistry`).
-3. **`@register_provider` Decorator**: A simple decorator that automatically registers a plugin with its corresponding registry.
+1. **Abstract Base Class (ABC)**: A template class that defines the interface a plugin must implement (e.g., `AssetSourceProvider`, `BRIMProvider`, `FXRateProvider`, `SignalPlugin`).
+2. **Plugin Registry**: A central class that discovers and stores all available plugins (e.g., `AssetProviderRegistry`, `SignalPluginRegistry`).
+3. **Registration Decorator**: `@register_provider` for provider systems or `@register_plugin` for non-provider plugin systems.
 
 ### 🗺️ High-Level Flow
 
@@ -80,6 +80,7 @@ BRIMProviderRegistry.shutdown_all_providers()
 | `BRIMProviderRegistry` | `brim_providers/` | `BRIMProvider` | Parse broker CSV/Excel files |
 | `AssetProviderRegistry` | `asset_source_providers/` | `AssetSourceProvider` | Fetch asset prices |
 | `FXProviderRegistry` | `fx_providers/` | `FXRateProvider` | Fetch exchange rates |
+| `SignalPluginRegistry` | `signal_plugins/` | `SignalPlugin` | Compute schema-driven technical signals |
 
 ### 🎯 `@register_provider` Decorator
 
@@ -90,6 +91,14 @@ class MyProvider(AssetSourceProvider):
 ```
 
 The decorator is a factory that calls `registry_class.register(provider_class)` at import time.
+
+Technical signals use the equivalent non-provider decorator:
+
+```python
+@register_plugin(SignalPluginRegistry)
+class MySignal(SignalPlugin):
+    ...
+```
 
 ---
 
@@ -102,6 +111,7 @@ Each subsystem has its own detailed guide with ABC method tables, flow diagrams,
 | **BRIM** | [BRIM Plugin Guide](brim_plugin_guide.md) | `BRIMProvider` | Parse broker export files (CSV, Excel) into transactions |
 | **Assets** | [Asset Plugin Guide](asset_plugin_guide.md) | `AssetSourceProvider` | Fetch current and historical asset prices |
 | **FX** | [FX Plugin Guide](fx_plugin_guide.md) | `FXRateProvider` | Fetch exchange rates from central banks |
+| **Signals** | [Signal Plugin Guide](signal_plugin_guide.md) | `SignalPlugin` | Compute backend technical indicators and expose schema-driven UI metadata |
 
 ---
 
@@ -127,3 +137,7 @@ Each plugin subsystem also has architecture docs, provider lists, and configurat
 - [Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, priority fallback
 - [Providers](../../backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
 
+### 📊 Technical Signals
+
+- [Signal Plugin Guide](signal_plugin_guide.md) — Runtime architecture, contracts, implementation example, and validation gates
+- [Technical Analysis](../../../financial-theory/technical-analysis/index.md) — Financial and mathematical documentation for built-in indicators

@@ -30,7 +30,13 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from backend.app.schemas.common import (
     BackwardFillInfo,
@@ -42,6 +48,13 @@ from backend.app.schemas.common import (
     DateRangeModel,
     FxBackwardFillInfo,
     SafeDecimal,
+)
+from backend.app.schemas.signals import (
+    SignalAnnotationRequest,
+    SignalLineCrossoverRequest,
+    SignalOutputValueSource,
+    SignalRequest,
+    SignalResult,
 )
 
 # ============================================================================
@@ -491,6 +504,14 @@ class FAPriceQueryItem(BaseModel):
     include_price: bool = Field(True, description="Include price history in response")
     include_events: bool = Field(False, description="Include asset events in response")
     target_currency: Optional[str] = Field(None, description="Convert prices to this currency via FX rates (None = native currency)")
+    signals: List[SignalRequest] = Field(
+        default_factory=list,
+        description="Technical signal instances to compute on the requested asset series",
+    )
+    annotation_requests: List[SignalAnnotationRequest] = Field(
+        default_factory=list,
+        description="Optional cross/threshold rules evaluated on extended signal output",
+    )
 
     @field_validator("target_currency")
     @classmethod
@@ -498,6 +519,24 @@ class FAPriceQueryItem(BaseModel):
         if v is not None:
             return Currency.validate_code(v)
         return v
+
+    @model_validator(mode="after")
+    def validate_signal_references(self) -> FAPriceQueryItem:
+        instance_ids = [signal.instance_id for signal in self.signals]
+        if len(instance_ids) != len(set(instance_ids)):
+            raise ValueError("signal instance_id values must be unique")
+        annotation_keys = [annotation.key for annotation in self.annotation_requests]
+        if len(annotation_keys) != len(set(annotation_keys)):
+            raise ValueError("annotation request keys must be unique")
+        known_instances = set(instance_ids)
+        for annotation in self.annotation_requests:
+            if annotation.attach_to_instance_id not in known_instances:
+                raise ValueError(f"annotation target '{annotation.attach_to_instance_id}' is not in signals")
+            sources = (annotation.left, annotation.right) if isinstance(annotation, SignalLineCrossoverRequest) else (annotation.source,)
+            for source in sources:
+                if isinstance(source, SignalOutputValueSource) and source.instance_id not in known_instances:
+                    raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
+        return self
 
 
 class FAPriceQueryResult(BaseModel):
@@ -512,6 +551,10 @@ class FAPriceQueryResult(BaseModel):
         description="Asset events (if requested). Includes DB id + is_auto flag so the frontend editor can reference them by id.",
     )
     errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. FX pair missing)")
+    signals: List[SignalResult] = Field(
+        default_factory=list,
+        description="Technical signal results keyed by request instance_id",
+    )
 
 
 class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):

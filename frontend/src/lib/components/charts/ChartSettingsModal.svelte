@@ -21,7 +21,7 @@
     import ChartAestheticsSection from './ChartAestheticsSection.svelte';
     import ChartSignalsSection from './ChartSignalsSection.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {type RenderedSignal, type SignalConfig, signalFromConfig} from '$lib/charts/signals';
+    import {getRegisteredSignalTypes, resolveSignalPreview, type RenderedSignal, type SignalConfig, type SignalDefinition, signalFromConfig} from '$lib/charts/signals';
     import {SineSignal} from '$lib/charts/signals/SineSignal';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
 
@@ -39,6 +39,16 @@
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal dynamic options */
         availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>;
+        /** Definitions available in the current Asset/FX domain. */
+        signalDefinitions?: SignalDefinition[];
+        /** Last applied backend signal rendering supplied by the current page. */
+        backendPreviewSignals?: RenderedSignal[];
+        /** Resolve latest backend preview for the modal's active view mode. */
+        backendPreviewSignalResolver?: (viewMode: 'absolute' | 'percentage') => RenderedSignal[];
+        /** Explicit backend signal loading error. */
+        signalBackendError?: string | null;
+        /** Retry backend catalog/result loading. */
+        onretrySignalBackend?: () => void;
         /** Pair-specific data for preview chart (used in pair mode). If omitted, uses synthetic demo data. */
         pairData?: LineDataPoint[];
         /** Map of pair slug → data points for resolving FxPairSignal data in preview */
@@ -51,7 +61,23 @@
         onclose?: () => void;
     }
 
-    let {open = false, settings, mode = 'global', availablePairs = [], availableAssets = [], pairData, pairsDataMap = {}, assetsDataMap = {}, onsave, onclose}: Props = $props();
+    let {
+        open = false,
+        settings,
+        mode = 'global',
+        availablePairs = [],
+        availableAssets = [],
+        signalDefinitions,
+        backendPreviewSignals = [],
+        backendPreviewSignalResolver,
+        signalBackendError = null,
+        onretrySignalBackend,
+        pairData,
+        pairsDataMap = {},
+        assetsDataMap = {},
+        onsave,
+        onclose,
+    }: Props = $props();
 
     // =========================================================================
     // Local editing state (cloned from props)
@@ -178,33 +204,46 @@
         return normalizeToPercentage(previewDataAbs);
     });
 
-    let previewSignals = $derived.by((): RenderedSignal[] => {
-        if (signals.length === 0) return [];
-        const rendered: RenderedSignal[] = [];
-        for (const cfg of signals) {
-            const instance = signalFromConfig(cfg);
-            if (!instance) continue;
-            if (cfg.signalType === 'fx-pair') {
-                const pairSlug = String(cfg.params.pairSlug || '');
-                if (!pairSlug) continue;
-                const resolvedData = pairsDataMap[pairSlug];
-                if (!resolvedData || resolvedData.length === 0) continue;
-                instance.params._resolvedData = resolvedData;
-            }
-            if (cfg.signalType === 'asset-comparison') {
-                const targetId = String(cfg.params.assetId || '');
-                if (!targetId) continue;
-                const resolvedData = assetsDataMap[targetId];
-                if (!resolvedData || resolvedData.length === 0) continue;
-                instance.params._resolvedData = resolvedData;
-            }
-            const results = instance.renderMulti(previewDataAbs, previewViewMode);
-            for (const result of results) {
-                if (result.data.length > 0) rendered.push(result);
-            }
+    let activeSignalDefinitions = $derived(signalDefinitions ?? getRegisteredSignalTypes());
+
+    function renderLocalPreview(cfg: SignalConfig): RenderedSignal[] {
+        const instance = signalFromConfig(cfg);
+        if (!instance) return [];
+        if (cfg.signalType === 'fx-pair') {
+            const pairSlug = String(cfg.params.pairSlug || '');
+            const resolvedData = pairsDataMap[pairSlug];
+            if (!pairSlug || !resolvedData?.length) return [];
+            instance.params._resolvedData = resolvedData;
         }
-        return rendered;
+        if (cfg.signalType === 'asset-comparison') {
+            const targetId = String(cfg.params.assetId || '');
+            const resolvedData = assetsDataMap[targetId];
+            if (!targetId || !resolvedData?.length) return [];
+            instance.params._resolvedData = resolvedData;
+        }
+        return instance.renderMulti(previewDataAbs, previewViewMode).filter((result) => result.data.length > 0);
+    }
+
+    let previewResolution = $derived.by(() => {
+        return resolveSignalPreview({
+            configs: signals,
+            definitions: activeSignalDefinitions,
+            mode,
+            backendSignals: backendPreviewSignalResolver?.(previewViewMode) ?? backendPreviewSignals,
+            renderLocal: renderLocalPreview,
+        });
     });
+    let previewSignals = $derived(previewResolution.signals);
+
+    let backendPreviewMessageKey = $derived(
+        previewResolution.backendState === 'real-target-required'
+            ? 'chartSettings.backendPreviewRealTarget'
+            : previewResolution.backendState === 'apply-required'
+              ? 'chartSettings.backendPreviewApply'
+              : previewResolution.backendState === 'unavailable'
+                ? 'chartSettings.backendPreviewUnavailable'
+                : null,
+    );
 </script>
 
 <ModalBase {open} maxWidth="3xl" onRequestClose={handleClose} testId="chart-settings-modal">
@@ -274,10 +313,17 @@
                 <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 italic">
                     {mode === 'global' ? $t('chartSettings.previewDescGlobal') : $t('chartSettings.previewDescPair')}
                 </p>
+                {#if backendPreviewMessageKey}
+                    <div class="mt-2" data-testid="backend-signal-preview-message">
+                        <InfoBanner variant="info">
+                            {$t(backendPreviewMessageKey)}
+                        </InfoBanner>
+                    </div>
+                {/if}
             </div>
 
             <!-- Signals Section (extracted component) -->
-            <ChartSignalsSection {availablePairs} {availableAssets} bind:signals />
+            <ChartSignalsSection {availablePairs} {availableAssets} definitions={signalDefinitions} backendError={signalBackendError} onretrybackend={onretrySignalBackend} bind:signals />
         </div>
 
         <!-- Footer -->

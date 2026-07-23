@@ -95,3 +95,7 @@ Definizione di workflow agentici complessi (sub-agenti dedicati) coordinati dall
 * **Rebalancing Agent:** Workflow che confronta l'allocazione attuale con il target desiderato, calcola la deviazione ed elabora un report con l'elenco esatto delle operazioni di acquisto e vendita necessarie.
 * **Tax Loss Harvesting Agent:** Scorre i lotti fiscali aperti e calcola quali vendite strategiche in perdita possono compensare le plusvalenze maturate, suggerendo l'acquisto temporaneo di asset correlati per non perdere esposizione.
 * **Monthly Audit Schedulato:** L'agente genera periodicamente e in autonomia un report dettagliato (Sharpe Ratio, Max Drawdown, volatilità, impatto forex) e lo rende disponibile come notifica nella chat sidebar dell'utente.
+
+---
+
+→ Piano Phase 0: [plan-phase00SignalsBackendMigration.prompt.md](../Phase_0/plan-phase00SignalsBackendMigration.prompt.md)
