@@ -190,10 +190,27 @@ plugins:
             "🔢 Composite": "🔢 Composite"
             "📉 Technical Analysis": "📉 Analisi Tecnica"
             "📐 Indicators": "📐 Indicatori"
+            "📈 Trend": "📈 Trend"
+            "⚡ Momentum": "⚡ Momentum"
+            "🌊 Volatility": "🌊 Volatilità"
+            "📊 Volume": "📊 Volume"
             EMA: EMA
+            "SMA — Simple Moving Average": "SMA — Media Mobile Semplice"
+            "KAMA — Kaufman Adaptive Moving Average": "KAMA — Media Mobile Adattiva di Kaufman"
+            "ADX — Average Directional Index": "ADX — Indice Direzionale Medio"
+            Aroon: Aroon
             MACD: MACD
             RSI: RSI
+            "ROC — Rate of Change": "ROC — Tasso di Variazione"
+            "Stochastic RSI": "RSI Stocastico"
+            "PPO — Percentage Price Oscillator": "PPO — Oscillatore Percentuale del Prezzo"
+            "CCI — Commodity Channel Index": "CCI — Indice del Canale delle Commodity"
             Bollinger Bands: Bande di Bollinger
+            "ATR — Average True Range": "ATR — Intervallo Reale Medio"
+            "NATR — Normalized ATR": "NATR — ATR Normalizzato"
+            Donchian Channels: Canali di Donchian
+            "OBV — On-Balance Volume": "OBV — Volume Bilanciato"
+            "MFI — Money Flow Index": "MFI — Indice del Flusso di Denaro"
             "🧪 Synthetic Benchmarks": "🧪 Benchmark Sintetici"
             Linear Growth: Crescita Lineare
             Compound Growth: Crescita Composta
@@ -346,10 +363,27 @@ plugins:
             "🔢 Composite": "🔢 Composites"
             "📉 Technical Analysis": "📉 Analyse Technique"
             "📐 Indicators": "📐 Indicateurs"
+            "📈 Trend": "📈 Tendance"
+            "⚡ Momentum": "⚡ Momentum"
+            "🌊 Volatility": "🌊 Volatilité"
+            "📊 Volume": "📊 Volume"
             EMA: EMA
+            "SMA — Simple Moving Average": "SMA — Moyenne Mobile Simple"
+            "KAMA — Kaufman Adaptive Moving Average": "KAMA — Moyenne Mobile Adaptative de Kaufman"
+            "ADX — Average Directional Index": "ADX — Indice Directionnel Moyen"
+            Aroon: Aroon
             MACD: MACD
             RSI: RSI
+            "ROC — Rate of Change": "ROC — Taux de Variation"
+            "Stochastic RSI": "RSI Stochastique"
+            "PPO — Percentage Price Oscillator": "PPO — Oscillateur de Prix en Pourcentage"
+            "CCI — Commodity Channel Index": "CCI — Indice du Canal des Matières Premières"
             Bollinger Bands: Bandes de Bollinger
+            "ATR — Average True Range": "ATR — Plage Réelle Moyenne"
+            "NATR — Normalized ATR": "NATR — ATR Normalisé"
+            Donchian Channels: Canaux de Donchian
+            "OBV — On-Balance Volume": "OBV — Volume Cumulé"
+            "MFI — Money Flow Index": "MFI — Indice de Flux Monétaire"
             "🧪 Synthetic Benchmarks": "🧪 Benchmarks Synthétiques"
             Linear Growth: Croissance Linéaire
             Compound Growth: Croissance Composée
@@ -502,10 +536,27 @@ plugins:
             "🔢 Composite": "🔢 Compuestas"
             "📉 Technical Analysis": "📉 Análisis Técnico"
             "📐 Indicators": "📐 Indicadores"
+            "📈 Trend": "📈 Tendencia"
+            "⚡ Momentum": "⚡ Momentum"
+            "🌊 Volatility": "🌊 Volatilidad"
+            "📊 Volume": "📊 Volumen"
             EMA: EMA
+            "SMA — Simple Moving Average": "SMA — Media Móvil Simple"
+            "KAMA — Kaufman Adaptive Moving Average": "KAMA — Media Móvil Adaptativa de Kaufman"
+            "ADX — Average Directional Index": "ADX — Índice Direccional Medio"
+            Aroon: Aroon
             MACD: MACD
             RSI: RSI
+            "ROC — Rate of Change": "ROC — Tasa de Cambio"
+            "Stochastic RSI": "RSI Estocástico"
+            "PPO — Percentage Price Oscillator": "PPO — Oscilador Porcentual del Precio"
+            "CCI — Commodity Channel Index": "CCI — Índice del Canal de Materias Primas"
             Bollinger Bands: Bandas de Bollinger
+            "ATR — Average True Range": "ATR — Rango Verdadero Medio"
+            "NATR — Normalized ATR": "NATR — ATR Normalizado"
+            Donchian Channels: Canales de Donchian
+            "OBV — On-Balance Volume": "OBV — Volumen en Balance"
+            "MFI — Money Flow Index": "MFI — Índice de Flujo de Dinero"
             "🧪 Synthetic Benchmarks": "🧪 Benchmarks Sintéticos"
             Linear Growth: Crecimiento Lineal
             Compound Growth: Crecimiento Compuesto
@@ -705,10 +756,31 @@ nav:
           - Overview: financial-theory/technical-analysis/index.md
           - 📐 Indicators:
               - Overview: financial-theory/technical-analysis/indicators/index.md
-              - EMA: financial-theory/technical-analysis/indicators/ema.md
-              - MACD: financial-theory/technical-analysis/indicators/macd.md
-              - RSI: financial-theory/technical-analysis/indicators/rsi.md
-              - Bollinger Bands: financial-theory/technical-analysis/indicators/bollinger-bands.md
+              - 📈 Trend:
+                  - Overview: financial-theory/technical-analysis/indicators/trend.md
+                  - EMA: financial-theory/technical-analysis/indicators/ema.md
+                  - "SMA — Simple Moving Average": financial-theory/technical-analysis/indicators/sma.md
+                  - "KAMA — Kaufman Adaptive Moving Average": financial-theory/technical-analysis/indicators/kama.md
+                  - "ADX — Average Directional Index": financial-theory/technical-analysis/indicators/adx.md
+                  - Aroon: financial-theory/technical-analysis/indicators/aroon.md
+              - ⚡ Momentum:
+                  - Overview: financial-theory/technical-analysis/indicators/momentum.md
+                  - RSI: financial-theory/technical-analysis/indicators/rsi.md
+                  - MACD: financial-theory/technical-analysis/indicators/macd.md
+                  - "ROC — Rate of Change": financial-theory/technical-analysis/indicators/roc.md
+                  - Stochastic RSI: financial-theory/technical-analysis/indicators/stochastic-rsi.md
+                  - "PPO — Percentage Price Oscillator": financial-theory/technical-analysis/indicators/ppo.md
+                  - "CCI — Commodity Channel Index": financial-theory/technical-analysis/indicators/cci.md
+              - 🌊 Volatility:
+                  - Overview: financial-theory/technical-analysis/indicators/volatility.md
+                  - Bollinger Bands: financial-theory/technical-analysis/indicators/bollinger-bands.md
+                  - "ATR — Average True Range": financial-theory/technical-analysis/indicators/atr.md
+                  - "NATR — Normalized ATR": financial-theory/technical-analysis/indicators/natr.md
+                  - Donchian Channels: financial-theory/technical-analysis/indicators/donchian-channels.md
+              - 📊 Volume:
+                  - Overview: financial-theory/technical-analysis/indicators/volume.md
+                  - "OBV — On-Balance Volume": financial-theory/technical-analysis/indicators/obv.md
+                  - "MFI — Money Flow Index": financial-theory/technical-analysis/indicators/mfi.md
           - 🧪 Synthetic Benchmarks:
               - Overview: financial-theory/technical-analysis/synthetic-benchmarks/index.md
               - Linear Growth: financial-theory/technical-analysis/synthetic-benchmarks/linear.md
@@ -757,6 +829,7 @@ nav:
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+                  - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
           - ⚙️ Core Systems:
               - Security & Authentication: developer/architecture/security.md

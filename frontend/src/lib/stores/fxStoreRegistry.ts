@@ -15,6 +15,8 @@ import type {TimeSeriesPoint} from './core/TimeSeriesStore';
 import {TimeSeriesStore} from './core/TimeSeriesStore';
 import type {ChainStep} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
+import {schemas} from '$lib/api/generated';
+import {z} from 'zod';
 
 // Re-export ChainStep for consumers that import from fxStoreRegistry
 export type {ChainStep};
@@ -173,6 +175,10 @@ export function apiResultToFxDataPoint(result: {
     };
 }
 
+export function apiResultsToCanonicalFxDataPoints(results: Array<Parameters<typeof apiResultToFxDataPoint>[0]>, displayedOrientationIsInverted: boolean): FxDataPoint[] {
+    return results.map(apiResultToFxDataPoint).map((point) => (displayedOrientationIsInverted && point.rate !== 0 ? {...point, rate: 1 / point.rate} : point));
+}
+
 // ============================================================================
 // SPOT LOOKUPS
 // ============================================================================
@@ -313,6 +319,111 @@ export async function ensureFxRangeLoadedBulk(requests: Array<{slug: string; sta
         resultMap.set(req.slug, getFxStore(req.slug).getRange(req.start, req.end).data);
     }
     return resultMap;
+}
+
+export interface FxRatesAndSignalsBulkRequest {
+    slug: string;
+    start: string;
+    end: string;
+    signals: Array<z.input<typeof schemas.SignalRequest>>;
+    displayedInverted: boolean;
+}
+
+export interface FxRatesAndSignalsBulkResult {
+    dataBySlug: Map<string, FxDataPoint[]>;
+    signalsBySlug: Map<string, Array<z.output<typeof schemas.SignalResult>>>;
+}
+
+/**
+ * Load every FX pair requiring rates and/or signals through exactly one bulk POST.
+ * Rates stay in canonical stores; signal results preserve each card's displayed orientation.
+ */
+export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkRequest[]): Promise<FxRatesAndSignalsBulkResult> {
+    type RequestEntry = {
+        slug: string;
+        start: string;
+        end: string;
+        displayedInverted: boolean;
+        signals: FxRatesAndSignalsBulkRequest['signals'];
+    };
+    const entries: RequestEntry[] = [];
+
+    for (const request of requests) {
+        const store = getFxStore(request.slug);
+        const gaps = store.getMissingIntervals(request.start, request.end);
+        if (request.signals.length > 0) {
+            entries.push(request);
+            continue;
+        }
+        for (const gap of gaps) {
+            entries.push({
+                ...request,
+                start: gap.start,
+                end: gap.end,
+            });
+        }
+    }
+
+    const signalsBySlug = new Map<string, Array<z.output<typeof schemas.SignalResult>>>();
+
+    if (entries.length > 0) {
+        const convertRequests = entries.map((entry) => {
+            const {base, quote} = parsePairSlug(entry.slug);
+            const from = entry.displayedInverted ? quote : base;
+            const to = entry.displayedInverted ? base : quote;
+            return {
+                from_amount: {code: from, amount: '1'},
+                to,
+                date_range: {start: entry.start, end: entry.end},
+                signals: entry.signals,
+            };
+        });
+
+        try {
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
+            const results = (response as any)?.results ?? [];
+            const pointsBySlug = new Map<string, FxDataPoint[]>();
+
+            for (const result of results) {
+                const fromCode = result.from_amount?.code;
+                const toCode = result.to_amount?.code;
+                if (!fromCode || !toCode) continue;
+                const slug = createPairSlug(fromCode, toCode);
+                const {base: canonicalBase} = parsePairSlug(slug);
+                const [point] = apiResultsToCanonicalFxDataPoints([result], fromCode !== canonicalBase);
+                if (!pointsBySlug.has(slug)) pointsBySlug.set(slug, []);
+                pointsBySlug.get(slug)!.push(point);
+            }
+
+            for (const [slug, points] of pointsBySlug) {
+                if (points.length > 0) getFxStore(slug).merge(points);
+            }
+
+            const groupedSignals = (response as any)?.signal_results ?? [];
+            for (const group of groupedSignals) {
+                const entry = entries[group.request_index];
+                if (!entry) continue;
+                const parsedSignals = Array.isArray(group.signals) ? group.signals.map((signal: unknown) => schemas.SignalResult.parse(signal)) : [];
+                signalsBySlug.set(entry.slug, parsedSignals);
+            }
+
+            for (const entry of entries) {
+                getFxStore(entry.slug).markFetched(entry.start, entry.end);
+            }
+        } catch (error: any) {
+            if (error?.response?.status === 404) {
+                for (const entry of entries) {
+                    getFxStore(entry.slug).markFetched(entry.start, entry.end);
+                }
+            }
+            throw error;
+        }
+    }
+
+    return {
+        dataBySlug: new Map(requests.map((request) => [request.slug, getFxStore(request.slug).getRange(request.start, request.end).data])),
+        signalsBySlug,
+    };
 }
 
 /**

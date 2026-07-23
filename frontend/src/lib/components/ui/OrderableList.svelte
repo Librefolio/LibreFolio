@@ -7,6 +7,8 @@
   - Snippet-based item rendering (consumer defines how each item looks)
   - GripVertical drag handle
   - Visual feedback: green left border during drag-over
+  - Optional equal-width responsive grid driven by container width
+  - Optional warning tone per item
   - Emits reordered items via callback
 
   Used by: FxProviderConfig, DataTableToolbar (future), etc.
@@ -30,11 +32,17 @@
         disabled?: boolean;
         /** Use compact padding (py-1 px-2 instead of p-2) for use in tight spaces like dropdowns */
         compact?: boolean;
+        /** Switch from a vertical list to an equal-width grid when the container has room */
+        responsiveGrid?: boolean;
+        /** Minimum grid item width before another column is added */
+        minItemWidth?: string;
+        /** Optional visual tone for individual items */
+        itemTone?: (item: T, index: number) => 'default' | 'warning';
         /** Snippet to render each item's content (between handle and arrows) */
         children: Snippet<[{item: T; index: number}]>;
     }
 
-    let {items = [], keyFn, onReorder, disabled = false, compact = false, children}: Props = $props();
+    let {items = [], keyFn, onReorder, disabled = false, compact = false, responsiveGrid = false, minItemWidth = '32rem', itemTone, children}: Props = $props();
 
     // =========================================================================
     // Drag & Drop State
@@ -102,11 +110,16 @@
     }
 </script>
 
-<div class="space-y-1">
+<div class={responsiveGrid ? 'grid gap-2' : 'space-y-1'} style={responsiveGrid ? `grid-template-columns: repeat(auto-fill, minmax(min(100%, ${minItemWidth}), 1fr));` : undefined} role="list">
     {#each items as item, index (keyFn(item))}
+        {@const tone = itemTone?.(item, index) ?? 'default'}
         <div
             class="flex items-center gap-2 {compact ? 'py-1 px-2' : 'p-2'} rounded-lg border transition-all duration-150
-                {dragOverIndex === index && dragIndex !== index ? 'border-l-4 border-l-libre-green border-y-gray-200 dark:border-y-slate-600 border-r-gray-200 dark:border-r-slate-600 bg-green-50/50 dark:bg-green-900/10' : 'border-gray-200 dark:border-slate-600'}
+                {dragOverIndex === index && dragIndex !== index
+                ? 'border-l-4 border-l-libre-green border-y-gray-200 dark:border-y-slate-600 border-r-gray-200 dark:border-r-slate-600 bg-green-50/50 dark:bg-green-900/10'
+                : tone === 'warning'
+                  ? 'border-amber-200 bg-amber-50/60 dark:border-amber-700/60 dark:bg-amber-950/20'
+                  : 'border-gray-200 dark:border-slate-600'}
                 {dragIndex === index ? 'opacity-50' : ''}
                 {disabled ? 'opacity-60' : ''}"
             draggable={!disabled}

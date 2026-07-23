@@ -9,6 +9,8 @@
  * @module stores/files/imagePreviewCache
  */
 
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
+
 interface CachedPreview {
     /** objectUrl created from blob */
     objectUrl: string;
@@ -62,3 +64,5 @@ export function clearImagePreviewCache(): void {
     for (const entry of cache.values()) URL.revokeObjectURL(entry.objectUrl);
     cache.clear();
 }
+
+registerClientSessionReset('imagePreviewCache', clearImagePreviewCache);

@@ -212,4 +212,21 @@ test.describe('Asset List Page', () => {
         // Count should be same or greater (all >= active)
         expect(parseInt(allBadge || '0')).toBeGreaterThanOrEqual(parseInt(activeBadge || '0'));
     });
+
+    test('loads all asset cards through exactly one bulk price request', async ({page}) => {
+        const bulkRequests: Array<{postData: unknown}> = [];
+        page.on('request', (request) => {
+            if (request.method() !== 'POST') return;
+            if (new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return;
+            bulkRequests.push({postData: request.postDataJSON()});
+        });
+
+        await goToAssetsPage(page);
+        await expect(page.getByTestId('assets-page')).toBeVisible({timeout: 8_000});
+        await page.waitForLoadState('networkidle');
+
+        expect(bulkRequests).toHaveLength(1);
+        expect(Array.isArray(bulkRequests[0].postData)).toBe(true);
+        expect((bulkRequests[0].postData as unknown[]).length).toBeGreaterThan(0);
+    });
 });

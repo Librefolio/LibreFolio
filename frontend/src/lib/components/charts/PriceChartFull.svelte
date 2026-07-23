@@ -18,7 +18,7 @@
     import ResolutionBadge from './ResolutionBadge.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
-    import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
+    import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
@@ -843,7 +843,8 @@
             });
         }
 
-        const resolvedOverlaySignals = activeResolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, activeResolution, dates)).filter((signal) => signal.data.length > 0);
+        const downsampledOverlaySignals = activeResolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, activeResolution, dates)).filter((signal) => signal.data.length > 0);
+        const resolvedOverlaySignals = assignOverlaySignalAxes(downsampledOverlaySignals);
 
         series.push(...buildOverlaySignalSeries(resolvedOverlaySignals, dates, isDark, 0));
 
@@ -1062,8 +1063,13 @@
                         }
                     }
                     const signalAxisMap = new Map<string, number>();
+                    const signalAxisLabelMap = new Map<number, string>();
                     for (const sig of resolvedOverlaySignals) {
-                        signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
+                        const axisIndex = sig.yAxisIndex ?? 0;
+                        signalAxisMap.set(sig.label, axisIndex);
+                        if (axisIndex > 0 && !signalAxisLabelMap.has(axisIndex)) {
+                            signalAxisLabelMap.set(axisIndex, sig.axisLabel ?? `AXIS ${axisIndex}`);
+                        }
                     }
                     const shownNames = new Set<string>();
                     const firstValue = resolvedLineData.length > 0 ? resolvedLineData[0].value : null;
@@ -1080,7 +1086,8 @@
                         const isGhost = hasOriginalValues && p.seriesName === ghostLabel;
                         const axisIdx = isGhost ? 0 : (signalAxisMap.get(p.seriesName) ?? 0);
                         const valueSuffix = axisIdx === 0 ? suffix : '';
-                        const axisNote = axisIdx === 1 ? ' <span style="font-size:10px;color:#94a3b8">[RSI]</span>' : axisIdx === 2 ? ' <span style="font-size:10px;color:#a78bfa">[MACD]</span>' : '';
+                        const axisLabel = signalAxisLabelMap.get(axisIdx);
+                        const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
 
                         // Use signalLabelToHtml for proper icon rendering
                         let labelHtml: string;

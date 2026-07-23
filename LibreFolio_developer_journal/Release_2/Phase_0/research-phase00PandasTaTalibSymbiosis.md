@@ -6,6 +6,12 @@
 - [`pandas-ta-talib-delegation.json`](./pandas-ta-talib-delegation.json)
 - [`librefolio-signal-backends.json`](./librefolio-signal-backends.json)
 
+> **Nota di avanzamento (22 Luglio 2026)**: adapter centrale, soglie warm-up,
+> prestazioni e concorrenza descritti in questa ricerca erano ipotesi. Le
+> decisioni architetturali definitive sono nel piano; le misure runtime
+> autorevoli sono in
+> [`spike-phase00SignalBackends.md`](./spike-phase00SignalBackends.md).
+
 ---
 
 ## 1. Executive Summary

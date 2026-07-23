@@ -40,7 +40,7 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
-    import {type RenderedSignal, signalFromConfig} from '$lib/charts/signals';
+    import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
@@ -48,6 +48,7 @@
     import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS} from '$lib/utils/assetPriceDerived';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
+    import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
 
     // =========================================================================
     // Types
@@ -211,6 +212,12 @@
     let settingsModalOpen = $state(false);
     let settingsTargetId = $state<string | null>(null);
     let settingsForModal = $derived(settingsTargetId ? getSettingsForPair(`asset-${settingsTargetId}`, 'assets') : getGlobalSettings('assets'));
+    let signalDefinitions = $state<SignalDefinition[]>([]);
+    let signalResultsByAsset = $state(new Map<number, SignalInstanceResult[]>());
+    let signalCatalogFailed = $state(false);
+    let signalRequestFailed = $state(false);
+    const signalResultStates = new Map<number, SignalResultState>();
+    let signalBackendError = $derived(signalCatalogFailed ? $t('chartSettings.signalCatalogUnavailable') : signalRequestFailed ? $t('chartSettings.signalResultsUnavailable') : null);
 
     // FX pair slugs for cross-domain signal selection (loaded lazily)
     let fxPairSlugs = $state<string[]>([]);
@@ -218,6 +225,8 @@
     // =========================================================================
     // Derived
     // =========================================================================
+
+    let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
     // Extract unique currencies from all assets
     let configuredCurrencies = $derived([...new Set(assets.map((a) => a.currency))].sort());
@@ -272,7 +281,41 @@
     // Lifecycle
     // =========================================================================
 
+    async function loadAssetSignalDefinitions(force = false) {
+        try {
+            signalDefinitions = await signalCatalogStore.load('asset', force);
+            signalCatalogFailed = false;
+        } catch (catalogError) {
+            console.error('Failed to load Asset signal catalog:', catalogError);
+            signalDefinitions = getLocalSignalDefinitions();
+            signalCatalogFailed = true;
+        }
+    }
+
+    function resultStateForAsset(assetId: number): SignalResultState {
+        let state = signalResultStates.get(assetId);
+        if (!state) {
+            state = new SignalResultState();
+            signalResultStates.set(assetId, state);
+        }
+        return state;
+    }
+
+    function backendRequestFingerprint(configs: SignalConfig[]): string {
+        return JSON.stringify(
+            buildBackendSignalRequestPlan(configs, signalDefinitions)
+                .requests.map((request) => `${request.signal_code}:${JSON.stringify(request.params ?? {})}`)
+                .sort(),
+        );
+    }
+
+    async function retryBackendSignals() {
+        await loadAssetSignalDefinitions(true);
+        await fetchAllPriceData();
+    }
+
     onMount(async () => {
+        await loadAssetSignalDefinitions();
         await loadAssets();
         // Load FX pair slugs for cross-domain signal selection in settings modal
         loadFxPairSlugs();
@@ -425,13 +468,41 @@
 
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
+        void getSettingsVersion();
 
-        // Split into cached (no gaps) and need-fetch (have gaps)
+        // Build one request item per asset that needs prices and/or backend signals.
         const cached: Map<number, any[]> = new Map();
         const needFetch: AssetState[] = [];
+        const queryItems: Array<{
+            asset_id: number;
+            date_range: {start: string; end: string};
+            include_price: boolean;
+            signals: ReturnType<typeof buildBackendSignalRequestPlan>['requests'];
+        }> = [];
+        const requestContexts = new Map<
+            number,
+            {
+                configs: SignalConfig[];
+                plan: ReturnType<typeof buildBackendSignalRequestPlan>;
+                requestVersion: number;
+            }
+        >();
+        const nextSignalResults = new Map(signalResultsByAsset);
+
         for (const asset of assets) {
+            const configs = getSettingsForPair(`asset-${asset.id}`, 'assets').signals;
+            const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+            const state = resultStateForAsset(asset.id);
+            const requestVersion = state.beginRequest();
+            requestContexts.set(asset.id, {
+                configs,
+                plan,
+                requestVersion,
+            });
+
             const store = getAssetPriceStore(asset.id, asset.currency);
             const gaps = store.getMissingIntervals(dateStart, dateEnd);
+            const needsPrice = gaps.length > 0;
             if (gaps.length === 0) {
                 const rangeData = store.getRange(dateStart, dateEnd).data;
                 cached.set(
@@ -450,16 +521,33 @@
             } else {
                 needFetch.push(asset);
             }
+
+            if (needsPrice || plan.requests.length > 0) {
+                queryItems.push({
+                    asset_id: asset.id,
+                    date_range: {start: dateStart, end: dateEnd},
+                    include_price: needsPrice,
+                    signals: plan.requests,
+                });
+            } else {
+                const mapped = mapSignalInstanceResults(configs, plan, []);
+                if (state.apply(requestVersion, mapped)) {
+                    nextSignalResults.set(asset.id, [...state.values()]);
+                }
+            }
         }
 
-        // If all cached — update instantly, no loading indicators
-        if (needFetch.length === 0) {
+        // If all prices are cached and no backend signals are selected, update instantly.
+        if (queryItems.length === 0) {
             assets = assets.map((asset) => buildAssetStateFromPrices(asset, cached.get(asset.id) ?? []));
+            signalResultsByAsset = nextSignalResults;
+            signalRequestFailed = false;
             resolveMaxStartFromAssets();
             return;
         }
 
         refreshing = true;
+        signalRequestFailed = false;
         assets = assets.map((a) => ({...a, loadingPrices: needFetch.some((nf) => nf.id === a.id)}));
 
         try {
@@ -471,31 +559,38 @@
             // worker pool: validating + computing derived state for every asset in one
             // synchronous main-thread block was what monopolized the thread long enough
             // to delay click/navigation handling on large "ALL date range" loads.
-            const queries = needFetch.map((a) => ({
-                asset_id: a.id,
-                date_range: {start: dateStart, end: dateEnd},
-            }));
-
-            const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', queries);
+            const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', queryItems);
             const rawItems: unknown[] = rawResponse.data?.items ?? [];
 
             const {results, invalidItemErrors} = await processPriceItemsInParallel(rawItems);
             if (invalidItemErrors.length > 0) {
                 console.error('Some price-query items failed validation:', invalidItemErrors);
             }
+            signalRequestFailed = invalidItemErrors.length > 0 && [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
 
             // Populate caches (cheap: just Map.set calls) and build a per-asset lookup
             // of the already-computed derived UI state (last price, deltas, chart data).
             const derivedByAssetId = new Map<number, ProcessedAssetResult>();
+            const needFetchIds = new Set(needFetch.map((asset) => asset.id));
             for (const result of results) {
                 derivedByAssetId.set(result.assetId, result);
                 const asset = needFetch.find((a) => a.id === result.assetId);
-                if (asset && result.mappedPoints.length > 0) {
+                if (asset && needFetchIds.has(result.assetId) && result.mappedPoints.length > 0) {
                     const store = getAssetPriceStore(asset.id, asset.currency);
                     store.merge(result.mappedPoints);
                     store.markFetched(dateStart, dateEnd);
                 }
             }
+
+            for (const [assetId, context] of requestContexts) {
+                const state = resultStateForAsset(assetId);
+                const processed = derivedByAssetId.get(assetId);
+                const mapped = mapSignalInstanceResults(context.configs, context.plan, processed?.signals ?? []);
+                if (state.apply(context.requestVersion, mapped)) {
+                    nextSignalResults.set(assetId, [...state.values()]);
+                }
+            }
+            signalResultsByAsset = nextSignalResults;
 
             // Merge cached + fresh results
             assets = assets.map((asset) => {
@@ -511,6 +606,7 @@
             resolveMaxStartFromAssets();
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
+            signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // For cached assets, still use cached data; for others, clear loading
             assets = assets.map((a) => {
                 const cachedPrices = cached.get(a.id);
@@ -758,10 +854,14 @@
     }
 
     function handleSettingsSave(s: ChartSettings) {
+        const shouldReloadBackend = backendRequestFingerprint(settingsForModal.signals) !== backendRequestFingerprint(s.signals);
         if (settingsTargetId) {
             setPairSettings(`asset-${settingsTargetId}`, s);
         } else {
             setGlobalSettings(s, 'assets');
+        }
+        if (shouldReloadBackend) {
+            void fetchAllPriceData();
         }
     }
 
@@ -811,6 +911,13 @@
         return Object.fromEntries(entries);
     }
 
+    function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
+        if (!settingsTargetId) return [];
+        const asset = assets.find((item) => item.id === Number(settingsTargetId));
+        if (!asset?.chartData.length) return [];
+        return getRenderedSignals(asset.id, asset.chartData, viewMode);
+    }
+
     /**
      * Render overlay signals for an asset card. Called by AssetCard reactively
      * whenever cardViewMode changes. Receives absolute chart data.
@@ -821,6 +928,8 @@
         if (!settings.signals.length) return [];
         const rendered: RenderedSignal[] = [];
         for (const cfg of settings.signals) {
+            const definition = signalDefinitionsByType.get(cfg.signalType);
+            if (!definition || definition.source === 'backend') continue;
             const instance = signalFromConfig(cfg);
             if (!instance) continue;
 
@@ -855,6 +964,17 @@
             for (const result of results) {
                 if (result.data.length > 0) rendered.push(result);
             }
+        }
+
+        for (const item of signalResultsByAsset.get(assetId) ?? []) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
+            const outcome = renderBackendSignalResult(item.result, currentConfig, {
+                baseData: absoluteData,
+                viewMode: vm,
+                translate: (key) => $t(key),
+            });
+            rendered.push(...outcome.signals);
         }
         return rendered;
     }
@@ -1273,6 +1393,10 @@
 <ChartSettingsModal
     open={settingsModalOpen}
     mode={settingsTargetId ? 'pair' : 'global'}
+    {signalDefinitions}
+    {signalBackendError}
+    onretrySignalBackend={retryBackendSignals}
+    backendPreviewSignalResolver={settingsTargetId ? resolveSettingsBackendPreview : undefined}
     onclose={() => {
         settingsModalOpen = false;
         settingsTargetId = null;

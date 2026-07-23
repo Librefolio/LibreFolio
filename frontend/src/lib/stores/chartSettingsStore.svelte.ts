@@ -12,6 +12,7 @@
  */
 
 import type {SignalConfig} from '$lib/charts/signals';
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -177,3 +178,5 @@ export function resetAllSettings(): void {
     pairOverrides.clear();
     bump();
 }
+
+registerClientSessionReset('chartSettingsStore', resetAllSettings);

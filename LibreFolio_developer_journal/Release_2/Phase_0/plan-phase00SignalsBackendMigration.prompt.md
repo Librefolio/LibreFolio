@@ -743,7 +743,7 @@ Pipeline:
 
 ## Step 0 — Validazione stack composito, ambiente e warm-up
 
-**Stato**: ⏳
+**Stato**: ✅ — 22 Luglio 2026
 
 1. Aggiungere temporaneamente nello spike entrambe le dipendenze tramite Pipenv.
 2. Validare i pin candidati e produrre `Pipfile.lock`.
@@ -786,11 +786,19 @@ Lo Step 0 non integra ancora le policy nei plugin production. Gli step plugin de
 recepire la candidata, verificarla in `warmup_requirement()` e documentare ogni
 variazione.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: stack lockato e validato su macOS arm64, Linux
+> arm64 e Linux amd64. Harness/fixture riproducibili, path 16+1, fallback,
+> warm-up candidate, numerica, gap/NaN, performance, concorrenza, wheel, delta
+> immagine e boot app documentati in
+> [spike-phase00SignalBackends.md](./spike-phase00SignalBackends.md).
+
+> **⚠️ Fuori pista**: rilevato bug Docker preesistente con GID macOS `20`
+> propagato da `dev.py`; non corretto perché fuori scope. Runtime release con
+> UID/GID `1000:1000` validato.
 
 ## Step 1 — Contratti, base class e registry
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Creare:
 
@@ -823,11 +831,20 @@ espliciti, senza introdurre mapping di librerie.
 - nessun tipo terzo nei contratti;
 - catalogo serializzabile e schema-driven.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: contratti neutrali, output canonici, catalogo,
+> status/availability, coverage/gap e metadata warm-up congelati con 54 test.
+> Creati `SignalPlugin`, registry generico/provider-compatible, registry signal
+> strict, decorator, discovery error espliciti e fail-fast stack. Regressioni
+> registry/runtime/provider: 402 test verdi. Startup/health verificati su macOS
+> arm64, Linux arm64 e Linux amd64.
+
+> **⚠️ Fuori pista**: Docker Desktop ha richiesto riavvio durante la verifica;
+> build successivo verde. Bug GID macOS `20` resta fuori scope e documentato
+> nello spike; runtime release `1000:1000` valido.
 
 ## Step 2 — `SignalService` e availability engine
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Creare `backend/app/services/signal_service.py`.
 
@@ -856,11 +873,19 @@ Non aggiungere adapter o cache.
 - nessuna scelta libreria nel service;
 - availability ricalcolata anche al compute.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: completati planning pre-load, dedup/fan-out,
+> aggregazione warm-up/campi/eventi, coverage e gap policy, availability,
+> batch singolo in worker thread, error isolation, NaN/infinity handling,
+> output/spec/date validation e slicing. Warm-up misurato sulle unità
+> pre-visibili; ramp-up iniziale produce correttamente
+> `partial|unavailable`. 29 test service + regressioni framework verdi.
+
+> **⚠️ Fuori pista**: audit pre-gate ha trovato e corretto un errore nella
+> semantica warm-up iniziale; aggiunto supporto coerente per event-only.
 
 ## Step 2-bis — Primitive tecniche di annotazione
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Creare primitive generiche on-demand per:
 
@@ -885,11 +910,18 @@ matematica nel frontend.
 - nessuna dipendenza da `pandas-ta-classic`/`TA-Lib`;
 - nessuna esecuzione quando il consumer non richiede annotations.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: request schema-driven per crossover/threshold,
+> source price/signal, epsilon, direction, observed-only, min-gap e sampling.
+> Primitive calcolate sull'output esteso dentro il batch, poi slice/attach per
+> instance; warning espliciti per source/target indisponibili. 13 test primitive,
+> 34 integrazione service e 60 schema verdi.
+
+> **⚠️ Fuori pista**: corretto edge touch esatto pre-visibile + conferma sul
+> primo punto visibile; merge annotations ordinato globalmente per data.
 
 ## Step 3 — Plugin tecnici esistenti
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Creare:
 
@@ -914,11 +946,15 @@ Ogni plugin:
 - Bollinger band;
 - nessun calcolo TypeScript modificato prima del cutover.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: implementati EMA/RSI/MACD/Bollinger come plugin
+> autonomi con `talib=True`, params alias-compatible, output canonici e test
+> delegation/numerici. Warm-up multi-parametro validato a `1e-6`: EMA `6×N`,
+> RSI `16×N`, MACD `8×max(slow,signal)`, Bollinger `N`. 46 test core,
+> regressioni complete service 45/45, startup catalogo `4` e health 200.
 
 ## Step 4 — Plugin close-only aggiuntivi
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Creare:
 
@@ -937,11 +973,17 @@ Tutti disponibili per Asset e FX, con `talib=True`.
 - params e reference levels schema-driven;
 - delegation path verificato.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: implementati SMA/ROC/StochRSI/KAMA/PPO,
+> `talib=True` + spy C, output composite/levels generici e parità Asset/FX.
+> Parametri ignorati dai path delegati non esposti. Warm-up multi-parametro
+> validato a `1e-6`; 62 test verdi.
+
+> **⚠️ Fuori pista**: KAMA richiede `period+1` punti per il primo output;
+> corretto off-by-one e aggiunto boundary regression test.
 
 ## Step 5 — Plugin OHLC
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Creare:
 
@@ -967,11 +1009,17 @@ Regole:
 - input mancanti = unavailable;
 - warm-up e date validati.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: implementati ATR/ADX/NATR/Aroon/Donchian/CCI,
+> input OHLC rigorosi, 5 path TA-Lib + Donchian nativo, composite/band e
+> levels generici. Missing/partial field e FX incompatibile → unavailable.
+> Warm-up full-range validato; 75 test verdi.
+
+> **⚠️ Fuori pista**: ADX `16×period` falliva `1e-6` su periodi intermedi;
+> corretto a `18×period` con regression 95/150/200.
 
 ## Step 6 — Plugin volume
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Creare:
 
@@ -991,11 +1039,17 @@ Regole:
 - delegation path verificato;
 - output e warm-up validati.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: implementati OBV/MFI con TA-Lib, coverage volume
+> rigorosa, zero volume valido, missing/partial unavailable. OBV ribasato sulla
+> prima data visibile; MFI levels/regions dinamici. 30 test verdi.
+
+> **⚠️ Fuori pista**: OBV con un solo punto è correttamente `partial`, non
+> unavailable. Edge cadence irregular oltre ultimo dato demandato alla matrice
+> B5.
 
 ## Step 7 — Catalogo e API Asset
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Modificare:
 
@@ -1021,11 +1075,17 @@ Aggiungere:
 - target-currency signals calcolati sui valori mostrati;
 - backend revalida disponibilità al compute.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: catalogo Asset 17 + POST bulk signals/annotations,
+> plan/warm-up per item, singola query globale estesa, seed/backfill/events/FX
+> preservati, compute su valori convertiti, slicing originale e
+> `include_price=false` reale. 9 service + 2 API test, regressioni legacy verdi.
+
+> **⚠️ Fuori pista**: corretto seed per same-asset multi-item con range diversi;
+> impedito input event mixed-currency su conversione parziale.
 
 ## Step 8 — Catalogo e API FX
 
-**Stato**: ⏳
+**Stato**: ✅ — 23 Luglio 2026
 
 Modificare:
 
@@ -1049,7 +1109,11 @@ Aggiungere:
 - niente array duplicati per giorno;
 - parity con Asset su input close equivalente.
 
-> **Note implementazione**: da compilare immediatamente al completamento.
+> **Note implementazione**: catalogo FX 9 + request signals/annotations,
+> singola convert_bulk combinata daily/amount1 estesa, identity close1,
+> effective rate nonidentity e grouped `signal_results` per request originale.
+> Daily result invariato; missing rate → unavailable. 6 nuovi test + legacy FX
+> API/service verdi.
 
 ## Step 9 — API sync e frontend schema-driven
 

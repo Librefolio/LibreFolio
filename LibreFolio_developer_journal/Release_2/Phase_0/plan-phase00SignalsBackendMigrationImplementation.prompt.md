@@ -1,6 +1,6 @@
 # Piano Applicativo: Phase 0 — Migrazione Segnali Backend
 
-**Stato**: 📋 DRAFT — in attesa di validazione; nessuna implementazione production avviata.
+**Stato**: 🚧 IN CORSO — implementazione approvata il 22 Luglio 2026.
 
 **Data**: 22 Luglio 2026
 
@@ -154,6 +154,8 @@ Per ogni task:
 
 ### A1 — Spike tecnico stack composito
 
+**Stato**: ✅ COMPLETATO — 22 Luglio 2026.
+
 **Obiettivo**
 
 Validare ambiente, backend computazionali e policy warm-up candidate prima del codice
@@ -212,9 +214,26 @@ production.
 - API della release diversa dalla ricerca;
 - stack nativo mancante che blocca tutto il backend, non soltanto i segnali.
 
+> **Note implementazione**: pin production `pandas-ta-classic==0.6.52` e
+> `TA-Lib==0.7.1` aggiunti con lock chirurgico; harness e fixture deterministiche
+> creati. Validati 17 segnali, 16 path TA-Lib + Donchian nativo, fallback,
+> warm-up cross-platform, gap/NaN, short input, performance, concorrenza, wheel
+> cp313 macOS/Linux amd64/arm64, clean Pipenv sync, full app macOS e Docker.
+> Evidenze e policy candidate:
+> [spike-phase00SignalBackends.md](./spike-phase00SignalBackends.md).
+
+> **⚠️ Fuori pista**: `./dev.py docker build` su macOS passa GID host `20`, già
+> occupato da `dialout` nella base Debian; l'entrypoint fallisce perché il gruppo
+> `librefolio` non esiste (`dev.py:1434-1435`, `Dockerfile:65-66`,
+> `entrypoint.sh:25`). Bug preesistente non corretto fuori scope; immagine
+> release-equivalent `1000:1000` validata. `pip check` espone inoltre conflitti
+> transitive preesistenti non collegati allo stack segnali.
+
 ---
 
 ### A2 — Schemi backend neutrali
+
+**Stato**: ✅ COMPLETATO — 22 Luglio 2026.
 
 **Obiettivo**
 
@@ -280,9 +299,26 @@ Gap policy:
 
 - output spec troppo specifico per un indicatore.
 
+> **Note implementazione**: creato `backend/app/schemas/signals.py` con input
+> OHLCV/event neutrali, execution context, warm-up, requirements anche event-only,
+> catalogo schema-driven, line/bar/band discriminati, composite flat, assi/unità,
+> reference levels, value regions, annotations, coverage/gap e availability.
+> Congelata la matrice `ok|partial|unavailable|failed`: `ok` non ammette valori
+> mancanti; `partial` richiede causa reale + warning; errori pre-compute non
+> fabbricano availability/warm-up; metadata duplicati devono coincidere. Aggiunti
+> barrel export, runner `./dev.py test schemas signals` e 54 test; intera suite
+> schemas 6/6 verde e OpenAPI discriminata generabile.
+
+> **⚠️ Fuori pista**: review logica pre-freeze ha rilevato tre blocker nel primo
+> draft (failure unknown/invalid con metadata finti, `ok` con null, impossibilità
+> di plugin event-only). Corretti prima del gate insieme a invarianti su
+> `used_points`, coverage, gap interni e ordinamento band.
+
 ---
 
 ### A3 — `SignalPlugin`, registry e fail-fast
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -335,9 +371,28 @@ atterrare un fail-fast globale che renda inavviabile il backend agli altri contr
 - circular import con `provider_registry.py`;
 - startup test contaminato dal package realmente installato.
 
+> **Note implementazione**: introdotti `SignalPlugin` library-agnostic,
+> `AbstractPluginRegistry`, `SignalPluginRegistry`, `@register_plugin`,
+> discovery strict con errori aggregati, duplicate rejection e catalogo
+> statico. `AbstractProviderRegistry` resta specializzazione compatibile:
+> test Asset/FX/BRIM invariati. Aggiunto fail-fast minimale in
+> `signal_runtime.py` e nel lifespan prima di DB/startup. Verificati 12 test
+> registry, 6 runtime, 5 provider registry, 6 helper registry e 373 contratti
+> provider. Startup/health validati su macOS arm64, Linux arm64 e Linux amd64;
+> entrambe le immagini Linux rilevano stack `0.6.52 + 0.7.1` e catalogo vuoto
+> atteso prima dei plugin production.
+
+> **⚠️ Fuori pista**: Docker Desktop si è bloccato durante una build locale ed
+> è stato ripristinato dall'utente. Il build successivo `./dev.py docker build`
+> è verde. L'immagine locale GID `20` usa ancora il workaround numerico già
+> documentato in A1; l'immagine amd64 release-equivalent `1000:1000` parte
+> normalmente non-root.
+
 ---
 
 ### A4 — Infrastruttura test con plugin fixture
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -382,9 +437,20 @@ Validare il framework prima dei 17 plugin reali.
 - test registry accoppiato al filesystem production;
 - fixture troppo semplici per trovare errori di slicing.
 
+> **Note implementazione**: aggiunto path/namespace discovery overridabile
+> mantenendo invariato il default production. Creato registry test-only in
+> `backend/test_scripts/fixtures/signal_plugins/` con 5 plugin:
+> rolling line, band + composite flat, warm-up parameter-aware, compute failure
+> e close + events. Aggiunte serie OHLCV/event deterministiche condivise e 10
+> contract test su catalogo, params, requirements, output, alignment, failure e
+> isolamento dal catalogo production. Regressioni signal/provider registry:
+> 23 test verdi.
+
 ---
 
 ### A5 — `SignalService` con fixture plugin
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -444,9 +510,28 @@ Completare orchestration e availability prima dei plugin reali.
 - dedup perde instance ID/stile;
 - warm-up calcolato su calendario invece che sulla serie effettiva.
 
+> **Note implementazione**: creato `SignalService` con piano pre-load
+> (`max_history_points_before_visible`, union campi/eventi), dedup
+> code+normalized params, fan-out per instance ID, availability dinamica,
+> coverage observed/backfilled/gap, strict policy e contiguous suffix opt-in.
+> Batch intero eseguito con una sola `asyncio.to_thread`; plugin sequenziali,
+> errori planning/compute/output isolati. NaN convertiti a `None`, infinity
+> rifiutata, metadata/date/cardinalità verificati, output tagliato sul range
+> visibile. Event load esplicito, inclusi plugin event-only. 29 test dedicati
+> + regressioni schemas/registry/contracts/runtime verdi; doppio audit
+> rubber-duck senza blocker residui.
+
+> **⚠️ Fuori pista**: primo audit ha rilevato warm-up erroneamente calcolato
+> sull'intera serie caricata. Corretto usando soltanto unità contigue prima di
+> `requested_start`: nessun valore visibile → `unavailable`; ramp-up con almeno
+> un valore → `partial`, mai `failed`. Corretti nello stesso pass event-only e
+> `requires_events=True` senza tipi espliciti.
+
 ---
 
 ### A6 — Primitive tecniche di annotazione
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -475,6 +560,20 @@ specifica nel frontend.
 Le annotazioni vengono calcolate solo se il consumer invia `annotation_requests`.
 Le regole request-level riferiscono instance ID/series key e threshold o altra serie.
 I plugin non devono conoscere AI Export.
+
+> **Note implementazione**: aggiunti source discriminati `price|signal`,
+> request `line_crossover|threshold_crossing`, direction, epsilon, min-gap,
+> observed-only, limit e sampling `recent|uniform`. `SignalAnnotationService`
+> opera su price point e output canonici estesi, resetta lo stato su missing/gap,
+> gestisce equality esatta, filtra/slicia/ordina e produce warning strutturati
+> per source indisponibili. Integrato nel batch `SignalService` prima dello
+> slicing: annotazioni attach per instance, source/target validate, failure
+> isolate. Test: 60 schema, 13 primitive, 34 service verdi.
+
+> **⚠️ Fuori pista**: audit ha trovato un touch esatto pre-visibile seguito da
+> conferma al primo punto visibile che perdeva l'evento perché datato al touch.
+> Ora usa la data del touch se visibile, altrimenti la data di conferma. Nel
+> medesimo pass il merge plugin/batch viene ordinato globalmente per data.
 
 **Test**
 
@@ -505,6 +604,8 @@ I plugin non devono conoscere AI Export.
 
 ### Gate A — Framework backend
 
+**Stato**: ✅ SUPERATO — 23 Luglio 2026.
+
 Non iniziare B1 finché:
 
 - A1-A6 sono ✅;
@@ -514,9 +615,18 @@ Non iniziare B1 finché:
 - fail-fast stack composito è dimostrato;
 - availability e slicing sono provati senza plugin production.
 
+> **Note implementazione**: A1-A6 completati. Gate finale eseguito con
+> `./dev.py test schemas all` (6/6 gruppi) e
+> `./dev.py test services all` (44/44 gruppi), entrambi verdi. Framework,
+> registry provider-compatible, runtime fail-fast, fixture test-only,
+> SignalService, availability/warm-up/gap policy e annotations estese sono
+> congelati per B1.
+
 ## Macrofase B — Plugin reali
 
 ### B1 — Quattro indicatori esistenti
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -555,13 +665,29 @@ long-history.
 - seed diverso dal TypeScript corrente;
 - value regions prodotte dal plugin non coerenti con thresholds parametrizzati.
 
+> **Note implementazione**: creati plugin autonomi `EMA`, `RSI`, `MACD`,
+> `BOLLINGER`, tutti con chiamata locale esplicita `talib=True`, params
+> schema-driven compatibili con chiavi frontend, output canonici e version.
+> RSI risolve levels/regions dai params; MACD produce 2 line + histogram flat;
+> Bollinger produce band; EMA applica offset dopo il calcolo. Sweep
+> multi-parametro su trend/volatile/scale ha corretto e validato warm-up:
+> EMA `6×period`, RSI `16×period`, MACD
+> `8×max(slowPeriod, signalPeriod)`, Bollinger `period`, tolleranza `1e-6`.
+> 46 test core, parity TA-Lib diretta e TypeScript convergente, short/gap,
+> 45/45 gruppi service verdi. Startup reale: `plugin_count=4`, health 200.
+> Audit dedicato: nessun blocker.
+
 ### Gate B1 — Pattern plugin
 
 B2-B4 possono partire in parallelo solo dopo B1 validato.
 
+**Stato**: ✅ SUPERATO — 23 Luglio 2026.
+
 ---
 
 ### B2 — Close-only aggiuntivi
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -594,9 +720,25 @@ Matrice completa + backend path + regression.
 
 - nomi/ordine colonne pandas-ta variabili con params.
 
+> **Note implementazione**: aggiunti `SMA`, `ROC`, `STOCH_RSI`, `KAMA`, `PPO`;
+> catalogo close-only totale `9`, Asset+FX. Tutte le chiamate delegano con
+> `talib=True` e testano anche la funzione C effettiva. StochRSI espone solo
+> params realmente efficaci (`period`, `dPeriod`, thresholds), KAMA solo
+> `period`; PPO normalizza composite 2 line + histogram e verifica
+> `histogram = ppo - signal`. Warm-up multi-parametro a `1e-6`: SMA `N`,
+> ROC `N+1`, StochRSI `16×max(period,d)`, KAMA
+> `max(30,12×period)`, PPO `8×max(slow,signal)`. 62 test verdi inclusi
+> direct TA-Lib, flat/trend/scale, short/gap e parità Asset/FX.
+
+> **⚠️ Fuori pista**: audit ha rilevato KAMA `minimum_points` off-by-one per
+> periodi ≥30. Corretto da `max(30, period)` a
+> `max(30, period + 1)` con boundary test dedicato.
+
 ---
 
 ### B3 — OHLC
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -632,9 +774,24 @@ Matrice completa + Donchian path + missing/partial fields.
 - copertura OHLC discontinua;
 - assi diversi dentro Aroon composite.
 
+> **Note implementazione**: aggiunti `ATR`, `ADX`, `NATR`, `AROON`,
+> `DONCHIAN`, `CCI`, tutti Asset-only con required fields rigorosi. I primi 5
+> delegabili usano `talib=True` e spy delle funzioni C; Donchian usa
+> esclusivamente il path nativo pandas-ta. ADX normalizza ADX/+DI/-DI, Aroon
+> Up/Down/Oscillator, Donchian band; CCI include levels/regions ±100.
+> Missing/partial OHLC e FX producono `unavailable`, senza sintesi/compaction.
+> Warm-up a `1e-6`: ATR/NATR `12×period`, ADX `18×period`, Aroon
+> `period+1`, Donchian/CCI `period`. 75 test verdi.
+
+> **⚠️ Fuori pista**: audit full-range period 2–200 ha trovato ADX
+> `16×period` insufficiente su 32 valori intermedi. Portato a `18×period`
+> (worst-case misurato ~`2.7e-7`) e aggiunti periodi 95/150/200 ai test.
+
 ---
 
 ### B4 — Volume
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -666,9 +823,25 @@ Matrice completa + zero/missing/partial volume.
 
 - provider con volume parziale o zero legittimo.
 
+> **Note implementazione**: aggiunti `OBV` e `MFI`, Asset-only,
+> `talib=True` + spy funzioni C. OBV viene ribasato a zero sulla prima data
+> disponibile `>= requested_start`, eliminando la dipendenza dalla storia
+> completa; MFI usa OHLCV e levels/regions dinamici 20/80. Volume zero resta
+> input valido e produce output zero; volume assente/parziale produce
+> `unavailable`, mai sintesi o compaction. Warm-up: OBV `1`, MFI `period+1`.
+> 30 test verdi; audit senza blocker.
+
+> **⚠️ Fuori pista**: il test short generico assumeva erroneamente che un solo
+> punto OBV fosse insufficiente; il contratto matematico produce invece output
+> valido ma warm-up incompleto → `partial`. Separato boundary test. Audit ha
+> inoltre segnalato un edge difensivo futuro con cadence `IRREGULAR` e range
+> interamente oltre i dati; da coprire esplicitamente in B5.
+
 ---
 
 ### B5 — Matrice regressiva completa
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -706,7 +879,21 @@ Provare uniformemente tutti i 17 plugin.
 
 - test parametrico troppo generico nasconde bug specifici; mantenere anche test dedicati.
 
+> **Note implementazione**: aggiunta matrice registry-driven su 17/17 plugin:
+> catalogo/schema/defaults, 16 path `talib=True` + Donchian native, batch Asset
+> completo, FX 9 close-only + 8 incompatible, exact minimum → `partial`,
+> required field missing/partial, gap interno, cardinalità/spec/output JSON,
+> invalid instance isolation e warm-up invariants. 63 test verdi, mantenendo
+> tutte le suite dedicate B1-B4.
+
+> **⚠️ Fuori pista**: l'edge B4 cadence `IRREGULAR` con range interamente
+> fuori dai dati produceva output vuoto/failed. `SignalService` ora conta una
+> boundary absence minima anche per serie irregolari e restituisce
+> `unavailable` senza inventare date.
+
 ### Gate B — Catalogo plugin
+
+**Stato**: ✅ SUPERATO — 23 Luglio 2026.
 
 Non iniziare il frontend. Richiede:
 
@@ -716,9 +903,18 @@ Non iniziare il frontend. Richiede:
 - contratti canonici congelati per Phase 0;
 - warm-up verificato nei plugin.
 
+> **Note implementazione**: 17 plugin production auto-discovered, 16 delegati
+> TA-Lib + Donchian nativo. Suite finali:
+> `./dev.py test schemas all` 6/6,
+> `./dev.py test services all` 49/49,
+> matrice uniforme 63/63. Startup test reale logga `plugin_count=17` e health
+> 200. Gate C autorizzato; frontend resta bloccato.
+
 ## Macrofase C — Integrazione backend Asset e FX
 
 ### C1 — Cataloghi GET statici
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -758,9 +954,17 @@ Esporre definizioni statiche senza DB/history lookup.
 
 - confondere catalogo signal con provider catalog esistente.
 
+> **Note implementazione**: aggiunti GET auth-protected
+> `/assets/prices/signals` e `/fx/currencies/signals`, filtrati dal registry
+> statico per domain. Asset restituisce 17 definizioni, FX 9; ordine/codici
+> deterministici, params/output/axis/unit/capability completi, nessuna
+> availability o dependency DB/history. 4 test live API verdi.
+
 ---
 
 ### C2 — POST Asset bulk
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -818,9 +1022,27 @@ Integrare segnali nella pipeline prezzi senza rompere cache/store/client esisten
 - global range molto ampio per un solo plugin;
 - worker/frontend dipendono dalla response completa.
 
+> **Note implementazione**: `FAPriceQueryItem` ora accetta `signals` e
+> `annotation_requests` default-empty con validazione ID/ref; result include
+> `signals=[]`. `get_prices_bulk()` prepara un plan per item, estende ogni
+> range del max warm-up, conserva una sola query globale, seed/backfill,
+> event load condizionale e FX conversion prima del compute. Risultati segnale
+> sono per instance, poi prices/events vengono sliciati al range originale;
+> `include_price=false` omette solo la response. FX miss blocca il compute
+> mixed-unit e produce unavailable. 9 service test, 2 live API, legacy
+> Asset/source/API verdi.
+
+> **⚠️ Fuori pista**: audit ha trovato seed condiviso troppo vecchio quando
+> lo stesso asset appare più volte con range/warm-up diversi. Ora ogni item usa
+> l'ultimo prezzo già nel `price_map` precedente al proprio start, fallback al
+> seed DB globale; regression dedicata. Event values futuri sono inoltre
+> gated sulla conversione target completa prima di `events_loaded=true`.
+
 ---
 
 ### C3 — POST FX bulk
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
 
 **Obiettivo**
 
@@ -874,9 +1096,34 @@ Integrare i nove close-only mantenendo il contratto daily.
 - confondere `rate=None` identity con missing rate;
 - range expansion costosa.
 
+> **Note implementazione**: `FXConversionRequest` accetta signals/annotations;
+> `FXConvertResponse.signal_results=[]` raggruppa per request index, pair e
+> range, mentre `FXConversionResult` daily resta invariato. Handler prepara un
+> plan per request e invia una sola `convert_bulk` combinata: amount originale
+> sul range visibile + amount `1` sul range esteso. Identity → close `1`;
+> nonidentity → effective rate; missing points → unavailable. Errori signal
+> estesi non contaminano gli errori daily; all-daily-failed con signal request
+> restituisce grouped unavailable. 6 test nuovi + legacy FX API/service verdi;
+> audit senza blocker.
+
 ---
 
 ### C4 — Compatibilità API e OpenAPI
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: suite complete verdi
+> (`schemas` 6/6, `services` 50/50, `api` 46/46), OpenAPI rigenerata con
+> `./dev.py api sync`, union `line|bar|band`, value-source e annotation request
+> generate come `z.discriminatedUnion()` con discriminator `z.literal()`;
+> `./dev.py front check` chiude con 0 errori e 0 warning.
+>
+> **⚠️ Fuori pista**: `openapi-zod-client` 1.18.3 con `--export-types` tipizza
+> ogni option come `z.ZodType<T>`, nascondendo i metodi `ZodObject` richiesti da
+> `z.discriminatedUnion()`. I discriminator backend sono ora required e
+> descritti anche come enum singleton; un post-process fail-fast rimuove
+> l'annotazione generica solo dalle sette option discriminate, preservando gli
+> export type e la compatibilità del client esistente.
 
 **Obiettivo**
 
@@ -885,7 +1132,9 @@ Congelare i contratti prima del frontend.
 **File**
 
 - test schema/API;
-- `frontend/src/lib/api/openapi.json` solo tramite `./dev.py api sync` nella fase D.
+- `frontend/src/lib/api/openapi.json` e `generated.ts` solo tramite
+  `./dev.py api sync`;
+- `frontend/scripts/fix-openapi-discriminators.mjs`.
 
 **Comportamento atteso**
 
@@ -915,6 +1164,13 @@ Congelare i contratti prima del frontend.
 
 ### Gate C — Backend completo
 
+**Stato**: ✅ SUPERATO — 23 Luglio 2026.
+
+> **Note implementazione**: Gate A/B verdi; cataloghi espongono 17 plugin Asset
+> e 9 FX; Asset/FX bulk restituiscono availability, serie e annotazioni senza
+> regressioni no-signal; OpenAPI e client Zodios sono compilabili. Macrofase D
+> autorizzata.
+
 Il frontend può iniziare solo quando:
 
 - Gate A e B superati;
@@ -927,6 +1183,13 @@ Il frontend può iniziare solo quando:
 ## Macrofase D — Fondazione frontend condivisa
 
 ### D1 — Client generato e tipi runtime
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: aggiunti alias `z.input`/`z.output` in
+> `backendTypes.ts`, separato `SignalDefinition` da `SignalConfig` e
+> `SignalResult`, mantenendo invariato il formato persistito di `SignalConfig`.
+> Fixture runtime line/bar/band/composite 4/4 e frontend check 0/0.
 
 **Obiettivo**
 
@@ -965,6 +1228,14 @@ Importare i contratti backend senza logica di vista.
 ---
 
 ### D2 — Catalog store e normalizzazione definizioni
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: creati mapper catalogo e store session-level unico
+> con cache per dominio, dedup delle fetch concorrenti, error state e retry
+> esplicito. Il merge include cataloghi backend + soli signal locali
+> comparison/benchmark, preserva compatibilità dominio e rifiuta collisioni.
+> Test catalog/store 7/7 (inclusi Asset 17 / FX 9), frontend check 0/0.
 
 **Obiettivo**
 
@@ -1007,6 +1278,15 @@ Creare una sola fonte condivisa per cataloghi Asset/FX e definizioni locali.
 ---
 
 ### D3 — JSON Schema mapper e configuratore unico
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: `schemaMapper.ts` supporta
+> number/integer/boolean/enum/string, required/default/min/max/step e metadata
+> `x-*`; schema non supportato genera errore typed. `SignalParamControl.svelte`
+> è il controllo unico per i backend signal; `ChartSignalsSection` riceve
+> definizioni remote, usa i18n/docs dal catalogo e conserva i controlli dinamici
+> locali comparison. Test mapper/config 7/7, frontend check 0/0.
 
 **Obiettivo**
 
@@ -1053,6 +1333,16 @@ singolo segnale.
 ---
 
 ### D4 — Renderer canonico e reference primitives
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: `backendRenderer.ts` converte genericamente
+> line/bar/band e composite flat, applica `base_percentage`, salta punti null,
+> preserva status/warning/error e applica stile locale. Gli helper chart
+> allocano assi dinamici per `role:key`, mantengono gli indici legacy e
+> costruiscono `markLine`/`markArea` da reference levels/value regions.
+> Coperti MACD, Bollinger, PPO, ADX, Aroon, Donchian, missing points,
+> multi-axis e percent transform: 10/10 test, frontend check 0/0.
 
 **Obiettivo**
 
@@ -1108,6 +1398,15 @@ per signal code.
 
 ### D5 — Request builder e result state
 
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: request planner separa config local/backend/unknown,
+> rimuove params transienti, deduplica code+params e conserva tutti gli
+> instance ID tramite alias. Il result mapper fanna il risultato canonico,
+> preserva `ok|partial|unavailable|failed`, mantiene config rimosse come
+> unavailable e usa uno state helper page-local con token stale-response.
+> Test request/result 7/7, frontend check 0/0.
+
 **Obiettivo**
 
 Condividere costruzione POST e mapping risultati, senza introdurre cache.
@@ -1149,6 +1448,15 @@ Condividere costruzione POST e mapping risultati, senza introdurre cache.
 ---
 
 ### D6 — Policy preview settings
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: policy isolata in `previewPolicy.ts`: global renderizza
+> solo signal locali e mostra il messaggio “target reale”; per-target usa
+> esclusivamente gli ultimi `backendPreviewSignals` forniti dalla page e segnala
+> “applica per aggiornare” o unavailable. Nessuna POST raw e nessuna chiamata
+> al renderer TypeScript per definizioni backend. Aggiunte traduzioni EN/IT/FR/ES;
+> test policy 4/4, frontend check 0/0, i18n 1778/1778 in tutte le lingue.
 
 **Obiettivo**
 
@@ -1192,6 +1500,14 @@ Risolvere il preview senza endpoint raw e senza calcoli TypeScript tecnici.
 
 ### Gate D — Frontend condiviso
 
+**Stato**: ✅ SUPERATO — 23 Luglio 2026.
+
+> **Note implementazione**: D1-D6 verdi; catalog, mapper, configuratore,
+> renderer, request/result state e preview policy sono condivisi e testati.
+> Suite frontend completa 25 file / 240 test, `svelte-check` 0/0 e build
+> production riuscita. Comparison, benchmark e Measure coperti da regression
+> test; Macrofase E autorizzata.
+
 Non migrare pagine finché:
 
 - D1-D6 ✅;
@@ -1203,6 +1519,16 @@ Non migrare pagine finché:
 ## Macrofase E — Migrazione viste reali
 
 ### E1 — Asset Detail
+
+**Stato**: ✅ IMPLEMENTAZIONE COMPLETATA — 23 Luglio 2026
+(`manual chart review` accorpata al Gate E).
+
+> **Note implementazione**: Asset Detail carica il catalogo 17, separa config
+> local/backend, invia tutte le istanze tecniche nella stessa POST prezzi,
+> usa `include_price=false` su cache hit, fanna i dedup per instance e renderizza
+> solo via renderer canonico. Range, currency e params rifanno la richiesta;
+> modifiche di solo stile non chiamano il backend. Catalog/request error sono
+> espliciti e i prezzi restano visibili. Suite frontend 240/240 e check 0/0.
 
 **Obiettivo**
 
@@ -1248,6 +1574,17 @@ Prima vista end-to-end, limitata inizialmente ai quattro segnali esistenti.
 ---
 
 ### E2 — Asset List e card
+
+**Stato**: ✅ COMPLETATO — 23 Luglio 2026.
+
+> **Note implementazione**: `fetchAllPriceData()` costruisce un unico array
+> bulk con ogni asset che necessita prezzi e/o signal; cache piena usa
+> `include_price=false`. Ogni item porta tutte le instance applicabili e viene
+> inviato da una sola `axiosInstance.post`. Worker Zod valida e preserva
+> `signals`, inclusi payload signal-only, e segnala item invalidi. Card e modal
+> usano risultati page-local + renderer canonico; comparison/benchmark restano
+> locali. Test worker/request 9/9 e frontend check 0/0; Playwright conferma
+> esattamente una POST bulk Asset per refresh.
 
 **Obiettivo**
 
@@ -1301,6 +1638,17 @@ Detail”.
 
 ### E3 — FX Detail
 
+**Stato**: ✅ IMPLEMENTAZIONE COMPLETATA — 23 Luglio 2026
+(`manual chart review` accorpata al Gate E).
+
+> **Note implementazione**: FX Detail carica il catalogo close-only 9 e, quando
+> richiesto, usa una POST convert full-range con tutte le instance; estrae il
+> grouped result `request_index=0` e renderizza via contratto canonico. La
+> richiesta usa l'orientamento visualizzato, mentre i daily rates vengono
+> reinvertiti prima del merge nello store canonico; lo swap URL forza il
+> ricalcolo tecnico. Cache senza signal resta sul path esistente. Test
+> direct/inverted/identity/backfill + mapping 16/16, frontend check 0/0.
+
 **Obiettivo**
 
 Migrare la vera detail FX distinta dalla list.
@@ -1344,6 +1692,18 @@ Migrare la vera detail FX distinta dalla list.
 ---
 
 ### E4 — FX List e card
+
+**Stato**: ✅ IMPLEMENTAZIONE COMPLETATA — 23 Luglio 2026
+(`manual chart review` accorpata al Gate E).
+
+> **Note implementazione**: nuovo bulk helper raccoglie tutte le pair che
+> richiedono rate e/o signal e invia esattamente una POST convert. Pair cached
+> con tecnici restano nella request; rates sono normalizzati nello store
+> canonico e signal grouped restano page-local. Card/modal usano il renderer
+> condiviso; inversione card/table forza un signal-only bulk refresh.
+> Test helper dimostra 2 pair/1 POST, grouped request-index, cache+signals e
+> inversione: FX store/request 18/18, frontend check 0/0; Playwright conferma
+> esattamente una POST bulk FX per refresh.
 
 **Obiettivo**
 
@@ -1391,6 +1751,69 @@ Migrare card, settings globali/per-pair e bulk multi-pair.
 - molti range daily espansi.
 
 ### Gate E — Parità viste
+
+**Stato**: 🟡 GATE AUTOMATICO SUPERATO — review visuale manuale pendente.
+
+> **Note implementazione**: E1-E4 implementati; 17 Asset / 9 FX disponibili
+> per capability, technical path UI esclusivamente backend, rollback ancora
+> possibile perché le classi TypeScript non sono state eliminate. Evidenze:
+> frontend 26 file / 246 test, `svelte-check` 0/0, build production verde,
+> Playwright desktop 1/1 Asset bulk + 1/1 FX bulk, i18n 1780/1780 × 4 lingue.
+>
+> **⚠️ Fuori pista**: code review ha rilevato e corretto un banner signal
+> fuorviante causato da item price invalidi senza signal configurati.
+>
+> **Note review visuale — round 1 (23 Luglio 2026)**: ripristinato toggle
+> dell'intera barra Segnali in Asset/FX Detail senza intercettare AI Export.
+> Selector tecnici rifatto come albero ricercabile
+> Trend/Momentum/Volatilità/Volume, con emoji plugin-owned, nomi e descrizioni
+> brevi human-friendly, sottotitolo dei campi input e tipografia condivisa con
+> Confronto/Benchmark. Corretto crash Candlestick: asse Volume non è più
+> hardcoded a `yAxisIndex=3`, ma segue gli assi signal dinamici; anche gli
+> overlay ricevono prima l'asse canonico. Traduzioni 1826/1826 × 4,
+> test mapper/chart 8/8, check 0/0 e build production verde.
+>
+> **Note review visuale — round 2 (23 Luglio 2026)**: sottotitoli dei selector
+> renderizzati con lo stesso helper KaTeX dei tooltip; `OrderableList` esteso con
+> griglia responsive opt-in a card equi-larghe e tono warning amber; cause
+> backend `partial`/`unavailable`/`failed` propagate fino alla card con dettaglio
+> campi OHLCV, copertura, warm-up e gap. Corpus devWiki lasciato invariato perché
+> sarà rigenerato dal Graphify finale. Test mapping 2/2, plugin matrix 63/63,
+> check 0/0, build frontend e MkDocs verdi, link docs 22/22.
+>
+> **Note review visuale — round 3 (23 Luglio 2026)**: corretto mismatch i18n dei
+> badge (`{n}` nelle quattro lingue, non `{count}`); in build debug ogni risultato
+> signal problematico stampa un warning strutturato con Asset ID/nome/ticker,
+> signal, params, status, warning, availability, warm-up ed errore. Probe
+> read-only sul DB produzione, Apple/AAPL (1980-12-12 → 2026-07-23): su range
+> 1Y e 5Y i 9 plugin close-only sono `ok`; gli 8 OHLC/volume sono
+> `unavailable` per 1–2 punti finali incompleti, non per errore formula.
+> `svelte-check` 0/0 e i18n 1837/1837 × 4.
+>
+> **Note review visuale — round 4 (23 Luglio 2026)**: probe prod completo su
+> Apple/AAPL, Asset 15, range 2025-07-23→2026-07-23. Confermata qualità input
+> realmente incompleta (`2026-07-22`: solo close; `2026-07-23`: volume assente),
+> ma classificata come falso errore la conseguente indisponibilità totale di 8
+> plugin. `ALLOW_PARTIAL_CONTIGUOUS` ora sceglie il segmento completo più recente
+> con storico minimo, altrimenti il più lungo, senza mai compattare il gap.
+> Risultato prod: 9 signal `ok`, 8 `partial`, 0 `unavailable`/`failed`; gli 8
+> field-rich renderizzano 2025-07-23→2026-07-21 e spiegano 617/618 (99,8%) o
+> 616/618 (99,6%) come punti input completi, warm-up incluso. Service 37/37,
+> plugin matrix 64/64, Asset integration 9/9 e API 2/2.
+>
+> **⚠️ Fuori pista — isolamento cache multi-utente (23 Luglio 2026)**: la review
+> manuale ha scoperto che `portfolioStore` e `brokerStore` sopravvivevano al
+> logout SPA e potevano mostrare dati dell'account precedente. Introdotto
+> `ClientSessionState`: reset centralizzato al cambio identità, chiavi portfolio
+> user-scoped, generation guard per risposte in-flight e reset di broker, asset,
+> transazioni, preview file, settings utente, chart/date/navigation state e
+> cache UI. Aggiunto invalidatore centrale per mutation API che influenzano il
+> Portfolio Engine e token monotono sulle operazioni auth per neutralizzare
+> `/auth/me` tardivi. Frontend unit 275/275, check 0/0 e build production verde.
+>
+> **Blocco residuo**: verificare manualmente assi, band, histogram, reference
+> levels/value regions, tooltip, dark mode e responsive su Asset/FX detail e
+> card prima di avviare F1/rimozione engine TypeScript.
 
 Non eliminare il TypeScript finché:
 
@@ -1488,6 +1911,15 @@ Completare il cutover senza rimuovere segnali locali.
 ---
 
 ### F3 — Docs, instructions e knowledge layer
+
+**Stato**: 🟡 IN CORSO — guida plugin e teoria finanziaria completate; cleanup e
+knowledge layer restano dipendenti da Gate E/F1-F2.
+
+> **Note implementazione (23 Luglio 2026)**: aggiunta la Developer Guide
+> `signal_plugin_guide.md` con architettura runtime/service/annotations, lifecycle,
+> contratto `SignalPlugin`, status/data policy, esempio completo, metadata JSON
+> Schema, checklist e gate test. Aggiornati overview Registry Pattern e nav
+> Developer Manual. MkDocs strict build e cross-boundary link check verdi.
 
 **Obiettivo**
 

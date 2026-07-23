@@ -9,6 +9,7 @@
  */
 
 import {canEditBroker, canEditPaired} from '$lib/stores/reference/brokerStore';
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,8 @@ export function txStoreInvalidate(): void {
     _map = new Map();
     _version++;
 }
+
+registerClientSessionReset('txStore', txStoreInvalidate);
 
 /** Reactive version number — use in `$derived`/`$effect` to track changes. */
 export function txStoreGetVersion(): number {

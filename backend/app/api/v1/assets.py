@@ -59,13 +59,20 @@ from backend.app.schemas.provider import (
     ProbeOperation,
 )
 from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
+from backend.app.schemas.signals import (
+    SignalCatalogResponse,
+    SignalDomain,
+)
 from backend.app.services.asset_source import (
     AssetCRUDService,
     AssetSearchService,
     AssetSourceError,
     AssetSourceManager,
 )
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.provider_registry import (
+    AssetProviderRegistry,
+    SignalPluginRegistry,
+)
 
 logger = get_logger(__name__)
 
@@ -666,6 +673,14 @@ async def delete_prices_bulk(
 #   GET /api/v1/backup/asset/{id}/prices?format=csv|json
 #   GET /api/v1/backup/asset/{id}/events?format=csv|json
 #   GET /api/v1/backup/fx/{base}/{quote}/rates?format=csv|json
+
+
+@price_router.get("/signals", response_model=SignalCatalogResponse)
+async def list_asset_signal_catalog(
+    _current_user: User = Depends(get_current_user),
+) -> SignalCatalogResponse:
+    """Return static signal definitions compatible with Asset price data."""
+    return SignalCatalogResponse(items=[definition for definition in SignalPluginRegistry.list_definitions() if SignalDomain.ASSET in definition.compatible_domains])
 
 
 @price_router.post("/query", response_model=FAPriceQueryResponse)
