@@ -2,7 +2,6 @@
 Backend service tests: FX conversion, asset source, provider registry, transactions, etc.
 """
 
-
 from . import _common
 from ._backend_db import db_create
 from ._common import (
@@ -67,6 +66,94 @@ def services_provider_registry(verbose: bool = False, test_names: list = None) -
     print_info("Testing: backend/app/services/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
     return run_command(cmd, "Provider registry tests", verbose=verbose)
+
+
+def services_signal_registry(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SignalPlugin base, strict registry and discovery."""
+    print_section("Services: Signal Plugin Registry")
+    print_info("Testing: library-agnostic SignalPlugin + strict discovery")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_registry.py", test_names)
+    return run_command(cmd, "Signal plugin registry tests", verbose=verbose)
+
+
+def services_signal_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test composite-stack fail-fast and startup integration."""
+    print_section("Services: Signal Runtime")
+    print_info("Testing: pandas-ta-classic + TA-Lib fail-fast")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_runtime.py", test_names)
+    return run_command(cmd, "Signal runtime tests", verbose=verbose)
+
+
+def services_signal_contracts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test auto-discovered test-only signal plugin fixtures."""
+    print_section("Services: Signal Plugin Contracts")
+    print_info("Testing: line, band/composite, warm-up, failure and event fixtures")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_contracts.py", test_names)
+    return run_command(cmd, "Signal plugin contract tests", verbose=verbose)
+
+
+def services_signal_service(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SignalService planning, availability, execution and slicing."""
+    print_section("Services: Signal Service")
+    print_info("Testing: dedup, warm-up, coverage, gaps, events, isolation and output validation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_service.py", test_names)
+    return run_command(cmd, "Signal service tests", verbose=verbose)
+
+
+def services_signal_annotations(verbose: bool = False, test_names: list = None) -> bool:
+    """Test cross/threshold annotation primitives."""
+    print_section("Services: Signal Annotations")
+    print_info("Testing: extended-range crossing, gaps, observed-only, dedup and sampling")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_annotations.py", test_names)
+    return run_command(cmd, "Signal annotation tests", verbose=verbose)
+
+
+def services_signal_plugins_core(verbose: bool = False, test_names: list = None) -> bool:
+    """Test EMA, RSI, MACD and Bollinger production plugins."""
+    print_section("Services: Core Signal Plugins")
+    print_info("Testing: TA-Lib delegation, numerical parity, warm-up and canonical output")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_core.py", test_names)
+    return run_command(cmd, "Core signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugins_close_only(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SMA, ROC, StochRSI, KAMA and PPO plugins."""
+    print_section("Services: Close-only Signal Plugins")
+    print_info("Testing: TA-Lib delegation, warm-up, composite output and Asset/FX parity")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_close_only.py", test_names)
+    return run_command(cmd, "Close-only signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugins_ohlc(verbose: bool = False, test_names: list = None) -> bool:
+    """Test ATR, ADX, NATR, Aroon, Donchian and CCI plugins."""
+    print_section("Services: OHLC Signal Plugins")
+    print_info("Testing: strict input coverage, TA-Lib delegation, Donchian native path and warm-up")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_ohlc.py", test_names)
+    return run_command(cmd, "OHLC signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugins_volume(verbose: bool = False, test_names: list = None) -> bool:
+    """Test OBV and MFI plugins."""
+    print_section("Services: Volume Signal Plugins")
+    print_info("Testing: zero/missing volume, OBV rebasing, MFI levels and TA-Lib delegation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugins_volume.py", test_names)
+    return run_command(cmd, "Volume signal plugin tests", verbose=verbose)
+
+
+def services_signal_plugin_matrix(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the uniform 17-plugin regression matrix."""
+    print_section("Services: Full Signal Plugin Matrix")
+    print_info("Testing: all 17 plugins, domains, fields, gaps, boundaries and isolation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_signal_plugin_matrix.py", test_names)
+    return run_command(cmd, "Full signal plugin matrix", verbose=verbose)
+
+
+def services_asset_signals(verbose: bool = False, test_names: list = None) -> bool:
+    """Test AssetSourceManager signal integration."""
+    print_section("Services: Asset Signals")
+    print_info("Testing: extended bulk load, FX-before-compute, signal-only payload and isolation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_signals.py", test_names)
+    return run_command(cmd, "Asset signal service tests", verbose=verbose)
 
 
 def services_provider_contracts(verbose: bool = False, test_names: list = None) -> bool:
@@ -402,8 +489,8 @@ def services_all(verbose: bool = False) -> bool:
         header_msg=None,
         summary_title="Backend Services Test Summary",
         success_msg="All backend services tests passed! 🎉",
-            resume=_common._RESUME_MODE,
-        )
+        resume=_common._RESUME_MODE,
+    )
 
 
 def populate_registry(registry: dict) -> None:
@@ -421,12 +508,24 @@ Tests for business logic and service layer:
   • Broker service (CRUD, summaries)
 
 Note: No backend server required.
-""")
+""",
+    )
     add_test(cat, "fx-conversion", services_fx_conversion, name="FX Conversion", desc="Currency conversion algorithms", prereq="Database created")
     add_test(cat, "asset-metadata", services_asset_metadata, name="Asset Metadata", desc="Parse/serialize, diff, patch semantics")
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
+    add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
+    add_test(cat, "signal-runtime", services_signal_runtime, name="Signal Runtime", desc="Composite-stack fail-fast and startup integration")
+    add_test(cat, "signal-contracts", services_signal_contracts, name="Signal Contracts", desc="Auto-discovered test-only line, band/composite, warm-up, failure and event fixtures")
+    add_test(cat, "signal-service", services_signal_service, name="Signal Service", desc="Planning, dedup, availability, one-thread batch, output validation and slicing")
+    add_test(cat, "signal-annotations", services_signal_annotations, name="Signal Annotations", desc="Line crossover, threshold crossing, observed-only, dedup and sampling")
+    add_test(cat, "signal-plugins-core", services_signal_plugins_core, name="Core Signal Plugins", desc="EMA, RSI, MACD and Bollinger TA-Lib delegation and numerical regression")
+    add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
+    add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
+    add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
+    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 17-plugin domains, fields, gaps, boundaries and isolation gate")
+    add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")

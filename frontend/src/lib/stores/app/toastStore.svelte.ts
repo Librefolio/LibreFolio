@@ -14,6 +14,7 @@
 
 import {generateUUID} from '$lib/utils/core/uuid';
 import {debug} from '$lib/debug';
+import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
 
@@ -125,3 +126,5 @@ export const toasts = {
     warning: (message: string, duration?: number) => show('warning', message, duration),
     info: (message: string, duration?: number) => show('info', message, duration),
 };
+
+registerClientSessionReset('toastStore', clear);

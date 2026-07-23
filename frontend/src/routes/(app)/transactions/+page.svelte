@@ -31,6 +31,7 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/stores/transactions/txStore.svelte';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
 
@@ -131,6 +132,7 @@
     }
 
     async function reload(opts?: {soft?: boolean}): Promise<void> {
+        const sessionGeneration = getClientSessionGeneration();
         if (!opts?.soft) loading = true;
         error = null;
         // Any soft reload means a transaction mutation succeeded — bust the portfolio cache.
@@ -138,10 +140,12 @@
         try {
             // Stage 1: main filtered rows.
             const main = await loadMainRows();
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             mainRows = main;
 
             // Stage 2: partners + tooltip + asset hydration in parallel.
             const [partner, tooltipMap] = await Promise.all([loadPartnerRows(main), loadEventTooltipMap(main), ensureAssetsLoaded()]);
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             partnerRows = partner;
             eventTooltipMap = tooltipMap;
 
@@ -510,13 +514,15 @@
         }
     }
 
-    async function mergeFetchedTransaction(row: TXReadItem): Promise<void> {
+    async function mergeFetchedTransaction(row: TXReadItem, sessionGeneration: number): Promise<void> {
+        if (!isClientSessionCurrent(sessionGeneration)) return;
         if (mainRows.some((r) => r.id === row.id) || partnerRows.some((r) => r.id === row.id)) return;
         mainRows = [row, ...mainRows];
 
         const partnerId = row.related_transaction_id;
         if (partnerId != null && !mainRows.some((r) => r.id === partnerId) && !partnerRows.some((r) => r.id === partnerId)) {
             const partner = await fetchTransactionById(partnerId);
+            if (!isClientSessionCurrent(sessionGeneration)) return;
             if (partner) partnerRows = [...partnerRows, partner];
         }
 
@@ -525,12 +531,13 @@
     }
 
     async function resolveHighlightedTransaction(txId: number): Promise<TXReadItem | null> {
+        const sessionGeneration = getClientSessionGeneration();
         const loaded = findLoadedTransaction(txId);
         if (loaded) return loaded;
         const fetched = await fetchTransactionById(txId);
-        if (!fetched) return null;
-        await mergeFetchedTransaction(fetched);
-        return fetched;
+        if (!fetched || !isClientSessionCurrent(sessionGeneration)) return null;
+        await mergeFetchedTransaction(fetched, sessionGeneration);
+        return isClientSessionCurrent(sessionGeneration) ? fetched : null;
     }
 
     async function pulseTransactionRow(txId: number): Promise<boolean> {

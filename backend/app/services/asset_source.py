@@ -68,6 +68,11 @@ from backend.app.schemas import (
     FARefreshItem,
     FARefreshResult,
     FAUpsert,
+    SignalCadence,
+    SignalDomain,
+    SignalEventPoint,
+    SignalExecutionContext,
+    SignalPricePoint,
     SyncStatus,
 )
 from backend.app.schemas.assets import (
@@ -100,6 +105,7 @@ from backend.app.schemas.provider import (
 )
 from backend.app.services.fx import convert_bulk
 from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.signal_service import SignalService
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -1933,11 +1939,42 @@ class AssetSourceManager:
         if not requests:
             return []
 
-        # Build per-asset date ranges
+        signal_service = SignalService()
+        signal_plans = []
+        request_ranges: list[tuple[date_type, date_type]] = []
+        load_ranges: list[tuple[date_type, date_type]] = []
         asset_ranges: dict[int, tuple[date_type, date_type]] = {}
         for req in requests:
             end = req.date_range.end or req.date_range.start
-            asset_ranges[req.asset_id] = (req.date_range.start, end)
+            requested_range = (req.date_range.start, end)
+            context = SignalExecutionContext(
+                domain=SignalDomain.ASSET,
+                requested_range=req.date_range,
+                cadence=SignalCadence.DAILY,
+                source_reference=f"asset:{req.asset_id}",
+                target_currency=req.target_currency,
+            )
+            plan = signal_service.prepare_plan(
+                req.signals,
+                context,
+                req.annotation_requests,
+            )
+            warmup_days = min(
+                plan.max_history_points_before_visible,
+                (req.date_range.start - date_type.min).days,
+            )
+            load_range = (
+                req.date_range.start - timedelta(days=warmup_days),
+                end,
+            )
+            request_ranges.append(requested_range)
+            load_ranges.append(load_range)
+            signal_plans.append(plan)
+            existing = asset_ranges.get(req.asset_id)
+            asset_ranges[req.asset_id] = (
+                min(existing[0], load_range[0]) if existing else load_range[0],
+                max(existing[1], load_range[1]) if existing else load_range[1],
+            )
 
         asset_ids = list(asset_ranges.keys())
 
@@ -1992,7 +2029,15 @@ class AssetSourceManager:
         results = []
 
         # Check if any request wants events
-        event_requests = {req.asset_id for req in requests if getattr(req, "include_events", False)}
+        event_requests = {
+            req.asset_id
+            for req, plan in zip(
+                requests,
+                signal_plans,
+                strict=True,
+            )
+            if getattr(req, "include_events", False) or plan.requires_events
+        }
 
         # Query events if needed
         event_maps: dict[int, list[FAAssetEventPointOut]] = {}
@@ -2023,13 +2068,21 @@ class AssetSourceManager:
                     )
                 )
 
-        for req in requests:
+        for req, (start, end) in zip(
+            requests,
+            load_ranges,
+            strict=True,
+        ):
             aid = req.asset_id
-            start, end = asset_ranges[aid]
             price_map = price_maps.get(aid, {})
-            seed = seed_prices.get(aid)
+            in_memory_seed = max(
+                (price for point_date, price in price_map.items() if point_date < start),
+                key=lambda price: price.date,
+                default=None,
+            )
+            seed = in_memory_seed or seed_prices.get(aid)
             series = AssetSourceManager._build_backward_filled_series(price_map, start, end, seed_price=seed)
-            events = event_maps.get(aid, []) if aid in event_requests else []
+            events = [event for event in event_maps.get(aid, []) if start <= event.date <= end] if aid in event_requests else []
             results.append(FAPriceQueryResult(asset_id=aid, prices=series, events=events))
 
         # ── Currency conversion pass ──────────────────────────────────────
@@ -2208,6 +2261,63 @@ class AssetSourceManager:
             for err in conv_errors:
                 if err not in result.errors:
                     result.errors.append(err)
+
+        # ── Signal computation and response slicing ────────────────────────
+        for req, result, plan, requested_range in zip(
+            requests,
+            results,
+            signal_plans,
+            request_ranges,
+            strict=True,
+        ):
+            if req.signals:
+                target = req.target_currency
+                conversion_complete = not target or all(point.currency == target for point in result.prices)
+                event_conversion_complete = not target or all(event.value.code == target for event in result.events)
+                neutral_prices = (
+                    [
+                        SignalPricePoint(
+                            date=point.date,
+                            open=point.open,
+                            high=point.high,
+                            low=point.low,
+                            close=point.close,
+                            volume=point.volume,
+                            backward_fill_info=point.backward_fill_info,
+                        )
+                        for point in result.prices
+                    ]
+                    if conversion_complete
+                    else []
+                )
+                neutral_events = (
+                    [
+                        SignalEventPoint(
+                            date=event.date,
+                            type=event.type,
+                            value=event.value.amount,
+                            metadata={
+                                "currency": event.value.code,
+                                "notes": event.notes,
+                                "id": event.id,
+                                "is_auto": event.is_auto,
+                            },
+                        )
+                        for event in result.events
+                    ]
+                    if event_conversion_complete
+                    else []
+                )
+                result.signals = await signal_service.execute(
+                    plan,
+                    neutral_prices,
+                    neutral_events,
+                    events_loaded=(plan.requires_events and event_conversion_complete),
+                )
+
+            requested_start, requested_end = requested_range
+            result.prices = [point for point in result.prices if requested_start <= point.date <= requested_end] if req.include_price else []
+            result.events = [event for event in result.events if requested_start <= event.date <= requested_end] if req.include_events else []
 
         return results
 

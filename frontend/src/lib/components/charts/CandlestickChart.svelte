@@ -25,7 +25,7 @@
     import type {LineDataPoint} from './LineChart.svelte';
     import {COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
-    import {buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
+    import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
@@ -344,8 +344,9 @@
         });
 
         // ── Overlay signals ──
-        const resolvedOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, dates)).filter((signal) => signal.data.length > 0);
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0);
+        const downsampledOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, dates)).filter((signal) => signal.data.length > 0);
+        const resolvedOverlaySignals = assignOverlaySignalAxes(downsampledOverlaySignals);
+        const {axes: secondaryAxes, extraAxesCount, nextAxisIndex: volumeYAxisIndex} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0);
 
         const series: any[] = [];
 
@@ -372,7 +373,7 @@
                 name: 'Volume',
                 data: volumeData,
                 xAxisIndex: 1,
-                yAxisIndex: 3,
+                yAxisIndex: volumeYAxisIndex,
                 barMaxWidth: 12,
             });
         }

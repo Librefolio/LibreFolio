@@ -13,7 +13,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write 'src/**/*.{ts,svelte,js,css,html}' 'e2e/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.{ts,svelte,js,css,html}' 'e2e/**/*.ts'",
-    "generate-api": "npx openapi-zod-client src/lib/api/openapi.json -o src/lib/api/generated.ts --export-types --with-docs --with-description",
+    "generate-api": "npx openapi-zod-client src/lib/api/openapi.json -o src/lib/api/generated.ts --export-types --with-docs --with-description && node scripts/fix-openapi-discriminators.mjs",
     "i18n:audit": "python scripts/i18n-audit.py",
     "i18n:audit:xlsx": "python scripts/i18n-audit.py --format xlsx",
     "i18n:audit:md": "python scripts/i18n-audit.py --format md",

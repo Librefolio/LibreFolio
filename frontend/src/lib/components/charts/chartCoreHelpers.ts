@@ -8,7 +8,7 @@
 
 import type {RenderedSignal} from '$lib/charts/signals';
 import type {ECharts} from 'echarts';
-import {buildBandSeries, buildBarSeries, COLORS, hexToRgba} from './lineChartHelpers';
+import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS, hexToRgba} from './lineChartHelpers';
 
 // =============================================================================
 // Types
@@ -89,66 +89,107 @@ export function buildPriceYAxis(config: YAxisConfig, colors: ChartColors, opts: 
     };
 }
 
-/**
- * Build secondary (RSI) and tertiary (MACD) Y-axes for overlay signals.
- * Always returns 2 axes (indices 1 and 2 relative to yAxes array).
- */
-export function buildSecondaryYAxes(overlaySignals: RenderedSignal[], dark: boolean, gridIndex: number = 0): {axes: any[]; hasSecondary: boolean; hasTertiary: boolean; extraAxesCount: number} {
-    const hasSecondary = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-    const hasTertiary = overlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
-    const extraAxesCount = (hasSecondary ? 1 : 0) + (hasTertiary ? 1 : 0);
+/** Assign stable ECharts indexes to canonical independent axes. */
+export function assignOverlaySignalAxes(overlaySignals: RenderedSignal[]): RenderedSignal[] {
+    const axisIndexes = new Map<string, number>();
+    const usedIndexes = new Set<number>([0]);
 
-    const axes: any[] = [
-        // yAxis[1] — secondary / RSI
-        {
+    for (const signal of overlaySignals) {
+        if (!signal.axisKey && (signal.yAxisIndex ?? 0) > 0) {
+            const index = signal.yAxisIndex!;
+            axisIndexes.set(`legacy:${index}`, index);
+            usedIndexes.add(index);
+        }
+    }
+
+    function nextIndex(): number {
+        let index = 1;
+        while (usedIndexes.has(index)) index++;
+        usedIndexes.add(index);
+        return index;
+    }
+
+    return overlaySignals.map((signal) => {
+        if (signal.axisRole === 'price') return {...signal, yAxisIndex: 0};
+
+        if (signal.axisKey && (signal.axisRole === 'independent' || signal.axisRole === 'volume')) {
+            const key = `${signal.axisRole}:${signal.axisKey}`;
+            let index = axisIndexes.get(key);
+            if (index === undefined) {
+                index = nextIndex();
+                axisIndexes.set(key, index);
+            }
+            return {...signal, yAxisIndex: index};
+        }
+
+        return signal;
+    });
+}
+
+/** Build all active non-price Y-axes from canonical axis metadata. */
+export function buildSecondaryYAxes(overlaySignals: RenderedSignal[], dark: boolean, gridIndex: number = 0, showAxes: boolean = true): {axes: any[]; hasSecondary: boolean; hasTertiary: boolean; extraAxesCount: number; nextAxisIndex: number} {
+    const signalByIndex = new Map<number, RenderedSignal>();
+    for (const signal of overlaySignals) {
+        const index = signal.yAxisIndex ?? 0;
+        if (index > 0 && signal.data.length > 0 && !signalByIndex.has(index)) {
+            signalByIndex.set(index, signal);
+        }
+    }
+
+    const activeIndexes = [...signalByIndex.keys()].sort((left, right) => left - right);
+    const maxIndex = activeIndexes.at(-1) ?? 0;
+    const axes: any[] = [];
+
+    for (let index = 1; index <= maxIndex; index++) {
+        const signal = signalByIndex.get(index);
+        const active = signal !== undefined;
+        const color = signal?.color ?? (dark ? '#64748b' : '#9ca3af');
+        const label = signal?.axisLabel ?? (index === 1 ? 'RSI' : index === 2 ? 'MACD' : `AXIS ${index}`);
+
+        axes.push({
             type: 'value',
             gridIndex,
-            name: hasSecondary ? 'RSI' : '',
+            name: active && showAxes ? label : '',
             nameLocation: 'start' as const,
             nameGap: 5,
-            nameTextStyle: {color: dark ? '#94a3b8' : '#9ca3af', fontSize: 9, fontWeight: 'bold', align: 'center'},
-            show: hasSecondary,
+            nameTextStyle: {
+                color,
+                fontSize: 9,
+                fontWeight: 'bold',
+                align: 'center',
+            },
+            show: active && showAxes,
             position: 'right' as const,
-            min: hasSecondary ? undefined : 0,
-            max: hasSecondary ? undefined : 100,
-            axisLine: {show: hasSecondary, lineStyle: {color: dark ? '#64748b' : '#9ca3af'}},
-            axisTick: {show: hasSecondary},
+            offset: (index - 1) * 55,
+            min: active ? signal.axisMinimum : 0,
+            max: active ? signal.axisMaximum : 1,
+            axisLine: {
+                show: active && showAxes,
+                lineStyle: {color},
+            },
+            axisTick: {show: active && showAxes},
             axisLabel: {
-                show: hasSecondary,
-                color: dark ? '#94a3b8' : '#9ca3af',
+                show: active && showAxes,
+                color,
                 fontSize: 10,
-                formatter: (v: number) => v.toFixed(0),
+                formatter: (value: number) => {
+                    if (Math.abs(value) >= 100) return value.toFixed(0);
+                    if (Math.abs(value) >= 1) return value.toFixed(2);
+                    return value.toFixed(4).replace(/\.?0+$/, '');
+                },
             },
             splitLine: {show: false},
-            scale: hasSecondary,
-        },
-        // yAxis[2] — tertiary / MACD
-        {
-            type: 'value',
-            gridIndex,
-            name: hasTertiary ? 'MACD' : '',
-            nameLocation: 'start' as const,
-            nameGap: 5,
-            nameTextStyle: {color: dark ? '#a78bfa' : '#7c3aed', fontSize: 9, fontWeight: 'bold', align: 'center'},
-            show: hasTertiary,
-            position: 'right' as const,
-            offset: hasSecondary && hasTertiary ? 55 : 0,
-            min: hasTertiary ? undefined : 0,
-            max: hasTertiary ? undefined : 1,
-            axisLine: {show: hasTertiary, lineStyle: {color: dark ? '#8b5cf6' : '#7c3aed'}},
-            axisTick: {show: hasTertiary},
-            axisLabel: {
-                show: hasTertiary,
-                color: dark ? '#a78bfa' : '#7c3aed',
-                fontSize: 10,
-                formatter: (v: number) => (Math.abs(v) < 0.01 ? v.toExponential(1) : v.toFixed(3)),
-            },
-            splitLine: {show: false},
-            scale: hasTertiary,
-        },
-    ];
+            scale: signal?.axisMinimum === undefined && signal?.axisMaximum === undefined,
+        });
+    }
 
-    return {axes, hasSecondary, hasTertiary, extraAxesCount};
+    return {
+        axes,
+        hasSecondary: signalByIndex.has(1),
+        hasTertiary: signalByIndex.has(2),
+        extraAxesCount: activeIndexes.length,
+        nextAxisIndex: axes.length + 1,
+    };
 }
 
 // =============================================================================
@@ -208,6 +249,7 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
             itemStyle: {color: signal.color, opacity: signal.opacity ?? 1},
             emphasis: {focus: 'none'},
             z: signal.opacity != null && signal.opacity < 1 ? 0 : 1,
+            ...buildSignalReferencePrimitives(signal, dark),
         };
 
         // Marker points (start/end arrows)
@@ -314,5 +356,5 @@ export function getChartZoomWindow(chart: ECharts): {start: number; end: number}
  * Compute right margin based on how many extra y-axes are visible.
  */
 export function computeRightMargin(extraAxesCount: number): number {
-    return extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12;
+    return extraAxesCount > 0 ? 60 + (extraAxesCount - 1) * 55 : 12;
 }

@@ -19,7 +19,8 @@
     import * as echarts from 'echarts';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
@@ -348,6 +349,7 @@
                 activeOverlaySignals = overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, bucketedDates)).filter((signal) => signal.data.length > 0);
             }
         }
+        activeOverlaySignals = assignOverlaySignalAxes(activeOverlaySignals);
 
         currentRenderedData = renderedData;
 
@@ -450,6 +452,7 @@
                         focus: 'none',
                     },
                     z: 1, // below main series
+                    ...buildSignalReferencePrimitives(signal, isDark),
                 };
 
                 // Endpoint markers at start/end of signal data
@@ -529,14 +532,7 @@
 
         // Grid configuration
         const showYAxis = !compact || showMiniAxis;
-        // Check which overlay axes are active (have at least one signal with data).
-        // In compact mode the axes are hidden but still auto-scaled so overlay
-        // lines render at the correct proportions — no fixed min/max fallback.
-        const hasSecondaryAxis = activeOverlaySignals.some((s) => (s.yAxisIndex ?? 0) === 1 && s.data.length > 0);
-        const hasTertiaryAxis = activeOverlaySignals.some((s) => (s.yAxisIndex ?? 0) === 2 && s.data.length > 0);
-
-        // Count how many extra axes need right-side space (only visible in non-compact)
-        const extraAxesCount = (hasSecondaryAxis ? 1 : 0) + (hasTertiaryAxis ? 1 : 0);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(activeOverlaySignals, isDark, 0, !compact);
 
         const gridConfig = compact
             ? {
@@ -548,7 +544,7 @@
               }
             : {
                   top: 20,
-                  right: extraAxesCount > 1 ? 115 : extraAxesCount === 1 ? 60 : 12,
+                  right: computeRightMargin(extraAxesCount),
                   bottom: 25,
                   left: 10,
                   containLabel: true,
@@ -629,71 +625,7 @@
                         scale: !isInclude0,
                     };
                 })(),
-                // Axis 1 — Secondary (right side, independent scale for RSI 0-100)
-                // Always declared to prevent ECharts coord resolution crashes when
-                // axis count changes between renders. When no series use it, it's
-                // hidden with fixed bounds so coord resolution never fails.
-                // In compact mode: hidden but auto-scaled so overlay lines render correctly.
-                {
-                    type: 'value',
-                    name: hasSecondaryAxis && !compact ? 'RSI' : '',
-                    nameLocation: 'start',
-                    nameGap: 5,
-                    nameTextStyle: {
-                        color: isDark ? '#94a3b8' : '#9ca3af',
-                        fontSize: 9,
-                        fontWeight: 'bold',
-                        align: 'center',
-                    },
-                    show: hasSecondaryAxis && !compact,
-                    position: 'right',
-                    // Always auto-scale when signals are present (no fixed min/max)
-                    min: hasSecondaryAxis ? undefined : 0,
-                    max: hasSecondaryAxis ? undefined : 100,
-                    axisLine: {show: hasSecondaryAxis && !compact, lineStyle: {color: isDark ? '#64748b' : '#9ca3af'}},
-                    axisTick: {show: hasSecondaryAxis && !compact},
-                    axisLabel: {
-                        show: hasSecondaryAxis && !compact,
-                        color: isDark ? '#94a3b8' : '#9ca3af',
-                        fontSize: 10,
-                        formatter: (v: number) => v.toFixed(0),
-                    },
-                    splitLine: {show: false},
-                    scale: hasSecondaryAxis,
-                },
-                // Axis 2 — Tertiary (right side with offset, independent scale for MACD)
-                // Always declared so ECharts never crashes on yAxisIndex=2 references.
-                // In compact mode: hidden but auto-scaled so overlay lines render correctly.
-                {
-                    type: 'value',
-                    name: hasTertiaryAxis && !compact ? 'MACD' : '',
-                    nameLocation: 'start',
-                    nameGap: 5,
-                    nameTextStyle: {
-                        color: isDark ? '#a78bfa' : '#7c3aed',
-                        fontSize: 9,
-                        fontWeight: 'bold',
-                        align: 'center',
-                    },
-                    show: hasTertiaryAxis && !compact,
-                    position: 'right',
-                    offset: hasSecondaryAxis && hasTertiaryAxis ? 55 : 0,
-                    min: hasTertiaryAxis ? undefined : 0,
-                    max: hasTertiaryAxis ? undefined : 1,
-                    axisLine: {show: hasTertiaryAxis && !compact, lineStyle: {color: isDark ? '#8b5cf6' : '#7c3aed'}},
-                    axisTick: {show: hasTertiaryAxis && !compact},
-                    axisLabel: {
-                        show: hasTertiaryAxis && !compact,
-                        color: isDark ? '#a78bfa' : '#7c3aed',
-                        fontSize: 10,
-                        formatter: (v: number) => {
-                            if (Math.abs(v) >= 1) return v.toFixed(2);
-                            return v.toFixed(4).replace(/\.?0+$/, '');
-                        },
-                    },
-                    splitLine: {show: false},
-                    scale: hasTertiaryAxis,
-                },
+                ...secondaryAxes,
             ],
             tooltip: compact
                 ? undefined
@@ -722,8 +654,13 @@
 
                           // Build yAxisIndex lookup for overlay signals by name
                           const signalAxisMap = new Map<string, number>();
+                          const signalAxisLabelMap = new Map<number, string>();
                           for (const sig of activeOverlaySignals) {
-                              signalAxisMap.set(sig.label, sig.yAxisIndex ?? 0);
+                              const axisIndex = sig.yAxisIndex ?? 0;
+                              signalAxisMap.set(sig.label, axisIndex);
+                              if (axisIndex > 0 && !signalAxisLabelMap.has(axisIndex)) {
+                                  signalAxisLabelMap.set(axisIndex, sig.axisLabel ?? `AXIS ${axisIndex}`);
+                              }
                           }
 
                           // Track already-shown series names to deduplicate segmented baseline entries
@@ -752,7 +689,8 @@
                               const axisIdx = signalAxisMap.get(p.seriesName) ?? 0;
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
-                              const axisNote = axisIdx === 1 ? ` <span style="font-size:10px;color:#94a3b8">[RSI]</span>` : axisIdx === 2 ? ` <span style="font-size:10px;color:#a78bfa">[MACD]</span>` : '';
+                              const axisLabel = signalAxisLabelMap.get(axisIdx);
+                              const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
                               html += `<br/>${colorDot}${truncateName(String(p.seriesName ?? ''))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
 
                               // For band signals, also show upper/lower in the tooltip

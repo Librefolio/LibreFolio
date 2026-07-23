@@ -8,8 +8,7 @@
  * 3. Done — the UI automatically picks it up via getRegisteredSignalTypes()
  */
 
-import type {SignalParamDescriptor} from './ChartSignal';
-import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalStyle} from './ChartSignal';
+import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalDefinition, type SignalStyle} from './ChartSignal';
 import {generateUUID} from '$lib/utils/core/uuid';
 import {FxPairSignal} from './FxPairSignal';
 import {AssetComparisonSignal} from './AssetComparisonSignal';
@@ -94,26 +93,71 @@ function pickBestColor(usedColors: string[]): string {
 // PUBLIC API
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export interface SignalTypeInfo {
-    type: string;
-    displayName: string;
-    icon: string;
-    category: 'indicator' | 'comparison' | 'benchmark' | 'measure';
-    paramDescriptors: SignalParamDescriptor[];
-    /** Path to MkDocs documentation section, e.g. 'financial-theory/technical-analysis/indicators/ema/' */
-    docsPath?: string;
-}
+export type SignalTypeInfo = SignalDefinition;
 
-/** All registered signal types (for "Add signal" dropdown in ChartSettingsModal). */
-export function getRegisteredSignalTypes(): SignalTypeInfo[] {
-    return [...SIGNAL_REGISTRY.values()].map((Cls) => ({
+const LOCAL_SIGNAL_I18N_KEYS: Record<string, {displayNameKey: string; descriptionKey: string}> = {
+    'fx-pair': {
+        displayNameKey: 'chartSettings.signals.fxPair',
+        descriptionKey: 'chartSettings.signals.fxPairDesc',
+    },
+    'asset-comparison': {
+        displayNameKey: 'chartSettings.signals.assetComparison',
+        descriptionKey: 'chartSettings.signals.assetComparisonDesc',
+    },
+    linear: {
+        displayNameKey: 'chartSettings.signals.linear',
+        descriptionKey: 'chartSettings.signals.linearDesc',
+    },
+    compound: {
+        displayNameKey: 'chartSettings.signals.compound',
+        descriptionKey: 'chartSettings.signals.compoundDesc',
+    },
+    sine: {
+        displayNameKey: 'chartSettings.signals.sine',
+        descriptionKey: 'chartSettings.signals.sineDesc',
+    },
+    ema: {
+        displayNameKey: 'chartSettings.signals.ema',
+        descriptionKey: 'chartSettings.signals.emaDesc',
+    },
+    macd: {
+        displayNameKey: 'chartSettings.signals.macd',
+        descriptionKey: 'chartSettings.signals.macdDesc',
+    },
+    rsi: {
+        displayNameKey: 'chartSettings.signals.rsi',
+        descriptionKey: 'chartSettings.signals.rsiDesc',
+    },
+    bollinger: {
+        displayNameKey: 'chartSettings.signals.bollinger',
+        descriptionKey: 'chartSettings.signals.bollingerDesc',
+    },
+};
+
+function definitionFromConstructor(Cls: SignalConstructor): SignalDefinition {
+    const i18n = LOCAL_SIGNAL_I18N_KEYS[Cls.signalType];
+    return {
         type: Cls.signalType,
         displayName: Cls.displayName,
+        displayNameKey: i18n?.displayNameKey,
+        descriptionKey: i18n?.descriptionKey,
         icon: Cls.icon,
         category: Cls.category,
         paramDescriptors: Cls.paramDescriptors,
         docsPath: Cls.docsPath,
-    }));
+        source: 'local',
+        compatibleDomains: ['asset', 'fx'],
+    };
+}
+
+/** Local-only comparison and benchmark definitions merged with backend catalogs. */
+export function getLocalSignalDefinitions(): SignalDefinition[] {
+    return [...SIGNAL_REGISTRY.values()].filter((Cls) => Cls.category === 'comparison' || Cls.category === 'benchmark').map(definitionFromConstructor);
+}
+
+/** All registered signal types (for "Add signal" dropdown in ChartSettingsModal). */
+export function getRegisteredSignalTypes(): SignalDefinition[] {
+    return [...SIGNAL_REGISTRY.values()].map(definitionFromConstructor);
 }
 
 /**
@@ -155,6 +199,29 @@ export function createSignal(signalType: string, existingCount: number, usedColo
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return new (Cls as any)(id, style, params);
+}
+
+export function createSignalConfig(definition: SignalDefinition, existingCount: number, usedColors: string[] = []): SignalConfig {
+    if (definition.source === 'local') {
+        const localSignal = createSignal(definition.type, existingCount, usedColors);
+        if (localSignal) return localSignal.toConfig();
+    }
+
+    const color = usedColors.length > 0 ? pickBestColor(usedColors) : DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length];
+    const params = Object.fromEntries(definition.paramDescriptors.filter((descriptor) => descriptor.default !== undefined).map((descriptor) => [descriptor.key, descriptor.default]));
+
+    return {
+        id: generateUUID(),
+        signalType: definition.type,
+        params,
+        style: {
+            color,
+            lineWidth: 1,
+            lineType: definition.category === 'indicator' ? 'dotted' : definition.category === 'benchmark' ? 'dashed' : 'solid',
+            markerStart: null,
+            markerEnd: null,
+        },
+    };
 }
 
 /**
