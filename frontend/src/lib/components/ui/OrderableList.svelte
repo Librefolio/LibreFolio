@@ -37,7 +37,7 @@
         /** Minimum grid item width before another column is added */
         minItemWidth?: string;
         /** Optional visual tone for individual items */
-        itemTone?: (item: T, index: number) => 'default' | 'warning';
+        itemTone?: (item: T, index: number) => 'default' | 'warning' | 'error';
         /** Snippet to render each item's content (between handle and arrows) */
         children: Snippet<[{item: T; index: number}]>;
     }
@@ -117,9 +117,11 @@
             class="flex items-center gap-2 {compact ? 'py-1 px-2' : 'p-2'} rounded-lg border transition-all duration-150
                 {dragOverIndex === index && dragIndex !== index
                 ? 'border-l-4 border-l-libre-green border-y-gray-200 dark:border-y-slate-600 border-r-gray-200 dark:border-r-slate-600 bg-green-50/50 dark:bg-green-900/10'
-                : tone === 'warning'
-                  ? 'border-amber-200 bg-amber-50/60 dark:border-amber-700/60 dark:bg-amber-950/20'
-                  : 'border-gray-200 dark:border-slate-600'}
+                : tone === 'error'
+                  ? 'border-red-200 bg-red-50/70 dark:border-red-800/70 dark:bg-red-950/25'
+                  : tone === 'warning'
+                    ? 'border-amber-200 bg-amber-50/60 dark:border-amber-700/60 dark:bg-amber-950/20'
+                    : 'border-gray-200 dark:border-slate-600'}
                 {dragIndex === index ? 'opacity-50' : ''}
                 {disabled ? 'opacity-60' : ''}"
             draggable={!disabled}

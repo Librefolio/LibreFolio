@@ -191,6 +191,56 @@ async def test_buy_sell_summary_converts_to_target_currency(session, test_user, 
 
 
 @pytest.mark.asyncio
+async def test_full_history_keeps_prior_price_seed_for_first_chart_day(session, test_user, asset, broker):
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 9),
+                close=Decimal("95"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 11),
+                close=Decimal("105"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 11),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "PRICE_HISTORY"],
+    )
+
+    assert result.lots is not None
+    assert len(result.lots) == 1
+    assert result.price_history is not None
+    price_points = _points_by_lot_date(result.price_history)
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 10))].market_price == Decimal("95")
+
+
+@pytest.mark.asyncio
 async def test_split_adjustment_uses_asset_event_ratio(session, test_user, asset, broker):
     split_event = AssetEvent(
         asset_id=asset.id,

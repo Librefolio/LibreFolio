@@ -444,9 +444,11 @@
                         color: signal.color,
                         width: signal.lineWidth,
                         type: signal.lineType,
+                        opacity: signal.opacity ?? 1,
                     },
                     itemStyle: {
                         color: signal.color,
+                        opacity: signal.opacity ?? 1,
                     },
                     emphasis: {
                         focus: 'none',

@@ -528,18 +528,7 @@
         {:else if activeTab === 'posizioni'}
             <div data-testid="broker-holdings">
                 <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
-                <LotsAnalysisPanel
-                    open={activeAssetId != null}
-                    assetId={activeAssetId}
-                    brokerIds={[broker.id]}
-                    brokers={panelBrokers}
-                    {dateFrom}
-                    {dateTo}
-                    isAllPeriod={isMaxPending}
-                    currency={activeAsset?.currency ?? baseCurrency}
-                    assetName={activeAsset?.display_name ?? null}
-                    onClose={closeAssetPanel}
-                />
+                <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
             </div>
         {:else if activeTab === 'transazioni'}
             <div class="space-y-4" data-testid="broker-transactions-tab">

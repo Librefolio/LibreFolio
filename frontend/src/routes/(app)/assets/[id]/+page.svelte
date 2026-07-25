@@ -45,6 +45,7 @@
         backendSignalSchemas,
         buildBackendSignalRequestPlan,
         getSignalProblem,
+        getSignalProblemSeverity,
         getLocalSignalDefinitions,
         mapSignalInstanceResults,
         renderBackendSignalResult,
@@ -797,7 +798,9 @@
                 for (const item of mapped) {
                     const problem = getSignalProblem(item);
                     if (!problem) continue;
-                    debug.warn('AssetSignals', `${assetLabel} (#${data.assetId}) · ${item.result?.signal_code ?? item.config.signalType} · ${item.status}`, {
+                    const severity = getSignalProblemSeverity(problem);
+                    const logProblem = severity === 'error' ? debug.error : severity === 'warning' ? debug.warn : debug.info;
+                    logProblem('AssetSignals', `${assetLabel} (#${data.assetId}) · ${item.result?.signal_code ?? item.config.signalType} · ${item.status}`, {
                         asset: {
                             id: data.assetId,
                             name: assetLabel,
@@ -810,6 +813,7 @@
                             params: item.config.params,
                         },
                         status: item.status,
+                        severity,
                         warningMessages: item.result?.warnings?.map((warning) => warning.message) ?? [],
                         problem,
                         availability: item.result?.availability ?? null,

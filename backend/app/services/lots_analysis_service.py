@@ -8,7 +8,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Iterable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
@@ -219,7 +219,11 @@ class LotsAnalysisService:
         computed_from = transactions[0].date
         split_ratios_by_tx_id = await self._load_split_ratios(transactions)
         broker_shorting = await self._load_broker_shorting(scope_broker_ids)
-        prices = await self._load_prices(asset_id=asset_id, date_to=actual_to)
+        prices = await self._load_prices(
+            asset_id=asset_id,
+            date_from=computed_from,
+            date_to=actual_to,
+        )
         price_lookup = _PriceHistoryLookup(prices)
         estimated_mode = price_lookup.latest() is None
         income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
@@ -609,8 +613,26 @@ class LotsAnalysisService:
         rows = (await self.db.execute(stmt)).all()
         return dict(rows)
 
-    async def _load_prices(self, asset_id: int, date_to: date_type) -> list[PriceHistory]:
-        stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id).where(PriceHistory.date <= date_to).where(PriceHistory.close.is_not(None)).order_by(PriceHistory.date)
+    async def _load_prices(
+        self,
+        asset_id: int,
+        date_from: date_type,
+        date_to: date_type,
+    ) -> list[PriceHistory]:
+        previous_price_date = select(func.max(PriceHistory.date)).where(PriceHistory.asset_id == asset_id).where(PriceHistory.date < date_from).where(PriceHistory.close.is_not(None)).scalar_subquery()
+        stmt = (
+            select(PriceHistory)
+            .where(PriceHistory.asset_id == asset_id)
+            .where(
+                or_(
+                    PriceHistory.date >= date_from,
+                    PriceHistory.date == previous_price_date,
+                )
+            )
+            .where(PriceHistory.date <= date_to)
+            .where(PriceHistory.close.is_not(None))
+            .order_by(PriceHistory.date)
+        )
         return list((await self.db.execute(stmt)).scalars().all())
 
     def _empty_response(

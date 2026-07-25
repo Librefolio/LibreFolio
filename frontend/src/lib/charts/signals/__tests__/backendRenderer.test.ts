@@ -132,7 +132,61 @@ describe('canonical backend signal renderer', () => {
         expect(outcome.signals).toHaveLength(expectedCount);
     });
 
-    it('preserves missing points and maps reference levels/value regions', () => {
+    it('applies plugin-owned styles to ADX components', () => {
+        const adx = lineSeries('adx', 'adx');
+        const plusDi = lineSeries('plus_di', 'adx');
+        const minusDi = lineSeries('minus_di', 'adx');
+        Object.assign(adx, {style: {color_role: 'primary', line_pattern: 'solid', width_delta: 1, opacity: 1}});
+        Object.assign(plusDi, {style: {color_role: 'positive', line_pattern: 'solid', width_delta: 0, opacity: 1}});
+        Object.assign(minusDi, {style: {color_role: 'negative', line_pattern: 'solid', width_delta: 0, opacity: 1}});
+
+        const outcome = renderBackendSignalResult(resultWithSeries('ADX', [adx, plusDi, minusDi]), config, {
+            baseData,
+            viewMode: 'absolute',
+        });
+
+        expect(outcome.signals.map((signal) => signal.color)).toEqual(['#3b82f6', '#16a34a', '#dc2626']);
+        expect(outcome.signals.map((signal) => signal.lineType)).toEqual(['solid', 'solid', 'solid']);
+        expect(outcome.signals.map((signal) => signal.lineWidth)).toEqual([3, 2, 2]);
+    });
+
+    it('applies per-component style overrides without changing sibling outputs', () => {
+        const adx = lineSeries('adx', 'adx');
+        const plusDi = lineSeries('plus_di', 'adx');
+        const minusDi = lineSeries('minus_di', 'adx');
+        Object.assign(adx, {style: {color_role: 'primary', line_pattern: 'solid', width_delta: 1, opacity: 1}});
+        Object.assign(plusDi, {style: {color_role: 'positive', line_pattern: 'solid', width_delta: 0, opacity: 1}});
+        Object.assign(minusDi, {style: {color_role: 'negative', line_pattern: 'solid', width_delta: 0, opacity: 1}});
+        const customizedConfig: SignalConfig = {
+            ...config,
+            componentStyles: {
+                plus_di: {
+                    color: '#7c3aed',
+                    lineWidth: 4,
+                    lineType: 'dotted',
+                    markerStart: 'circle',
+                    markerEnd: 'diamond',
+                },
+            },
+        };
+
+        const outcome = renderBackendSignalResult(resultWithSeries('ADX', [adx, plusDi, minusDi]), customizedConfig, {
+            baseData,
+            viewMode: 'absolute',
+        });
+
+        expect(outcome.signals[0]).toMatchObject({color: '#3b82f6', lineWidth: 3, lineType: 'solid'});
+        expect(outcome.signals[1]).toMatchObject({
+            color: '#7c3aed',
+            lineWidth: 4,
+            lineType: 'dotted',
+            markerStart: 'circle',
+            markerEnd: 'diamond',
+        });
+        expect(outcome.signals[2]).toMatchObject({color: '#dc2626', lineWidth: 2, lineType: 'solid'});
+    });
+
+    it('preserves axis metadata and applies backend value-region styling', () => {
         const rsi = lineSeries('rsi', 'rsi', [null, 72]);
         Object.assign(rsi, {
             axis: {
@@ -155,6 +209,10 @@ describe('canonical backend signal renderer', () => {
                     label_key: 'signals.rsi.overboughtRegion',
                     semantic: 'overbought',
                     lower: 70,
+                    line_style: {
+                        pattern: 'solid',
+                        width_delta: 1,
+                    },
                 },
             ],
         });
@@ -169,17 +227,143 @@ describe('canonical backend signal renderer', () => {
         expect(rendered.data).toEqual([{date: '2026-07-23', value: 72}]);
         expect(rendered.axisMinimum).toBe(0);
         expect(rendered.axisMaximum).toBe(100);
-        expect(rendered.referenceLevels).toEqual([
-            {
-                key: 'overbought',
-                label: 'Overbought',
-                semantic: 'overbought',
-                value: 70,
+        expect(rendered.lineType).toBe('solid');
+        expect(rendered.lineWidth).toBe(3);
+        expect(rendered.referenceLevels).toBeUndefined();
+        expect(rendered.valueRegions).toBeUndefined();
+    });
+
+    it('derives dashed and solid time slices from backend value-region rules', () => {
+        const rsi = {
+            ...lineSeries('rsi', 'rsi'),
+            points: [
+                {date: '2026-07-20', value: 20},
+                {date: '2026-07-21', value: 40},
+                {date: '2026-07-22', value: 80},
+            ],
+            value_regions: [
+                {
+                    key: 'oversold',
+                    label_key: 'signals.rsi.oversoldRegion',
+                    semantic: 'oversold',
+                    upper: 30,
+                    include_lower: true,
+                    include_upper: false,
+                    line_style: {pattern: 'solid', width_delta: 1},
+                },
+                {
+                    key: 'neutral',
+                    label_key: 'signals.rsi.neutralRegion',
+                    semantic: 'neutral',
+                    lower: 30,
+                    upper: 70,
+                    include_lower: true,
+                    include_upper: true,
+                    line_style: {pattern: 'dashed', width_delta: 0},
+                },
+                {
+                    key: 'overbought',
+                    label_key: 'signals.rsi.overboughtRegion',
+                    semantic: 'overbought',
+                    lower: 70,
+                    include_lower: false,
+                    include_upper: false,
+                    line_style: {pattern: 'solid', width_delta: 1},
+                },
+            ],
+        };
+
+        const outcome = renderBackendSignalResult(resultWithSeries('RSI', [rsi]), config, {
+            baseData,
+            viewMode: 'absolute',
+        });
+
+        expect(outcome.signals.map((signal) => signal.lineType)).toEqual(['solid', 'dashed', 'solid']);
+        expect(outcome.signals.map((signal) => signal.lineWidth)).toEqual([3, 2, 3]);
+        expect(outcome.signals.map((signal) => signal.label)).toEqual(['RSI', 'RSI', 'RSI']);
+        expect(outcome.signals[1].data.map((point) => point.date)).toEqual(['2026-07-20', '2026-07-21']);
+    });
+
+    it('applies a per-partition override only to the matching time slices', () => {
+        const rsi = {
+            ...lineSeries('rsi', 'rsi'),
+            points: [
+                {date: '2026-07-20', value: 20},
+                {date: '2026-07-21', value: 40},
+                {date: '2026-07-22', value: 80},
+            ],
+            value_regions: [
+                {
+                    key: 'oversold',
+                    label_key: 'signals.rsi.oversoldRegion',
+                    semantic: 'oversold',
+                    upper: 30,
+                    line_style: {pattern: 'solid', width_delta: 1},
+                },
+                {
+                    key: 'neutral',
+                    label_key: 'signals.rsi.neutralRegion',
+                    semantic: 'neutral',
+                    lower: 30,
+                    upper: 70,
+                    include_upper: true,
+                    line_style: {pattern: 'dashed', width_delta: 0},
+                },
+                {
+                    key: 'overbought',
+                    label_key: 'signals.rsi.overboughtRegion',
+                    semantic: 'overbought',
+                    lower: 70,
+                    line_style: {pattern: 'solid', width_delta: 1},
+                },
+            ],
+        };
+        const customizedConfig: SignalConfig = {
+            ...config,
+            partitionStyles: {
+                'rsi:neutral': {
+                    color: '#ec4899',
+                    lineWidth: 4,
+                    lineType: 'dotted',
+                    markerStart: null,
+                    markerEnd: null,
+                },
             },
-        ]);
-        expect(rendered.valueRegions?.[0]).toMatchObject({
-            lower: 70,
-            semantic: 'overbought',
+        };
+
+        const outcome = renderBackendSignalResult(resultWithSeries('RSI', [rsi]), customizedConfig, {
+            baseData,
+            viewMode: 'absolute',
+        });
+
+        expect(outcome.signals.map((signal) => signal.color)).toEqual(['#3b82f6', '#ec4899', '#3b82f6']);
+        expect(outcome.signals.map((signal) => signal.lineWidth)).toEqual([3, 4, 3]);
+        expect(outcome.signals.map((signal) => signal.lineType)).toEqual(['solid', 'dotted', 'solid']);
+    });
+
+    it('switches a customized histogram from signed colors to its selected color', () => {
+        const histogram = barSeries('histogram', 'macd');
+        const customizedConfig: SignalConfig = {
+            ...config,
+            componentStyles: {
+                histogram: {
+                    color: '#06b6d4',
+                    lineWidth: 2,
+                    lineType: 'solid',
+                    markerStart: null,
+                    markerEnd: null,
+                },
+            },
+        };
+
+        const rendered = renderBackendSignalResult(resultWithSeries('MACD', [histogram]), customizedConfig, {
+            baseData,
+            viewMode: 'absolute',
+        }).signals[0];
+
+        expect(rendered).toMatchObject({
+            color: '#06b6d4',
+            barColorMode: 'single',
         });
     });
 

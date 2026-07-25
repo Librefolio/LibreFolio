@@ -22,6 +22,7 @@ from backend.app.schemas.signals import (
     SignalBandSeries,
     SignalCatalogDefinition,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDataPolicy,
     SignalDomain,
@@ -33,13 +34,16 @@ from backend.app.schemas.signals import (
     SignalInputData,
     SignalInputRequirements,
     SignalLineCrossoverRequest,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalOutputValueSource,
     SignalPriceField,
     SignalPricePoint,
     SignalPriceValueSource,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalRequest,
     SignalResult,
     SignalSeriesKind,
@@ -305,6 +309,44 @@ class TestOutputContracts:
         with pytest.raises(ValidationError, match="lower bound"):
             SignalValueRegion(key="neutral", label_key="signals.neutral", semantic="neutral", lower=70, upper=30)
 
+    def test_region_can_declare_line_style(self):
+        region = SignalValueRegion(
+            key="neutral",
+            label_key="signals.neutral",
+            semantic="neutral",
+            lower=30,
+            upper=70,
+            line_style=SignalRegionLineStyle(
+                pattern=SignalLinePattern.DASHED,
+                width_delta=1,
+            ),
+        )
+
+        assert region.line_style is not None
+        assert region.line_style.pattern == SignalLinePattern.DASHED
+        with pytest.raises(ValidationError):
+            SignalRegionLineStyle(pattern=SignalLinePattern.SOLID, width_delta=4)
+
+    def test_output_can_declare_plugin_owned_visual_style(self):
+        output = SignalOutputSpec(
+            key="plus_di",
+            label_key="signals.adx.plusDi",
+            description_key="signals.adx.plusDiDescription",
+            kind=SignalSeriesKind.LINE,
+            unit=SignalUnit.INDEX,
+            axis=SignalAxisSpec(key="adx", role=SignalAxisRole.INDEPENDENT),
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.POSITIVE,
+                line_pattern=SignalLinePattern.SOLID,
+                width_delta=1,
+                opacity=0.8,
+            ),
+        )
+
+        assert output.style.color_role == SignalColorRole.POSITIVE
+        assert output.style.line_pattern == SignalLinePattern.SOLID
+        assert output.description_key == "signals.adx.plusDiDescription"
+
     def test_output_spec_rejects_unadvertised_defaults(self):
         with pytest.raises(ValidationError, match="supports_reference_levels"):
             SignalOutputSpec(
@@ -410,7 +452,8 @@ class TestOutputContracts:
         result = make_result(SignalStatus.OK, series=[series])
         dumped = result.model_dump(mode="json")
         assert dumped["series"][0]["reference_levels"][0]["value"] == 70.0
-        assert "color" not in json.dumps(dumped)
+        assert dumped["series"][0]["style"]["color_role"] == "primary"
+        assert "#" not in json.dumps(dumped)
 
 
 class TestCoverageAndAvailability:

@@ -62,6 +62,8 @@ describe('canonical overlay axis and reference helpers', () => {
                         label: 'High',
                         semantic: 'high',
                         lower: 70,
+                        includeLower: true,
+                        includeUpper: false,
                     },
                 ],
             }),

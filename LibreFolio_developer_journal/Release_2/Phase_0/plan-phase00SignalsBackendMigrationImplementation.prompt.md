@@ -1801,6 +1801,92 @@ Migrare card, settings globali/per-pair e bulk multi-pair.
 > 616/618 (99,6%) come punti input completi, warm-up incluso. Service 37/37,
 > plugin matrix 64/64, Asset integration 9/9 e API 2/2.
 >
+> **Note review visuale — round 5 (24 Luglio 2026)**: i tre selector usano ora
+> lo stesso `SignalTreeSelect`; Indicatori mantiene i gruppi, Confronto e Benchmark
+> usano la modalità flat con ricerca e identica estetica. `SignalValueRegion`
+> espone `line_style`: RSI, CCI, MFI e Stochastic RSI delegano al backend soglie,
+> inclusività e stile, mentre il renderer genera slice temporali generiche
+> (neutro tratteggiato, estremi solidi) senza switch per signal code e senza le
+> precedenti guide orizzontali ridondanti. Il controllo line type viene nascosto
+> quando lo stile è region-driven, mentre colore, spessore e marker restano
+> configurabili. I problemi sono contestualizzati:
+> fino a due punti edge mancanti diventano info neutra, `partial` materiale resta
+> amber, `unavailable`/`failed`/assenza dati diventa rosso. Unit frontend 20/20,
+> backend FIFO+signal 187/187, `svelte-check` 0/0 e build production verde.
+>
+> **Note review visuale — round 6 (24 Luglio 2026)**: verificato MFI prod su
+> Apple: 616/618 punti completi (99,6%), con volume assente il 22 e 23 luglio
+> 2026 — mercoledì e giovedì, non weekend. Lo status backend resta correttamente
+> `partial`, ma il buffer UI/debug classifica fino a due difetti edge con
+> copertura ≥99% e impatto ≤2 come `notice`: card neutra, icona info e
+> `console.info` invece di warning. `SignalTreeSelect` supporta ora
+> ArrowUp/ArrowDown, Home/End, Enter su item, Enter/ArrowLeft/ArrowRight sui
+> gruppi, highlight e auto-scroll; ricerca e selector flat condividono la stessa
+> navigazione. `svelte-check` 0/0 e build production verde.
+>
+> **Note review visuale — round 7 (24 Luglio 2026)**: policy warning coverage
+> resa globale e cadence-aware. `SignalInputCoverage` espone
+> `max_consecutive_missing_points`; un `partial` diventa amber solo con copertura
+> ≤95% o streak mancante >7, altrimenti resta notice informativa. MFI/OBV
+> Apple 616/618 (99,6%, streak 2) non generano più warning console/card.
+> Introdotto contratto visuale plugin-owned unico per output e partizioni:
+> `color_role`, pattern, delta spessore, opacity, label e description. ADX resta
+> correttamente composto da tre linee standard (ADX, +DI verde, −DI rossa);
+> MACD/PPO mantengono due linee + istogramma perché l'istogramma è un output
+> matematico definito. Aroon e Stochastic RSI ricevono stili distinti. Ogni card
+> backend mostra componenti e zone in una legenda responsive con tooltip, usando
+> lo stesso metadata del renderer. La validazione runtime rifiuta divergenze
+> style/description rispetto al catalogo; warm-up incompleto mantiene priorità
+> warning anche in presenza di gap minori. Backend 165/165, frontend 21/21, i18n
+> 1904/1904 × 4, `svelte-check` 0/0, build frontend e MkDocs verdi.
+>
+> **Note review visuale — round 8 (25 Luglio 2026)**: corretto `Δ1%` nelle tabelle
+> posizioni. Prima divideva il Δ P&L giornaliero per il P&L latente del giorno
+> precedente, quindi un movimento 27,81→27,84 poteva apparire come +7%; ora usa
+> il valore di mercato assoluto della posizione precedente e restituisce +0,11%
+> sul caso XGBE, preservando segno short e `quote_base_quantity`. Tooltip pinned
+> esteso a 30 secondi, con dismiss immediato su scroll/click esterno, larghezza e
+> touch target mobile maggiorati. Il selector non mostra più l'unione OHLCV del
+> gruppo: ogni indicatore espone i propri campi esatti (`EMA: Close`, ecc.).
+> Ripristinate e formattate integralmente le quattro risorse i18n:
+> 1905/1905 EN/IT/FR/ES. Formula backend 3/3, signal unit 21/21, Tooltip E2E 6/6,
+> `svelte-check` 0/0 e build production verde.
+>
+> **Note review visuale — round 9 (25 Luglio 2026)**: la legenda visuale è ora
+> anche editor. Ogni output backend e ogni partizione/zone conserva override
+> indipendenti in `SignalConfig.componentStyles` / `partitionStyles`; colore,
+> pattern, spessore e marker delle linee sono separati. Il selettore comune sotto
+> la card è stato rimosso per i signal backend e resta solo come fallback per
+> comparison/benchmark locali e vecchie config. Istogrammi restano signed
+> verde/rosso finché non personalizzati, poi usano il colore scelto; band e zone
+> seguono i rispettivi editor. I soli cambi stile non modificano request params e
+> non rifanno la POST. Renderer/style unit 21/21, `svelte-check` 0/0 e build
+> production verde.
+>
+> **Note review visuale — round 10 (25 Luglio 2026)**: rimosso il parent editor
+> ridondante quando le partizioni coprono l'intero dominio numerico. Il mapper
+> calcola `fullyPartitioned` verificando estremi aperti e continuità/inclusività
+> delle soglie, senza switch per signal code. RSI/CCI/MFI mostrano solo le zone;
+> Stochastic RSI nasconde `%K` partizionato ma conserva `%D`; output con regioni
+> parziali mantengono il parent. Mapper/renderer 19/19, `svelte-check` 0/0 e build
+> production verde.
+>
+> **Note review visuale — round 11 (25 Luglio 2026)**: tradotta la chiave
+> `signals.params.dPeriod` e introdotto metadata generico
+> `x-affects-outputs`. La card mostra ora `Agisce su: %K · %D` per il periodo,
+> `%D` per `dPeriod`, `%K` per le soglie; le partizioni sono intestate
+> esplicitamente `Zone %K`. I suffix `days` sono localizzati tramite
+> `signals.units.days`. L'audit i18n scansiona anche `x-i18n-key` /
+> `x-tooltip-key` in `backend/app` e fallisce se una chiave backend manca:
+> 1911/1911 × 4, backend missing 0. Mapper 10/10, Stochastic plugin 3/3,
+> `svelte-check` 0/0.
+>
+> **⚠️ Fuori pista — Dettaglio Lotti FIFO (24 Luglio 2026)**: il pannello non
+> eredita più il range Dashboard/Broker e richiede sempre l'intero ciclo dei
+> lotti. La query prezzi è limitata dalla prima transazione, conservando un seed
+> precedente per il fallback del prezzo di apertura. Il range Y PMC/prezzo
+> include valore e raggio massimo delle bubble, evitando clipping ai bordi.
+>
 > **⚠️ Fuori pista — isolamento cache multi-utente (23 Luglio 2026)**: la review
 > manuale ha scoperto che `portfolioStore` e `brokerStore` sopravvivevano al
 > logout SPA e potevano mostrare dati dell'account precedente. Introdotto
@@ -1811,8 +1897,8 @@ Migrare card, settings globali/per-pair e bulk multi-pair.
 > Portfolio Engine e token monotono sulle operazioni auth per neutralizzare
 > `/auth/me` tardivi. Frontend unit 275/275, check 0/0 e build production verde.
 >
-> **Blocco residuo**: verificare manualmente assi, band, histogram, reference
-> levels/value regions, tooltip, dark mode e responsive su Asset/FX detail e
+> **Blocco residuo**: verificare manualmente assi, band, histogram, slice
+> threshold, tooltip, dark mode e responsive su Asset/FX detail e
 > card prima di avviare F1/rimozione engine TypeScript.
 
 Non eliminare il TypeScript finché:
@@ -1920,6 +2006,18 @@ knowledge layer restano dipendenti da Gate E/F1-F2.
 > contratto `SignalPlugin`, status/data policy, esempio completo, metadata JSON
 > Schema, checklist e gate test. Aggiornati overview Registry Pattern e nav
 > Developer Manual. MkDocs strict build e cross-boundary link check verdi.
+>
+> **Note implementazione (24 Luglio 2026)**: scorporati nella Signal Plugin Guide
+> il diagramma del sottosistema e il sequence diagram delle chiamate; documentato
+> `SignalValueRegion.line_style`. Home EN aggiornata con il quarto nodo orbitale
+> Technical Signal Plugins, contributi EN collegati alla guida. MkDocs strict
+> build e link check restano verdi; traduzioni rinviate alla pipeline.
+>
+> **Note implementazione (24 Luglio 2026, round 2)**: diagramma architetturale
+> ridotto a un flusso verticale con sole relazioni dirette e frecce orientate;
+> rimossi collegamenti senza punta e fan-out incrociati. Documentati
+> `SignalOutputStyle`, ruoli colore semantici, legenda card condivisa, scelte
+> standard ADX/MACD/PPO/Stochastic RSI e soglia warning 95%/7.
 
 **Obiettivo**
 

@@ -12,14 +12,17 @@ from backend.app.schemas.signals import (
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDataPolicy,
     SignalDomain,
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
@@ -82,23 +85,39 @@ class AdxSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="adx",
             label_key="signals.adx.adx",
+            description_key="signals.adx.adxDescription",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.PRIMARY,
+                line_pattern=SignalLinePattern.SOLID,
+                width_delta=1,
+            ),
         ),
         SignalOutputSpec(
             key="plus_di",
             label_key="signals.adx.plusDi",
+            description_key="signals.adx.plusDiDescription",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.POSITIVE,
+                line_pattern=SignalLinePattern.SOLID,
+            ),
         ),
         SignalOutputSpec(
             key="minus_di",
             label_key="signals.adx.minusDi",
+            description_key="signals.adx.minusDiDescription",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.NEGATIVE,
+                line_pattern=SignalLinePattern.SOLID,
+            ),
         ),
     )
     compatible_domains = (SignalDomain.ASSET,)
@@ -163,8 +182,10 @@ class AdxSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    description_key=spec.description_key,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
+                    style=spec.style.model_copy(deep=True),
                     points=[
                         SignalValuePoint(
                             date=point.date,

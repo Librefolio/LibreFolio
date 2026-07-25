@@ -46,8 +46,10 @@
     // Fixed (non-containLabel) grid bounds shared byte-for-byte with LotGanttChart.svelte so the
     // two charts' X axes are pixel-perfect aligned regardless of how wide either chart's Y-axis
     // labels happen to be (containLabel:true would make that alignment drift with content).
+    const GRID_TOP_PX = 62;
     const GRID_LEFT_PX = 56;
     const GRID_RIGHT_PX = 18;
+    const GRID_BOTTOM_PX = 34;
     const MARKER_CATEGORY_ORDER: Record<EventMarkerSeriesKind, number> = {
         buy: 0,
         sell: 1,
@@ -491,10 +493,10 @@
         return aggregateLineSeries(source, currentResolution).map((point) => namedPoint(point.date, Number.isFinite(point.value) ? point.value : null));
     }
 
-    function computeAbsoluteAutoYAxisBounds(): {min: number; max: number} | null {
+    function computeAutoYAxisBounds(valueKey: ValueKey): {min: number; max: number} | null {
         const values: number[] = [];
         const collectValues = (points: ValuePoint[]) => {
-            for (const point of aggregateValuePoints(points, 'absolute')) {
+            for (const point of aggregateValuePoints(points, valueKey)) {
                 const value = point.value[1];
                 if (value == null || value === 0 || !Number.isFinite(value)) continue;
                 values.push(value);
@@ -502,19 +504,36 @@
         };
 
         for (const brokerSeries of groupedChartData.realSeries) {
-            if (brokerSeries.hasAbsoluteData) collectValues(brokerSeries.points);
+            if (brokerSeries.points.some((point) => point[valueKey] != null)) collectValues(brokerSeries.points);
         }
-        if (groupedChartData.combinedSeries?.hasAbsoluteData) collectValues(groupedChartData.combinedSeries.points);
-        if (groupedChartData.marketPricePoints.some((point) => point.absolute != null)) collectValues(groupedChartData.marketPricePoints);
+        if (groupedChartData.combinedSeries?.points.some((point) => point[valueKey] != null)) collectValues(groupedChartData.combinedSeries.points);
+        if (groupedChartData.marketPricePoints.some((point) => point[valueKey] != null)) collectValues(groupedChartData.marketPricePoints);
+
+        const bubbles = buildRenderableLotBubbles();
+        values.push(...bubbles.map((entry) => entry.yValue));
+        if (valueKey === 'percent' || absYFromZero) values.push(0);
 
         if (values.length === 0) return null;
         const min = Math.min(...values);
         const max = Math.max(...values);
         const span = max - min;
-        const padding = span > 0 ? span * 0.04 : Math.max(Math.abs(min), Math.abs(max)) * 0.04;
+        const padding = span > 0 ? span * 0.04 : Math.max(Math.abs(min), Math.abs(max), 1) * 0.04;
+        let paddedMin = min - padding;
+        let paddedMax = max + padding;
+
+        const maxBubbleRadius = Math.max(0, ...bubbles.map((entry) => entry.radius));
+        if (maxBubbleRadius > 0) {
+            const plotHeight = Math.max(1, (chartContainer?.clientHeight ?? 288) - GRID_TOP_PX - GRID_BOTTOM_PX);
+            const edgeFraction = Math.min(0.3, maxBubbleRadius / plotHeight);
+            const paddedSpan = paddedMax - paddedMin;
+            const bubblePadding = (paddedSpan * edgeFraction) / Math.max(0.1, 1 - 2 * edgeFraction);
+            paddedMin -= bubblePadding;
+            paddedMax += bubblePadding;
+        }
+
         return {
-            min: min - padding,
-            max: max + padding,
+            min: paddedMin,
+            max: paddedMax,
         };
     }
 
@@ -1093,6 +1112,14 @@
         active: boolean;
     }
 
+    interface RenderableLotBubble {
+        point: LotBubblePoint;
+        baseY: number;
+        yValue: number;
+        metric: number;
+        radius: number;
+    }
+
     function lotBubbleFillColor(brokerId: number | null): string {
         if (brokerId == null) return isDark ? '#94a3b8' : '#475569';
         const colors = getBrokerColor(brokerId, brokers);
@@ -1188,11 +1215,7 @@
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(point.label), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
-    /** Per-lot performance bubbles + dashed baseline→bubble connectors (ABS: from the lot's opening unit
-     * price / cost basis; %: from the 0% baseline) + a small centre marker whose shape/colour encodes the
-     * lot's open/partial/closed state. Empty selection = all visible lots highlighted; otherwise
-     * non-selected bubbles are dimmed. */
-    function buildLotBubbleSeries(): echarts.SeriesOption[] {
+    function buildRenderableLotBubbles(): RenderableLotBubble[] {
         const isAbsolute = displayMode === 'absolute';
         const renderable = lotBubblePoints
             .map((point) => {
@@ -1222,6 +1245,19 @@
         const metrics = renderable.map((entry) => entry.metric);
         const minMetric = Math.min(...metrics);
         const maxMetric = Math.max(...metrics);
+        return renderable.map((entry) => ({
+            ...entry,
+            radius: lotBubbleRadius(entry.metric, minMetric, maxMetric),
+        }));
+    }
+
+    /** Per-lot performance bubbles + dashed baseline→bubble connectors (ABS: from the lot's opening unit
+     * price / cost basis; %: from the 0% baseline) + a small centre marker whose shape/colour encodes the
+     * lot's open/partial/closed state. Empty selection = all visible lots highlighted; otherwise
+     * non-selected bubbles are dimmed. */
+    function buildLotBubbleSeries(): echarts.SeriesOption[] {
+        const renderable = buildRenderableLotBubbles();
+        if (renderable.length === 0) return [];
 
         const series: echarts.SeriesOption[] = [];
 
@@ -1256,7 +1292,7 @@
                 value: [entry.point.openingDate, entry.yValue],
                 lotBubbleId: entry.point.lotId,
                 point: entry.point,
-                symbolSize: lotBubbleRadius(entry.metric, minMetric, maxMetric) * 2,
+                symbolSize: entry.radius * 2,
                 itemStyle: {
                     color: entry.point.fillColor,
                     borderColor: isDark ? '#0f172a' : '#ffffff',
@@ -1562,7 +1598,9 @@
         const gridColors = buildGridColors(isDark);
         const series = attachIncomeMarkers(buildSeries());
         const xAxisBounds = getXAxisBounds();
-        const absoluteAutoYBounds = displayMode === 'absolute' && !absYFromZero ? computeAbsoluteAutoYAxisBounds() : null;
+        const autoYBounds = computeAutoYAxisBounds(displayMode === 'absolute' ? 'absolute' : 'percent');
+        const yAxisMin = displayMode === 'percentage' ? (autoYBounds ? Math.min(0, autoYBounds.min) : (value: {min: number}) => Math.min(0, value.min)) : absYFromZero ? 0 : ((autoYBounds?.min ?? null) as unknown as number);
+        const yAxisMax = displayMode === 'percentage' ? (autoYBounds ? Math.max(0, autoYBounds.max) : (value: {max: number}) => Math.max(0, value.max)) : ((autoYBounds?.max ?? null) as unknown as number);
 
         // In percentage mode, emphasise the 0% baseline so gains/losses read against a clear zero.
         if (displayMode === 'percentage') {
@@ -1587,9 +1625,9 @@
         return {
             ...CHART_ANIMATION_CONFIG,
             grid: {
-                top: 62,
+                top: GRID_TOP_PX,
                 right: GRID_RIGHT_PX,
-                bottom: 34,
+                bottom: GRID_BOTTOM_PX,
                 left: GRID_LEFT_PX,
                 containLabel: false,
             },
@@ -1646,8 +1684,8 @@
                 // Always set min/max explicitly: setOption merges yAxis, so omitting them lets the
                 // percentage-mode 0-clamp persist into absolute mode (user report). Runtime null =
                 // "auto" (ECharts clears the merged bound); cast keeps TS happy without changing it.
-                min: displayMode === 'percentage' ? (v: {min: number}) => Math.min(0, v.min) : absYFromZero ? 0 : ((absoluteAutoYBounds?.min ?? null) as unknown as number),
-                max: displayMode === 'percentage' ? (v: {max: number}) => Math.max(0, v.max) : ((absoluteAutoYBounds?.max ?? null) as unknown as number),
+                min: yAxisMin,
+                max: yAxisMax,
                 axisLine: {show: false},
                 axisTick: {show: false},
                 splitLine: {

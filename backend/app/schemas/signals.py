@@ -112,6 +112,21 @@ class SignalSeriesKind(StrEnum):
     BAND = "band"
 
 
+class SignalLinePattern(StrEnum):
+    SOLID = "solid"
+    DASHED = "dashed"
+    DOTTED = "dotted"
+
+
+class SignalColorRole(StrEnum):
+    PRIMARY = "primary"
+    SECONDARY = "secondary"
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+    NEUTRAL = "neutral"
+    ACCENT = "accent"
+
+
 class SignalAxisRole(StrEnum):
     PRICE = "price"
     INDEPENDENT = "independent"
@@ -301,14 +316,30 @@ class SignalReferenceLevel(SignalModel):
     value: FiniteFloat
 
 
+class SignalOutputStyle(SignalModel):
+    color_role: SignalColorRole = SignalColorRole.PRIMARY
+    line_pattern: Optional[SignalLinePattern] = None
+    width_delta: int = Field(0, ge=-3, le=3)
+    opacity: FiniteFloat = Field(1.0, gt=0, le=1)
+
+
+class SignalRegionLineStyle(SignalModel):
+    pattern: SignalLinePattern
+    color_role: SignalColorRole = SignalColorRole.PRIMARY
+    width_delta: int = Field(0, ge=-3, le=3)
+    opacity: FiniteFloat = Field(1.0, gt=0, le=1)
+
+
 class SignalValueRegion(SignalModel):
     key: str = Field(..., pattern=_KEY_PATTERN)
     label_key: str = Field(..., min_length=1)
+    description_key: Optional[str] = Field(None, min_length=1)
     semantic: str = Field(..., min_length=1)
     lower: Optional[FiniteFloat] = None
     upper: Optional[FiniteFloat] = None
     include_lower: bool = True
     include_upper: bool = False
+    line_style: Optional[SignalRegionLineStyle] = None
 
     @model_validator(mode="after")
     def validate_bounds(self) -> SignalValueRegion:
@@ -322,9 +353,11 @@ class SignalValueRegion(SignalModel):
 class SignalOutputBase(SignalModel):
     key: str = Field(..., pattern=_KEY_PATTERN)
     label_key: str = Field(..., min_length=1)
+    description_key: Optional[str] = Field(None, min_length=1)
     unit: SignalUnit
     axis: SignalAxisSpec
     view_transform: SignalViewTransform = SignalViewTransform.NONE
+    style: SignalOutputStyle = Field(default_factory=SignalOutputStyle)
 
 
 class SignalOutputSpec(SignalOutputBase):
@@ -543,6 +576,7 @@ class SignalInputCoverage(SignalModel):
     observed_points: int = Field(..., ge=0)
     backfilled_points: int = Field(..., ge=0)
     missing_points: int = Field(..., ge=0)
+    max_consecutive_missing_points: int = Field(0, ge=0)
     internal_gap_count: int = Field(..., ge=0)
     coverage_ratio: FiniteFloat = Field(..., ge=0, le=1)
     field_coverage: Dict[SignalPriceField, FiniteFloat] = Field(default_factory=dict)
@@ -560,6 +594,8 @@ class SignalInputCoverage(SignalModel):
             raise ValueError("observed_points + backfilled_points must equal available_points")
         if self.missing_points != self.requested_points - self.available_points:
             raise ValueError("missing_points must equal requested_points - available_points")
+        if self.max_consecutive_missing_points > self.missing_points:
+            raise ValueError("max_consecutive_missing_points cannot exceed missing_points")
         if self.internal_gap_count > self.missing_points:
             raise ValueError("internal_gap_count cannot exceed missing_points")
         if self.missing_points == 0 and self.contiguous_points != self.available_points:

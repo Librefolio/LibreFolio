@@ -290,7 +290,7 @@ class PortfolioHolding(BaseModel):
     gain_loss_percent: Optional[SafeDecimal] = None
     price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")
     gain_loss_change_1d: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L vs previous day using current quantity and base-currency prices")
-    gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="gain_loss_change_1d as percentage of previous day's unrealized P&L; None if prior unrealized P&L is ~0")
+    gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="Daily unrealized P&L change as percentage of the previous day's absolute position market value; None if prior value is ~0")
     allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
     nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
 

@@ -13,13 +13,16 @@ from backend.app.schemas.signals import (
     SignalAxisSpec,
     SignalBarSeries,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDomain,
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
@@ -108,23 +111,36 @@ class MacdSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="macd",
             label_key="signals.macd.line",
+            description_key="signals.macd.lineDescription",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.PRIMARY,
+                line_pattern=SignalLinePattern.SOLID,
+                width_delta=1,
+            ),
         ),
         SignalOutputSpec(
             key="signal",
             label_key="signals.macd.signal",
+            description_key="signals.macd.signalDescription",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.SECONDARY,
+                line_pattern=SignalLinePattern.DASHED,
+            ),
         ),
         SignalOutputSpec(
             key="histogram",
             label_key="signals.macd.histogram",
+            description_key="signals.macd.histogramDescription",
             kind=SignalSeriesKind.BAR,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
+            style=SignalOutputStyle(color_role=SignalColorRole.NEUTRAL),
         ),
     )
     compatible_domains = (SignalDomain.ASSET, SignalDomain.FX)
@@ -190,9 +206,11 @@ class MacdSignalPlugin(SignalPlugin):
                 series_type(
                     key=spec.key,
                     label_key=spec.label_key,
+                    description_key=spec.description_key,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,
+                    style=spec.style.model_copy(deep=True),
                     points=[
                         SignalValuePoint(
                             date=point.date,

@@ -192,6 +192,8 @@ async def test_all_seventeen_plugins_batch_ok_on_asset(
         plugin_class = SignalPluginRegistry.get_plugin(result.signal_code)
         assert [series.key for series in result.series] == [spec.key for spec in plugin_class.output_specs]
         assert [series.kind for series in result.series] == [spec.kind for spec in plugin_class.output_specs]
+        assert [series.style for series in result.series] == [spec.style for spec in plugin_class.output_specs]
+        assert [series.description_key for series in result.series] == [spec.description_key for spec in plugin_class.output_specs]
         assert all(len(series.points) == VISIBLE_POINTS for series in result.series)
         assert result.model_dump_json()
 

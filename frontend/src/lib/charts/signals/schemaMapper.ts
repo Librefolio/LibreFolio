@@ -13,6 +13,7 @@ interface JsonSchemaProperty {
     ['x-suffix']?: unknown;
     ['x-step']?: unknown;
     ['x-tooltip-key']?: unknown;
+    ['x-affects-outputs']?: unknown;
 }
 
 interface JsonObjectSchema {
@@ -49,6 +50,14 @@ function readProperties(schema: JsonObjectSchema): Record<string, JsonSchemaProp
         throw new UnsupportedSignalSchemaError('Signal params schema must be an object with properties');
     }
     return schema.properties as Record<string, JsonSchemaProperty>;
+}
+
+function readAffectedOutputs(key: string, value: unknown): string[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== 'string' || item.length === 0)) {
+        throw new UnsupportedSignalSchemaError(`Signal parameter '${key}' has invalid x-affects-outputs metadata`);
+    }
+    return value;
 }
 
 function mapPropertyType(key: string, property: JsonSchemaProperty): Pick<SignalParamDescriptor, 'type' | 'integer' | 'options'> {
@@ -100,6 +109,7 @@ export function mapSignalParamsSchema(paramsSchema: Record<string, unknown>, def
                 step: asFiniteNumber(property['x-step']) ?? asFiniteNumber(property.multipleOf),
                 suffix: asString(property['x-suffix']),
                 tooltip: asString(property['x-tooltip-key']),
+                affectsOutputs: readAffectedOutputs(key, property['x-affects-outputs']),
                 order,
                 ...mappedType,
             };

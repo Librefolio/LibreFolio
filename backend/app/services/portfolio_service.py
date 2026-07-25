@@ -1247,10 +1247,11 @@ class PortfolioService:
                         # inflating the daily delta by quote_base_quantity× for such assets
                         # (reported: a BTP position showed a +93.60% "1-day" P&L swing).
                         # Reuse compute_holding_value for both legs so the scaling matches.
-                        gain_loss_change_1d = compute_holding_value(ps.quantity, current_price, asset.quote_base_quantity) - compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
-                        gain_loss_yesterday = gain_loss - gain_loss_change_1d if gain_loss is not None else None
-                        if gain_loss_yesterday is not None and abs(gain_loss_yesterday) > Decimal("0.01"):
-                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(gain_loss_yesterday) * 100).quantize(Decimal("0.01"))
+                        current_position_value = compute_holding_value(ps.quantity, current_price, asset.quote_base_quantity)
+                        previous_position_value = compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
+                        gain_loss_change_1d = current_position_value - previous_position_value
+                        if abs(previous_position_value) > Decimal("0.01"):
+                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
 
             if ps.valuation_source == "MISSING":
                 missing_price_assets.append(
