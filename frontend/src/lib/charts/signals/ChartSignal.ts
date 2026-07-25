@@ -58,12 +58,39 @@ export interface SignalParamDescriptor {
      * e.g. 'chartSettings.tooltips.period'
      */
     tooltip?: string;
+    /** Backend output keys affected by this parameter. */
+    affectsOutputs?: string[];
 }
 
 export type SignalDomain = 'asset' | 'fx';
 export type SignalDefinitionSource = 'local' | 'backend';
 export type SignalIndicatorGroup = 'trend' | 'momentum' | 'volatility' | 'volume';
 export type SignalInputField = 'open' | 'high' | 'low' | 'close' | 'volume';
+export type SignalColorRole = 'primary' | 'secondary' | 'positive' | 'negative' | 'neutral' | 'accent';
+
+export interface SignalVisualStyle {
+    colorRole: SignalColorRole;
+    lineType?: 'solid' | 'dashed' | 'dotted';
+    lineWidthDelta: number;
+    opacity: number;
+}
+
+export interface SignalVisualComponent {
+    key: string;
+    labelKey: string;
+    descriptionKey?: string;
+    kind: 'line' | 'bar' | 'band';
+    style: SignalVisualStyle;
+    fullyPartitioned: boolean;
+}
+
+export interface SignalVisualPartition {
+    key: string;
+    labelKey: string;
+    descriptionKey?: string;
+    semantic: string;
+    style: SignalVisualStyle;
+}
 
 /**
  * Selector/configuration metadata. Unlike SignalConfig, this describes a signal
@@ -83,6 +110,8 @@ export interface SignalDefinition {
     indicatorGroup?: SignalIndicatorGroup;
     inputPriceFields?: SignalInputField[];
     compatibleDomains?: SignalDomain[];
+    visualComponents?: SignalVisualComponent[];
+    visualPartitions?: SignalVisualPartition[];
     paramsSchema?: Record<string, unknown>;
     defaultParams?: Record<string, unknown>;
 }
@@ -138,6 +167,10 @@ export interface SignalConfig {
     params: Record<string, unknown>;
     /** Rendering style */
     style: SignalStyle;
+    /** Per-output style overrides for backend signal components. */
+    componentStyles?: Record<string, SignalStyle>;
+    /** Per-region style overrides for backend threshold/value partitions. */
+    partitionStyles?: Record<string, SignalStyle>;
 }
 
 /** Default color palette — cycled when adding new signals */
@@ -183,6 +216,8 @@ export interface RenderedSignal {
      *           (used for Bollinger Bands)
      */
     seriesType?: 'line' | 'bar' | 'band';
+    /** Signed histograms keep semantic green/red bars until explicitly overridden. */
+    barColorMode?: 'signed' | 'single';
     /**
      * Band data for confidence-band rendering (seriesType === 'band').
      * Contains parallel arrays for upper, middle, lower values aligned to `data[].date`.
@@ -216,6 +251,14 @@ export interface RenderedSignal {
         semantic: string;
         lower?: number;
         upper?: number;
+        includeLower: boolean;
+        includeUpper: boolean;
+        lineStyle?: {
+            lineType: 'solid' | 'dashed' | 'dotted';
+            lineWidth: number;
+            color: string;
+            opacity: number;
+        };
     }>;
 }
 

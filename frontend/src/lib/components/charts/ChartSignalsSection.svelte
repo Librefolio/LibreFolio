@@ -19,11 +19,10 @@
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import SignalParamControl from './SignalParamControl.svelte';
-    import SignalOptionContent from './SignalOptionContent.svelte';
+    import SignalVisualLegend from './SignalVisualLegend.svelte';
     import SignalTreeSelect, {type SignalTreeGroup} from './SignalTreeSelect.svelte';
-    import type {SelectOption} from '$lib/components/ui/select/types';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {createSignalConfig, getRegisteredSignalTypes, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalProblem, type SignalStyle} from '$lib/charts/signals';
+    import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/charts/signals';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
@@ -113,12 +112,6 @@
         return translated !== definition.displayNameKey ? translated : definition.displayName;
     }
 
-    /** Extract typed data from dropdown option (avoids TS `as` cast in template) */
-    function getOptionData(option: SelectOption): {name: string; subtitle: string} {
-        const d = (option.data ?? {}) as Record<string, string>;
-        return {name: d.name ?? '', subtitle: d.subtitle ?? ''};
-    }
-
     function translatedValue(key: string | undefined): string {
         if (!key) return '';
         const value = $t(key);
@@ -147,6 +140,23 @@
 
     function signalFieldLabel(field: SignalInputField): string {
         return $t(`signals.dataFields.${field}`);
+    }
+
+    function humanizeSignalKey(value: string): string {
+        return value
+            .replaceAll('_', ' ')
+            .replaceAll('-', ' ')
+            .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    }
+
+    function signalParamAffectsLabel(definition: SignalDefinition, descriptor: SignalParamDescriptor): string {
+        if (!descriptor.affectsOutputs?.length) return '';
+        return descriptor.affectsOutputs
+            .map((outputKey) => {
+                const component = definition.visualComponents?.find((item) => item.key === outputKey);
+                return component ? translatedValue(component.labelKey) || humanizeSignalKey(component.key) : humanizeSignalKey(outputKey);
+            })
+            .join(' · ');
     }
 
     function problemCount(value: number | null): string {
@@ -202,6 +212,7 @@
                             available: problemCount(problem.availablePoints),
                             requested: problemCount(problem.requestedPoints),
                             coverage: problemCount(problem.coveragePercent),
+                            consecutive: problemCount(problem.maxConsecutiveMissingPoints),
                         },
                     });
                 }
@@ -228,17 +239,45 @@
         }
     }
 
-    function getSignalIssueMessage(signal: SignalConfig): string | null {
+    interface SignalIssue {
+        message: string;
+        severity: SignalProblemSeverity;
+    }
+
+    function getSignalIssue(signal: SignalConfig): SignalIssue | null {
         const summary = signalSummaries.get(signal.id);
-        if (summary?.problem) return formatSignalProblem(summary.problem);
-        if (signal.signalType === 'asset-comparison' && signal.params._conversionFailed) {
-            return signal.params._conversionError ? String(signal.params._conversionError) : $t('chartSettings.conversionFailed');
+        if (summary?.problem) {
+            return {
+                message: formatSignalProblem(summary.problem),
+                severity: getSignalProblemSeverity(summary.problem),
+            };
         }
-        if (summary && summary.pointCount === 0) return $t('chartSettings.noDataAvailable');
+        if (signal.signalType === 'asset-comparison' && signal.params._conversionFailed) {
+            return {
+                message: signal.params._conversionError ? String(signal.params._conversionError) : $t('chartSettings.conversionFailed'),
+                severity: 'error',
+            };
+        }
+        if (summary && summary.pointCount === 0) {
+            return {
+                message: $t('chartSettings.noDataAvailable'),
+                severity: 'error',
+            };
+        }
         if (summary?.firstDate && dateStart && summary.firstDate > dateStart) {
-            return $t('chartSettings.dataMissingBefore', {values: {date: summary.firstDate}});
+            return {
+                message: $t('chartSettings.dataMissingBefore', {values: {date: summary.firstDate}}),
+                severity: 'warning',
+            };
         }
         return null;
+    }
+
+    function getSignalCardTone(signal: SignalConfig): 'default' | 'warning' | 'error' {
+        const severity = getSignalIssue(signal)?.severity;
+        if (severity === 'error') return 'error';
+        if (severity === 'warning') return 'warning';
+        return 'default';
     }
 
     function getParamNumber(signal: SignalConfig, key: string, fallback: unknown): number {
@@ -258,8 +297,8 @@
     const INDICATOR_GROUP_ORDER: SignalIndicatorGroup[] = ['trend', 'momentum', 'volatility', 'volume'];
     const INPUT_FIELD_ORDER: SignalInputField[] = ['open', 'high', 'low', 'close', 'volume'];
 
-    function groupDataSubtitle(definitions: SignalDefinition[]): string {
-        const fields = new Set(definitions.flatMap((definition) => definition.inputPriceFields ?? []));
+    function signalDataSubtitle(definition: SignalDefinition): string {
+        const fields = new Set(definition.inputPriceFields ?? []);
         const labels = INPUT_FIELD_ORDER.filter((field) => fields.has(field)).map((field) => $t(`signals.dataFields.${field}`));
         return `${$t('signals.dataUsed')}: ${labels.join(', ')}`;
     }
@@ -270,41 +309,52 @@
             return {
                 key: groupKey,
                 label: $t(`signals.groups.${groupKey}`),
-                subtitle: groupDataSubtitle(items),
+                subtitle: $t('signals.dataShownPerIndicator'),
                 items: items.map((definition) => {
                     const name = getSignalName(definition);
                     const subtitle = getSignalSubtitle(definition);
+                    const dataSubtitle = signalDataSubtitle(definition);
                     return {
                         value: definition.type,
                         icon: definition.icon,
                         name,
                         subtitle,
-                        searchText: `${definition.type} ${definition.backendSignalCode ?? ''} ${name} ${subtitle}`.toLocaleLowerCase(),
+                        dataSubtitle,
+                        searchText: `${definition.type} ${definition.backendSignalCode ?? ''} ${name} ${subtitle} ${dataSubtitle}`.toLocaleLowerCase(),
                     };
                 }),
             };
         }).filter((group) => group.items.length > 0),
     );
 
-    let comparisonOptions: SelectOption[] = $derived(
-        signalTypes
-            .filter((st) => st.category === 'comparison')
-            .map((st) => {
-                const name = getSignalName(st);
-                const subtitle = getSignalSubtitle(st);
-                return {value: st.type, label: subtitle ? `${name} — ${subtitle}` : name, searchText: `${name} ${subtitle}`, icon: st.icon, data: {name, subtitle}};
-            }),
-    );
+    function flatSignalGroups(category: 'comparison' | 'benchmark'): SignalTreeGroup[] {
+        const items = signalTypes
+            .filter((definition) => definition.category === category)
+            .map((definition) => {
+                const name = getSignalName(definition);
+                const subtitle = getSignalSubtitle(definition);
+                return {
+                    value: definition.type,
+                    icon: definition.icon,
+                    name,
+                    subtitle,
+                    searchText: `${definition.type} ${name} ${subtitle}`.toLocaleLowerCase(),
+                };
+            });
+        return items.length > 0
+            ? [
+                  {
+                      key: category,
+                      label: '',
+                      subtitle: '',
+                      items,
+                  },
+              ]
+            : [];
+    }
 
-    let benchmarkOptions: SelectOption[] = $derived(
-        signalTypes
-            .filter((st) => st.category === 'benchmark')
-            .map((st) => {
-                const name = getSignalName(st);
-                const subtitle = getSignalSubtitle(st);
-                return {value: st.type, label: subtitle ? `${name} — ${subtitle}` : name, searchText: `${name} ${subtitle}`, icon: st.icon, data: {name, subtitle}};
-            }),
-    );
+    let comparisonGroups = $derived(flatSignalGroups('comparison'));
+    let benchmarkGroups = $derived(flatSignalGroups('benchmark'));
 
     let indicatorSelect = $state('');
     let comparisonSelect = $state('');
@@ -347,6 +397,36 @@
 
     function updateSignalStyle<K extends keyof SignalStyle>(id: string, key: K, value: SignalStyle[K]) {
         signals = signals.map((s) => (s.id === id ? {...s, style: {...s.style, [key]: value}} : s));
+        emitChange();
+    }
+
+    function updateSignalComponentStyle(id: string, componentKey: string, style: SignalStyle) {
+        signals = signals.map((signal) =>
+            signal.id === id
+                ? {
+                      ...signal,
+                      componentStyles: {
+                          ...signal.componentStyles,
+                          [componentKey]: style,
+                      },
+                  }
+                : signal,
+        );
+        emitChange();
+    }
+
+    function updateSignalPartitionStyle(id: string, partitionKey: string, style: SignalStyle) {
+        signals = signals.map((signal) =>
+            signal.id === id
+                ? {
+                      ...signal,
+                      partitionStyles: {
+                          ...signal.partitionStyles,
+                          [partitionKey]: style,
+                      },
+                  }
+                : signal,
+        );
         emitChange();
     }
 
@@ -457,56 +537,36 @@
                     />
                 </div>
             {/if}
-            {#if comparisonOptions.length > 0}
+            {#if comparisonGroups.length > 0}
                 <div>
                     <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">💱 {$t('chartSettings.categories.comparison')}</span>
-                    <SearchSelect
+                    <SignalTreeSelect
                         bind:value={comparisonSelect}
-                        options={comparisonOptions}
+                        groups={comparisonGroups}
                         placeholder={$t('common.select')}
-                        class="text-sm"
-                        dropdownPosition="auto"
-                        dropdownMinWidth={360}
-                        maxVisibleItems={8}
-                        inlineSearch={true}
+                        testId="signals-comparison-select"
+                        flat
                         onchange={(v) => {
                             addSignal(v);
                             comparisonSelect = '';
                         }}
-                    >
-                        {#snippet item(option)}
-                            {#if option.data}
-                                {@const d = getOptionData(option)}
-                                <SignalOptionContent icon={option.icon ?? '❓'} name={d.name} subtitle={d.subtitle} />
-                            {/if}
-                        {/snippet}
-                    </SearchSelect>
+                    />
                 </div>
             {/if}
-            {#if benchmarkOptions.length > 0}
+            {#if benchmarkGroups.length > 0}
                 <div>
                     <span class="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">📐 {$t('chartSettings.categories.benchmark')}</span>
-                    <SearchSelect
+                    <SignalTreeSelect
                         bind:value={benchmarkSelect}
-                        options={benchmarkOptions}
+                        groups={benchmarkGroups}
                         placeholder={$t('common.select')}
-                        class="text-sm"
-                        dropdownPosition="auto"
-                        dropdownMinWidth={360}
-                        maxVisibleItems={8}
-                        inlineSearch={true}
+                        testId="signals-benchmark-select"
+                        flat
                         onchange={(v) => {
                             addSignal(v);
                             benchmarkSelect = '';
                         }}
-                    >
-                        {#snippet item(option)}
-                            {#if option.data}
-                                {@const d = getOptionData(option)}
-                                <SignalOptionContent icon={option.icon ?? '❓'} name={d.name} subtitle={d.subtitle} />
-                            {/if}
-                        {/snippet}
-                    </SearchSelect>
+                    />
                 </div>
             {/if}
         </div>
@@ -517,7 +577,7 @@
             {$t('chartSettings.noSignals')}
         </p>
     {:else}
-        <OrderableList items={signals} keyFn={(s) => s.id} onReorder={handleSignalReorder} responsiveGrid minItemWidth="32rem" itemTone={(signal) => (getSignalIssueMessage(signal) ? 'warning' : 'default')}>
+        <OrderableList items={signals} keyFn={(s) => s.id} onReorder={handleSignalReorder} responsiveGrid minItemWidth="32rem" itemTone={getSignalCardTone}>
             {#snippet children({item: signal})}
                 {#if true}
                     {@const typeInfo = getSignalTypeInfo(signal.signalType)}
@@ -525,7 +585,7 @@
                     {@const signalFullName = getSignalFullName(signal.signalType)}
                     {@const signalDescText = getSignalDesc(signal.signalType)}
                     {@const summary = signalSummaries.get(signal.id)}
-                    {@const issueMessage = getSignalIssueMessage(signal)}
+                    {@const issue = getSignalIssue(signal)}
                     {@const conversionFailed = signal.signalType === 'asset-comparison' && Boolean(signal.params._conversionFailed)}
                     <div class="space-y-2">
                         <!-- Signal header -->
@@ -539,9 +599,17 @@
                                 {#if typeInfo?.docsPath}
                                     <DocsLink path={typeInfo.docsPath} label={signalDescText || signalName} math />
                                 {/if}
-                                {#if issueMessage}
-                                    <Tooltip text={issueMessage} position="top">
-                                        <AlertTriangle size={13} class="text-amber-500 shrink-0 cursor-help" />
+                                {#if issue}
+                                    <Tooltip text={issue.message} position="top" maxWidth="min(34rem, calc(100vw - 16px))">
+                                        {#if issue.severity === 'notice'}
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center text-gray-400 sm:my-0 sm:h-4 sm:w-4">
+                                                <Info size={14} class="cursor-help" />
+                                            </span>
+                                        {:else}
+                                            <span class="-my-2 flex h-9 w-9 shrink-0 items-center justify-center sm:my-0 sm:h-4 sm:w-4 {issue.severity === 'error' ? 'text-red-500' : 'text-amber-500'}">
+                                                <AlertTriangle size={14} class="cursor-help" />
+                                            </span>
+                                        {/if}
                                     </Tooltip>
                                 {/if}
                             </div>
@@ -574,7 +642,7 @@
                             <div class="flex flex-wrap gap-2">
                                 {#each typeInfo.paramDescriptors as desc}
                                     {#if typeInfo.source === 'backend'}
-                                        <SignalParamControl descriptor={desc} value={signal.params[desc.key]} onchange={(value) => updateSignalParam(signal.id, desc.key, value)} />
+                                        <SignalParamControl descriptor={desc} value={signal.params[desc.key]} affectsLabel={signalParamAffectsLabel(typeInfo, desc)} onchange={(value) => updateSignalParam(signal.id, desc.key, value)} />
                                     {:else}
                                         <div class="flex items-center gap-1.5">
                                             <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
@@ -783,8 +851,18 @@
                             </div>
                         {/if}
 
-                        <!-- Style strip (non-MACD) -->
-                        {#if typeInfo?.source === 'backend' || signal.signalType !== 'macd'}
+                        {#if typeInfo?.source === 'backend'}
+                            <SignalVisualLegend
+                                definition={typeInfo}
+                                {signalName}
+                                config={signal}
+                                oncomponentstylechange={(componentKey, style) => updateSignalComponentStyle(signal.id, componentKey, style)}
+                                onpartitionstylechange={(partitionKey, style) => updateSignalPartitionStyle(signal.id, partitionKey, style)}
+                            />
+                        {/if}
+
+                        <!-- Local signal style strip. Backend components own their individual editors above. -->
+                        {#if typeInfo?.source !== 'backend' && signal.signalType !== 'macd'}
                             <div class="pt-1.5 border-t border-gray-100 dark:border-slate-700">
                                 <SignalStyleEditor style={signal.style} onstylechange={(key, value) => updateSignalStyle(signal.id, key, value)} hideLineType={typeInfo?.source === 'local' && signal.signalType === 'rsi'} />
                             </div>

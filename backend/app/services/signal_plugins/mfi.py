@@ -24,11 +24,13 @@ from backend.app.schemas.signals import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalSeriesKind,
     SignalUnit,
     SignalValuePoint,
@@ -93,6 +95,11 @@ _MFI_AXIS = SignalAxisSpec(
     minimum=0,
     maximum=100,
 )
+_EXTREME_LINE_STYLE = SignalRegionLineStyle(
+    pattern=SignalLinePattern.SOLID,
+    width_delta=1,
+)
+_NEUTRAL_LINE_STYLE = SignalRegionLineStyle(pattern=SignalLinePattern.DASHED)
 _DEFAULT_LEVELS = [
     SignalReferenceLevel(
         key="oversold",
@@ -111,25 +118,31 @@ _DEFAULT_REGIONS = [
     SignalValueRegion(
         key="oversold",
         label_key="signals.mfi.oversoldRegion",
+        description_key="signals.regions.oversoldDescription",
         semantic="oversold",
         upper=20,
         include_upper=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
     SignalValueRegion(
         key="neutral",
         label_key="signals.mfi.neutralRegion",
+        description_key="signals.regions.neutralDescription",
         semantic="neutral",
         lower=20,
         upper=80,
         include_lower=True,
         include_upper=True,
+        line_style=_NEUTRAL_LINE_STYLE,
     ),
     SignalValueRegion(
         key="overbought",
         label_key="signals.mfi.overboughtRegion",
+        description_key="signals.regions.overboughtDescription",
         semantic="overbought",
         lower=80,
         include_lower=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
 ]
 
@@ -236,25 +249,31 @@ class MfiSignalPlugin(SignalPlugin):
             SignalValueRegion(
                 key="oversold",
                 label_key="signals.mfi.oversoldRegion",
+                description_key="signals.regions.oversoldDescription",
                 semantic="oversold",
                 upper=params.oversold,
                 include_upper=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="neutral",
                 label_key="signals.mfi.neutralRegion",
+                description_key="signals.regions.neutralDescription",
                 semantic="neutral",
                 lower=params.oversold,
                 upper=params.overbought,
                 include_lower=True,
                 include_upper=True,
+                line_style=_NEUTRAL_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="overbought",
                 label_key="signals.mfi.overboughtRegion",
+                description_key="signals.regions.overboughtDescription",
                 semantic="overbought",
                 lower=params.overbought,
                 include_lower=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
         ]
         spec = self.output_specs[0]

@@ -359,7 +359,7 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
     if (!signal.bandData) return [];
     const {upper, middle, lower} = signal.bandData;
     const bandColor = signal.color;
-    const bandOpacity = isDark ? 0.18 : 0.12;
+    const bandOpacity = (isDark ? 0.18 : 0.12) * (signal.opacity ?? 1);
 
     const signalDateIdx = new Map(signal.data.map((d, idx) => [d.date, idx]));
 
@@ -422,8 +422,8 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
             smooth: false,
             symbol: 'none',
             yAxisIndex: signal.yAxisIndex ?? 0,
-            lineStyle: {color: bandColor, width: signal.lineWidth, type: signal.lineType},
-            itemStyle: {color: bandColor},
+            lineStyle: {color: bandColor, width: signal.lineWidth, type: signal.lineType, opacity: signal.opacity ?? 1},
+            itemStyle: {color: bandColor, opacity: signal.opacity ?? 1},
             emphasis: {focus: 'none'},
             z: 1,
             ...buildSignalReferencePrimitives(signal, isDark),
@@ -441,7 +441,8 @@ export function buildBarSeries(signal: RenderedSignal, signalSeriesData: any[], 
         return {
             value: val,
             itemStyle: {
-                color: val >= 0 ? (isDark ? COLORS.greenDark : COLORS.greenLight) : isDark ? COLORS.redDark : COLORS.redLight,
+                color: signal.barColorMode === 'single' ? signal.color : val >= 0 ? (isDark ? COLORS.greenDark : COLORS.greenLight) : isDark ? COLORS.redDark : COLORS.redLight,
+                opacity: signal.opacity ?? 1,
             },
         };
     });
@@ -452,7 +453,7 @@ export function buildBarSeries(signal: RenderedSignal, signalSeriesData: any[], 
         data: barData,
         yAxisIndex: signal.yAxisIndex ?? 0,
         barWidth: '60%',
-        itemStyle: {color: signal.color},
+        itemStyle: {color: signal.color, opacity: signal.opacity ?? 1},
         emphasis: {focus: 'none'},
         z: 0,
         ...buildSignalReferencePrimitives(signal, isDark),

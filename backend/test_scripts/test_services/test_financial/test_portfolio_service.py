@@ -1136,7 +1136,7 @@ class TestNetDepositedCapital:
         assert len(summary.holdings) == 1
         assert summary.holdings[0].price_change_1d == Decimal("0.1000")
         assert summary.holdings[0].gain_loss_change_1d == Decimal("50")
-        assert summary.holdings[0].gain_loss_change_1d_percent == Decimal("100.00")
+        assert summary.holdings[0].gain_loss_change_1d_percent == Decimal("10.00")
 
     @pytest.mark.asyncio
     async def test_holding_gain_loss_change_1d_respects_quote_base_quantity(self, session, test_user, broker_with_access):
@@ -1226,9 +1226,58 @@ class TestNetDepositedCapital:
         # 100x too large. Explicitly guard against regressing to that.
         assert holding.gain_loss_change_1d != Decimal("1900")
 
-        expected_gain_loss_yesterday = holding.gain_loss - expected_change_1d
-        expected_pct = (expected_change_1d / abs(expected_gain_loss_yesterday) * 100).quantize(Decimal("0.01"))
+        previous_position_value = compute_holding_value(Decimal("10000"), Decimal("98.51"), 100)
+        expected_pct = (expected_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
         assert holding.gain_loss_change_1d_percent == expected_pct
+
+    @pytest.mark.asyncio
+    async def test_holding_daily_percent_uses_previous_position_value(self, session, test_user, broker_with_access):
+        """A small market move must stay small even when unrealized P&L is near zero."""
+        broker, _ = broker_with_access
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        asset = Asset(
+            display_name=f"DailyPercent_{utcnow().timestamp()}",
+            asset_type=AssetType.ETF,
+            currency="EUR",
+            quote_base_quantity=1,
+        )
+        session.add(asset)
+        await session.flush()
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    type=TransactionType.BUY,
+                    date=yesterday,
+                    amount=Decimal("-473.11"),
+                    currency="EUR",
+                    asset_id=asset.id,
+                    quantity=Decimal("17"),
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=yesterday,
+                    close=Decimal("27.81"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=today,
+                    close=Decimal("27.84"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+        holding = next(item for item in summary.holdings if item.asset_id == asset.id)
+
+        assert holding.gain_loss_change_1d == Decimal("0.51")
+        assert holding.gain_loss_change_1d_percent == Decimal("0.11")
 
 
 class TestPortfolioServiceDateAwareDashboardData:

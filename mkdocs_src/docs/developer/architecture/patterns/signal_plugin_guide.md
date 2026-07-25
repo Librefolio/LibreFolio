@@ -15,16 +15,34 @@ Signal plugins own indicator-specific behavior. Shared infrastructure owns data 
 coverage policy, error isolation, annotations, and API serialization.
 
 ```mermaid
-flowchart LR
-    API["🌐 Asset / FX API"] --> PLAN["🧭 SignalService.prepare_plan()"]
-    PLAN --> LOAD["📚 Domain adapter loads extended data"]
-    LOAD --> POINTS["🔄 SignalPricePoint / SignalEventPoint"]
-    POINTS --> EXEC["🧠 SignalService.execute()"]
-    EXEC --> REG["🧩 SignalPluginRegistry"]
-    REG --> PLUGIN["📈 plugin.compute()"]
-    PLUGIN --> VALIDATE["🛡️ Contract validation + status"]
-    VALIDATE --> ANNOTATE["🎯 SignalAnnotationService"]
-    ANNOTATE --> RESULT["📦 Canonical SignalResult"]
+flowchart TB
+    CLIENTS["🖥️ Frontend charts<br/>🤖 AI export<br/>🔌 API clients"]
+
+    subgraph ADAPTERS["Domain adapters"]
+        DOMAIN["📈 Asset API<br/>💱 FX API"]
+    end
+
+    subgraph PLATFORM["Signal platform"]
+        CONTRACTS["📐 Canonical contracts<br/>prices · events · outputs · statuses"]
+        SERVICE["🧠 SignalService<br/>plan · coverage · execute · validate · slice"]
+        REGISTRY["🧩 SignalPluginRegistry<br/>discover · validate · resolve"]
+        ANNOTATIONS["🎯 SignalAnnotationService<br/>crossovers · thresholds"]
+        RUNTIME["🛡️ Runtime guard<br/>pandas-ta-classic + TA-Lib"]
+    end
+
+    subgraph PLUGINS["Python plugin boundary"]
+        ABC["🧱 SignalPlugin ABC"]
+        FAMILIES["📉 Trend · 🧭 Momentum<br/>🌊 Volatility · 📊 Volume"]
+    end
+
+    CLIENTS -->|"domain request"| DOMAIN
+    DOMAIN -->|"neutral price/event arrays"| SERVICE
+    CONTRACTS -->|"shared types"| SERVICE
+    SERVICE -->|"resolve plugin"| REGISTRY
+    SERVICE -->|"optional semantic events"| ANNOTATIONS
+    RUNTIME -->|"validate numerical stack"| REGISTRY
+    REGISTRY -->|"instantiate"| ABC
+    ABC -->|"implementations"| FAMILIES
 ```
 
 | Component | Responsibility |
@@ -45,6 +63,42 @@ flowchart LR
 ---
 
 ## 🔄 Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Frontend / AI client
+    participant A as Asset or FX adapter
+    participant S as SignalService
+    participant R as SignalPluginRegistry
+    participant P as SignalPlugin
+    participant N as SignalAnnotationService
+
+    C->>A: Bulk signal request
+    A->>S: prepare_plan(requests, context)
+    loop Each requested signal
+        S->>R: Resolve code and validate definition
+        R-->>S: Plugin class
+        S->>P: Validate params and warmup_requirement()
+        P-->>S: Validated params and required history
+    end
+    S-->>A: Deduplicated plan and union of input needs
+    A->>A: Load extended domain data once
+    A->>S: execute(plan, price_points, event_points)
+    loop Each planned plugin
+        S->>S: Check coverage, gaps, and warm-up
+        S->>P: compute(neutral points, params, context)
+        P-->>S: SignalComputation
+        S->>S: Validate canonical outputs and isolate failures
+    end
+    opt Annotation requests
+        S->>N: Derive crossings and threshold events
+        N-->>S: Canonical annotations
+    end
+    S->>S: Slice to visible range and assign status
+    S-->>A: SignalResult[]
+    A-->>C: One canonical bulk response
+```
 
 ### 1. 🧭 Planning
 
@@ -106,7 +160,7 @@ Every concrete plugin must declare:
 | `docs_path` | MkDocs path opened by the UI information button. |
 | `params_model` | Pydantic model with `extra="forbid"` and JSON Schema UI metadata. |
 | `input_requirements` | Required OHLCV fields, events, coverage, and data policy. |
-| `output_specs` | Declared line/bar/band outputs, units, axes, levels, and regions. |
+| `output_specs` | Declared line/bar/band components, descriptions, styles, units, axes, levels, and regions. |
 | `compatible_domains` | `ASSET`, `FX`, or both. |
 | `annotation_capabilities` | Supported generic annotation primitives. |
 | `warmup_requirement()` | Parameter-aware minimum and stabilization history. |
@@ -115,6 +169,58 @@ Every concrete plugin must declare:
 The base class converts this declaration into `SignalCatalogDefinition`. Therefore the
 frontend receives names, descriptions, parameter controls, required data, output shapes,
 and documentation links without a signal-specific UI implementation.
+
+### 🎨 Plugin-owned presentation
+
+Every output component can declare a canonical `style`:
+
+```python
+SignalOutputSpec(
+    key="plus_di",
+    label_key="signals.adx.plusDi",
+    description_key="signals.adx.plusDiDescription",
+    kind=SignalSeriesKind.LINE,
+    unit=SignalUnit.INDEX,
+    axis=adx_axis,
+    style=SignalOutputStyle(
+        color_role=SignalColorRole.POSITIVE,
+        line_pattern=SignalLinePattern.SOLID,
+    ),
+)
+```
+
+Supported color roles are semantic (`primary`, `secondary`, `positive`, `negative`,
+`neutral`, `accent`), not hard-coded hex colors. The frontend combines those roles with
+the user-selected base color and uses the same metadata for both chart rendering and the
+component legend inside the configuration card.
+
+The card exposes one independent style editor per output component and per value region.
+Overrides are stored in `SignalConfig.componentStyles` and
+`SignalConfig.partitionStyles`; they affect every chart surface without changing signal
+parameters or triggering a backend recomputation. The legacy top-level `style` remains a
+backward-compatible default for old saved configurations and frontend-local signals.
+
+When value regions cover an output's complete numeric domain, the redundant parent
+component editor is hidden automatically: RSI, CCI, and MFI show only their editable zones.
+For mixed outputs, only the partitioned component is hidden; Stochastic RSI therefore keeps
+the `%D` component editor while `%K` is represented by its complete zone set.
+
+Line components can customize color, pattern, width, and endpoint markers. Bands customize
+their middle line and fill color. Histograms keep signed green/red bars until the user
+chooses a component color, after which the selected single color is used.
+
+Value regions can declare their own `line_style`. The frontend applies those threshold
+rules to returned points and derives contiguous visual slices at render time. For example,
+RSI renders its neutral range as dashed while overbought and oversold segments remain
+solid, without an RSI-specific frontend switch.
+
+Multi-output indicators follow their financial definition:
+
+- ADX uses three lines: ADX for strength, `+DI` for positive direction, and `-DI` for
+  negative direction;
+- MACD and PPO use two lines plus a histogram because the histogram is itself a defined
+  output: line minus signal;
+- Stochastic RSI uses `%K` plus the smoothed `%D` signal line.
 
 ---
 
@@ -134,6 +240,11 @@ silently compacted. If a plugin can safely operate on one complete segment, it m
 `ALLOW_PARTIAL_CONTIGUOUS`. The service prefers the newest segment that satisfies the
 plugin's minimum history; otherwise it uses the longest sufficient segment. Output remains
 partial and never jumps across the gap.
+
+Coverage metadata includes both the total missing-point ratio and
+`max_consecutive_missing_points`. The UI keeps the backend `partial` status visible, but
+promotes it to an amber warning only when coverage is at most 95% or a missing streak is
+longer than seven cadence points. Smaller gaps remain an informational notice.
 
 !!! warning "A long history is not automatically complete"
 
@@ -293,12 +404,18 @@ period: int = Field(
         "x-suffix": "days",
         "x-step": 1,
         "x-tooltip-key": "chartSettings.tooltips.period",
+        "x-affects-outputs": ["line"],
     },
 )
 ```
 
 Prefer schema metadata over frontend conditionals. New parameter shapes should be added
 to the shared JSON Schema mapper only when they are reusable across plugins.
+
+For composite indicators, `x-affects-outputs` lists the output keys changed by a
+parameter. The generic card resolves those keys to localized component labels. Stochastic
+RSI, for example, declares that its main period affects `%K` and the derived `%D`, while
+`dPeriod` affects `%D` only and threshold parameters affect the `%K` zones.
 
 ---
 

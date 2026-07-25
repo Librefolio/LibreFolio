@@ -210,17 +210,18 @@ export function createSignalConfig(definition: SignalDefinition, existingCount: 
     const color = usedColors.length > 0 ? pickBestColor(usedColors) : DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length];
     const params = Object.fromEntries(definition.paramDescriptors.filter((descriptor) => descriptor.default !== undefined).map((descriptor) => [descriptor.key, descriptor.default]));
 
+    const style: SignalStyle = {
+        color,
+        lineWidth: 1,
+        lineType: definition.category === 'indicator' ? 'dotted' : definition.category === 'benchmark' ? 'dashed' : 'solid',
+        markerStart: null,
+        markerEnd: null,
+    };
     return {
         id: generateUUID(),
         signalType: definition.type,
         params,
-        style: {
-            color,
-            lineWidth: 1,
-            lineType: definition.category === 'indicator' ? 'dotted' : definition.category === 'benchmark' ? 'dashed' : 'solid',
-            markerStart: null,
-            markerEnd: null,
-        },
+        style,
     };
 }
 

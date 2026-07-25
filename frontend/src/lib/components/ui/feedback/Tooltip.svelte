@@ -66,7 +66,7 @@
 
     /** Grace period after a *pinned* tooltip loses contact (mouse leaves both
      *  trigger and tooltip, or a touch ends) before it auto-dismisses. */
-    const PINNED_LEAVE_GRACE_MS = 5000;
+    const PINNED_LEAVE_GRACE_MS = 30000;
     /** Near-instant delay for plain hover — bridges the gap between trigger
      *  and tooltip elements when the pointer moves from one to the other,
      *  without introducing a perceptible "stays open" timer. */
@@ -365,6 +365,15 @@
         overflow-y: auto;
         cursor: default;
         user-select: text;
+    }
+
+    @media (max-width: 640px) {
+        .tooltip-fixed {
+            min-width: min(18rem, calc(100vw - 20px));
+            padding: 0.75rem 0.875rem;
+            font-size: 0.875rem;
+            line-height: 1.35rem;
+        }
     }
 
     /* Dark mode tooltip */

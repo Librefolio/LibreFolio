@@ -69,6 +69,8 @@ describe('signal catalog mapper', () => {
         expect(definition.indicatorGroup).toBe('trend');
         expect(definition.inputPriceFields).toEqual(['close']);
         expect(definition.compatibleDomains).toEqual(['asset', 'fx']);
+        expect(definition.visualComponents).toHaveLength(1);
+        expect(definition.visualComponents?.[0].fullyPartitioned).toBe(false);
         expect(definition.paramDescriptors[0]).toMatchObject({
             key: 'period',
             type: 'number',
@@ -107,5 +109,83 @@ describe('signal catalog mapper', () => {
             markerStart: null,
             markerEnd: null,
         });
+    });
+
+    it('marks backend line styles controlled by value regions', () => {
+        const catalog = makeCatalog('RSI');
+        catalog.output_specs[0].style = {
+            color_role: 'accent',
+            line_pattern: 'solid',
+            width_delta: 1,
+            opacity: 0.8,
+        };
+        catalog.output_specs[0].default_value_regions = [
+            {
+                key: 'neutral',
+                label_key: 'signals.rsi.neutralRegion',
+                semantic: 'neutral',
+                lower: 30,
+                upper: 70,
+                line_style: {
+                    pattern: 'dashed',
+                    width_delta: 0,
+                },
+            },
+        ];
+
+        const definition = mapBackendSignalDefinition(catalog);
+        expect(definition.visualComponents?.[0].style).toEqual({
+            colorRole: 'accent',
+            lineType: 'solid',
+            lineWidthDelta: 1,
+            opacity: 0.8,
+        });
+        expect(definition.visualComponents?.[0].fullyPartitioned).toBe(false);
+        expect(definition.visualPartitions).toMatchObject([
+            {
+                key: 'output:neutral',
+                semantic: 'neutral',
+                style: {
+                    lineType: 'dashed',
+                },
+            },
+        ]);
+    });
+
+    it('marks an output fully partitioned only when regions cover the whole value domain', () => {
+        const catalog = makeCatalog('RSI');
+        catalog.output_specs[0].default_value_regions = [
+            {
+                key: 'low',
+                label_key: 'signals.low',
+                semantic: 'low',
+                upper: 30,
+                include_upper: false,
+                line_style: {pattern: 'solid'},
+            },
+            {
+                key: 'middle',
+                label_key: 'signals.middle',
+                semantic: 'middle',
+                lower: 30,
+                upper: 70,
+                include_lower: true,
+                include_upper: true,
+                line_style: {pattern: 'dashed'},
+            },
+            {
+                key: 'high',
+                label_key: 'signals.high',
+                semantic: 'high',
+                lower: 70,
+                include_lower: false,
+                line_style: {pattern: 'solid'},
+            },
+        ];
+
+        expect(mapBackendSignalDefinition(catalog).visualComponents?.[0].fullyPartitioned).toBe(true);
+
+        catalog.output_specs[0].default_value_regions = catalog.output_specs[0].default_value_regions?.slice(1);
+        expect(mapBackendSignalDefinition(catalog).visualComponents?.[0].fullyPartitioned).toBe(false);
     });
 });

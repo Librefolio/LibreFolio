@@ -132,6 +132,24 @@ class WrongMetadataPlugin(LineFixturePlugin):
         return output
 
 
+class WrongVisualMetadataPlugin(LineFixturePlugin):
+    signal_code = "TEST_WRONG_VISUAL_METADATA"
+
+    def compute(self, price_points, event_points, params, context):
+        output = (
+            super()
+            .compute(
+                price_points,
+                event_points,
+                params,
+                context,
+            )
+            .model_dump(mode="python")
+        )
+        output["series"][0]["style"]["color_role"] = "secondary"
+        return output
+
+
 class WrongDatesPlugin(LineFixturePlugin):
     signal_code = "TEST_WRONG_DATES"
 
@@ -479,6 +497,7 @@ async def test_strict_internal_gap_is_unavailable_without_compaction():
     assert result.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE
     assert result.availability.input_coverage.internal_gap_count == 1
     assert result.availability.input_coverage.requested_points == 6
+    assert result.availability.input_coverage.max_consecutive_missing_points == 1
 
 
 @pytest.mark.asyncio
@@ -505,6 +524,7 @@ async def test_partial_policy_uses_contiguous_suffix_and_warns():
     assert warning.details["selected_start_date"] == "2026-01-04"
     assert warning.details["selected_end_date"] == "2026-01-06"
     assert warning.details["excluded_points"] == 2
+    assert warning.details["max_consecutive_missing_points"] == 1
 
 
 @pytest.mark.asyncio
@@ -610,6 +630,25 @@ async def test_missing_visible_boundaries_are_counted_in_coverage():
     assert coverage.requested_points == 6
     assert coverage.available_points == 4
     assert coverage.missing_points == 2
+    assert coverage.max_consecutive_missing_points == 1
+
+
+@pytest.mark.asyncio
+async def test_coverage_tracks_longest_consecutive_missing_run():
+    service = make_service(HighPartialPlugin)
+    points = make_signal_price_points()
+    points[-2:] = [point.model_copy(update={"high": None}) for point in points[-2:]]
+    result = (
+        await service.compute(
+            [request("high", "TEST_HIGH_PARTIAL", {"length": 2})],
+            points,
+            make_context(start=date(2026, 1, 1)),
+        )
+    )[0]
+
+    coverage = result.availability.input_coverage
+    assert coverage.missing_points == 2
+    assert coverage.max_consecutive_missing_points == 2
 
 
 @pytest.mark.asyncio
@@ -820,6 +859,7 @@ async def test_infinity_is_failed_as_invalid_output():
     ("plugin", "code"),
     [
         (WrongMetadataPlugin, "TEST_WRONG_METADATA"),
+        (WrongVisualMetadataPlugin, "TEST_WRONG_VISUAL_METADATA"),
         (WrongDatesPlugin, "TEST_WRONG_DATES"),
     ],
 )

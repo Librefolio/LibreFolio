@@ -816,6 +816,15 @@ class SignalService:
             observed_points=observed_points,
             backfilled_points=backfilled_points,
             missing_points=missing_points,
+            max_consecutive_missing_points=(
+                cls._max_consecutive_missing_points(
+                    price_points,
+                    valid_flags,
+                    context,
+                )
+                if required_fields
+                else 0
+            ),
             internal_gap_count=internal_gap_count,
             coverage_ratio=(available_points / expected_points if expected_points else 0.0),
             field_coverage=field_coverage,
@@ -824,6 +833,55 @@ class SignalService:
             last_available_date=available_dates[-1] if available_dates else None,
         )
         return coverage, valid_flags, internal_calendar_gaps
+
+    @classmethod
+    def _max_consecutive_missing_points(
+        cls,
+        price_points: list[SignalPricePoint],
+        valid_flags: list[bool],
+        context: SignalExecutionContext,
+    ) -> int:
+        if not price_points:
+            return cls._visible_slot_count(context)
+
+        end = context.requested_range.end or context.requested_range.start
+        current = (
+            cls._distance_slots(
+                context.requested_range.start,
+                price_points[0].date,
+                context.cadence,
+            )
+            if price_points[0].date > context.requested_range.start
+            else 0
+        )
+        maximum = current
+        for index, (point, valid) in enumerate(
+            zip(
+                price_points,
+                valid_flags,
+                strict=True,
+            )
+        ):
+            if index > 0:
+                current += cls._gap_slots(
+                    price_points[index - 1].date,
+                    point.date,
+                    context.cadence,
+                )
+                maximum = max(maximum, current)
+            if valid:
+                current = 0
+            else:
+                current += 1
+                maximum = max(maximum, current)
+        if price_points[-1].date < end:
+            current += cls._distance_slots(
+                price_points[-1].date,
+                end,
+                context.cadence,
+            )
+            maximum = max(maximum, current)
+        return maximum
 
     @classmethod
     def _select_computation_points(
@@ -965,6 +1023,7 @@ class SignalService:
                     details={
                         "coverage_ratio": availability.input_coverage.coverage_ratio,
                         "contiguous_points": availability.input_coverage.contiguous_points,
+                        "max_consecutive_missing_points": availability.input_coverage.max_consecutive_missing_points,
                         "selected_start_date": max(selected_start, context.requested_range.start).isoformat() if selected_start else None,
                         "selected_end_date": min(selected_end, requested_end).isoformat() if selected_end else None,
                         "excluded_points": len(excluded_points),
@@ -1064,7 +1123,7 @@ class SignalService:
             expected_specs,
             strict=True,
         ):
-            if series.key != spec.key or series.kind != spec.kind or series.label_key != spec.label_key or series.unit != spec.unit or series.axis != spec.axis or series.view_transform != spec.view_transform:
+            if series.key != spec.key or series.kind != spec.kind or series.label_key != spec.label_key or series.description_key != spec.description_key or series.unit != spec.unit or series.axis != spec.axis or series.view_transform != spec.view_transform or series.style != spec.style:
                 raise SignalOutputContractError(f"plugin output metadata does not match spec '{spec.key}'")
 
         if selected_points and plugin_class.input_requirements.price_fields:

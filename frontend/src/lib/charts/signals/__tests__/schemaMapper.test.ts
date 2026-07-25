@@ -29,6 +29,7 @@ describe('signal params JSON Schema mapper', () => {
                         'x-suffix': 'days',
                         'x-i18n-key': 'chartSettings.params.period',
                         'x-tooltip-key': 'chartSettings.tooltips.period',
+                        'x-affects-outputs': ['k', 'd'],
                         'x-control-order': 1,
                     },
                     multiplier: {
@@ -54,6 +55,7 @@ describe('signal params JSON Schema mapper', () => {
             suffix: 'days',
             label: 'chartSettings.params.period',
             tooltip: 'chartSettings.tooltips.period',
+            affectsOutputs: ['k', 'd'],
         });
         expect(descriptors[1]).toMatchObject({
             type: 'boolean',
@@ -79,6 +81,20 @@ describe('signal params JSON Schema mapper', () => {
                 properties: {
                     windows: {
                         type: 'array',
+                    },
+                },
+            }),
+        ).toThrow(UnsupportedSignalSchemaError);
+    });
+
+    it('rejects malformed output-affinity metadata', () => {
+        expect(() =>
+            mapSignalParamsSchema({
+                type: 'object',
+                properties: {
+                    period: {
+                        type: 'integer',
+                        'x-affects-outputs': ['k', 1],
                     },
                 },
             }),

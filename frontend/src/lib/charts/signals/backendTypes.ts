@@ -13,6 +13,8 @@ export type BackendSignalBandSeries = z.output<typeof schemas.SignalBandSeries>;
 export type BackendSignalSeries = BackendSignalLineSeries | BackendSignalBarSeries | BackendSignalBandSeries;
 export type BackendSignalReferenceLevel = z.output<typeof schemas.SignalReferenceLevel>;
 export type BackendSignalValueRegion = z.output<typeof schemas.SignalValueRegion>;
+export type BackendSignalOutputSpec = z.output<typeof schemas.SignalOutputSpec>;
+export type BackendSignalOutputStyle = z.output<typeof schemas.SignalOutputStyle>;
 export type BackendSignalAnnotation = z.output<typeof schemas.SignalAnnotation>;
 
 export const backendSignalSchemas = {

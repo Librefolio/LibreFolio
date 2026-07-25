@@ -18,11 +18,13 @@ from backend.app.schemas.signals import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalSeriesKind,
     SignalUnit,
     SignalValuePoint,
@@ -73,29 +75,40 @@ _CCI_LEVELS = [
         value=100,
     ),
 ]
+_EXTREME_LINE_STYLE = SignalRegionLineStyle(
+    pattern=SignalLinePattern.SOLID,
+    width_delta=1,
+)
+_NEUTRAL_LINE_STYLE = SignalRegionLineStyle(pattern=SignalLinePattern.DASHED)
 _CCI_REGIONS = [
     SignalValueRegion(
         key="oversold",
         label_key="signals.cci.oversoldRegion",
+        description_key="signals.regions.oversoldDescription",
         semantic="oversold",
         upper=-100,
         include_upper=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
     SignalValueRegion(
         key="neutral",
         label_key="signals.cci.neutralRegion",
+        description_key="signals.regions.neutralDescription",
         semantic="neutral",
         lower=-100,
         upper=100,
         include_lower=True,
         include_upper=True,
+        line_style=_NEUTRAL_LINE_STYLE,
     ),
     SignalValueRegion(
         key="overbought",
         label_key="signals.cci.overboughtRegion",
+        description_key="signals.regions.overboughtDescription",
         semantic="overbought",
         lower=100,
         include_lower=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
 ]
 

@@ -664,18 +664,7 @@
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
             <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
-            <LotsAnalysisPanel
-                open={activeAssetId != null}
-                assetId={activeAssetId}
-                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
-                brokers={allBrokers}
-                dateFrom={dateRangeCtl.start}
-                dateTo={dateRangeCtl.end}
-                isAllPeriod={dateRangeCtl.activePreset === 'MAX'}
-                currency={activeAsset?.currency ?? appliedCurrency}
-                assetName={activeAsset?.display_name ?? null}
-                onClose={closeAssetPanel}
-            />
+            <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)} brokers={allBrokers} currency={activeAsset?.currency ?? appliedCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">

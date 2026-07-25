@@ -13,13 +13,16 @@ from backend.app.schemas.signals import (
     SignalAxisSpec,
     SignalBarSeries,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDomain,
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
@@ -115,25 +118,38 @@ class PpoSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="ppo",
             label_key="signals.ppo.line",
+            description_key="signals.ppo.lineDescription",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.PRIMARY,
+                line_pattern=SignalLinePattern.SOLID,
+                width_delta=1,
+            ),
             supports_reference_levels=True,
             default_reference_levels=[_ZERO_LEVEL],
         ),
         SignalOutputSpec(
             key="signal",
             label_key="signals.ppo.signal",
+            description_key="signals.ppo.signalDescription",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.SECONDARY,
+                line_pattern=SignalLinePattern.DASHED,
+            ),
         ),
         SignalOutputSpec(
             key="histogram",
             label_key="signals.ppo.histogram",
+            description_key="signals.ppo.histogramDescription",
             kind=SignalSeriesKind.BAR,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
+            style=SignalOutputStyle(color_role=SignalColorRole.NEUTRAL),
         ),
     )
     compatible_domains = (SignalDomain.ASSET, SignalDomain.FX)
@@ -201,9 +217,11 @@ class PpoSignalPlugin(SignalPlugin):
                 series_type(
                     key=spec.key,
                     label_key=spec.label_key,
+                    description_key=spec.description_key,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,
+                    style=spec.style.model_copy(deep=True),
                     reference_levels=([_ZERO_LEVEL.model_copy(deep=True)] if index == 0 else []),
                     points=[
                         SignalValuePoint(

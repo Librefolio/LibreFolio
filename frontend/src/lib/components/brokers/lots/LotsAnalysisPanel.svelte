@@ -8,7 +8,7 @@
 
   Fetch strategy (two tiers, per plan v2 §13 "il frontend non effettua autonomamente ...
   calcoli WAC"):
-  - Main fetch (asset/broker/date-range change): LOT_SUMMARY + GANTT_TOPOLOGY +
+  - Main fetch (asset/broker change): LOT_SUMMARY + GANTT_TOPOLOGY +
     EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
     NO selected_lot_ids (service defaults to "all lots" — see
     LotsAnalysisService._resolve_selected_lot_ids). EVENT_HISTORY (superset of the old
@@ -84,14 +84,11 @@
         brokerIds: number[];
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
-        dateFrom: string;
-        dateTo: string;
-        isAllPeriod: boolean;
         assetName?: string | null;
         onClose: () => void;
     }
 
-    let {open, assetId, brokerIds, brokers, currency, dateFrom, dateTo, isAllPeriod, assetName = null, onClose}: Props = $props();
+    let {open, assetId, brokerIds, brokers, currency, assetName = null, onClose}: Props = $props();
 
     let loading = $state(false);
     let error = $state<string | null>(null);
@@ -162,10 +159,7 @@
 
     let effectiveSelectedLots = $derived.by((): LotSummarySchema[] => (selectedLotIds.length > 0 ? selectedLots : visibleLots));
 
-    let xAxisRange = $derived.by((): DateRange | null => {
-        if (!isAllPeriod) return {min: dateFrom, max: dateTo};
-        return computedRange;
-    });
+    let xAxisRange = $derived(computedRange);
 
     function handleZoomChange(start: number, end: number) {
         sharedZoomStart = start;
@@ -180,7 +174,6 @@
             const body = {
                 asset_id: currentAssetId,
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
                 requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const,
             };
@@ -248,7 +241,6 @@
             const body = {
                 asset_id: currentAssetId,
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
                 selected_lot_ids: ids,
                 requested_analyses: ['VALUE_HISTORY', 'RETURN_HISTORY'] as const,

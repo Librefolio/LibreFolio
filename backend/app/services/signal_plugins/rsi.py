@@ -17,11 +17,13 @@ from backend.app.schemas.signals import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalSeriesKind,
     SignalUnit,
     SignalValuePoint,
@@ -86,6 +88,11 @@ _RSI_AXIS = SignalAxisSpec(
     minimum=0,
     maximum=100,
 )
+_EXTREME_LINE_STYLE = SignalRegionLineStyle(
+    pattern=SignalLinePattern.SOLID,
+    width_delta=1,
+)
+_NEUTRAL_LINE_STYLE = SignalRegionLineStyle(pattern=SignalLinePattern.DASHED)
 _DEFAULT_LEVELS = [
     SignalReferenceLevel(
         key="oversold",
@@ -104,25 +111,31 @@ _DEFAULT_REGIONS = [
     SignalValueRegion(
         key="oversold",
         label_key="signals.rsi.oversoldRegion",
+        description_key="signals.regions.oversoldDescription",
         semantic="oversold",
         upper=30,
         include_upper=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
     SignalValueRegion(
         key="neutral",
         label_key="signals.rsi.neutralRegion",
+        description_key="signals.regions.neutralDescription",
         semantic="neutral",
         lower=30,
         upper=70,
         include_lower=True,
         include_upper=True,
+        line_style=_NEUTRAL_LINE_STYLE,
     ),
     SignalValueRegion(
         key="overbought",
         label_key="signals.rsi.overboughtRegion",
+        description_key="signals.regions.overboughtDescription",
         semantic="overbought",
         lower=70,
         include_lower=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
 ]
 
@@ -207,25 +220,31 @@ class RsiSignalPlugin(SignalPlugin):
             SignalValueRegion(
                 key="oversold",
                 label_key="signals.rsi.oversoldRegion",
+                description_key="signals.regions.oversoldDescription",
                 semantic="oversold",
                 upper=params.oversold,
                 include_upper=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="neutral",
                 label_key="signals.rsi.neutralRegion",
+                description_key="signals.regions.neutralDescription",
                 semantic="neutral",
                 lower=params.oversold,
                 upper=params.overbought,
                 include_lower=True,
                 include_upper=True,
+                line_style=_NEUTRAL_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="overbought",
                 label_key="signals.rsi.overboughtRegion",
+                description_key="signals.regions.overboughtDescription",
                 semantic="overbought",
                 lower=params.overbought,
                 include_lower=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
         ]
         return SignalComputation(
