@@ -144,6 +144,7 @@ plugins:
             Directa SIM: Directa SIM
             Charles Schwab: Charles Schwab
             Revolut: Revolut
+            Fineco: Fineco
             Coinbase: Coinbase
             Freetrade: Freetrade
             Finpension: Finpension
@@ -316,6 +317,7 @@ plugins:
             Directa SIM: Directa SIM
             Charles Schwab: Charles Schwab
             Revolut: Revolut
+            Fineco: Fineco
             Coinbase: Coinbase
             Freetrade: Freetrade
             Finpension: Finpension
@@ -489,6 +491,7 @@ plugins:
             Directa SIM: Directa SIM
             Charles Schwab: Charles Schwab
             Revolut: Revolut
+            Fineco: Fineco
             Coinbase: Coinbase
             Freetrade: Freetrade
             Finpension: Finpension
@@ -649,6 +652,7 @@ nav:
                   - Investimental: user/transactions/import/investimental.md
               - 🏦 Banks & Neobrokers:
                   - Revolut: user/transactions/import/revolut.md
+                  - Fineco: user/transactions/import/fineco.md
                   - BUX: user/transactions/import/bux.md
                   - Rabobank: user/transactions/import/rabobank.md
               - 🪙 Crypto:

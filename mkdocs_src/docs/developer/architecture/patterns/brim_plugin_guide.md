@@ -67,6 +67,33 @@ graph TD
 
 ---
 
+## 🧭 Import philosophy & currency rules
+
+A BRIM plugin is a **faithful transcriber, not a re-calculator**. These rules are
+mandatory for every new plugin:
+
+- **Verbatim / copy-paste import.** Import the numbers exactly as they appear in the
+  broker's report. Do not recompute totals, prices or amounts; transcribe them.
+- **No forex system.** A BRIM plugin must **never** invoke the FX subsystem and must
+  **never** convert amounts using the report's own exchange-rate column. If the export
+  has a rate column (e.g. Fineco's *Cambio*), **ignore it**.
+- **Currency from the source.** Derive each transaction's currency from the broker's own
+  currency column (per row) and tag **every** monetary figure in that row with it. A
+  single file may legitimately contain multiple currencies — that's expected, keep them
+  as reported.
+- **Delimiter detection.** Always resolve the separator with
+  `self.detect_csv_delimiter(file_path)` — **never hardcode** `,` or `;`.
+- **Multiple export layouts.** When a broker ships more than one report layout (e.g. with
+  and without commission columns), detect the variant **dynamically** — locate the header
+  row and branch on the actual column set rather than assuming a fixed line offset.
+- **Sign conventions.** Set signs per `TransactionType` (BUY: qty > 0, cash < 0; SELL:
+  qty < 0, cash > 0; DIVIDEND/INTEREST: qty = 0, cash > 0; FEE/TAX: qty = 0, cash < 0;
+  ADJUSTMENT: qty ≠ 0, no cash), but take the **magnitudes** verbatim from the report.
+- **Fake asset IDs.** Emit negative fake asset IDs (keyed by ISIN/ticker) plus
+  `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
+
+---
+
 ## 📋 ABC Methods
 
 ### ✅ Required (Abstract)
@@ -332,12 +359,22 @@ If no working icon exists, ship `icon_url = None` and mark the broker in
 
 ## 📚 Register the user-facing docs
 
-Expose the plugin to users by wiring up its documentation. Point `docs_url` at the page:
+Expose the plugin to users by wiring up its documentation. Point `docs_url` at the page.
+
+`docs_url` accepts **either** an internal MkDocs slug **or** an external absolute URL:
+
+- **Internal wiki slug (recommended, the convention used by every current plugin)** —
+  an absolute `/mkdocs/...` path. Use this whenever you ship a page under
+  `user/transactions/import/`. The frontend localizes it automatically by rewriting
+  `/mkdocs/` → `/mkdocs/<lang>/`, so **only the internal slug form gets translated**.
+- **External URL** — a full `https://...` link to a broker help page. Allowed (opens in a
+  new tab) but it is **not** localized, so prefer an internal page when one exists.
 
 ```python
 @property
 def docs_url(self) -> Optional[str]:
-    return "/mkdocs/user/transactions/import/<slug>/"
+    return "/mkdocs/user/transactions/import/<slug>/"   # internal slug (localized)
+    # or: return "https://broker.example/help/exports"   # external URL (not localized)
 ```
 
 Then, reusing `<slug>` everywhere:
@@ -347,15 +384,37 @@ Then, reusing `<slug>` everywhere:
    the H1, a "how to export" line, a note that it was built from sample exports). Use
    `directa.it.md` as a fuller reference once real export steps are known.
 2. **Index card** — add an `<a href="<slug>/">` card in each
-   `mkdocs_src/docs/user/transactions/import/index.<lang>.md` (before the `generic-csv` card).
-3. **Capacity table** — add one row per language in the `??? info` table of those same index
-   files, **4-space indented** so it stays inside the admonition.
+   `mkdocs_src/docs/user/transactions/import/index.<lang>.md` (in the matching broker group,
+   before the final `Request New Plugin` / `generic-csv` card). Copy an existing card and
+   swap the slug, favicon, name and description:
+
+    ```html
+    <a href="<slug>/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="<favicon-url>" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon <Display>">
+    <span class="card-title" style="margin: 0;"><Display></span>
+    </div>
+    <span class="card-desc">Import the <…> export from <Display>.</span>
+    </a>
+    ```
+
+3. **Capacity table** — add one row per language in the `??? info "📊 Importer Capabilities"`
+   table of those same index files, **4-space indented** so it stays inside the admonition.
+   Columns are `Broker | Status | Format | Buy/Sell | Dividends | Deposits/Cash | Fees/Taxes | Notes`
+   (use ✅ / ❌ per capability):
+
+    ```markdown
+    | <img src="<favicon-url>" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **<Display>** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | <short note> |
+    ```
 4. **Nav** — add `- <Display>: user/transactions/import/<slug>.md` in `mkdocs_src/mkdocs.yml`
    under the right `📥 Import from Broker` subgroup, and add any new group/leaf title to the
    `nav_translations` of each non-English locale.
 5. **Validate** — `./dev.py mkdocs build` must report **no** `unrecognized relative link` /
    `no such anchor`. Internal links use the `.md` form (`how-to.md`,
    `../../../community/contribute.md`), never trailing-slash paths.
+6. **Developer providers overview** — add one row for the broker to
+   [Providers List](../../backend/brim/providers_list.md) (favicon, code, formats, status,
+   notes) so the developer-side catalogue stays in sync.
 
 ---
 
