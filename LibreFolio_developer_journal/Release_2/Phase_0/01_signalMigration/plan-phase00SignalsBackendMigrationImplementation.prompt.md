@@ -1752,7 +1752,7 @@ Migrare card, settings globali/per-pair e bulk multi-pair.
 
 ### Gate E — Parità viste
 
-**Stato**: 🟡 GATE AUTOMATICO SUPERATO — review visuale manuale pendente.
+**Stato**: ✅ SUPERATO — 25 Luglio 2026.
 
 > **Note implementazione**: E1-E4 implementati; 17 Asset / 9 FX disponibili
 > per capability, technical path UI esclusivamente backend, rollback ancora
@@ -1897,9 +1897,9 @@ Migrare card, settings globali/per-pair e bulk multi-pair.
 > Portfolio Engine e token monotono sulle operazioni auth per neutralizzare
 > `/auth/me` tardivi. Frontend unit 275/275, check 0/0 e build production verde.
 >
-> **Blocco residuo**: verificare manualmente assi, band, histogram, slice
-> threshold, tooltip, dark mode e responsive su Asset/FX detail e
-> card prima di avviare F1/rimozione engine TypeScript.
+> **Approvazione Gate E (25 Luglio 2026)**: review visuale conclusa con esito
+> positivo dopo undici round. F1 autorizzata; rimozione engine TypeScript resta
+> subordinata al cutover AI Export.
 
 Non eliminare il TypeScript finché:
 
@@ -1915,43 +1915,122 @@ Non eliminare il TypeScript finché:
 
 ### F1 — AI Export
 
+**Stato**: 🟡 REPORT ARCHITETTURALE V2 COMPLETATO — piano esecutivo pendente.
+
+> **Nota di scope (25 Luglio 2026)**: F1 non sarà una migrazione 1:1 dei vecchi
+> EMA/RSI/MACD. La nuova fotografia userà un profilo sviluppatore-curato con più
+> segnali, dati e incroci, omissione totale delle sezioni senza punti e budget
+> token misurati ma non distruttivi. I profili sono curati per
+> `domain + task + detail_level`; `full` non applica top-N automatici. Nessun
+> auto-enrollment dei plugin in questa fase.
+>
+> **Analisi**:
+> [AI Export F1 — Architettura e fotografia dati curata](./analysis-phase00AiExportArchitectureAndSnapshot.md)
+
 **Obiettivo**
 
-Eliminare il secondo calcolo tecnico frontend.
+Costruire una fotografia AI backend, curata e token-bounded, riutilizzabile da
+frontend e futuro MCP; eliminare il secondo calcolo tecnico frontend.
 
 **File**
 
+- `backend/app/schemas/ai_export.py`;
+- `backend/app/services/ai_export/`;
+- `backend/app/api/v1/ai_export.py`;
 - `frontend/src/lib/features/ai-export/technical/technicalExportBuilder.ts`;
 - `technicalEvents.ts`;
-- Asset/FX export builders;
+- Asset/FX/Portfolio/Broker export builders e renderer;
 - test AI Export.
 
 **Comportamento atteso**
 
-- EMA20/50/200, RSI14, MACD backend;
-- `annotation_requests` esplicite per price/EMA, EMA/EMA, RSI threshold e MACD
-  histogram/zero;
-- observed-only;
-- annotations backend;
-- sampling/payload invariati.
+- endpoint read-only autenticato `POST /api/v1/ai-export/snapshot`;
+- `user_id` derivato dalla sessione e broker scope validato server-side;
+- request `domain + task + detail_level` con combinazioni allow-listed;
+- `schema_version`, `profile_id/profile_version` e range/date distinti;
+- ogni task allow-listed ha backend profile e frontend response contract
+  versionati;
+- profili sviluppatore-curati per Asset, FX, Dashboard e Broker;
+- livelli `compact`, `standard`, `full` espliciti;
+- nessun top-N implicito in `full`;
+- tutte le posizioni aperte previste dal detail level;
+- bundle tecnici ampliati secondo l'analisi F1;
+- asset/posizioni preservati anche senza indicatori tecnici;
+- soltanto segnali/componenti/sezioni senza punti completamente omessi;
+- coverage e breadth ponderata dichiarate;
+- raw values, derived states ed events separati;
+- normalized return 3M semanticamente compatibile col vecchio export;
+- warm-up plugin applicato prima di slicing/normalizzazione/sampling;
+- fallback ultima BUY esposto come valuation reference, non market return;
+- cash decomposition mappata dal Portfolio Engine;
+- currency allocation semantics esplicite;
+- allocazioni PAC preservate per asset, asset type, settore, geografia, valuta e
+  broker;
+- nessun warning/unavailable/error testuale nel prompt standard;
+- instructions, snapshot, domain notes e user notes separati;
+- serializer YAML/Markdown robusto e prompt-injection aware;
+- metric semantics e signal semantics canoniche;
+- privacy awareness nel feedback post-copy;
+- sampling e precisione applicati nel backend;
+- budget restituiti come telemetria non distruttiva;
+- prompt catalog e rendering finale restano frontend in F1;
+- servizio snapshot invocabile direttamente dal futuro MCP;
+- nessun auto-enrollment dei nuovi plugin;
+- Portfolio Risk Review rinviata;
+- band-boundary crossing incluso come sub-step isolato.
 
 **Test**
 
-- snapshot/fixture payload;
-- unavailable history;
-- event limits;
-- Asset/FX.
+- snapshot fixture per Asset, FX, Dashboard e Broker;
+- auth, user scope e broker access;
+- omissione componenti/sezioni tecniche vuote senza eliminare asset/posizioni;
+- partial con punti incluso senza spiegazioni;
+- coverage/breadth coverage;
+- precisione, sampling e telemetry;
+- parity normalized return vecchio/nuovo;
+- long-window warm-up su technical window brevi;
+- fallback ultima BUY senza serie/indicatori artificiali;
+- compatibilità semantica PAC/portfolio export;
+- copertura esplicita delle sei dimensioni di allocazione PAC;
+- cash decomposition e currency semantics;
+- event limits e deduplica;
+- note con colon/quote/newline/backtick/instruction-like text;
+- versionamento DTO/profilo/task contract;
+- profili statici non modificati dal plugin registry;
+- compatibilità semantica dei prompt catalog esistenti.
 
 **Dipendenze**: Gate E.
 
 **Accettazione**
 
 - nessun import di classi tecniche TS;
-- payload compatibile.
+- nessuna matematica tecnica AI Export nel frontend;
+- quattro domini consumano snapshot backend;
+- prompt/task/lingua restano frontend-owned;
+- snapshot/profili/task contract versionati;
+- warm-up long-window verificato su technical window brevi;
+- profilo full senza top-N impliciti;
+- snapshot privo di null tecnici, sezioni tecniche vuote e failure prose;
+- nessuna posizione omessa per assenza indicatori;
+- technical coverage dichiarata;
+- normalized return compatibile;
+- valuation fallback non rappresentato come market return;
+- cash decomposition engine-owned;
+- note trattate come contesto e serializzate in modo sicuro;
+- note/descrizioni autorizzate esportabili come contesto;
+- metriche e segnali con semantica/unità deterministiche;
+- privacy banner post-copy;
+- servizio riusabile senza UI;
+- payload deliberatamente ridisegnato e coperto da fixture versionate.
 
 **Rischi**
 
-- differenze numerical/warm-up cambiano eventi.
+- differenze numerical/warm-up cambiano eventi;
+- snapshot full può superare il context esterno e richiede scelta utente;
+- profili compact possono nascondere dati se la profondità non è esplicita;
+- endpoint AI non correttamente scoped può esporre dati cross-user;
+- nuova primitive band-boundary amplia schema e annotation resolver;
+- parity normalized return può divergere su finestre incomplete.
 
 ---
 
