@@ -63,6 +63,16 @@ class TWRRPoint:
 
 
 @dataclass(frozen=True)
+class TWRRPeriodPoint:
+    """Unrounded TWRR sub-period values for downstream analytics."""
+
+    date: date
+    period_return: Decimal
+    wealth_index: Decimal
+    cumulative_twrr: Decimal
+
+
+@dataclass(frozen=True)
 class MWRRPoint:
     """Single MWRR value at a date (None if calculation did not converge)."""
 
@@ -177,31 +187,45 @@ def calculate_twrr(
     if len(nav_snapshots) < 2:
         raise ValueError("TWRR requires at least 2 NAV snapshots (start and end).")
 
-    sorted_navs = sorted(nav_snapshots, key=lambda s: s.date)
+    period_series = calculate_twrr_period_series(nav_snapshots, cash_flows)
+    final = period_series[-1]
+    twrr = final.cumulative_twrr.quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+    return TWRRPoint(date=final.date, twrr=twrr)
+
+
+def calculate_twrr_period_series(
+    nav_snapshots: list[NAVSnapshot],
+    cash_flows: list[CashFlowInput],
+) -> list[TWRRPeriodPoint]:
+    """Return exact sub-period HPR and unrounded cumulative TWRR values."""
+    if len(nav_snapshots) < 2:
+        return []
+
+    sorted_navs = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
     cf_by_date: dict[date, Decimal] = {}
-    for cf in cash_flows:
-        cf_by_date[cf.date] = cf_by_date.get(cf.date, Decimal("0")) + cf.amount
+    for cash_flow in cash_flows:
+        cf_by_date[cash_flow.date] = cf_by_date.get(cash_flow.date, Decimal("0")) + cash_flow.amount
 
     compound = Decimal("1")
-    for i in range(1, len(sorted_navs)):
-        v_start = sorted_navs[i - 1].nav
-        v_end = sorted_navs[i].nav
-        snap_date = sorted_navs[i].date
-
-        # Remove CF that arrived at snap_date to get pre-CF NAV.
-        # Snapshots are POST-CF. Deposits are negative, withdrawals positive.
-        # pre_CF_NAV = post_CF_NAV + cf_amount
-        cf_amount = cf_by_date.get(snap_date, Decimal("0"))
-        v_end_pre_cf = v_end + cf_amount
-
-        if v_start == Decimal("0"):
-            continue  # No prior investment — skip sub-period
-
-        hpr = (v_end_pre_cf - v_start) / v_start
-        compound *= Decimal("1") + hpr
-
-    twrr = (compound - Decimal("1")).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
-    return TWRRPoint(date=sorted_navs[-1].date, twrr=twrr)
+    result: list[TWRRPeriodPoint] = []
+    for previous, current in zip(
+        sorted_navs,
+        sorted_navs[1:],
+        strict=False,
+    ):
+        cash_flow = cf_by_date.get(current.date, Decimal("0"))
+        value_before_cash_flow = current.nav + cash_flow
+        period_return = Decimal("0") if previous.nav == Decimal("0") else (value_before_cash_flow - previous.nav) / previous.nav
+        compound *= Decimal("1") + period_return
+        result.append(
+            TWRRPeriodPoint(
+                date=current.date,
+                period_return=period_return,
+                wealth_index=compound,
+                cumulative_twrr=compound - Decimal("1"),
+            )
+        )
+    return result
 
 
 def calculate_twrr_series(
@@ -218,31 +242,13 @@ def calculate_twrr_series(
     if len(nav_snapshots) < 2:
         return []
 
-    sorted_navs = sorted(nav_snapshots, key=lambda s: s.date)
-    cf_by_date: dict[date, Decimal] = {}
-    for cf in cash_flows:
-        cf_by_date[cf.date] = cf_by_date.get(cf.date, Decimal("0")) + cf.amount
-
-    compound = Decimal("1")
-    result: list[TWRRPoint] = []
-
-    for i in range(1, len(sorted_navs)):
-        v_start = sorted_navs[i - 1].nav
-        v_end = sorted_navs[i].nav
-        snap_date = sorted_navs[i].date
-
-        cf_amount = cf_by_date.get(snap_date, Decimal("0"))
-        # Snapshots are POST-CF. pre_CF_NAV = post_CF_NAV + cf_amount
-        v_end_pre_cf = v_end + cf_amount
-
-        if v_start != Decimal("0"):
-            hpr = (v_end_pre_cf - v_start) / v_start
-            compound *= Decimal("1") + hpr
-
-        twrr = (compound - Decimal("1")).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
-        result.append(TWRRPoint(date=snap_date, twrr=twrr))
-
-    return result
+    return [
+        TWRRPoint(
+            date=point.date,
+            twrr=point.cumulative_twrr.quantize(_PREC_PCT, rounding=ROUND_HALF_UP),
+        )
+        for point in calculate_twrr_period_series(nav_snapshots, cash_flows)
+    ]
 
 
 def calculate_mwrr(

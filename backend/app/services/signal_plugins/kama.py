@@ -58,6 +58,8 @@ class KamaSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.kama.name"
     description_key = "signals.kama.description"
+    semantic_id = "kaufman_adaptive_moving_average"
+    semantic_description = "Smooths prices with responsiveness adjusted by market efficiency."
     icon = "🛣️"
     docs_path = "financial-theory/technical-analysis/indicators/kama/"
     params_model = KamaSignalParams
@@ -66,6 +68,8 @@ class KamaSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="kama",
             label_key="signals.kama.output",
+            semantic_id="kaufman_adaptive_moving_average.value",
+            semantic_description="Adaptive moving average of closing prices.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
@@ -121,6 +125,8 @@ class KamaSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

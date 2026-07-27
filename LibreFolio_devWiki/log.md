@@ -4,6 +4,39 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-07-27] update | Phase 0 AI Export final UI closure and manual approval
+
+Source: completed `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` chain @ git:`untracked`. Recorded the custom icon/name/description analysis select; synthetic Data Snapshot → `data_only`; real analyses → `full_prompt`; locale-owned response language; hidden web/compatibility controls; body portal; domain-aware manuals; and final desktop/mobile approval.
+Created: [[decisions/ai-export-contextual-ui-memory]] for client-session-user/context-keyed Portfolio, Broker, Asset, and canonical-FX draft persistence, including the invariant that Snapshot remembers hidden notes but never exports them.
+Updated: [[sources/phase00-ai-export-backend-snapshot]], [[decisions/ai-export-versioned-snapshot-boundary]], [[decisions/ai-export-prompt-catalog]], [[entities/ai-export-snapshot-service]], [[problems/ai-export-cash-fx-valuation-basis-mismatch]], [[problems/ai-export-drawdown-selected-history-fallback]], [[problems/ai-export-clipboard-fallback-unreachable]].
+Archive: the chain is complete in `Release_2/Phase_0/01_signalMigration/02_aiExport/`; no move to `RoadmapV4_UI/phases/` is required.
+Graph: ran `./dev.py graph update`, semantically merged the eight changed AI Export wiki pages, reclustered, and regenerated `graph.html`; verified [[decisions/ai-export-contextual-ui-memory]] as a linked graph node.
+
+## [2026-07-26] update | AI Export final-review regressions and canonical test registration
+
+Filed the false Asset drawdown 409 caused by an empty technical window and the unreachable non-modern clipboard transport. Updated the Phase 0 source, snapshot entity, and versioned-boundary decision with the selected-history fallback, prepare-once V2 clipboard behavior, and canonical backend/service/schema/API plus frontend AI Export+signal suite registration; unrelated pre-existing orphan tests remain outside scope.
+Created: [[problems/ai-export-drawdown-selected-history-fallback]], [[problems/ai-export-clipboard-fallback-unreachable]].
+Updated: [[sources/phase00-ai-export-backend-snapshot]], [[entities/ai-export-snapshot-service]], [[decisions/ai-export-versioned-snapshot-boundary]].
+Graph: ran `./dev.py graph update`, cached the five changed wiki pages, and reclustered with no visualization; both new problem nodes were verified linked.
+
+## [2026-07-26] ingest | Phase 0 AI Export backend snapshot and hard cutover
+
+Source: `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/` plan, frozen task/profile contract, and migration equivalence report @ git:`untracked`. Recorded the 18-task × 3-detail = 54 versioned profile platform, backend-owned factual snapshot boundary, frontend-owned safe prompt/clipboard boundary, fail-closed compatibility, four-surface hard cutover, and MCP-ready service seam.
+Created: [[sources/phase00-ai-export-backend-snapshot]], [[decisions/ai-export-versioned-snapshot-boundary]], [[entities/ai-export-snapshot-service]].
+Updated: [[decisions/ai-export-prompt-catalog]] (marked superseded by the Phase 0 architecture).
+
+## [2026-07-26] file | AI Export cash FX valuation-basis mismatch
+
+Live E2E showed that Portfolio Engine cash is transaction-date FX valued while native cash exposure is snapshot-date FX valued; an invalid equality invariant produced `portfolio_service.cash_balance_total_mismatch` as HTTP 503. Preserved engine summary/decomposition, kept factual snapshot-valued native cash, and gave `allocation_by_currency_pct` its declared `trading_currency_positions_plus_native_cash_snapshot_value` denominator without changing Portfolio Engine math. Filed: [[problems/ai-export-cash-fx-valuation-basis-mismatch]].
+
+## [2026-07-26] file | Import wizard fake asset-id collision across multiple files
+
+Root-caused marco's prod portfolio corruption (BTP PIU at -917k/-99.99%): the Step-4 merge keyed asset resolutions by bare fake ids that collide across files, binding Intesa's EURIZON seeds onto Crédit Agricole's BTPs. Fixed by namespacing fake ids per-file (unique global allocator) + cloning txs; documented the companion locale numeric-input bug. Filed: [[problems/import-wizard-fake-id-collision]].
+
+## [2026-07-25] file | Crédit Agricole securities-only BRIM cash-neutral model
+
+Recorded the CA BRIM decision: securities-only exports get automatic BUY/SELL cash counter-entries, and succession transfer rows are faithful BUY+DEPOSIT legs rather than ADJUSTMENTs. Filed: [[decisions/credit-agricole-securities-only-cash-neutral-brim]].
+
 ## [2026-07-23] file | Backend plugin signals and OpenAPI discriminator workaround
 
 Recorded the Phase 0 technical-signal architecture (pure Python plugins, canonical outputs, one Asset/FX bulk request, local-only comparisons/benchmarks) and the `openapi-zod-client` discriminator type-erasure workaround. Updated the signals domain page. Filed: [[decisions/signal-backend-plugin-architecture]], [[problems/openapi-zod-discriminator-type-erasure]].
@@ -1366,4 +1399,3 @@ wiki cleanup).
 Next recommended: (a) re-ingest/refresh the 3 genuinely-stale backend/frontend sources above; (b) a dedicated
 orphan-linking pass for the 7 problem + 3 decision pages listed above; (c) hand-relabel the ~225 auto-labeled
 communities from this update if/when the graph is used for browsing rather than query.
-

@@ -2,7 +2,7 @@
 
 **Versione**: 3  
 **Data**: 25 luglio 2026  
-**Stato**: decisioni architetturali incorporate — base per un futuro piano esecutivo  
+**Stato**: ✅ implementata e verificata — 27 luglio 2026
 **Prerequisito**: Gate E segnali approvato  
 **Piano di riferimento**:
 [Signal Backend Migration Implementation](./plan-phase00SignalsBackendMigrationImplementation.prompt.md)
@@ -1667,3 +1667,8 @@ F1 è completa quando:
 
 Questi punti richiedono verifica implementativa, non cambiano le decisioni
 architetturali del report.
+
+---
+
+→ Piano esecutivo:
+[AI Export Backend Snapshot e Hard Cutover](./02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md)

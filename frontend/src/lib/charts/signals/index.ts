@@ -53,10 +53,6 @@ export {AssetComparisonSignal} from './AssetComparisonSignal';
 export {LinearSignal} from './LinearSignal';
 export {CompoundSignal} from './CompoundSignal';
 export {SineSignal} from './SineSignal';
-export {EmaSignal} from './EmaSignal';
-export {MacdSignal} from './MacdSignal';
-export {RsiSignal} from './RsiSignal';
-export {BollingerSignal} from './BollingerSignal';
 
 // Measure signal (not registered in dropdown — managed by MeasurePanel)
 export {MeasureSignal, type MeasurementResult} from './MeasureSignal';

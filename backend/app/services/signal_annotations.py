@@ -12,6 +12,8 @@ from backend.app.schemas.signals import (
     SignalAnnotationDirection,
     SignalAnnotationRequest,
     SignalAnnotationSampling,
+    SignalBandSeries,
+    SignalBandValueSource,
     SignalBarSeries,
     SignalCadence,
     SignalExecutionContext,
@@ -308,6 +310,22 @@ class SignalAnnotationService:
                 raise SignalAnnotationSourceUnavailable(f"Series '{source.series_key}' is not scalar")
             return _ValueTimeline(
                 values={point.date: point.value for point in selected.points},
+                source_metadata=source.model_dump(mode="json"),
+            )
+        if isinstance(source, SignalBandValueSource):
+            series = series_by_instance.get(source.instance_id)
+            if series is None:
+                raise SignalAnnotationSourceUnavailable(f"Signal instance '{source.instance_id}' has no extended output")
+            selected = next(
+                (item for item in series if item.key == source.series_key),
+                None,
+            )
+            if selected is None:
+                raise SignalAnnotationSourceUnavailable(f"Series '{source.series_key}' is missing from '{source.instance_id}'")
+            if not isinstance(selected, SignalBandSeries):
+                raise SignalAnnotationSourceUnavailable(f"Series '{source.series_key}' is not a band")
+            return _ValueTimeline(
+                values={point.date: getattr(point, source.component.value) for point in selected.points},
                 source_metadata=source.model_dump(mode="json"),
             )
         raise SignalAnnotationSourceUnavailable(f"Unsupported source: {type(source).__name__}")

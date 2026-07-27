@@ -1,11 +1,6 @@
 /**
- * Signal Registry — Maps signalType strings to constructors.
- * Provides factory functions for creating, deserializing, and querying signals.
- *
- * To add a new signal type:
- * 1. Create the class extending ChartSignal
- * 2. Add an entry to SIGNAL_REGISTRY below
- * 3. Done — the UI automatically picks it up via getRegisteredSignalTypes()
+ * Local Signal Registry — Maps comparison and benchmark signal types to constructors.
+ * Backend technical indicators use catalog definitions and generic rendering instead.
  */
 
 import {ChartSignal, DEFAULT_SIGNAL_COLORS, type SignalConfig, type SignalDefinition, type SignalStyle} from './ChartSignal';
@@ -15,10 +10,6 @@ import {AssetComparisonSignal} from './AssetComparisonSignal';
 import {LinearSignal} from './LinearSignal';
 import {CompoundSignal} from './CompoundSignal';
 import {SineSignal} from './SineSignal';
-import {EmaSignal} from './EmaSignal';
-import {MacdSignal} from './MacdSignal';
-import {RsiSignal} from './RsiSignal';
-import {BollingerSignal} from './BollingerSignal';
 
 // Re-export for convenience
 export type {SignalConfig, SignalStyle};
@@ -37,10 +28,6 @@ const SIGNAL_REGISTRY = new Map<string, SignalConstructor>([
     [LinearSignal.signalType, LinearSignal as unknown as SignalConstructor],
     [CompoundSignal.signalType, CompoundSignal as unknown as SignalConstructor],
     [SineSignal.signalType, SineSignal as unknown as SignalConstructor],
-    [EmaSignal.signalType, EmaSignal as unknown as SignalConstructor],
-    [MacdSignal.signalType, MacdSignal as unknown as SignalConstructor],
-    [RsiSignal.signalType, RsiSignal as unknown as SignalConstructor],
-    [BollingerSignal.signalType, BollingerSignal as unknown as SignalConstructor],
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -116,22 +103,6 @@ const LOCAL_SIGNAL_I18N_KEYS: Record<string, {displayNameKey: string; descriptio
         displayNameKey: 'chartSettings.signals.sine',
         descriptionKey: 'chartSettings.signals.sineDesc',
     },
-    ema: {
-        displayNameKey: 'chartSettings.signals.ema',
-        descriptionKey: 'chartSettings.signals.emaDesc',
-    },
-    macd: {
-        displayNameKey: 'chartSettings.signals.macd',
-        descriptionKey: 'chartSettings.signals.macdDesc',
-    },
-    rsi: {
-        displayNameKey: 'chartSettings.signals.rsi',
-        descriptionKey: 'chartSettings.signals.rsiDesc',
-    },
-    bollinger: {
-        displayNameKey: 'chartSettings.signals.bollinger',
-        descriptionKey: 'chartSettings.signals.bollingerDesc',
-    },
 };
 
 function definitionFromConstructor(Cls: SignalConstructor): SignalDefinition {
@@ -155,7 +126,7 @@ export function getLocalSignalDefinitions(): SignalDefinition[] {
     return [...SIGNAL_REGISTRY.values()].filter((Cls) => Cls.category === 'comparison' || Cls.category === 'benchmark').map(definitionFromConstructor);
 }
 
-/** All registered signal types (for "Add signal" dropdown in ChartSettingsModal). */
+/** All locally registered signal types. */
 export function getRegisteredSignalTypes(): SignalDefinition[] {
     return [...SIGNAL_REGISTRY.values()].map(definitionFromConstructor);
 }
@@ -170,10 +141,8 @@ export function createSignal(signalType: string, existingCount: number, usedColo
     if (!Cls) return null;
 
     const id = generateUUID();
-    // Line width: indicator=1, benchmark=1, fx-pair=1, asset-comparison=2
-    const defaultWidth = Cls.category === 'indicator' ? 1 : Cls.category === 'benchmark' ? 1 : Cls.signalType === 'fx-pair' ? 1 : 2; // asset-comparison
-    // Line type: indicator=dotted, benchmark=dashed, comparison=solid, MACD=solid
-    const defaultLineType: 'solid' | 'dashed' | 'dotted' = Cls.signalType === 'macd' ? 'solid' : Cls.category === 'indicator' ? 'dotted' : Cls.category === 'benchmark' ? 'dashed' : 'solid'; // comparison
+    const defaultWidth = Cls.signalType === 'asset-comparison' ? 2 : 1;
+    const defaultLineType: 'solid' | 'dashed' = Cls.category === 'benchmark' ? 'dashed' : 'solid';
     const color = usedColors.length > 0 ? pickBestColor(usedColors) : DEFAULT_SIGNAL_COLORS[existingCount % DEFAULT_SIGNAL_COLORS.length];
     const style: SignalStyle = {
         color,
@@ -186,15 +155,6 @@ export function createSignal(signalType: string, existingCount: number, usedColo
     const params: Record<string, unknown> = {};
     for (const desc of Cls.paramDescriptors) {
         params[desc.key] = desc.default;
-    }
-
-    // MACD composite: set signal-line defaults so they match renderMulti() and the UI
-    if (Cls.signalType === 'macd') {
-        params._signalColor = style.color; // same color as primary
-        params._signalLineWidth = 1; // thinner than MACD line
-        params._signalLineType = 'dashed'; // dashed to distinguish
-        params._signalMarkerStart = null;
-        params._signalMarkerEnd = null;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -294,7 +294,7 @@
     // Category dropdowns
     // =========================================================================
 
-    const INDICATOR_GROUP_ORDER: SignalIndicatorGroup[] = ['trend', 'momentum', 'volatility', 'volume'];
+    const INDICATOR_GROUP_ORDER: SignalIndicatorGroup[] = ['trend', 'momentum', 'volatility', 'volume', 'risk'];
     const INPUT_FIELD_ORDER: SignalInputField[] = ['open', 'high', 'low', 'close', 'volume'];
 
     function signalDataSubtitle(definition: SignalDefinition): string {

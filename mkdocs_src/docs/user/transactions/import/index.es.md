@@ -109,13 +109,20 @@ LibreFolio admite la importación de archivos de estado de cuenta de los siguien
  </div>
  <span class="card-desc">Importa la exportación CSV del historial de transacciones desde InvestEngine.</span>
  </a>
- <a href="rabobank/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
- <div style="display: flex; align-items: center; gap: 0.75rem;">
- <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Rabobank">
- <span class="card-title" style="margin: 0;">Rabobank</span>
- </div>
- <span class="card-desc">Importa la exportación CSV del historial de transacciones desde Rabobank.</span>
- </a>
+    <a href="rabobank/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Rabobank">
+    <span class="card-title" style="margin: 0;">Rabobank</span>
+    </div>
+    <span class="card-desc">Importar la exportación CSV del historial de transacciones desde Rabobank.</span>
+    </a>
+    <a href="fineco/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Fineco">
+    <span class="card-title" style="margin: 0;">Fineco</span>
+    </div>
+    <span class="card-desc">Importar la exportación CSV "Movimenti Dossier Titoli" desde Fineco.</span>
+    </a>
  <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
  <img src="https://traderepublic.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trade Republic">
@@ -227,7 +234,8 @@ LibreFolio admite la importación de archivos de estado de cuenta de los siguien
     | <img src="https://bux.com/it/wp-content/themes/vo-theme/assets/images/favicon/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **BUX** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://disnat.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Disnat** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://www.investengine.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **InvestEngine** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ❌ | Escrito a partir de los archivos de ejemplo |
-    | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
+    | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Creado a partir de exportaciones de ejemplo |
+    | <img src="https://finecobank.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Ambos diseños de exportación; importes en la divisa del informe |
     | <img src="https://traderepublic.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trade Republic** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://www.xtb.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **XTB** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |
     | <img src="https://parqet.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Parqet** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Escrito a partir de los archivos de ejemplo |

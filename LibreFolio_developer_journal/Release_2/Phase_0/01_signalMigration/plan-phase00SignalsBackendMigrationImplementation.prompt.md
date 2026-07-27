@@ -1,6 +1,6 @@
 # Piano Applicativo: Phase 0 — Migrazione Segnali Backend
 
-**Stato**: 🚧 IN CORSO — implementazione approvata il 22 Luglio 2026.
+**Stato**: ✅ COMPLETATO — 27 Luglio 2026.
 
 **Data**: 22 Luglio 2026
 
@@ -1915,7 +1915,13 @@ Non eliminare il TypeScript finché:
 
 ### F1 — AI Export
 
-**Stato**: 🟡 REPORT ARCHITETTURALE V2 COMPLETATO — piano esecutivo pendente.
+**Stato**: ✅ COMPLETATO — 26 Luglio 2026.
+
+> **Note implementazione (26 Luglio 2026)**: realizzati 54 profili versionati, endpoint
+> catalog/snapshot autenticati, quattro assembler backend, prompt/clipboard V2 e hard
+> cutover Dashboard/Broker/Asset/FX. Rimossi tutti i builder legacy. Dettagli:
+> [piano esecutivo](./02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md)
+> e [equivalence report](./02_aiExport/report-phase00AiExportMigrationEquivalence.md).
 
 > **Nota di scope (25 Luglio 2026)**: F1 non sarà una migrazione 1:1 dei vecchi
 > EMA/RSI/MACD. La nuova fotografia userà un profilo sviluppatore-curato con più
@@ -1926,10 +1932,14 @@ Non eliminare il TypeScript finché:
 >
 > **Analisi**:
 > [AI Export F1 — Architettura e fotografia dati curata](./analysis-phase00AiExportArchitectureAndSnapshot.md)
+>
+> **Piano esecutivo**:
+> [AI Export Backend Snapshot e Hard Cutover](./02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md)
 
 **Obiettivo**
 
-Costruire una fotografia AI backend, curata e token-bounded, riutilizzabile da
+Costruire una fotografia AI backend, curata e misurata con telemetria non distruttiva,
+riutilizzabile da
 frontend e futuro MCP; eliminare il secondo calcolo tecnico frontend.
 
 **File**
@@ -2036,6 +2046,12 @@ frontend e futuro MCP; eliminare il secondo calcolo tecnico frontend.
 
 ### F2 — Rimozione engine tecnico TypeScript
 
+**Stato**: ✅ COMPLETATO — 26 Luglio 2026.
+
+> **Note implementazione**: rimossi EMA/RSI/MACD/Bollinger TypeScript, relativi export
+> e test obsoleti. Registry locale limitato a comparison/benchmark; Measure e renderer
+> backend generico preservati. Signal regression finale: 45/45.
+
 **Obiettivo**
 
 Completare il cutover senza rimuovere segnali locali.
@@ -2077,8 +2093,12 @@ Completare il cutover senza rimuovere segnali locali.
 
 ### F3 — Docs, instructions e knowledge layer
 
-**Stato**: 🟡 IN CORSO — guida plugin e teoria finanziaria completate; cleanup e
-knowledge layer restano dipendenti da Gate E/F1-F2.
+**Stato**: ✅ COMPLETATO — 26 Luglio 2026.
+
+> **Note implementazione (26 Luglio 2026)**: aggiunte architettura AI Export,
+> guida utente EN/IT/FR/ES e instruction frontend dedicata; aggiornata la Signal Plugin
+> Guide. Ingeriti piano/decisioni/problema cash FX nel devWiki e rigenerato il grafo.
+> MkDocs build e link check verdi.
 
 > **Note implementazione (23 Luglio 2026)**: aggiunta la Developer Guide
 > `signal_plugin_guide.md` con architettura runtime/service/annotations, lifecycle,
@@ -2137,6 +2157,12 @@ Allineare documentazione e memoria progetto.
 - analisi storiche restano contraddittorie senza nota superseded.
 
 ### Gate F — Completamento Phase 0
+
+**Stato**: ✅ SUPERATO — 27 Luglio 2026.
+
+> **Chiusura Gate F (27 Luglio 2026)**: review manuale AI Export approvata; catena
+> esecutiva verificata e indicizzata in
+> [`./02_aiExport/README.md`](./02_aiExport/README.md).
 
 Phase 0 è completa quando:
 

@@ -66,6 +66,8 @@ class RocSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.roc.name"
     description_key = "signals.roc.description"
+    semantic_id = "rate_of_change"
+    semantic_description = "Measures percentage change from the price one lookback period earlier."
     icon = "🚀"
     docs_path = "financial-theory/technical-analysis/indicators/roc/"
     params_model = RocSignalParams
@@ -74,6 +76,8 @@ class RocSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="roc",
             label_key="signals.roc.output",
+            semantic_id="rate_of_change.value",
+            semantic_description="Percentage change from the closing price one lookback period earlier.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PERCENTAGE,
             axis=SignalAxisSpec(
@@ -126,6 +130,8 @@ class RocSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

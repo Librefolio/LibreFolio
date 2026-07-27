@@ -14,6 +14,7 @@ interface JsonSchemaProperty {
     ['x-step']?: unknown;
     ['x-tooltip-key']?: unknown;
     ['x-affects-outputs']?: unknown;
+    ['x-control']?: unknown;
 }
 
 interface JsonObjectSchema {
@@ -58,6 +59,12 @@ function readAffectedOutputs(key: string, value: unknown): string[] | undefined 
         throw new UnsupportedSignalSchemaError(`Signal parameter '${key}' has invalid x-affects-outputs metadata`);
     }
     return value;
+}
+
+function readSemanticControl(key: string, value: unknown): SignalParamDescriptor['control'] {
+    if (value === undefined) return undefined;
+    if (value === 'comparison_asset') return value;
+    throw new UnsupportedSignalSchemaError(`Signal parameter '${key}' has unsupported x-control '${String(value)}'`);
 }
 
 function mapPropertyType(key: string, property: JsonSchemaProperty): Pick<SignalParamDescriptor, 'type' | 'integer' | 'options'> {
@@ -110,6 +117,7 @@ export function mapSignalParamsSchema(paramsSchema: Record<string, unknown>, def
                 suffix: asString(property['x-suffix']),
                 tooltip: asString(property['x-tooltip-key']),
                 affectsOutputs: readAffectedOutputs(key, property['x-affects-outputs']),
+                control: readSemanticControl(key, property['x-control']),
                 order,
                 ...mappedType,
             };

@@ -64,6 +64,7 @@ from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo,
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
 
 logger = structlog.get_logger(__name__)
@@ -165,6 +166,11 @@ class FinecoBrokerProvider(BRIMProvider):
     @property
     def supported_extensions(self) -> List[str]:
         return [".csv"]
+
+    @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — bond redeemed above par split into par SELL + INTEREST surplus.
+        return "1.1.0"
 
     @property
     def detection_priority(self) -> int:
@@ -296,6 +302,20 @@ class FinecoBrokerProvider(BRIMProvider):
                 isin = row[COL_ISIN].strip()
                 name = row[COL_TITOLO].strip()
 
+                # Bond redeemed above par at maturity: split the credited amount into a
+                # par-value SELL plus a separate INTEREST leg for the surplus (premio /
+                # revaluation = reddito di capitale). The row already carries the nominal
+                # in Quantità, so the position is exact (no verify flag needed). Simple
+                # redemptions at/below par are left untouched (pass-through).
+                maturity_surplus: Optional[Decimal] = None
+                if tx_type == TransactionType.SELL and "rimborso" in descrizione.lower() and io.looks_like_bond(name, isin):
+                    price = _parse_fineco_number(row[COL_PRICE])
+                    if price and price > Decimal("100") and quantity and controvalore:
+                        model = io.model_bond_maturity(ctv=controvalore, price=price, held_qty=abs(quantity))
+                        if model.nominal > 0 and model.surplus_cash > 0:
+                            controvalore = model.principal_cash
+                            maturity_surplus = model.surplus_cash
+
                 # Apply per-type sign conventions (verbatim magnitude from source)
                 quantity, cash = self._apply_sign_rules(tx_type, quantity, controvalore, currency)
 
@@ -316,6 +336,23 @@ class FinecoBrokerProvider(BRIMProvider):
                     description=f"{descrizione}: {name}" if name else descrizione,
                     tags=["import", "fineco"],
                 )
+
+                # Surplus over par at maturity = premio / revaluation → INTEREST income.
+                if maturity_surplus is not None and maturity_surplus > 0:
+                    self._create_transaction(
+                        row_num=row_num,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=f"Maturity premium: {name}" if name else "Maturity premium",
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=TransactionType.INTEREST,
+                        date=tx_date,
+                        quantity=Decimal("0"),
+                        cash=Currency(code=currency, amount=abs(maturity_surplus)),
+                        description=f"Rimborso a scadenza — premio/rivalutazione oltre la pari: {name}" if name else "Premio/rivalutazione a scadenza",
+                        tags=["import", "fineco", "maturity_premium"],
+                    )
 
                 # Variant B: emit a separate FEE transaction for total commissions
                 if has_commissions:

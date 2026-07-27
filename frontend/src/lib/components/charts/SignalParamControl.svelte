@@ -5,6 +5,7 @@
     import type {SignalParamDescriptor} from '$lib/charts/signals';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import SignalAssetParamControl from './SignalAssetParamControl.svelte';
 
     interface Props {
         descriptor: SignalParamDescriptor;
@@ -63,7 +64,9 @@
         </span>
     {/if}
 
-    {#if descriptor.type === 'number'}
+    {#if descriptor.control === 'comparison_asset'}
+        <SignalAssetParamControl {value} onchange={(assetId) => onchange(assetId)} />
+    {:else if descriptor.type === 'number'}
         <div class="flex items-center gap-1">
             <input
                 type="number"

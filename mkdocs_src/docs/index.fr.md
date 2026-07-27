@@ -32,9 +32,9 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
  </script>
  <h1>LibreFolio</h1>
  </div>
- 
+
  <h2>Libre à comprendre,<span class="desktop-space"> </span><span class="mobile-break"></span>libre d'agir.</h2>
- 
+
  <p class="hero-subtitle" style="margin-top: 2rem;">
  Regroupez tous vos investissements dans un tableau de bord sécurisé.<br><br>
  Vos données prennent vie grâce à des outils d'analyse conçus pour vous.<br>
@@ -54,7 +54,7 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
  <section class="lf-quick-install-section" id="get-started-quick">
  <div class="lf-quick-install-card">
  <h2 class="lf-quick-install-title">Prêt à essayer<br><img id="quick-install-logo" alt="Logo LibreFolio" style="height: 1em; width: auto; vertical-align: text-bottom; margin-right: 0.2em; border-radius: 4px;"><script>(function(){var p=window.location.pathname.replace(/\/+$/,"");var base=p.replace(/\/(it|fr|es)$/,"");document.getElementById("quick-install-logo").src=base+"/static/logo.png";})();</script>LibreFolio ?</h2>
- 
+
   <div class="lf-quick-install-docker" style="display: block; padding: 2rem;">
   <span class="lf-quick-install-eyebrow">Recommandé</span>
   <div class="lf-quick-install-docker-body">
@@ -70,7 +70,7 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
     <a href="user/installation/" class="lf-btn-primary">Lire le guide Docker &rarr;</a>
   </div>
   </div>
-  
+
   <div class="lf-quick-install-dev" style="display: block; padding: 1.5rem 2rem;">
   <div class="lf-quick-install-dev-body">
   <div class="lf-quick-install-heading">
@@ -241,7 +241,7 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
  </div>
  <div class="deep-dive-image">
  <div class="lf-screenshot-carousel" data-carousel="assets" data-carousel-interval="18000">
- <img class="gallery-img lf-screenshot-carousel-item is-active" 
+ <img class="gallery-img lf-screenshot-carousel-item is-active"
  data-category="assets" data-name="detail-chart" alt="Graphique de base des détails de l'actif">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
  data-category="assets" data-name="detail-signals-macd" alt="Signaux MACD de l'actif">
@@ -264,7 +264,7 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
  </div>
  <div class="deep-dive-image">
  <div class="lf-screenshot-carousel" data-carousel="fx-assets-table" data-carousel-interval="18000">
- <img class="gallery-img lf-screenshot-carousel-item is-active" 
+ <img class="gallery-img lf-screenshot-carousel-item is-active"
  data-category="fx" data-name="list" data-title="Grille Forex" alt="Grille Forex">
  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy"
  data-category="fx" data-name="list-table" data-title="Tableau Forex" alt="Tableau Forex">
@@ -281,71 +281,35 @@ description: Libre à comprendre, libre d'agir. LibreFolio regroupe tous vos inv
  </div>
 
  <!-- Deep Dive: Expandable by the Community -->
- <div class="deep-dive" style="margin-top: 4rem; display: block; text-align: center;">
- <h2 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
- Un écosystème modulaire
- <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
- </h2>
- <p style="max-width: 680px; margin: 0 auto 3rem auto; color: var(--md-default-fg-color--light); font-size: 1.05rem; line-height: 1.6;">
- Libérez-vous des feuilles de calcul. LibreFolio est conçu pour se <b>connecter parfaitement</b> aux outils financiers que vous utilisez déjà, étendant ses capacités via un écosystème croissant de <b>plugins communautaires</b>.
- </p>
- 
- <div class="plugin-radial-hub">
- <div class="hub-core">
- <img id="hub-core-img" alt="Cœur de LibreFolio" src="/LibreFolio/static/logo.png">
- <script>
- (function() {
- var p = window.location.pathname.replace(/\/+$/, '');
- var base = p.replace(/\/(it|fr|es)$/, '');
- document.getElementById('hub-core-img').src = base + '/static/logo.png';
- })();
- </script>
- </div>
+  <div class="deep-dive" style="margin-top: 4rem; display: block; text-align: center;">
+  <h2 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+  Un écosystème modulaire
+  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+  </h2>
+  <p style="max-width: 680px; margin: 0 auto 3rem auto; color: var(--md-default-fg-color--light); font-size: 1.05rem; line-height: 1.6;">
+  Libérez-vous des feuilles de calcul. LibreFolio est conçu pour se <b>connecter parfaitement</b> aux outils financiers que vous utilisez déjà, étendant ses capacités via un écosystème croissant de <b>plugins communautaires</b>.
+  </p>
 
- <div class="ellipse-wrapper">
- <div class="satellite-track">
- <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
- <line x1="325" y1="325" x2="325" y2="0" />
- <line x1="325" y1="325" x2="43.5" y2="487.5" />
- <line x1="325" y1="325" x2="606.5" y2="487.5" />
- </svg>
- 
- <div class="hub-node node-top">
- <div class="hub-node-unscale">
- <a href="user/transactions/import/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
- <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
- <div class="provider-info">
- <h4>Importation des Courtiers</h4>
- <p><b>Chargez et traitez</b> les fichiers d'exportation de vos courtiers <b>en quelques secondes</b> grâce aux parseurs intelligents de la communauté.</p>
- </div>
- </a>
- </div>
- </div>
+  <div class="plugin-radial-hub plugin-radial-hub--four">
+      <div class="hub-core">
+        <img id="hub-core-img" alt="LibreFolio Core" src="/LibreFolio/static/logo.png">
+        <script>
+          (function() {
+            var p = window.location.pathname.replace(/\/+$/, '');
+            var base = p.replace(/\/(it|fr|es)$/, '');
+            document.getElementById('hub-core-img').src = base + '/static/logo.png';
+          })();
+        </script>
+      </div>
 
- <div class="hub-node node-bottom-left">
- <div class="hub-node-unscale">
- <a href="user/assets/providers/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
- <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
- <div class="provider-info">
- <h4>Prix et Cours des Actifs</h4>
- <p><b>Mettez à jour automatiquement</b> les valeurs de vos actions, ETF et cryptomonnaies en vous connectant à des fournisseurs de données en temps réel.</p>
- </div>
- </a>
- </div>
- </div>
-
- <div class="hub-node node-bottom-right">
- <div class="hub-node-unscale">
- <a href="user/fx/" class="card-link provider-row" style="padding: 1rem; margin: 0; color: inherit; text-decoration: none; text-align: left;">
- <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
- <div class="provider-info">
- <h4>Gestion des Changes et Forex</h4>
- <p><b>Synchronisez les taux de change</b> (FX) pour calculer et équilibrer avec précision vos <b>portefeuilles multi-devises</b>.</p>
- </div>
- </a>
- </div>
- </div>
- </div>
+      <div class="ellipse-wrapper">
+        <div class="satellite-track">
+          <svg class="hub-lines" viewBox="0 0 650 650" width="100%" height="100%">
+            <line x1="325" y1="325" x2="95" y2="95" />
+            <line x1="325" y1="325" x2="555" y2="95" />
+            <line x1="325" y1="325" x2="555" y2="555" />
+            <line x1="325" y1="325" x2="95" y2="555" />
+          </svg>
  </div>
  </div>
  </div>

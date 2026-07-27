@@ -197,7 +197,7 @@
                             </div>
                         </div>
                     </div>
-                    <button onclick={() => handleDelete(file.file_id)} class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100" title={$_('common.delete')}>
+                    <button onclick={() => handleDelete(file.file_id)} class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title={$_('common.delete')}>
                         <Trash2 size={14} />
                     </button>
                 </div>

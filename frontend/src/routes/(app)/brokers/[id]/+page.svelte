@@ -37,10 +37,21 @@
     import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
-    import {copyAiExport} from '$lib/features/ai-export/aiExportClipboard';
-    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {PORTFOLIO_PROMPT_CATALOG, type PromptId} from '$lib/features/ai-export/promptCatalog';
+    import AiExportMenuV2 from '$lib/features/ai-export/AiExportMenuV2.svelte';
+    import {copyAiExportV2, type AiExportBrokerRequestContext} from '$lib/features/ai-export/aiExportClipboardV2';
+    import {aiExportStatsContextFingerprint, isAiExportStatsRequestCurrent, normalizeAiExportUserNotes, type AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
+    import {BROKER_AI_EXPORT_TASKS} from '$lib/features/ai-export/catalog/brokerTasks';
+    import {aiExportCatalogLoader, reconcileAiExportCatalog, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
+    import {AI_EXPORT_CATALOG_SCHEMA_VERSION} from '$lib/features/ai-export/catalog/shared';
+    import type {AiExportPromptStats} from '$lib/features/ai-export/templates/promptRenderer';
+    import {buildAiExportMenuV2Labels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+
+    const DISABLED_AI_EXPORT_COMPATIBILITY = reconcileAiExportCatalog({
+        schema_version: AI_EXPORT_CATALOG_SCHEMA_VERSION,
+        entries: [],
+    });
+    type BrokerAiExportTask = (typeof BROKER_AI_EXPORT_TASKS)[number]['id'];
 
     export let data: {brokerId: number};
 
@@ -75,9 +86,20 @@
         bulkOpen = true;
     }
 
-    /** AI export state — dropdown open/position handled internally by AiExportMenu */
+    /** AI export state — dropdown open/position handled internally by AiExportMenuV2. */
+    let aiExportCompatibility: AiExportCatalogCompatibilityResult = DISABLED_AI_EXPORT_COMPATIBILITY;
+    let aiExportCatalogLoading = true;
+    let aiExportCatalogFailed = false;
     let aiExportLoading = false;
-    $: aiExportEntries = PORTFOLIO_PROMPT_CATALOG.map((p) => ({id: p.id, label: $_(p.labelKey), description: $_(p.descriptionKey), icon: p.icon}));
+    let aiExportLastStats: AiExportPromptStats | undefined;
+    let aiExportLastStatsFingerprint: string | undefined;
+    let aiExportLastStatsContextFingerprint: string | undefined;
+    let aiExportObservedContextFingerprint: string | undefined;
+    let aiExportContextGeneration = 0;
+    let aiExportContextFingerprint = '';
+    let aiExportVisibleLastStats: AiExportPromptStats | undefined;
+    let aiExportVisibleLastStatsFingerprint: string | undefined;
+    let aiExportLabels = buildAiExportMenuV2Labels($_, BROKER_AI_EXPORT_TASKS, $_('dashboard.aiExport'), $_('dashboard.aiExportBuilding'));
 
     // Transactions tab — full paginated history (not just "recent 10").
     let txMainRows: TXReadItem[] = [];
@@ -173,6 +195,18 @@
         if (hadLoadedData && !reportLoading) void loadOverview(true);
     }
 
+    $: aiExportContextFingerprint = aiExportStatsContextFingerprint({
+        contextKey: `broker:route=${data.brokerId}:loaded=${broker?.id ?? 'none'}`,
+        dateStart: dateFrom,
+        dateEnd: dateTo,
+        displayCurrency: targetCurrency,
+        targetCurrency,
+    });
+    $: aiExportVisibleLastStats = aiExportLastStatsContextFingerprint === aiExportContextFingerprint ? aiExportLastStats : undefined;
+    $: aiExportVisibleLastStatsFingerprint = aiExportLastStatsContextFingerprint === aiExportContextFingerprint ? aiExportLastStatsFingerprint : undefined;
+    $: aiExportLabels = buildAiExportMenuV2Labels($_, BROKER_AI_EXPORT_TASKS, $_('dashboard.aiExport'), $_('dashboard.aiExportBuilding'));
+    $: resetAiExportStatsForContext(aiExportContextFingerprint);
+
     $: brokerTabs = [
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni'},
@@ -180,28 +214,82 @@
         {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info'},
     ];
 
-    async function handleAiExport(promptId: PromptId) {
-        if (!broker) return;
-        aiExportLoading = true;
+    function resetAiExportStatsForContext(contextFingerprint: string) {
+        if (aiExportObservedContextFingerprint === contextFingerprint) return;
+
+        aiExportObservedContextFingerprint = contextFingerprint;
+        aiExportContextGeneration += 1;
+        aiExportLastStats = undefined;
+        aiExportLastStatsFingerprint = undefined;
+        aiExportLastStatsContextFingerprint = undefined;
+    }
+
+    async function loadAiExportCompatibility() {
+        aiExportCatalogLoading = true;
         try {
-            await copyAiExport(
-                promptId,
-                {
-                    brokerIds: [broker.id],
-                    dateFrom: dateFrom || undefined,
-                    dateTo: dateTo || undefined,
-                    targetCurrency: targetCurrency,
-                    locale: $currentLanguage,
-                },
-                toasts,
-                $_,
-            );
+            aiExportCompatibility = await aiExportCatalogLoader.load();
+            aiExportCatalogFailed = false;
+        } catch {
+            aiExportCatalogFailed = true;
+            toasts.error($_('aiExport.v2.catalogUnavailable'));
+        } finally {
+            aiExportCatalogLoading = false;
+        }
+    }
+
+    function isBrokerAiExportTask(task: AiExportOptionsSelection['task']): task is BrokerAiExportTask {
+        return BROKER_AI_EXPORT_TASKS.some((definition) => definition.id === task);
+    }
+
+    async function handleAiExport(options: AiExportOptionsSelection) {
+        const loadedBroker = broker;
+        if (!loadedBroker || loadedBroker.id !== data.brokerId || aiExportCatalogLoading || aiExportCatalogFailed) return;
+        if (!isBrokerAiExportTask(options.task)) {
+            toasts.error($_('aiExport.v2.catalogUnavailable'));
+            return;
+        }
+
+        aiExportLoading = true;
+        const requestGeneration = aiExportContextGeneration;
+        const requestContextFingerprint = aiExportContextFingerprint;
+        const context: AiExportBrokerRequestContext = {
+            domain: 'broker',
+            brokerId: loadedBroker.id,
+            dateRange: {
+                start: dateFrom,
+                end: dateTo,
+            },
+            targetCurrency,
+        };
+        try {
+            const result = await copyAiExportV2({
+                context,
+                task: options.task,
+                detailLevel: options.detailLevel,
+                renderMode: options.renderMode,
+                responseLanguage: options.responseLanguage,
+                userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
+                webResearch: options.webResearch,
+                compatibility: aiExportCompatibility,
+            });
+            if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, aiExportContextGeneration, aiExportContextFingerprint)) {
+                aiExportLastStats = result.stats;
+                aiExportLastStatsFingerprint = result.optionsFingerprint;
+                aiExportLastStatsContextFingerprint = requestContextFingerprint;
+            }
+
+            const messages = getAiExportSuccessMessages($_, result);
+            toasts.success(messages.copied);
+            toasts.info(messages.privacyNotice);
+        } catch (error) {
+            toasts.error(getAiExportErrorMessage($_, error));
         } finally {
             aiExportLoading = false;
         }
     }
 
     onMount(() => {
+        void loadAiExportCompatibility();
         void Promise.all([loadBroker(), loadOverview(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
     });
 
@@ -480,8 +568,21 @@
                     {#if showActionLabels}<span>{$_('dashboard.syncData')}</span>{/if}
                 </button>
 
-                <!-- AI Export — reuses the same copyAiExport() utility as the dashboard, scoped to this single broker. -->
-                <AiExportMenu entries={aiExportEntries} loading={aiExportLoading} triggerLabel={$_('dashboard.aiExport')} loadingLabel={$_('dashboard.aiExportBuilding')} showLabel={showActionLabels} onselect={(id) => handleAiExport(id as PromptId)} />
+                <AiExportMenuV2
+                    domainTaskDefinitions={BROKER_AI_EXPORT_TASKS}
+                    compatibility={aiExportCompatibility}
+                    memoryKey={`broker:${data.brokerId}`}
+                    defaultTask="broker_review"
+                    defaultDetailLevel="standard"
+                    defaultRenderMode="full_prompt"
+                    lastStats={aiExportVisibleLastStats}
+                    lastStatsFingerprint={aiExportVisibleLastStatsFingerprint}
+                    disabled={aiExportCatalogLoading || aiExportCatalogFailed || broker?.id !== data.brokerId}
+                    loading={aiExportLoading}
+                    labels={aiExportLabels}
+                    showLabel={showActionLabels}
+                    onexport={handleAiExport}
+                />
             {/snippet}
         </PageToolbar>
 

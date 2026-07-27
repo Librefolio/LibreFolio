@@ -1203,11 +1203,16 @@ class PortfolioService:
             broker_name = broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}")
 
             current_price: Decimal | None = None
-            if ps.valuation_price is not None and ps.valuation_price_ccy is not None:
-                if ps.valuation_price_ccy == base_currency:
-                    current_price = ps.valuation_price
+            if ps.valuation_effective_unit_price is not None and ps.valuation_effective_currency is not None:
+                if ps.valuation_effective_currency == base_currency:
+                    current_price = ps.valuation_effective_unit_price
                 else:
-                    current_price, mp = await self._convert_to_base(ps.valuation_price, ps.valuation_price_ccy, base_currency, ps.date)
+                    current_price, mp = await self._convert_to_base(
+                        ps.valuation_effective_unit_price,
+                        ps.valuation_effective_currency,
+                        base_currency,
+                        ps.date,
+                    )
                     all_missing_pairs.extend(mp)
 
             wac_per_unit: Decimal | None = None
@@ -1280,6 +1285,14 @@ class PortfolioService:
                     wac_per_unit=wac_per_unit,
                     current_price=current_price,
                     current_value=current_value,
+                    valuation_source=ps.valuation_source.value,
+                    valuation_effective_unit_price=ps.valuation_effective_unit_price,
+                    valuation_effective_currency=ps.valuation_effective_currency,
+                    valuation_reference_date=ps.valuation_reference_date,
+                    valuation_reference_unit_price=ps.valuation_reference_unit_price,
+                    valuation_reference_currency=ps.valuation_reference_currency,
+                    valuation_split_adjusted=ps.valuation_split_adjusted,
+                    missing_fx_pair=ps.missing_fx_pair,
                     gain_loss=gain_loss,
                     gain_loss_percent=gain_loss_pct,
                     price_change_1d=price_change_1d,

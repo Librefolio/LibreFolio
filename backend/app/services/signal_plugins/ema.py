@@ -70,6 +70,8 @@ class EmaSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.ema.name"
     description_key = "signals.ema.description"
+    semantic_id = "exponential_moving_average"
+    semantic_description = "Smooths prices with greater weight on recent observations."
     icon = "📉"
     docs_path = "financial-theory/technical-analysis/indicators/ema/"
     params_model = EmaSignalParams
@@ -78,6 +80,8 @@ class EmaSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="ema",
             label_key="signals.ema.output",
+            semantic_id="exponential_moving_average.value",
+            semantic_description="Exponentially weighted closing-price average with the configured offset.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
@@ -130,6 +134,8 @@ class EmaSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

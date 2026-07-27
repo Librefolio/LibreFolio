@@ -120,6 +120,8 @@ class CciSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.cci.name"
     description_key = "signals.cci.description"
+    semantic_id = "commodity_channel_index"
+    semantic_description = "Measures typical-price deviation from its recent average."
     icon = "🧭"
     docs_path = "financial-theory/technical-analysis/indicators/cci/"
     params_model = CciSignalParams
@@ -136,6 +138,8 @@ class CciSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="cci",
             label_key="signals.cci.output",
+            semantic_id="commodity_channel_index.value",
+            semantic_description="Normalized typical-price deviation from the lookback average.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(
@@ -199,6 +203,8 @@ class CciSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     reference_levels=[item.model_copy(deep=True) for item in _CCI_LEVELS],

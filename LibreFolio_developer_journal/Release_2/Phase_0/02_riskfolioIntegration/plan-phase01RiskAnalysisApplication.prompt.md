@@ -68,6 +68,12 @@ Confermate esplicitamente e vincolanti per tutti gli step:
 | D11 | **MC / QMC / RQMC** valutati via spike: **QuantLib vs NumPy/SciPy**. QMCPy **non** fa parte del piano iniziale (solo eventuale fallback futuro per gap dimostrato) |
 | D12 | Parallelismo eventuale **solo `spawn`** (multiprocessing/ProcessPoolExecutor), mai `fork` di default, mai thread per calcoli QuantLib; solo dopo benchmark |
 
+> **Esito esecuzione P0 — 27 Luglio 2026**: QuantLib 1.43 è `ADOPTED`;
+> Sobol QMC è disponibile; Burley-2020 RQMC è `PARTIAL` perché manca un
+> path-generator specializzato. Riskfolio-Lib 7.3.0 è `REJECTED` per Release 2:
+> richiede NumPy `<2.5` e aggiunge circa 1 GiB al container. Evidenza:
+> [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md).
+
 ---
 
 ## 2. Librerie quantitative
@@ -93,6 +99,10 @@ Confermate esplicitamente e vincolanti per tutti gli step:
 - **⚠️ Thread-safety (decisione D12):** QuantLib **non è thread-safe** — stato globale (evaluation date non thread-local), lazy-eval/caching → **non** condividere oggetti tra thread. Modello «un thread / un contesto di mercato»; per il parallelismo usare **process `spawn`** con oggetti locali al worker.
 - **Differenza API Python vs C++:** alcuni template C++ (scrambled Sobol, alcuni engine MC) potrebbero **non** essere wrappati in SWIG → assunzione da confermare con probe (P0).
 
+> **Esito P0**: wheel ABI3 e capability verificate su Python 3.13/macOS arm64 e
+> Linux arm64/amd64. Dipendenza pinata a 1.43. Le sequenze Burley sono esposte;
+> il path-generator Burley specializzato non lo è.
+
 ### 2.2 Riskfolio-Lib — frontiera / ottimizzazione
 - **Versione:** `7.3.0` (PyPI). **Licenza:** **BSD-3-Clause** (OSI). `requires_python >=3.10` (compatibilità 3.13 comunque da provare in P0).
 - **Fonti:** <https://pypi.org/project/riskfolio-lib/>, <https://riskfolio-lib.readthedocs.io/>.
@@ -100,6 +110,10 @@ Confermate esplicitamente e vincolanti per tutti gli step:
 - **Ruolo (separato da QuantLib):** frontiera efficiente, ottimizzazione (min-risk, max-Sharpe **stimato**, max-utility, risk-parity), 22+ misure di rischio convesse. **Non** fa simulazione forward: il MC resta QuantLib/NumPy-SciPy.
 - **Installazione:** **verificata e installata in P0 se confermata**, anche se l'uso applicativo principale è nello step finale della frontiera (P13).
 - **Solver:** via CVXPY (ECOS/SCS/Clarabel default; MOSEK/Gurobi opzionali). Nessun solver commerciale richiesto.
+
+> **Esito P0**: min-risk, max-Sharpe e risk parity validati con solver open-source,
+> ma la libreria non è stata adottata. Il vincolo NumPy `<2.5` confligge con il
+> lock LibreFolio e il layer aggiuntivo misura circa 0,98–1,01 GiB oltre QuantLib.
 
 ### 2.3 NumPy / SciPy — base e fallback (già presenti)
 - **Presenti** nell'ambiente: numpy 2.5, scipy 1.18, pandas 3.0.
@@ -181,6 +195,9 @@ gap backend?
 > Bloccante.** «Nessuno» dove non applicabile.
 
 ### P0 — Probe e installazione definitiva delle librerie
+
+- **Stato esecuzione:** 🟡 chiusura build finale in corso; decisioni già fissate:
+  QuantLib `ADOPTED`, Riskfolio `REJECTED`, RQMC QuantLib `PARTIAL`.
 - **Obiettivo:** verificare nell'ambiente **reale** di LibreFolio le capability, la
   licenza e la compatibilità di **QuantLib** e **Riskfolio-Lib** e, se confermate,
   **installarle definitivamente** (manifest + lock + Docker + CI). Non è un semplice
@@ -591,21 +608,14 @@ gap backend?
 - **Parallelizzabile:** no (dipende da P11 + benchmark). **Bloccante:** nessuno.
 
 ### P13 — Frontiera e ottimizzazione con Riskfolio-Lib (opzionale, R9)
-- **Obiettivo:** frontiera efficiente / ottimizzazione dietro adapter, wording condizionato.
-- **Stato attuale:** in P0 Riskfolio-Lib è (se confermata) già installata; integrazione
-  funzionale assente.
-- **Gap:** integrazione applicativa (l'installazione è in P0, non qui).
-- **File/componenti:** adapter dedicato (separato da QuantLib), UI «Advanced» collassata.
-- **Contratto backend:** min-risk/max-Sharpe **stimato**/risk-parity; covarianza con
-  shrinkage; vincoli pesi; sensibilità; mai «portafoglio ottimo» assertivo. **Non** usare
-  Riskfolio per la simulazione forward né per metriche semplici già coperte da NumPy/pandas.
-- **Dipendenze:** Riskfolio-Lib 7.3.0 (BSD-3) + cvxpy/solver — **installata in P0**, qui
-  solo **integrazione funzionale**.
-- **Test:** adapter; determinismo su fixture; wording guardrail.
-- **Criteri:** frontiera calcolata dietro adapter, opzionale.
-- **Rischi:** estimation error; peso immagine (misurato in P0). **Fallback:** non spedire
-  (feature opzionale).
-- **Parallelizzabile:** indipendente (dopo P5). **Bloccante:** nessuno.
+- **Stato esecuzione:** 🚫 **CHIUSO DAL GATE P0 — 27 Luglio 2026**.
+- **Decisione:** non creare adapter, endpoint, capability catalog o UI frontier in
+  Release 2.
+- **Evidenza:** formule/solver validati, ma Riskfolio richiede NumPy `<2.5` e circa
+  1 GiB di layer aggiuntivo.
+- **Fallback applicato:** non spedire la capability opzionale; nessun codice morto.
+- **Rivalutazione futura:** solo con packaging opzionale separato o stack
+  significativamente più leggero.
 
 ---
 
@@ -707,3 +717,6 @@ Solo verifiche/misure implementative reali:
 - Brainstorming UI: [`brainstorm-phase01RiskUiConcepts.md`](./brainstorm-phase01RiskUiConcepts.md)
 - Review (Capitolo 4): [`review-risk-analysis-feedback.md`](./review-risk-analysis-feedback.md)
 - Indice: [`README.md`](./README.md)
+
+→ Piano implementativo:
+[`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md)

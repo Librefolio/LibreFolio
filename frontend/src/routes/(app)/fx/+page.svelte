@@ -209,7 +209,9 @@
     let fxTableRows = $derived<FxRow[]>(
         filteredPairs.map((p) => {
             const inv = isCardInverted(p.config.slug);
-            const deltas: Record<string, number | null> = {};
+            const deltas: Record<string, number | null> = {
+                '1D': computePeriodDelta(p.data, 1, inv),
+            };
             for (const period of visiblePeriods) {
                 deltas[period.key] = computePeriodDelta(p.data, period.days, inv);
             }

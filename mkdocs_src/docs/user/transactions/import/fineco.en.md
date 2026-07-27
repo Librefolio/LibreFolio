@@ -25,6 +25,11 @@ report exported from FinecoBank.
   (*Dividendo*), bond coupons (*Stacco Cedole*), redemptions/maturities (*Rimborso*),
   and capital increases (*Aumento capitale*, imported as a quantity **adjustment**
   without cash movement).
+- **Bond redeemed above par** — when a *Rimborso* row is a bond priced **above par (100)**,
+  the amount credited over par (a *premio fedeltà* / inflation revaluation) is booked as a
+  separate **interest** leg and the **sell** is recorded at par 100. This mirrors how coupons
+  are treated (reddito di capitale) and keeps the realised gain based on price-vs-cost only.
+  Bonds redeemed at or below par, and equity redemptions, are imported as a single sell.
 - **Amounts are imported verbatim** in the currency reported by Fineco: the *Divisa*
   column of each row determines the currency of that row's figures. No currency
   conversion is performed and the *Cambio* (exchange rate) column is ignored — the

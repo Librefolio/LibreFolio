@@ -71,6 +71,7 @@ from backend.app.services.provider_registry import (
 )
 from backend.app.services.signal_service import (
     SignalExecutionPlan,
+    SignalRequestValidationError,
     SignalService,
 )
 
@@ -578,11 +579,14 @@ async def convert_currency_bulk(
                 cadence=SignalCadence.DAILY,
                 source_reference=(f"fx:{conversion.from_amount.code}/" f"{conversion.to_currency}"),
             )
-            plan = signal_service.prepare_plan(
-                conversion.signals,
-                context,
-                conversion.annotation_requests,
-            )
+            try:
+                plan = signal_service.prepare_plan(
+                    conversion.signals,
+                    context,
+                    conversion.annotation_requests,
+                )
+            except SignalRequestValidationError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from e
             warmup_days = min(
                 plan.max_history_points_before_visible,
                 (conversion.date_range.start - date.min).days,

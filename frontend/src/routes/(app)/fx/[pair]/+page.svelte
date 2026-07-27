@@ -12,7 +12,7 @@
      *
      * Uses Svelte 5 runes. Replaces old FxEditSection with FxDataEditorSection.
      */
-    import {onMount, tick} from 'svelte';
+    import {onMount, tick, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -54,6 +54,7 @@
     import {getSettingsForPair, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultsToCanonicalFxDataPoints, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
@@ -67,10 +68,22 @@
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
-    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {copyFxAiExport} from '$lib/features/ai-export/fx/fxExportClipboard';
-    import {FX_PROMPT_CATALOG, type FxPromptId} from '$lib/features/ai-export/fx/fxPromptCatalog';
+    import AiExportMenuV2 from '$lib/features/ai-export/AiExportMenuV2.svelte';
+    import {copyAiExportV2} from '$lib/features/ai-export/aiExportClipboardV2';
+    import {aiExportStatsContextFingerprint, isAiExportStatsRequestCurrent, normalizeAiExportUserNotes, type AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
+    import {FX_AI_EXPORT_TASKS} from '$lib/features/ai-export/catalog/fxTasks';
+    import {aiExportCatalogLoader, reconcileAiExportCatalog, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
+    import {AI_EXPORT_CATALOG_SCHEMA_VERSION} from '$lib/features/ai-export/catalog/shared';
+    import type {AiExportPromptStats} from '$lib/features/ai-export/templates/promptRenderer';
+    import {buildAiExportMenuV2Labels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+
+    const DISABLED_AI_EXPORT_COMPATIBILITY = reconcileAiExportCatalog({
+        schema_version: AI_EXPORT_CATALOG_SCHEMA_VERSION,
+        entries: [],
+    });
+    type FxAiExportTask = (typeof FX_AI_EXPORT_TASKS)[number]['id'];
+    const FX_AI_EXPORT_HIDDEN_ANALYSIS_TASKS = ['fx_exposure_impact'] as const satisfies readonly FxAiExportTask[];
 
     // =========================================================================
     // Page data
@@ -192,9 +205,40 @@
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
 
-    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenu
+    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenuV2
+    let fxAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
+    let fxAiExportCatalogLoading = $state(true);
+    let fxAiExportCatalogFailed = $state(false);
     let fxAiExportLoading = $state(false);
-    let fxAiExportEntries = $derived(FX_PROMPT_CATALOG.map((p) => ({id: p.id, label: $t(p.labelKey), description: $t(p.descriptionKey), icon: p.icon})));
+    let fxAiExportLastStats = $state<AiExportPromptStats | undefined>(undefined);
+    let fxAiExportLastStatsFingerprint = $state<string | undefined>(undefined);
+    let fxAiExportLastStatsContextFingerprint = $state<string | undefined>(undefined);
+    let fxAiExportObservedContextFingerprint = $state<string | undefined>(undefined);
+    let fxAiExportContextGeneration = $state(0);
+    let fxAiExportTargetCurrency = $derived($globalSettings.default_currency || data.canonicalQuote);
+    let fxAiExportContextFingerprint = $derived(
+        aiExportStatsContextFingerprint({
+            contextKey: `fx:${data.canonicalSlug}`,
+            dateStart,
+            dateEnd,
+            displayCurrency: data.canonicalQuote,
+            targetCurrency: fxAiExportTargetCurrency,
+        }),
+    );
+    let fxAiExportVisibleLastStats = $derived(fxAiExportLastStatsContextFingerprint === fxAiExportContextFingerprint ? fxAiExportLastStats : undefined);
+    let fxAiExportVisibleLastStatsFingerprint = $derived(fxAiExportLastStatsContextFingerprint === fxAiExportContextFingerprint ? fxAiExportLastStatsFingerprint : undefined);
+    let fxAiExportLabels = $derived(buildAiExportMenuV2Labels($t, FX_AI_EXPORT_TASKS, $t('fxDetail.aiExport'), $t('fxDetail.aiExportBuilding')));
+
+    $effect(() => {
+        const contextFingerprint = fxAiExportContextFingerprint;
+        if (untrack(() => fxAiExportObservedContextFingerprint) === contextFingerprint) return;
+
+        fxAiExportObservedContextFingerprint = contextFingerprint;
+        fxAiExportContextGeneration = untrack(() => fxAiExportContextGeneration) + 1;
+        fxAiExportLastStats = undefined;
+        fxAiExportLastStatsFingerprint = undefined;
+        fxAiExportLastStatsContextFingerprint = undefined;
+    });
 
     // Panel states before edit mode (to restore when exiting)
     let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);
@@ -514,6 +558,7 @@
     onMount(async () => {
         // Persist the inversion state from the URL so FxCard reflects it on back-navigation
         setCardInverted(data.canonicalSlug, data.inverted);
+        void loadFxAiExportCompatibility();
 
         await loadFxSignalDefinitions();
         await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), loadChartData(), loadProviders(), loadAvailableProviders(), loadAssetList()]);
@@ -745,29 +790,64 @@
         await maybeLoadComparison();
     }
 
-    async function handleFxAiExport(promptId: FxPromptId) {
-        const latestPoint = chartData[chartData.length - 1];
-        if (!latestPoint) {
-            toasts.error($t('fxDetail.noData'));
+    async function loadFxAiExportCompatibility() {
+        fxAiExportCatalogLoading = true;
+        try {
+            fxAiExportCompatibility = await aiExportCatalogLoader.load();
+            fxAiExportCatalogFailed = false;
+        } catch {
+            fxAiExportCatalogFailed = true;
+            toasts.error($t('aiExport.v2.catalogUnavailable'));
+        } finally {
+            fxAiExportCatalogLoading = false;
+        }
+    }
+
+    function isFxAiExportTask(task: AiExportOptionsSelection['task']): task is FxAiExportTask {
+        return FX_AI_EXPORT_TASKS.some((definition) => definition.id === task);
+    }
+
+    async function handleFxAiExport(options: AiExportOptionsSelection) {
+        if (fxAiExportCatalogLoading || fxAiExportCatalogFailed) return;
+        if (!isFxAiExportTask(options.task)) {
+            toasts.error($t('aiExport.v2.catalogUnavailable'));
             return;
         }
 
         fxAiExportLoading = true;
+        const requestGeneration = fxAiExportContextGeneration;
+        const requestContextFingerprint = fxAiExportContextFingerprint;
         try {
-            await copyFxAiExport(
-                promptId,
-                {
-                    base: data.canonicalBase,
-                    quote: data.canonicalQuote,
-                    slug: data.canonicalSlug,
-                    latestPoint,
+            const result = await copyAiExportV2({
+                context: {
+                    domain: 'fx',
+                    baseCurrency: data.canonicalBase,
+                    quoteCurrency: data.canonicalQuote,
+                    dateRange: {
+                        start: dateStart,
+                        end: dateEnd,
+                    },
+                    targetCurrency: fxAiExportTargetCurrency,
                 },
-                {
-                    locale: $currentLanguage,
-                },
-                toasts,
-                $t,
-            );
+                task: options.task,
+                detailLevel: options.detailLevel,
+                renderMode: options.renderMode,
+                responseLanguage: options.responseLanguage,
+                userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
+                webResearch: options.webResearch,
+                compatibility: fxAiExportCompatibility,
+            });
+            if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, fxAiExportContextGeneration, fxAiExportContextFingerprint)) {
+                fxAiExportLastStats = result.stats;
+                fxAiExportLastStatsFingerprint = result.optionsFingerprint;
+                fxAiExportLastStatsContextFingerprint = requestContextFingerprint;
+            }
+
+            const messages = getAiExportSuccessMessages($t, result);
+            toasts.success(messages.copied);
+            toasts.info(messages.privacyNotice);
+        } catch (error) {
+            toasts.error(getAiExportErrorMessage($t, error));
         } finally {
             fxAiExportLoading = false;
         }
@@ -1037,7 +1117,22 @@
                 </span>
                 <div class="flex-1"></div>
                 <div class="pointer-events-auto shrink-0">
-                    <AiExportMenu entries={fxAiExportEntries} loading={fxAiExportLoading} triggerLabel={$t('fxDetail.aiExport')} loadingLabel={$t('fxDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleFxAiExport(id as FxPromptId)} />
+                    <AiExportMenuV2
+                        domainTaskDefinitions={FX_AI_EXPORT_TASKS}
+                        compatibility={fxAiExportCompatibility}
+                        memoryKey={`fx:${data.canonicalSlug}`}
+                        defaultTask="fx_trend_review"
+                        defaultDetailLevel="standard"
+                        defaultRenderMode="full_prompt"
+                        hiddenAnalysisTasks={FX_AI_EXPORT_HIDDEN_ANALYSIS_TASKS}
+                        lastStats={fxAiExportVisibleLastStats}
+                        lastStatsFingerprint={fxAiExportVisibleLastStatsFingerprint}
+                        disabled={fxAiExportCatalogLoading || fxAiExportCatalogFailed}
+                        loading={fxAiExportLoading}
+                        labels={fxAiExportLabels}
+                        showLabel={showAiExportLabel}
+                        onexport={handleFxAiExport}
+                    />
                 </div>
                 <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="fx-detail-signals-chevron">
                     <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />

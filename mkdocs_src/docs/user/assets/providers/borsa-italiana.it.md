@@ -40,6 +40,10 @@ Il provider Borsa Italiana partecipa al ciclo standard di **asset sync**. Avvial
 
     Il provider applica un throttling automatico per evitare di essere bloccato da Borsa Italiana. Se possiedi molti asset di questo exchange, il sync completo potrebbe richiedere alcuni minuti.
 
+!!! note "Fondi comuni (NAV)"
+
+    I fondi comuni e le SICAV sono valorizzati tramite il loro **NAV** giornaliero, pubblicato una volta al giorno con un ritardo. LibreFolio identifica ogni fondo tramite il suo codice fondo di Borsa, quindi lo storico prezzi mostra il NAV alla sua data reale e il valore corrente viene aggiornato solo quando il NAV pubblicato è datato oggi (altrimenti, come stima, si usa il prezzo dell'ultimo acquisto).
+
 ---
 
 ## 🔗 Documentazione per Sviluppatori

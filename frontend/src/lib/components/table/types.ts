@@ -152,6 +152,8 @@ export interface HtmlCell {
     };
     /** Optional click handler. When provided, the cell content is wrapped in a button. */
     onClick?: () => void;
+    /** Optional test id for clickable HTML cells. */
+    testId?: string;
 }
 
 /**
@@ -176,6 +178,8 @@ export interface EditableCheckboxCell {
     type: 'editable-checkbox';
     /** Current checked state */
     value: boolean;
+    /** Disable toggling and render in a muted state. */
+    disabled?: boolean;
     /** Callback when checkbox changes */
     onchange: (newValue: boolean) => void;
 }

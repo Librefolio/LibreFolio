@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -31,7 +32,7 @@ from backend.test_scripts.fixtures.signals.plugin_test_utils import (
     load_signal_frames,
 )
 
-EXPECTED_CODES = {
+LEGACY_CODES = {
     "EMA",
     "SMA",
     "RSI",
@@ -50,6 +51,14 @@ EXPECTED_CODES = {
     "OBV",
     "MFI",
 }
+RISK_CODES = {
+    "RISK_DRAWDOWN",
+    "RISK_ROLLING_BETA",
+    "RISK_ROLLING_RETURN",
+    "RISK_ROLLING_SHARPE",
+    "RISK_ROLLING_VOLATILITY",
+}
+ALL_CODES = LEGACY_CODES | RISK_CODES
 CLOSE_ONLY_CODES = {
     "EMA",
     "SMA",
@@ -70,6 +79,90 @@ PARTIAL_CONTIGUOUS_CODES = {
     "MFI",
     "NATR",
     "OBV",
+}
+EXPECTED_SEMANTIC_IDS = {
+    "ADX": (
+        "average_directional_index",
+        [
+            "average_directional_index.strength",
+            "average_directional_index.positive_directional_index",
+            "average_directional_index.negative_directional_index",
+        ],
+    ),
+    "AROON": (
+        "aroon",
+        ["aroon.up", "aroon.down", "aroon.oscillator"],
+    ),
+    "ATR": ("average_true_range", ["average_true_range.value"]),
+    "BOLLINGER": ("bollinger_bands", ["bollinger_bands.envelope"]),
+    "CCI": (
+        "commodity_channel_index",
+        ["commodity_channel_index.value"],
+    ),
+    "DONCHIAN": ("donchian_channels", ["donchian_channels.envelope"]),
+    "EMA": (
+        "exponential_moving_average",
+        ["exponential_moving_average.value"],
+    ),
+    "KAMA": (
+        "kaufman_adaptive_moving_average",
+        ["kaufman_adaptive_moving_average.value"],
+    ),
+    "MACD": (
+        "moving_average_convergence_divergence",
+        [
+            "moving_average_convergence_divergence.line",
+            "moving_average_convergence_divergence.signal",
+            "moving_average_convergence_divergence.histogram",
+        ],
+    ),
+    "MFI": ("money_flow_index", ["money_flow_index.value"]),
+    "NATR": (
+        "normalized_average_true_range",
+        ["normalized_average_true_range.value"],
+    ),
+    "OBV": ("on_balance_volume", ["on_balance_volume.value"]),
+    "PPO": (
+        "percentage_price_oscillator",
+        [
+            "percentage_price_oscillator.line",
+            "percentage_price_oscillator.signal",
+            "percentage_price_oscillator.histogram",
+        ],
+    ),
+    "ROC": ("rate_of_change", ["rate_of_change.value"]),
+    "RSI": (
+        "relative_strength_index",
+        ["relative_strength_index.value"],
+    ),
+    "RISK_DRAWDOWN": (
+        "underwater_drawdown",
+        ["underwater_drawdown.value"],
+    ),
+    "RISK_ROLLING_BETA": (
+        "rolling_beta",
+        ["rolling_beta.value"],
+    ),
+    "RISK_ROLLING_RETURN": (
+        "rolling_compounded_return",
+        ["rolling_compounded_return.value"],
+    ),
+    "RISK_ROLLING_SHARPE": (
+        "rolling_sharpe_ratio",
+        ["rolling_sharpe_ratio.value"],
+    ),
+    "RISK_ROLLING_VOLATILITY": (
+        "rolling_realized_volatility",
+        ["rolling_realized_volatility.value"],
+    ),
+    "SMA": ("simple_moving_average", ["simple_moving_average.value"]),
+    "STOCH_RSI": (
+        "stochastic_relative_strength_index",
+        [
+            "stochastic_relative_strength_index.k",
+            "stochastic_relative_strength_index.d",
+        ],
+    ),
 }
 
 
@@ -97,26 +190,47 @@ def default_requests() -> list[SignalRequest]:
             signal_code=code,
             params={},
         )
-        for code in sorted(EXPECTED_CODES)
+        for code in sorted(LEGACY_CODES)
     ]
 
 
-def test_registry_has_exactly_seventeen_complete_definitions():
+def test_registry_has_twenty_two_complete_definitions():
     definitions = SignalPluginRegistry.list_definitions()
-    assert {definition.signal_code for definition in definitions} == EXPECTED_CODES
-    assert len(definitions) == 17
+    assert {definition.signal_code for definition in definitions} == ALL_CODES
+    assert len(definitions) == 22
 
     for definition in definitions:
         assert definition.implementation_version
-        assert definition.docs_path
-        documentation = Path("mkdocs_src/docs") / f"{definition.docs_path.rstrip('/')}.en.md"
-        assert documentation.is_file()
+        if definition.signal_code in LEGACY_CODES:
+            assert definition.docs_path
+        if definition.docs_path:
+            documentation = Path("mkdocs_src/docs") / f"{definition.docs_path.rstrip('/')}.en.md"
+            assert documentation.is_file()
         assert definition.params_schema["additionalProperties"] is False
         assert definition.output_specs
         assert len({spec.key for spec in definition.output_specs}) == len(definition.output_specs)
+        expected_signal_semantic, expected_output_semantics = EXPECTED_SEMANTIC_IDS[definition.signal_code]
+        assert definition.semantic_id == expected_signal_semantic
+        assert [spec.semantic_id for spec in definition.output_specs] == expected_output_semantics
+        semantic_descriptions = [
+            definition.semantic_description,
+            *[spec.semantic_description for spec in definition.output_specs],
+        ]
+        assert all(description.strip() for description in semantic_descriptions)
+        assert all(re.search(r"(?<![A-Za-z])(?:buy|sell)(?![A-Za-z])", description, re.IGNORECASE) is None for description in semantic_descriptions)
         plugin_class = SignalPluginRegistry.get_plugin(definition.signal_code)
-        normalized_defaults = plugin_class.validate_params(definition.default_params).model_dump(mode="json", by_alias=True)
-        assert normalized_defaults == definition.default_params
+        required_params = set(definition.params_schema.get("required", []))
+        if required_params:
+            assert required_params.isdisjoint(definition.default_params)
+            for key, value in definition.default_params.items():
+                assert definition.params_schema["properties"][key]["default"] == value
+        else:
+            normalized_defaults = plugin_class.validate_params(definition.default_params).model_dump(mode="json", by_alias=True)
+            assert normalized_defaults == definition.default_params
+
+    assert len({definition.semantic_id for definition in definitions}) == len(definitions)
+    output_semantic_ids = [spec.semantic_id for definition in definitions for spec in definition.output_specs]
+    assert len(set(output_semantic_ids)) == len(output_semantic_ids)
 
     serialized = json.dumps([definition.model_dump(mode="json") for definition in definitions])
     for forbidden in (
@@ -130,7 +244,7 @@ def test_registry_has_exactly_seventeen_complete_definitions():
 
 
 def test_backend_path_is_sixteen_delegated_plus_native_donchian():
-    for code in EXPECTED_CODES:
+    for code in LEGACY_CODES:
         plugin_class = SignalPluginRegistry.get_plugin(code)
         source = inspect.getsource(plugin_class.compute)
         if code == "DONCHIAN":
@@ -140,7 +254,7 @@ def test_backend_path_is_sixteen_delegated_plus_native_donchian():
 
 
 def test_asset_only_field_rich_plugins_allow_partial_contiguous_input():
-    for code in EXPECTED_CODES:
+    for code in LEGACY_CODES:
         requirements = SignalPluginRegistry.get_plugin(code).input_requirements
         if code in PARTIAL_CONTIGUOUS_CODES:
             assert requirements.data_policy == SignalDataPolicy.ALLOW_PARTIAL_CONTIGUOUS
@@ -194,6 +308,8 @@ async def test_all_seventeen_plugins_batch_ok_on_asset(
         assert [series.kind for series in result.series] == [spec.kind for spec in plugin_class.output_specs]
         assert [series.style for series in result.series] == [spec.style for spec in plugin_class.output_specs]
         assert [series.description_key for series in result.series] == [spec.description_key for spec in plugin_class.output_specs]
+        assert [series.semantic_id for series in result.series] == [spec.semantic_id for spec in plugin_class.output_specs]
+        assert [series.semantic_description for series in result.series] == [spec.semantic_description for spec in plugin_class.output_specs]
         assert all(len(series.points) == VISIBLE_POINTS for series in result.series)
         assert result.model_dump_json()
 
@@ -214,13 +330,13 @@ async def test_fx_batch_exposes_only_nine_close_only_plugins(
     by_code = {result.signal_code: result for result in results}
 
     assert {code for code, result in by_code.items() if result.status == SignalStatus.OK} == CLOSE_ONLY_CODES
-    for code in EXPECTED_CODES - CLOSE_ONLY_CODES:
+    for code in LEGACY_CODES - CLOSE_ONLY_CODES:
         assert by_code[code].status == SignalStatus.UNAVAILABLE
         assert by_code[code].availability.reason_code == SignalAvailabilityReason.INCOMPATIBLE_DOMAIN
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("signal_code", sorted(EXPECTED_CODES))
+@pytest.mark.parametrize("signal_code", sorted(LEGACY_CODES))
 async def test_exact_minimum_history_is_partial_not_failed(
     signal_code,
     neutral_points,
@@ -261,7 +377,7 @@ async def test_exact_minimum_history_is_partial_not_failed(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("signal_code", sorted(EXPECTED_CODES))
+@pytest.mark.parametrize("signal_code", sorted(LEGACY_CODES))
 async def test_every_required_field_is_dynamically_enforced(
     signal_code,
     neutral_points,
@@ -291,7 +407,7 @@ async def test_every_required_field_is_dynamically_enforced(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("signal_code", sorted(EXPECTED_CODES))
+@pytest.mark.parametrize("signal_code", sorted(LEGACY_CODES))
 async def test_partial_required_field_never_compacts_dates(
     signal_code,
     neutral_points,
@@ -346,7 +462,7 @@ async def test_all_plugins_preserve_same_internal_date_gap_without_compaction(
 
     by_code = {result.signal_code: result for result in results}
     assert all(by_code[code].status == SignalStatus.PARTIAL for code in PARTIAL_CONTIGUOUS_CODES)
-    assert all(by_code[code].status == SignalStatus.UNAVAILABLE for code in EXPECTED_CODES - PARTIAL_CONTIGUOUS_CODES)
+    assert all(by_code[code].status == SignalStatus.UNAVAILABLE for code in LEGACY_CODES - PARTIAL_CONTIGUOUS_CODES)
     assert all(result.availability.input_coverage.internal_gap_count == 1 for result in results)
 
 
@@ -404,7 +520,7 @@ def test_all_warmup_contracts_are_internally_consistent(
 ):
     points = neutral_points["volatile"]
     context = execution_context(points)
-    for code in EXPECTED_CODES:
+    for code in LEGACY_CODES:
         plugin_class = SignalPluginRegistry.get_plugin(code)
         requirement = plugin_class.warmup_requirement(
             plugin_class.validate_params({}),

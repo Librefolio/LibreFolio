@@ -103,6 +103,8 @@ class MacdSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.macd.name"
     description_key = "signals.macd.description"
+    semantic_id = "moving_average_convergence_divergence"
+    semantic_description = "Compares fast and slow exponential price trends."
     icon = "📶"
     docs_path = "financial-theory/technical-analysis/indicators/macd/"
     params_model = MacdSignalParams
@@ -112,6 +114,8 @@ class MacdSignalPlugin(SignalPlugin):
             key="macd",
             label_key="signals.macd.line",
             description_key="signals.macd.lineDescription",
+            semantic_id="moving_average_convergence_divergence.line",
+            semantic_description="Difference between fast and slow exponential moving averages.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
@@ -125,6 +129,8 @@ class MacdSignalPlugin(SignalPlugin):
             key="signal",
             label_key="signals.macd.signal",
             description_key="signals.macd.signalDescription",
+            semantic_id="moving_average_convergence_divergence.signal",
+            semantic_description="Smoothed average of the MACD line.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
@@ -137,6 +143,8 @@ class MacdSignalPlugin(SignalPlugin):
             key="histogram",
             label_key="signals.macd.histogram",
             description_key="signals.macd.histogramDescription",
+            semantic_id="moving_average_convergence_divergence.histogram",
+            semantic_description="Difference between the MACD line and its signal line.",
             kind=SignalSeriesKind.BAR,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
@@ -207,6 +215,8 @@ class MacdSignalPlugin(SignalPlugin):
                     key=spec.key,
                     label_key=spec.label_key,
                     description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

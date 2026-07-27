@@ -1,7 +1,44 @@
 import {readFile, writeFile} from 'node:fs/promises';
 
 const generatedClient = new URL('../src/lib/api/generated.ts', import.meta.url);
-const discriminatedSchemas = ['SignalPriceValueSource', 'SignalOutputValueSource', 'SignalLineCrossoverRequest', 'SignalThresholdCrossingRequest', 'SignalLineSeries', 'SignalBarSeries', 'SignalBandSeries'];
+const discriminatedSchemas = [
+    'SignalPriceValueSource',
+    'SignalOutputValueSource',
+    'SignalBandValueSource',
+    'SignalLineCrossoverRequest',
+    'SignalThresholdCrossingRequest',
+    'SignalLineSeries',
+    'SignalBarSeries',
+    'SignalBandSeries',
+    'AiExportPortfolioSnapshotRequest',
+    'AiExportAssetSnapshotRequest',
+    'AiExportFxSnapshotRequest',
+    'AiExportBrokerSnapshotRequest',
+    'AiExportPortfolioSnapshotResponse',
+    'AiExportAssetSnapshotResponse',
+    'AiExportFxSnapshotResponse',
+    'AiExportBrokerSnapshotResponse',
+    'AiExportPortfolioTargetReference',
+    'AiExportBrokerTargetReference',
+    'AiExportAssetTargetReference',
+    'AiExportFxPairTargetReference',
+    'AiExportUnsupportedProfileProblem',
+    'AiExportProfileContractMismatchProblem',
+    'AiExportTaskNotApplicableProblem',
+    'AiExportBrokerAccessDeniedProblem',
+    'AiExportEntityNotFoundProblem',
+    'AiExportSnapshotSourceFailureProblem',
+    'AssetRiskScope',
+    'AssetSetRiskScope',
+    'PortfolioRiskScope',
+    'BrokerRiskScope',
+    'RiskKpiOutput',
+    'RiskCorrelationOutput',
+    'RiskContributionOutput',
+    'RiskStressOutput',
+    'RiskComparisonOutput',
+    'RiskVarCvarOutput',
+];
 
 let source = await readFile(generatedClient, 'utf8');
 

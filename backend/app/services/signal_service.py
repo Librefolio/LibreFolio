@@ -5,30 +5,35 @@ from __future__ import annotations
 import asyncio
 import json
 import math
-from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Optional
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from backend.app.logging_config import get_logger
+from backend.app.schemas.common import BackwardFillInfo
+from backend.app.schemas.portfolio import DataQualityReport, DataQualityStatus
+from backend.app.schemas.risk import (
+    PreparedAssetSeriesSet,
+    RiskFreeReference,
+    RiskResultMetadata,
+    RiskReturnBasis,
+)
 from backend.app.schemas.signals import (
     SignalAnnotation,
     SignalAnnotationRequest,
     SignalAvailability,
     SignalAvailabilityReason,
-    SignalBandSeries,
+    SignalBandValueSource,
     SignalCadence,
     SignalComputation,
-    SignalDataPolicy,
     SignalError,
     SignalErrorCode,
     SignalEventPoint,
     SignalExecutionContext,
-    SignalInputCoverage,
     SignalInputData,
     SignalLineCrossoverRequest,
     SignalOutputValueSource,
@@ -38,6 +43,7 @@ from backend.app.schemas.signals import (
     SignalRequest,
     SignalResult,
     SignalSeries,
+    SignalSeriesKind,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalValueSource,
@@ -47,8 +53,21 @@ from backend.app.schemas.signals import (
     SignalWarningCode,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.series_preparation import date_is_within_range
 from backend.app.services.signal_annotations import SignalAnnotationService
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signal_plugins.base import (
+    SignalPlugin,
+    SignalUnavailableError,
+)
+from backend.app.services.signal_series_preparation import (
+    build_signal_availability_warnings,
+    build_signal_coverage,
+    resolve_signal_availability,
+    select_signal_computation_points,
+    select_signal_events,
+    slice_signal_series,
+    visible_signal_output_state,
+)
 
 logger = get_logger(__name__)
 _ANNOTATION_REQUEST_ADAPTER = TypeAdapter(SignalAnnotationRequest)
@@ -66,6 +85,10 @@ class SignalOutputContractError(SignalOutputValidationError):
     """Raised when canonical output disagrees with plugin metadata."""
 
 
+class SignalRequestValidationError(ValueError):
+    """Raised when a signal or annotation request is structurally inconsistent."""
+
+
 @dataclass(frozen=True)
 class PlannedSignal:
     dedup_key: str
@@ -75,6 +98,15 @@ class PlannedSignal:
     requirement: SignalWarmupRequirement
     instance_ids: tuple[str, ...]
     statically_compatible: bool
+    comparison_asset_id: Optional[int]
+
+
+@dataclass(frozen=True)
+class SignalPreparedSeriesBundle:
+    """Prepared primary and optional comparison series for one Asset query."""
+
+    primary_asset_id: int
+    series_sets: Mapping[Optional[int], PreparedAssetSeriesSet]
 
 
 @dataclass(frozen=True)
@@ -84,9 +116,11 @@ class SignalExecutionPlan:
     computations: tuple[PlannedSignal, ...]
     preflight_results: dict[str, SignalResult]
     max_total_points: int
+    max_prepared_total_points: int
     required_price_fields: frozenset[SignalPriceField]
     requires_events: bool
     required_event_types: frozenset[str]
+    comparison_asset_ids: frozenset[int]
     annotation_requests: tuple[SignalAnnotationRequest, ...]
 
     @property
@@ -96,6 +130,14 @@ class SignalExecutionPlan:
     @property
     def max_history_points_before_visible(self) -> int:
         return self.max_total_points
+
+    @property
+    def max_prepared_history_points_before_visible(self) -> int:
+        return self.max_prepared_total_points
+
+    @property
+    def requires_prepared_asset_series(self) -> bool:
+        return self.max_prepared_total_points > 0
 
 
 class SignalService:
@@ -118,7 +160,7 @@ class SignalService:
         request_models = tuple(request if isinstance(request, SignalRequest) else SignalRequest.model_validate(request) for request in requests)
         instance_ids = [request.instance_id for request in request_models]
         if len(instance_ids) != len(set(instance_ids)):
-            raise ValueError("signal instance_id values must be unique within one batch")
+            raise SignalRequestValidationError("signal instance_id values must be unique within one batch")
         annotation_models = tuple(
             (
                 item
@@ -135,21 +177,24 @@ class SignalService:
         )
         annotation_keys = [item.key for item in annotation_models]
         if len(annotation_keys) != len(set(annotation_keys)):
-            raise ValueError("annotation request keys must be unique within one batch")
+            raise SignalRequestValidationError("annotation request keys must be unique within one batch")
         request_ids = set(instance_ids)
         for annotation in annotation_models:
             if annotation.attach_to_instance_id not in request_ids:
-                raise ValueError(f"annotation target '{annotation.attach_to_instance_id}' is not a requested signal instance")
+                raise SignalRequestValidationError(f"annotation target '{annotation.attach_to_instance_id}' is not a requested signal instance")
             for source in self._annotation_sources(annotation):
-                if isinstance(source, SignalOutputValueSource) and source.instance_id not in request_ids:
-                    raise ValueError(f"annotation source '{source.instance_id}' is not a requested signal instance")
+                if isinstance(source, (SignalOutputValueSource, SignalBandValueSource)) and source.instance_id not in request_ids:
+                    raise SignalRequestValidationError(f"annotation source '{source.instance_id}' is not a requested signal instance")
 
         grouped: dict[str, dict[str, Any]] = {}
+        plugin_classes_by_instance: dict[str, type[SignalPlugin]] = {}
         preflight_results: dict[str, SignalResult] = {}
         max_total_points = 0
+        max_prepared_total_points = 0
         required_price_fields: set[SignalPriceField] = set()
         requires_events = False
         required_event_types: set[str] = set()
+        comparison_asset_ids: set[int] = set()
         for annotation in annotation_models:
             for source in self._annotation_sources(annotation):
                 if isinstance(source, SignalPriceValueSource):
@@ -167,6 +212,7 @@ class SignalService:
                     message=f"Unknown signal code: {request.signal_code}",
                 )
                 continue
+            plugin_classes_by_instance[request.instance_id] = plugin_class
 
             try:
                 params = plugin_class.validate_params(request.params)
@@ -184,6 +230,8 @@ class SignalService:
                 mode="json",
                 by_alias=True,
             )
+            comparison_asset_param = plugin_class.input_requirements.comparison_asset_param
+            comparison_asset_id = int(getattr(params, comparison_asset_param)) if comparison_asset_param is not None else None
             dedup_key = self._dedup_key(
                 request.signal_code,
                 normalized_params,
@@ -213,12 +261,20 @@ class SignalService:
                 "requirement": requirement,
                 "instance_ids": [request.instance_id],
                 "statically_compatible": statically_compatible,
+                "comparison_asset_id": comparison_asset_id,
             }
             if statically_compatible:
                 max_total_points = max(
                     max_total_points,
                     requirement.total_points,
                 )
+                if plugin_class.input_requirements.uses_prepared_asset_series:
+                    max_prepared_total_points = max(
+                        max_prepared_total_points,
+                        requirement.total_points,
+                    )
+                    if comparison_asset_id is not None:
+                        comparison_asset_ids.add(comparison_asset_id)
                 required_price_fields.update(plugin_class.input_requirements.price_fields)
                 if plugin_class.input_requirements.requires_events:
                     requires_events = True
@@ -233,8 +289,13 @@ class SignalService:
                 requirement=entry["requirement"],
                 instance_ids=tuple(entry["instance_ids"]),
                 statically_compatible=entry["statically_compatible"],
+                comparison_asset_id=entry["comparison_asset_id"],
             )
             for dedup_key, entry in grouped.items()
+        )
+        self._validate_annotation_output_sources(
+            annotation_models,
+            plugin_classes_by_instance,
         )
         return SignalExecutionPlan(
             requests=request_models,
@@ -242,9 +303,11 @@ class SignalService:
             computations=computations,
             preflight_results=preflight_results,
             max_total_points=max_total_points,
+            max_prepared_total_points=max_prepared_total_points,
             required_price_fields=frozenset(required_price_fields),
             requires_events=requires_events,
             required_event_types=frozenset(required_event_types),
+            comparison_asset_ids=frozenset(comparison_asset_ids),
             annotation_requests=annotation_models,
         )
 
@@ -255,6 +318,7 @@ class SignalService:
         event_points: Sequence[SignalEventPoint] = (),
         *,
         events_loaded: bool = False,
+        prepared_series_bundle: Optional[SignalPreparedSeriesBundle] = None,
     ) -> list[SignalResult]:
         """Execute the entire signal batch in one worker thread."""
         return await asyncio.to_thread(
@@ -263,6 +327,7 @@ class SignalService:
             tuple(price_points),
             tuple(event_points),
             events_loaded,
+            prepared_series_bundle,
         )
 
     async def compute(
@@ -274,6 +339,7 @@ class SignalService:
         *,
         events_loaded: bool = False,
         annotation_requests: Sequence[SignalAnnotationRequest | dict[str, Any]] = (),
+        prepared_series_bundle: Optional[SignalPreparedSeriesBundle] = None,
     ) -> list[SignalResult]:
         plan = self.prepare_plan(
             requests,
@@ -285,6 +351,7 @@ class SignalService:
             price_points,
             event_points,
             events_loaded=events_loaded,
+            prepared_series_bundle=prepared_series_bundle,
         )
 
     def _execute_sync(
@@ -293,6 +360,7 @@ class SignalService:
         price_points: tuple[SignalPricePoint, ...],
         event_points: tuple[SignalEventPoint, ...],
         events_loaded: bool,
+        prepared_series_bundle: Optional[SignalPreparedSeriesBundle],
     ) -> list[SignalResult]:
         input_data = SignalInputData(
             price_points=list(price_points),
@@ -305,13 +373,30 @@ class SignalService:
         ] = {}
 
         for computation in plan.computations:
+            risk_metadata: Optional[RiskResultMetadata] = None
+            data_quality: Optional[DataQualityReport] = None
             try:
-                result, extended_series = self._execute_planned_signal(
+                (
+                    execution_context,
+                    computation_price_points,
+                    risk_metadata,
+                    data_quality,
+                    forced_unavailable_reason,
+                ) = self._prepared_signal_inputs(
                     computation,
                     plan.context,
                     input_data.price_points,
+                    prepared_series_bundle,
+                )
+                result, extended_series = self._execute_planned_signal(
+                    computation,
+                    execution_context,
+                    computation_price_points,
                     input_data.event_points,
                     events_loaded,
+                    risk_metadata,
+                    data_quality,
+                    forced_unavailable_reason,
                 )
             except Exception as exc:
                 logger.error(
@@ -326,6 +411,8 @@ class SignalService:
                     implementation_version=computation.plugin_class.implementation_version,
                     normalized_params=computation.normalized_params,
                     status=SignalStatus.FAILED,
+                    risk_metadata=risk_metadata,
+                    data_quality=data_quality,
                     error=SignalError(
                         code=SignalErrorCode.PLANNING_ERROR,
                         message=f"Signal orchestration failed for {computation.plugin_class.signal_code}",
@@ -354,6 +441,154 @@ class SignalService:
             )
 
         return [result_by_instance[request.instance_id] for request in plan.requests]
+
+    @classmethod
+    def _prepared_signal_inputs(
+        cls,
+        planned: PlannedSignal,
+        context: SignalExecutionContext,
+        default_price_points: list[SignalPricePoint],
+        bundle: Optional[SignalPreparedSeriesBundle],
+    ) -> tuple[
+        SignalExecutionContext,
+        list[SignalPricePoint],
+        Optional[RiskResultMetadata],
+        Optional[DataQualityReport],
+        Optional[SignalAvailabilityReason],
+    ]:
+        requirements = planned.plugin_class.input_requirements
+        if not requirements.uses_prepared_asset_series:
+            return context, default_price_points, None, None, None
+        if bundle is None:
+            return (
+                context,
+                [],
+                None,
+                None,
+                SignalAvailabilityReason.MISSING_PREPARED_SERIES,
+            )
+
+        dependency_key = planned.comparison_asset_id if requirements.comparison_asset_param is not None else None
+        prepared = bundle.series_sets.get(dependency_key)
+        if prepared is None:
+            return (
+                context,
+                [],
+                None,
+                None,
+                (SignalAvailabilityReason.MISSING_COMPARISON_SERIES if dependency_key is not None else SignalAvailabilityReason.MISSING_PREPARED_SERIES),
+            )
+
+        primary = next(
+            (item for item in prepared.series if item.valuations.asset_id == bundle.primary_asset_id),
+            None,
+        )
+        comparison = (
+            next(
+                (item for item in prepared.series if item.valuations.asset_id == planned.comparison_asset_id),
+                None,
+            )
+            if planned.comparison_asset_id is not None
+            else None
+        )
+        if comparison is None and planned.comparison_asset_id == bundle.primary_asset_id:
+            comparison = primary
+
+        forced_reason: Optional[SignalAvailabilityReason] = None
+        if primary is None:
+            forced_reason = SignalAvailabilityReason.MISSING_PREPARED_SERIES
+        elif requirements.comparison_asset_param is not None and comparison is None:
+            forced_reason = SignalAvailabilityReason.MISSING_COMPARISON_SERIES
+
+        context_data = context.model_dump(mode="python")
+        context_data.update(
+            {
+                "target_currency": prepared.target_currency,
+                "primary_asset_series": primary,
+                "comparison_asset_series": comparison,
+                "annualization_factor": prepared.annualization_factor,
+            }
+        )
+        execution_context = SignalExecutionContext.model_validate(context_data)
+        risk_metadata = cls._risk_result_metadata(planned, prepared)
+        price_points = cls._prepared_price_points(primary)
+        return (
+            execution_context,
+            price_points,
+            risk_metadata,
+            prepared.data_quality,
+            forced_reason,
+        )
+
+    @staticmethod
+    def _prepared_price_points(
+        primary: Any,
+    ) -> list[SignalPricePoint]:
+        if primary is None:
+            return []
+        return [
+            SignalPricePoint(
+                date=point.valuation_date,
+                close=point.target_close,
+                backward_fill_info=(
+                    BackwardFillInfo(
+                        actual_rate_date=point.effective_price_date,
+                        days_back=(point.valuation_date - point.effective_price_date).days,
+                    )
+                    if point.is_price_carried_forward
+                    else None
+                ),
+            )
+            for point in primary.valuations.points
+        ]
+
+    @staticmethod
+    def _risk_result_metadata(
+        planned: PlannedSignal,
+        prepared: PreparedAssetSeriesSet,
+    ) -> RiskResultMetadata:
+        risk_free = None
+        if "risk_free_annual_rate" in planned.normalized_params:
+            risk_free = RiskFreeReference(
+                annual_rate=float(planned.normalized_params["risk_free_annual_rate"]),
+                source="signal_param",
+                currency=prepared.target_currency,
+            )
+        return RiskResultMetadata(
+            analyzed_range=prepared.requested_range,
+            n_observations=prepared.n_observations,
+            calendar_days=prepared.calendar_days,
+            annualization_factor=prepared.annualization_factor,
+            coverage=prepared.calendar_coverage,
+            currency=prepared.target_currency,
+            method="rolling",
+            params=planned.normalized_params,
+            return_basis=RiskReturnBasis.PRICE_ONLY,
+            comparison_asset_id=planned.comparison_asset_id,
+            risk_free=risk_free,
+            algorithm_version=planned.plugin_class.implementation_version,
+            computed_at=datetime.now(UTC),
+        )
+
+    @staticmethod
+    def _risk_quality_warnings(
+        data_quality: Optional[DataQualityReport],
+    ) -> list[SignalWarning]:
+        if data_quality is None or data_quality.data_quality_status == DataQualityStatus.OK:
+            return []
+        return [
+            SignalWarning(
+                code=SignalWarningCode.DATA_QUALITY,
+                message="Risk signal used degraded prepared price or FX data",
+                details={
+                    "data_quality_status": (data_quality.data_quality_status.value),
+                    "carried_forward_price_points": (data_quality.carried_forward_price_points),
+                    "carried_forward_fx_points": (data_quality.carried_forward_fx_points),
+                    "unresolved_fx_pairs": list(data_quality.unresolved_fx_pairs),
+                    "unusable_asset_ids": [item.asset_id for item in data_quality.unusable_assets],
+                },
+            )
+        ]
 
     def _attach_annotations(
         self,
@@ -447,26 +682,30 @@ class SignalService:
         price_points: list[SignalPricePoint],
         event_points: list[SignalEventPoint],
         events_loaded: bool,
+        risk_metadata: Optional[RiskResultMetadata] = None,
+        data_quality: Optional[DataQualityReport] = None,
+        forced_unavailable_reason: Optional[SignalAvailabilityReason] = None,
     ) -> tuple[
         SignalResult,
         Optional[tuple[SignalSeries, ...]],
     ]:
         plugin_class = planned.plugin_class
         requirements = plugin_class.input_requirements
-        coverage, valid_flags, calendar_gap_slots = self._build_coverage(
+        coverage_context = context.model_copy(update={"cadence": SignalCadence.IRREGULAR}) if requirements.uses_prepared_asset_series else context
+        coverage, valid_flags, calendar_gap_slots = build_signal_coverage(
             price_points,
             event_points,
             requirements.price_fields,
-            context,
+            coverage_context,
         )
-        selected_points = self._select_computation_points(
+        selected_points = select_signal_computation_points(
             price_points,
             valid_flags,
-            context.cadence,
+            coverage_context.cadence,
             requirements.data_policy,
             planned.requirement.minimum_points,
         )
-        selected_events = self._select_events(
+        selected_events = select_signal_events(
             event_points,
             requirements.event_types,
         )
@@ -494,8 +733,10 @@ class SignalService:
         missing_event_types = []
         if requirements.requires_events and not events_loaded:
             missing_event_types = list(requirements.event_types) or ["*"]
-        can_compute, reason_code, partial_coverage_used = self._availability_state(
-            planned=planned,
+        can_compute, reason_code, partial_coverage_used = resolve_signal_availability(
+            requirements=requirements,
+            minimum_points=planned.requirement.minimum_points,
+            statically_compatible=planned.statically_compatible,
             coverage=coverage,
             missing_price_fields=missing_price_fields,
             missing_event_types=missing_event_types,
@@ -515,6 +756,18 @@ class SignalService:
             partial_coverage_used=partial_coverage_used,
             reason_code=reason_code,
         )
+        if forced_unavailable_reason is not None:
+            availability = self._unavailable_availability(
+                availability,
+                forced_unavailable_reason,
+            )
+            can_compute = False
+
+        risk_warnings = self._risk_quality_warnings(data_quality)
+        result_context = {
+            "risk_metadata": risk_metadata,
+            "data_quality": data_quality,
+        }
 
         if not can_compute:
             return (
@@ -526,17 +779,22 @@ class SignalService:
                     status=SignalStatus.UNAVAILABLE,
                     availability=availability,
                     warmup=warmup,
+                    warnings=risk_warnings,
+                    **result_context,
                 ),
                 None,
             )
 
-        service_warnings = self._availability_warnings(
-            availability,
-            warmup,
-            price_points,
-            selected_points,
-            context,
-        )
+        service_warnings = [
+            *build_signal_availability_warnings(
+                availability,
+                warmup,
+                price_points,
+                selected_points,
+                context,
+            ),
+            *risk_warnings,
+        ]
         try:
             raw_computation = plugin_class().compute(
                 selected_points,
@@ -550,10 +808,11 @@ class SignalService:
                 computation,
                 selected_points,
             )
-            all_series_have_finite, visible_has_missing = self._visible_output_state(
+            all_series_have_finite, visible_has_missing = visible_signal_output_state(
                 computation.series,
                 context,
             )
+            has_undefined_window = any(warning.code == SignalWarningCode.UNDEFINED_METRIC_WINDOW for warning in computation.warnings)
             if not all_series_have_finite:
                 if not warmup.complete:
                     unavailable = self._visible_history_unavailable(availability)
@@ -566,17 +825,52 @@ class SignalService:
                             status=SignalStatus.UNAVAILABLE,
                             availability=unavailable,
                             warmup=warmup,
+                            warnings=service_warnings,
+                            **result_context,
+                        ),
+                        None,
+                    )
+                if has_undefined_window:
+                    unavailable = self._unavailable_availability(
+                        availability,
+                        SignalAvailabilityReason.UNDEFINED_METRIC,
+                    )
+                    return (
+                        SignalResult(
+                            instance_id=planned.instance_ids[0],
+                            signal_code=plugin_class.signal_code,
+                            implementation_version=plugin_class.implementation_version,
+                            normalized_params=planned.normalized_params,
+                            status=SignalStatus.UNAVAILABLE,
+                            availability=unavailable,
+                            warmup=warmup,
+                            warnings=[
+                                *computation.warnings,
+                                *service_warnings,
+                            ],
+                            **result_context,
                         ),
                         None,
                     )
                 raise SignalOutputValidationError("visible output has no finite value for every series")
             if visible_has_missing and warmup.complete and not availability.partial_coverage_used:
-                raise SignalOutputValidationError("complete visible output contains missing values")
-            sliced_series = self._slice_series(
+                if has_undefined_window:
+                    availability = self._partial_metric_availability(availability)
+                else:
+                    raise SignalOutputValidationError("complete visible output contains missing values")
+            sliced_series = slice_signal_series(
                 computation.series,
                 context,
             )
-            sliced_annotations = [annotation for annotation in computation.annotations if self._date_is_visible(annotation.date, context)]
+            sliced_annotations = [
+                annotation
+                for annotation in computation.annotations
+                if date_is_within_range(
+                    annotation.date,
+                    context.requested_range.start,
+                    context.requested_range.end,
+                )
+            ]
         except SignalNonFiniteOutputError as exc:
             return (
                 self._runtime_failure(
@@ -587,6 +881,8 @@ class SignalService:
                     str(exc),
                     exc,
                     phase="output",
+                    risk_metadata=risk_metadata,
+                    data_quality=data_quality,
                 ),
                 None,
             )
@@ -600,6 +896,8 @@ class SignalService:
                     f"Output contract violation from {plugin_class.signal_code}",
                     exc,
                     phase="output",
+                    risk_metadata=risk_metadata,
+                    data_quality=data_quality,
                 ),
                 None,
             )
@@ -613,6 +911,35 @@ class SignalService:
                     f"Invalid output from {plugin_class.signal_code}",
                     exc,
                     phase="output",
+                    risk_metadata=risk_metadata,
+                    data_quality=data_quality,
+                ),
+                None,
+            )
+        except SignalUnavailableError as exc:
+            unavailable = self._unavailable_availability(
+                availability,
+                exc.reason_code,
+            )
+            warning_code = SignalWarningCode.UNDEFINED_METRIC_WINDOW if exc.reason_code == SignalAvailabilityReason.UNDEFINED_METRIC else SignalWarningCode.DATA_QUALITY
+            return (
+                SignalResult(
+                    instance_id=planned.instance_ids[0],
+                    signal_code=plugin_class.signal_code,
+                    implementation_version=plugin_class.implementation_version,
+                    normalized_params=planned.normalized_params,
+                    status=SignalStatus.UNAVAILABLE,
+                    availability=unavailable,
+                    warmup=warmup,
+                    warnings=[
+                        SignalWarning(
+                            code=warning_code,
+                            message=str(exc),
+                            details=exc.details,
+                        ),
+                        *service_warnings,
+                    ],
+                    **result_context,
                 ),
                 None,
             )
@@ -632,11 +959,13 @@ class SignalService:
                     f"Signal computation failed for {plugin_class.signal_code}",
                     exc,
                     phase="compute",
+                    risk_metadata=risk_metadata,
+                    data_quality=data_quality,
                 ),
                 None,
             )
 
-        status = SignalStatus.PARTIAL if not warmup.complete or availability.partial_coverage_used else SignalStatus.OK
+        status = SignalStatus.PARTIAL if (not warmup.complete or availability.partial_coverage_used or availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC) else SignalStatus.OK
         warnings = [*computation.warnings, *service_warnings]
         try:
             return (
@@ -651,6 +980,7 @@ class SignalService:
                     warmup=warmup,
                     annotations=sliced_annotations,
                     warnings=warnings,
+                    **result_context,
                 ),
                 tuple(computation.series),
             )
@@ -664,6 +994,8 @@ class SignalService:
                     f"Invalid visible output from {plugin_class.signal_code}",
                     exc,
                     phase="output",
+                    risk_metadata=risk_metadata,
+                    data_quality=data_quality,
                 ),
                 None,
             )
@@ -675,6 +1007,30 @@ class SignalService:
         if isinstance(request, SignalLineCrossoverRequest):
             return (request.left, request.right)
         return (request.source,)
+
+    @staticmethod
+    def _validate_annotation_output_sources(
+        requests: tuple[SignalAnnotationRequest, ...],
+        plugin_classes_by_instance: dict[str, type[SignalPlugin]],
+    ) -> None:
+        for request in requests:
+            for source in SignalService._annotation_sources(request):
+                if not isinstance(source, (SignalOutputValueSource, SignalBandValueSource)):
+                    continue
+                plugin_class = plugin_classes_by_instance.get(source.instance_id)
+                if plugin_class is None:
+                    continue
+                spec = next(
+                    (item for item in plugin_class.output_specs if item.key == source.series_key),
+                    None,
+                )
+                if isinstance(source, SignalBandValueSource):
+                    if spec is None:
+                        raise SignalRequestValidationError(f"annotation band source series '{source.series_key}' is not declared by '{source.instance_id}'")
+                    if spec.kind != SignalSeriesKind.BAND:
+                        raise SignalRequestValidationError(f"annotation band source series '{source.series_key}' is not a band")
+                elif spec is not None and spec.kind == SignalSeriesKind.BAND:
+                    raise SignalRequestValidationError(f"annotation scalar source series '{source.series_key}' is a band; use kind='band'")
 
     @staticmethod
     def _dedup_key(
@@ -719,6 +1075,8 @@ class SignalService:
         exc: Exception,
         *,
         phase: str,
+        risk_metadata: Optional[RiskResultMetadata] = None,
+        data_quality: Optional[DataQualityReport] = None,
     ) -> SignalResult:
         return SignalResult(
             instance_id=planned.instance_ids[0],
@@ -728,6 +1086,8 @@ class SignalService:
             status=SignalStatus.FAILED,
             availability=availability,
             warmup=warmup,
+            risk_metadata=risk_metadata,
+            data_quality=data_quality,
             error=SignalError(
                 code=code,
                 message=message,
@@ -754,286 +1114,6 @@ class SignalService:
         return details
 
     @classmethod
-    def _build_coverage(
-        cls,
-        price_points: list[SignalPricePoint],
-        event_points: list[SignalEventPoint],
-        required_fields: list[SignalPriceField],
-        context: SignalExecutionContext,
-    ) -> tuple[SignalInputCoverage, list[bool], int]:
-        valid_flags = [all(getattr(point, field.value) is not None for field in required_fields) for point in price_points]
-        internal_calendar_gaps = sum(
-            cls._gap_slots(previous.date, current.date, context.cadence)
-            for previous, current in zip(
-                price_points,
-                price_points[1:],
-                strict=False,
-            )
-        )
-        boundary_missing = cls._boundary_missing_slots(
-            price_points,
-            context,
-        )
-        expected_points = len(price_points) + internal_calendar_gaps + boundary_missing
-        if not price_points and required_fields:
-            expected_points = cls._visible_slot_count(context)
-
-        available_points = sum(valid_flags)
-        missing_points = expected_points - available_points
-        invalid_internal = sum(1 for index, valid in enumerate(valid_flags) if not valid and any(valid_flags[:index]) and any(valid_flags[index + 1 :]))
-        internal_gap_count = internal_calendar_gaps + invalid_internal
-        contiguous_points = cls._longest_contiguous_run(
-            price_points,
-            valid_flags,
-            context.cadence,
-        )
-        observed_points = sum(
-            1
-            for point, valid in zip(
-                price_points,
-                valid_flags,
-                strict=True,
-            )
-            if valid and point.backward_fill_info is None
-        )
-        backfilled_points = available_points - observed_points
-        denominator = expected_points or 1
-        field_coverage = {field: sum(1 for point in price_points if getattr(point, field.value) is not None) / denominator for field in required_fields}
-        available_dates = [
-            point.date
-            for point, valid in zip(
-                price_points,
-                valid_flags,
-                strict=True,
-            )
-            if valid
-        ]
-        event_counts = Counter(event.type for event in event_points)
-        coverage = SignalInputCoverage(
-            requested_points=expected_points,
-            available_points=available_points,
-            contiguous_points=contiguous_points,
-            observed_points=observed_points,
-            backfilled_points=backfilled_points,
-            missing_points=missing_points,
-            max_consecutive_missing_points=(
-                cls._max_consecutive_missing_points(
-                    price_points,
-                    valid_flags,
-                    context,
-                )
-                if required_fields
-                else 0
-            ),
-            internal_gap_count=internal_gap_count,
-            coverage_ratio=(available_points / expected_points if expected_points else 0.0),
-            field_coverage=field_coverage,
-            event_type_counts=dict(event_counts),
-            first_available_date=available_dates[0] if available_dates else None,
-            last_available_date=available_dates[-1] if available_dates else None,
-        )
-        return coverage, valid_flags, internal_calendar_gaps
-
-    @classmethod
-    def _max_consecutive_missing_points(
-        cls,
-        price_points: list[SignalPricePoint],
-        valid_flags: list[bool],
-        context: SignalExecutionContext,
-    ) -> int:
-        if not price_points:
-            return cls._visible_slot_count(context)
-
-        end = context.requested_range.end or context.requested_range.start
-        current = (
-            cls._distance_slots(
-                context.requested_range.start,
-                price_points[0].date,
-                context.cadence,
-            )
-            if price_points[0].date > context.requested_range.start
-            else 0
-        )
-        maximum = current
-        for index, (point, valid) in enumerate(
-            zip(
-                price_points,
-                valid_flags,
-                strict=True,
-            )
-        ):
-            if index > 0:
-                current += cls._gap_slots(
-                    price_points[index - 1].date,
-                    point.date,
-                    context.cadence,
-                )
-                maximum = max(maximum, current)
-            if valid:
-                current = 0
-            else:
-                current += 1
-                maximum = max(maximum, current)
-        if price_points[-1].date < end:
-            current += cls._distance_slots(
-                price_points[-1].date,
-                end,
-                context.cadence,
-            )
-            maximum = max(maximum, current)
-        return maximum
-
-    @classmethod
-    def _select_computation_points(
-        cls,
-        price_points: list[SignalPricePoint],
-        valid_flags: list[bool],
-        cadence: SignalCadence,
-        data_policy: SignalDataPolicy,
-        minimum_points: int,
-    ) -> list[SignalPricePoint]:
-        if not price_points:
-            return []
-        has_date_gap = any(
-            cls._gap_slots(previous.date, current.date, cadence) > 0
-            for previous, current in zip(
-                price_points,
-                price_points[1:],
-                strict=False,
-            )
-        )
-        if all(valid_flags) and not has_date_gap:
-            return price_points
-        if data_policy != SignalDataPolicy.ALLOW_PARTIAL_CONTIGUOUS:
-            return []
-
-        runs: list[list[SignalPricePoint]] = []
-        current_run: list[SignalPricePoint] = []
-        for index, point in enumerate(price_points):
-            is_contiguous = not current_run or (
-                valid_flags[index - 1]
-                and cls._gap_slots(
-                    price_points[index - 1].date,
-                    point.date,
-                    cadence,
-                )
-                == 0
-            )
-            if not valid_flags[index] or not is_contiguous:
-                if current_run:
-                    runs.append(current_run)
-                    current_run = []
-                if not valid_flags[index]:
-                    continue
-            current_run.append(point)
-        if current_run:
-            runs.append(current_run)
-        if not runs:
-            return []
-
-        latest_run = runs[-1]
-        if len(latest_run) >= minimum_points:
-            return latest_run
-        return max(runs, key=lambda run: (len(run), run[-1].date))
-
-    @staticmethod
-    def _select_events(
-        event_points: list[SignalEventPoint],
-        event_types: list[str],
-    ) -> list[SignalEventPoint]:
-        if not event_types:
-            return event_points
-        allowed = set(event_types)
-        return [event for event in event_points if event.type in allowed]
-
-    @staticmethod
-    def _availability_state(
-        *,
-        planned: PlannedSignal,
-        coverage: SignalInputCoverage,
-        missing_price_fields: list[SignalPriceField],
-        missing_event_types: list[str],
-        available_units: int,
-        visible_units: int,
-        warmup_complete: bool,
-        calendar_gap_slots: int,
-    ) -> tuple[bool, Optional[SignalAvailabilityReason], bool]:
-        requirements = planned.plugin_class.input_requirements
-        if not planned.statically_compatible:
-            return False, SignalAvailabilityReason.INCOMPATIBLE_DOMAIN, False
-        if missing_event_types:
-            return False, SignalAvailabilityReason.MISSING_EVENT_TYPES, False
-        if missing_price_fields:
-            return False, SignalAvailabilityReason.MISSING_INPUT_FIELDS, False
-        if requirements.price_fields and coverage.coverage_ratio < requirements.minimum_coverage:
-            return (
-                False,
-                SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE,
-                False,
-            )
-        partial_coverage = bool(requirements.price_fields) and coverage.missing_points > 0
-        if partial_coverage and requirements.data_policy != SignalDataPolicy.ALLOW_PARTIAL_CONTIGUOUS:
-            return (
-                False,
-                SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE,
-                False,
-            )
-        if available_units < planned.requirement.minimum_points:
-            return False, SignalAvailabilityReason.INSUFFICIENT_HISTORY, False
-        if visible_units == 0:
-            return False, SignalAvailabilityReason.INSUFFICIENT_HISTORY, False
-        if partial_coverage:
-            reason = SignalAvailabilityReason.DATA_GAP if calendar_gap_slots else SignalAvailabilityReason.PARTIAL_INPUT_COVERAGE
-            return True, reason, True
-        if not warmup_complete:
-            return True, SignalAvailabilityReason.INCOMPLETE_WARMUP, False
-        return True, None, False
-
-    @staticmethod
-    def _availability_warnings(
-        availability: SignalAvailability,
-        warmup: SignalWarmupMetadata,
-        price_points: list[SignalPricePoint],
-        selected_points: list[SignalPricePoint],
-        context: SignalExecutionContext,
-    ) -> list[SignalWarning]:
-        warnings: list[SignalWarning] = []
-        if not warmup.complete:
-            warnings.append(
-                SignalWarning(
-                    code=SignalWarningCode.INCOMPLETE_WARMUP,
-                    message="Signal warm-up is incomplete",
-                    details={
-                        "used_points": warmup.used_points,
-                        "required_points": warmup.requirement.total_points,
-                    },
-                )
-            )
-        if availability.partial_coverage_used:
-            warning_code = SignalWarningCode.DATA_GAP if availability.reason_code == SignalAvailabilityReason.DATA_GAP else SignalWarningCode.PARTIAL_INPUT_COVERAGE
-            selected_dates = {point.date for point in selected_points}
-            excluded_points = [point for point in price_points if point.date not in selected_dates]
-            selected_start = selected_points[0].date if selected_points else None
-            selected_end = selected_points[-1].date if selected_points else None
-            requested_end = context.requested_range.end or context.requested_range.start
-            warnings.append(
-                SignalWarning(
-                    code=warning_code,
-                    message="Signal used one complete contiguous input segment",
-                    details={
-                        "coverage_ratio": availability.input_coverage.coverage_ratio,
-                        "contiguous_points": availability.input_coverage.contiguous_points,
-                        "max_consecutive_missing_points": availability.input_coverage.max_consecutive_missing_points,
-                        "selected_start_date": max(selected_start, context.requested_range.start).isoformat() if selected_start else None,
-                        "selected_end_date": min(selected_end, requested_end).isoformat() if selected_end else None,
-                        "excluded_points": len(excluded_points),
-                        "first_excluded_date": excluded_points[0].date.isoformat() if excluded_points else None,
-                    },
-                )
-            )
-        return warnings
-
-    @classmethod
     def _normalize_computation(
         cls,
         raw_computation: Any,
@@ -1042,34 +1122,6 @@ class SignalService:
             raw_computation = raw_computation.model_dump(mode="python")
         sanitized = cls._sanitize_output(raw_computation)
         return SignalComputation.model_validate(sanitized)
-
-    @classmethod
-    def _visible_output_state(
-        cls,
-        series: list[SignalSeries],
-        context: SignalExecutionContext,
-    ) -> tuple[bool, bool]:
-        all_series_have_finite = True
-        visible_has_missing = False
-        for item in series:
-            visible_points = [point for point in item.points if cls._date_is_visible(point.date, context)]
-            if isinstance(item, SignalBandSeries):
-                values = [
-                    value
-                    for point in visible_points
-                    for value in (
-                        point.lower,
-                        point.middle,
-                        point.upper,
-                    )
-                ]
-            else:
-                values = [point.value for point in visible_points]
-            if not any(value is not None for value in values):
-                all_series_have_finite = False
-            if any(value is None for value in values):
-                visible_has_missing = True
-        return all_series_have_finite, visible_has_missing
 
     @staticmethod
     def _visible_history_unavailable(
@@ -1081,6 +1133,35 @@ class SignalService:
                 "can_compute": False,
                 "partial_coverage_used": False,
                 "reason_code": SignalAvailabilityReason.INSUFFICIENT_HISTORY,
+            }
+        )
+        return SignalAvailability.model_validate(data)
+
+    @staticmethod
+    def _unavailable_availability(
+        availability: SignalAvailability,
+        reason: SignalAvailabilityReason,
+    ) -> SignalAvailability:
+        data = availability.model_dump(mode="python")
+        data.update(
+            {
+                "can_compute": False,
+                "partial_coverage_used": False,
+                "reason_code": reason,
+            }
+        )
+        return SignalAvailability.model_validate(data)
+
+    @staticmethod
+    def _partial_metric_availability(
+        availability: SignalAvailability,
+    ) -> SignalAvailability:
+        data = availability.model_dump(mode="python")
+        data.update(
+            {
+                "can_compute": True,
+                "partial_coverage_used": False,
+                "reason_code": (SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC),
             }
         )
         return SignalAvailability.model_validate(data)
@@ -1123,7 +1204,18 @@ class SignalService:
             expected_specs,
             strict=True,
         ):
-            if series.key != spec.key or series.kind != spec.kind or series.label_key != spec.label_key or series.description_key != spec.description_key or series.unit != spec.unit or series.axis != spec.axis or series.view_transform != spec.view_transform or series.style != spec.style:
+            if (
+                series.key != spec.key
+                or series.kind != spec.kind
+                or series.label_key != spec.label_key
+                or series.description_key != spec.description_key
+                or series.semantic_id != spec.semantic_id
+                or series.semantic_description != spec.semantic_description
+                or series.unit != spec.unit
+                or series.axis != spec.axis
+                or series.view_transform != spec.view_transform
+                or series.style != spec.style
+            ):
                 raise SignalOutputContractError(f"plugin output metadata does not match spec '{spec.key}'")
 
         if selected_points and plugin_class.input_requirements.price_fields:
@@ -1133,131 +1225,6 @@ class SignalService:
                 if actual_dates != expected_dates:
                     raise SignalOutputContractError(f"series '{series.key}' dates/cardinality do not match input")
 
-    @classmethod
-    def _slice_series(
-        cls,
-        series: list[SignalSeries],
-        context: SignalExecutionContext,
-    ) -> list[SignalSeries]:
-        sliced: list[SignalSeries] = []
-        for item in series:
-            data = item.model_dump(mode="python", exclude={"points"})
-            data["points"] = [point.model_dump(mode="python") for point in item.points if cls._date_is_visible(point.date, context)]
-            sliced.append(type(item).model_validate(data))
-        return sliced
-
-    @staticmethod
-    def _date_is_visible(
-        value: date,
-        context: SignalExecutionContext,
-    ) -> bool:
-        end = context.requested_range.end or context.requested_range.start
-        return context.requested_range.start <= value <= end
-
-    @classmethod
-    def _longest_contiguous_run(
-        cls,
-        price_points: list[SignalPricePoint],
-        valid_flags: list[bool],
-        cadence: SignalCadence,
-    ) -> int:
-        longest = 0
-        current = 0
-        for index, valid in enumerate(valid_flags):
-            if not valid:
-                current = 0
-                continue
-            if (
-                index > 0
-                and valid_flags[index - 1]
-                and cls._gap_slots(
-                    price_points[index - 1].date,
-                    price_points[index].date,
-                    cadence,
-                )
-                == 0
-            ):
-                current += 1
-            else:
-                current = 1
-            longest = max(longest, current)
-        return longest
-
-    @classmethod
-    def _boundary_missing_slots(
-        cls,
-        price_points: list[SignalPricePoint],
-        context: SignalExecutionContext,
-    ) -> int:
-        if not price_points:
-            return 0
-        end = context.requested_range.end or context.requested_range.start
-        if context.cadence == SignalCadence.IRREGULAR:
-            return 0 if any(context.requested_range.start <= point.date <= end for point in price_points) else 1
-        before = (
-            cls._distance_slots(
-                context.requested_range.start,
-                price_points[0].date,
-                context.cadence,
-            )
-            if price_points[0].date > context.requested_range.start
-            else 0
-        )
-        after = (
-            cls._distance_slots(
-                price_points[-1].date,
-                end,
-                context.cadence,
-            )
-            if price_points[-1].date < end
-            else 0
-        )
-        return before + after
-
-    @classmethod
-    def _visible_slot_count(
-        cls,
-        context: SignalExecutionContext,
-    ) -> int:
-        end = context.requested_range.end or context.requested_range.start
-        if context.cadence == SignalCadence.IRREGULAR:
-            return 0
-        return (
-            cls._distance_slots(
-                context.requested_range.start,
-                end,
-                context.cadence,
-            )
-            + 1
-        )
-
-    @classmethod
-    def _gap_slots(
-        cls,
-        previous: date,
-        current: date,
-        cadence: SignalCadence,
-    ) -> int:
-        return max(
-            0,
-            cls._distance_slots(previous, current, cadence) - 1,
-        )
-
-    @staticmethod
-    def _distance_slots(
-        start: date,
-        end: date,
-        cadence: SignalCadence,
-    ) -> int:
-        if cadence == SignalCadence.DAILY:
-            return (end - start).days
-        if cadence == SignalCadence.WEEKLY:
-            days = (end - start).days
-            return math.ceil(days / 7)
-        if cadence == SignalCadence.MONTHLY:
-            return (end.year - start.year) * 12 + end.month - start.month
-        return 0
-
 
 __all__ = [
     "PlannedSignal",
@@ -1265,5 +1232,7 @@ __all__ = [
     "SignalNonFiniteOutputError",
     "SignalOutputContractError",
     "SignalOutputValidationError",
+    "SignalPreparedSeriesBundle",
+    "SignalRequestValidationError",
     "SignalService",
 ]

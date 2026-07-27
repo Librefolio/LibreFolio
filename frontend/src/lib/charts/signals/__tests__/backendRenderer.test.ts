@@ -41,6 +41,8 @@ function lineSeries(key: string, axisKey: string = 'momentum', values: Array<num
     return {
         key,
         label_key: `signals.${key}`,
+        semantic_id: `test.${key.replaceAll('_', '.')}`,
+        semantic_description: `Canonical test output for ${key}.`,
         unit: 'index',
         axis: {
             key: axisKey,
@@ -65,6 +67,8 @@ function bandSeries(key: string, axisKey: string = 'price') {
     return {
         key,
         label_key: `signals.${key}`,
+        semantic_id: `test.${key.replaceAll('_', '.')}`,
+        semantic_description: `Canonical test band output for ${key}.`,
         unit: 'price',
         axis: {
             key: axisKey,

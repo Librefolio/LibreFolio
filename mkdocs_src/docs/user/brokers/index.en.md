@@ -32,7 +32,7 @@ Once you select a broker from the list, the interface is split into four primary
 1. **Overview**: Display of net worth, return metrics, growth history, and allocation charts scoped exclusively to this broker account (see **[Dashboard Overview](../dashboard/index.md)**).
 2. **Positions**: List of open positions, asset weights, and performance metrics within this broker, with access to the inline FIFO Lots Analysis panel (see **[Dashboard Positions](../dashboard/positions.md)**).
 3. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Importing Transactions](import.md)**).
-4. **Info**: Broker metadata, cash overdraft/shorting configurations, AI Export, and inline sharing controls (see **[Configuration & Info](info.md)**).
+4. **Info**: Broker metadata, cash overdraft/shorting configurations, AI Export, and inline sharing controls (see **[Configuration & Info](info.md)** and **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
 
@@ -67,4 +67,5 @@ The **Positions** tab lists all active assets currently held under this broker. 
 
 - 📥 **[Importing Transactions (BRIM)](import.md)** — How to manually record transactions, run the BRIM CSV/Excel import wizard, and view import logs.
 - ⚙️ **[Configuration & Info](info.md)** — Metadata settings (overdrafts, shorting), scoped AI Export prompt generator, and the inline broker sharing panel.
+- 🧠 **[Broker AI Export](../ai-export/broker.md)** — Broker-scoped tasks, data coverage, exact sampling, availability, and privacy.
 - 🤝 **[Broker Sharing](sharing.md)** — Detailed guide on role permissions (Owner, Editor, Viewer) and asset percentage settings.

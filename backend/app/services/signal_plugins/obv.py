@@ -45,6 +45,8 @@ class ObvSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLUME
     display_name_key = "signals.obv.name"
     description_key = "signals.obv.description"
+    semantic_id = "on_balance_volume"
+    semantic_description = "Accumulates volume according to closing-price direction."
     icon = "📊"
     docs_path = "financial-theory/technical-analysis/indicators/obv/"
     params_model = ObvSignalParams
@@ -60,6 +62,8 @@ class ObvSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="obv",
             label_key="signals.obv.output",
+            semantic_id="on_balance_volume.value",
+            semantic_description="Cumulative signed volume rebased at the requested range.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.VOLUME,
             axis=SignalAxisSpec(
@@ -120,6 +124,8 @@ class ObvSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     points=[

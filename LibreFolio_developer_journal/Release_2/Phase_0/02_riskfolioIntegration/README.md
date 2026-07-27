@@ -5,7 +5,8 @@ della Fase 0.1 (Monte Carlo & Risk Metrics Engine). Lo scopo dello studio è
 rispondere a una domanda architetturale chiave: *dove* mettere l'analisi del
 rischio in LibreFolio e *quanto* di essa può essere reso modulare (stile
 "segnali") invece di richiedere una UI ad-hoc ogni volta. Lo studio è **approvato**;
-il piano applicativo (documento 4) formalizza gli step implementativi P0–P12.
+il piano applicativo (documento 4) formalizza gli step P0–P13; il master
+implementativo (documento 6) li traduce in sei sub-plan backend-first.
 
 ## Documenti
 
@@ -15,8 +16,10 @@ il piano applicativo (documento 4) formalizza gli step implementativi P0–P12.
 | 1 | [`analysis-phase01RiskModularityAndPlacement.md`](./analysis-phase01RiskModularityAndPlacement.md) | Analisi architetturale. Tassonomia degli output di rischio, la proposta `RiskAnalytic` (distinta da `SignalPlugin`) + "widget primitives", matrice di posizionamento UI per pagina, cosa implementare / rimandare / evitare, scelta libreria e async safety, roadmap R0–R9. |
 | 2 | [`brainstorm-phase01RiskUiConcepts.md`](./brainstorm-phase01RiskUiConcepts.md) | Brainstorming visivo. **9 concept UI** (A–I) con **ASCII art** e, per ciascuno, "cosa fa notare all'utente" + costo/valore. Information architecture della Risk tab + banner qualità dati trasversale. |
 | 3 | [`review-risk-analysis-feedback.md`](./review-risk-analysis-feedback.md) | **Revisione critica punto-per-punto.** Le 18 osservazioni valutate (ACCETTO / ACCETTO CON MODIFICHE / RESPINGO / RIMANDO) con evidenza dal codice, razionale finanziario/tecnico, conseguenze architetturali e modifiche apportate ai documenti. |
-| 4 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | **Piano applicativo incrementale (P0–P13).** Decisioni consolidate (D1–D12), librerie (QuantLib 1.43 e Riskfolio-Lib 7.3.0 **verificate e installate in P0**; NumPy/SciPy per QMC/RQMC; QMCPy fuori dal piano), matrice capability→libreria, classificazione dell'invalidazione post-sync con evidenza dal codice, step verificabili (incl. **P9 confronto risk-free/comparison_asset**) con criteri/rischi/fallback/parallelizzabilità, test+benchmark obbligatori, doppio critical path e tracciabilità R0–R9↔P0–P13. **Nessun codice.** |
+| 4 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | **Piano applicativo incrementale (P0–P13).** Decisioni consolidate (D1–D12), gate librerie, matrice capability→libreria, invalidazione post-sync, step verificabili, test+benchmark e tracciabilità R0–R9↔P0–P13. L'esecuzione P0 ha adottato QuantLib e respinto Riskfolio per conflitto NumPy/peso container. |
 | 5 | [`_RECAP-and-implementation-reading-guide.md`](./_RECAP-and-implementation-reading-guide.md) | **Punto d'ingresso / ripresa.** Mappa dei documenti, decisioni cardine consolidate, **prompt di ripresa** copiabile e **guida di lettura** per pianificare l'implementazione in fasi (A–F, raggruppamento di P0–P13, doppio percorso funzionale/librerie). |
+| 6 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | **Master implementativo backend-first.** Coordina sei sub-plan eseguibili, gate G0–G6, test matematici, fallback P12/P13 e tracking task-per-task. |
+| 7 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | **Evidenza esecutiva P0.** Probe host/container arm64+amd64, capability QuantLib, solver Riskfolio, dimensioni, lock, decisioni `ADOPTED/PARTIAL/REJECTED`. |
 
 ## TL;DR delle conclusioni (revisionate)
 
@@ -49,9 +52,14 @@ il piano applicativo (documento 4) formalizza gli step implementativi P0–P12.
    presenti (`SignalStatus`, `SignalWarningCode`, `DataQualityReport`), non inventarne.
 8. **Priorità rivista:** risk contribution (PCTR) e stress test **precedono** il Monte
    Carlo, che scende per il rischio di falsa precisione (review §9, §13).
-9. **Riskfolio-Lib solo dove serve davvero** (ottimizzazione/frontiera); per scalari e
-   serie rolling: `numpy`/`pandas` leggeri in `asyncio.to_thread`; Monte
-   Carlo/ottimizzazione richiedono process pool + timeout + cache (oggi assenti).
+9. **Gate librerie eseguito.** QuantLib 1.43 è adottata per il boundary
+   quantitativo; Riskfolio-Lib non viene spedita in Release 2 perché richiede
+   NumPy `<2.5` e circa 1 GiB aggiuntivo. P13/frontiera è quindi chiuso senza
+   endpoint/UI morti.
+10. **Esecuzione G0-G3 completata.** Serie canoniche e metadata sono condivisi;
+    cinque rolling risk sono nel catalogo Asset, calcolati nel backend e
+    renderizzati con controllo beta su asset persistito. Prossimo gate: G4,
+    analytics deterministici multi-asset P5-P10.
 
 > **Vincolo dello studio:** solo documentazione — nessun codice applicativo, nessuna
 > nuova dipendenza, nessuna migrazione.

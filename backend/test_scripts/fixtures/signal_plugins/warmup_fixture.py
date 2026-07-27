@@ -45,6 +45,8 @@ class WarmupFixturePlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.fixtureWarmup.name"
     description_key = "signals.fixtureWarmup.description"
+    semantic_id = "fixture_warmup"
+    semantic_description = "Test signal with configurable warm-up history."
     icon = "history"
     params_model = WarmupFixtureParams
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
@@ -52,6 +54,8 @@ class WarmupFixturePlugin(SignalPlugin):
         SignalOutputSpec(
             key="close",
             label_key="signals.fixtureWarmup.close",
+            semantic_id="fixture_warmup.close",
+            semantic_description="Test closing-price timeline.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
@@ -83,6 +87,8 @@ class WarmupFixturePlugin(SignalPlugin):
                 SignalLineSeries(
                     key="close",
                     label_key="signals.fixtureWarmup.close",
+                    semantic_id="fixture_warmup.close",
+                    semantic_description="Test closing-price timeline.",
                     unit=SignalUnit.PRICE,
                     axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
                     points=[SignalValuePoint(date=point.date, value=float(point.close)) for point in price_points],

@@ -20,6 +20,7 @@
     import type {SignRule} from '$lib/stores/transactions/transactionTypeStore';
     import CurrencySearchSelect from '../select/CurrencySearchSelect.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
 
     interface CashValue {
@@ -77,7 +78,7 @@
     });
 
     function emit() {
-        const trimmed = amountStr.trim();
+        const trimmed = normalizeDecimalInput(amountStr);
         if (trimmed === '' && code === '') {
             onChange(null);
             return;
@@ -88,6 +89,7 @@
     }
 
     function handleBlur() {
+        amountStr = formatDecimalForDisplay(normalizeDecimalInput(amountStr));
         emit();
     }
 
@@ -106,14 +108,14 @@
     let signOk = $state(false);
     let signBad = $state(false);
     $effect(() => {
-        const {ok, bad} = computeSignHint(parseFloat(amountStr), signHint);
+        const {ok, bad} = computeSignHint(parseFloat(normalizeDecimalInput(amountStr)), signHint);
         signOk = ok;
         signBad = bad;
     });
 </script>
 
 <div class="compact-cash" class:sign-ok={signOk} class:sign-bad={signBad} data-testid={testid}>
-    <input type="number" step="any" inputmode="decimal" autocomplete="off" class="amount-input" value={amountStr} oninput={handleAmountInput} onblur={handleBlur} placeholder={amountPlaceholder} disabled={disabled || amountDisabled} data-testid={`${testid}-amount`} />
+    <input type="text" inputmode="decimal" autocomplete="off" class="amount-input" value={amountStr} oninput={handleAmountInput} onblur={handleBlur} placeholder={amountPlaceholder} disabled={disabled || amountDisabled} data-testid={`${testid}-amount`} />
     <div class="currency-wrap">
         <CurrencySearchSelect bind:value={code} compact={true} disabled={disabled || currencyDisabled} onchange={handleCurrencyChange} {originalCurrency} {allowedCurrencies} />
         <span class="sr-only" data-testid={`${testid}-currency`}>{code}</span>
@@ -137,9 +139,8 @@
         text-align: right;
         /* Bugfix-2 §U12 + Bugfix-3 §C12: monospace + tabular numerals AND a
            visible input-style border so the field reads as editable.
-           Bugfix-5 walkthrough #6: switched to `type="number"` so we hide
-           the browser spinner controls (they collapse the horizontal space
-           and look unpolished against the currency picker on the right).
+           Locale-safe text input keeps browser number controls from
+           reinterpreting "." as a thousands separator.
            Walkthrough #6 (mobile): wrapper is now `flex` and amount input
            uses `flex: 1` so the field stretches to fill the row when Cash
            is dropped below Qty on narrow screens. */

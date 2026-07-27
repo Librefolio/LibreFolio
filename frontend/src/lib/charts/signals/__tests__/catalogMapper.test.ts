@@ -12,6 +12,8 @@ function makeCatalog(signalCode: string, domains: Array<'asset' | 'fx'> = ['asse
         category: 'trend',
         display_name_key: `chartSettings.signals.${signalCode.toLowerCase()}`,
         description_key: `chartSettings.signals.${signalCode.toLowerCase()}Desc`,
+        semantic_id: `test.${signalCode.toLowerCase()}`,
+        semantic_description: `Canonical description for ${signalCode}.`,
         icon: 'chart-spline',
         docs_path: `financial-theory/${signalCode.toLowerCase()}/`,
         params_schema: {
@@ -38,6 +40,8 @@ function makeCatalog(signalCode: string, domains: Array<'asset' | 'fx'> = ['asse
             {
                 key: 'output',
                 label_key: 'signals.output',
+                semantic_id: `test.${signalCode.toLowerCase()}.output`,
+                semantic_description: `Canonical output description for ${signalCode}.`,
                 unit: 'price',
                 axis: {key: 'price', role: 'price'},
                 kind: 'line',
@@ -82,6 +86,13 @@ describe('signal catalog mapper', () => {
     it('merges remote and local definitions for one domain', () => {
         const definitions = mergeSignalDefinitions([makeCatalog('EMA')], [localDefinition], 'fx');
         expect(definitions.map((definition) => definition.type)).toEqual(['ema', 'linear']);
+    });
+
+    it('maps risk as a supported backend indicator group', () => {
+        const catalog = makeCatalog('RISK_ROLLING_RETURN', ['asset']);
+        catalog.category = 'risk';
+
+        expect(mapBackendSignalDefinition(catalog).indicatorGroup).toBe('risk');
     });
 
     it('rejects duplicate normalized codes', () => {

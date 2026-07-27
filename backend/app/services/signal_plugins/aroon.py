@@ -76,6 +76,8 @@ class AroonSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.aroon.name"
     description_key = "signals.aroon.description"
+    semantic_id = "aroon"
+    semantic_description = "Measures how recently lookback-period highs and lows occurred."
     icon = "⏱️"
     docs_path = "financial-theory/technical-analysis/indicators/aroon/"
     params_model = AroonSignalParams
@@ -92,6 +94,8 @@ class AroonSignalPlugin(SignalPlugin):
             key="up",
             label_key="signals.aroon.up",
             description_key="signals.aroon.upDescription",
+            semantic_id="aroon.up",
+            semantic_description="Recency score for the highest high in the lookback window.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
@@ -104,6 +108,8 @@ class AroonSignalPlugin(SignalPlugin):
             key="down",
             label_key="signals.aroon.down",
             description_key="signals.aroon.downDescription",
+            semantic_id="aroon.down",
+            semantic_description="Recency score for the lowest low in the lookback window.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
@@ -116,6 +122,8 @@ class AroonSignalPlugin(SignalPlugin):
             key="oscillator",
             label_key="signals.aroon.oscillator",
             description_key="signals.aroon.oscillatorDescription",
+            semantic_id="aroon.oscillator",
+            semantic_description="Difference between the Aroon up and down scores.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
@@ -189,6 +197,8 @@ class AroonSignalPlugin(SignalPlugin):
                     key=spec.key,
                     label_key=spec.label_key,
                     description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     style=spec.style.model_copy(deep=True),

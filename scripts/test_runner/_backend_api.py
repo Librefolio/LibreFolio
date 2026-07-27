@@ -98,6 +98,22 @@ def api_fx_signals(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "FX signal API tests", verbose=verbose)
 
 
+def api_signal_request_validation(verbose: bool = False, test_names: list = None) -> bool:
+    """Run signal request validation API tests."""
+    print_section("Signal Request Validation API Tests")
+    print_info("Testing request validation for Asset and FX signal endpoints")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_signal_request_validation_api.py", test_names)
+    return run_command(cmd, "Signal request validation API tests", verbose=verbose)
+
+
+def api_ai_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Run AI Export API tests."""
+    print_section("AI Export API Tests")
+    print_info("Testing catalog, snapshot, authorization, and typed problem contracts")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_ai_export_api.py", test_names)
+    return run_command(cmd, "AI Export API tests", verbose=verbose)
+
+
 def api_assets_provider(verbose: bool = False, test_names: list = None) -> bool:
     """Run Assets Provider API endpoint tests."""
     print_section("Assets Provider API Endpoint Tests")
@@ -566,6 +582,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
     add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
     add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
+    add_test(api, "signal-request-validation", api_signal_request_validation, name="Signal Request Validation", desc="Asset/FX signal request validation contracts")
+    add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(api, "assets-metadata", api_assets_metadata, name="Assets Metadata API", desc="PATCH metadata, bulk read, refresh")
     add_test(api, "assets-events", api_assets_events, name="Assets Events API", desc="Bulk upsert, delete, query")

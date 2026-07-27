@@ -7,8 +7,10 @@ The Borsa Italiana provider fetches financial data from [borsaitaliana.it](https
 ## ⚙️ How it Works
 
 1. **Identifier**: An ISIN code (e.g., `IT0003128367` for ENEL S.p.A.).
-2. **Identifier Types**: Only `ISIN` is accepted.
-3. **`provider_params`**: Optional `language` field (`"en"` or `"it"`, default `"en"`). Controls the language of asset names, metadata descriptions, and the provider URL.
+2. **Identifier Types**: `ISIN` for listed instruments. Mutual funds are priced by a Borsa **internal code** carried in `provider_params.codice_fondo` (see [Mutual funds](#mutual-funds-nav-by-internal-code) below); the asset identifier is still the real ISIN when the fund page exposes one.
+3. **`provider_params`**:
+    - `language` — optional (`"en"` or `"it"`, default `"en"`). Controls the language of asset names, metadata descriptions, and the provider URL.
+    - `codice_fondo` — optional Borsa internal fund code (e.g. `2FADB602822`). When present, current/historical value use the **fund NAV path** instead of the market API.
 
 ### 💱 Currency
 
@@ -16,7 +18,8 @@ All data is returned in **EUR** — Borsa Italiana is an Italian exchange.
 
 ### 💰 Current Value (`get_current_value`)
 
-- Uses `ottieni_prezzo_corrente(isin)` from the scraping library.
+- **Funds** (when `provider_params.codice_fondo` is set): returns the fund NAV **only if the published NAV is dated today**. A fund NAV is published once per day with a lag, so exposing a stale NAV as the "current" value would misstate the portfolio. When the NAV date ≠ today, the provider raises `NO_DATA` and the core falls back to the **last recorded buy price** as the unit-value estimate.
+- **Listed instruments**: uses `ottieni_prezzo_corrente(isin)` from the scraping library.
 - **Strategy** (fastest first):
     1. Fetches the latest point from the historical API (1M period).
     2. Falls back to scraping the instrument page (`ottieni_scheda`).
@@ -24,18 +27,31 @@ All data is returned in **EUR** — Borsa Italiana is an Italian exchange.
 
 ### 📈 Historical Data (`get_history_value`)
 
-- Uses `ottieni_storico(isin, periodo)` from the `grafici.borsaitaliana.it` JSON API.
-- Returns full **OHLCV data** (open, high, low, close, volume) for each trading day.
-- **Period selection**: The API uses fixed windows (`1M`, `3M`, `6M`, `1Y`, `3Y`, `5Y`, `MAX`). The provider automatically selects the smallest period that covers the requested `start_date..end_date` range.
-- Results are filtered in-memory to the exact requested date range.
-- The core handles gap filling (weekends, holidays) — the plugin returns only actual trading days.
+- **Funds** (when `provider_params.codice_fondo` is set): the fund page exposes only the **latest NAV** (no series), dated to the day it actually refers to (never today). The provider returns a **single price point** at that real NAV date; the core backward-fills the gaps up to the requested range. Out-of-range NAV dates yield no points.
+- **Listed instruments**: uses `ottieni_storico(isin, periodo)` from the `grafici.borsaitaliana.it` JSON API.
+    - Returns full **OHLCV data** (open, high, low, close, volume) for each trading day.
+    - **Period selection**: The API uses fixed windows (`1M`, `3M`, `6M`, `1Y`, `3Y`, `5Y`, `MAX`). The provider automatically selects the smallest period that covers the requested `start_date..end_date` range.
+    - Results are filtered in-memory to the exact requested date range.
+    - The core handles gap filling (weekends, holidays) — the plugin returns only actual trading days.
+
+### 🧾 Mutual funds (NAV by internal code)
+
+Mutual funds / SICAVs are **not** on the XMIL market API, so `ottieni_storico` / `ottieni_prezzo_corrente` cannot price them. Their only public NAV source is the fund detail page `/borsa/fondi/dettaglio/{code}.html`, addressed by a Borsa **internal code** (`2FADB…`) that is **not** the ISIN. The scraping library exposes:
+
+- `ottieni_dati_fondo(codice, sessione)` — fetch NAV, currency, NAV date (dd/mm/yy), name, and the real **ISIN extracted from the page** (`DatiFondo`).
+- `ottieni_dati_fondo_da_url(url, sessione)` / `estrai_codice_da_url(url)` — the URL variant used by `resolve_url`.
+
+The provider captures the internal code into `provider_params.codice_fondo` at asset creation (from search or `resolve_url`); pricing afterwards uses that stored code with **no external search**. Price fetches never hit any web search — that invariant is what keeps automated syncs deterministic.
 
 ### 🔎 Search (`search`)
 
 - Uses `cerca(query)` — the internal JSON search engine of borsaitaliana.it.
-- Searches across all instrument types: stocks, bonds, ETFs, ETC/ETN.
-- **Dual-language results**: emits two entries per ISIN (🇬🇧 English + 🇮🇹 Italiano) with flag emojis in `display_name`. Each result carries `provider_params: {language: "en"|"it"}` so the user's selection is propagated on assignment.
-- Results are deduplicated by `(ISIN, language)` pair.
+- Searches across all instrument types: stocks, bonds, ETFs, ETC/ETN, and funds.
+- Fund names are indexed with Borsa abbreviations (for example `Obbligaz.` instead of `Obbligazionaria`), so the provider retries common full-word variants with abbreviated terms.
+- **Funds**: `cerca` returns the Borsa **internal code** in the `isin` field (not a real ISIN). The provider fetches each fund page **once per code** (in-search cache) via `ottieni_dati_fondo` to recover the real ISIN, sets it as the `identifier` (`ISIN`), and carries the internal code in `provider_params.codice_fondo`. If the page can't be fetched, it falls back to the code as an `OTHER` identifier — still priceable by NAV.
+- **Dual-language results**: emits two entries per instrument (🇬🇧 English + 🇮🇹 Italiano) with flag emojis in `display_name`. Each result carries `provider_params: {language: "en"|"it"}` so the user's selection is propagated on assignment.
+- Results are deduplicated by `(identifier, language)` pair.
+- **Last-resort external fallback**: when `cerca` returns nothing, the search orchestration may call the LibreFolio [`web_link_finder`](#web_link_finder-last-resort-external-search) module to turn the query into a candidate Borsa page URL, then `resolve_url` it (see below). Best-effort, interactive-only, never on price fetches.
 
 ### 📋 Metadata (`fetch_asset_metadata`)
 
@@ -54,6 +70,28 @@ All data is returned in **EUR** — Borsa Italiana is an Italian exchange.
 
 Returns `https://www.borsaitaliana.it/borsa/search/scheda.html?code={ISIN}&lang={language}` — the `lang` parameter follows the user's `provider_params.language` selection (default `en`).
 
+### 🔁 `resolve_url` (inverse of `get_asset_url`)
+
+The provider opts into the generic **URL → search-item** capability:
+
+- `resolvable_url_domains = ["borsaitaliana.it"]` → `supports_url_resolution` is `True`.
+- `resolve_url(url)` recognises fund detail pages (`/borsa/fondi/dettaglio/{code}.html`, `?code=`), fetches the page, and returns the **same dict shape as a search item** — `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`. Anything that is not a recognisable Borsa fund page (off-domain, no extractable code) returns `None`. Best-effort: fetch/parse errors return `None`, never raise.
+
+This lets an externally discovered page URL (e.g. found via `web_link_finder`, or pasted by the user in a future UI) be turned into a ready-to-create asset with the correct pricing params.
+
+### 🌐 `web_link_finder` (last-resort external search)
+
+`backend/app/services/web_link_finder.py` is a **LibreFolio-level** module (deliberately *not* inside the scraping library, so the choice of external engine stays a LibreFolio concern). It turns a free-text query/ISIN into candidate **provider-domain** URLs, used **only at search time** as a last resort when a provider's on-site search yields nothing.
+
+- **Best-effort**: any failure (rate-limit, anomaly page, network/parse error) yields `[]` and is never fatal — the search always completes and emits `done`.
+- **Async-safe**: sync I/O runs in `asyncio.to_thread`; short timeout, small TTL cache, domain-filtered hits, structured logs.
+- **Pluggable engine**: default keyless `DuckDuckGoEngine` (scrapes the DDG HTML endpoint) with an `ApiKeyEngine` seam for a paid API (Brave/Bing/SerpAPI) later.
+- **Config** (all optional env vars): `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` (`1`/`0`, default `1`), `_ENGINE` (`duckduckgo`|`apikey`), `_API_KEY`, `_TIMEOUT` (s), `_MAX`.
+
+!!! warning "Invariant"
+
+    External search is only ever hit during **interactive asset search**. Price fetches (frequent, automated) must **never** call `web_link_finder` — once an asset exists it is priced by its stored `provider_params` (a fund's `codice_fondo`), not by search.
+
 ---
 
 ## 🔌 Technical Details
@@ -69,11 +107,12 @@ The provider maintains a **shared `Sessione` instance** across all calls:
 
 ### `params_schema` (Dynamic UI Form)
 
-The provider exposes one optional parameter via `params_schema`:
+The provider exposes optional parameters via `params_schema`:
 
 | Key | Type | Options | Default | Description |
 |-----|------|---------|---------|-------------|
 | `language` | `select` | `en` (🇬🇧 English), `it` (🇮🇹 Italiano) | `en` | Language for names and metadata |
+| `codice_fondo` | `text` | — | — | Borsa internal fund code (e.g. `2FADB602822`); when set, current/history use the fund NAV path |
 
 Uses `option_labels` for human-readable display in the frontend dropdown.
 
@@ -98,11 +137,13 @@ Transitive: `httpx`, `beautifulsoup4`, `lxml`.
 
 ## 🧪 Test Cases
 
-| Identifier | Type | Description |
+| Identifier | `provider_params` | Description |
 |---|---|---|
-| `IT0003128367` | ISIN | ENEL S.p.A. (stock) |
+| `IT0003128367` | — | ENEL S.p.A. (stock) |
+| `LU2178929613` | `{codice_fondo: "2FADB602822"}` | Eurizon Next 2.0 Alloc. Divers. 40 P (fund, NAV by code) |
 
-Search test query: `"ENEL"`.
+Search test query: `"ENEL"` (listed) / `"EURIZON NEXT 2.0 DIVERSIFICATO 40 P"` (fund by report name).
+`resolve_url` test: `https://www.borsaitaliana.it/borsa/fondi/dettaglio/2FADB602822.html` → fund search-item with ISIN `LU2178929613` + `codice_fondo`.
 
 ---
 

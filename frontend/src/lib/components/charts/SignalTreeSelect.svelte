@@ -331,6 +331,7 @@
                             aria-expanded={groupOpen}
                             onclick={() => toggleGroup(group.key)}
                             onmouseenter={() => activateEntry(navigationId)}
+                            data-testid="signal-tree-group-{group.key}"
                         >
                             {#if groupOpen}
                                 <ChevronDown size={15} class="mt-0.5 shrink-0 text-gray-400" />

@@ -73,6 +73,7 @@ from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     SignalPluginRegistry,
 )
+from backend.app.services.signal_service import SignalRequestValidationError
 
 logger = get_logger(__name__)
 
@@ -698,6 +699,8 @@ async def query_prices_bulk(
     try:
         results = await AssetSourceManager.get_prices_bulk(requests, session)
         return FAPriceQueryResponse(items=results)
+    except SignalRequestValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error querying prices bulk: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

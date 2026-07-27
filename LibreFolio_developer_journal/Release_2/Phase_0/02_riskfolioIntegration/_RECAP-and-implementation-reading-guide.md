@@ -17,12 +17,24 @@
 | 2 | [`brainstorm-phase01RiskUiConcepts.md`](./brainstorm-phase01RiskUiConcepts.md) | **Brainstorming visivo.** 9 concept UI (A–I) con ASCII art + «cosa fa notare» + costo/valore; D-bis (Asset Global Correlation), D-ter (asset-centric), E-bis (multi-asset % stress), banner→PageSyncModal. | 553 | approvato |
 | 3 | [`review-risk-analysis-feedback.md`](./review-risk-analysis-feedback.md) | **Log decisionale critico** (Capitoli 1–4). 18 osservazioni valutate ACCETTO/CON MODIFICHE/RESPINGO/RIMANDO con evidenza dal codice; Cap. 4 = decisioni review-4 + skeleton del piano. | 851 | approvato |
 | 4 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | **Piano applicativo P0–P13.** Principi, decisioni D1–D12, librerie (QuantLib/Riskfolio in P0, NumPy/SciPy, QMCPy fuori), matrice capability, classificazione invalidazione, step verificabili, test+benchmark, doppio critical path, tracciabilità R0–R9↔P0–P13. | 709 | **da eseguire** |
+| 5 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | **Master implementativo backend-first.** Coordina 6 sub-plan: Quant Foundation · serie/metadata · rolling backend · multi-asset backend · simulazione/scala/frontiera · frontend funzionale. | vivo | **G0-G3 chiusi** |
+| 6 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | **Esito P0.** QuantLib adottata, RQMC partial, Riskfolio respinta; probe e misure host/container riproducibili. | vivo | **G1 chiuso** |
 | — | [`README.md`](./README.md) | Indice + TL;DR + punti decisionali review-2/3/4. | 155 | vivo |
 | — | `_RECAP-and-implementation-reading-guide.md` | **Questo file** — riepilogo, prompt di ripresa, guida di lettura. | — | vivo |
 
 **Catena logica:** contratto (*cosa è vero*) → analisi (*dove va nel sistema*) →
-brainstorm (*che aspetto ha*) → review (*perché così, cosa scartato*) → piano (*come
-costruirlo, in che ordine*).
+brainstorm (*che aspetto ha*) → review (*perché così, cosa scartato*) → piano
+applicativo (*cosa costruire*) → master+sub-plan implementativi (*come eseguirlo e
+verificarlo*).
+
+### Stato esecutivo — 27 Luglio 2026
+
+- ✅ G0 piano e sub-plan;
+- ✅ G1 Quant Foundation, incluso build Docker e import QuantLib 1.43;
+- ✅ G2 serie canoniche, FX, qualità e metadata;
+- ✅ G3 cinque rolling risk, client OpenAPI e render funzionale Asset Detail;
+- 🟡 Step 4 / G4 avviato: contratti schema multi-asset 4.1 completati; registry,
+  matematica, service e API in corso.
 
 ---
 
@@ -43,9 +55,10 @@ costruirlo, in che ordine*).
   auto-invalidante (nessun nuovo sistema di invalidazione).
 - **UI:** Correlazione primaria in Asset Global (tab); Dashboard/Broker Risk; stress
   differenziato per scope (% / % multi / €).
-- **Librerie:** QuantLib (motore quant/simulazione, adapter) + Riskfolio-Lib (frontiera),
-  **entrambe verificate e installate in P0**; NumPy/SciPy base+fallback+RQMC; **QMCPy
-  fuori dal piano** (solo fallback futuro). Parallelismo **solo `spawn`**, dopo benchmark.
+- **Librerie — esito P0:** QuantLib 1.43 **adottata**; Sobol QMC disponibile;
+  Burley RQMC `PARTIAL` con fallback SciPy. Riskfolio-Lib **respinta per Release 2**
+  (NumPy `<2.5`, circa 1 GiB); P13 non spedito. **QMCPy fuori dal piano**.
+  Parallelismo QuantLib **solo `spawn`**, dopo benchmark.
 
 ---
 
@@ -70,11 +83,11 @@ Vincoli non negoziabili (già decisi, NON riaprire):
 - rolling beta solo con comparison_asset reale; risk-free solo per lo Sharpe;
 - utility comune di preparazione serie; DataQualityReport esteso vs RiskResultMetadata;
 - sync via PageSyncModal; cache content-keyed (niente nuovo sistema di invalidazione);
-- QuantLib + Riskfolio-Lib installate/validate in P0; NumPy/SciPy fallback+RQMC;
-  QMCPy fuori dal piano; parallelismo solo spawn e solo dopo benchmark.
+- QuantLib 1.43 adottata in P0; RQMC via QuantLib/SciPy secondo spike P11;
+  Riskfolio/P13 respinti per Release 2; QMCPy fuori; parallelismo solo spawn.
 
-Obiettivo di questa sessione: <SCEGLIERE UNA FASE — vedi guida §4 del recap, es.
-"Fase A: fondamenta P0+P1+P2">. Per ogni step del piano rispetta i campi
+Obiettivo di questa sessione: Step 4 / G4 — backend deterministico multi-asset
+P5-P10. Per ogni step del piano rispetta i campi
 obiettivo/gap/file/contratto/schema/service/frontend/deps/test/migrazione/criteri/
 rischi/fallback. Verifica sempre contro il codice reale (evidenza file:linea) prima di
 proporre nuovi elementi. Documenta prima di implementare; niente dipendenze/migrazioni/
@@ -94,7 +107,7 @@ librerie quantitative).
                  PERCORSO FUNZIONALE                 PERCORSO LIBRERIE QUANT
                  (valore utente)                     (abbatti rischio infra)
 
-  Fase A ─ Fondamenta      P1 · P2                    P0  (probe+install QuantLib+Riskfolio)
+  Fase A ─ Fondamenta      P1 · P2                    P0  (QuantLib sì; Riskfolio no)
               │                                          │
   Fase B ─ Rolling & UI    P3 · P4 (Asset Detail)        │  (spike simulazione in prep.)
               │                                          │
@@ -136,8 +149,8 @@ librerie quantitative).
   %/€; confronto A/B; `CVaR≥VaR≥0`.
 - **Fase E — Simulazione** (`P11`). Motore MC/QMC/RQMC componibile dietro adapter, dopo
   lo spike QuantLib vs NumPy/SciPy. *Criterio:* seed deterministico, metriche corrette.
-- **Fase F — Scala & advanced** (`P12` + `P13`). Parallelismo `spawn` **solo se i
-  benchmark lo giustificano**; frontiera/ottimizzazione con Riskfolio-Lib (opzionale).
+- **Fase F — Scala & advanced** (`P12`; `P13` chiuso). Parallelismo `spawn`
+  **solo se i benchmark lo giustificano**; frontiera Riskfolio non spedita.
 
 ### Principi trasversali per ogni fase
 - **Spike prima del commitment:** P0 (probe+install) e lo spike simulazione (P11) sono
@@ -152,13 +165,15 @@ librerie quantitative).
 ---
 
 ## 5. Cosa NON è ancora deciso (rimane ai probe/spike)
-Compatibilità QuantLib↔Python 3.13 e wheel nel container (P0) · scrambling/RQMC nel
-binding SWIG (P0/P11) · composizione QuantLib+`scipy.stats.qmc` (P11) · peso Docker di
-QuantLib e Riskfolio+solver (P0) · soglia per attivare il pool `spawn` (P12) · forma
-finale di `comparison_asset_series` (P3) e `AssetReturnSeries` (P1).
+Composizione finale Burley QuantLib vs `scipy.stats.qmc` (P11) · soglia per
+attivare il pool `spawn` (P12). P0-P3, `AssetReturnSeries` e
+`comparison_asset_series` sono chiusi; compatibilità/wheel/peso P0 sono registrati
+nel [`report dello spike`](./spike-phase01QuantLibraries.md).
 
 ---
 
 ## Riferimenti
 - Indice cartella: [`README.md`](./README.md)
 - Piano applicativo: [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md)
+- Master implementativo: [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md)
+- Esito Quant Foundation: [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md)

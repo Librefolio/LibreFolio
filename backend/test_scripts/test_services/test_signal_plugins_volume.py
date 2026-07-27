@@ -56,9 +56,9 @@ def neutral_points(frames):
     return {name: frame_to_points(frame) for name, frame in frames.items()}
 
 
-def test_volume_catalog_completes_seventeen_plugins():
+def test_volume_catalog_includes_technical_and_risk_plugins():
     definitions = {item.signal_code: item for item in SignalPluginRegistry.list_definitions()}
-    assert len(definitions) == 17
+    assert len(definitions) == 22
     assert VOLUME_CODES.issubset(definitions)
     assert definitions["OBV"].input_requirements.price_fields == [
         "close",
@@ -310,7 +310,7 @@ async def test_missing_volume_is_unavailable(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("signal_code", sorted(VOLUME_CODES))
-async def test_partial_volume_is_not_compacted(
+async def test_partial_volume_uses_latest_contiguous_segment(
     signal_code,
     neutral_points,
 ):
@@ -330,9 +330,11 @@ async def test_partial_volume_is_not_compacted(
         )
     )[0]
 
-    assert result.status == SignalStatus.UNAVAILABLE
-    assert result.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE
+    assert result.status == SignalStatus.PARTIAL
+    assert result.availability.reason_code == SignalAvailabilityReason.PARTIAL_INPUT_COVERAGE
     assert result.availability.input_coverage.internal_gap_count == 1
+    gap_date = points[500].date
+    assert all(point.date > gap_date for series in result.series for point in series.points)
 
 
 @pytest.mark.asyncio

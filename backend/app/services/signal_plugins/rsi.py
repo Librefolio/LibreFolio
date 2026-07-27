@@ -147,6 +147,8 @@ class RsiSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.rsi.name"
     description_key = "signals.rsi.description"
+    semantic_id = "relative_strength_index"
+    semantic_description = "Measures recent gain and loss magnitude on a bounded scale."
     icon = "💪"
     docs_path = "financial-theory/technical-analysis/indicators/rsi/"
     params_model = RsiSignalParams
@@ -155,6 +157,8 @@ class RsiSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="rsi",
             label_key="signals.rsi.output",
+            semantic_id="relative_strength_index.value",
+            semantic_description="Bounded ratio of smoothed gains to total directional movement.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_RSI_AXIS,
@@ -252,6 +256,8 @@ class RsiSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

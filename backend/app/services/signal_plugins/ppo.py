@@ -110,6 +110,8 @@ class PpoSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.ppo.name"
     description_key = "signals.ppo.description"
+    semantic_id = "percentage_price_oscillator"
+    semantic_description = "Compares fast and slow exponential trends as a percentage."
     icon = "📡"
     docs_path = "financial-theory/technical-analysis/indicators/ppo/"
     params_model = PpoSignalParams
@@ -119,6 +121,8 @@ class PpoSignalPlugin(SignalPlugin):
             key="ppo",
             label_key="signals.ppo.line",
             description_key="signals.ppo.lineDescription",
+            semantic_id="percentage_price_oscillator.line",
+            semantic_description="Percentage difference between fast and slow exponential moving averages.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
@@ -134,6 +138,8 @@ class PpoSignalPlugin(SignalPlugin):
             key="signal",
             label_key="signals.ppo.signal",
             description_key="signals.ppo.signalDescription",
+            semantic_id="percentage_price_oscillator.signal",
+            semantic_description="Smoothed average of the PPO line.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
@@ -146,6 +152,8 @@ class PpoSignalPlugin(SignalPlugin):
             key="histogram",
             label_key="signals.ppo.histogram",
             description_key="signals.ppo.histogramDescription",
+            semantic_id="percentage_price_oscillator.histogram",
+            semantic_description="Difference between the PPO line and its signal line.",
             kind=SignalSeriesKind.BAR,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
@@ -218,6 +226,8 @@ class PpoSignalPlugin(SignalPlugin):
                     key=spec.key,
                     label_key=spec.label_key,
                     description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,
