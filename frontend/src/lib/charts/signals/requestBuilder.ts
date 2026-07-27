@@ -26,6 +26,15 @@ function stableJson(value: unknown): string {
     return JSON.stringify(value);
 }
 
+function hasRequiredParams(config: SignalConfig, definition: SignalDefinition): boolean {
+    return definition.paramDescriptors
+        .filter((descriptor) => descriptor.required)
+        .every((descriptor) => {
+            const value = config.params[descriptor.key];
+            return value !== undefined && value !== null && value !== '';
+        });
+}
+
 export function buildBackendSignalRequestPlan(configs: SignalConfig[], definitions: SignalDefinition[]): BackendSignalRequestPlan {
     const definitionsByType = new Map(definitions.map((definition) => [definition.type, definition]));
     const requests: BackendSignalRequest[] = [];
@@ -46,6 +55,10 @@ export function buildBackendSignalRequestPlan(configs: SignalConfig[], definitio
             continue;
         }
         if (!definition.backendSignalCode) {
+            unavailableConfigs.push(config);
+            continue;
+        }
+        if (!hasRequiredParams(config, definition)) {
             unavailableConfigs.push(config);
             continue;
         }

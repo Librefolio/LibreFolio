@@ -82,6 +82,7 @@ plugins:
             Getting Started: Per Iniziare
             Installation (Docker): Installazione (Docker)
             Install as App (PWA): Installa come App (PWA)
+            "🧠 AI Export": "🧠 Esportazione AI"
             "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
             Broker Transactions: Transazioni del broker
@@ -256,6 +257,7 @@ plugins:
             Getting Started: Premiers Pas
             Installation (Docker): Installation (Docker)
             Install as App (PWA): Installer comme App (PWA)
+            "🧠 AI Export": "🧠 Export IA"
             "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
             Broker Transactions: Transactions du broker
@@ -430,6 +432,7 @@ plugins:
             Getting Started: Primeros Pasos
             Installation (Docker): Instalación (Docker)
             Install as App (PWA): Instalar como App (PWA)
+            "🧠 AI Export": "🧠 Exportación de IA"
             "🏦 Brokers": "🏦 Brokers"
             Broker Sharing: Compartir Broker
             Broker Transactions: Transacciones del bróker
@@ -653,6 +656,8 @@ nav:
               - 🏦 Banks & Neobrokers:
                   - Revolut: user/transactions/import/revolut.md
                   - Fineco: user/transactions/import/fineco.md
+                  - Intesa Sanpaolo: user/transactions/import/intesa.md
+                  - Crédit Agricole Italia: user/transactions/import/credit_agricole.md
                   - BUX: user/transactions/import/bux.md
                   - Rabobank: user/transactions/import/rabobank.md
               - 🪙 Crypto:
@@ -702,6 +707,12 @@ nav:
               - Data Editor: user/fx/detail/data-editor.md
               - Provider Config: user/fx/detail/provider.md
           - Chart Settings: user/fx/chart-settings.md
+      - 🧠 AI Export:
+          - Overview: user/ai-export/index.md
+          - Portfolio: user/ai-export/portfolio.md
+          - Broker: user/ai-export/broker.md
+          - Asset: user/ai-export/asset.md
+          - FX: user/ai-export/fx.md
       - 📁 Files:
           - Overview: user/files/index.md
       - ⚙️ Settings:
@@ -834,6 +845,7 @@ nav:
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
+              - AI Export Snapshot: developer/architecture/patterns/ai_export_snapshot.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
           - ⚙️ Core Systems:
               - Security & Authentication: developer/architecture/security.md

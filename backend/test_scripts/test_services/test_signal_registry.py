@@ -56,12 +56,20 @@ class DemoParams(BaseModel):
     required_mode: str
 
 
+class ComparisonParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    comparison_asset_id: int = Field(..., gt=0)
+
+
 class DemoSignalPlugin(SignalPlugin):
     signal_code = "DEMO"
     implementation_version = "1.0.0"
     category = SignalCategory.TREND
     display_name_key = "signals.demo.name"
     description_key = "signals.demo.description"
+    semantic_id = "demo_signal"
+    semantic_description = "Test signal used by registry contracts."
     icon = "activity"
     docs_path = "signals/demo/"
     params_model = DemoParams
@@ -70,6 +78,8 @@ class DemoSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="demo",
             label_key="signals.demo.output",
+            semantic_id="demo_signal.value",
+            semantic_description="Test signal output value.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
@@ -91,6 +101,8 @@ class DemoSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key="demo",
                     label_key="signals.demo.output",
+                    semantic_id="demo_signal.value",
+                    semantic_description="Test signal output value.",
                     unit=SignalUnit.PRICE,
                     axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
                     points=[SignalValuePoint(date=point.date, value=float(point.close)) for point in price_points],
@@ -142,6 +154,9 @@ def test_register_plugin_decorator_and_catalog_definition():
     definition = InlineSignalRegistry.list_definitions()[0]
     assert definition.signal_code == "DECORATED"
     assert definition.default_params == {"length": 20}
+    assert definition.semantic_id == "demo_signal"
+    assert definition.semantic_description == "Test signal used by registry contracts."
+    assert definition.output_specs[0].semantic_id == "demo_signal.value"
     assert definition.params_schema["required"] == ["required_mode"]
     assert definition.params_schema["properties"]["length"]["x-i18n-key"] == "signals.params.length"
     assert InlineSignalRegistry.get_plugin(" decorated ") is DecoratedSignal
@@ -184,6 +199,47 @@ def test_noncanonical_signal_code_is_rejected():
         InlineSignalRegistry.register(LowercaseSignal)
 
 
+def test_invalid_or_prescriptive_semantics_are_rejected():
+    class InvalidSemanticIdSignal(DemoSignalPlugin):
+        signal_code = "INVALID_SEMANTIC_ID"
+        semantic_id = "Invalid Semantic"
+
+    class PrescriptiveSemanticSignal(DemoSignalPlugin):
+        signal_code = "PRESCRIPTIVE_SEMANTIC"
+        semantic_description = "Indicates when to buy."
+
+    with pytest.raises(ValueError, match="semantic_id"):
+        InlineSignalRegistry.register(InvalidSemanticIdSignal)
+    with pytest.raises(ValueError, match="neutral and non-prescriptive"):
+        InlineSignalRegistry.register(PrescriptiveSemanticSignal)
+
+
+def test_duplicate_output_semantic_ids_are_rejected():
+    duplicate = DemoSignalPlugin.output_specs[0].model_copy(
+        update={
+            "key": "duplicate",
+            "label_key": "signals.demo.duplicate",
+        }
+    )
+
+    class DuplicateOutputSemanticSignal(DemoSignalPlugin):
+        signal_code = "DUPLICATE_OUTPUT_SEMANTIC"
+        output_specs = (
+            DemoSignalPlugin.output_specs[0],
+            duplicate,
+        )
+
+    with pytest.raises(ValueError, match="output semantic_ids"):
+        InlineSignalRegistry.register(DuplicateOutputSemanticSignal)
+
+    class SignalOutputSemanticCollision(DemoSignalPlugin):
+        signal_code = "SIGNAL_OUTPUT_SEMANTIC_COLLISION"
+        semantic_id = DemoSignalPlugin.output_specs[0].semantic_id
+
+    with pytest.raises(ValueError, match="signal and output semantic_ids"):
+        InlineSignalRegistry.register(SignalOutputSemanticCollision)
+
+
 def test_registry_rejects_non_signal_classes_and_abstract_base():
     class NotASignal:
         signal_code = "NOT_A_SIGNAL"
@@ -215,6 +271,30 @@ def test_registry_rejects_params_models_that_allow_extra_fields():
 
     with pytest.raises(ValueError, match="extra='forbid'"):
         InlineSignalRegistry.register(UnsafeSignal)
+
+
+def test_comparison_asset_requirement_references_declared_param():
+    class MissingComparisonParamSignal(DemoSignalPlugin):
+        signal_code = "MISSING_COMPARISON_PARAM"
+        input_requirements = SignalInputRequirements(
+            price_fields=[SignalPriceField.CLOSE],
+            uses_prepared_asset_series=True,
+            comparison_asset_param="comparison_asset_id",
+        )
+
+    class ComparisonSignal(MissingComparisonParamSignal):
+        signal_code = "COMPARISON"
+        params_model = ComparisonParams
+
+    with pytest.raises(
+        ValueError,
+        match="declared plugin parameter",
+    ):
+        InlineSignalRegistry.register(MissingComparisonParamSignal)
+
+    InlineSignalRegistry.register(ComparisonSignal)
+    definition = InlineSignalRegistry.list_definitions()[0]
+    assert definition.input_requirements.comparison_asset_param == "comparison_asset_id"
 
 
 def test_catalog_generation_deep_copies_plugin_metadata():

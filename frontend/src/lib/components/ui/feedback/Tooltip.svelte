@@ -41,10 +41,12 @@
         maxWidth?: string;
         /** Extra classes for the trigger wrapper (e.g. `min-w-0` to allow shrinking/truncating inside a flex row) */
         wrapperClass?: string;
+        /** Child owns native interaction semantics (for example, a button or link). */
+        interactiveChild?: boolean;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -302,25 +304,44 @@
     }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-    bind:this={triggerElement}
-    class="tooltip-wrapper {wrapperClass}"
-    onclick={(e) => {
-        if (!isTouchInteraction) toggle(e);
-    }}
-    onkeydown={handleKeydown}
-    onmouseenter={handlePointerEnter}
-    onmouseleave={handlePointerLeave}
-    ontouchstart={handleTouchStart}
-    ontouchend={handleTouchEnd}
-    role="button"
-    tabindex="0"
->
-    {#if children}
-        {@render children()}
-    {/if}
-</div>
+{#if interactiveChild}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        bind:this={triggerElement}
+        class="tooltip-wrapper {wrapperClass}"
+        onclick={(e) => {
+            if (!isTouchInteraction) toggle(e);
+        }}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+    >
+        {#if children}
+            {@render children()}
+        {/if}
+    </div>
+{:else}
+    <div
+        bind:this={triggerElement}
+        class="tooltip-wrapper {wrapperClass}"
+        onclick={(e) => {
+            if (!isTouchInteraction) toggle(e);
+        }}
+        onkeydown={handleKeydown}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+        role="button"
+        tabindex="0"
+    >
+        {#if children}
+            {@render children()}
+        {/if}
+    </div>
+{/if}
 
 {#if visible}
     <!-- svelte-ignore a11y_no_static_element_interactions -->

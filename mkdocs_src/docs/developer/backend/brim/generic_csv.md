@@ -80,6 +80,19 @@ The fastest way to import data from an unsupported source is to **paste this ent
 
 ---
 
+!!! warning "Inherited cost basis (WAC) is PER-UNIT"
+
+    A `TRANSFER` / `ADJUSTMENT` row that seeds an **inherited or transferred** position
+    (you owned it before, with a known purchase cost) carries a *frozen cost basis*. The
+    generic CSV has no `cost_basis` column, so the import wizard **prompts you to fill it**
+    ("Missing inherited per-unit cost basis (WAC)"). Enter the **cost per single unit**
+    (e.g. `42.50` for a share bought at €42.50), **not** the position's total value. The
+    engine multiplies it by `quantity`; a total entered here inflates the cost basis by a
+    factor of `quantity`. For bonds, `quantity` is the face value and the per-unit cost is
+    near `1.0`.
+
+---
+
 ## 🏷️ Asset Identifier
 
 The `asset` column accepts:

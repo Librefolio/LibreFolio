@@ -54,6 +54,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,
+    SignalBandValueSource,
     SignalLineCrossoverRequest,
     SignalOutputValueSource,
     SignalRequest,
@@ -135,7 +136,7 @@ class FXConversionRequest(BaseModel):
                 raise ValueError(f"annotation target '{annotation.attach_to_instance_id}' is not in signals")
             sources = (annotation.left, annotation.right) if isinstance(annotation, SignalLineCrossoverRequest) else (annotation.source,)
             for source in sources:
-                if isinstance(source, SignalOutputValueSource) and source.instance_id not in known_instances:
+                if isinstance(source, (SignalOutputValueSource, SignalBandValueSource)) and source.instance_id not in known_instances:
                     raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
         return self
 

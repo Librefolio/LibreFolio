@@ -258,6 +258,77 @@ transaction breaks these rules, so flip source signs as needed:
   cashless `ADJUSTMENT` for coin-only rewards).
 - Prefer **skipping a row with a warning** over emitting a schema-invalid transaction.
 
+!!! warning "`cost_basis_override` is PER-UNIT, never a total"
+
+    When a plugin freezes an inherited cost basis (WAC) on a `TRANSFER`/`ADJUSTMENT`
+    seed — e.g. an opening *patrimonio* snapshot, or a `TRANSFER_IN` — the value you put
+    in `cost_basis_override` (and its `cost_basis_currency`) **must be the cost per single
+    unit**, not the position's total countervalue. The portfolio engine and the lot
+    analysis both **multiply it by `quantity`** to reconstruct the total cost basis, so a
+    total slipped in here is silently multiplied again and blows the cost basis up by a
+    factor of `quantity`.
+
+    If your source only reports a **total** (e.g. Intesa's *"Controvalore di carico
+    fiscale €"*), divide it by the quantity first:
+
+    ```python
+    unit_cost = (total_cost / qty).quantize(Decimal("0.000001"))
+    cost_basis_override = Currency(code="EUR", amount=unit_cost)
+    ```
+
+    Bond nominal note: for bonds `quantity` is the face value (e.g. `50000`) and the seed
+    per-unit cost lands near `1.0` — that is correct, the engine handles the /100 quote
+    scaling elsewhere. Canonical example: `broker_intesa.py` (patrimonio seed).
+
+!!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
+
+    A bond is **redeemed at par (100)** at maturity. When the bank credits *more* than par
+    (e.g. a BTP Italia *premio fedeltà* or a `FOI` inflation revaluation), that surplus is
+    **reddito di capitale** — the same nature as a coupon — and must be booked as a separate
+    **`INTEREST`** leg, *not* folded into the sale price. Folding it in would inflate the
+    realised gain and leave a residual position when `ctv/price` ≠ the true nominal.
+
+    **Working assumption (document it on the plugin's own page):** a maturity/redemption row
+    is a bond quoted at par 100, so *anything above 100 is interest*. A plugin whose maturity
+    causale is bond-specific (e.g. Crédit Agricole's `TITOLI SCADUTI`) can apply this
+    unconditionally; a plugin whose causale is generic (e.g. Fineco's `Rimborso`, which also
+    covers equities) must still gate on `io.looks_like_bond(name)`. Generalise only when a
+    real counter-example appears.
+
+    The nominal to redeem comes from the **held position** (the BUY / succession / seed
+    rows), never from the maturity row itself (whose `quantity` is often `0`). Use the shared
+    helper:
+
+    ```python
+    from backend.app.services.brim_providers import _brim_io as io
+
+    if ctv is not None:                       # (+ io.looks_like_bond(name) if the causale is generic)
+        model = io.model_bond_maturity(ctv=ctv, price=price, held_qty=held or None)
+        sell_qty  = -model.nominal            # SELL closes the nominal at par, e.g. -30000
+        sell_cash = model.principal_cash      # e.g. 30000.00 (nominal × par/100)
+        if model.surplus_cash > 0:            # surplus over par → INTEREST income
+            emit_interest(cash=model.surplus_cash)   # e.g. 105.00
+    ```
+
+    - **`held_qty > 0` → `source == "position"`**: exact close, **no verify flag**. This is
+      the normal case — the nominal lives in the position, so there is nothing for the user
+      to check. If the file is not chronologically ordered, pre-compute the position in a
+      first pass (see `broker_credit_agricole.py`).
+    - **no position → `source == "derived"`**: the nominal is inferred from `ctv/price` (a
+      best effort, imprecise because the quoted price embeds the premium — e.g. `30105/100.40
+      = 29985` vs a true `30000`). This happens on a **partial download** (a "last 3 months"
+      export where the buy legs are missing). Attach a `warning` `BRIMFieldTodo`
+      (`reason_code="derived_quantity"`) so the user verifies the nominal — the plugin sees
+      only the file, so it cannot confirm the close against the position already stored in
+      LibreFolio (that reconciliation happens in the portfolio engine at compute time).
+    - A price **at or below par** yields `surplus_cash == 0` → emit a single plain SELL
+      (pass-through); don't invent negative income.
+    - Keep the plugin's usual cash model: if BUYs get a balancing `DEPOSIT` and SELLs a
+      `WITHDRAWAL`, the par principal nets to zero and only the `INTEREST` surplus adds cash.
+
+    Reference plugins: `broker_credit_agricole.py` (`TITOLI SCADUTI`, position pre-computed
+    from succession legs) and `broker_fineco.py` (`Rimborso` above par, nominal from the row).
+
 ## 🆔 Fake asset IDs
 
 Asset-linked transactions reference a *fake* (negative) asset id at parse time; the core

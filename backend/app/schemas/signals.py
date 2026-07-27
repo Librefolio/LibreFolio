@@ -12,9 +12,16 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, field_validator, model_validator
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.risk import PreparedAssetSeries, RiskResultMetadata
 
 _SIGNAL_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _KEY_PATTERN = r"^[a-z][a-z0-9_.-]*$"
+_SEMANTIC_ID_PATTERN = r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+_PRESCRIPTIVE_WORD_PATTERN = re.compile(
+    r"(?<![A-Za-z])(?:buy|buys|buying|bought|sell|sells|selling|sold)(?![A-Za-z])",
+    re.IGNORECASE,
+)
 
 
 def _finite_decimal(value: Decimal) -> Decimal:
@@ -23,7 +30,18 @@ def _finite_decimal(value: Decimal) -> Decimal:
     return value
 
 
+def _semantic_description(value: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError("semantic_description must not be empty")
+    if _PRESCRIPTIVE_WORD_PATTERN.search(normalized):
+        raise ValueError("semantic_description must be neutral and non-prescriptive")
+    return normalized
+
+
 SignalDecimal = Annotated[Decimal, AfterValidator(_finite_decimal)]
+SignalSemanticId = Annotated[str, Field(min_length=1, max_length=128, pattern=_SEMANTIC_ID_PATTERN)]
+SignalSemanticDescription = Annotated[str, Field(min_length=1, max_length=300), AfterValidator(_semantic_description)]
 NonNegativeInt = Annotated[int, Field(ge=0)]
 
 
@@ -84,6 +102,7 @@ class SignalCategory(StrEnum):
     MOMENTUM = "momentum"
     VOLATILITY = "volatility"
     VOLUME = "volume"
+    RISK = "risk"
 
 
 class SignalPriceField(StrEnum):
@@ -110,6 +129,12 @@ class SignalSeriesKind(StrEnum):
     LINE = "line"
     BAR = "bar"
     BAND = "band"
+
+
+class SignalBandComponent(StrEnum):
+    LOWER = "lower"
+    MIDDLE = "middle"
+    UPPER = "upper"
 
 
 class SignalLinePattern(StrEnum):
@@ -157,12 +182,16 @@ class SignalAvailabilityReason(StrEnum):
     INCOMPATIBLE_DOMAIN = "incompatible_domain"
     MISSING_INPUT_FIELDS = "missing_input_fields"
     MISSING_EVENT_TYPES = "missing_event_types"
+    MISSING_PREPARED_SERIES = "missing_prepared_series"
+    MISSING_COMPARISON_SERIES = "missing_comparison_series"
     INSUFFICIENT_INPUT_COVERAGE = "insufficient_input_coverage"
     INSUFFICIENT_EVENT_COVERAGE = "insufficient_event_coverage"
     INSUFFICIENT_HISTORY = "insufficient_history"
+    UNDEFINED_METRIC = "undefined_metric"
     INCOMPLETE_WARMUP = "incomplete_warmup"
     PARTIAL_INPUT_COVERAGE = "partial_input_coverage"
     PARTIAL_EVENT_COVERAGE = "partial_event_coverage"
+    PARTIAL_UNDEFINED_METRIC = "partial_undefined_metric"
     DATA_GAP = "data_gap"
 
 
@@ -170,6 +199,8 @@ class SignalWarningCode(StrEnum):
     INCOMPLETE_WARMUP = "incomplete_warmup"
     PARTIAL_INPUT_COVERAGE = "partial_input_coverage"
     PARTIAL_EVENT_COVERAGE = "partial_event_coverage"
+    DATA_QUALITY = "data_quality"
+    UNDEFINED_METRIC_WINDOW = "undefined_metric_window"
     DATA_GAP = "data_gap"
     OUTPUT_TRUNCATED = "output_truncated"
     ANNOTATION_UNAVAILABLE = "annotation_unavailable"
@@ -243,11 +274,27 @@ class SignalExecutionContext(SignalModel):
     source_reference: str = Field(..., min_length=1)
     target_currency: Optional[str] = Field(None, min_length=3, max_length=3)
     observed_only: bool = False
+    primary_asset_series: Optional[PreparedAssetSeries] = Field(None, exclude=True)
+    comparison_asset_series: Optional[PreparedAssetSeries] = Field(None, exclude=True)
+    annualization_factor: Optional[FiniteFloat] = Field(None, gt=0, exclude=True)
 
     @field_validator("target_currency", mode="before")
     @classmethod
     def normalize_target_currency(cls, value: Any) -> Any:
         return value.strip().upper() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def validate_prepared_series(self) -> SignalExecutionContext:
+        if self.comparison_asset_series is not None and self.primary_asset_series is None:
+            raise ValueError("comparison_asset_series requires primary_asset_series")
+        if self.primary_asset_series is not None and self.target_currency is not None and self.primary_asset_series.valuations.target_currency != self.target_currency:
+            raise ValueError("primary_asset_series currency must match target_currency")
+        if self.comparison_asset_series is not None:
+            if self.primary_asset_series is None:
+                raise ValueError("comparison_asset_series requires primary_asset_series")
+            if self.comparison_asset_series.valuations.target_currency != self.primary_asset_series.valuations.target_currency:
+                raise ValueError("prepared asset series must use the same target currency")
+        return self
 
 
 class SignalWarmupRequirement(SignalModel):
@@ -284,6 +331,8 @@ class SignalInputRequirements(SignalModel):
     event_types: List[str] = Field(default_factory=list)
     data_policy: SignalDataPolicy = SignalDataPolicy.STRICT_CONTIGUOUS
     minimum_coverage: FiniteFloat = Field(1.0, ge=0, le=1)
+    uses_prepared_asset_series: bool = False
+    comparison_asset_param: Optional[str] = Field(None, pattern=_KEY_PATTERN)
 
     @model_validator(mode="after")
     def validate_requirements(self) -> SignalInputRequirements:
@@ -293,6 +342,8 @@ class SignalInputRequirements(SignalModel):
             raise ValueError("signal requires price fields and/or events")
         if self.event_types and not self.requires_events:
             raise ValueError("event_types require requires_events=true")
+        if self.comparison_asset_param is not None and not self.uses_prepared_asset_series:
+            raise ValueError("comparison_asset_param requires uses_prepared_asset_series=true")
         return self
 
 
@@ -354,6 +405,8 @@ class SignalOutputBase(SignalModel):
     key: str = Field(..., pattern=_KEY_PATTERN)
     label_key: str = Field(..., min_length=1)
     description_key: Optional[str] = Field(None, min_length=1)
+    semantic_id: SignalSemanticId
+    semantic_description: SignalSemanticDescription
     unit: SignalUnit
     axis: SignalAxisSpec
     view_transform: SignalViewTransform = SignalViewTransform.NONE
@@ -481,8 +534,20 @@ class SignalOutputValueSource(SignalModel):
         return _inject_discriminator(value, kind="signal")
 
 
+class SignalBandValueSource(SignalModel):
+    kind: Literal["band"] = Field(json_schema_extra={"enum": ["band"]})
+    instance_id: str = Field(..., min_length=1, max_length=128)
+    series_key: str = Field(..., pattern=_KEY_PATTERN)
+    component: SignalBandComponent
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_kind(cls, value: Any) -> Any:
+        return _inject_discriminator(value, kind="band")
+
+
 SignalValueSource = Annotated[
-    Union[SignalPriceValueSource, SignalOutputValueSource],
+    Union[SignalPriceValueSource, SignalOutputValueSource, SignalBandValueSource],
     Field(discriminator="kind"),
 ]
 
@@ -640,14 +705,18 @@ class SignalAvailability(SignalModel):
             SignalAvailabilityReason.INCOMPATIBLE_DOMAIN,
             SignalAvailabilityReason.MISSING_INPUT_FIELDS,
             SignalAvailabilityReason.MISSING_EVENT_TYPES,
+            SignalAvailabilityReason.MISSING_PREPARED_SERIES,
+            SignalAvailabilityReason.MISSING_COMPARISON_SERIES,
             SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE,
             SignalAvailabilityReason.INSUFFICIENT_EVENT_COVERAGE,
             SignalAvailabilityReason.INSUFFICIENT_HISTORY,
+            SignalAvailabilityReason.UNDEFINED_METRIC,
         }
         partial_reasons = {
             SignalAvailabilityReason.INCOMPLETE_WARMUP,
             SignalAvailabilityReason.PARTIAL_INPUT_COVERAGE,
             SignalAvailabilityReason.PARTIAL_EVENT_COVERAGE,
+            SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC,
             SignalAvailabilityReason.DATA_GAP,
         }
         if self.can_compute and self.reason_code in unavailable_reasons:
@@ -711,6 +780,8 @@ class SignalCatalogDefinition(SignalModel):
     category: SignalCategory
     display_name_key: str = Field(..., min_length=1)
     description_key: str = Field(..., min_length=1)
+    semantic_id: SignalSemanticId
+    semantic_description: SignalSemanticDescription
     icon: str = Field(..., min_length=1)
     docs_path: Optional[str] = None
     params_schema: Dict[str, JsonValue]
@@ -738,6 +809,11 @@ class SignalCatalogDefinition(SignalModel):
     @model_validator(mode="after")
     def validate_catalog(self) -> SignalCatalogDefinition:
         _ensure_unique([spec.key for spec in self.output_specs], "output spec keys")
+        _ensure_unique([spec.semantic_id for spec in self.output_specs], "output semantic_ids")
+        _ensure_unique(
+            [self.semantic_id, *[spec.semantic_id for spec in self.output_specs]],
+            "signal and output semantic_ids",
+        )
         _ensure_unique(self.compatible_domains, "compatible_domains")
         _ensure_unique(self.annotation_capabilities, "annotation_capabilities")
         return self
@@ -745,6 +821,26 @@ class SignalCatalogDefinition(SignalModel):
 
 class SignalCatalogResponse(SignalModel):
     items: List[SignalCatalogDefinition] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_semantic_ids(self) -> SignalCatalogResponse:
+        _ensure_unique([item.semantic_id for item in self.items], "signal semantic_ids")
+        _ensure_unique(
+            [spec.semantic_id for item in self.items for spec in item.output_specs],
+            "catalog output semantic_ids",
+        )
+        _ensure_unique(
+            [
+                semantic_id
+                for item in self.items
+                for semantic_id in (
+                    item.semantic_id,
+                    *[spec.semantic_id for spec in item.output_specs],
+                )
+            ],
+            "all catalog semantic_ids",
+        )
+        return self
 
 
 class SignalResult(SignalModel):
@@ -759,6 +855,8 @@ class SignalResult(SignalModel):
     annotations: List[SignalAnnotation] = Field(default_factory=list)
     warnings: List[SignalWarning] = Field(default_factory=list)
     error: Optional[SignalError] = None
+    risk_metadata: Optional[RiskResultMetadata] = None
+    data_quality: Optional[DataQualityReport] = None
 
     @field_validator("signal_code", mode="before")
     @classmethod
@@ -802,7 +900,7 @@ class SignalResult(SignalModel):
                 raise ValueError("partial result requires computable input")
             if not self.warnings:
                 raise ValueError("partial result requires at least one warning")
-            if self.warmup.complete and not self.availability.partial_coverage_used:
+            if self.warmup.complete and not self.availability.partial_coverage_used and self.availability.reason_code != SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC:
                 raise ValueError("partial result requires incomplete warm-up or partial coverage")
             if self.error is not None:
                 raise ValueError("partial result cannot contain error")
@@ -839,11 +937,14 @@ class SignalResult(SignalModel):
                 raise ValueError("availability required_points must match warm-up total_points")
             if self.availability.warmup_complete != self.warmup.complete:
                 raise ValueError("availability warmup_complete must match warm-up metadata")
+        if (self.risk_metadata is None) != (self.data_quality is None):
+            raise ValueError("risk_metadata and data_quality must be provided together")
         return self
 
 
 def _validate_series_alignment(series: List[SignalSeries]) -> None:
     _ensure_unique([item.key for item in series], "series keys")
+    _ensure_unique([item.semantic_id for item in series], "series semantic_ids")
     reference_dates = [point.date for point in series[0].points]
     for item in series[1:]:
         if [point.date for point in item.points] != reference_dates:
@@ -870,8 +971,10 @@ __all__ = [
     "SignalAvailabilityReason",
     "SignalAxisRole",
     "SignalAxisSpec",
+    "SignalBandComponent",
     "SignalBandPoint",
     "SignalBandSeries",
+    "SignalBandValueSource",
     "SignalBarSeries",
     "SignalCadence",
     "SignalCatalogDefinition",

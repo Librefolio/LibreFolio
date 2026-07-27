@@ -7,6 +7,7 @@ from borsaitaliana.it (stocks, bonds, ETFs listed on Borsa Italiana).
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
 from typing import Dict, List
@@ -29,11 +30,15 @@ from backend.app.services.provider_registry import AssetProviderRegistry, regist
 try:
     from borsa_italiana_scraping import (
         BorsaItalianaErrore,
+        DatiFondo,
         DatiNonDisponibili,
         RicercaNonDisponibile,
         Sessione,
         StrumentoNonTrovato,
         cerca,
+        estrai_codice_da_url,
+        ottieni_dati_fondo,
+        ottieni_dati_fondo_da_url,
         ottieni_prezzo_corrente,
         ottieni_scheda,
         ottieni_storico,
@@ -65,18 +70,58 @@ _TIPO_TO_ASSET_TYPE: dict[str, AssetType] = {
     "obbligazione": AssetType.BOND,
     "etf": AssetType.ETF,
     "etc/etn": AssetType.ETF,
+    "fondi comuni": AssetType.FUND,
     # English labels (lingua="en")
     "stock": AssetType.STOCK,
     "share": AssetType.STOCK,
     "bond": AssetType.BOND,
     "government bond": AssetType.BOND,
     "corporate bond": AssetType.BOND,
+    "fund": AssetType.FUND,
+    "common fund": AssetType.FUND,
+    "common funds": AssetType.FUND,
 }
 
 
 def _map_asset_type(tipo: str) -> AssetType | None:
     """Map a Borsa Italiana type string to AssetType (case-insensitive)."""
     return _TIPO_TO_ASSET_TYPE.get(tipo.lower().strip()) if tipo else None
+
+
+_SEARCH_TERM_ABBREVIATIONS: tuple[tuple[str, str], ...] = (
+    ("obbligazionaria", "obbligaz"),
+    ("obbligazionario", "obbligaz"),
+    ("azionaria", "azion"),
+    ("azionario", "azion"),
+    ("conservativa", "conserv"),
+    ("conservativo", "conserv"),
+    ("dinamica", "din"),
+    ("dinamico", "din"),
+)
+
+
+def _search_query_variants(query: str) -> list[str]:
+    """Return Borsa search variants for fund titles indexed with abbreviations."""
+    normalized = re.sub(r"\s+", " ", query.replace("-", " ")).strip()
+    variants: list[str] = []
+    seen: set[str] = set()
+
+    def add_variant(value: str) -> None:
+        value = re.sub(r"\s+", " ", value).strip()
+        key = value.lower()
+        if value and key not in seen:
+            seen.add(key)
+            variants.append(value)
+
+    add_variant(query)
+    add_variant(normalized)
+
+    abbreviated = normalized
+    for full_term, abbreviation in _SEARCH_TERM_ABBREVIATIONS:
+        abbreviated = re.sub(rf"\b{full_term}\b", abbreviation, abbreviated, flags=re.IGNORECASE)
+    add_variant(abbreviated)
+
+    return variants
 
 
 # Issuer name → ISO-3166-A3 country code.
@@ -249,7 +294,13 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 "option_labels": {"en": "🇬🇧 English", "it": "🇮🇹 Italiano"},
                 "default": "en",
                 "description": "Language for asset names and metadata.",
-            }
+            },
+            {
+                "key": "codice_fondo",
+                "type": "string",
+                "required": False,
+                "description": "Internal Borsa Italiana fund code (auto-filled for mutual funds; enables NAV pricing when the fund is not on the XMIL market API).",
+            },
         ]
 
     # ── Current value ───────────────────────────────────────────────────
@@ -262,6 +313,11 @@ class BorsaItalianaProvider(AssetSourceProvider):
     ) -> FACurrentValue:
         """Fetch current price from Borsa Italiana."""
         self._check_availability()
+
+        codice_fondo = (provider_params or {}).get("codice_fondo")
+        if codice_fondo:
+            return self._fund_current_value(codice_fondo)
+
         if identifier_type != IdentifierType.ISIN:
             raise AssetSourceError(
                 f"Borsa Italiana provider only supports ISIN, got {identifier_type}",
@@ -317,6 +373,12 @@ class BorsaItalianaProvider(AssetSourceProvider):
     ) -> FAHistoricalData:
         """Fetch historical OHLCV data from Borsa Italiana."""
         self._check_availability()
+
+        codice_fondo = (provider_params or {}).get("codice_fondo")
+        if codice_fondo:
+            effective_start = ASSET_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
+            return self._fund_history_value(codice_fondo, effective_start, end_date)
+
         if identifier_type != IdentifierType.ISIN:
             raise AssetSourceError(
                 f"Borsa Italiana provider only supports ISIN, got {identifier_type}",
@@ -380,6 +442,117 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
 
+    # ── Fund NAV (mutual funds, priced by internal Borsa Italiana code) ──
+    #
+    # Mutual funds are NOT on the XMIL market API: their only NAV source is the
+    # fund detail page, addressed by an internal code (≠ ISIN) carried in
+    # provider_params["codice_fondo"]. That page exposes a single, delayed NAV.
+
+    def _fetch_fund(self, codice_fondo: str) -> DatiFondo:
+        """Fetch fund NAV data by internal code, mapping lib errors to AssetSourceError."""
+        try:
+            return ottieni_dati_fondo(codice_fondo, sessione=_get_session())
+        except (StrumentoNonTrovato, DatiNonDisponibili) as e:
+            raise AssetSourceError(
+                f"No NAV available for fund {codice_fondo} on Borsa Italiana",
+                "NO_DATA",
+                {"codice_fondo": codice_fondo, "error": str(e)},
+            ) from e
+        except BorsaItalianaErrore as e:
+            raise AssetSourceError(
+                f"Failed to fetch NAV for fund {codice_fondo} from Borsa Italiana: {e}",
+                "FETCH_ERROR",
+                {"codice_fondo": codice_fondo, "error": str(e)},
+            ) from e
+
+    def _fund_current_value(self, codice_fondo: str) -> FACurrentValue:
+        """Current NAV for a fund — only if the published NAV is dated today.
+
+        A fund NAV is published once per day with a lag. Exposing a stale NAV as the
+        "current" value would misstate the portfolio, so when the NAV date is not
+        today we raise NO_DATA and let the core fall back to the last-buy estimate.
+        """
+        dati = self._fetch_fund(codice_fondo)
+        if dati.data_nav != date.today():
+            raise AssetSourceError(
+                f"Fund {codice_fondo} NAV is dated {dati.data_nav}, not today",
+                "NO_DATA",
+                {"codice_fondo": codice_fondo, "nav_date": str(dati.data_nav)},
+            )
+        return FACurrentValue(
+            value=dati.nav,
+            currency=dati.valuta or "EUR",
+            as_of_date=dati.data_nav,
+            source=self.provider_name,
+        )
+
+    def _fund_history_value(self, codice_fondo: str, start: date, end: date) -> FAHistoricalData:
+        """Historical NAV for a fund: a single point at the real NAV date.
+
+        The fund page exposes only the latest NAV (no series), dated to the day it
+        actually refers to — never date.today(). The core backward-fills the gaps.
+        """
+        dati = self._fetch_fund(codice_fondo)
+        prices: List[FAPricePoint] = []
+        if start <= dati.data_nav <= end:
+            prices.append(
+                FAPricePoint(
+                    date=dati.data_nav,
+                    open=None,
+                    high=None,
+                    low=None,
+                    close=dati.nav,
+                    volume=None,
+                    currency=dati.valuta or "EUR",
+                    backward_fill_info=None,
+                )
+            )
+        return FAHistoricalData(prices=prices, currency=dati.valuta or "EUR", source=self.provider_name)
+
+    def _fund_search_item(self, dati: DatiFondo, lingua: str, display_name: str | None = None) -> dict:
+        """Build a standard search-item dict from fetched fund data.
+
+        The identifier is the real ISIN extracted from the page when available,
+        otherwise the internal code as OTHER; provider_params always carries the
+        internal code so the asset can be priced by NAV afterwards.
+        """
+        identifier = dati.isin or dati.codice
+        identifier_type = IdentifierType.ISIN if dati.isin else IdentifierType.OTHER
+        return {
+            "identifier": identifier,
+            "identifier_type": identifier_type,
+            "display_name": display_name or dati.nome,
+            "currency": dati.valuta or "EUR",
+            "type": AssetType.FUND.value,
+            "provider_params": {"codice_fondo": dati.codice, "language": lingua},
+        }
+
+    # ── URL resolution (inverse of get_asset_url) ───────────────────────
+
+    @property
+    def resolvable_url_domains(self) -> list[str]:
+        return ["borsaitaliana.it"]
+
+    async def resolve_url(self, url: str) -> dict | None:
+        """Resolve a Borsa Italiana fund page URL into a search-item dict.
+
+        Recognises fund detail pages (``/borsa/fondi/dettaglio/{code}.html``) and
+        ``?code=`` links. Fetches the page and returns a fund search-item with the
+        real ISIN as identifier and the internal code in provider_params. Returns
+        ``None`` for anything that is not a recognisable Borsa Italiana fund page.
+        """
+        self._check_availability()
+        if not url or "borsaitaliana.it" not in url.lower() or not estrai_codice_da_url(url):
+            return None
+        try:
+            dati = ottieni_dati_fondo_da_url(url, sessione=_get_session())
+        except (StrumentoNonTrovato, DatiNonDisponibili):
+            return None
+        except Exception as e:  # best-effort — never fatal to search
+            logger.debug(f"Borsa Italiana resolve_url failed for '{url}': {e}")
+            return None
+        return self._fund_search_item(dati, "it")
+
     # ── Search ──────────────────────────────────────────────────────────
 
     async def search(self, query: str) -> list[dict]:
@@ -393,10 +566,18 @@ class BorsaItalianaProvider(AssetSourceProvider):
             # Fetch results in both languages in parallel-ish (sync lib, sequential)
             results_by_lang: dict[str, list] = {}
             for lingua in self.SUPPORTED_LANGUAGES:
-                results_by_lang[lingua] = cerca(query, lingua=lingua, sessione=_get_session())
+                results_by_lang[lingua] = []
+                seen_isins: set[str] = set()
+                for query_variant in _search_query_variants(query):
+                    for result in cerca(query_variant, lingua=lingua, sessione=_get_session()):
+                        if result.isin in seen_isins:
+                            continue
+                        seen_isins.add(result.isin)
+                        results_by_lang[lingua].append(result)
 
             items = []
             seen_pairs: set[tuple[str, str]] = set()  # (isin, lingua) dedup
+            fund_cache: dict[str, DatiFondo | None] = {}  # code → fund data, fetched once per search
 
             # Use EN results as primary (usually same ISINs), then fill from IT
             for lingua in self.SUPPORTED_LANGUAGES:
@@ -407,6 +588,35 @@ class BorsaItalianaProvider(AssetSourceProvider):
                         continue
                     seen_pairs.add(pair)
                     asset_type = _map_asset_type(r.tipo)
+
+                    if asset_type == AssetType.FUND:
+                        # For funds the search API returns the internal code in `isin`,
+                        # not a real ISIN; only the fund page holds the real ISIN + NAV.
+                        codice = r.isin
+                        if codice not in fund_cache:
+                            try:
+                                fund_cache[codice] = ottieni_dati_fondo(codice, sessione=_get_session())
+                            except Exception as e:
+                                logger.debug(f"Borsa Italiana: fund page fetch failed for code '{codice}': {e}")
+                                fund_cache[codice] = None
+                        dati = fund_cache[codice]
+                        if dati is not None:
+                            items.append(self._fund_search_item(dati, lingua, display_name=f"{r.nome} {flag}"))
+                        else:
+                            # Fallback: emit with the code as OTHER identifier; pricing still
+                            # works via provider_params.codice_fondo.
+                            items.append(
+                                {
+                                    "identifier": codice,
+                                    "identifier_type": IdentifierType.OTHER,
+                                    "display_name": f"{r.nome} {flag}",
+                                    "currency": "EUR",
+                                    "type": AssetType.FUND.value,
+                                    "provider_params": {"codice_fondo": codice, "language": lingua},
+                                }
+                            )
+                        continue
+
                     items.append(
                         {
                             "identifier": r.isin,

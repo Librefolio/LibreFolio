@@ -43,7 +43,7 @@
 
     // Determine if we're in aggregate mode
     let isAggregate = $derived(!parseResult && (allResults?.length ?? 0) > 0);
-    let activeResults = $derived(allResults?.filter((r) => r.status === 'done' && r.response) ?? []);
+    let activeResults = $derived(allResults?.filter((r) => r.response != null && r.status !== 'error') ?? []);
 
     // Group transactions by type — works for single or aggregate
     let txByType = $derived.by(() => {
@@ -124,11 +124,12 @@
         return [];
     });
 
-    let fieldTodos = $derived.by((): BrimFieldTodo[] => {
-        if (parseResult?.response?.field_todos) return parseResult.response.field_todos as BrimFieldTodo[];
-        if (isAggregate) return activeResults.flatMap((r) => (r.response!.field_todos as BrimFieldTodo[] | undefined) ?? []);
+    let fieldTodoEntries = $derived.by((): Array<{fileName: string | null; todo: BrimFieldTodo}> => {
+        if (parseResult?.response?.field_todos) return (parseResult.response.field_todos as BrimFieldTodo[]).map((todo) => ({fileName: null, todo}));
+        if (isAggregate) return activeResults.flatMap((r) => ((r.response!.field_todos as BrimFieldTodo[] | undefined) ?? []).map((todo) => ({fileName: r.fileName, todo})));
         return [];
     });
+    let hasBlockerTodo = $derived(fieldTodoEntries.some((e) => e.todo.severity === 'blocker'));
 
     let title = $derived.by(() => {
         if (parseResult) return $t('importWizard.detailTitle', {values: {file: parseResult.fileName}});
@@ -259,22 +260,25 @@
                 {/if}
             </section>
 
-            <!-- Manual Fields Required (Field TODOs) -->
+            <!-- Manual Fields (Field TODOs) — 'Required' only when blockers exist, else 'To Verify' -->
             <section>
                 <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    {$t('importWizard.manualFieldsRequired')}
-                    {#if fieldTodos.length > 0}
-                        {@const hasBlocker = fieldTodos.some((t) => t.severity === 'blocker')}
-                        <span class="ml-1 text-xs font-normal {hasBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodos.length})</span>
+                    {hasBlockerTodo ? $t('importWizard.manualFieldsRequired') : $t('importWizard.manualFieldsToVerify')}
+                    {#if fieldTodoEntries.length > 0}
+                        <span class="ml-1 text-xs font-normal {hasBlockerTodo ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodoEntries.length})</span>
                     {/if}
                 </h3>
-                {#if fieldTodos.length > 0}
+                {#if fieldTodoEntries.length > 0}
                     <ul class="space-y-1.5">
-                        {#each fieldTodos as todo}
+                        {#each fieldTodoEntries as entry}
+                            {@const todo = entry.todo}
                             {@const isBlocker = todo.severity === 'blocker'}
                             <li class="flex items-start gap-2 px-3 py-1.5 rounded text-sm {isBlocker ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'}">
                                 <Wrench size={14} class="mt-0.5 shrink-0 {isBlocker ? 'text-red-500' : 'text-amber-500'}" />
                                 <div class="min-w-0 flex-1">
+                                    {#if entry.fileName}
+                                        <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">{entry.fileName} ·</span>
+                                    {/if}
                                     <span class="font-medium {isBlocker ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
                                     <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({todo.field})</span>
                                     <span class="ml-1 {isBlocker ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}">{todo.message}</span>

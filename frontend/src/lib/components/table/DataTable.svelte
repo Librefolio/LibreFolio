@@ -1488,12 +1488,15 @@
                                             <div class="cell-checkbox-wrapper flex justify-center" onclick={(e) => e.stopPropagation()}>
                                                 <button
                                                     type="button"
-                                                    onclick={() => cellContent.onchange(!cellContent.value)}
+                                                    onclick={() => {
+                                                        if (!cellContent.disabled) cellContent.onchange(!cellContent.value);
+                                                    }}
                                                     aria-label="Toggle"
                                                     class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
                                                            {cellContent.value ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'}
-                                                           cursor-pointer"
+                                                           {cellContent.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
                                                     aria-pressed={cellContent.value}
+                                                    disabled={cellContent.disabled}
                                                 >
                                                     <span
                                                         class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform
@@ -1508,6 +1511,7 @@
                                                         <button
                                                             type="button"
                                                             class="cursor-pointer"
+                                                            data-testid={cellContent.testId}
                                                             onclick={(event) => {
                                                                 event.stopPropagation();
                                                                 cellContent.onClick?.();
@@ -1523,6 +1527,7 @@
                                                 <button
                                                     type="button"
                                                     class="cursor-pointer"
+                                                    data-testid={cellContent.testId}
                                                     onclick={(event) => {
                                                         event.stopPropagation();
                                                         cellContent.onClick?.();

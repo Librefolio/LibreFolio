@@ -121,6 +121,23 @@ test.describe('FX List Page', () => {
         expect(afterReset).toBe(totalBefore);
     });
 
+    test('column menu stays compact and lists daily delta after rate', async ({page}) => {
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-list').click();
+        await page.waitForTimeout(300);
+
+        await page.getByTestId('column-visibility-toggle').click();
+        const dropdown = page.getByTestId('column-visibility-dropdown');
+        await expect(dropdown).toBeVisible();
+        const box = await dropdown.boundingBox();
+        expect(box?.width ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(320);
+
+        const rateItem = page.getByTestId('column-visibility-item-rate');
+        const dailyItem = page.getByTestId('column-visibility-item-delta_1D');
+        await expect(dailyItem).toBeVisible();
+        expect(await rateItem.evaluate((element) => element.compareDocumentPosition(document.querySelector('[data-testid="column-visibility-item-delta_1D"]')!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+    });
+
     // ========================================================================
     // Test 8: DateRangePicker preset changes date
     // ========================================================================

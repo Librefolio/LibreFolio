@@ -58,6 +58,8 @@ class AtrSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.atr.name"
     description_key = "signals.atr.description"
+    semantic_id = "average_true_range"
+    semantic_description = "Measures absolute price variability from true range."
     icon = "🌡️"
     docs_path = "financial-theory/technical-analysis/indicators/atr/"
     params_model = AtrSignalParams
@@ -74,6 +76,8 @@ class AtrSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="atr",
             label_key="signals.atr.output",
+            semantic_id="average_true_range.value",
+            semantic_description="Smoothed true range expressed in price units.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
@@ -123,6 +127,8 @@ class AtrSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     points=[

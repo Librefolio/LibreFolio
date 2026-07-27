@@ -14,7 +14,7 @@ from datetime import date as date_type
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal
 from backend.app.schemas.wac import WACMissingPairInfo
@@ -139,6 +139,33 @@ class StalePriceAsset(BaseModel):
     stale_days: int
 
 
+class DataQualityStatus(StrEnum):
+    """Overall source-data quality for a derived result."""
+
+    OK = "ok"
+    CARRIED_FORWARD = "carried_forward"
+    PARTIAL = "partial"
+
+
+class DataQualityExclusionReason(StrEnum):
+    """Why an asset cannot participate in a source-data calculation."""
+
+    MISSING_PRICE = "missing_price"
+    MISSING_FX = "missing_fx"
+    INVALID_CURRENCY = "invalid_currency"
+
+
+class DataQualityExcludedAsset(BaseModel):
+    """Asset excluded before metric-specific eligibility is evaluated."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    reason: DataQualityExclusionReason
+    symbol: Optional[str] = None
+    name: Optional[str] = None
+
+
 # =============================================================================
 # DATA QUALITY ENUMS + ISSUE DTO
 # =============================================================================
@@ -233,9 +260,26 @@ class DataQualityReport(BaseModel):
     incomplete_nav_dates: List[date_type] = Field(default_factory=list)
     incomplete_book_value_dates: List[date_type] = Field(default_factory=list)
     incomplete_allocation_dates: List[date_type] = Field(default_factory=list)
+    incomplete_valuation_dates: List[date_type] = Field(default_factory=list)
+    carried_forward_price_points: int = Field(0, ge=0)
+    carried_forward_fx_points: int = Field(0, ge=0)
+    carried_forward_price_asset_ids: List[int] = Field(default_factory=list)
+    carried_forward_fx_pairs: List[str] = Field(default_factory=list)
+    unresolved_fx_pairs: List[str] = Field(default_factory=list)
+    unusable_assets: List[DataQualityExcludedAsset] = Field(default_factory=list)
     in_transit_cost_basis_warnings: List[str] = Field(default_factory=list)
     share_mismatch_warnings: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def data_quality_status(self) -> DataQualityStatus:
+        """Derive status so legacy producers cannot emit contradictory values."""
+        if self.missing_price_assets or self.missing_fx_pairs or self.incomplete_nav_dates or self.incomplete_book_value_dates or self.incomplete_allocation_dates or self.incomplete_valuation_dates or self.unresolved_fx_pairs or self.unusable_assets:
+            return DataQualityStatus.PARTIAL
+        if self.stale_prices or self.carried_forward_price_points or self.carried_forward_fx_points:
+            return DataQualityStatus.CARRIED_FORWARD
+        return DataQualityStatus.OK
 
 
 # =============================================================================
@@ -284,8 +328,19 @@ class PortfolioHolding(BaseModel):
     broker_name: Optional[str] = Field(None, description="Broker display name")
     quantity: SafeDecimal
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
-    current_price: Optional[SafeDecimal] = Field(None, description="Snapshot price at report end date. None if FX rate missing")
+    current_price: Optional[SafeDecimal] = Field(None, description="Effective current-unit price converted to report currency. None if FX rate missing")
     current_value: Optional[SafeDecimal] = Field(None, description="Snapshot position value at report end date")
+    valuation_source: Optional[Literal["MARKET_PRICE", "LAST_BUY_PRICE", "LAST_SEED_COST", "MISSING"]] = Field(
+        None,
+        description="Source selected by the valuation hierarchy",
+    )
+    valuation_effective_unit_price: Optional[SafeDecimal] = Field(None, description="Native-currency unit price actually used for current_value")
+    valuation_effective_currency: Optional[str] = Field(None, description="Native currency of valuation_effective_unit_price")
+    valuation_reference_date: Optional[date_type] = Field(None, description="Original date of the selected market or transaction reference")
+    valuation_reference_unit_price: Optional[SafeDecimal] = Field(None, description="Original source unit price before split adjustment or target-currency conversion")
+    valuation_reference_currency: Optional[str] = Field(None, description="Native currency of valuation_reference_unit_price")
+    valuation_split_adjusted: bool = Field(False, description="Whether intervening split events restated the transaction reference for current units")
+    missing_fx_pair: Optional[str] = Field(None, description="Required source/target FX pair when valuation conversion is unavailable")
     gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L at report end date: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
     price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")

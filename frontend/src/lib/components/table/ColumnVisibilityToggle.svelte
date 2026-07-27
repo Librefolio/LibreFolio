@@ -91,8 +91,8 @@
         // regardless of where the trigger button sits (even near the top/bottom edge).
         const maxTop = Math.max(margin, window.innerHeight - dropH - margin);
         const top = Math.min(Math.max(preferredTop, margin), maxTop);
-        const right = window.innerWidth - rect.right;
-        dropdownStyle = `position: fixed; top: ${top}px; right: ${right}px; z-index: 9999;`;
+        const right = Math.max(margin, window.innerWidth - rect.right);
+        dropdownStyle = `position: fixed; top: ${top}px; right: ${right}px; width: min(20rem, calc(100vw - 1rem)); z-index: 9999;`;
     }
 
     // Keep the dropdown anchored to the trigger while the page scrolls (ignore internal
@@ -134,6 +134,7 @@
     class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors {extraClass}"
     onclick={toggle}
     type="button"
+    data-testid="column-visibility-toggle"
 >
     <Eye size={13} />
     {#if showLabel}<span>{$t('table.columns')}</span>{/if}
@@ -146,12 +147,12 @@
 
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div bind:this={dropdownRef} class="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg p-2 max-h-[400px] overflow-y-auto w-max" style={dropdownStyle} onclick={(e) => e.stopPropagation()}>
+    <div bind:this={dropdownRef} class="bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg p-2 max-h-[400px] overflow-y-auto" style={dropdownStyle} onclick={(e) => e.stopPropagation()} data-testid="column-visibility-dropdown">
         <OrderableList items={columnItems} keyFn={(c) => c.id} onReorder={handleReorder} compact={true}>
             {#snippet children({item})}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" onclick={() => handleToggleColumn(item.id)}>
+                <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" onclick={() => handleToggleColumn(item.id)} data-testid={`column-visibility-item-${item.id}`}>
                     {#if item.visible}
                         <Eye size={13} class="text-libre-green shrink-0" />
                     {:else}

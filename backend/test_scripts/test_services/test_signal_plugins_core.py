@@ -152,7 +152,7 @@ def test_registry_discovers_core_plugins_and_schema_driven_catalog():
     assert definitions["RSI"].output_specs[0].supports_value_regions is True
     assert definitions["BOLLINGER"].output_specs[0].kind == SignalSeriesKind.BAND
     serialized = json.dumps({code: definition.model_dump(mode="json") for code, definition in definitions.items()})
-    for forbidden in ("color", "lineWidth", "lineType", "marker"):
+    for forbidden in ('"color"', '"lineWidth"', '"lineType"', '"marker"'):
         assert forbidden not in serialized
 
 

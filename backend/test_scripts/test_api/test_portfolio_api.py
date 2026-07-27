@@ -219,6 +219,14 @@ class TestPortfolioSummaryEndpoint:
         holding = data["holdings"][0]
         assert holding["current_value"] is not None
         assert holding["current_value"].startswith("300")
+        assert holding["valuation_source"] == "LAST_BUY_PRICE"
+        assert holding["valuation_effective_unit_price"].startswith("100")
+        assert holding["valuation_effective_currency"] == "EUR"
+        assert holding["valuation_reference_date"] == "2025-01-16"
+        assert holding["valuation_reference_unit_price"].startswith("100")
+        assert holding["valuation_reference_currency"] == "EUR"
+        assert holding["valuation_split_adjusted"] is False
+        assert holding["missing_fx_pair"] is None
         # Asset without market price does NOT appear in missing_price_assets
         # (LAST_BUY_PRICE gives it a value — appears in data_quality as warning instead)
         assert len(data["missing_price_assets"]) == 0

@@ -19,7 +19,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
+    import {isFakeAssetId, FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';
     import {getIndexColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
@@ -241,6 +241,26 @@
     let createBrokerContext = $state<'global' | string | null>(null);
     let step4ShowResolveSection = $state(true);
     let step4TableRef = $state<DataTable<MergedTx> | undefined>(undefined);
+    let brokers = $state<BrokerInfo[]>([]);
+    let brokersLoading = $state(false);
+    let confirmCloseOpen = $state(false);
+    let showWarningConfirm = $state(false);
+
+    interface BrokerModalInitialData {
+        name?: string;
+        description?: string | null;
+        portal_url?: string | null;
+        icon_url?: string | null;
+        default_import_plugin?: string | null;
+        allow_cash_overdraft?: boolean;
+        allow_asset_shorting?: boolean;
+        is_active?: boolean;
+        opened_at?: string | null;
+    }
+
+    let editBrokerOpen = $state(false);
+    let editBrokerId = $state<number | null>(null);
+    let editBrokerInitialData = $state<BrokerModalInitialData>({});
 
     // Compare modal state — opens TransactionFormModal in view mode for duplicate inspection
     let compareOpen = $state(false);
@@ -261,12 +281,38 @@
     let identifierPromptIsConflict = $state(false);
     let identifierPromptExistingValue = $state<string | null>(null);
 
+    function getBrokerIdForTx(mt: MergedTx): number | null {
+        return parseResults.find((r) => r.fileId === mt.sourceFileId)?.brokerId ?? null;
+    }
+
+    function getBeforeOpeningInfo(mt: MergedTx): {brokerId: number; openedAt: string} | null {
+        const brokerId = getBrokerIdForTx(mt);
+        if (brokerId === null) return null;
+        const openedAt = brokers.find((b) => b.id === brokerId)?.opened_at ?? null;
+        if (!openedAt) return null;
+        return {brokerId, openedAt};
+    }
+
+    function isBeforeOpening(mt: MergedTx): boolean {
+        const info = getBeforeOpeningInfo(mt);
+        const txDate = mt.tx.date ? String(mt.tx.date) : '';
+        return info !== null && txDate !== '' && txDate <= info.openedAt;
+    }
+
+    let beforeOpeningIndices = $derived.by(() => new Set(mergedTransactions.filter(isBeforeOpening).map((t) => t.index)));
+
+    $effect(() => {
+        if (!mergedTransactions.some((t) => t.selected && beforeOpeningIndices.has(t.index))) return;
+        mergedTransactions = mergedTransactions.map((t) => (beforeOpeningIndices.has(t.index) ? {...t, selected: false} : t));
+    });
+
     // Step 4 deriveds
-    let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected).length);
-    let step4TotalCount = $derived(mergedTransactions.length);
+    let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)).length);
+    let step4TotalCount = $derived(mergedTransactions.filter((t) => !beforeOpeningIndices.has(t.index)).length);
     let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
     let step4HasUnresolvedSelected = $derived(
         mergedTransactions.some((t) => {
+            if (beforeOpeningIndices.has(t.index)) return false;
             if (t.selected && typeof t.tx.asset_id === 'number' && isFakeAssetId(t.tx.asset_id)) {
                 const res = assetResolutions.find((r) => r.fakeAssetId === t.tx.asset_id);
                 return res?.resolvedAssetId == null;
@@ -275,15 +321,33 @@
         }),
     );
     let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
-    let step4LikelyDupCount = $derived(mergedTransactions.filter((t) => t.selected && t.duplicateStatus === 'likely').length);
+    let step4LikelyDupCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'likely').length);
+    let step4BeforeOpeningCount = $derived(beforeOpeningIndices.size);
+
+    /**
+     * Return the asset_id of a lone EXACT-confidence candidate, else null.
+     * Used to auto-bind an extracted asset whose ISIN uniquely matches one existing
+     * asset even when the backend left selected_asset_id null.
+     */
+    function uniqueExactCandidateId(candidates: AssetResolution['candidates']): number | null {
+        const exact = (candidates ?? []).filter((c) => String(c.match_confidence).toLowerCase() === 'exact');
+        return exact.length === 1 ? exact[0].asset_id : null;
+    }
 
     function mergeAllTransactions() {
         const txArr: MergedTx[] = [];
         const assetMap = new Map<number, AssetResolution>();
         let globalIndex = 0;
+        // Global unique fake-id allocator. Each source file's plugin emits fake ids from the
+        // same FAKE_ASSET_ID_BASE downward, so ids collide across files. Re-map every file's
+        // fake ids to a globally-unique fake id (kept within the isFakeAssetId range) so a
+        // resolution is never shared between two different instruments from different files.
+        let nextFakeId = FAKE_ASSET_ID_BASE;
 
         for (const result of parseResults.filter((r) => r.status === 'done' && r.response)) {
             const resp = result.response!;
+            // Per-file map: original plugin fake id → globally-unique fake id.
+            const fakeRemap = new Map<number, number>();
             // Build todos map by tx_index
             const todosMap = new Map<number, ImportTodo[]>();
             for (const ft of resp.field_todos ?? []) {
@@ -311,33 +375,47 @@
                 let dupStatus: 'unique' | 'possible' | 'likely' = 'unique';
                 if (likelySet.has(txIdx)) dupStatus = 'likely';
                 else if (possibleSet.has(txIdx)) dupStatus = 'possible';
+                const openedAt = brokers.find((b) => b.id === result.brokerId)?.opened_at ?? null;
+                const beforeOpening = openedAt != null && String(tx.date ?? '') <= openedAt;
+
+                // Clone so re-mapping the fake asset id never mutates the stored parse result
+                // (mergeAllTransactions may run again after a broker/opening edit).
+                const txClone = {...(tx as TransactionCreateItem)} as TransactionCreateItem;
+                const origAssetId = typeof txClone.asset_id === 'number' ? txClone.asset_id : null;
+                if (origAssetId !== null && isFakeAssetId(origAssetId)) {
+                    let globalFakeId = fakeRemap.get(origAssetId);
+                    if (globalFakeId === undefined) {
+                        globalFakeId = nextFakeId--;
+                        fakeRemap.set(origAssetId, globalFakeId);
+                        const mapping = (resp.asset_mappings ?? []).find((m: any) => m.fake_asset_id === origAssetId);
+                        if (mapping) {
+                            const candidates = (mapping.candidates ?? []) as AssetResolution['candidates'];
+                            const selected = typeof mapping.selected_asset_id === 'number' ? (mapping.selected_asset_id as number) : null;
+                            assetMap.set(globalFakeId, {
+                                fakeAssetId: globalFakeId,
+                                extractedSymbol: (mapping.extracted_symbol as string | null) ?? null,
+                                extractedIsin: (mapping.extracted_isin as string | null) ?? null,
+                                extractedName: (mapping.extracted_name as string | null) ?? null,
+                                candidates,
+                                // Auto-bind an exact-ISIN match even if the backend left it unselected.
+                                resolvedAssetId: selected ?? uniqueExactCandidateId(candidates),
+                                txCount: 0,
+                                sourceFiles: [],
+                            });
+                        }
+                    }
+                    (txClone as {asset_id?: number | null}).asset_id = globalFakeId;
+                }
 
                 txArr.push({
                     index: globalIndex++,
                     sourceFileId: result.fileId,
-                    tx: tx as TransactionCreateItem,
-                    selected: dupStatus !== 'likely',
+                    tx: txClone,
+                    selected: !beforeOpening && dupStatus !== 'likely',
                     duplicateStatus: dupStatus,
                     dupMatches: dupMatchesMap.get(txIdx) ?? [],
                     todos: todosMap.get(txIdx) ?? [],
                 });
-
-                const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
-                if (assetId !== null && isFakeAssetId(assetId) && !assetMap.has(assetId)) {
-                    const mapping = (resp.asset_mappings ?? []).find((m: any) => m.fake_asset_id === assetId);
-                    if (mapping) {
-                        assetMap.set(assetId, {
-                            fakeAssetId: assetId,
-                            extractedSymbol: (mapping.extracted_symbol as string | null) ?? null,
-                            extractedIsin: (mapping.extracted_isin as string | null) ?? null,
-                            extractedName: (mapping.extracted_name as string | null) ?? null,
-                            candidates: (mapping.candidates ?? []) as AssetResolution['candidates'],
-                            resolvedAssetId: typeof mapping.selected_asset_id === 'number' ? (mapping.selected_asset_id as number) : null,
-                            txCount: 0,
-                            sourceFiles: [],
-                        });
-                    }
-                }
             }
         }
 
@@ -361,8 +439,8 @@
         assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
     }
 
-    /** Confidence sort order for sorting candidates list. */
-    const CONF_ORDER: Record<string, number> = {EXACT: 0, HIGH: 1, MEDIUM: 2, LOW: 3};
+    /** Confidence sort order for sorting candidates list. Keys match the API's lowercase enum values. */
+    const CONF_ORDER: Record<string, number> = {exact: 0, high: 1, medium: 2, low: 3};
 
     /**
      * Replace candidates for a specific fakeAssetId with fresh results from the backend.
@@ -381,7 +459,12 @@
             const sorted: AssetResolution['candidates'] = [...fresh]
                 .sort((a, b) => (CONF_ORDER[a.match_confidence] ?? 9) - (CONF_ORDER[b.match_confidence] ?? 9))
                 .map((c) => ({asset_id: c.asset_id, symbol: (Array.isArray(c.symbol) ? (c.symbol[0] ?? null) : c.symbol) as string | null, isin: (Array.isArray(c.isin) ? (c.isin[0] ?? null) : c.isin) as string | null, name: c.name, match_confidence: c.match_confidence as string}));
-            assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, candidates: sorted} : r));
+            assetResolutions = assetResolutions.map((r) => {
+                if (r.fakeAssetId !== fakeAssetId) return r;
+                // If still unresolved and a fresh identifier edit produced a lone exact match, auto-bind it.
+                const autoBind = r.resolvedAssetId == null ? uniqueExactCandidateId(sorted) : null;
+                return {...r, candidates: sorted, resolvedAssetId: r.resolvedAssetId ?? autoBind};
+            });
         } catch {
             // Silently ignore — old candidates remain visible
         }
@@ -464,7 +547,7 @@
 
     function buildFinalTxList(): Array<{tx: TransactionCreateItem; todos: ImportTodo[]}> {
         return mergedTransactions
-            .filter((t) => t.selected)
+            .filter((t) => t.selected && !beforeOpeningIndices.has(t.index))
             .map((t) => {
                 const tx = {...t.tx} as any;
                 const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
@@ -569,6 +652,49 @@
         compareTitle = `🔍 ${$t('importWizard.compareTitle', {values: {id: String(existingId)}})}`;
         compareOpen = true;
     }
+
+    async function openBrokerOpeningEdit(mt: MergedTx) {
+        const brokerId = getBrokerIdForTx(mt);
+        if (brokerId === null) return;
+
+        let broker = getBrokerInfo(brokerId) ?? brokers.find((b) => b.id === brokerId) ?? null;
+        if (!broker) {
+            await refreshAllBrokers();
+            brokers = getEditableBrokers();
+            broker = getBrokerInfo(brokerId) ?? brokers.find((b) => b.id === brokerId) ?? null;
+        }
+        if (!broker) return;
+
+        editBrokerId = brokerId;
+        editBrokerInitialData = {
+            name: broker.name,
+            description: broker.description ?? null,
+            portal_url: broker.portal_url ?? null,
+            icon_url: broker.icon_url ?? null,
+            default_import_plugin: broker.default_import_plugin ?? null,
+            allow_cash_overdraft: broker.allow_cash_overdraft,
+            allow_asset_shorting: broker.allow_asset_shorting,
+            is_active: broker.is_active,
+            opened_at: broker.opened_at ?? null,
+        };
+        editBrokerOpen = true;
+    }
+
+    async function refreshEditableBrokers() {
+        await refreshAllBrokers();
+        brokers = getEditableBrokers();
+    }
+
+    /**
+     * Re-evaluate the opening-date gate after a broker's opening date was edited.
+     * Refreshes the broker list (so `beforeOpeningIndices` recomputes) and re-selects rows
+     * that just became importable (no longer before-opening and not a likely duplicate).
+     */
+    async function recheckOpenings() {
+        await refreshEditableBrokers();
+        mergedTransactions = mergedTransactions.map((t) => (!isBeforeOpening(t) && !t.selected && t.duplicateStatus !== 'likely' ? {...t, selected: true} : t));
+    }
+
     let step4Columns = $derived.by<ColumnDef<MergedTx>[]>(() => {
         const doneFilesCount = parseResults.filter((r) => r.status === 'done').length;
         const columns: ColumnDef<MergedTx>[] = [
@@ -580,18 +706,20 @@
                 type: 'enum',
                 sortable: true,
                 filterable: true,
-                width: 65,
-                minWidth: 50,
+                width: 170,
+                minWidth: 130,
                 align: 'center' as const,
                 pinned: 'left' as const,
                 sortFn: (a: MergedTx, b: MergedTx) => {
-                    const order = {unresolved: 0, likely: 1, possible: 2, unique: 3};
+                    const order = {before_opening: 0, unresolved: 1, likely: 2, possible: 3, unique: 4};
                     const aKey = (() => {
+                        if (beforeOpeningIndices.has(a.index)) return 'before_opening';
                         const id = typeof a.tx.asset_id === 'number' ? a.tx.asset_id : null;
                         if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
                         return a.duplicateStatus;
                     })();
                     const bKey = (() => {
+                        if (beforeOpeningIndices.has(b.index)) return 'before_opening';
                         const id = typeof b.tx.asset_id === 'number' ? b.tx.asset_id : null;
                         if (id !== null && isFakeAssetId(id) && !assetResolutions.find((r) => r.fakeAssetId === id)?.resolvedAssetId) return 'unresolved';
                         return b.duplicateStatus;
@@ -599,6 +727,7 @@
                     return (order[aKey as keyof typeof order] ?? 3) - (order[bKey as keyof typeof order] ?? 3);
                 },
                 getValue: (mt) => {
+                    if (beforeOpeningIndices.has(mt.index)) return 'before_opening';
                     const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
                     if (assetId !== null && isFakeAssetId(assetId) && !assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId) return 'unresolved';
                     return mt.duplicateStatus as string;
@@ -608,8 +737,18 @@
                     {value: 'possible', label: $t('importWizard.status.possibleDup')},
                     {value: 'likely', label: $t('importWizard.status.likelyDup')},
                     {value: 'unresolved', label: $t('importWizard.status.unresolved')},
+                    {value: 'before_opening', label: $t('importWizard.status.beforeOpening')},
                 ],
                 cell: (mt) => {
+                    if (beforeOpeningIndices.has(mt.index)) {
+                        return {
+                            type: 'html',
+                            html: `<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 cursor-pointer"><span>⛔</span><span class="hidden sm:inline">${$t('importWizard.status.beforeOpening')}</span><span class="text-gray-500 dark:text-gray-300">· ${$t('importWizard.status.editBrokerDate')}</span></span>`,
+                            tooltip: {text: $t('importWizard.status.tooltip.beforeOpening'), position: 'top', maxWidth: '280px'},
+                            onClick: () => openBrokerOpeningEdit(mt),
+                            testId: `import-wizard-edit-broker-opening-${mt.index}`,
+                        };
+                    }
                     const assetId = typeof mt.tx.asset_id === 'number' ? mt.tx.asset_id : null;
                     const isUnresolved = assetId !== null && isFakeAssetId(assetId) && assetResolutions.find((r) => r.fakeAssetId === assetId)?.resolvedAssetId == null;
                     if (isUnresolved) {
@@ -652,13 +791,18 @@
                 filterable: false,
                 width: 44,
                 minWidth: 44,
-                cell: (mt) => ({
-                    type: 'editable-checkbox',
-                    value: mt.selected,
-                    onchange: (v: boolean) => {
-                        mergedTransactions = mergedTransactions.map((t) => (t.index === mt.index ? {...t, selected: v} : t));
-                    },
-                }),
+                cell: (mt) => {
+                    const beforeOpening = beforeOpeningIndices.has(mt.index);
+                    return {
+                        type: 'editable-checkbox',
+                        value: beforeOpening ? false : mt.selected,
+                        disabled: beforeOpening,
+                        onchange: (v: boolean) => {
+                            if (beforeOpening) return;
+                            mergedTransactions = mergedTransactions.map((t) => (t.index === mt.index ? {...t, selected: v} : t));
+                        },
+                    };
+                },
             },
             {
                 id: 'date',
@@ -779,6 +923,51 @@ ${arrow}<span>${label}</span></span>`,
                 },
             },
             {
+                id: 'broker',
+                header: () => $t('common.broker'),
+                type: 'enum',
+                sortable: true,
+                filterable: true,
+                width: 160,
+                minWidth: 110,
+                getValue: (mt) => {
+                    const brokerId = getBrokerIdForTx(mt);
+                    return brokerId === null ? '__none__' : String(brokerId);
+                },
+                enumOptions: (() => {
+                    const opts = new Map<string, EnumOption>();
+                    for (const mt of mergedTransactions) {
+                        const brokerId = getBrokerIdForTx(mt);
+                        if (brokerId === null) continue;
+                        const key = String(brokerId);
+                        if (!opts.has(key)) {
+                            const b = brokers.find((x) => x.id === brokerId) ?? getBrokerInfo(brokerId);
+                            opts.set(key, {value: key, label: b?.name ?? `#${brokerId}`, iconUrl: b?.icon_url ?? undefined});
+                        }
+                    }
+                    return [...opts.values()].sort((a, b) => a.label.localeCompare(b.label));
+                })(),
+                cell: (mt) => {
+                    const brokerId = getBrokerIdForTx(mt);
+                    if (brokerId === null) return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    const b = brokers.find((x) => x.id === brokerId) ?? getBrokerInfo(brokerId);
+                    const name = b?.name ?? `#${brokerId}`;
+                    const iconUrl = b?.icon_url ?? null;
+                    const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+                    // For rows blocked by the broker's opening date, surface a discoverable
+                    // "edit opening date" affordance directly in the destination-broker column.
+                    if (beforeOpeningIndices.has(mt.index)) {
+                        return {
+                            type: 'html',
+                            html: `<span class="inline-flex items-center gap-1 cursor-pointer text-gray-700 dark:text-gray-200 hover:text-libre-green" title="${$t('importWizard.status.editBrokerDate')}">${iconHtml}<span class="truncate">${name}</span><span class="shrink-0">✏️</span></span>`,
+                            onClick: () => openBrokerOpeningEdit(mt),
+                            testId: `import-wizard-broker-edit-${mt.index}`,
+                        };
+                    }
+                    return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${name}</span></span>`};
+                },
+            },
+            {
                 id: 'quantity',
                 header: () => $t('common.quantity'),
                 type: 'number',
@@ -838,7 +1027,7 @@ ${arrow}<span>${label}</span></span>`,
     });
 
     function step4SelectAll() {
-        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: true}));
+        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: !beforeOpeningIndices.has(t.index)}));
     }
     function step4DeselectAll() {
         mergedTransactions = mergedTransactions.map((t) => ({...t, selected: false}));
@@ -847,11 +1036,6 @@ ${arrow}<span>${label}</span></span>`,
     // =========================================================================
     // Shared State
     // =========================================================================
-
-    let brokers = $state<BrokerInfo[]>([]);
-    let brokersLoading = $state(false);
-    let confirmCloseOpen = $state(false);
-    let showWarningConfirm = $state(false);
 
     // =========================================================================
     // Derived
@@ -903,6 +1087,9 @@ ${arrow}<span>${label}</span></span>`,
         assetResolutions = [];
         step4ShowResolveSection = true;
         createAssetForFakeId = null;
+        editBrokerOpen = false;
+        editBrokerId = null;
+        editBrokerInitialData = {};
     }
 
     // =========================================================================
@@ -2174,8 +2361,17 @@ ${arrow}<span>${label}</span></span>`,
                             {#if step4LikelyDupCount > 0}
                                 <span class="text-xs text-amber-600 dark:text-amber-400">⚠ {step4LikelyDupCount} {$t('importWizard.likelyDuplicate')}</span>
                             {/if}
+                            {#if step4BeforeOpeningCount > 0}
+                                <span class="text-xs text-gray-500 dark:text-gray-400">⛔ {step4BeforeOpeningCount} {$t('importWizard.beforeOpeningCount')}</span>
+                            {/if}
                         </div>
                         <div class="flex items-center gap-2">
+                            {#if step4BeforeOpeningCount > 0}
+                                <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={() => void recheckOpenings()} data-testid="import-wizard-recheck-openings" title={$t('importWizard.recheckOpeningsTip')}>
+                                    <RefreshCw size={12} /><span class="hidden sm:inline">{$t('importWizard.recheckOpenings')}</span>
+                                </button>
+                                <span class="text-gray-300 dark:text-gray-600">|</span>
+                            {/if}
                             <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectAll}>
                                 <CheckSquare size={12} /><span class="hidden sm:inline">{$t('common.selectAll')}</span>
                             </button>
@@ -2414,6 +2610,10 @@ ${arrow}<span>${label}</span></span>`,
 <!-- Asset creation modal (Step 4 Zone C) -->
 {#if createAssetForFakeId !== null}
     {@const _createRes = assetResolutions.find((r) => r.fakeAssetId === createAssetForFakeId)}
+    {@const _createNames = _createRes ? [...new Set([_createRes.extractedName, ...(_createRes.candidates ?? []).map((c) => c.name)].filter((n): n is string => !!n && n.trim() !== ''))] : []}
+    {@const _createDesc = _createRes
+        ? [$t('importWizard.createAsset.identifiedNames'), ..._createNames.map((n) => `• ${n}`), _createRes.extractedSymbol ? `Ticker: ${_createRes.extractedSymbol}` : '', _createRes.extractedIsin ? `ISIN: ${_createRes.extractedIsin}` : ''].filter((l) => l !== '').join('\n')
+        : ''}
     <AssetModal
         open={true}
         editMode={false}
@@ -2422,13 +2622,14 @@ ${arrow}<span>${label}</span></span>`,
                   display_name: _createRes.extractedName ?? '',
                   identifier_ticker: _createRes.extractedSymbol ?? undefined,
                   identifier_isin: _createRes.extractedIsin ?? undefined,
+                  classification_params: _createDesc ? {short_description: _createDesc} : undefined,
               }
             : null}
         initialSearchBadges={_createRes
             ? [
                   ...(_createRes.extractedSymbol ? [{label: `Ticker: ${_createRes.extractedSymbol}`, value: _createRes.extractedSymbol}] : []),
                   ...(_createRes.extractedIsin ? [{label: `ISIN: ${_createRes.extractedIsin}`, value: _createRes.extractedIsin}] : []),
-                  ...(_createRes.extractedName ? [{label: _createRes.extractedName.slice(0, 28), value: _createRes.extractedName}] : []),
+                  ...(_createRes.extractedName ? [{label: _createRes.extractedName, value: _createRes.extractedName}] : []),
               ]
             : []}
         initialSearchQuery=""
@@ -2538,5 +2739,21 @@ ${arrow}<span>${label}</span></span>`,
     onclose={() => {
         createBrokerOpen = false;
         createBrokerContext = null;
+    }}
+/>
+
+<BrokerModal
+    isOpen={editBrokerOpen}
+    mode="edit"
+    brokerId={editBrokerId}
+    initialData={editBrokerInitialData}
+    zIndex={zIndex + 20}
+    onupdated={() => {
+        void recheckOpenings();
+    }}
+    onclose={() => {
+        editBrokerOpen = false;
+        editBrokerId = null;
+        editBrokerInitialData = {};
     }}
 />

@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "f408a73855a54465a697b2f3eb148eec21e525dd8a2f0974ac23cc1055b96aef"
+            "sha256": "be4437c1f3b39ecccef9fa50edecb77ec6dc3f5b86d1bea4b7ee202b76219a26"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -178,7 +178,7 @@
         },
         "borsa-italiana-scraping": {
             "git": "git+https://github.com/Librefolio/borsaItaliana-scraping.git",
-            "ref": "40aaa95f7773dbe672b09184e9d7955587374d5e"
+            "ref": "e0e40fd67b6a206315a92fb97f92547b86a1a34b"
         },
         "build": {
             "hashes": [
@@ -2288,6 +2288,38 @@
             ],
             "markers": "python_version >= '3.9'",
             "version": "==0.25.0"
+        },
+        "quantlib": {
+            "hashes": [
+                "sha256:03dc31c2e4b68b458a47937047c6704ae30c51fff229aa7a009a4c9c7077590a",
+                "sha256:03f027bab14891a9b599417eacef3116353e385194dd3300dc801166c92bf71c",
+                "sha256:2c1fb5bcaf4f20704559c79c280a20585387fbe9aa4534d82421c15a1cb4e17f",
+                "sha256:35cd2c178aa9a30c3b7a9ca050536037c3185afd6728e6a1cf2085adef54464e",
+                "sha256:39db7f7a33f3fa71d50a53451699f9685b2bca0045db7f2d87dc1e24ba68ea0e",
+                "sha256:3c0ec04adb19660a029d2095609f5a8add1541b1d2bb14a990665738c911770e",
+                "sha256:3e6e8c9dc37c9f34ebf343e461c3f8a3274c087a112098d766d02083d94ad6d4",
+                "sha256:4e0107b25771d72a4744f0cbcd4874117302a82ddcab04213d2eaf6b3d2b723b",
+                "sha256:53bf822aef061d6264260350156cda2ac1aa27db1a8a1443ac8a2f81d283ecce",
+                "sha256:577c98ee38e3cafe564daeb22fb9e8628e2fba782eb7afa0134b1e2a6eccb720",
+                "sha256:59c8af8ce2d26de674fe1033765db90d94476470001d3ed93c33aa5bc3efca68",
+                "sha256:61fcb95e8d7e15dfd23e83104d24ce28d45582a645e7dbce0c248216bf51913b",
+                "sha256:6ee4295d0432d9ab0f0529ba97eda0c80da61cab134576fee62a4ca407cd85c0",
+                "sha256:70adba78db6bbb72b5b608af866c2fb3d3e440dc54bee9eb68d757e31c1c2e90",
+                "sha256:70e2bd469d155a3198438e28a89bdd9d6dcc7e260c756c5de7e761f3ccda4cb2",
+                "sha256:85d70b28778afca84b9b6ae74ef05a1069b2dca00e80fc74aa8ddf438259dc0c",
+                "sha256:9d028659a2557d549766bcebb346a9cacae0b3514bf205ddefadb64f9330bbb4",
+                "sha256:bf0cd0cc6029378b797b43619a5efd7d69fb22d48a95a3f9b9d0894bed2c67d9",
+                "sha256:c2d1680e1bb28bc58fe9d5cd1a966382cc490264368cc77300c9c9a381416d7e",
+                "sha256:c7b33959457889b6392a7c203a7c6730a301d192dcc60d6839cbbfcfc4336cd0",
+                "sha256:cf113464f75500c3f67ec7a6865b9dee1082650b37943a45974d83d9b29a32b1",
+                "sha256:d019ad14efacbec732253c65d1a33f97f22b0a9e0e236e0cb0278cea2a5769cf",
+                "sha256:ef6cde83c3beff278ed651196b6b802ddf749544d2c6c253cb059b19f39fab90",
+                "sha256:f21eaf656ea5bd26e023a402eda81a6b66338c7a3d1f3dfef3894f05312f7ac6",
+                "sha256:f5e1a4f286187ca858aaf7b2bdd90941b436937955e02c72be69e7653f7619ca",
+                "sha256:f9c620de81c8bea76b7bd82a190fdf0393f18812a2c2529351fabc7338b6b3c1"
+            ],
+            "index": "pypi",
+            "version": "==1.43"
         }
     },
     "develop": {

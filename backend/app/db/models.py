@@ -652,7 +652,11 @@ class Transaction(SQLModel, table=True):
 
     description: Optional[str] = Field(default=None, sa_column=Column(Text))
 
-    # Frozen cost basis for TRANSFER_IN transactions
+    # Frozen cost basis for TRANSFER_IN transactions.
+    # IMPORTANT: this is a PER-UNIT value (weighted-average cost per single unit),
+    # NOT a total. The portfolio engine and lot analysis multiply it by quantity to
+    # obtain the total cost basis. If a source reports a TOTAL countervalue, divide
+    # it by quantity before storing here.
     # When set, this value is used as acquisition price instead of calculating
     # from source broker history. Enables "snapshot" architecture for transfers:
     # - Backend calculates PMC on source broker at transfer time
@@ -661,7 +665,7 @@ class Transaction(SQLModel, table=True):
     cost_basis_override: Optional[Decimal] = Field(
         default=None,
         sa_column=Column(Numeric(18, 6), nullable=True),
-        description="Frozen cost basis for TRANSFER_IN. Overrides calculated cost basis.",
+        description="Frozen PER-UNIT cost basis (WAC per single unit) for TRANSFER_IN / opening ADJUSTMENT. Multiplied by quantity to get the total cost basis. Overrides calculated cost basis.",
     )
 
     # Currency code for cost_basis_override (ISO 4217).

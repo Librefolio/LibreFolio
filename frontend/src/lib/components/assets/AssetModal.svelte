@@ -501,6 +501,7 @@
         if (data.currency) currency = data.currency;
         if (data.asset_type) assetType = data.asset_type;
         if (data.quote_base_quantity && data.quote_base_quantity > 0) quoteBaseQuantity = data.quote_base_quantity;
+        if (data.classification_params?.short_description) shortDescription = data.classification_params.short_description;
         // Build identifier rows from prefilled columns
         const rows: IdentifierRow[] = [];
         for (const idType of IDENTIFIER_TYPES) {

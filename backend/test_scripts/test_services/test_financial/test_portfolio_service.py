@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.portfolio_engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
-from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import IssueCode, PortfolioReportQuery
@@ -1282,6 +1282,35 @@ class TestNetDepositedCapital:
 
 class TestPortfolioServiceDateAwareDashboardData:
     @pytest.mark.asyncio
+    async def test_summary_selects_historical_buy_reference_before_future_buy(self, session, test_user, broker_with_access, test_asset):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("1"), amount=Decimal("-100"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("1"), amount=Decimal("-120"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        historical = await service.get_summary(user_id=test_user.id, date_to=date(2025, 1, 5))
+        current = await service.get_summary(user_id=test_user.id, date_to=date(2025, 1, 15))
+
+        historical_holding = historical.holdings[0]
+        assert historical_holding.quantity == Decimal("1")
+        assert historical_holding.current_price == Decimal("100")
+        assert historical_holding.current_value == Decimal("100")
+        assert historical_holding.valuation_reference_date == date(2025, 1, 2)
+        assert historical_holding.valuation_reference_unit_price == Decimal("100")
+
+        current_holding = current.holdings[0]
+        assert current_holding.quantity == Decimal("2")
+        assert current_holding.current_price == Decimal("120")
+        assert current_holding.current_value == Decimal("240")
+        assert current_holding.valuation_reference_date == date(2025, 1, 10)
+        assert current_holding.valuation_reference_unit_price == Decimal("120")
+
+    @pytest.mark.asyncio
     async def test_summary_holdings_use_date_to_snapshot(self, session, test_user, broker_with_access, test_asset):
         """Summary holdings and cash must reflect selected date_to, not current ledger state."""
         broker, _ = broker_with_access
@@ -1329,7 +1358,114 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert holding.quantity == Decimal("1")
         assert holding.current_price == Decimal("110")
         assert holding.current_value == Decimal("110")
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == date(2025, 1, 31)
+        assert holding.valuation_reference_unit_price == Decimal("110")
+        assert holding.valuation_reference_currency == "EUR"
+        assert holding.missing_fx_pair is None
         assert holding.nav_weight_percent == Decimal("10.89")
+
+    @pytest.mark.asyncio
+    async def test_summary_maps_seed_cost_valuation_reference(self, session, test_user, broker_with_access, test_asset):
+        broker, _ = broker_with_access
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2025, 1, 10),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2025, 1, 2),
+                    quantity=Decimal("5"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                    cost_basis_override=Decimal("20"),
+                    cost_basis_currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    asset_event_id=split_event.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2025, 1, 10),
+                    quantity=Decimal("5"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(
+            user_id=test_user.id,
+            date_to=date(2025, 1, 31),
+        )
+
+        assert summary.net_worth.amount == Decimal("100")
+        assert len(summary.holdings) == 1
+        holding = summary.holdings[0]
+        assert holding.quantity == Decimal("10")
+        assert holding.current_price == Decimal("10")
+        assert holding.current_value == Decimal("100")
+        assert holding.gain_loss == Decimal("0")
+        assert holding.valuation_source == "LAST_SEED_COST"
+        assert holding.valuation_effective_unit_price == Decimal("10")
+        assert holding.valuation_effective_currency == "EUR"
+        assert holding.valuation_reference_date == date(2025, 1, 2)
+        assert holding.valuation_reference_unit_price == Decimal("20")
+        assert holding.valuation_reference_currency == "EUR"
+        assert holding.valuation_split_adjusted is True
+        assert holding.missing_fx_pair is None
+
+    @pytest.mark.asyncio
+    async def test_summary_deduplicates_shared_split_event_and_maps_effective_price(self, session, test_user, broker_with_access, test_asset):
+        broker_one, _ = broker_with_access
+        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_split_two")
+        session.add(broker_two)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker_two.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("1")))
+
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2025, 1, 5),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+
+        session.add_all(
+            [
+                Transaction(broker_id=broker_one.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker_two.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker_one.id, asset_id=test_asset.id, asset_event_id=split_event.id, type=TransactionType.ADJUSTMENT, date=date(2025, 1, 5), quantity=Decimal("10"), amount=Decimal("0"), currency="EUR"),
+                Transaction(broker_id=broker_two.id, asset_id=test_asset.id, asset_event_id=split_event.id, type=TransactionType.ADJUSTMENT, date=date(2025, 1, 5), quantity=Decimal("10"), amount=Decimal("0"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, date_to=date(2025, 1, 10))
+
+        assert len(summary.holdings) == 2
+        for holding in summary.holdings:
+            assert holding.quantity == Decimal("20")
+            assert holding.current_price == Decimal("50")
+            assert holding.current_value == Decimal("1000")
+            assert holding.valuation_effective_unit_price == Decimal("50")
+            assert holding.valuation_effective_currency == "EUR"
+            assert holding.valuation_reference_date == date(2025, 1, 2)
+            assert holding.valuation_reference_unit_price == Decimal("100")
+            assert holding.valuation_reference_currency == "EUR"
+            assert holding.valuation_split_adjusted is True
 
     @pytest.mark.asyncio
     async def test_positions_contribution_uses_date_to_and_other_effects(self, session, test_user, broker_with_access, test_asset):

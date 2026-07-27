@@ -59,6 +59,8 @@ class DonchianSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.donchian.name"
     description_key = "signals.donchian.description"
+    semantic_id = "donchian_channels"
+    semantic_description = "Describes recent high and low boundaries over a rolling window."
     icon = "↔️"
     docs_path = "financial-theory/technical-analysis/indicators/donchian-channels/"
     params_model = DonchianSignalParams
@@ -74,6 +76,8 @@ class DonchianSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="channels",
             label_key="signals.donchian.channels",
+            semantic_id="donchian_channels.envelope",
+            semantic_description="Rolling lower, midpoint, and upper price boundaries.",
             kind=SignalSeriesKind.BAND,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
@@ -131,6 +135,8 @@ class DonchianSignalPlugin(SignalPlugin):
                 SignalBandSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

@@ -40,6 +40,10 @@ The Borsa Italiana provider participates in the standard **asset sync** cycle. T
 
     The provider applies automatic throttling to avoid being blocked by Borsa Italiana. If you have many assets from this exchange, full sync may take a few minutes.
 
+!!! note "Mutual funds (NAV)"
+
+    Mutual funds and SICAVs are priced by their daily **NAV**, published once per day with a delay. LibreFolio identifies each fund by its Borsa fund code, so the price history shows the NAV at its real date, and the current value is refreshed only when the published NAV is dated today (otherwise your most recent purchase price is used as the estimate).
+
 ---
 
 ## 🔗 Developer Documentation

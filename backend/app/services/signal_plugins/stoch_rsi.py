@@ -175,6 +175,8 @@ class StochRsiSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.stochRsi.name"
     description_key = "signals.stochRsi.description"
+    semantic_id = "stochastic_relative_strength_index"
+    semantic_description = "Locates RSI within its recent range and applies smoothing."
     icon = "🎛️"
     docs_path = "financial-theory/technical-analysis/indicators/stochastic-rsi/"
     params_model = StochRsiSignalParams
@@ -184,6 +186,8 @@ class StochRsiSignalPlugin(SignalPlugin):
             key="k",
             label_key="signals.stochRsi.k",
             description_key="signals.stochRsi.kDescription",
+            semantic_id="stochastic_relative_strength_index.k",
+            semantic_description="Fast stochastic position of RSI within its lookback range.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_STOCH_RSI_AXIS,
@@ -201,6 +205,8 @@ class StochRsiSignalPlugin(SignalPlugin):
             key="d",
             label_key="signals.stochRsi.d",
             description_key="signals.stochRsi.dDescription",
+            semantic_id="stochastic_relative_strength_index.d",
+            semantic_description="Smoothed average of the stochastic RSI K line.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_STOCH_RSI_AXIS,
@@ -314,6 +320,8 @@ class StochRsiSignalPlugin(SignalPlugin):
                     key=spec.key,
                     label_key=spec.label_key,
                     description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

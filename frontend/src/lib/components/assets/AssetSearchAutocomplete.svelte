@@ -129,6 +129,10 @@
     let providersDone = $state(0);
     let providersTotal = $state(0);
 
+    // Interactive search must never hang; cap the whole streamed request so a slow or
+    // stuck provider resolves to an empty result instead of an endless spinner.
+    const SEARCH_TIMEOUT_MS = 30000;
+
     async function executeSearch(q: string) {
         if (q.trim().length === 0 || selectedProviders.size === 0) return;
 
@@ -144,9 +148,16 @@
 
         const providerCodes = [...selectedProviders].join(',');
 
+        const controller = new AbortController();
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, SEARCH_TIMEOUT_MS);
+
         try {
             // Try SSE streaming first
-            const response = await fetch(`/api/v1/assets/provider/search/stream?q=${encodeURIComponent(q)}&providers=${encodeURIComponent(providerCodes)}`);
+            const response = await fetch(`/api/v1/assets/provider/search/stream?q=${encodeURIComponent(q)}&providers=${encodeURIComponent(providerCodes)}`, {signal: controller.signal});
 
             if (!response.ok || !response.body) {
                 throw new Error('SSE not available');
@@ -155,6 +166,7 @@
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let streamDone = false;
 
             while (true) {
                 const {done, value} = await reader.read();
@@ -190,20 +202,38 @@
                         } else if (event.event === 'provider_error') {
                             providersDone++;
                         } else if (event.event === 'done') {
-                            // Final event
+                            // Terminal event: stop now instead of waiting for the HTTP
+                            // stream to physically close (a slow provider or a buffering
+                            // proxy could otherwise keep it open indefinitely).
+                            streamDone = true;
                         }
                     } catch {
                         /* skip malformed SSE lines */
                     }
+                }
+
+                if (streamDone) {
+                    void reader.cancel();
+                    break;
                 }
             }
 
             if (mySearchId === searchId) {
                 loading = false;
             }
-        } catch {
-            // Fallback to REST endpoint
+        } catch (streamErr) {
             if (mySearchId !== searchId) return;
+
+            // Timed out / aborted: surface an empty result with a clear message instead of
+            // spinning forever. Don't fall back to REST — it would hang the same way.
+            if (timedOut || (streamErr instanceof DOMException && streamErr.name === 'AbortError')) {
+                results = [];
+                error = $t('assets.search.timeout');
+                loading = false;
+                return;
+            }
+
+            // Fallback to REST endpoint (SSE genuinely unavailable)
             try {
                 const response = (await zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get({
                     queries: {q, providers: providerCodes},
@@ -230,6 +260,8 @@
                     loading = false;
                 }
             }
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 

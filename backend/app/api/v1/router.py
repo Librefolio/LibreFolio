@@ -6,12 +6,14 @@ Aggregates all v1 endpoints.
 from fastapi import APIRouter
 
 from backend.app.api.v1 import (
+    ai_export,
     assets,
     auth,
     backup,
     brokers,
     fx,
     portfolio_api,
+    risk,
     settings,
     system,
     transactions,
@@ -27,6 +29,7 @@ router = APIRouter()
 
 # Include sub-routers
 router.include_router(auth.router)  # Auth first (no prefix, uses /auth)
+router.include_router(ai_export.router)
 router.include_router(settings.router)  # Settings
 router.include_router(system.router)  # System info
 router.include_router(uploads.router)  # File uploads
@@ -37,4 +40,5 @@ router.include_router(transactions.tx_router)
 router.include_router(brokers.broker_router)
 router.include_router(backup.backup_router)
 router.include_router(portfolio_api.portfolio_router)
+router.include_router(risk.router)
 router.include_router(utilities_router)

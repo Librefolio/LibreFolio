@@ -2,6 +2,8 @@
 Backend service tests: FX conversion, asset source, provider registry, transactions, etc.
 """
 
+from scripts.cli_base import pipenv_prefix
+
 from . import _common
 from ._backend_db import db_create
 from ._common import (
@@ -17,6 +19,18 @@ from ._common import (
     print_success,
     print_warning,
     run_command,
+)
+
+AI_EXPORT_SERVICE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_asset_fx.py",
+    "backend/test_scripts/test_services/test_ai_export_coverage.py",
+    "backend/test_scripts/test_services/test_ai_export_normalization.py",
+    "backend/test_scripts/test_services/test_ai_export_portfolio_broker.py",
+    "backend/test_scripts/test_services/test_ai_export_profiles.py",
+    "backend/test_scripts/test_services/test_ai_export_sampling.py",
+    "backend/test_scripts/test_services/test_ai_export_service.py",
+    "backend/test_scripts/test_services/test_ai_export_technical.py",
+    "backend/test_scripts/test_services/test_ai_export_telemetry.py",
 )
 
 
@@ -66,6 +80,22 @@ def services_provider_registry(verbose: bool = False, test_names: list = None) -
     print_info("Testing: backend/app/services/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
     return run_command(cmd, "Provider registry tests", verbose=verbose)
+
+
+def services_quantlib_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Smoke test the pinned QuantLib runtime and deterministic path generation."""
+    print_section("Services: QuantLib Runtime")
+    print_info("Testing: QuantLib version, required APIs and seeded path reproducibility")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_quantlib_smoke.py", test_names)
+    return run_command(cmd, "QuantLib runtime smoke tests", verbose=verbose)
+
+
+def services_series_preparation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test canonical target-currency valuation and return preparation."""
+    print_section("Services: Canonical Series Preparation")
+    print_info("Testing: joint calendar, FX/price provenance, annualization and fingerprints")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_series_preparation.py", test_names)
+    return run_command(cmd, "Canonical series preparation tests", verbose=verbose)
 
 
 def services_signal_registry(verbose: bool = False, test_names: list = None) -> bool:
@@ -469,6 +499,16 @@ def services_scheduler_settings_misc(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Scheduler settings TZ conversion tests", verbose=verbose)
 
 
+def services_ai_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the complete AI Export service test set in one pytest invocation."""
+    print_section("Services: AI Export")
+    print_info("Testing all nine AI Export service files")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *AI_EXPORT_SERVICE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "AI Export service tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     print_header("LibreFolio Backend Services Tests")
@@ -515,6 +555,8 @@ Note: No backend server required.
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
+    add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
+    add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
     add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
     add_test(cat, "signal-runtime", services_signal_runtime, name="Signal Runtime", desc="Composite-stack fail-fast and startup integration")
     add_test(cat, "signal-contracts", services_signal_contracts, name="Signal Contracts", desc="Auto-discovered test-only line, band/composite, warm-up, failure and event fixtures")
@@ -560,5 +602,6 @@ Note: No backend server required.
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
     add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")
+    add_test(cat, "ai-export", services_ai_export, name="AI Export", desc="All nine AI Export service test files in one pytest invocation")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

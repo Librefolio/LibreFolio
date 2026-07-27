@@ -32,6 +32,8 @@ export interface SignalParamDescriptor {
      *  - 'string': <input type="text">
      */
     type: 'number' | 'boolean' | 'string' | 'select';
+    /** Optional backend-declared semantic control overriding the primitive type. */
+    control?: 'comparison_asset';
     /** Default value for new instances */
     default: unknown;
     /** Whether the backend schema requires this parameter. */
@@ -64,7 +66,7 @@ export interface SignalParamDescriptor {
 
 export type SignalDomain = 'asset' | 'fx';
 export type SignalDefinitionSource = 'local' | 'backend';
-export type SignalIndicatorGroup = 'trend' | 'momentum' | 'volatility' | 'volume';
+export type SignalIndicatorGroup = 'trend' | 'momentum' | 'volatility' | 'volume' | 'risk';
 export type SignalInputField = 'open' | 'high' | 'low' | 'close' | 'volume';
 export type SignalColorRole = 'primary' | 'secondary' | 'positive' | 'negative' | 'neutral' | 'accent';
 
@@ -153,10 +155,12 @@ export interface SignalStyle {
 
 /**
  * Serializable config for a signal instance.
- * Stored in `ChartSettings.signals[]` and used to recreate class instances
- * via the registry's `signalFromConfig()`.
+ * Stored in `ChartSettings.signals[]`. Local comparison and benchmark configs
+ * may be recreated as class instances via the registry's `signalFromConfig()`.
+ * Backend technical configs remain plain transported state and are rendered
+ * generically from backend results.
  *
- * Fields prefixed with '_' in params are transient and excluded by `toConfig()`.
+ * Local runtime data such as `params._resolvedData` is excluded by `toConfig()`.
  */
 export interface SignalConfig {
     /** Unique instance ID (UUID) */

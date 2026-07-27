@@ -43,6 +43,8 @@ class EventsFixturePlugin(SignalPlugin):
     category = SignalCategory.VOLUME
     display_name_key = "signals.fixtureEvents.name"
     description_key = "signals.fixtureEvents.description"
+    semantic_id = "fixture_cumulative_events"
+    semantic_description = "Test cumulative event values over time."
     icon = "calendar-range"
     params_model = EventsFixtureParams
     input_requirements = SignalInputRequirements(
@@ -54,6 +56,8 @@ class EventsFixturePlugin(SignalPlugin):
         SignalOutputSpec(
             key="cumulative-events",
             label_key="signals.fixtureEvents.cumulative",
+            semantic_id="fixture_cumulative_events.value",
+            semantic_description="Test cumulative value of matching events.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(key="events", role=SignalAxisRole.INDEPENDENT),
@@ -102,6 +106,8 @@ class EventsFixturePlugin(SignalPlugin):
                 SignalLineSeries(
                     key="cumulative-events",
                     label_key="signals.fixtureEvents.cumulative",
+                    semantic_id="fixture_cumulative_events.value",
+                    semantic_description="Test cumulative value of matching events.",
                     unit=SignalUnit.INDEX,
                     axis=SignalAxisSpec(
                         key="events",

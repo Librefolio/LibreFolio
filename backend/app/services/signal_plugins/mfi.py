@@ -154,6 +154,8 @@ class MfiSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLUME
     display_name_key = "signals.mfi.name"
     description_key = "signals.mfi.description"
+    semantic_id = "money_flow_index"
+    semantic_description = "Measures price-and-volume flow over a rolling window."
     icon = "💸"
     docs_path = "financial-theory/technical-analysis/indicators/mfi/"
     params_model = MfiSignalParams
@@ -171,6 +173,8 @@ class MfiSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="mfi",
             label_key="signals.mfi.output",
+            semantic_id="money_flow_index.value",
+            semantic_description="Bounded price-and-volume flow index.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_MFI_AXIS,
@@ -282,6 +286,8 @@ class MfiSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     reference_levels=levels,

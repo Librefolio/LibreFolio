@@ -51,6 +51,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,
+    SignalBandValueSource,
     SignalLineCrossoverRequest,
     SignalOutputValueSource,
     SignalRequest,
@@ -131,6 +132,7 @@ class FAPricePoint(BaseModel):
     original_open: Optional[SafeDecimal] = Field(None, description="Open price in original currency before FX conversion")
     original_high: Optional[SafeDecimal] = Field(None, description="High price in original currency before FX conversion")
     original_low: Optional[SafeDecimal] = Field(None, description="Low price in original currency before FX conversion")
+    source_plugin_key: Optional[str] = Field(None, description="Provider key that produced the stored price")
     backward_fill_info: Optional[AssetBackwardFillInfo] = Field(None, description="Backward-fill + FX staleness info (only in query results)")
 
     @field_validator("currency")
@@ -534,7 +536,7 @@ class FAPriceQueryItem(BaseModel):
                 raise ValueError(f"annotation target '{annotation.attach_to_instance_id}' is not in signals")
             sources = (annotation.left, annotation.right) if isinstance(annotation, SignalLineCrossoverRequest) else (annotation.source,)
             for source in sources:
-                if isinstance(source, SignalOutputValueSource) and source.instance_id not in known_instances:
+                if isinstance(source, (SignalOutputValueSource, SignalBandValueSource)) and source.instance_id not in known_instances:
                     raise ValueError(f"annotation source '{source.instance_id}' is not in signals")
         return self
 

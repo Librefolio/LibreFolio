@@ -5,14 +5,18 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.signals import (
     SignalAnnotationDirection,
     SignalAnnotationSampling,
     SignalAxisRole,
     SignalAxisSpec,
+    SignalBandComponent,
     SignalBandPoint,
     SignalBandSeries,
+    SignalBandValueSource,
     SignalDomain,
     SignalExecutionContext,
     SignalLineCrossoverRequest,
@@ -88,6 +92,8 @@ def line_series(
     return SignalLineSeries(
         key=key,
         label_key=f"signals.{key}",
+        semantic_id=f"test.{key}",
+        semantic_description=f"Test semantic value for {key}.",
         unit=SignalUnit.INDEX,
         axis=SignalAxisSpec(
             key="annotation",
@@ -98,6 +104,43 @@ def line_series(
             for point_date, value in zip(
                 point_dates,
                 values,
+                strict=True,
+            )
+        ],
+    )
+
+
+def band_series(
+    lower: list[float | None],
+    middle: list[float | None],
+    upper: list[float | None],
+    *,
+    key: str = "envelope",
+    point_dates: list[date] | None = None,
+) -> SignalBandSeries:
+    point_dates = point_dates or dates(len(lower))
+    return SignalBandSeries(
+        key=key,
+        label_key=f"signals.{key}",
+        semantic_id=f"test.{key}",
+        semantic_description=f"Test band semantic value for {key}.",
+        unit=SignalUnit.INDEX,
+        axis=SignalAxisSpec(
+            key="annotation",
+            role=SignalAxisRole.INDEPENDENT,
+        ),
+        points=[
+            SignalBandPoint(
+                date=point_date,
+                lower=lower_value,
+                middle=middle_value,
+                upper=upper_value,
+            )
+            for point_date, lower_value, middle_value, upper_value in zip(
+                point_dates,
+                lower,
+                middle,
+                upper,
                 strict=True,
             )
         ],
@@ -442,6 +485,140 @@ def test_signal_to_signal_crossover_uses_common_extended_dates():
     assert event.direction == SignalAnnotationDirection.UP
 
 
+@pytest.mark.parametrize(
+    "component",
+    [
+        SignalBandComponent.LOWER,
+        SignalBandComponent.MIDDLE,
+        SignalBandComponent.UPPER,
+    ],
+)
+def test_band_source_crosses_for_each_component(component: SignalBandComponent):
+    source = SignalBandValueSource(
+        instance_id="band",
+        series_key="envelope",
+        component=component,
+    )
+    request = SignalThresholdCrossingRequest(
+        key=f"{component.value}-threshold",
+        attach_to_instance_id="band",
+        source=source,
+        threshold=0.5,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([1, 1]),
+        {
+            "band": [
+                band_series(
+                    [-2, 2],
+                    [-1, 3],
+                    [0, 4],
+                )
+            ]
+        },
+        context(end=START + timedelta(days=1)),
+    )
+
+    event = result.annotations_by_target["band"][0]
+    assert event.date == START + timedelta(days=1)
+    assert event.direction == SignalAnnotationDirection.UP
+    assert event.metadata["source"] == source.model_dump(mode="json")
+
+
+def test_band_source_preserves_null_dates_and_resets_cross_state():
+    source = SignalBandValueSource(
+        instance_id="band",
+        series_key="envelope",
+        component=SignalBandComponent.MIDDLE,
+    )
+    series = band_series(
+        [-2, None, 0],
+        [-1, None, 1],
+        [0, None, 2],
+    )
+    timeline = SignalAnnotationService._resolve_source(
+        source,
+        [],
+        {"band": [series]},
+    )
+    request = SignalThresholdCrossingRequest(
+        key="middle-null-gap",
+        attach_to_instance_id="band",
+        source=source,
+        threshold=0,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([1, 1, 1]),
+        {"band": [series]},
+        context(end=START + timedelta(days=2)),
+    )
+
+    assert timeline.values == {
+        START: -1.0,
+        START + timedelta(days=1): None,
+        START + timedelta(days=2): 1.0,
+    }
+    assert timeline.source_metadata == source.model_dump(mode="json")
+    assert result.annotations_by_target.get("band", ()) == ()
+
+
+@pytest.mark.parametrize(
+    ("source", "series_by_instance", "reason"),
+    [
+        (
+            SignalBandValueSource(
+                instance_id="missing",
+                series_key="envelope",
+                component=SignalBandComponent.LOWER,
+            ),
+            {},
+            "has no extended output",
+        ),
+        (
+            SignalBandValueSource(
+                instance_id="band",
+                series_key="missing",
+                component=SignalBandComponent.MIDDLE,
+            ),
+            {"band": [band_series([0], [1], [2])]},
+            "is missing",
+        ),
+        (
+            SignalBandValueSource(
+                instance_id="line",
+                series_key="line",
+                component=SignalBandComponent.UPPER,
+            ),
+            {"line": [line_series([1])]},
+            "is not a band",
+        ),
+    ],
+)
+def test_unavailable_band_sources_return_structured_warning(
+    source: SignalBandValueSource,
+    series_by_instance,
+    reason: str,
+):
+    request = SignalThresholdCrossingRequest(
+        key="band-unavailable",
+        attach_to_instance_id="target",
+        source=source,
+        threshold=0,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([1]),
+        series_by_instance,
+        context(end=START),
+    )
+
+    warning = result.warnings_by_target["target"][0]
+    assert warning.code == SignalWarningCode.ANNOTATION_UNAVAILABLE
+    assert reason in warning.details["reason"]
+
+
 def test_missing_or_non_scalar_source_returns_structured_warning():
     missing = SignalThresholdCrossingRequest(
         key="missing-source",
@@ -464,6 +641,8 @@ def test_missing_or_non_scalar_source_returns_structured_warning():
     band_series = SignalBandSeries(
         key="envelope",
         label_key="signals.envelope",
+        semantic_id="test.envelope",
+        semantic_description="Test band envelope.",
         unit=SignalUnit.INDEX,
         axis=SignalAxisSpec(
             key="annotation",

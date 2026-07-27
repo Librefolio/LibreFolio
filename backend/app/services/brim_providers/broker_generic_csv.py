@@ -438,7 +438,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
                                         field="cost_basis_override",
                                         severity="blocker",
                                         reason_code="corporate_action",
-                                        message="Missing inherited cost basis (WAC). Fill this field to import.",
+                                        message="Missing inherited per-unit cost basis (WAC). Enter the cost per single unit (not the total) to import.",
                                     )
                                 )
 

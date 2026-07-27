@@ -50,6 +50,27 @@ Comparez la performance de l'actif actuel par rapport à **un autre actif**. Le 
 
 ---
 
+## 🧠 Export IA
+
+Le bouton **Export IA** (:material-brain:) dans l'en-tête Signaux propose cinq
+tâches Actif :
+
+- **Instantané de l'actif**
+- **Analyse de tendance de l'actif**
+- **Analyse de la position**
+- **Contexte temporel du PAC**
+- **Repli et reprise**
+
+Le backend construit l'instantané à partir de l'identité et de la valorisation
+de l'actif, de l'historique de prix normalisé, du contexte de la position dans le
+portefeuille et des résultats techniques du service de signaux partagé. Le
+navigateur ne recalcule pas les indicateurs. Les tâches apparaissent uniquement
+si elles s'appliquent à l'actif et aux données disponibles : par exemple, le
+contexte de position ou de plan récurrent doit exister pour l'analyse associée.
+Consultez le [guide de l'Export IA](../../ai-export/index.md).
+
+---
+
 ## 📚 Approfondissement : Théorie Financière
 
 Pour un traitement mathématique complet de chaque indicateur — incluant les formules, les équivalents en traitement du signal et l'interprétation pratique :

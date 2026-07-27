@@ -6,12 +6,13 @@ import inspect
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
 from backend.app.schemas.signals import (
+    SignalAvailabilityReason,
     SignalCatalogDefinition,
     SignalCategory,
     SignalComputation,
@@ -25,6 +26,22 @@ from backend.app.schemas.signals import (
 )
 
 _SIGNAL_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_SEMANTIC_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
+
+
+class SignalUnavailableError(ValueError):
+    """Report a mathematically unavailable result without treating it as failure."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason_code: SignalAvailabilityReason,
+        details: Optional[dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+        self.details = details or {}
 
 
 class SignalPlugin(ABC):
@@ -35,6 +52,8 @@ class SignalPlugin(ABC):
     category: ClassVar[SignalCategory]
     display_name_key: ClassVar[str]
     description_key: ClassVar[str]
+    semantic_id: ClassVar[str]
+    semantic_description: ClassVar[str]
     icon: ClassVar[str]
     docs_path: ClassVar[Optional[str]] = None
     params_model: ClassVar[type[BaseModel]]
@@ -67,6 +86,8 @@ class SignalPlugin(ABC):
             category=cls.category,
             display_name_key=cls.display_name_key,
             description_key=cls.description_key,
+            semantic_id=cls.semantic_id,
+            semantic_description=cls.semantic_description,
             icon=cls.icon,
             docs_path=cls.docs_path,
             params_schema=cls.params_model.model_json_schema(),
@@ -88,6 +109,8 @@ class SignalPlugin(ABC):
             "category",
             "display_name_key",
             "description_key",
+            "semantic_id",
+            "semantic_description",
             "icon",
             "params_model",
             "input_requirements",
@@ -99,10 +122,22 @@ class SignalPlugin(ABC):
             raise ValueError(f"signal plugin is missing required attributes: {', '.join(missing)}")
         if not isinstance(cls.signal_code, str) or cls.signal_code != cls.signal_code.strip().upper() or not _SIGNAL_CODE_PATTERN.fullmatch(cls.signal_code):
             raise ValueError("signal_code must be canonical uppercase letters, numbers, and underscores")
+        if not isinstance(cls.semantic_id, str) or not _SEMANTIC_ID_PATTERN.fullmatch(cls.semantic_id):
+            raise ValueError("semantic_id must be canonical lower-case letters, numbers, dots, hyphens, and underscores")
+        if not isinstance(cls.semantic_description, str) or not cls.semantic_description.strip():
+            raise ValueError("semantic_description must be a non-empty string")
+        output_semantic_ids = [spec.semantic_id for spec in cls.output_specs]
+        if len(output_semantic_ids) != len(set(output_semantic_ids)):
+            raise ValueError("output semantic_ids must not contain duplicates")
+        if cls.semantic_id in output_semantic_ids:
+            raise ValueError("signal and output semantic_ids must be unique")
         if not issubclass(cls.params_model, BaseModel):
             raise TypeError("params_model must be a Pydantic BaseModel subclass")
         if cls.params_model.model_config.get("extra") != "forbid":
             raise ValueError("signal params_model must use ConfigDict(extra='forbid')")
+        comparison_asset_param = cls.input_requirements.comparison_asset_param
+        if comparison_asset_param is not None and comparison_asset_param not in cls.params_model.model_fields:
+            raise ValueError("comparison_asset_param must reference a declared plugin parameter")
         try:
             inspect.signature(cls).bind()
         except TypeError as exc:
@@ -129,4 +164,4 @@ class SignalPlugin(ABC):
         """Compute and normalize output using the plugin-owned implementation."""
 
 
-__all__ = ["SignalPlugin"]
+__all__ = ["SignalPlugin", "SignalUnavailableError"]

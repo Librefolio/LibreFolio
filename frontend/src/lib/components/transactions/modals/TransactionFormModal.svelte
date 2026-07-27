@@ -67,6 +67,7 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
@@ -1207,7 +1208,7 @@
     function onQuantityInput(e: Event) {
         const v = (e.currentTarget as HTMLInputElement).value;
         qtyDisplay = v; // preserve raw user input mid-typing
-        setQuantity(v);
+        setQuantity(normalizeDecimalInput(v));
     }
     function onDescriptionInput(e: Event) {
         draft = {...draft, description: (e.currentTarget as HTMLTextAreaElement).value};
@@ -1549,8 +1550,7 @@
                                 {$t('transactions.table.quantity')} <span class="text-amber-500">(+)</span>
                             </span>
                             <input
-                                type="number"
-                                step="any"
+                                type="text"
                                 inputmode="decimal"
                                 autocomplete="off"
                                 spellcheck="false"
@@ -1825,8 +1825,7 @@
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
                                 <input
-                                    type="number"
-                                    step="any"
+                                    type="text"
                                     inputmode="decimal"
                                     autocomplete="off"
                                     spellcheck="false"
@@ -1869,8 +1868,7 @@
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
                                 <input
-                                    type="number"
-                                    step="any"
+                                    type="text"
                                     inputmode="decimal"
                                     autocomplete="off"
                                     spellcheck="false"

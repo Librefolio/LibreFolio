@@ -69,6 +69,8 @@ class AdxSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.adx.name"
     description_key = "signals.adx.description"
+    semantic_id = "average_directional_index"
+    semantic_description = "Measures trend strength from directional price movement without indicating trend direction."
     icon = "💹"
     docs_path = "financial-theory/technical-analysis/indicators/adx/"
     params_model = AdxSignalParams
@@ -86,6 +88,8 @@ class AdxSignalPlugin(SignalPlugin):
             key="adx",
             label_key="signals.adx.adx",
             description_key="signals.adx.adxDescription",
+            semantic_id="average_directional_index.strength",
+            semantic_description="Smoothed strength of directional price movement.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
@@ -99,6 +103,8 @@ class AdxSignalPlugin(SignalPlugin):
             key="plus_di",
             label_key="signals.adx.plusDi",
             description_key="signals.adx.plusDiDescription",
+            semantic_id="average_directional_index.positive_directional_index",
+            semantic_description="Positive directional movement relative to true range.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
@@ -111,6 +117,8 @@ class AdxSignalPlugin(SignalPlugin):
             key="minus_di",
             label_key="signals.adx.minusDi",
             description_key="signals.adx.minusDiDescription",
+            semantic_id="average_directional_index.negative_directional_index",
+            semantic_description="Negative directional movement relative to true range.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
@@ -183,6 +191,8 @@ class AdxSignalPlugin(SignalPlugin):
                     key=spec.key,
                     label_key=spec.label_key,
                     description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     style=spec.style.model_copy(deep=True),

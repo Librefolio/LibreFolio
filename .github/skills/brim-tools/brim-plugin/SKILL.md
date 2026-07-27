@@ -37,7 +37,11 @@ converter.
 6. **Correct sign conventions.** Set signs per transaction type (BUY: qty > 0 / cash < 0;
    SELL: qty < 0 / cash > 0; DIVIDEND & INTEREST: qty = 0 / cash > 0; FEE & TAX: qty = 0 /
    cash < 0; ADJUSTMENT: qty ≠ 0 / no cash), but take magnitudes verbatim from the report.
-7. **Fake asset IDs.** Emit negative fake asset IDs (keyed by ISIN/ticker) plus the
+7. **`cost_basis_override` is PER-UNIT.** If you freeze an inherited cost basis (WAC) on a
+   `TRANSFER`/`ADJUSTMENT` seed (opening snapshot, TRANSFER_IN), store the cost **per single
+   unit**, never the total — the engine multiplies it by `quantity`. If the source reports a
+   total countervalue, divide by quantity first. Set `cost_basis_currency` alongside it.
+8. **Fake asset IDs.** Emit negative fake asset IDs (keyed by ISIN/ticker) plus the
    extracted asset info, so the core can drive the asset-matching UI.
 
 ## 🛠️ Rough shape of the work

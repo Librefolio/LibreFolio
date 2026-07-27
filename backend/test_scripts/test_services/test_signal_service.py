@@ -7,16 +7,20 @@ import sys
 from datetime import date, timedelta
 
 import pytest
+from pydantic import ValidationError
 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.signals import (
     SignalAvailabilityReason,
+    SignalBandComponent,
+    SignalBandValueSource,
     SignalComputation,
     SignalDataPolicy,
     SignalDomain,
     SignalErrorCode,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLineCrossoverRequest,
     SignalLineSeries,
     SignalOutputValueSource,
     SignalPriceField,
@@ -28,7 +32,11 @@ from backend.app.schemas.signals import (
     SignalWarningCode,
 )
 from backend.app.services import signal_service as signal_service_module
-from backend.app.services.signal_service import SignalService
+from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signal_service import (
+    SignalRequestValidationError,
+    SignalService,
+)
 from backend.test_scripts.fixtures.signal_plugins.events_fixture import (
     EventsFixturePlugin,
 )
@@ -150,6 +158,24 @@ class WrongVisualMetadataPlugin(LineFixturePlugin):
         return output
 
 
+class WrongSemanticMetadataPlugin(LineFixturePlugin):
+    signal_code = "TEST_WRONG_SEMANTIC_METADATA"
+
+    def compute(self, price_points, event_points, params, context):
+        output = (
+            super()
+            .compute(
+                price_points,
+                event_points,
+                params,
+                context,
+            )
+            .model_dump(mode="python")
+        )
+        output["series"][0]["semantic_id"] = "unexpected.semantic"
+        return output
+
+
 class WrongDatesPlugin(LineFixturePlugin):
     signal_code = "TEST_WRONG_DATES"
 
@@ -192,6 +218,8 @@ class EventOnlyPlugin(EventsFixturePlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis,
                     points=points,
@@ -860,6 +888,10 @@ async def test_infinity_is_failed_as_invalid_output():
     [
         (WrongMetadataPlugin, "TEST_WRONG_METADATA"),
         (WrongVisualMetadataPlugin, "TEST_WRONG_VISUAL_METADATA"),
+        (
+            WrongSemanticMetadataPlugin,
+            "TEST_WRONG_SEMANTIC_METADATA",
+        ),
         (WrongDatesPlugin, "TEST_WRONG_DATES"),
     ],
 )
@@ -982,7 +1014,7 @@ def test_annotation_plan_validates_refs_and_adds_price_requirements():
                 }
             ],
         )
-    with pytest.raises(ValueError, match="annotation source"):
+    with pytest.raises(SignalRequestValidationError, match="annotation source"):
         service.prepare_plan(
             requests,
             make_context(),
@@ -997,6 +1029,147 @@ def test_annotation_plan_validates_refs_and_adds_price_requirements():
                 }
             ],
         )
+
+
+def test_annotation_plan_validates_band_source_contracts():
+    service = make_service()
+    requests = [
+        request("band", "FIXTURE_BAND_COMPOSITE"),
+        request("line", "FIXTURE_LINE", {"length": 2}),
+    ]
+    valid = SignalThresholdCrossingRequest(
+        key="band-lower-threshold",
+        attach_to_instance_id="band",
+        source=SignalBandValueSource(
+            instance_id="band",
+            series_key="envelope",
+            component=SignalBandComponent.LOWER,
+        ),
+        threshold=100,
+    )
+
+    plan = service.prepare_plan(requests, make_context(), [valid])
+    assert plan.annotation_requests == (valid,)
+
+    with pytest.raises(SignalRequestValidationError, match="is not a band"):
+        service.prepare_plan(
+            requests,
+            make_context(),
+            [
+                valid.model_copy(
+                    update={
+                        "source": SignalBandValueSource(
+                            instance_id="line",
+                            series_key="average",
+                            component=SignalBandComponent.MIDDLE,
+                        )
+                    }
+                )
+            ],
+        )
+    with pytest.raises(SignalRequestValidationError, match="is not declared"):
+        service.prepare_plan(
+            requests,
+            make_context(),
+            [
+                valid.model_copy(
+                    update={
+                        "source": SignalBandValueSource(
+                            instance_id="band",
+                            series_key="missing",
+                            component=SignalBandComponent.UPPER,
+                        )
+                    }
+                )
+            ],
+        )
+    with pytest.raises(SignalRequestValidationError, match="is a band"):
+        service.prepare_plan(
+            requests,
+            make_context(),
+            [
+                valid.model_copy(
+                    update={
+                        "source": SignalOutputValueSource(
+                            instance_id="band",
+                            series_key="envelope",
+                        )
+                    }
+                )
+            ],
+        )
+
+    scalar_missing_series = valid.model_copy(
+        update={
+            "source": SignalOutputValueSource(
+                instance_id="line",
+                series_key="missing",
+            )
+        }
+    )
+    scalar_plan = service.prepare_plan(
+        requests,
+        make_context(),
+        [scalar_missing_series],
+    )
+    assert scalar_plan.annotation_requests == (scalar_missing_series,)
+
+    invalid_component = valid.model_dump(mode="json")
+    invalid_component["source"]["component"] = "median"
+    with pytest.raises(ValidationError, match="component"):
+        service.prepare_plan(
+            requests,
+            make_context(),
+            [invalid_component],
+        )
+
+
+@pytest.mark.asyncio
+async def test_bollinger_and_donchian_band_crossings_are_plugin_agnostic():
+    points = make_signal_price_points()
+    annotations = [
+        SignalLineCrossoverRequest(
+            key="price-bollinger-upper",
+            attach_to_instance_id="bollinger",
+            left=SignalPriceValueSource(field=SignalPriceField.CLOSE),
+            right=SignalBandValueSource(
+                instance_id="bollinger",
+                series_key="bands",
+                component=SignalBandComponent.UPPER,
+            ),
+        ),
+        SignalLineCrossoverRequest(
+            key="price-donchian-middle",
+            attach_to_instance_id="donchian",
+            left=SignalPriceValueSource(field=SignalPriceField.CLOSE),
+            right=SignalBandValueSource(
+                instance_id="donchian",
+                series_key="channels",
+                component=SignalBandComponent.MIDDLE,
+            ),
+        ),
+    ]
+    results = await SignalService(SignalPluginRegistry).compute(
+        [
+            request(
+                "bollinger",
+                "BOLLINGER",
+                {"period": 2, "multiplier": 0.5},
+            ),
+            request("donchian", "DONCHIAN", {"period": 2}),
+        ],
+        points,
+        make_context(),
+        annotation_requests=annotations,
+    )
+
+    assert [result.status for result in results] == [
+        SignalStatus.OK,
+        SignalStatus.OK,
+    ]
+    assert {annotation.key for annotation in results[0].annotations} == {"price-bollinger-upper"}
+    assert {annotation.key for annotation in results[1].annotations} == {"price-donchian-middle"}
+    assert all(warning.code != SignalWarningCode.ANNOTATION_UNAVAILABLE for result in results for warning in result.warnings)
 
 
 @pytest.mark.asyncio

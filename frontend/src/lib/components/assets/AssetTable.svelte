@@ -195,6 +195,21 @@
                 width: 150,
                 minWidth: 100,
             },
+            {
+                id: 'delta_1D',
+                header: 'Δ 1D',
+                cell: (row) => {
+                    const val = row.deltas?.['1D'] ?? null;
+                    return {
+                        type: 'html',
+                        html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
+                    };
+                },
+                type: 'number',
+                getValue: (row) => row.deltas?.['1D'] ?? 0,
+                width: 80,
+                minWidth: 60,
+            },
             // Dynamic Δ multi-period columns
             ...visiblePeriods.map((period) => ({
                 id: `delta_${period.key}`,

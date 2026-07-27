@@ -38,12 +38,17 @@ describe('signal params JSON Schema mapper', () => {
                         multipleOf: 0.1,
                         'x-control-order': 4,
                     },
+                    comparison_asset_id: {
+                        type: 'integer',
+                        'x-control': 'comparison_asset',
+                        'x-control-order': 5,
+                    },
                 },
             },
             {period: 20},
         );
 
-        expect(descriptors.map((descriptor) => descriptor.key)).toEqual(['period', 'enabled', 'mode', 'multiplier']);
+        expect(descriptors.map((descriptor) => descriptor.key)).toEqual(['period', 'enabled', 'mode', 'multiplier', 'comparison_asset_id']);
         expect(descriptors[0]).toMatchObject({
             type: 'number',
             integer: true,
@@ -71,6 +76,12 @@ describe('signal params JSON Schema mapper', () => {
         expect(descriptors[3]).toMatchObject({
             type: 'number',
             step: 0.1,
+        });
+        expect(descriptors[4]).toMatchObject({
+            key: 'comparison_asset_id',
+            type: 'number',
+            integer: true,
+            control: 'comparison_asset',
         });
     });
 

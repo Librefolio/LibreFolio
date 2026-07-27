@@ -94,6 +94,41 @@ test.describe('Asset Detail Page', () => {
         expect(true).toBeTruthy(); // Panel toggled without error
     });
 
+    test('risk signals render and beta requests only after selecting a comparison asset', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        await page.getByTestId('asset-detail-signals-toggle').click();
+        await expect(page.getByTestId('asset-detail-signals-panel')).toBeVisible({timeout: 5_000});
+
+        await page.getByTestId('signals-indicator-select-button').click();
+        await page.getByTestId('signal-tree-group-risk').click();
+        await expect(page.getByTestId('signal-tree-option-risk-drawdown')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-volatility')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-return')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-sharpe')).toBeVisible();
+        await page.getByTestId('signal-tree-option-risk-rolling-beta').click();
+
+        await expect(page.getByTestId('signal-comparison-asset-control')).toBeVisible({timeout: 5_000});
+        await page.getByTestId('signal-comparison-asset-select-trigger').click();
+
+        const comparisonOption = page.getByTestId(/^search-select-option-/).first();
+        await expect(comparisonOption).toBeVisible({timeout: 5_000});
+        const betaRequest = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || !request.url().includes('/api/v1/assets/prices/query')) return false;
+                const body = request.postDataJSON();
+                return Array.isArray(body) && body.some((item) => item.signals?.some((signal: {signal_code?: string; params?: {comparison_asset_id?: number}}) => signal.signal_code === 'RISK_ROLLING_BETA' && Number.isInteger(signal.params?.comparison_asset_id)));
+            },
+            {timeout: 10_000},
+        );
+        await comparisonOption.click();
+
+        const requestBody = (await betaRequest).postDataJSON() as Array<{
+            signals?: Array<{signal_code?: string; params?: {comparison_asset_id?: number}}>;
+        }>;
+        const betaSignal = requestBody.flatMap((item) => item.signals ?? []).find((signal) => signal.signal_code === 'RISK_ROLLING_BETA');
+        expect(betaSignal?.params?.comparison_asset_id).toBeGreaterThan(0);
+    });
+
     // ========================================================================
     // Test 7: Measures panel toggle
     // ========================================================================

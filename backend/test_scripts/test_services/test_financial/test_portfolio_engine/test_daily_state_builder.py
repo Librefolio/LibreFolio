@@ -15,6 +15,7 @@ from backend.app.services.portfolio_engine import (
     DailyStateBuilder,
     DerivedViewsBuilder,
     InTransitInterval,
+    ValuationSource,
 )
 
 # =============================================================================
@@ -526,17 +527,22 @@ class TestPrivateValuationHelpers:
             date_to=date(2025, 1, 2),
         )
 
-        value, price_found, is_stale, missing_fx_pair, is_last_buy = builder._market_value_for(
+        valuation = builder._market_value_for(
             asset_id=100,
             qty=Decimal("5"),
             dt=date(2025, 1, 2),
         )
 
-        assert value == Decimal("90")  # 5 * 20 USD * 0.9 EUR/USD
-        assert price_found is True
-        assert is_stale is False
-        assert missing_fx_pair is None
-        assert is_last_buy is False
+        assert valuation.market_value == Decimal("90")  # 5 * 20 USD * 0.9 EUR/USD
+        assert valuation.source == ValuationSource.MARKET_PRICE
+        assert valuation.reference_date == date(2025, 1, 1)
+        assert valuation.unit_price == Decimal("20")
+        assert valuation.effective_unit_price == Decimal("20")
+        assert valuation.effective_currency == "USD"
+        assert valuation.reference_unit_price == Decimal("20")
+        assert valuation.reference_currency == "USD"
+        assert valuation.stale is False
+        assert valuation.missing_fx_pair is None
 
     def test_market_value_for_last_buy_price_uses_fx_rate(self):
         builder = _builder(
@@ -546,17 +552,22 @@ class TestPrivateValuationHelpers:
             date_to=date(2025, 1, 2),
         )
 
-        value, price_found, is_stale, missing_fx_pair, is_last_buy = builder._market_value_for(
+        valuation = builder._market_value_for(
             asset_id=100,
             qty=Decimal("2"),
             dt=date(2025, 1, 2),
         )
 
-        assert value == Decimal("48")  # 2 * 30 USD * 0.8 EUR/USD
-        assert price_found is False
-        assert is_stale is False
-        assert missing_fx_pair is None
-        assert is_last_buy is True
+        assert valuation.market_value == Decimal("48")  # 2 * 30 USD * 0.8 EUR/USD
+        assert valuation.source == ValuationSource.LAST_BUY_PRICE
+        assert valuation.reference_date == date(2025, 1, 1)
+        assert valuation.unit_price == Decimal("30")
+        assert valuation.effective_unit_price == Decimal("30")
+        assert valuation.effective_currency == "USD"
+        assert valuation.reference_unit_price == Decimal("30")
+        assert valuation.reference_currency == "USD"
+        assert valuation.stale is False
+        assert valuation.missing_fx_pair is None
 
 
 class TestPrivateCostHelpers:
@@ -631,7 +642,7 @@ class TestPrivateInTransitHelper:
                     arrival_leg=asset_arr,
                     share=Decimal("0.5"),
                     asset_id=100,
-                    cost_basis_amount=Decimal("80"),
+                    cost_basis_amount=Decimal("20"),
                     cost_basis_currency="USD",
                 ),
             ],
@@ -650,6 +661,35 @@ class TestPrivateInTransitHelper:
         assert it_cash == Decimal("67.5")  # 300 USD * 0.9 * 0.25
         assert it_asset_mv == Decimal("100")  # 4 * 50 * 0.5
         assert it_asset_cb == Decimal("36")  # 80 USD * 0.9 * 0.5
+        assert missing_fx == set()
+
+    def test_compute_in_transit_uses_frozen_per_unit_cost_when_unpriced(self):
+        asset_dep = _tx(id=202, broker_id=10, dt="2025-01-01", type="TRANSFER", quantity="-4", asset_id=100)
+        asset_arr = _tx(id=203, broker_id=20, dt="2025-01-04", type="TRANSFER", quantity="4", asset_id=100)
+        builder = _builder(
+            in_transit_intervals=[
+                InTransitInterval(
+                    start_date=date(2025, 1, 2),
+                    end_date=date(2025, 1, 3),
+                    tx_type="asset",
+                    departure_leg=asset_dep,
+                    arrival_leg=asset_arr,
+                    share=Decimal("1"),
+                    asset_id=100,
+                    cost_basis_amount=Decimal("20"),
+                    cost_basis_currency="EUR",
+                )
+            ],
+            last_seed_prices={(10, 100): (date(2025, 1, 1), Decimal("999"), "EUR")},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 4),
+        )
+
+        missing_fx: set[str] = set()
+        _, it_asset_mv, it_asset_cb = builder._compute_in_transit(date(2025, 1, 2), missing_fx)
+
+        assert it_asset_mv == Decimal("80")
+        assert it_asset_cb == Decimal("80")
         assert missing_fx == set()
 
 

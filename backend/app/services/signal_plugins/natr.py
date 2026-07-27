@@ -58,6 +58,8 @@ class NatrSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.natr.name"
     description_key = "signals.natr.description"
+    semantic_id = "normalized_average_true_range"
+    semantic_description = "Measures true-range variability relative to price."
     icon = "📐"
     docs_path = "financial-theory/technical-analysis/indicators/natr/"
     params_model = NatrSignalParams
@@ -74,6 +76,8 @@ class NatrSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="natr",
             label_key="signals.natr.output",
+            semantic_id="normalized_average_true_range.value",
+            semantic_description="Average true range expressed as a percentage of price.",
             kind=SignalSeriesKind.LINE,
             unit=SignalUnit.PERCENTAGE,
             axis=SignalAxisSpec(
@@ -135,6 +139,8 @@ class NatrSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     points=[

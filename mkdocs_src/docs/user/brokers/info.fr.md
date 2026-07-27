@@ -22,15 +22,22 @@ La colonne de gauche de l'onglet Informations affiche les propriétés clés et 
 
 ## 🧠 Export IA ciblé
 
-En haut à droite de la barre d'outils du courtier, le bouton **Export IA** (:material-brain:) copie dans votre presse-papiers une représentation textuelle structurée de l'état actuel du courtier.
+En haut à droite de la barre d'outils du courtier, **Export IA**
+(:material-brain:) ouvre quatre tâches Courtier dédiées, et non des prompts
+Portefeuille filtrés :
 
-Cet export est **spécifiquement ciblé sur ce courtier** (contrairement au bouton du tableau de bord principal qui copie les données pour l'ensemble du portefeuille). Il agrège :
+- **Analyse du courtier**
+- **Efficacité des coûts du courtier**
+- **Concentration chez le courtier**
+- **Analyse des lots FIFO**
 
-- Les soldes de trésorerie locaux.
-- Les avoirs et quantités d'actifs locaux.
-- Les pondérations d'allocation actives.
-
-Vous pouvez coller cette invite structurée directement dans votre LLM préféré (comme Gemini ou ChatGPT) pour une analyse ciblée et personnalisée de ce compte spécifique.
+L'instantané du backend est limité au courtier sélectionné et peut inclure sa
+trésorerie, ses positions, son activité, ses performances, ses coûts, sa
+concentration et ses lots FIFO selon la tâche choisie. Les contrôles d'accès du
+serveur empêchent l'export d'un courtier inaccessible à l'utilisateur actuel.
+LibreFolio copie uniquement le résultat dans le presse-papiers ; vérifiez les
+données financières sensibles avant de les partager. Consultez le
+[guide de l'Export IA](../ai-export/index.md).
 
 ---
 

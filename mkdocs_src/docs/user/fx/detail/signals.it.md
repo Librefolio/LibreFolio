@@ -46,6 +46,26 @@ Un **inviluppo di volatilità** attorno al prezzo. Le bande si allargano durante
 
 ---
 
+## 🧠 Esportazione AI
+
+Il pulsante **Esportazione AI** (:material-brain:) nell'intestazione Segnali
+offre tre task FX:
+
+- **Analisi del trend valutario**
+- **Impatto dell'esposizione valutaria**
+- **Contesto temporale della conversione valutaria**
+
+L'istantanea del backend usa la coppia valutaria canonica della pagina,
+l'intervallo selezionato, la valuta di destinazione, lo storico dei cambi e i
+risultati tecnici del servizio segnali condiviso. Per Impatto dell'esposizione
+valutaria, l'esposizione è limitata alle valute della liquidità e alle valute di
+negoziazione o valutazione delle posizioni direttamente collegabili alla coppia;
+non effettua **look-through** di fondi o emittenti per dedurre esposizioni
+valutarie nascoste. Consulta la
+[guida Esportazione AI](../../ai-export/index.md).
+
+---
+
 ## 📚 Approfondimento: Teoria Finanziaria
 
 Per un trattamento matematico completo di ogni indicatore — incluse formule, equivalenti di elaborazione dei segnali e interpretazione pratica:

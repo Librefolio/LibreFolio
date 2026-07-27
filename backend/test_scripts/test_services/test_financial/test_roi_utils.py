@@ -20,6 +20,7 @@ from backend.app.utils.financial.roi_utils import (
     calculate_simple_roi,
     calculate_simple_roi_series,
     calculate_twrr,
+    calculate_twrr_period_series,
     calculate_twrr_series,
 )
 
@@ -214,6 +215,80 @@ class TestTWRRSeries:
         assert calculate_twrr_series([], []) == []
         navs = [NAVSnapshot(date(2025, 1, 1), Decimal("1000"))]
         assert calculate_twrr_series(navs, []) == []
+
+    def test_raw_period_series_preserves_exact_hpr_and_public_rounding(self):
+        navs = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("1000")),
+            NAVSnapshot(date(2025, 7, 1), Decimal("2100")),
+            NAVSnapshot(date(2025, 12, 31), Decimal("2310")),
+        ]
+        cash_flows = [
+            CashFlowInput(
+                date(2025, 7, 1),
+                Decimal("-1000"),
+            )
+        ]
+
+        raw = calculate_twrr_period_series(navs, cash_flows)
+        public = calculate_twrr_series(navs, cash_flows)
+
+        assert [point.period_return for point in raw] == [
+            Decimal("0.1"),
+            Decimal("0.1"),
+        ]
+        assert [point.wealth_index for point in raw] == [
+            Decimal("1.1"),
+            Decimal("1.21"),
+        ]
+        assert [point.cumulative_twrr for point in raw] == [
+            Decimal("0.1"),
+            Decimal("0.21"),
+        ]
+        assert [point.twrr for point in public] == [
+            Decimal("0.100000"),
+            Decimal("0.210000"),
+        ]
+        assert calculate_twrr(navs, cash_flows).twrr == Decimal("0.210000")
+
+    def test_raw_period_series_keeps_zero_start_cardinality(self):
+        navs = [
+            NAVSnapshot(date(2025, 1, 1), Decimal("0")),
+            NAVSnapshot(date(2025, 1, 2), Decimal("1000")),
+            NAVSnapshot(date(2025, 1, 3), Decimal("1100")),
+        ]
+
+        raw = calculate_twrr_period_series(navs, [])
+        public = calculate_twrr_series(navs, [])
+
+        assert [point.period_return for point in raw] == [
+            Decimal("0"),
+            Decimal("0.1"),
+        ]
+        assert [point.cumulative_twrr for point in raw] == [
+            Decimal("0"),
+            Decimal("0.1"),
+        ]
+        assert [point.date for point in raw] == [
+            date(2025, 1, 2),
+            date(2025, 1, 3),
+        ]
+        assert [point.twrr for point in public] == [
+            Decimal("0.000000"),
+            Decimal("0.100000"),
+        ]
+
+    def test_raw_period_series_sorts_input_and_rounds_half_up_only_at_boundary(self):
+        navs = [
+            NAVSnapshot(date(2025, 1, 2), Decimal("1000000.5")),
+            NAVSnapshot(date(2025, 1, 1), Decimal("1000000")),
+        ]
+
+        raw = calculate_twrr_period_series(navs, [])
+        public = calculate_twrr_series(navs, [])
+
+        assert raw[0].period_return == Decimal("0.0000005")
+        assert raw[0].cumulative_twrr == Decimal("0.0000005")
+        assert public[0].twrr == Decimal("0.000001")
 
 
 # ---------------------------------------------------------------------------

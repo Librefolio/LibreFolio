@@ -47,7 +47,7 @@ function visualStyle(value: unknown): SignalVisualStyle {
 }
 
 function indicatorGroup(value: string): SignalIndicatorGroup {
-    if (value === 'trend' || value === 'momentum' || value === 'volatility' || value === 'volume') return value;
+    if (value === 'trend' || value === 'momentum' || value === 'volatility' || value === 'volume' || value === 'risk') return value;
     throw new Error(`Unsupported signal category '${value}'`);
 }
 

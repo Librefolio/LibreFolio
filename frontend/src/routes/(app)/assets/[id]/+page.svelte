@@ -12,7 +12,7 @@
      *
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
-    import {onMount, tick} from 'svelte';
+    import {onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
     import {debug, isDebugEnabled} from '$lib/debug';
@@ -79,10 +79,22 @@
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
-    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {copyAssetAiExport} from '$lib/features/ai-export/asset/assetExportClipboard';
-    import {ASSET_PROMPT_CATALOG, type AssetPromptId} from '$lib/features/ai-export/asset/assetPromptCatalog';
+    import AiExportMenuV2 from '$lib/features/ai-export/AiExportMenuV2.svelte';
+    import {copyAiExportV2} from '$lib/features/ai-export/aiExportClipboardV2';
+    import {aiExportStatsContextFingerprint, isAiExportStatsRequestCurrent, normalizeAiExportUserNotes, type AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
+    import {ASSET_AI_EXPORT_TASKS} from '$lib/features/ai-export/catalog/assetTasks';
+    import {aiExportCatalogLoader, reconcileAiExportCatalog, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
+    import {AI_EXPORT_CATALOG_SCHEMA_VERSION} from '$lib/features/ai-export/catalog/shared';
+    import type {AiExportPromptStats} from '$lib/features/ai-export/templates/promptRenderer';
+    import {buildAiExportMenuV2Labels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+
+    const DISABLED_AI_EXPORT_COMPATIBILITY = reconcileAiExportCatalog({
+        schema_version: AI_EXPORT_CATALOG_SCHEMA_VERSION,
+        entries: [],
+    });
+    type AssetAiExportTask = (typeof ASSET_AI_EXPORT_TASKS)[number]['id'];
+    const ASSET_AI_EXPORT_HIDDEN_ANALYSIS_TASKS = ['asset_snapshot', 'asset_pac_timing_context'] as const satisfies readonly AssetAiExportTask[];
 
     // =========================================================================
     // Page data
@@ -204,9 +216,39 @@
     let shortDescription: string | null = $state(null);
     let classificationLoaded = $state(false);
 
-    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenu
+    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenuV2
+    let assetAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
+    let assetAiExportCatalogLoading = $state(true);
+    let assetAiExportCatalogFailed = $state(false);
     let assetAiExportLoading = $state(false);
-    let assetAiExportEntries = $derived(ASSET_PROMPT_CATALOG.map((p) => ({id: p.id, label: $t(p.labelKey), description: $t(p.descriptionKey), icon: p.icon})));
+    let assetAiExportLastStats = $state<AiExportPromptStats | undefined>(undefined);
+    let assetAiExportLastStatsFingerprint = $state<string | undefined>(undefined);
+    let assetAiExportLastStatsContextFingerprint = $state<string | undefined>(undefined);
+    let assetAiExportObservedContextFingerprint = $state<string | undefined>(undefined);
+    let assetAiExportContextGeneration = $state(0);
+    let assetAiExportContextFingerprint = $derived(
+        aiExportStatsContextFingerprint({
+            contextKey: `asset:${data.assetId}`,
+            dateStart,
+            dateEnd,
+            displayCurrency,
+            targetCurrency: displayCurrency || assetInfo?.currency || '',
+        }),
+    );
+    let assetAiExportVisibleLastStats = $derived(assetAiExportLastStatsContextFingerprint === assetAiExportContextFingerprint ? assetAiExportLastStats : undefined);
+    let assetAiExportVisibleLastStatsFingerprint = $derived(assetAiExportLastStatsContextFingerprint === assetAiExportContextFingerprint ? assetAiExportLastStatsFingerprint : undefined);
+    let assetAiExportLabels = $derived(buildAiExportMenuV2Labels($t, ASSET_AI_EXPORT_TASKS, $t('assetDetail.aiExport'), $t('assetDetail.aiExportBuilding')));
+
+    $effect(() => {
+        const contextFingerprint = assetAiExportContextFingerprint;
+        if (untrack(() => assetAiExportObservedContextFingerprint) === contextFingerprint) return;
+
+        assetAiExportObservedContextFingerprint = contextFingerprint;
+        assetAiExportContextGeneration = untrack(() => assetAiExportContextGeneration) + 1;
+        assetAiExportLastStats = undefined;
+        assetAiExportLastStatsFingerprint = undefined;
+        assetAiExportLastStatsContextFingerprint = undefined;
+    });
 
     // Signals header row's OWN width (NOT pageLayoutMode — that tracks the PageToolbar bar,
     // which needs ~780px+ to avoid stacking its date picker/filters/2x2 actions, so its
@@ -881,6 +923,7 @@
     onMount(() => {
         _prevAssetId = data.assetId;
         reloadPage();
+        void loadAssetAiExportCompatibility();
     });
 
     // Re-load everything when navigating to a different asset (same route pattern)
@@ -1308,25 +1351,63 @@
     // Actions
     // =========================================================================
 
-    async function handleAssetAiExport(promptId: AssetPromptId) {
-        if (!assetInfo) return;
-        assetAiExportLoading = true;
+    async function loadAssetAiExportCompatibility() {
+        assetAiExportCatalogLoading = true;
         try {
-            await copyAssetAiExport(
-                promptId,
-                {
-                    assetInfo,
-                    sectorDistribution,
-                    geographicDistribution,
-                    shortDescription,
-                },
-                {
+            assetAiExportCompatibility = await aiExportCatalogLoader.load();
+            assetAiExportCatalogFailed = false;
+        } catch {
+            assetAiExportCatalogFailed = true;
+            toasts.error($t('aiExport.v2.catalogUnavailable'));
+        } finally {
+            assetAiExportCatalogLoading = false;
+        }
+    }
+
+    function isAssetAiExportTask(task: AiExportOptionsSelection['task']): task is AssetAiExportTask {
+        return ASSET_AI_EXPORT_TASKS.some((definition) => definition.id === task);
+    }
+
+    async function handleAssetAiExport(options: AiExportOptionsSelection) {
+        if (!assetInfo || assetAiExportCatalogLoading || assetAiExportCatalogFailed) return;
+        if (!isAssetAiExportTask(options.task)) {
+            toasts.error($t('aiExport.v2.catalogUnavailable'));
+            return;
+        }
+
+        assetAiExportLoading = true;
+        const requestGeneration = assetAiExportContextGeneration;
+        const requestContextFingerprint = assetAiExportContextFingerprint;
+        try {
+            const result = await copyAiExportV2({
+                context: {
+                    domain: 'asset',
+                    assetId: data.assetId,
+                    dateRange: {
+                        start: dateStart,
+                        end: dateEnd,
+                    },
                     targetCurrency: displayCurrency || assetInfo.currency,
-                    locale: $currentLanguage,
                 },
-                toasts,
-                $t,
-            );
+                task: options.task,
+                detailLevel: options.detailLevel,
+                renderMode: options.renderMode,
+                responseLanguage: options.responseLanguage,
+                userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
+                webResearch: options.webResearch,
+                compatibility: assetAiExportCompatibility,
+            });
+            if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, assetAiExportContextGeneration, assetAiExportContextFingerprint)) {
+                assetAiExportLastStats = result.stats;
+                assetAiExportLastStatsFingerprint = result.optionsFingerprint;
+                assetAiExportLastStatsContextFingerprint = requestContextFingerprint;
+            }
+
+            const messages = getAiExportSuccessMessages($t, result);
+            toasts.success(messages.copied);
+            toasts.info(messages.privacyNotice);
+        } catch (error) {
+            toasts.error(getAiExportErrorMessage($t, error));
         } finally {
             assetAiExportLoading = false;
         }
@@ -1794,7 +1875,22 @@
                 </span>
                 <div class="flex-1"></div>
                 <div class="pointer-events-auto shrink-0">
-                    <AiExportMenu entries={assetAiExportEntries} loading={assetAiExportLoading} triggerLabel={$t('assetDetail.aiExport')} loadingLabel={$t('assetDetail.aiExportBuilding')} showLabel={showAiExportLabel} onselect={(id) => handleAssetAiExport(id as AssetPromptId)} />
+                    <AiExportMenuV2
+                        domainTaskDefinitions={ASSET_AI_EXPORT_TASKS}
+                        compatibility={assetAiExportCompatibility}
+                        memoryKey={`asset:${data.assetId}`}
+                        defaultTask="asset_trend_analysis"
+                        defaultDetailLevel="standard"
+                        defaultRenderMode="full_prompt"
+                        hiddenAnalysisTasks={ASSET_AI_EXPORT_HIDDEN_ANALYSIS_TASKS}
+                        lastStats={assetAiExportVisibleLastStats}
+                        lastStatsFingerprint={assetAiExportVisibleLastStatsFingerprint}
+                        disabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
+                        loading={assetAiExportLoading}
+                        labels={assetAiExportLabels}
+                        showLabel={showAiExportLabel}
+                        onexport={handleAssetAiExport}
+                    />
                 </div>
                 <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
                     <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />

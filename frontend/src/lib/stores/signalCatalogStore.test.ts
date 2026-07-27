@@ -10,6 +10,8 @@ function makeCatalogItem(index: number, domain: 'asset' | 'fx'): BackendSignalCa
         category: 'trend',
         display_name_key: `signals.${index}`,
         description_key: `signals.${index}.description`,
+        semantic_id: `test.signal_${index}`,
+        semantic_description: `Canonical description for signal ${index}.`,
         icon: 'chart-spline',
         params_schema: {type: 'object', properties: {}},
         default_params: {},
@@ -22,6 +24,8 @@ function makeCatalogItem(index: number, domain: 'asset' | 'fx'): BackendSignalCa
             {
                 key: 'value',
                 label_key: 'signals.value',
+                semantic_id: `test.signal_${index}.value`,
+                semantic_description: `Canonical output description for signal ${index}.`,
                 unit: 'price',
                 axis: {key: 'price', role: 'price'},
                 kind: 'line',

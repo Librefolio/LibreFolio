@@ -15,11 +15,27 @@ Signal plugins own indicator-specific behavior. Shared infrastructure owns data 
 coverage policy, error isolation, annotations, and API serialization.
 
 ```mermaid
+---
+config:
+  layout: elk
+---
 flowchart TB
-    CLIENTS["🖥️ Frontend charts<br/>🤖 AI export<br/>🔌 API clients"]
+    subgraph CHART["📈 Chart ingress"]
+        CHART_UI["Frontend chart"]
+        CHART_API["Asset / FX signal API"]
+        CHART_ADAPTER["Asset / FX adapter"]
+        CHART_UI -->|"bulk signal request"| CHART_API
+        CHART_API --> CHART_ADAPTER
+    end
 
-    subgraph ADAPTERS["Domain adapters"]
-        DOMAIN["📈 Asset API<br/>💱 FX API"]
+    subgraph EXPORT["🧠 AI Export ingress"]
+        EXPORT_UI["AI Export frontend"]
+        SNAPSHOT_API["POST /api/v1/ai-export/snapshot"]
+        SNAPSHOT_SERVICE["AiExportSnapshotService"]
+        ASSEMBLER["Portfolio / Broker / Asset / FX assembler"]
+        EXPORT_UI -->|"typed snapshot request"| SNAPSHOT_API
+        SNAPSHOT_API --> SNAPSHOT_SERVICE
+        SNAPSHOT_SERVICE --> ASSEMBLER
     end
 
     subgraph PLATFORM["Signal platform"]
@@ -35,8 +51,8 @@ flowchart TB
         FAMILIES["📉 Trend · 🧭 Momentum<br/>🌊 Volatility · 📊 Volume"]
     end
 
-    CLIENTS -->|"domain request"| DOMAIN
-    DOMAIN -->|"neutral price/event arrays"| SERVICE
+    CHART_ADAPTER -->|"neutral chart price/event arrays"| SERVICE
+    ASSEMBLER -->|"neutral snapshot price/event arrays"| SERVICE
     CONTRACTS -->|"shared types"| SERVICE
     SERVICE -->|"resolve plugin"| REGISTRY
     SERVICE -->|"optional semantic events"| ANNOTATIONS
@@ -52,7 +68,8 @@ flowchart TB
 | `provider_registry.py` | Discover plugin files, validate definitions, and reject duplicate codes. |
 | `signal_service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
 | `signal_annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
-| Asset/FX adapters | Load domain data, perform currency conversion, and map it into neutral points. |
+| Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
+| AI Export snapshot service/assemblers | Resolve an authenticated snapshot profile, load authoritative facts, and call the same `SignalService` for curated technical bundles. |
 
 !!! important "Plugins do not load data"
 
@@ -60,14 +77,23 @@ flowchart TB
     invoked from an Asset or FX endpoint. It receives neutral price/event arrays and
     returns canonical output.
 
+The AI Export browser code never calculates indicators and never sends chart-computed
+technical values. It calls `/ai-export/snapshot`; the backend snapshot assembler owns
+data loading and invokes the shared signal platform.
+
 ---
 
 ## 🔄 Request Lifecycle
 
+Chart requests and AI Export snapshots have separate adapters. They converge only at
+`SignalService`.
+
+### 📈 Chart Asset/FX Lifecycle
+
 ```mermaid
 sequenceDiagram
     autonumber
-    participant C as Frontend / AI client
+    participant C as Frontend chart
     participant A as Asset or FX adapter
     participant S as SignalService
     participant R as SignalPluginRegistry
@@ -100,6 +126,41 @@ sequenceDiagram
     A-->>C: One canonical bulk response
 ```
 
+### 🧠 AI Export Snapshot Lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant F as AI Export frontend
+    participant E as /ai-export/snapshot
+    participant X as AiExportSnapshotService
+    participant A as Domain snapshot assembler
+    participant D as Portfolio / Lots / Asset / FX sources
+    participant S as SignalService
+    participant R as SignalPluginRegistry
+    participant P as SignalPlugin
+
+    F->>E: Typed domain/task/detail request
+    E->>X: Authenticated build_snapshot()
+    X->>X: Resolve exact profile and broker scope
+    X->>A: assemble(prepared, session)
+    A->>D: Load authoritative financial/domain facts
+    opt Profile has a technical bundle
+        A->>S: prepare_plan(curated requests, context)
+        S->>R: Resolve and validate plugin definitions
+        R-->>S: Plugin classes
+        S-->>A: Plan and required warm-up
+        A->>D: Bulk-load extended neutral inputs
+        A->>S: execute(plan, price_points, event_points)
+        S->>P: Compute canonical outputs
+        P-->>S: SignalComputation
+        S-->>A: Signals, states, events, coverage
+    end
+    A-->>X: Typed snapshot response
+    X-->>E: Versioned discriminated response
+    E-->>F: Snapshot facts for local safe rendering
+```
+
 ### 1. 🧭 Planning
 
 `SignalService.prepare_plan()`:
@@ -111,7 +172,8 @@ sequenceDiagram
 - aggregates the maximum history and union of required price fields/events;
 - records per-instance preflight failures without aborting the remaining batch.
 
-The Asset or FX adapter uses that plan to load one extended input range.
+The chart Asset/FX adapter or AI Export domain assembler uses that plan to load one
+extended input range.
 
 ### 2. 🧮 Execution
 
@@ -466,4 +528,5 @@ Useful commands:
 - [Registry Pattern Overview](registry_pattern.md)
 - [Asset Plugin Guide](asset_plugin_guide.md)
 - [FX Plugin Guide](fx_plugin_guide.md)
+- [AI Export Snapshot Architecture](ai_export_snapshot.md)
 - [Technical Analysis](../../../financial-theory/technical-analysis/index.md)

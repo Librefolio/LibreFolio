@@ -288,6 +288,8 @@
     /** B23 Step 4: confirm edit on a row marked for deletion. */
     let confirmEditDeleteOpen = $state(false);
     let confirmEditDeleteRow = $state<PendingOp | null>(null);
+    /** Gate: confirm Save when auto-derived "fields to verify" (warning todos) are still un-acknowledged. */
+    let confirmWarningsOpen = $state(false);
 
     // =========================================================================
     // WAC results — populated from validate response (Phase C: inline WAC)
@@ -1309,6 +1311,20 @@
     // Commit
     // =========================================================================
 
+    /**
+     * Save-gate: if there are auto-derived "fields to verify" (warning todos) that the user
+     * hasn't acknowledged yet, force a confirmation step listing them before committing.
+     * Blockers are already gated by `commitDisabled`; this covers non-blocking warnings so the
+     * user is prompted to look (e.g. matured-bond nominal quantities) instead of silently saving.
+     */
+    function requestCommit() {
+        if (todoWarningRowCount > 0) {
+            confirmWarningsOpen = true;
+            return;
+        }
+        void commit();
+    }
+
     async function commit() {
         if (committing) return;
         committing = true;
@@ -1962,6 +1978,9 @@
     let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && getPartnerOp(d.tempId) != null));
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
+    let todoWarningRowCount = $derived(ops.filter((op) => op.todos?.some((t) => t.severity === 'warning')).length);
+    /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
+    let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((t) => t.message || t.field)));
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('common.saveAll'));
 
@@ -2816,6 +2835,11 @@
                     <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.deleteModal.splitHint')}</p>
                 </InfoBanner>
             {/if}
+            {#if todoWarningRowCount > 0}
+                <InfoBanner variant="warning">
+                    <p data-testid="tx-bulk-todo-warnings">🔧 {$t('importWizard.todoWarningVerifyHint', {values: {n: todoWarningRowCount}})}</p>
+                </InfoBanner>
+            {/if}
             {#if bannerSuggestions.length > 0}
                 <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner">
                     <div class="font-medium text-green-800 dark:text-green-200 mb-1.5">{$t('transactions.promoteSuggest.detected')}</div>
@@ -3079,7 +3103,7 @@
                     type="button"
                     class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
                     disabled={commitDisabled}
-                    onclick={commit}
+                    onclick={requestCommit}
                     data-testid="tx-bulk-commit"
                     title={hasTodoBlockers ? $t('importWizard.todoBlockerCommitHint') : commitLabel}
                 >
@@ -3089,6 +3113,25 @@
         </div>
     </div>
 </ModalBase>
+
+<!-- Save-gate: force the user to review auto-derived "fields to verify" (warning todos)
+     before committing. Non-destructive — "Save anyway" proceeds, "Review" returns to the grid. -->
+<ConfirmModal
+    open={confirmWarningsOpen}
+    title={$t('importWizard.todoWarningConfirmTitle')}
+    message={$t('importWizard.todoWarningConfirmMessage', {values: {n: todoWarningRowCount}})}
+    items={todoWarningItems}
+    itemsLabel={$t('importWizard.todoWarningConfirmItemsLabel', {values: {n: todoWarningItems.length}})}
+    confirmText={$t('importWizard.todoWarningConfirmProceed')}
+    cancelText={$t('importWizard.todoWarningConfirmReview')}
+    warning
+    onConfirm={() => {
+        confirmWarningsOpen = false;
+        void commit();
+    }}
+    onCancel={() => (confirmWarningsOpen = false)}
+    zIndex={70}
+/>
 
 <!-- Bugfix-3 §C11: confirm dialog when closing with unsaved changes. -->
 <ConfirmModal
