@@ -10,6 +10,7 @@
 Related history:
 - BRIM bridge / import wizard: `phases/phase-07-subplan/Parte5/plan-phase07Part5-BRIMImportBridge.prompt.md`
 - BRIM plugin guide (dev): `.github/skills/brim-tools/brim-plugin/SKILL.md` + backend dev manual
+- **Punti aperti & stato (crystallization)**: [`report-phase00BrokerImportRecoveryOpenPoints.md`](./report-phase00BrokerImportRecoveryOpenPoints.md)
 
 ---
 
