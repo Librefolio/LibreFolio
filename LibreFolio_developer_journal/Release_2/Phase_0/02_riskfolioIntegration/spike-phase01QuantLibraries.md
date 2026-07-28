@@ -133,6 +133,27 @@ ripetibili. Verificati anche covariance storica/Ledoit/OAS PSD, frontiera a cinq
 punti e vincoli infeasible. Probe completo: ~2,59 s host, ~2,14 s Linux arm64,
 ~4,43 s Linux amd64 emulato.
 
+### 5.3 Probe esplicito Riskfolio-Lib 7.3.0
+
+L'audit successivo ha verificato anche la release `7.3.0` in un ambiente pulito,
+senza assumere che il vincolo osservato nel primo tentativo fosse ancora valido.
+
+Risultato:
+
+- `riskfolio-lib==7.3.0` richiede `vectorbt`;
+- `vectorbt` richiede Numba;
+- Numba 0.66 richiede `numpy<2.5`;
+- LibreFolio usa e mantiene `numpy==2.5.1`;
+- pip, Pipenv e il probe Docker non risolvono questa combinazione senza downgrade
+  di NumPy.
+
+Quindi sono vere entrambe le conclusioni seguenti:
+
+1. escludere **tutta** Riskfolio era una falsa pista: 7.0.1 funziona e viene usata;
+2. non aggiornare ora a 7.3.0 è una scelta tecnica reale, non un risparmio di spazio.
+
+Il pin 7.0.1 evita `vectorbt`/Numba, preserva NumPy 2.5.1 e supera i gate P13.
+
 ## 6. Costo container
 
 Dimensioni Docker non compresse:
@@ -170,6 +191,13 @@ Il build finale LibreFolio con entrambi i runtime è verde:
 - import FastAPI application riuscito;
 - `vectorbt` e `numba` assenti nel container.
 
+Il build finale dell'audit è
+`librefolio:risk-audit-remediation`, digest
+`sha256:98a2cea750af424ffabf7b9ed01beba0afe329fde445e9d85a240f2d492194ac`,
+architettura arm64 e dimensione non compressa `2.781.625.742 B`. Lo smoke importa
+NumPy 2.5.1, QuantLib 1.43 e Riskfolio 7.0.1. Il valore è la dimensione
+dell'intera immagine corrente, non un delta attribuibile al solo Riskfolio.
+
 ## 8. Conseguenze per P11-P13
 
 - P11 può usare QuantLib dietro adapter senza esporre oggetti SWIG.
@@ -193,14 +221,15 @@ Il build finale LibreFolio con entrambi i runtime è verde:
 - `vectorbt`/`numba`: assenti;
 - build immagine LibreFolio arm64: verde;
 - import QuantLib 1.43 nell'immagine LibreFolio: verde;
-- `./dev.py test services risk-all`: 68 test verdi;
+- `./dev.py test services risk-all`: 74 test verdi;
 - `./dev.py test api risk`: 7 test verdi sul DB popolato;
+- `./dev.py test schemas`: 21 test Risk verdi;
 - frontend check/build: verdi;
 - API sync: idempotente;
 - immagine finale arm64 + smoke runtime: verdi;
 - lint Ruff + formato Black: verdi.
 
-La suite backend completa è attualmente bloccata da lavoro concorrente sul provider
-Borsa Italiana: il modulo non espone ancora `ottieni_storico` e marca la libreria
-come non disponibile nei test external. I gate risk dedicati, API e container sono
-verdi; nessuna modifica provider è stata effettuata in G5.
+Alla prima chiusura G5 la suite backend globale aveva incontrato lavoro concorrente
+sul provider Borsa Italiana. Nell'audit finale non è stata riusata come gate Risk:
+i gate dedicati, API, schema, frontend e container sono verdi e isolano il dominio
+verificato da modifiche concorrenti estranee.

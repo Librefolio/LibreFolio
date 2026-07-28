@@ -95,15 +95,16 @@ def synthetic_covariance(asset_count: int) -> np.ndarray:
 def simulation_request(
     *,
     assets: int,
-    paths: int,
+    path_count: int,
     horizon_days: int,
-    sampling: str,
-    seed: int,
+    sampling_method: str,
+    random_seed: int | None = None,
+    sobol_start_index: int | None = None,
     diagnostics: bool = False,
 ) -> SimulationEngineRequest:
     covariance = synthetic_covariance(assets)
     return SimulationEngineRequest(
-        sampling=sampling,
+        sampling_method=sampling_method,
         asset_ids=list(range(1, assets + 1)),
         annual_drifts=np.linspace(
             0.02,
@@ -114,8 +115,9 @@ def simulation_request(
         weights=[0.95 / assets] * assets,
         cash_weight=0.05,
         horizon_days=horizon_days,
-        paths=paths,
-        seed=seed,
+        path_count=path_count,
+        random_seed=random_seed,
+        sobol_start_index=sobol_start_index,
         diagnostics=diagnostics,
     )
 
@@ -173,22 +175,23 @@ def classify_matrix() -> list[dict[str, Any]]:
     for assets in ASSET_COUNTS:
         for path_tier, path_values in PATH_COUNTS.items():
             for horizon_tier, horizon_days in HORIZONS.items():
-                for sampling, paths in path_values.items():
+                for sampling_method, path_count in path_values.items():
                     row = {
                         "assets": assets,
                         "path_tier": path_tier,
-                        "paths": paths,
+                        "path_count": path_count,
                         "horizon_tier": horizon_tier,
                         "horizon_days": horizon_days,
-                        "sampling": sampling,
+                        "sampling_method": sampling_method,
                     }
                     try:
+                        sequence_params = {"sobol_start_index": 4096} if sampling_method == "qmc" else {"random_seed": 4096}
                         request = simulation_request(
                             assets=assets,
-                            paths=paths,
+                            path_count=path_count,
                             horizon_days=horizon_days,
-                            sampling=sampling,
-                            seed=4096,
+                            sampling_method=sampling_method,
+                            **sequence_params,
                         )
                         validate_resource_budget(request)
                     except ValidationError as exc:
@@ -226,9 +229,9 @@ async def benchmark_persistent_case(
     return {
         "label": label,
         "assets": len(request.asset_ids),
-        "paths": request.paths,
+        "path_count": request.path_count,
         "horizon_days": request.horizon_days,
-        "sampling": request.sampling.value,
+        "sampling_method": request.sampling_method.value,
         "equivalent": (result_digest(cold.payload) == result_digest(warm.payload)),
         "cold": worker_metrics(cold),
         "warm": worker_metrics(warm),
@@ -241,10 +244,10 @@ async def benchmark_simulation_cache() -> dict[str, Any]:
     clear_simulation_cache()
     request = simulation_request(
         assets=5,
-        paths=2048,
+        path_count=2048,
         horizon_days=90,
-        sampling="mc",
-        seed=123456,
+        sampling_method="mc",
+        random_seed=123456,
     )
     started = perf_counter()
     first, first_hit, worker = await run_simulation(
@@ -277,10 +280,10 @@ async def benchmark_simulation_concurrency(
     requests = [
         simulation_request(
             assets=5,
-            paths=2048,
+            path_count=2048,
             horizon_days=90,
-            sampling="mc",
-            seed=123456 + index,
+            sampling_method="mc",
+            random_seed=123456 + index,
         )
         for index in range(4)
     ]
@@ -293,16 +296,16 @@ async def benchmark_simulation_concurrency(
     )
     warmup_request = simulation_request(
         assets=1,
-        paths=256,
+        path_count=256,
         horizon_days=10,
-        sampling="mc",
-        seed=1000,
+        sampling_method="mc",
+        random_seed=1000,
     )
     warmup = await asyncio.gather(
         *(
             pool.submit(
                 warmup_request.model_copy(
-                    update={"seed": 1000 + index},
+                    update={"random_seed": 1000 + index},
                 ).model_dump(mode="json"),
             )
             for index in range(workers)
@@ -343,10 +346,10 @@ async def benchmark_timeout_recycle() -> dict[str, Any]:
     )
     slow = simulation_request(
         assets=5,
-        paths=8192,
+        path_count=8192,
         horizon_days=365,
-        sampling="mc",
-        seed=123456,
+        sampling_method="mc",
+        random_seed=123456,
     )
     task = asyncio.create_task(
         pool.submit(slow.model_dump(mode="json")),
@@ -362,10 +365,10 @@ async def benchmark_timeout_recycle() -> dict[str, Any]:
     recovered = await pool.submit(
         simulation_request(
             assets=1,
-            paths=256,
+            path_count=256,
             horizon_days=10,
-            sampling="mc",
-            seed=1,
+            sampling_method="mc",
+            random_seed=1,
         ).model_dump(mode="json"),
     )
     await pool.shutdown()
@@ -400,6 +403,49 @@ async def benchmark_optimization_persistence() -> dict[str, Any]:
         "equivalent": (result_digest(cold.payload) == result_digest(warm.payload)),
         "cold": worker_metrics(cold),
         "warm": worker_metrics(warm),
+    }
+
+
+async def benchmark_idle_lifecycle(
+    *,
+    name: str,
+    handler_path: str,
+    payload: dict[str, Any],
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    pool = SpawnWorkerPool(
+        name=f"benchmark-{name}-idle",
+        handler_path=handler_path,
+        workers=1,
+        queue_capacity=0,
+        timeout_seconds=timeout_seconds,
+        idle_timeout_seconds=0.2,
+    )
+    try:
+        cold = await pool.submit(payload)
+        warm = await pool.submit(payload)
+        active_pid = warm.worker_pid
+        reap_started = perf_counter()
+        deadline = reap_started + 5
+        while pool.process_ids and perf_counter() < deadline:
+            await asyncio.sleep(0.01)
+        idle_reap_seconds = perf_counter() - reap_started
+        reaped = pool.process_ids == ()
+        resident_worker_count_after_idle = len(pool.process_ids)
+        restarted = await pool.submit(payload)
+    finally:
+        await pool.shutdown()
+    return {
+        "equivalent": (result_digest(cold.payload) == result_digest(warm.payload) == result_digest(restarted.payload)),
+        "cold": worker_metrics(cold),
+        "warm": worker_metrics(warm),
+        "idle_timeout_seconds": 0.2,
+        "idle_reap_seconds": idle_reap_seconds,
+        "reaped": reaped,
+        "resident_worker_count_after_idle": resident_worker_count_after_idle,
+        "resident_child_peak_rss_bytes_before_idle": warm.peak_rss_bytes,
+        "restart": worker_metrics(restarted),
+        "restarted_with_new_pid": reaped and restarted.worker_pid != active_pid,
     }
 
 
@@ -468,10 +514,10 @@ async def run_benchmark(repeats: int) -> dict[str, Any]:
             "small_mc",
             simulation_request(
                 assets=1,
-                paths=1024,
+                path_count=1024,
                 horizon_days=30,
-                sampling="mc",
-                seed=123456,
+                sampling_method="mc",
+                random_seed=123456,
                 diagnostics=True,
             ),
         ),
@@ -479,10 +525,10 @@ async def run_benchmark(repeats: int) -> dict[str, Any]:
             "small_qmc",
             simulation_request(
                 assets=1,
-                paths=1024,
+                path_count=1024,
                 horizon_days=30,
-                sampling="qmc",
-                seed=4096,
+                sampling_method="qmc",
+                sobol_start_index=4096,
                 diagnostics=True,
             ),
         ),
@@ -490,10 +536,10 @@ async def run_benchmark(repeats: int) -> dict[str, Any]:
             "medium_mc",
             simulation_request(
                 assets=5,
-                paths=4096,
+                path_count=4096,
                 horizon_days=90,
-                sampling="mc",
-                seed=123456,
+                sampling_method="mc",
+                random_seed=123456,
                 diagnostics=True,
             ),
         ),
@@ -501,10 +547,10 @@ async def run_benchmark(repeats: int) -> dict[str, Any]:
             "medium_qmc",
             simulation_request(
                 assets=5,
-                paths=4096,
+                path_count=4096,
                 horizon_days=90,
-                sampling="qmc",
-                seed=4096,
+                sampling_method="qmc",
+                sobol_start_index=4096,
                 diagnostics=True,
             ),
         ),
@@ -512,10 +558,10 @@ async def run_benchmark(repeats: int) -> dict[str, Any]:
             "long_mc",
             simulation_request(
                 assets=1,
-                paths=2048,
+                path_count=2048,
                 horizon_days=365,
-                sampling="mc",
-                seed=123456,
+                sampling_method="mc",
+                random_seed=123456,
                 diagnostics=True,
             ),
         ),
@@ -559,6 +605,24 @@ async def run_benchmark(repeats: int) -> dict[str, Any]:
     simulation_speedups = [run["one_worker"]["wall_seconds"] / run["two_workers"]["wall_seconds"] for run in simulation_concurrency]
     optimization_speedups = [run["one_worker"]["wall_seconds"] / run["two_workers"]["wall_seconds"] for run in optimization_concurrency]
     matrix_summary = {status: sum(row["status"] == status for row in matrix) for status in {row["status"] for row in matrix}}
+    simulation_idle_lifecycle = await benchmark_idle_lifecycle(
+        name="simulation",
+        handler_path=SIMULATION_HANDLER,
+        payload=simulation_request(
+            assets=1,
+            path_count=256,
+            horizon_days=10,
+            sampling_method="mc",
+            random_seed=4242,
+        ).model_dump(mode="json"),
+        timeout_seconds=30,
+    )
+    optimization_idle_lifecycle = await benchmark_idle_lifecycle(
+        name="optimization",
+        handler_path=OPTIMIZATION_HANDLER,
+        payload=optimization_request().model_dump(mode="json"),
+        timeout_seconds=60,
+    )
     return {
         "environment": {
             "python": platform.python_version(),
@@ -583,9 +647,15 @@ async def run_benchmark(repeats: int) -> dict[str, Any]:
         "optimization_concurrency": optimization_concurrency,
         "optimization_concurrency_median_speedup": (statistics.median(optimization_speedups)),
         "timeout_recycle": await benchmark_timeout_recycle(),
+        "simulation_idle_lifecycle": simulation_idle_lifecycle,
+        "optimization_idle_lifecycle": optimization_idle_lifecycle,
         "decision": {
             "process_isolation": "always",
             "default_workers_per_pool": 1,
+            "default_idle_timeout_seconds": {
+                "simulation": 600,
+                "optimization": 600,
+            },
             "multiple_workers_configurable": True,
             "selection_rule": ("Default remains one worker because concurrency gains " "must be weighed against measured per-process RSS; " "operators may configure more workers for concurrent load."),
         },
@@ -596,7 +666,17 @@ def main() -> int:
     args = parse_args()
     report = asyncio.run(run_benchmark(args.repeats))
     equivalent = all(row["equivalent"] for row in report["simulation_representative"])
-    equivalent = equivalent and report["simulation_cache"]["equivalent"] and report["optimization_persistence"]["equivalent"] and report["timeout_recycle"]["timed_out"] and report["timeout_recycle"]["worker_recycled"]
+    equivalent = (
+        equivalent
+        and report["simulation_cache"]["equivalent"]
+        and report["optimization_persistence"]["equivalent"]
+        and report["timeout_recycle"]["timed_out"]
+        and report["timeout_recycle"]["worker_recycled"]
+        and report["simulation_idle_lifecycle"]["equivalent"]
+        and report["simulation_idle_lifecycle"]["restarted_with_new_pid"]
+        and report["optimization_idle_lifecycle"]["equivalent"]
+        and report["optimization_idle_lifecycle"]["restarted_with_new_pid"]
+    )
     report["status"] = "ok" if equivalent else "failed"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

@@ -26,6 +26,7 @@ def get_simulation_worker_pool() -> SpawnWorkerPool:
                 workers=settings.RISK_SIMULATION_WORKERS,
                 queue_capacity=(settings.RISK_SIMULATION_QUEUE_CAPACITY),
                 timeout_seconds=(settings.RISK_SIMULATION_TIMEOUT_SECONDS),
+                idle_timeout_seconds=(settings.RISK_SIMULATION_IDLE_TIMEOUT_SECONDS),
             )
         return _simulation_pool
 
@@ -41,6 +42,7 @@ def get_optimization_worker_pool() -> SpawnWorkerPool:
                 workers=settings.RISK_OPTIMIZATION_WORKERS,
                 queue_capacity=(settings.RISK_OPTIMIZATION_QUEUE_CAPACITY),
                 timeout_seconds=(settings.RISK_OPTIMIZATION_TIMEOUT_SECONDS),
+                idle_timeout_seconds=(settings.RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS),
             )
         return _optimization_pool
 

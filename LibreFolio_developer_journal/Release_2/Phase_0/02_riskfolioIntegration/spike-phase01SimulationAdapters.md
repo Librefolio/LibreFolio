@@ -10,7 +10,8 @@
 **QuantLib 1.43 è l'unico motore production della simulazione GBM.**
 
 - MC: RNG pseudo-random QuantLib + `GaussianMultiPathGenerator`;
-- QMC: `SobolRsg.skipTo(seed)` + `InvCumulativeSobolGaussianRsg` +
+- QMC: `SobolRsg.skipTo(sobol_start_index)` +
+  `InvCumulativeSobolGaussianRsg` +
   `StochasticProcessArray.evolve`;
 - NumPy: algebra, aggregazione e oracle; nessun adapter production;
 - RQMC: rimosso dal contratto;
@@ -74,8 +75,9 @@ Pendenza log2:
 - media: `-0,648`;
 - covarianza: `-0,283`.
 
-Entrambe negative; l'errore finale è inferiore a quello iniziale. Il `seed` QMC è
-l'indice iniziale Sobol, applicato con `skipTo`, non un parametro di scrambling.
+Entrambe negative; l'errore finale è inferiore a quello iniziale.
+`sobol_start_index` è l'indice iniziale Sobol applicato con `skipTo`, non un seed
+casuale né un parametro di scrambling.
 
 ## 5. Isolamento e equivalenza
 
@@ -108,7 +110,7 @@ del binding e del percorso generico richiesto dalla semantica `skipTo`.
 - nessun SciPy Sobol/`ndtri` nel runtime;
 - MC/QMC QuantLib soltanto;
 - limite Sobol `asset × giorni <= 21.201`;
-- seed riproducibile per entrambi i sampling;
+- `random_seed` MC e `sobol_start_index` QMC riproducibili e mutuamente esclusivi;
 - cache content-keyed;
 - timeout/crash riciclano la sola lane simulation;
 - nessun fallback silenzioso: un errore QuantLib è esplicito.

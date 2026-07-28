@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import logging
 import multiprocessing
 import os
 import pickle
@@ -15,6 +16,8 @@ import traceback
 import uuid
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class SpawnWorkerError(RuntimeError):
@@ -314,6 +317,7 @@ class SpawnWorkerPool:
         workers: int,
         queue_capacity: int,
         timeout_seconds: float,
+        idle_timeout_seconds: float = 0.0,
     ) -> None:
         if workers < 1:
             raise ValueError("spawn worker count must be positive")
@@ -325,11 +329,16 @@ class SpawnWorkerPool:
             raise ValueError(
                 "spawn worker timeout must be positive",
             )
+        if idle_timeout_seconds < 0:
+            raise ValueError(
+                "spawn worker idle timeout cannot be negative",
+            )
         self.name = name
         self.handler_path = handler_path
         self.workers = workers
         self.queue_capacity = queue_capacity
         self.timeout_seconds = timeout_seconds
+        self.idle_timeout_seconds = idle_timeout_seconds
         context = multiprocessing.get_context("spawn")
         self._lanes = [
             _WorkerLane(
@@ -348,6 +357,8 @@ class SpawnWorkerPool:
         self._state_lock = asyncio.Lock()
         self._pending = 0
         self._closed = False
+        self._idle_generation = 0
+        self._idle_task: asyncio.Task[None] | None = None
 
     @property
     def process_ids(self) -> tuple[int, ...]:
@@ -360,6 +371,7 @@ class SpawnWorkerPool:
                 raise SpawnWorkerError(
                     f"{self.name} pool is closed",
                 )
+            self._cancel_idle_reap()
             capacity = self.workers + self.queue_capacity
             if self._pending >= capacity:
                 raise SpawnWorkerQueueFullError(
@@ -388,13 +400,63 @@ class SpawnWorkerPool:
                 self._available.put_nowait(lane_index)
             async with self._state_lock:
                 self._pending -= 1
+                if self._pending == 0:
+                    self._schedule_idle_reap()
 
     async def shutdown(self) -> None:
+        idle_task: asyncio.Task[None] | None
         async with self._state_lock:
             if self._closed:
                 return
             self._closed = True
+            self._idle_generation += 1
+            idle_task = self._idle_task
+            self._idle_task = None
+            if idle_task is not None and not idle_task.done():
+                idle_task.cancel()
+        if idle_task is not None:
+            await asyncio.gather(idle_task, return_exceptions=True)
         await asyncio.gather(*(asyncio.to_thread(lane.stop) for lane in self._lanes))
+
+    def _cancel_idle_reap(self) -> None:
+        self._idle_generation += 1
+        task = self._idle_task
+        self._idle_task = None
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _schedule_idle_reap(self) -> None:
+        if self.idle_timeout_seconds <= 0 or self._closed or not self.process_ids:
+            return
+        self._idle_generation += 1
+        generation = self._idle_generation
+        task = asyncio.create_task(
+            self._reap_after_idle(generation),
+            name=f"{self.name}-idle-reaper",
+        )
+        self._idle_task = task
+        task.add_done_callback(self._idle_reap_done)
+
+    def _idle_reap_done(self, task: asyncio.Task[None]) -> None:
+        if self._idle_task is task:
+            self._idle_task = None
+        if task.cancelled():
+            return
+        exception = task.exception()
+        if exception is not None:
+            logger.error(
+                "%s idle reaper failed",
+                self.name,
+                exc_info=exception,
+            )
+
+    async def _reap_after_idle(self, generation: int) -> None:
+        await asyncio.sleep(self.idle_timeout_seconds)
+        async with self._state_lock:
+            if self._closed or self._pending != 0 or generation != self._idle_generation:
+                return
+            self._idle_task = None
+            await asyncio.gather(*(asyncio.to_thread(lane.stop) for lane in self._lanes))
 
 
 __all__ = [

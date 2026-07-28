@@ -1,6 +1,6 @@
 # Benchmark P12 corretto — Pool quant persistenti
 
-**Data**: 28 Luglio 2026
+**Data**: 28 Luglio 2026, audit/remediation incluso
 **Gate**: G5 / P12
 **Piano**:
 [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md)
@@ -14,9 +14,10 @@ Production usa due failure domain separati:
 - pool simulation QuantLib;
 - pool optimization Riskfolio.
 
-Entrambi sono lazy, persistenti, bounded e configurabili. Il default resta un worker
-per pool; due worker sono disponibili per carichi concorrenti e mostrano un beneficio
-warm reale, al costo di raddoppiare circa la RAM child.
+Entrambi sono lazy, bounded e configurabili. Restano persistenti mentre ricevono
+lavoro, ma vengono chiusi dopo un timeout idle configurabile e ripartono lazy. Il
+default resta un worker per pool; due worker sono disponibili per carichi concorrenti
+e mostrano un beneficio warm reale, al costo di raddoppiare circa la RAM child.
 
 Non esiste più una scelta `to_thread` vs processi: P12 decide solo il numero di worker.
 
@@ -24,6 +25,8 @@ Non esiste più una scelta `to_thread` vs processi: P12 decide solo il numero di
 
 - `scripts/spikes/risk/run_simulation_scale_benchmark.py`
 - output: `/tmp/libreFolio_quant_worker_benchmark.json`
+- rerun remediation:
+  `/tmp/libreFolio_quant_worker_benchmark_20260728_idle_reap.json`
 
 ```bash
 pipenv run python scripts/spikes/risk/run_simulation_scale_benchmark.py \
@@ -118,7 +121,7 @@ per-pool consente di abilitarli senza cambiare architettura.
 Il costo cold è quasi interamente import CVXPY/Riskfolio/solver; il worker persistente
 lo paga una volta.
 
-## 8. Timeout e recycle
+## 8. Timeout/crash e recycle
 
 Un job QuantLib è stato forzato oltre timeout:
 
@@ -127,13 +130,41 @@ Un job QuantLib è stato forzato oltre timeout:
 - richiesta successiva completata con PID nuovo;
 - nessun fallback nello stesso processo web.
 
-## 9. Conseguenze operative
+## 9. Idle reap e restart lazy
+
+Il rerun remediation usa timeout idle `0,2 s` e verifica entrambi i failure domain:
+
+| Pool | Cold | Warm | RSS child | Reap osservato | Restart cold |
+|---|---:|---:|---:|---:|---:|
+| Simulation | `1,067 s` | `0,002722 s` | `171,3 MB` | `0,416 s`, stop incluso | `1,197 s` |
+| Optimization | `3,075 s` | `0,016835 s` | `340,4 MB` | `0,645 s`, stop incluso | `2,961 s` |
+
+In entrambi i casi:
+
+- il PID non è più vivo dopo il reap;
+- il job successivo usa un PID nuovo;
+- il reaper parte solo con `_pending == 0`;
+- richieste queued/in-flight non vengono interrotte;
+- tutte le lane di un pool multi-worker vengono chiuse e ricreate;
+- tre cicli consecutivi reap/restart non lasciano processi orfani;
+- timeout `0` disabilita il comportamento.
+
+L'ultimo rerun a una ripetizione misura anche speedup concorrente `2,144x`
+simulation e `2,471x` optimization. Il run principale a due ripetizioni resta il
+riferimento per la decisione del default; entrambi confermano che `>1` può aiutare.
+
+Il default production `600 s` evita processi QuantLib/Riskfolio residenti
+indefinitamente senza introdurre churn sui normali burst di richieste.
+
+## 10. Conseguenze operative
 
 - process isolation obbligatorio;
 - default `1` worker simulation + `1` optimization;
 - `>1` configurabile e misurato;
 - queue bounded e backpressure esplicita;
 - timeout/crash riciclano una sola lane;
+- idle timeout chiude tutte le lane solo a pool inattivo;
+- restart dopo idle resta lazy e trasparente;
 - shutdown idempotente nel lifespan;
 - cache evita job identici;
 - P12 non giudica la correttezza di QuantLib tramite tempi NumPy.

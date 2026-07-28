@@ -16,6 +16,8 @@ from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.prices import FAPriceQueryItem
 from backend.app.schemas.risk import RiskResultMetadata, RiskReturnBasis
 from backend.app.schemas.signals import (
+    SignalAiDescription,
+    SignalAiOutputDescription,
     SignalAnnotationRequest,
     SignalAnnotationSampling,
     SignalAvailability,
@@ -54,6 +56,7 @@ from backend.app.schemas.signals import (
     SignalRequest,
     SignalResult,
     SignalSeriesKind,
+    SignalSourceCapability,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalThresholdDirection,
@@ -62,6 +65,7 @@ from backend.app.schemas.signals import (
     SignalValueRegion,
     SignalValueSource,
     SignalViewTransform,
+    SignalVolumeKind,
     SignalWarmupMetadata,
     SignalWarmupRequirement,
     SignalWarning,
@@ -278,6 +282,35 @@ class TestNeutralInputs:
         assert context.target_currency == "EUR"
         assert context.data_policy == SignalDataPolicy.STRICT_CONTIGUOUS
 
+    def test_execution_context_defaults_to_unsupported_source_capability(self):
+        """Safe-by-default: contexts built without an explicit capability
+        never accidentally grant meaningful-volume trust."""
+        context = SignalExecutionContext(
+            domain=SignalDomain.ASSET,
+            requested_range=DateRangeModel(start=DAY_1, end=DAY_2),
+            source_reference="asset:42",
+        )
+        assert context.source_capability.supports_meaningful_volume is False
+        assert context.source_capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+
+class TestSignalSourceCapability:
+    def test_default_is_unsupported_and_unknown(self):
+        capability = SignalSourceCapability()
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_supported_capability_can_declare_traded_shares(self):
+        capability = SignalSourceCapability(supports_meaningful_volume=True, volume_kind=SignalVolumeKind.TRADED_SHARES)
+        assert capability.supports_meaningful_volume is True
+        assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
+
+    def test_unsupported_capability_rejects_a_declared_volume_kind(self):
+        """A source that doesn't support meaningful volume can't claim a
+        specific volume kind — prevents inconsistent half-declarations."""
+        with pytest.raises(ValidationError, match="volume_kind"):
+            SignalSourceCapability(supports_meaningful_volume=False, volume_kind=SignalVolumeKind.TRADED_SHARES)
+
 
 class TestWarmupAndRequirements:
     def test_warmup_total_must_match_components(self):
@@ -326,6 +359,20 @@ class TestWarmupAndRequirements:
             comparison_asset_param="comparison_asset_id",
         )
         assert requirements.comparison_asset_param == "comparison_asset_id"
+
+    def test_requires_meaningful_volume_needs_volume_price_field(self):
+        with pytest.raises(ValidationError, match="requires_meaningful_volume"):
+            SignalInputRequirements(
+                price_fields=[SignalPriceField.CLOSE],
+                requires_meaningful_volume=True,
+            )
+
+    def test_requires_meaningful_volume_is_accepted_with_volume_field(self):
+        requirements = SignalInputRequirements(
+            price_fields=[SignalPriceField.CLOSE, SignalPriceField.VOLUME],
+            requires_meaningful_volume=True,
+        )
+        assert requirements.requires_meaningful_volume is True
 
 
 class TestOutputContracts:
@@ -695,6 +742,50 @@ class TestRequestAndCatalog:
         assert length_schema["x-control-order"] == 1
         assert dumped["compatible_domains"] == ["asset", "fx"]
         assert json.loads(catalog.model_dump_json()) == dumped
+
+    def test_catalog_auto_populates_ai_description_when_omitted(self):
+        """SignalCatalogDefinition derives ai_description from its own
+        existing fields when the caller doesn't supply one — keeping the
+        catalog the single source of truth without per-caller boilerplate."""
+        catalog = make_catalog()
+        assert catalog.ai_description is not None
+        assert catalog.ai_description.signal_code == catalog.signal_code
+        assert catalog.ai_description.semantic_id == catalog.semantic_id
+        assert catalog.ai_description.semantic_description == catalog.semantic_description
+        assert catalog.ai_description.category == catalog.category
+        assert len(catalog.ai_description.outputs) == len(catalog.output_specs)
+        assert catalog.ai_description.outputs[0].semantic_id == catalog.output_specs[0].semantic_id
+        assert catalog.ai_events == []
+
+    def test_catalog_preserves_explicit_ai_description(self):
+        """An explicitly supplied ai_description is never overwritten by
+        the auto-populate validator."""
+        explicit = SignalAiDescription(
+            signal_code="EMA",
+            semantic_id="custom_semantic_id",
+            semantic_description="Custom AI-facing description.",
+            category=SignalCategory.TREND,
+            outputs=(SignalAiOutputDescription(key="custom", semantic_id="custom.value", semantic_description="Custom output.", unit=SignalUnit.PRICE),),
+        )
+        catalog = SignalCatalogDefinition(
+            signal_code="ema",
+            implementation_version="1.0.0",
+            category=SignalCategory.TREND,
+            display_name_key="signals.ema.name",
+            description_key="signals.ema.description",
+            semantic_id="exponential_moving_average",
+            semantic_description="Smooths prices with greater weight on recent observations.",
+            icon="activity",
+            docs_path="financial-theory/technical-analysis/indicators/ema/",
+            params_schema=DemoParams.model_json_schema(),
+            default_params=DemoParams().model_dump(mode="json"),
+            input_requirements=SignalInputRequirements(price_fields=[SignalPriceField.CLOSE]),
+            output_specs=[make_output_spec()],
+            compatible_domains=[SignalDomain.ASSET, SignalDomain.FX],
+            ai_description=explicit,
+        )
+        assert catalog.ai_description.semantic_id == "custom_semantic_id"
+        assert catalog.ai_description.outputs[0].key == "custom"
 
     def test_catalog_rejects_duplicate_outputs_and_domains(self):
         catalog = make_catalog().model_dump()

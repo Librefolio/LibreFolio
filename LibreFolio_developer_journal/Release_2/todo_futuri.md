@@ -32,3 +32,20 @@ revisit, and a link to the detailed plan if one exists.
   in-process dict when no external cache is configured (optional dependency).
 - **Trigger to revisit**: together with the SearXNG Fase B decision (shared Redis), or if prod
   moves to multi-worker uvicorn.
+
+---
+
+## Risk Analysis
+
+### RQMC with explicit scrambling contract (low priority — 2026-07-28)
+- **What**: re-evaluate randomized quasi-Monte Carlo only when the QuantLib Python
+  binding exposes a complete scrambling path suitable for production.
+- **Why deferred**: production now supports MC and QMC entirely in QuantLib. The
+  previous SciPy RQMC path was removed, and its overloaded `seed` mixed random seed,
+  Sobol offset and scrambling semantics.
+- **Required contract**: separate scramble seed from `sobol_start_index`; never
+  overload either field.
+- **Required gate**: convergence across randomized replicates, QuantLib-only
+  execution inside the `spawn` worker and no silent SciPy production fallback.
+- **Trigger to revisit**: a newer QuantLib binding exposes the required scrambling
+  primitives or a separately approved production engine is adopted.

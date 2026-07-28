@@ -2,21 +2,26 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import numpy as np
 import pytest
 import talib
 
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
 from backend.app.schemas.signals import (
     SignalAvailabilityReason,
     SignalDomain,
     SignalExecutionContext,
     SignalRequest,
+    SignalSourceCapability,
     SignalStatus,
+    SignalVolumeKind,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
 from backend.app.services.signal_plugins import mfi as mfi_module
 from backend.app.services.signal_plugins import obv as obv_module
+from backend.app.services.signal_plugins.base import SignalUnavailableError
 from backend.app.services.signal_plugins.mfi import (
     MfiSignalParams,
     MfiSignalPlugin,
@@ -435,6 +440,10 @@ async def test_volume_plugins_are_unavailable_on_short_history(
             end=points[-1].date,
         ),
         source_reference="asset:short-volume",
+        source_capability=SignalSourceCapability(
+            supports_meaningful_volume=True,
+            volume_kind=SignalVolumeKind.TRADED_SHARES,
+        ),
     )
     result = (
         await SignalService().compute(
@@ -465,6 +474,10 @@ async def test_obv_single_point_is_partial_not_unavailable(
             end=point[0].date,
         ),
         source_reference="asset:obv-single",
+        source_capability=SignalSourceCapability(
+            supports_meaningful_volume=True,
+            volume_kind=SignalVolumeKind.TRADED_SHARES,
+        ),
     )
     result = (
         await SignalService().compute(
@@ -482,3 +495,85 @@ async def test_obv_single_point_is_partial_not_unavailable(
 
     assert result.status == SignalStatus.PARTIAL
     assert result.series[0].points[0].value == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("signal_code", ["MFI", "OBV"])
+async def test_volume_plugins_are_unavailable_for_unknown_source_capability(
+    signal_code,
+    neutral_points,
+):
+    """A source that hasn't declared meaningful-volume support (the default,
+    e.g. mixed/unregistered/manual sources) must gate MFI/OBV closed with a
+    distinct MISSING_SOURCE_CAPABILITY reason — never silently compute."""
+    points = neutral_points["volatile"][-1000:]
+    context = SignalExecutionContext(
+        domain=SignalDomain.ASSET,
+        requested_range=DateRangeModel(
+            start=points[-VISIBLE_POINTS].date,
+            end=points[-1].date,
+        ),
+        source_reference="asset:unknown-source",
+        # source_capability omitted -> defaults to unsupported/unknown.
+    )
+    result = (
+        await SignalService().compute(
+            [
+                SignalRequest(
+                    instance_id=signal_code,
+                    signal_code=signal_code,
+                    params={},
+                )
+            ],
+            points,
+            context,
+        )
+    )[0]
+
+    assert result.status == SignalStatus.UNAVAILABLE
+    assert result.availability.reason_code == SignalAvailabilityReason.MISSING_SOURCE_CAPABILITY
+
+
+@pytest.mark.parametrize("plugin_class", [MfiSignalPlugin, ObvSignalPlugin])
+def test_volume_plugins_reject_negative_volume(plugin_class, neutral_points):
+    """Negative volume is structurally invalid even though the schema's
+    finiteness check alone would let it through."""
+    points = neutral_points["volatile"][-30:]
+    tampered = list(points)
+    tampered[-1] = tampered[-1].model_copy(update={"volume": Decimal("-1")})
+
+    with pytest.raises(SignalUnavailableError, match="non-negative"):
+        plugin_class.validate_input(tampered, [], plugin_class.validate_params({}), execution_context(points))
+
+
+@pytest.mark.parametrize("plugin_class", [MfiSignalPlugin, ObvSignalPlugin])
+def test_volume_plugins_reject_sparse_directly_observed_volume(plugin_class, neutral_points):
+    """Volume that is mostly backward-filled (stale, not fresh evidence)
+    fails the plugin's own observed-coverage check even when every point has
+    a non-null value."""
+    points = neutral_points["volatile"][-30:]
+    stale_fill = BackwardFillInfo(actual_rate_date=points[0].date, days_back=1)
+    tampered = [point.model_copy(update={"backward_fill_info": stale_fill}) for point in points[:-1]] + [points[-1]]
+
+    with pytest.raises(SignalUnavailableError, match="insufficient directly observed volume"):
+        plugin_class.validate_input(tampered, [], plugin_class.validate_params({}), execution_context(points))
+
+
+@pytest.mark.parametrize("plugin_class", [MfiSignalPlugin, ObvSignalPlugin])
+def test_volume_plugins_reject_non_increasing_dates(plugin_class, neutral_points):
+    """Defense-in-depth: selection logic must never hand the plugin
+    non-strictly-increasing dates."""
+    points = neutral_points["volatile"][-30:]
+    tampered = list(points)
+    tampered[-1] = tampered[-1].model_copy(update={"date": tampered[-2].date})
+
+    with pytest.raises(SignalUnavailableError, match="strictly increasing"):
+        plugin_class.validate_input(tampered, [], plugin_class.validate_params({}), execution_context(points))
+
+
+@pytest.mark.parametrize("plugin_class", [MfiSignalPlugin, ObvSignalPlugin])
+def test_volume_plugins_accept_sufficient_observed_volume(plugin_class, neutral_points):
+    """Sanity check: well-formed, fully-observed volume passes validate_input
+    without raising (positive-path complement to the rejection tests above)."""
+    points = neutral_points["volatile"][-30:]
+    assert plugin_class.validate_input(points, [], plugin_class.validate_params({}), execution_context(points)) is None

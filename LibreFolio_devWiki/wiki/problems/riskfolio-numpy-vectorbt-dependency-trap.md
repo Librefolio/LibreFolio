@@ -13,7 +13,7 @@ related:
 
 ## Symptom
 
-The initially evaluated newer Riskfolio dependency closure introduced
+Riskfolio-Lib 7.3.0 introduced
 `vectorbt → numba`, whose constraints conflicted with LibreFolio's required
 NumPy 2.5.1 baseline. Treating that conflict as proof that Riskfolio itself was
 unusable would have incorrectly removed P13.
@@ -30,7 +30,10 @@ Python/NumPy stack.
 Riskfolio-Lib 7.0.1 was probed and locked with Python 3.13 and NumPy 2.5.1.
 Minimum variance, maximum Sharpe, equal risk contribution, covariance estimators,
 bounds, frontier generation, CLARABEL, and SCS all passed. Neither `vectorbt` nor
-`numba` is present in the final dependency graph.
+`numba` is present in the final dependency graph. A later clean probe explicitly
+retested 7.3.0 with pip, Pipenv, and Docker: all paths preserving NumPy 2.5.1 fail
+because Numba 0.66 requires `numpy<2.5`. The exact 7.0.1 pin is therefore a current
+compatibility decision, not merely an assumption inherited from the first probe.
 
 ## Prevention
 
@@ -40,6 +43,12 @@ bounds, frontier generation, CLARABEL, and SCS all passed. Neither `vectorbt` no
 - Probe imports, solvers, mathematical outputs, Docker architectures, and lock
   reproducibility before accepting or rejecting a quantitative library.
 - Never silently downgrade NumPy or replace the requested engine.
+
+## Impact
+
+P13 portfolio optimization remains available without weakening LibreFolio's NumPy
+baseline or adding vectorbt/Numba to production. The exact 7.0.1 pin is intentional
+and must not be upgraded without repeating the capability and dependency probes.
 
 ## Source files
 

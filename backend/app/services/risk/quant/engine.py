@@ -121,7 +121,7 @@ def validate_resource_budget(
     request: SimulationEngineRequest,
 ) -> None:
     """Reject path matrices that exceed self-hosted limits."""
-    portfolio_cells = request.paths * (request.horizon_days + 1)
+    portfolio_cells = request.path_count * (request.horizon_days + 1)
     if portfolio_cells > MAX_PORTFOLIO_CELLS:
         raise SimulationResourceLimitError(
             "Simulation percentile matrix exceeds the memory budget",
@@ -129,7 +129,7 @@ def validate_resource_budget(
             actual=portfolio_cells,
             limit=MAX_PORTFOLIO_CELLS,
         )
-    stochastic_cells = request.paths * request.horizon_days * len(request.asset_ids)
+    stochastic_cells = request.path_count * request.horizon_days * len(request.asset_ids)
     if stochastic_cells > MAX_STOCHASTIC_CELLS:
         raise SimulationResourceLimitError(
             "Simulation stochastic workload exceeds the compute budget",

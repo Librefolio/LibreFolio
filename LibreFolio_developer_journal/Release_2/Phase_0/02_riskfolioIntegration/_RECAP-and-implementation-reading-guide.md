@@ -1,7 +1,7 @@
 # Recap corretto — Risk Analysis backend (G0-G5)
 
 **Data**: 28 Luglio 2026
-**Stato**: backend G0-G5 completato; stop prima di riprendere G6.
+**Stato**: backend G0-G5 completato e auditato; G6 ripianificato, non eseguito.
 
 ## 1. Esito
 
@@ -10,7 +10,7 @@ La correzione richiesta è completa:
 - nessun adapter production NumPy/SciPy;
 - simulazione MC/QMC production con QuantLib 1.43;
 - calcolo nativo in processi `spawn`, mai nel thread web;
-- due pool separati, lazy e persistenti;
+- due pool separati, lazy, isolati e liberati dopo idle timeout;
 - Riskfolio-Lib 7.0.1 adottata per P13;
 - RQMC rimosso;
 - test matematici basati su oracle motivati;
@@ -26,14 +26,16 @@ Le vecchie conclusioni «NumPy più veloce quindi production», «single
 
 | Ordine | Documento | Ruolo |
 |---:|---|---|
-| 0 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | Handoff autosufficiente per agente di alto livello: richieste, falsa pista, stato reale, gap e decisioni aperte. |
-| 1 | [`contract-phase01RiskMetricsMathematical.md`](./contract-phase01RiskMetricsMathematical.md) | Contratto matematico fondativo. |
-| 2 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | Piano P0-P13 aggiornato con gli esiti. |
-| 3 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | Master G0-G6 e stato corrente. |
-| 4 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | Implementazione corretta P11-P13. |
-| 5 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | Versioni, solver, lock, Docker arm64/amd64. |
-| 6 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | Oracle MC/QMC QuantLib. |
-| 7 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | Cold/warm, RSS, cache, concorrenza, recycle. |
+| 0 | [`report-phase01RiskBackendAuditAndRemediation.md`](./report-phase01RiskBackendAuditAndRemediation.md) | Stato tecnico finale: audit, remediation, prove e replan G6. |
+| 1 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | Handoff storico autosufficiente: richieste, falsa pista e costruzione G0-G5. |
+| 2 | [`contract-phase01RiskMetricsMathematical.md`](./contract-phase01RiskMetricsMathematical.md) | Contratto matematico fondativo. |
+| 3 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | Piano P0-P13 aggiornato con gli esiti. |
+| 4 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | Master G0-G6 e stato corrente. |
+| 5 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | Implementazione corretta P11-P13. |
+| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | Piano G6 riconciliato sul codice reale, non ancora eseguito. |
+| 7 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | Versioni, solver, lock, Docker arm64/amd64. |
+| 8 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | Oracle MC/QMC QuantLib. |
+| 9 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | Cold/warm, RSS, cache, concorrenza, recycle e idle reap. |
 
 ## 3. Architettura backend finale
 
@@ -42,7 +44,8 @@ Le vecchie conclusioni «NumPy più veloce quindi production», «single
 `SpawnWorkerPool` implementa:
 
 - start method `spawn`;
-- lane persistenti create alla prima richiesta;
+- lane create alla prima richiesta, persistenti durante attività;
+- idle reap configurabile e restart lazy;
 - coda bounded e backpressure;
 - timeout hard per job;
 - recycle della sola lane dopo timeout, crash o errore remoto;
@@ -83,7 +86,7 @@ UniformRandomGenerator
 QMC:
 
 ```text
-SobolRsg.skipTo(seed)
+SobolRsg.skipTo(sobol_start_index)
 → InvCumulativeSobolGaussianRsg
 → StochasticProcessArray.evolve
 ```
@@ -93,8 +96,8 @@ Regole:
 - stato iniziale asset normalizzato a `1`;
 - griglia giornaliera, `dt=1/365`;
 - GBM correlato multi-asset;
-- seed MC deterministico;
-- seed QMC = indice iniziale Sobol;
+- `random_seed` MC deterministico;
+- `sobol_start_index` QMC = indice iniziale Sobol;
 - path QMC in potenza di due;
 - limite `asset × horizon_days <= 21.201`;
 - NumPy solo per algebra, aggregazione e oracle;
@@ -241,6 +244,14 @@ Timeout:
 - lane ricreata con PID nuovo;
 - richiesta successiva completata.
 
+Idle:
+
+- default `600 s` distinto per pool;
+- simulation reap `0,416 s`, restart cold `1,197 s`;
+- optimization reap `0,645 s`, restart cold `2,961 s`;
+- nessun reap con job queued/in-flight;
+- PID nuovo al restart.
+
 Matrice P12:
 
 - 72 celle;
@@ -272,10 +283,10 @@ Probe:
 
 Immagine finale:
 
-- tag `librefolio:g5-quantlib-riskfolio-final`;
+- tag `librefolio:risk-audit-remediation`;
 - digest
-  `sha256:fd8d79d6584dd7cf8087f54508f8c73cc66bbcacebe5a206bf46821117bd7999`;
-- dimensione non compressa `2.756.004.428` byte;
+  `sha256:98a2cea750af424ffabf7b9ed01beba0afe329fde445e9d85a240f2d492194ac`;
+- dimensione non compressa `2.781.625.742` byte;
 - smoke: QuantLib/NumPy/Riskfolio + import FastAPI app verdi.
 
 ## 7. Superfici modificate
@@ -320,9 +331,10 @@ Compatibilità:
 
 ## 8. Validazione
 
-- risk service suite: **68 passed**;
+- risk service suite: **74 passed**;
 - risk API: **7 passed**;
-- worker lifecycle: **6 passed**, senza resource-tracker warning;
+- risk schema: **21 passed**;
+- worker lifecycle: **11 passed**, senza resource-tracker warning;
 - oracle QuantLib: `status=ok`;
 - benchmark pool: `status=ok`;
 - Ruff/Black target: verdi;
@@ -347,7 +359,7 @@ Suite backend globale:
 1. Il primo confronto QuantLib/NumPy non era neutrale e usava un cutoff di
    correlazione arbitrario. Risolto con oracle analitici e standard error.
 2. Il seed constructor Sobol QuantLib non sposta lo stream. Risolto con
-   `SobolRsg.skipTo(seed)`.
+   `SobolRsg.skipTo(sobol_start_index)` e campi MC/QMC distinti.
 3. Riskfolio 7.3.0 portava `vectorbt → numba → numpy<2.5`; la capability richiesta
    funziona con Riskfolio 7.0.1 e NumPy 2.5.1.
 4. Un primo lock aveva incluso upgrade wildcard non correlati. Ricostruita la
@@ -372,9 +384,9 @@ Suite backend globale:
 | G2 — serie/metadata | ✅ |
 | G3 — rolling risk | ✅ |
 | G4 — multi-asset deterministico | ✅ |
-| G5 — simulazione/scala/ottimizzazione | ✅ corretto |
-| G6 — frontend funzionale | ⏸️ non ripreso |
-| GF — chiusura integrata | 🟡 dipende da G6 e dal failure AI Export concorrente |
+| G5 — simulazione/scala/ottimizzazione | ✅ corretto e auditato |
+| G6 — frontend funzionale | ⏸️ ripianificato, non eseguito |
+| GF — chiusura integrata | 🟡 dipende da G6 e da worktree stabile |
 
 P0-P13 backend:
 
@@ -392,12 +404,11 @@ Nessun lavoro backend G5 rimasto.
 Rispetto al piano originale:
 
 1. riprendere G6 solo su nuova richiesta;
-2. completare/verificare il wiring funzionale multi-scope già parzialmente presente;
-3. decidere e implementare la UI P13/frontiera;
-4. aggiungere i test funzionali frontend mancanti;
+2. eseguire il nuovo Step 6 riconciliato;
+3. spostare Asset Detail, rimuovere fallback id e aggiungere UI P13 minima;
+4. aggiungere test funzionali mocked e almeno due smoke real-backend;
 5. lasciare fillings/polish/design finale all'utente;
-6. rilanciare la suite backend globale quando il test AI Export concorrente è
-   riallineato;
+6. rilanciare la suite globale quando il worktree concorrente è stabile;
 7. chiudere GF e archiviare la catena di piano.
 
 ## 12. Prompt di ripresa

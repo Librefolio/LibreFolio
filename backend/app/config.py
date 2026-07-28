@@ -25,6 +25,8 @@ Environment Variables (see .env):
     PREVIEW_CACHE_MAX_MB: Image preview cache size in MB (default: 50)
     RISK_SIMULATION_WORKERS: Spawned simulation workers (default: 1)
     RISK_OPTIMIZATION_WORKERS: Spawned optimization workers (default: 1)
+    RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600)
+    RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600)
 """
 
 import os
@@ -114,6 +116,8 @@ class Settings(BaseSettings):
     RISK_OPTIMIZATION_QUEUE_CAPACITY: int = Field(2, ge=0, le=64)
     RISK_SIMULATION_TIMEOUT_SECONDS: float = Field(120.0, gt=0)
     RISK_OPTIMIZATION_TIMEOUT_SECONDS: float = Field(60.0, gt=0)
+    RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: float = Field(600.0, ge=0)
+    RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: float = Field(600.0, ge=0)
 
     model_config = ConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

@@ -33,6 +33,7 @@ from backend.app.schemas.signals import (
 )
 from backend.app.services import signal_service as signal_service_module
 from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signal_plugins.base import SignalUnavailableError
 from backend.app.services.signal_service import (
     SignalRequestValidationError,
     SignalService,
@@ -233,11 +234,52 @@ class AnyEventOnlyPlugin(EventOnlyPlugin):
     input_requirements = SignalInputRequirements(requires_events=True)
 
 
+class HookRecordingPlugin(LineFixturePlugin):
+    """Records validate_input/validate_output invocations for hook-wiring tests."""
+
+    signal_code = "TEST_HOOK_RECORDING"
+    validate_input_calls: list[tuple] = []
+    validate_output_calls: list[tuple] = []
+
+    @classmethod
+    def validate_input(cls, price_points, event_points, params, context):
+        cls.validate_input_calls.append((tuple(price_points), tuple(event_points), params, context))
+
+    @classmethod
+    def validate_output(cls, computation, price_points, event_points, params, context):
+        cls.validate_output_calls.append((computation, tuple(price_points), tuple(event_points), params, context))
+
+
+class RejectingValidateInputPlugin(LineFixturePlugin):
+    """validate_input always rejects — used to test isolation of input-hook failures."""
+
+    signal_code = "TEST_REJECT_VALIDATE_INPUT"
+
+    @classmethod
+    def validate_input(cls, price_points, event_points, params, context):
+        raise SignalUnavailableError(
+            "fixture rejects all input",
+            reason_code=SignalAvailabilityReason.MISSING_SOURCE_CAPABILITY,
+        )
+
+
+class RejectingValidateOutputPlugin(LineFixturePlugin):
+    """validate_output always rejects — used to test isolation of output-hook failures."""
+
+    signal_code = "TEST_REJECT_VALIDATE_OUTPUT"
+
+    @classmethod
+    def validate_output(cls, computation, price_points, event_points, params, context):
+        raise ValueError("fixture rejects all output")
+
+
 @pytest.fixture(autouse=True)
 def reset_fixture_registry():
     FixtureSignalPluginRegistry._plugins = {}
     FixtureSignalPluginRegistry._discovery_done = False
     FixtureSignalPluginRegistry._discovery_errors = ()
+    HookRecordingPlugin.validate_input_calls = []
+    HookRecordingPlugin.validate_output_calls = []
     for module_name in tuple(sys.modules):
         if module_name.startswith(f"{FIXTURE_NAMESPACE}.") and module_name != f"{FIXTURE_NAMESPACE}.registry":
             sys.modules.pop(module_name, None)
@@ -810,6 +852,70 @@ async def test_compute_failure_is_isolated_from_valid_signal():
     results = await service.compute(
         [
             request("broken", "FIXTURE_FAILING"),
+            request("valid", "FIXTURE_LINE", {"length": 2}),
+        ],
+        make_signal_price_points(),
+        make_context(),
+    )
+
+    assert results[0].status == SignalStatus.FAILED
+    assert results[0].error.code == SignalErrorCode.COMPUTE_ERROR
+    assert results[1].status == SignalStatus.OK
+
+
+@pytest.mark.asyncio
+async def test_validate_input_and_validate_output_hooks_are_invoked_with_selected_data():
+    service = make_service(HookRecordingPlugin)
+    context = make_context()
+    price_points = make_signal_price_points()
+    result = (
+        await service.compute(
+            [request("hooked", "TEST_HOOK_RECORDING", {"length": 2})],
+            price_points,
+            context,
+        )
+    )[0]
+
+    assert result.status == SignalStatus.OK
+    assert len(HookRecordingPlugin.validate_input_calls) == 1
+    assert len(HookRecordingPlugin.validate_output_calls) == 1
+
+    input_price_points, input_event_points, input_params, input_context = HookRecordingPlugin.validate_input_calls[0]
+    assert len(input_price_points) > 0
+    assert input_event_points == ()
+    assert input_params.length == 2
+    assert input_context.source_capability == context.source_capability
+
+    output_computation, output_price_points, output_event_points, output_params, output_context = HookRecordingPlugin.validate_output_calls[0]
+    assert output_computation.series[0].key == "average"
+    assert output_price_points == input_price_points
+    assert output_params.length == 2
+    assert output_context.source_capability == context.source_capability
+
+
+@pytest.mark.asyncio
+async def test_validate_input_rejection_is_isolated_from_valid_signal():
+    service = make_service(RejectingValidateInputPlugin)
+    results = await service.compute(
+        [
+            request("rejected", "TEST_REJECT_VALIDATE_INPUT"),
+            request("valid", "FIXTURE_LINE", {"length": 2}),
+        ],
+        make_signal_price_points(),
+        make_context(),
+    )
+
+    assert results[0].status == SignalStatus.UNAVAILABLE
+    assert results[0].availability.reason_code == SignalAvailabilityReason.MISSING_SOURCE_CAPABILITY
+    assert results[1].status == SignalStatus.OK
+
+
+@pytest.mark.asyncio
+async def test_validate_output_rejection_is_isolated_from_valid_signal():
+    service = make_service(RejectingValidateOutputPlugin)
+    results = await service.compute(
+        [
+            request("rejected", "TEST_REJECT_VALIDATE_OUTPUT"),
             request("valid", "FIXTURE_LINE", {"length": 2}),
         ],
         make_signal_price_points(),

@@ -108,6 +108,7 @@ def _run_mc(
     request: SimulationEngineRequest,
     process,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
+    assert request.random_seed is not None
     time_grid = ql.TimeGrid(
         request.horizon_days / 365.0,
         request.horizon_days,
@@ -115,7 +116,7 @@ def _run_mc(
     dimension = process.factors() * request.horizon_days
     uniform = ql.UniformRandomSequenceGenerator(
         dimension,
-        ql.UniformRandomGenerator(request.seed),
+        ql.UniformRandomGenerator(request.random_seed),
     )
     gaussian = ql.GaussianRandomSequenceGenerator(uniform)
     generator = ql.GaussianMultiPathGenerator(
@@ -126,17 +127,17 @@ def _run_mc(
     )
     weights = np.asarray(request.weights, dtype=np.float64)
     portfolio_returns = np.full(
-        (request.paths, request.horizon_days + 1),
+        (request.path_count, request.horizon_days + 1),
         request.cash_weight - 1.0,
         dtype=np.float64,
     )
     terminal_log_returns = np.empty(
-        (request.paths, len(request.asset_ids)),
+        (request.path_count, len(request.asset_ids)),
         dtype=np.float64,
     )
     generation_evolution_seconds = 0.0
     path_aggregation_seconds = 0.0
-    for path_index in range(request.paths):
+    for path_index in range(request.path_count):
         stage_started = time.perf_counter()
         sample = generator.next()
         multi_path = sample.value()
@@ -168,6 +169,7 @@ def _run_qmc(
     request: SimulationEngineRequest,
     process,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
+    assert request.sobol_start_index is not None
     factors = process.factors()
     dimension = factors * request.horizon_days
     sobol = ql.SobolRsg(
@@ -175,23 +177,23 @@ def _run_qmc(
         0,
         ql.SobolRsg.JoeKuoD7,
     )
-    sobol.skipTo(request.seed)
+    sobol.skipTo(request.sobol_start_index)
     gaussian = ql.InvCumulativeSobolGaussianRsg(sobol)
     weights = np.asarray(request.weights, dtype=np.float64)
     portfolio_returns = np.empty(
-        (request.paths, request.horizon_days + 1),
+        (request.path_count, request.horizon_days + 1),
         dtype=np.float64,
     )
     portfolio_returns[:, 0] = 0.0
     terminal_log_returns = np.empty(
-        (request.paths, len(request.asset_ids)),
+        (request.path_count, len(request.asset_ids)),
         dtype=np.float64,
     )
     step_time = 1.0 / 365.0
     rng_seconds = 0.0
     process_evolution_seconds = 0.0
     path_aggregation_seconds = 0.0
-    for path_index in range(request.paths):
+    for path_index in range(request.path_count):
         stage_started = time.perf_counter()
         sample = gaussian.nextSequence()
         normals = tuple(float(value) for value in sample.value())
@@ -248,7 +250,7 @@ def execute_simulation_job(payload: dict[str, Any]) -> dict[str, Any]:
         covariance,
     )
     process_build_seconds = time.perf_counter() - process_started
-    if request.sampling == RiskSamplingStrategy.MC:
+    if request.sampling_method == RiskSamplingStrategy.MC:
         portfolio_returns, terminal_log_returns, stage_timings = _run_mc(
             request,
             process,

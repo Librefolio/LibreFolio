@@ -7085,19 +7085,19 @@
     "semantic_hash": "1a4f24eaf5b436e6bf3e990e7d24d4ba"
   },
   "wiki/decisions/risk-quant-engine-process-boundary.md": {
-    "mtime": 1785246139.411431,
-    "ast_hash": "3306d861a882a7c55e35e14996438e19",
-    "semantic_hash": "3306d861a882a7c55e35e14996438e19"
+    "mtime": 1785254388.4940505,
+    "ast_hash": "af2a74b20194ba1e1ca07740de9b8342",
+    "semantic_hash": "af2a74b20194ba1e1ca07740de9b8342"
   },
   "wiki/problems/quantlib-sobol-seed-skipto.md": {
-    "mtime": 1785246139.4136422,
-    "ast_hash": "e58596e25ee1fd14336eda499227829b",
-    "semantic_hash": "e58596e25ee1fd14336eda499227829b"
+    "mtime": 1785254584.682558,
+    "ast_hash": "90f4f94b1cf67651497d950b64285bff",
+    "semantic_hash": "90f4f94b1cf67651497d950b64285bff"
   },
   "wiki/problems/riskfolio-numpy-vectorbt-dependency-trap.md": {
-    "mtime": 1785246139.415427,
-    "ast_hash": "56542b0dab0bc6ed591d2e4277f84e31",
-    "semantic_hash": "56542b0dab0bc6ed591d2e4277f84e31"
+    "mtime": 1785254584.6845226,
+    "ast_hash": "0eb478ae0a491a3a4148df6efb485686",
+    "semantic_hash": "0eb478ae0a491a3a4148df6efb485686"
   },
   "wiki/problems/spawn-worker-response-queue-semaphore-leak.md": {
     "mtime": 1785246139.414593,
@@ -7105,8 +7105,13 @@
     "semantic_hash": "17fc7e4927dfc190061808f34d88ff25"
   },
   "wiki/sources/phase00-risk-analysis-backend.md": {
-    "mtime": 1785246139.4167318,
-    "ast_hash": "c5ac9a7617ce6586c6920aa24ab44767",
-    "semantic_hash": "c5ac9a7617ce6586c6920aa24ab44767"
+    "mtime": 1785254584.6871934,
+    "ast_hash": "3903564ab5f5697e830ebdf63c3a4a39",
+    "semantic_hash": "3903564ab5f5697e830ebdf63c3a4a39"
+  },
+  "wiki/problems/risk-spawn-worker-idle-residency.md": {
+    "mtime": 1785254388.5001605,
+    "ast_hash": "b163b6a279b4ed76599fe7da27923112",
+    "semantic_hash": "b163b6a279b4ed76599fe7da27923112"
   }
 }

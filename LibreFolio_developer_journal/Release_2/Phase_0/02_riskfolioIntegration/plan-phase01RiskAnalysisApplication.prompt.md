@@ -185,9 +185,9 @@ gap backend?
   content-derived e gli store frontend gestiscono già il refresh.
 - **C (piccola estensione)** *solo* se la Risk Analysis introdurrà una **cache
   propria**: dovrà adottare lo **stesso pattern content-keyed** (chiave che include
-  `price_fingerprint`/fingerprint FX + parametri + `algo_version` + `seed`), così da
-  auto-invalidarsi come il blob. **Nessun D (gap backend), nessun nuovo sistema di
-  invalidazione.**
+  `price_fingerprint`/fingerprint FX + parametri canonici + `algo_version`, incluso
+  `random_seed` MC oppure `sobol_start_index` QMC), così da auto-invalidarsi come il
+  blob. **Nessun D (gap backend), nessun nuovo sistema di invalidazione.**
 
 ---
 
@@ -306,7 +306,8 @@ gap backend?
   `carried_forward_fx_points`, `excluded_assets` (privi di dati valorizzabili).
   `RiskResultMetadata` (nuovo) = contesto esecuzione: periodo, metodo, parametri,
   valuta, annualization factor, mode/composition policy, risk-free, comparison_asset,
-  `algo_version`, `seed`, timestamp. **Asset esclusi per requisito-metrica** → nei
+  `algo_version`, `sampling_method`, `path_count`, `random_seed` MC oppure
+  `sobol_start_index` QMC, timestamp. **Asset esclusi per requisito-metrica** → nei
   metadata del risultato, **non** in `DataQualityReport` (separazione semantica).
 - **Schema dati:** solo Pydantic (nessuna tabella).
 - **Service/Frontend:** i producer popolano i nuovi campi; il FE li mostra (banner/modale).
@@ -568,13 +569,15 @@ gap backend?
   · `RiskMetrics` · `ResultMetadata` · `Rendering` (il grafico a bande/percentili è
   **soltanto uno** dei renderer).
 - **Implementazione:** MC usa generator multi-path QuantLib; QMC usa
-  `SobolRsg.skipTo(seed)`, gaussianizzazione QuantLib e
+  `SobolRsg.skipTo(sobol_start_index)`, gaussianizzazione QuantLib e
   `StochasticProcessArray.evolve`. NumPy aggrega soltanto dopo l'evoluzione.
 - **Frontend:** cono percentili su band `LineChart` (riuso Bollinger), label «simulato».
 - **Dipendenze:** QuantLib (BSD-3, installata in P0) + NumPy/SciPy. **Migrazione:** nessuna.
-- **Test:** seed/riproducibilità; MC vs QMC su casi noti; dimensioni/correlazioni;
-  adapter; convergenza/stabilità; serialize/deserialize input.
-- **Criteri:** adapter unico, seed deterministico, metriche corrette.
+- **Test:** `random_seed`/`sobol_start_index` e riproducibilità; MC vs QMC su casi
+  noti; dimensioni/correlazioni; adapter; convergenza/stabilità;
+  serialize/deserialize input.
+- **Criteri:** adapter unico, controllo di sequenza deterministico e non ambiguo,
+  metriche corrette.
 - **Rischi:** costo SWIG/copia path QMC. **Fallback:** nessuno silenzioso.
 - **Parallelizzabile:** spike sì; integrazione dopo P5. **Bloccante per:** P12.
 
@@ -582,17 +585,20 @@ gap backend?
 - **Stato esecuzione:** ✅ completato.
 - **Obiettivo:** process isolation obbligatorio; benchmark per scegliere il numero
   di worker.
-- **File/componenti:** due pool `spawn` custom separati, lazy, persistenti e bounded.
+- **File/componenti:** due pool `spawn` custom separati, lazy, bounded, persistenti
+  durante attività e chiusi dopo idle timeout configurabile.
 - **Contratto backend:** ogni subprocess importa QuantLib autonomamente, crea localmente
   processi/curve/generatori/handle e configurazioni, riceve **solo input serializzabili**
   (Pydantic/dataclass), restituisce output serializzabili, **non** condivide oggetti
-  QuantLib, **non** riceve connessioni/sessioni/service, **non** dipende da PID/scheduling
-  per il seed. Riproducibilità: master seed → sub-stream per scenario/config/chunk.
-  Granularità: 1 job/worker → 1 scenario/config per worker → 1 finestra/worker → chunk
-  dello stesso job solo se necessario (aggregazione esplicita di
-  distribuzioni/percentili/VaR/CVaR — mai media dei quantili).
+  QuantLib, **non** riceve connessioni/sessioni/service, **non** dipende da
+  PID/scheduling per il controllo di sequenza. Granularità corrente:
+  1 job/worker → 1 scenario/config per worker → nessun chunk interno. Se in futuro
+  viene introdotto chunking QMC, il parent deve assegnare intervalli
+  `sobol_start_index` disgiunti e aggregare esplicitamente
+  distribuzioni/percentili/VaR/CVaR — mai media dei quantili.
 - **Operatività:** max worker (default conservativo self-hosted), coda, timeout,
-  cancellazione, error handling, shutdown ordinato, protezione RAM, dedup richieste,
+  idle reap/restart lazy, cancellazione, error handling, shutdown ordinato,
+  protezione RAM, dedup richieste,
   metriche tempo/memoria; nessun fallback in-process.
 - **Dipendenze:** stdlib. **Migrazione:** nessuna.
 - **Test:** spawn isolation; serialize/deserialize; timeout/error propagation;
@@ -621,7 +627,8 @@ gap backend?
 carried-forward prezzi; backward-filled FX; annualization factor; neutralità flussi
 TWRR; `DataQualityReport`; comparison_asset; rolling beta con asset reale; active return;
 tracking error; Information Ratio; drawdown comparato; comparison_asset uguale al primario;
-comparison_asset a varianza nulla; insufficienza dati; seed/riproducibilità; MC vs QMC su
+comparison_asset a varianza nulla; insufficienza dati; controllo di sequenza/
+riproducibilità; MC vs QMC su
 casi noti; dimensioni/correlazioni; adapter QuantLib; serialize/deserialize input
 subprocess; spawn isolation; timeout/error propagation; convergenza/stabilità; VaR/CVaR
 (`CVaR≥VaR≥0`); PCTR; integration endpoint/service; smoke-test import librerie (P0).

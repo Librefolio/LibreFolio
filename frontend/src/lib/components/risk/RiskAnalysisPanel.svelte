@@ -57,7 +57,8 @@
     let simulationSampling = $state<'mc' | 'qmc'>('mc');
     let simulationHorizonDays = $state(365);
     let simulationPaths = $state(8192);
-    let simulationSeed = $state(123456);
+    let simulationRandomSeed = $state(123456);
+    let simulationSobolStartIndex = $state(123456);
     let syncOpen = $state(false);
 
     const samplingOptions = [
@@ -388,10 +389,10 @@
         try {
             simulationResult = await runSingle('simulation', 'current_composition', {
                 process: 'gbm',
-                sampling: simulationSampling,
+                sampling_method: simulationSampling,
                 horizon_days: simulationHorizonDays,
-                paths: simulationPaths,
-                seed: simulationSeed,
+                path_count: simulationPaths,
+                ...(simulationSampling === 'mc' ? {random_seed: simulationRandomSeed} : {sobol_start_index: simulationSobolStartIndex}),
             });
         } catch (error) {
             console.error('[Risk] Simulation failed:', error);
@@ -689,10 +690,24 @@
                         <SimpleSelect value={String(simulationPaths)} options={pathOptions} compact testId="risk-simulation-paths" onchange={(value) => (simulationPaths = Number(value))} />
                     </div>
                 </label>
-                <label class="text-xs text-gray-500 dark:text-gray-400">
-                    {$t('risk.params.seed')}
-                    <input class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200 disabled:opacity-50" type="number" min="0" step="1" bind:value={simulationSeed} data-testid="risk-simulation-seed" />
-                </label>
+                {#if simulationSampling === 'mc'}
+                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                        {$t('risk.params.randomSeed')}
+                        <input class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="number" min="0" step="1" bind:value={simulationRandomSeed} data-testid="risk-simulation-random-seed" />
+                    </label>
+                {:else}
+                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                        {$t('risk.params.sobolStartIndex')}
+                        <input
+                            class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                            type="number"
+                            min="0"
+                            step="1"
+                            bind:value={simulationSobolStartIndex}
+                            data-testid="risk-simulation-sobol-start-index"
+                        />
+                    </label>
+                {/if}
                 <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runSimulation} disabled={simulationLoading} data-testid="risk-simulation-run">
                     <Play size={13} />
                     {$t('risk.actions.simulate')}
@@ -712,7 +727,7 @@
                         <LineChart data={simulationData} overlaySignals={simulationOverlay} currency="%" viewMode="percentage" colorByBaseline={false} showGradient={false} height="320px" />
                     </div>
                     <p class="mt-2 text-xs text-gray-400 dark:text-gray-500" data-testid="risk-simulation-assumptions">
-                        {$t('risk.simulation.assumptions', {values: {paths: simulationOutput.paths, days: simulationOutput.horizon_days}})}
+                        {$t('risk.simulation.assumptions', {values: {paths: simulationOutput.path_count, days: simulationOutput.horizon_days}})}
                     </p>
                 {/if}
             </RiskResultFrame>

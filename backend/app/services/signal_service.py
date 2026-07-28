@@ -44,6 +44,7 @@ from backend.app.schemas.signals import (
     SignalResult,
     SignalSeries,
     SignalSeriesKind,
+    SignalSourceCapability,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalValueSource,
@@ -319,6 +320,7 @@ class SignalService:
         *,
         events_loaded: bool = False,
         prepared_series_bundle: Optional[SignalPreparedSeriesBundle] = None,
+        source_capability: Optional[SignalSourceCapability] = None,
     ) -> list[SignalResult]:
         """Execute the entire signal batch in one worker thread."""
         return await asyncio.to_thread(
@@ -328,6 +330,7 @@ class SignalService:
             tuple(event_points),
             events_loaded,
             prepared_series_bundle,
+            source_capability,
         )
 
     async def compute(
@@ -340,6 +343,7 @@ class SignalService:
         events_loaded: bool = False,
         annotation_requests: Sequence[SignalAnnotationRequest | dict[str, Any]] = (),
         prepared_series_bundle: Optional[SignalPreparedSeriesBundle] = None,
+        source_capability: Optional[SignalSourceCapability] = None,
     ) -> list[SignalResult]:
         plan = self.prepare_plan(
             requests,
@@ -352,6 +356,7 @@ class SignalService:
             event_points,
             events_loaded=events_loaded,
             prepared_series_bundle=prepared_series_bundle,
+            source_capability=source_capability,
         )
 
     def _execute_sync(
@@ -361,11 +366,18 @@ class SignalService:
         event_points: tuple[SignalEventPoint, ...],
         events_loaded: bool,
         prepared_series_bundle: Optional[SignalPreparedSeriesBundle],
+        source_capability: Optional[SignalSourceCapability] = None,
     ) -> list[SignalResult]:
         input_data = SignalInputData(
             price_points=list(price_points),
             event_points=list(event_points),
         )
+        # `plan.context` is frozen at prepare_plan() time, before actual
+        # price data (and thus source capability) is known. Callers that
+        # discover capability from the loaded series (e.g. AssetSourceManager)
+        # pass it here so it can be merged in just before per-computation
+        # execution, without needing to re-plan.
+        base_context = plan.context if source_capability is None else plan.context.model_copy(update={"source_capability": source_capability})
         result_by_instance = {instance_id: result.model_copy(deep=True) for instance_id, result in plan.preflight_results.items()}
         extended_series_by_instance: dict[
             str,
@@ -384,7 +396,7 @@ class SignalService:
                     forced_unavailable_reason,
                 ) = self._prepared_signal_inputs(
                     computation,
-                    plan.context,
+                    base_context,
                     input_data.price_points,
                     prepared_series_bundle,
                 )
@@ -437,7 +449,7 @@ class SignalService:
                 plan.annotation_requests,
                 input_data.price_points,
                 extended_series_by_instance,
-                plan.context,
+                base_context,
             )
 
         return [result_by_instance[request.instance_id] for request in plan.requests]
@@ -744,6 +756,7 @@ class SignalService:
             visible_units=visible_units,
             warmup_complete=warmup_complete,
             calendar_gap_slots=calendar_gap_slots,
+            source_capability=context.source_capability,
         )
         availability = SignalAvailability(
             domain_compatible=planned.statically_compatible,
@@ -796,6 +809,12 @@ class SignalService:
             *risk_warnings,
         ]
         try:
+            plugin_class.validate_input(
+                selected_points,
+                selected_events,
+                planned.params,
+                context,
+            )
             raw_computation = plugin_class().compute(
                 selected_points,
                 selected_events,
@@ -807,6 +826,13 @@ class SignalService:
                 plugin_class,
                 computation,
                 selected_points,
+            )
+            plugin_class.validate_output(
+                computation,
+                selected_points,
+                selected_events,
+                planned.params,
+                context,
             )
             all_series_have_finite, visible_has_missing = visible_signal_output_state(
                 computation.series,

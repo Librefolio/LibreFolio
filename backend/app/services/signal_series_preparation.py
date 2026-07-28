@@ -18,6 +18,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeries,
+    SignalSourceCapability,
     SignalWarmupMetadata,
     SignalWarning,
     SignalWarningCode,
@@ -307,6 +308,7 @@ def resolve_signal_availability(
     visible_units: int,
     warmup_complete: bool,
     calendar_gap_slots: int,
+    source_capability: SignalSourceCapability,
 ) -> tuple[bool, Optional[SignalAvailabilityReason], bool]:
     """Resolve signal availability from prepared coverage and plugin requirements."""
     if not statically_compatible:
@@ -315,6 +317,11 @@ def resolve_signal_availability(
         return False, SignalAvailabilityReason.MISSING_EVENT_TYPES, False
     if missing_price_fields:
         return False, SignalAvailabilityReason.MISSING_INPUT_FIELDS, False
+    if requirements.requires_meaningful_volume and not source_capability.supports_meaningful_volume:
+        # Semantic gate: the volume field is structurally present (checked
+        # above) but its *meaning* is not vouched for by the source(s) that
+        # produced this series (unknown/mixed/manual/no-volume sources).
+        return False, SignalAvailabilityReason.MISSING_SOURCE_CAPABILITY, False
     if requirements.price_fields and coverage.coverage_ratio < requirements.minimum_coverage:
         return (
             False,

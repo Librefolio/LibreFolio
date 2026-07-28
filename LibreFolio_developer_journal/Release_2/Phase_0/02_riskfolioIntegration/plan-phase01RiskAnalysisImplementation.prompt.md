@@ -1,6 +1,7 @@
 # Piano Implementativo — Risk Analysis (Fase 0.1)
 
-**Stato**: ⏸️ PAUSA RICHIESTA — G0-G5 backend chiusi; G6 non ripreso.
+**Stato**: ⏸️ PAUSA RICHIESTA — G0-G5 backend chiusi e auditati; G6 ripianificato,
+non implementato.
 
 **Data avvio**: 27 Luglio 2026
 
@@ -71,7 +72,7 @@ precedente non necessariamente committato:
 | 3 | [`plan-phase01Step3RollingRiskBackend.prompt.md`](./plan-phase01Step3RollingRiskBackend.prompt.md) | P3-P4 backend | ✅ G3 |
 | 4 | [`plan-phase01Step4MultiAssetRiskBackend.prompt.md`](./plan-phase01Step4MultiAssetRiskBackend.prompt.md) | P5 + backend P6-P10 | ✅ G4 |
 | 5 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | P11-P13 | ✅ G5 corretto e verificato |
-| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | UI P4/P6-P13 | ⏸️ parzialmente materializzato; non riallineato/chiuso, non riprendere in questa esecuzione |
+| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | UI P4/P6-P13 | 📋 riconciliato sul codice reale; non implementato in questa esecuzione |
 
 > **Note implementazione G1/G3 — 27 Luglio 2026**: QuantLib 1.43 è importabile
 > nell'immagine LibreFolio finale; Riskfolio/P13 restano esclusi. I cinque rolling
@@ -103,6 +104,14 @@ precedente non necessariamente committato:
 > backend; il materiale esistente resta da auditare e ricertificare, e P13 UI è
 > assente. Vedi
 > [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md).
+>
+> **Note audit/remediation G5 — 28 Luglio 2026**: separati i controlli
+> `random_seed` MC e `sobol_start_index` QMC in contratto, cache, metadata, API e
+> frontend minimo. Aggiunto idle reap configurabile ai due pool `spawn`, sicuro con
+> coda/in-flight e seguito da restart lazy. Il probe pulito 7.3.0 conferma il
+> conflitto `vectorbt`/Numba con NumPy 2.5.1: production resta su Riskfolio 7.0.1.
+> G6 è stato riconciliato contro il codice reale nel relativo sub-plan, senza
+> iniziarne l'implementazione.
 
 ## 5. Convenzioni di esecuzione
 
@@ -127,8 +136,8 @@ Per ogni task:
 | G2 — Serie | ✅ parità segnali + joint calendar/FX/metadata testati |
 | G3 — Rolling | ✅ 5 plugin nel catalogo, formule/status/client/render testati |
 | G4 — Deterministico | ✅ RiskAnalytic/API P5-P10 testati, OpenAPI stabile |
-| G5 — Avanzato | QuantLib MC/QMC + spawn + Riskfolio P13; oracle e benchmark verdi |
-| G6 — Frontend | quattro scope renderizzati e funzionali |
+| G5 — Avanzato | ✅ QuantLib MC/QMC + spawn + idle reap + Riskfolio P13; oracle e benchmark verdi |
+| G6 — Frontend | ⏸️ capability esistenti ricertificate; gap placement/P13/smoke pianificati |
 | GF — Finale | backend/frontend/Docker/docs/graph verdi |
 
 ## 7. Strategia matematica
@@ -151,7 +160,7 @@ Invarianti minimi:
 - matrice correlazione simmetrica;
 - `ΣCCTR=σp`, `ΣPCTR≈100%`;
 - `CVaR≥VaR≥0`;
-- stesso seed → stesso output;
+- stesso controllo di sequenza canonico → stesso output;
 - single/multi-worker equivalenti.
 
 ## 8. Rollback

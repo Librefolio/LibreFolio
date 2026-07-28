@@ -2436,7 +2436,8 @@
             "process": "Processus stochastique",
             "sampling": "Stratégie d'échantillonnage",
             "paths": "Trajectoires simulées",
-            "seed": "Graine aléatoire"
+            "randomSeed": "Graine aléatoire",
+            "sobolStartIndex": "Indice de départ Sobol"
         },
         "title": "Risque",
         "dashboardTitle": "Risque du portefeuille",

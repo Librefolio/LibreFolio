@@ -395,7 +395,10 @@ RiskResultMetadata = {
   "excluded_assets":  [{"asset_id": 42, "reason": "insufficient_history"}],
   "algo_version":     "risk-vol@1.0.0",
   "computed_at":      "2026-07-26T09:50:00Z",
-  "seed":             123456789      // solo se stocastico (Monte Carlo)
+  "sampling_method":  "mc",           // solo se stocastico
+  "path_count":       4096,           // solo se stocastico
+  "random_seed":      123456789,      // solo MC
+  "sobol_start_index": null           // solo QMC; alternativo a random_seed
 }
 ```
 
@@ -548,8 +551,9 @@ Casi limite:
 
 ### 6.9 Monte Carlo (review §12) — scenario condizionato, non previsione
 - **Modello dichiarato:** es. GBM; processo, stima di `drift`, `σ`, correlazioni,
-  orizzonte, frequenza, n. percorsi, **seed**, trattamento di costi/contributi/
-  prelievi, ribilanciamento, inflazione, **limiti del modello**.
+  orizzonte, frequenza, n. percorsi, `random_seed` MC oppure
+  `sobol_start_index` QMC, trattamento di costi/contributi/prelievi,
+  ribilanciamento, inflazione, **limiti del modello**.
 - Output: **percentili** (P5/P50/P95), non un singolo numero.
 - Linguaggio: «simulato sotto il modello X», mai «probabilità oggettiva del
   futuro».
@@ -753,8 +757,10 @@ warning); correlazioni calcolate **dopo** conversione.
 
 ## 9. Determinismo, riproducibilità, async
 
-- Calcoli **deterministici** dove possibile; per gli stocastici **seed esplicito**
-  in `RiskResultMetadata.seed`.
+- Calcoli **deterministici** dove possibile; per gli stocastici controllo di
+  sequenza esplicito e non ambiguo nei metadati: `random_seed` per MC,
+  `sobol_start_index` per QMC. I due campi sono mutuamente esclusivi;
+  `sobol_start_index` è un offset di sequenza, non uno scramble seed.
 - Coerente col motore: base temporale a **giorni di calendario** (365) ma fattore di
   annualizzazione **osservato** dal campione (§2.1); calendario congiunto (§2.2);
   ultimo prezzo disponibile per la valorizzazione, mai ffill dei rendimenti.

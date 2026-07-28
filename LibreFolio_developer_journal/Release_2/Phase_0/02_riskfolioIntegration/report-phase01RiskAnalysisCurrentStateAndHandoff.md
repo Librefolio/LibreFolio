@@ -8,6 +8,11 @@ lo stato verificato attuale e le decisioni ancora da prendere.
 
 > Questo documento è autosufficiente. Per approfondire formule, benchmark o singoli
 > step, usare i riferimenti nella sezione finale.
+>
+> **Aggiornamento successivo**: l'audit/remediation del contratto simulation e del
+> lifecycle idle dei worker è documentato in
+> [`report-phase01RiskBackendAuditAndRemediation.md`](./report-phase01RiskBackendAuditAndRemediation.md).
+> Quel report prevale per lo stato tecnico finale.
 
 ---
 
@@ -22,7 +27,8 @@ Il lavoro backend della Risk Analysis è arrivato alla chiusura di **G0-G5**:
 - API bulk autenticata e client OpenAPI sincronizzato;
 - Monte Carlo e Quasi-Monte Carlo production con **QuantLib 1.43**;
 - ottimizzazione di portafoglio P13 con **Riskfolio-Lib 7.0.1**;
-- QuantLib e Riskfolio eseguiti in **pool `spawn` separati, persistenti e isolati**;
+- QuantLib e Riskfolio eseguiti in **pool `spawn` separati e isolati**, persistenti
+  durante attività e rilasciati dopo idle timeout;
 - cache content-keyed, deduplicazione dei miss concorrenti e recovery da
   timeout/crash;
 - test matematici, service/API, benchmark, lock e Docker verificati;
@@ -402,7 +408,7 @@ UniformRandomGenerator
 QMC:
 
 ```text
-SobolRsg.skipTo(seed)
+SobolRsg.skipTo(sobol_start_index)
 → InvCumulativeSobolGaussianRsg
 → StochasticProcessArray.evolve
 ```
@@ -412,8 +418,8 @@ Contratto:
 - GBM correlato multi-asset;
 - `dt=1/365`;
 - stato iniziale normalizzato a `1`;
-- seed deterministico;
-- seed QMC = indice iniziale Sobol;
+- `random_seed` MC / `sobol_start_index` QMC deterministici;
+- `sobol_start_index` = indice iniziale Sobol, non scramble seed;
 - path QMC in potenza di due;
 - dimensione Sobol `asset × horizon_days <= 21.201`;
 - output percentili, distribuzione e probability of loss.
@@ -564,9 +570,10 @@ Quindi lo stato corretto non è “G6 mai toccato”, ma:
 
 ### 8.1 Test
 
-- risk service suite: **68 passed**;
+- risk service suite dopo remediation: **74 passed**;
 - risk API: **7 passed**;
-- worker lifecycle: **6 passed**;
+- risk schema: **21 passed**;
+- worker lifecycle: **11 passed**;
 - nessun resource-tracker warning dopo la correzione pipe;
 - probe QuantLib: `status=ok`;
 - benchmark pool: `status=ok`;
@@ -704,7 +711,7 @@ Quest'ultimo blocco non equivale a G6 chiuso.
 |---|---|---|
 | Benchmark QuantLib/NumPy non equivalente | Scelta production errata | Oracle analitici e stage timing. |
 | Gate correlazione arbitrario | QuantLib giudicata erroneamente | Standard error + Fisher-z + convergenza QMC. |
-| Seed constructor Sobol non spostava lo stream come richiesto | Semantica seed ambigua | `SobolRsg.skipTo(seed)`. |
+| Seed constructor Sobol non spostava lo stream come richiesto | Semantica seed ambigua | `SobolRsg.skipTo(sobol_start_index)` e campi MC/QMC distinti. |
 | Riskfolio 7.3 trascinava vectorbt/numba | Falso conflitto globale | Riskfolio-Lib 7.0.1 capability-tested. |
 | Primo lock includeva upgrade wildcard non correlati | Diff dipendenze troppo ampio | Ricostruita closure minima; successivo update utente preservato. |
 | Follower cancellato poteva cancellare il future condiviso | Richieste concorrenti fragili | `asyncio.shield`. |
@@ -895,5 +902,6 @@ Produci:
 ## 19. Stato finale in una frase
 
 > **Backend risk completo e corretto; falsa pista NumPy/thread rimossa; QuantLib e
-> Riskfolio operative in processi isolati; frontend già parzialmente materializzato
-> ma non riallineato né chiuso, P13 UI assente, GF ancora da eseguire.**
+> Riskfolio operative in processi isolati con idle reap; frontend già parzialmente
+> materializzato e ora ripianificato, ma non chiuso; P13 UI assente, GF ancora da
+> eseguire.**

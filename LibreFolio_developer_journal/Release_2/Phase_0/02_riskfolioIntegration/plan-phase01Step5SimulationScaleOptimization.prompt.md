@@ -1,6 +1,6 @@
 # Step 5 — Simulation, Scale & Optimization (P11-P13)
 
-**Stato**: ✅ CORREZIONE COMPLETATA — 28 Luglio 2026. Stop prima di G6.
+**Stato**: ✅ CORREZIONE + AUDIT COMPLETATI — 28 Luglio 2026. Stop prima di G6.
 
 ← Step precedente:
 [`plan-phase01Step4MultiAssetRiskBackend.prompt.md`](./plan-phase01Step4MultiAssetRiskBackend.prompt.md)
@@ -14,7 +14,8 @@
 ## 1. Obiettivo
 
 Implementare simulazione componibile, decisione di scala e frontiera condizionata,
-senza esporre oggetti di libreria.
+senza esporre oggetti di libreria, con controlli di sequenza non ambigui e processi
+pesanti liberati dopo inattività.
 
 > **⚠️ Riapertura 28 Luglio 2026**: le conclusioni NumPy/SciPy production,
 > `asyncio.to_thread`, assenza pool e P13 respinto non sono più decisioni valide.
@@ -41,8 +42,10 @@ Separare:
 - renderer-neutral result.
 
 > **Note implementazione — 28 Luglio 2026**: contratti MC/QMC strict e
-> serializzabili; RQMC rimosso. `seed` QMC = indice iniziale Sobol. Aggiunti DTO
-> optimization, errori worker, metriche process boundary, output discriminato
+> serializzabili; RQMC rimosso. Il contratto canonico usa `sampling_method`,
+> `path_count`, `random_seed` esclusivo per MC e `sobol_start_index` esclusivo per
+> QMC. Gli alias legacy restano temporaneamente accettati solo in ingresso. Aggiunti
+> DTO optimization, errori worker, metriche process boundary, output discriminato
 > `optimization` e chiavi cache complete.
 
 ### 5.2 — Spike QuantLib vs NumPy/SciPy
@@ -53,7 +56,7 @@ Confrontare:
 
 - single/multi-asset;
 - MC/QMC;
-- seed;
+- controllo di sequenza specifico del metodo;
 - memoria/velocità;
 - binding ergonomics;
 - testabilità;
@@ -73,7 +76,8 @@ Confrontare:
 GBM giornaliero correlato QuantLib; output percentili e distribuzione.
 
 > **Note implementazione — 28 Luglio 2026**: MC usa RNG e
-> `GaussianMultiPathGenerator` QuantLib. QMC usa `SobolRsg.skipTo(seed)`,
+> `GaussianMultiPathGenerator` QuantLib. QMC usa
+> `SobolRsg.skipTo(sobol_start_index)`,
 > `InvCumulativeSobolGaussianRsg` e `StochasticProcessArray.evolve`.
 > `NumpyScipySimulationAdapter`, SciPy Sobol/`ndtri`, lock in-process e RQMC
 > rimossi. NumPy resta solo dopo l'evoluzione per algebra/aggregazione.
@@ -86,7 +90,7 @@ Chiave:
 
 ```text
 scope + range + currency + tx/price/fx/split fingerprints
-+ params + algo_version + seed
++ params normalizzati + algo_version
 ```
 
 Nessuna invalidazione manuale.
@@ -103,6 +107,8 @@ Se QuantLib è production:
 - nessuna esecuzione QuantLib concorrente in thread;
 - solo input/output serializzabili;
 - oggetti QuantLib creati nel worker.
+- idle reap configurabile, default `600 s`, solo con coda vuota;
+- restart lazy dopo reap con nuovo PID.
 
 P12 decide soltanto il numero di worker.
 
@@ -122,7 +128,7 @@ P12 decide soltanto il numero di worker.
 > **Note implementazione — 28 Luglio 2026**: classificate 72 celle MC/QMC:
 > 32 accettate, 12 `dimension_limit`, 28 `resource_limit`. Misurati pool
 > persistenti reali: cold/warm, queue, IPC, stage engine, cache, RSS,
-> concorrenza e timeout/recycle. Evidenza:
+> concorrenza, timeout/recycle e idle-reap/restart. Evidenza:
 > [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md).
 
 ### 5.6 — Decisione pool
@@ -133,10 +139,11 @@ Attivare >1 worker solo con beneficio ripetibile e RAM accettabile. Altrimenti
 chiudere P12 come `single-worker`.
 
 > **Note implementazione — 28 Luglio 2026**: due pool separati, lazy e
-> persistenti, con default configurabile 1 worker. Sul throughput warm, 2 worker
-> danno `1,938x` simulation e `1,477x` optimization; RSS passa rispettivamente
-> da ~176 a ~349 MB e da ~342 a ~683 MB. Process isolation resta sempre;
-> `>1` è configurabile.
+> persistenti, con default configurabile 1 worker. I run ripetuti confermano
+> beneficio concorrente con 2 worker; l'ultimo rerun misura `2,144x` simulation e
+> `2,471x` optimization. Il default resta 1 per non raddoppiare la RAM; `>1` è
+> configurabile. Dopo inattività entrambi i pool rilasciano tutte le lane e
+> ripartono lazy.
 
 ## 5. P13 — Riskfolio-Lib
 
@@ -164,13 +171,14 @@ Nessuna raccomandazione assertiva.
 
 ## 6. Test
 
-- seed/reproducibility;
+- `random_seed`/`sobol_start_index` e riproducibilità;
 - shape/momenti/correlazioni;
 - MC vs QMC;
 - convergence/stability;
 - serialization;
 - worker isolation;
 - timeout/error propagation;
+- idle reap, queue safety e restart lazy multi-lane;
 - cache key;
 - single/multi equivalence;
 - solver/frontier fixture.
@@ -183,17 +191,23 @@ Nessuna raccomandazione assertiva.
 - [x] capability catalog espone solo funzioni disponibili;
 - [x] backend pronto; P13 UI esplicitamente rinviata.
 
-> **Note implementazione finale — 28 Luglio 2026**: 68 test service risk e 7
+> **Note prima chiusura G5 — 28 Luglio 2026**: 68 test service risk e 7
 > test API verdi; probe matematico e benchmark `status=ok`; lock verificato;
 > immagine finale arm64 costruita e import smoke verde. Il response channel
 > worker usa una pipe one-way, eliminando i semaphore warning dopo crash forzato.
 > La suite backend globale supera external+DB e tutti i service fino a un solo
 > failure concorrente AI Export (`volume_analyzed`), non collegato a G5.
+>
+> **Note audit/remediation — 28 Luglio 2026**: suite Risk estesa a **74 test
+> service**, 7 API e 21 schema, tutti verdi. Il probe pulito Riskfolio 7.3.0
+> conferma il conflitto `vectorbt`/Numba con NumPy 2.5.1: production resta
+> intenzionalmente su 7.0.1. Il primo rerun API fallito dipendeva dal DB test
+> concorrente; dopo `./dev.py test db populate --force` gli stessi test sono verdi.
 
 ## 8. Rischi/fallback
 
 - binding QuantLib incompleto → errore esplicito, nessun fallback silenzioso;
-- spawn overhead → worker persistente lazy;
+- spawn overhead → worker persistente lazy con idle timeout configurabile;
 - Riskfolio/solver failure → risultato unavailable esplicito e lane riciclata;
 - estimation error → metadata/wording obbligatori.
 

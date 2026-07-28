@@ -4,6 +4,22 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-07-28] update | Risk backend audit and worker idle lifecycle
+
+Updated the Risk quantitative decision, Sobol contract, Riskfolio dependency trap,
+and Phase 0 source with canonical `random_seed`/`sobol_start_index` semantics,
+generation-safe idle reap, lazy restart, and the explicit Riskfolio 7.3.0 probe.
+Final focused evidence recorded: 74 service, 7 API, 21 schema, and 11 worker
+lifecycle tests; frontend check/build and 5 mocked E2E; Docker arm64 build/smoke.
+Created: [[problems/risk-spawn-worker-idle-residency]]. Updated:
+[[decisions/risk-quant-engine-process-boundary]],
+[[problems/quantlib-sobol-seed-skipto]],
+[[problems/riskfolio-numpy-vectorbt-dependency-trap]], and
+[[sources/phase00-risk-analysis-backend]].
+Graph: incremental semantic extraction refreshed five Risk pages, removed modified-page
+ghosts, preserved 11 external edges, and regenerated 1,435 nodes / 2,040 edges /
+144 communities plus `graph.html`.
+
 ## [2026-07-28] file | Phase 0 Risk Analysis backend G0-G5
 
 Filed the corrected quantitative backend: QuantLib MC/QMC and Riskfolio 7.0.1 in separate persistent spawn pools, cancellation-safe content-key deduplication, Sobol `skipTo` seed semantics, crash-safe response pipes, and the exact-version dependency resolution that preserves NumPy 2.5.1 without vectorbt/numba.

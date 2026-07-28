@@ -23,7 +23,8 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
 | 8 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | **Evidenza P11.** Oracle analitici GBM, gate MC a standard error, convergenza QMC e equivalenza direct/spawn. |
 | 9 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | **Evidenza P12.** Cold/warm, cache, RSS, concorrenza e timeout/recycle dei pool production. |
 | 10 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | **Report autosufficiente per handoff.** Richieste vs stato reale, falsa pista NumPy/thread, correzione QuantLib/Riskfolio, lavoro completato/rimandato/eliminato, problemi inattesi e decisioni ancora aperte. |
-| 11 | [`workItems/`](./workItems/README.md) | **Snapshot dei 37 work item operativi.** Scomposizione P0-P13 per gate G0-G6/GF, stato, dipendenze e descrizioni originali del tracker interno. |
+| 11 | [`report-phase01RiskBackendAuditAndRemediation.md`](./report-phase01RiskBackendAuditAndRemediation.md) | **Audit evidence-first G0-G5 e remediation.** Inventario reale, debiti trovati, decisioni prima del codice, contratto simulation canonico, lifecycle idle dei worker, probe Riskfolio 7.3.0, evidenze finali e piano G6 riconciliato. |
+| 12 | [`workItems/`](./workItems/README.md) | **Snapshot dei 37 work item operativi.** Scomposizione P0-P13 per gate G0-G6/GF, stato, dipendenze e descrizioni originali del tracker interno. |
 
 ## TL;DR delle conclusioni (revisionate)
 
@@ -63,10 +64,10 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
     cinque rolling risk sono nel catalogo Asset; sei analytics deterministici
     multi-asset sono disponibili via service/API bulk con test matematici e query
     reale sul DB popolato.
-11. **G5 corretto.** P11 usa QuantLib MC/QMC in worker `spawn`; P12 usa pool
-    simulation/optimization separati e persistenti; P13 espone
+11. **G5 corretto e auditato.** P11 usa QuantLib MC/QMC in worker `spawn`; P12 usa
+    pool simulation/optimization separati, con idle reap e restart lazy; P13 espone
     `portfolio_optimization` Riskfolio nei tre scope. RQMC e l'adapter
-    NumPy/SciPy production sono rimossi. G6 non viene ripreso in questo round.
+    NumPy/SciPy production sono rimossi. G6 è ripianificato ma non eseguito.
 
 > **Nota:** i documenti 0–4 nascono come studio; il master e le evidenze successive
 > registrano ora anche l'implementazione. Nessuna migrazione DB è stata necessaria.

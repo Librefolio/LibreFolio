@@ -12,6 +12,9 @@ from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
 from backend.app.schemas.signals import (
+    SignalAiDescription,
+    SignalAiEventDescription,
+    SignalAiOutputDescription,
     SignalAvailabilityReason,
     SignalCatalogDefinition,
     SignalCategory,
@@ -96,7 +99,161 @@ class SignalPlugin(ABC):
             output_specs=[spec.model_copy(deep=True) for spec in cls.output_specs],
             compatible_domains=list(cls.compatible_domains),
             annotation_capabilities=list(cls.annotation_capabilities),
+            ai_description=cls.describe_for_ai(),
+            ai_events=list(cls.describe_events_for_ai()),
         )
+
+    @classmethod
+    def describe_for_ai(cls) -> SignalAiDescription:
+        """AI-consumable description of this signal.
+
+        Default derived purely from existing catalog metadata
+        (`semantic_id`/`semantic_description`/`category`/`output_specs`) so
+        plugins need zero boilerplate. Override only when the AI-facing
+        description should diverge from the catalog's own public metadata.
+        """
+        return SignalAiDescription(
+            signal_code=cls.signal_code,
+            semantic_id=cls.semantic_id,
+            semantic_description=cls.semantic_description,
+            category=cls.category,
+            outputs=tuple(
+                SignalAiOutputDescription(
+                    key=spec.key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
+                    unit=spec.unit,
+                )
+                for spec in cls.output_specs
+            ),
+        )
+
+    @classmethod
+    def describe_events_for_ai(cls) -> tuple[SignalAiEventDescription, ...]:
+        """AI-consumable description of event types this plugin consumes.
+
+        Default derives one entry per declared `event_types`, falling back
+        to the signal's own `semantic_description` when no per-event
+        signal_description is defined. Returns an empty tuple when the
+        plugin does not consume events (the common case today — no current
+        plugin declares `requires_events=True`). Override for plugins that
+        need per-event-type descriptions or non-default deduplication.
+        """
+        if not cls.input_requirements.requires_events:
+            return ()
+        return tuple(
+            SignalAiEventDescription(
+                event_type=event_type,
+                semantic_description=cls.semantic_description,
+            )
+            for event_type in cls.input_requirements.event_types
+        )
+
+    @classmethod
+    def validate_input(
+        cls,
+        price_points: Sequence[SignalPricePoint],
+        event_points: Sequence[SignalEventPoint],
+        params: BaseModel,
+        context: SignalExecutionContext,
+    ) -> None:
+        """Optional plugin-owned semantic input validation.
+
+        Runs after generic coverage/warmup/availability resolution and
+        before `compute()`. Default is a no-op. Override to reject inputs
+        the plugin cannot honor despite generic coverage passing (e.g.
+        volume that is structurally present but semantically unusable).
+
+        Raise `SignalUnavailableError` (preferred — reported as
+        `SignalStatus.UNAVAILABLE`) or `ValueError`/`ValidationError`
+        (reported as `SignalStatus.FAILED`) to reject. Failures here are
+        isolated per-signal by `SignalService` and never block sibling
+        signals in the same batch.
+        """
+        return None
+
+    @classmethod
+    def validate_output(
+        cls,
+        computation: SignalComputation,
+        price_points: Sequence[SignalPricePoint],
+        event_points: Sequence[SignalEventPoint],
+        params: BaseModel,
+        context: SignalExecutionContext,
+    ) -> None:
+        """Optional plugin-owned semantic output validation.
+
+        Runs alongside the central output contract validation
+        (`SignalService._validate_plugin_output`), after `compute()`.
+        Default is a no-op. Same exception-handling contract as
+        `validate_input`.
+        """
+        return None
+
+    @staticmethod
+    def validate_meaningful_volume_input(
+        price_points: Sequence[SignalPricePoint],
+        *,
+        minimum_coverage: float,
+    ) -> None:
+        """Shared structural volume validation for plugins that declare
+        `requires_meaningful_volume=True` (MFI, OBV today).
+
+        Complements — does not replace — the semantic gate SignalService
+        enforces centrally via `resolve_signal_availability` (comparing
+        `context.source_capability.supports_meaningful_volume` against
+        `input_requirements.requires_meaningful_volume`, before `validate_input`
+        is even called). This helper instead checks structural usability of
+        the already-selected points:
+
+        - non-empty input,
+        - strictly increasing, unique dates (defense in depth — the full
+          series is already validated on construction, but selection logic
+          could change),
+        - every present volume value is non-negative (finiteness is already
+          enforced by the `SignalDecimal` schema type),
+        - sufficient fraction of *directly observed* (non-backward-filled)
+          non-null volume, using the plugin's own `minimum_coverage` as the
+          threshold. Backward-filled volume carries a stale value forward
+          and must not count as fresh evidence for a volume-flow indicator.
+
+        Raises `SignalUnavailableError` so the signal is reported
+        `UNAVAILABLE` rather than `FAILED`.
+        """
+        if not price_points:
+            raise SignalUnavailableError(
+                "no price points available for volume validation",
+                reason_code=SignalAvailabilityReason.INSUFFICIENT_HISTORY,
+            )
+        previous_date = None
+        observed_non_null = 0
+        for point in price_points:
+            if previous_date is not None and point.date <= previous_date:
+                raise SignalUnavailableError(
+                    "price points must have strictly increasing, unique dates",
+                    reason_code=SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE,
+                )
+            previous_date = point.date
+            if point.volume is None:
+                continue
+            if point.volume < 0:
+                raise SignalUnavailableError(
+                    "volume must be non-negative",
+                    reason_code=SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE,
+                    details={"date": point.date.isoformat()},
+                )
+            if point.backward_fill_info is None:
+                observed_non_null += 1
+        observed_ratio = observed_non_null / len(price_points)
+        if observed_ratio < minimum_coverage:
+            raise SignalUnavailableError(
+                "insufficient directly observed volume coverage",
+                reason_code=SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE,
+                details={
+                    "observed_ratio": observed_ratio,
+                    "minimum_coverage": minimum_coverage,
+                },
+            )
 
     @classmethod
     def validate_definition(cls) -> None:

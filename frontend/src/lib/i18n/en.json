@@ -2436,7 +2436,8 @@
             "process": "Stochastic process",
             "sampling": "Sampling strategy",
             "paths": "Simulation paths",
-            "seed": "Random seed"
+            "randomSeed": "Random seed",
+            "sobolStartIndex": "Sobol start index"
         },
         "title": "Risk",
         "dashboardTitle": "Portfolio risk",

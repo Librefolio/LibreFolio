@@ -28,6 +28,7 @@ from backend.app.schemas.risk import (
     RiskMode,
     RiskOutputKind,
     RiskReturnBasis,
+    RiskSamplingStrategy,
     RiskScopeKind,
     RiskWarning,
 )
@@ -101,7 +102,10 @@ class RiskComputation:
     annualization_factor: Optional[float] = None
     coverage: Optional[float] = None
     return_basis: Optional[RiskReturnBasis] = None
-    seed: Optional[int] = None
+    sampling_method: Optional[RiskSamplingStrategy] = None
+    path_count: Optional[int] = None
+    random_seed: Optional[int] = None
+    sobol_start_index: Optional[int] = None
 
 
 class RiskAnalytic(ABC):
