@@ -5,9 +5,25 @@ import type {AiExportPromptStats, AiExportResponseLanguageDisplayName} from './t
 export const AI_EXPORT_TOKEN_WARNING_THRESHOLD = 8_000;
 export const AI_EXPORT_TOKEN_LARGE_THRESHOLD = 16_000;
 export const AI_EXPORT_SNAPSHOT_SELECTION_ID = 'snapshot' as const;
+export const AI_EXPORT_TECHNICAL_WINDOW_PRESETS = ['3m', '6m', '1y', 'custom'] as const;
+export const AI_EXPORT_TECHNICAL_WINDOW_UNITS = ['days', 'weeks', 'months', 'years'] as const;
 
 export type AiExportAnalysisSelection = AiExportTask | typeof AI_EXPORT_SNAPSHOT_SELECTION_ID;
 export type AiExportHiddenAnalysisTasks = readonly AiExportTask[];
+export type AiExportTechnicalWindowPreset = (typeof AI_EXPORT_TECHNICAL_WINDOW_PRESETS)[number];
+export type AiExportTechnicalWindowUnit = (typeof AI_EXPORT_TECHNICAL_WINDOW_UNITS)[number];
+
+export interface AiExportTechnicalWindowSelection {
+    readonly preset: AiExportTechnicalWindowPreset;
+    readonly customAmount: number;
+    readonly customUnit: AiExportTechnicalWindowUnit;
+}
+
+export const AI_EXPORT_DEFAULT_TECHNICAL_WINDOW = {
+    preset: '3m',
+    customAmount: 3,
+    customUnit: 'months',
+} as const satisfies AiExportTechnicalWindowSelection;
 
 export const AI_EXPORT_SNAPSHOT_TASK_BY_DOMAIN = {
     portfolio: 'portfolio_description',
@@ -58,6 +74,7 @@ export interface AiExportOptionsFingerprintInput {
     readonly responseLanguage: AiExportResponseLanguageDisplayName;
     readonly userNotes?: string;
     readonly webResearch: boolean;
+    readonly technicalWindow?: AiExportTechnicalWindowSelection;
 }
 
 export interface AiExportOptionsSelection extends AiExportOptionsFingerprintInput {}
@@ -72,6 +89,7 @@ export interface AiExportPanelSelectionInput {
     readonly detailLevel: AiExportDetailLevel;
     readonly responseLanguage: AiExportResponseLanguageDisplayName;
     readonly userNotes?: string;
+    readonly technicalWindow?: AiExportTechnicalWindowSelection;
     readonly taskDefinitions: readonly AiExportTaskDefinition[];
 }
 
@@ -103,6 +121,11 @@ export interface AiExportOptionsPanelLabels {
     readonly detailLevelLabel: string;
     readonly detailLevelHelp: Readonly<Record<AiExportDetailLevel, string>>;
     readonly detailLevelLabels: Readonly<Record<AiExportDetailLevel, string>>;
+    readonly technicalWindowLabel: string;
+    readonly technicalWindowHelp: string;
+    readonly technicalWindowPresetLabels: Readonly<Record<AiExportTechnicalWindowPreset, string>>;
+    readonly technicalWindowUnitLabels: Readonly<Record<AiExportTechnicalWindowUnit, string>>;
+    readonly technicalWindowUnitShortLabels: Readonly<Record<AiExportTechnicalWindowUnit, string>>;
     readonly documentationLabel: string;
     readonly userNotesLabel: string;
     readonly userNotesPlaceholder?: string;
@@ -277,6 +300,13 @@ export function normalizeAiExportUserNotes(renderMode: AiExportRenderMode, userN
     return renderMode === 'full_prompt' ? userNotes : undefined;
 }
 
+export function normalizeAiExportTechnicalWindow(selection: AiExportTechnicalWindowSelection | undefined): AiExportTechnicalWindowSelection {
+    const preset = selection && AI_EXPORT_TECHNICAL_WINDOW_PRESETS.includes(selection.preset) ? selection.preset : AI_EXPORT_DEFAULT_TECHNICAL_WINDOW.preset;
+    const customUnit = selection && AI_EXPORT_TECHNICAL_WINDOW_UNITS.includes(selection.customUnit) ? selection.customUnit : AI_EXPORT_DEFAULT_TECHNICAL_WINDOW.customUnit;
+    const customAmount = selection && Number.isFinite(selection.customAmount) ? Math.max(1, Math.floor(selection.customAmount)) : AI_EXPORT_DEFAULT_TECHNICAL_WINDOW.customAmount;
+    return {preset, customAmount, customUnit};
+}
+
 export function getAiExportMenuTriggerBehavior(disabled: boolean, loading: boolean): AiExportMenuTriggerBehavior {
     return {
         nativeDisabled: disabled,
@@ -286,7 +316,19 @@ export function getAiExportMenuTriggerBehavior(disabled: boolean, loading: boole
 }
 
 export function aiExportOptionsFingerprint(options: AiExportOptionsFingerprintInput): string {
-    return JSON.stringify(['ai-export-options-v1', options.task, options.detailLevel, options.renderMode, options.responseLanguage, normalizeAiExportUserNotes(options.renderMode, options.userNotes) ?? null, options.webResearch]);
+    const technicalWindow = normalizeAiExportTechnicalWindow(options.technicalWindow);
+    return JSON.stringify([
+        'ai-export-options-v2',
+        options.task,
+        options.detailLevel,
+        options.renderMode,
+        options.responseLanguage,
+        normalizeAiExportUserNotes(options.renderMode, options.userNotes) ?? null,
+        options.webResearch,
+        technicalWindow.preset,
+        technicalWindow.preset === 'custom' ? technicalWindow.customAmount : null,
+        technicalWindow.preset === 'custom' ? technicalWindow.customUnit : null,
+    ]);
 }
 
 export function normalizeAiExportPanelOptions(input: AiExportPanelSelectionInput): AiExportOptionsSelection {
@@ -302,6 +344,7 @@ export function normalizeAiExportPanelOptions(input: AiExportPanelSelectionInput
         responseLanguage: input.responseLanguage,
         userNotes,
         webResearch: false,
+        technicalWindow: normalizeAiExportTechnicalWindow(input.technicalWindow),
     };
 }
 

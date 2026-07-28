@@ -55,6 +55,7 @@
     // Fixed position coordinates (viewport-relative)
     let fixedTop = $state(0);
     let fixedLeft = $state(0);
+    let pendingPositionFrame: number | null = null;
 
     /** True once opened via click/tap ("pinned") rather than plain hover.
      *  Pinned tooltips stay open indefinitely while the pointer remains over
@@ -94,8 +95,7 @@
 
     function show() {
         visible = true;
-        // Defer position calculation to next frame (tooltip must be in DOM first)
-        requestAnimationFrame(calculateFixedPosition);
+        schedulePositionUpdate();
     }
 
     function hide() {
@@ -267,6 +267,14 @@
         fixedLeft = left;
     }
 
+    function schedulePositionUpdate() {
+        if (pendingPositionFrame !== null) cancelAnimationFrame(pendingPositionFrame);
+        pendingPositionFrame = requestAnimationFrame(() => {
+            pendingPositionFrame = null;
+            calculateFixedPosition();
+        });
+    }
+
     /**
      * Compute the final tooltip content as HTML string.
      * Priority: html prop > text prop. If math=true, process LaTeX.
@@ -279,23 +287,25 @@
         return content;
     });
 
-    // Register/unregister click-outside listener + scroll-dismiss
+    // Keep fixed coordinates aligned while nested panels or the page scroll.
     $effect(() => {
         if (visible) {
             document.addEventListener('click', handleClickOutside);
             document.addEventListener('touchstart', handleTouchOutside);
-            document.addEventListener('scroll', handleScrollDismiss, {capture: true, passive: true});
+            document.addEventListener('scroll', schedulePositionUpdate, {capture: true, passive: true});
+            window.addEventListener('resize', schedulePositionUpdate);
             return () => {
                 document.removeEventListener('click', handleClickOutside);
                 document.removeEventListener('touchstart', handleTouchOutside);
-                document.removeEventListener('scroll', handleScrollDismiss, true);
+                document.removeEventListener('scroll', schedulePositionUpdate, true);
+                window.removeEventListener('resize', schedulePositionUpdate);
+                if (pendingPositionFrame !== null) {
+                    cancelAnimationFrame(pendingPositionFrame);
+                    pendingPositionFrame = null;
+                }
             };
         }
     });
-
-    function handleScrollDismiss() {
-        if (visible) hide();
-    }
 
     function handleTouchOutside(event: TouchEvent) {
         if (visible && triggerElement && !triggerElement.contains(event.target as Node)) {

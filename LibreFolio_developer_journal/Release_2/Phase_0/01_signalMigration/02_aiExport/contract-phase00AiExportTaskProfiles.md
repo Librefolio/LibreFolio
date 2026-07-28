@@ -1,8 +1,8 @@
 # AI Export F1 — Contratto task, profili e detail overlay
 
 **Versione contratto**: 1
-**Data**: 26 luglio 2026
-**Stato**: ✅ implementato e validato
+**Data**: 27 luglio 2026
+**Stato**: 🟡 estensione FIFO in implementazione
 
 ← Piano:
 [AI Export Backend Snapshot e Hard Cutover](./plan-phase00AiExportBackendSnapshotImplementation.prompt.md)
@@ -11,9 +11,9 @@
 
 Il catalogo contiene:
 
-- 18 task spec;
+- 19 task spec;
 - 3 detail overlay;
-- 54 profili risolti.
+- 57 profili risolti.
 
 ```text
 profile = task_spec + detail_overlay
@@ -75,7 +75,7 @@ Asset e FX sono single-entity: compact riduce campi/serie, non l'entità.
 - ultimi 7 daily;
 - annotazioni;
 - massimo 120 eventi dopo deduplica;
-- FIFO sintetico dove previsto;
+- FIFO per-lot sintetico dove previsto, senza timeline;
 - nessun top-N.
 
 ## 3. Bundle tecnici
@@ -200,6 +200,7 @@ Event limit e deduplica sono detail/task-specific.
 | `rebalancing` | 12 maggiori NAV; nessun target drift inventato | latest breadth / standard summary / full | sì | opzionale |
 | `performance_attribution` | 5 migliori + 5 peggiori `period_pnl_amount` | none / latest states / sampled standard | sì | no |
 | `income_review` | 10 maggiori `period_income_amount` | none / latest states / sampled standard | sì | no |
+| `portfolio_fifo_lot_review` | 7 maggiori residual cost basis aperti/parziali + 3 chiusi più recenti; backfill fino a 10 | none / none / none | sì | no |
 | `technical_breadth` | aggregati completi + 10 eventi recenti pesati NAV | breadth only / standard / full | no | opzionale |
 | `portfolio_description` | 10 maggiori NAV | none / standard summary / sampled standard | sì | no |
 
@@ -207,6 +208,7 @@ Regole:
 
 - `pac_planning` non inventa target allocation;
 - `rebalancing` deve chiedere target/range di tolleranza mancanti;
+- `portfolio_fifo_lot_review` segue il filtro broker attivo della Dashboard;
 - breadth aggregata usa sempre l'intero universo eleggibile;
 - compact limita soltanto il dettaglio entità, non gli aggregati.
 
@@ -250,14 +252,30 @@ Applicability:
 | `broker_review` | 10 maggiori NAV | breadth / standard / full | sì | no |
 | `broker_cost_efficiency` | 10 maggiori `abs(period_fees_taxes_amount)` | none / latest states / sampled standard | sì | no |
 | `broker_concentration_context` | 10 maggiori NAV | breadth / standard / full | sì | no |
-| `broker_fifo_lot_review` | 10 maggiori residual cost basis | none / latest states / sampled standard | sì | no |
+| `broker_fifo_lot_review` | 7 maggiori residual cost basis aperti/parziali + 3 chiusi più recenti; backfill fino a 10 | none / none / none | sì | no |
 
 Applicability:
 
 - broker accessibile via `BrokerUserAccess`;
 - nessun `last_import_at` inferito;
 - `latest_transaction_date` è l'unica attività temporale autorevole F1;
-- FIFO full resta sintetico, senza fragment history completa.
+- FIFO richiede almeno un lotto aperto/parziale o chiuso nei tre mesi precedenti;
+- standard/full includono tutte le righe FIFO eleggibili;
+- nessun livello esporta custody/event/value/return/price history.
+
+### 8.1 Contratto righe FIFO condiviso
+
+- l'universo include tutti i lotti aperti o parziali;
+- include inoltre i lotti completamente chiusi con `closing_date` nei tre mesi di
+  calendario precedenti `snapshot_as_of`;
+- `closing_date` deriva dalle closure autorevoli del `LotsAnalysisService`;
+- gli asset sono scoperti anche dallo storico transazioni dello scope, non soltanto
+  dalle posizioni correnti;
+- la riga usa asset, data di apertura e broker di apertura come identità leggibile;
+- `lot_id` e `opening_transaction_id` restano interni e non sono serializzati;
+- ogni riga è una fotografia sintetica: quantità, costo residuo, valore, P&L,
+  income, fee, tax, stato e fonte valutazione;
+- tutti i response contract restano v1 finché il sistema non viene rilasciato.
 
 ## 9. Response contract ID
 
@@ -267,6 +285,7 @@ Applicability:
 | portfolio | rebalancing | `portfolio.rebalancing` |
 | portfolio | performance_attribution | `portfolio.performance_attribution` |
 | portfolio | income_review | `portfolio.income_review` |
+| portfolio | portfolio_fifo_lot_review | `portfolio.portfolio_fifo_lot_review` |
 | portfolio | technical_breadth | `portfolio.technical_breadth` |
 | portfolio | portfolio_description | `portfolio.portfolio_description` |
 | asset | asset_snapshot | `asset.asset_snapshot` |

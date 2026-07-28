@@ -64,18 +64,19 @@ function findChoice(result: AiExportCatalogCompatibilityResult, domain: AiExport
 }
 
 describe('backend AI Export catalog compatibility', () => {
-    it('freezes 6/5/3/4 tasks and 54 exact detail choices in approved order', () => {
-        expect(PORTFOLIO_AI_EXPORT_TASKS).toHaveLength(6);
+    it('freezes 7/5/3/4 tasks and 57 exact detail choices in approved order', () => {
+        expect(PORTFOLIO_AI_EXPORT_TASKS).toHaveLength(7);
         expect(ASSET_AI_EXPORT_TASKS).toHaveLength(5);
         expect(FX_AI_EXPORT_TASKS).toHaveLength(3);
         expect(BROKER_AI_EXPORT_TASKS).toHaveLength(4);
-        expect(AI_EXPORT_TASK_CATALOG).toHaveLength(18);
-        expect(AI_EXPORT_LOCAL_CHOICES).toHaveLength(54);
+        expect(AI_EXPORT_TASK_CATALOG).toHaveLength(19);
+        expect(AI_EXPORT_LOCAL_CHOICES).toHaveLength(57);
         expect(AI_EXPORT_TASK_CATALOG.map((task) => `${task.domain}.${task.backendTask}`)).toEqual([
             'portfolio.pac_planning',
             'portfolio.rebalancing',
             'portfolio.performance_attribution',
             'portfolio.income_review',
+            'portfolio.portfolio_fifo_lot_review',
             'portfolio.technical_breadth',
             'portfolio.portfolio_description',
             'asset.asset_snapshot',
@@ -116,12 +117,12 @@ describe('backend AI Export catalog compatibility', () => {
         }
     });
 
-    it('reconciles an exact backend fixture to 54 compatible selectable choices', () => {
+    it('reconciles an exact backend fixture to 57 compatible selectable choices', () => {
         const result = reconcileAiExportCatalog(buildMatchingBackendCatalog());
 
         expect(result.status).toBe('compatible');
-        expect(result.choices).toHaveLength(54);
-        expect(result.selectableChoices).toHaveLength(54);
+        expect(result.choices).toHaveLength(57);
+        expect(result.selectableChoices).toHaveLength(57);
         expect(result.backendOnlyEntries).toEqual([]);
         expect(result.reasonCodes).toEqual([]);
         expect(result.choices.every((choice) => choice.status === 'compatible' && choice.reasonCode === null)).toBe(true);
@@ -135,7 +136,7 @@ describe('backend AI Export catalog compatibility', () => {
         });
 
         expect(result.status).toBe('disabled');
-        expect(result.selectableChoices).toHaveLength(53);
+        expect(result.selectableChoices).toHaveLength(56);
         expect(findChoice(result, 'portfolio', 'pac_planning', 'compact')).toMatchObject({
             status: 'disabled',
             reasonCode: 'backend_entry_missing',
@@ -162,7 +163,7 @@ describe('backend AI Export catalog compatibility', () => {
         });
 
         expect(result.status).toBe('disabled');
-        expect(result.selectableChoices).toHaveLength(54);
+        expect(result.selectableChoices).toHaveLength(57);
         expect(result.backendOnlyEntries).toEqual([
             {
                 key: 'asset:pac_planning:compact',
@@ -191,8 +192,8 @@ describe('backend AI Export catalog compatibility', () => {
 
         expect(findChoice(idMismatch, 'portfolio', 'pac_planning', 'compact').reasonCode).toBe('profile_id_mismatch');
         expect(findChoice(versionMismatch, 'portfolio', 'pac_planning', 'compact').reasonCode).toBe('profile_version_mismatch');
-        expect(idMismatch.selectableChoices).toHaveLength(53);
-        expect(versionMismatch.selectableChoices).toHaveLength(53);
+        expect(idMismatch.selectableChoices).toHaveLength(56);
+        expect(versionMismatch.selectableChoices).toHaveLength(56);
     });
 
     it('fails closed on frontend response contract ID or version mismatch', () => {
@@ -256,7 +257,7 @@ describe('backend AI Export catalog compatibility', () => {
         });
 
         expect(findChoice(result, duplicate.domain, duplicate.task, duplicate.detail_level).reasonCode).toBe('duplicate_backend_entry');
-        expect(result.selectableChoices).toHaveLength(53);
+        expect(result.selectableChoices).toHaveLength(56);
     });
 
     it('preserves deterministic local order regardless of backend order', () => {
@@ -426,8 +427,8 @@ describe('backend AI Export catalog compatibility', () => {
             }
         }
 
-        expect(greenfieldKeys).toHaveLength(10);
-        expect(classifications).toHaveLength(18);
+        expect(greenfieldKeys).toHaveLength(11);
+        expect(classifications).toHaveLength(19);
         for (const task of AI_EXPORT_TASK_CATALOG) {
             const key = `${task.domain}.${task.backendTask}`;
             const expectedClassification = greenfieldKeys.has(key) ? 'greenfield' : 'migration-parity';

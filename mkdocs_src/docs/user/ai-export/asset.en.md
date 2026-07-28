@@ -43,6 +43,9 @@ results. The browser does not recalculate indicators.
 | **Full** | All applicable entities; **7 recent daily points** plus weekly points across the **full technical window**. |
 
 A task/profile may omit sections whose data is unavailable or not applicable.
+The separate **Technical window** selector uses **3M** by default and can be set
+to **6M**, **1Y**, or a custom duration. It always ends on the snapshot date and
+does not change the Asset page's selected financial range.
 
 ## 🔒 Applicability, Errors, and Privacy
 

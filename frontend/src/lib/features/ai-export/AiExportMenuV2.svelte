@@ -10,7 +10,7 @@
     import {loadAiExportMemory, saveAiExportMemory, type AiExportMemoryKey} from './aiExportMemory';
     import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
     import type {AiExportDetailLevel, AiExportRenderMode, AiExportTask, AiExportTaskDefinition} from './catalog/shared';
-    import {getAiExportMenuTriggerBehavior, normalizeAiExportUserNotes, type AiExportHiddenAnalysisTasks, type AiExportOptionsPanelCallbackMetadata, type AiExportOptionsPanelLabels, type AiExportOptionsSelection} from './aiExportOptions';
+    import {AI_EXPORT_DEFAULT_TECHNICAL_WINDOW, getAiExportMenuTriggerBehavior, normalizeAiExportUserNotes, type AiExportHiddenAnalysisTasks, type AiExportOptionsPanelCallbackMetadata, type AiExportOptionsPanelLabels, type AiExportOptionsSelection} from './aiExportOptions';
     import type {AiExportPromptStats} from './templates/promptRenderer';
     import {aiExportResponseLanguageFromLocale} from './ui';
 
@@ -71,6 +71,7 @@
                     detailLevel: defaultDetailLevel,
                     renderMode: defaultRenderMode,
                     userNotes: defaultUserNotes,
+                    technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
                 },
                 responseLanguage: aiExportResponseLanguageFromLocale(get(currentLanguage)),
                 taskDefinitions: domainTaskDefinitions,
@@ -118,6 +119,7 @@
                 detailLevel: defaultDetailLevel,
                 renderMode: defaultRenderMode,
                 userNotes: defaultUserNotes,
+                technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
             },
             responseLanguage,
             taskDefinitions: domainTaskDefinitions,
@@ -299,6 +301,7 @@
             initialTask={draft.task}
             initialDetailLevel={draft.detailLevel}
             initialRenderMode={draft.renderMode}
+            initialTechnicalWindow={draft.technicalWindow}
             {hiddenAnalysisTasks}
             {responseLanguage}
             initialUserNotes={draft.userNotes}

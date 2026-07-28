@@ -67,6 +67,13 @@ export const AI_EXPORT_TASK_INSTRUCTIONS = {
         'Keep fees, taxes, and data gaps separate from gross income.',
         'Frame reinvestment or spending considerations as neutral options that depend on user goals.',
     ]),
+    portfolio_fifo_lot_review: defineTaskInstruction('portfolio', 'portfolio_fifo_lot_review', 'Review FIFO lot composition across the active portfolio scope using current open lots and recent closures.', [
+        'State the active Dashboard broker scope, snapshot date, recent-closure cutoff, and detail-level selection rule.',
+        'Summarize open and partial lots separately from lots closed during the declared three-month window.',
+        'Compare residual cost basis, current value, realized results, unrealized results, income, fees, taxes, and net results only where present.',
+        'Describe concentration by asset and opening broker, including old lots and estimated-at-cost values where relevant.',
+        'Treat every exported row as a point-in-time lot summary and do not imply daily, event, custody, or fragment history.',
+    ]),
     technical_breadth: defineTaskInstruction('portfolio', 'technical_breadth', 'Describe technical breadth across the full eligible portfolio universe.', [
         'Start with coverage and the analyzed-universe limits.',
         'Describe long-term, short-term, momentum, and volatility breadth separately.',
@@ -158,11 +165,12 @@ export const AI_EXPORT_TASK_INSTRUCTIONS = {
         'Distinguish broker-scope concentration from whole-portfolio concentration.',
         'Frame diversification questions as neutral considerations.',
     ]),
-    broker_fifo_lot_review: defineTaskInstruction('broker', 'broker_fifo_lot_review', 'Review aggregate FIFO lot context within the selected broker scope.', [
-        'Summarize open, partial, and closed lot counts and residual cost basis.',
+    broker_fifo_lot_review: defineTaskInstruction('broker', 'broker_fifo_lot_review', 'Review FIFO lot composition within the selected broker scope using current open lots and recent closures.', [
+        'State the broker scope, snapshot date, recent-closure cutoff, and detail-level selection rule.',
+        'Summarize open and partial lots separately from lots closed during the declared three-month window.',
         'Separate realized, unrealized, income, fee, and tax components.',
-        'Describe lot age, oldest lots, concentration, in-transit values, shorts, and estimated-at-cost values where present.',
-        'Do not imply fragment-level history when the snapshot provides only aggregate FIFO detail.',
+        'Describe lot age, concentration, in-transit values, shorts, and estimated-at-cost values where present.',
+        'Treat every exported row as a point-in-time lot summary and do not imply daily, event, custody, or fragment history.',
         'State valuation, scope, and coverage limits.',
     ]),
 } satisfies Readonly<Record<AiExportTask, AiExportTaskInstructionTemplate>>;

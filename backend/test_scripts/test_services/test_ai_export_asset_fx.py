@@ -235,6 +235,7 @@ async def _empty_technical(
     event_points: Any = (),
     *,
     events_loaded: bool = True,
+    source_capability: Any = None,
 ) -> TechnicalTargetResult:
     eligible = any(prepared.technical_window.start <= point.date <= prepared.technical_window.end and (point.backward_fill_info is None or point.backward_fill_info.days_back == 0) for point in price_points)
     return TechnicalTargetResult(
@@ -262,6 +263,7 @@ async def _partial_technical(
     event_points: Any = (),
     *,
     events_loaded: bool = True,
+    source_capability: Any = None,
 ) -> TechnicalTargetResult:
     signal = prepared.resolved_profile.technical_bundle.signals[0]
     technical_target = AiExportTechnicalTarget(
@@ -318,12 +320,14 @@ def _asset_prepared(
     broker_scope: tuple[int, ...] = (2,),
     start: date = SELECTED_START,
     end: date = SELECTED_END,
+    technical_window: DateRangeModel | None = None,
 ) -> AiExportPreparedRequest:
     request = AiExportAssetSnapshotRequest(
         domain=AiExportDomain.ASSET,
         task=task,
         detail_level=detail,
         date_range=DateRangeModel(start=start, end=end),
+        technical_window=technical_window,
         target_currency="USD",
         asset_id=7,
         broker_ids=list(broker_scope) if broker_scope else None,
@@ -1158,6 +1162,7 @@ async def test_asset_selected_range_is_distinct_from_three_month_technical_windo
         event_points: Any = (),
         *,
         events_loaded: bool = True,
+        source_capability: Any = None,
     ) -> TechnicalTargetResult:
         captured.extend(price_points)
         return await _empty_technical(
@@ -1165,6 +1170,7 @@ async def test_asset_selected_range_is_distinct_from_three_month_technical_windo
             price_points,
             event_points,
             events_loaded=events_loaded,
+            source_capability=source_capability,
         )
 
     assembler, _portfolio, _prices = _asset_assembler(
@@ -1193,6 +1199,68 @@ async def test_asset_selected_range_is_distinct_from_three_month_technical_windo
     assert response.facts.normalized_return.requested_range.start == SELECTED_START
     assert response.meta.selected_range.start < response.meta.calculation_range.start
     assert all(response.meta.calculation_range.start <= point.date <= response.meta.calculation_range.end for point in captured)
+
+
+@pytest.mark.asyncio
+async def test_asset_uses_explicit_one_year_technical_window():
+    technical_start = date(2025, 7, 1)
+    captured: list[SignalPricePoint] = []
+    captured_windows: list[DateRangeModel] = []
+
+    async def capture_technical(
+        prepared: Any,
+        price_points: Any,
+        event_points: Any = (),
+        *,
+        events_loaded: bool = True,
+        source_capability: Any = None,
+    ) -> TechnicalTargetResult:
+        captured.extend(price_points)
+        captured_windows.append(prepared.technical_window)
+        return await _empty_technical(
+            prepared,
+            price_points,
+            event_points,
+            events_loaded=events_loaded,
+            source_capability=source_capability,
+        )
+
+    assembler, _portfolio, _prices = _asset_assembler(
+        price_loader=_PriceLoader(
+            [
+                _price(date(2025, 6, 30), "90"),
+                _price(technical_start, "95"),
+                _price(SELECTED_START, "100"),
+                _price(SELECTED_END, "110"),
+            ]
+        ),
+        technical_executor=capture_technical,
+    )
+
+    response = await assembler.assemble(
+        _asset_prepared(
+            AiExportAssetTask.ASSET_TREND_ANALYSIS,
+            AiExportDetailLevel.FULL,
+            technical_window=DateRangeModel(
+                start=technical_start,
+                end=SELECTED_END,
+            ),
+        ),
+        SimpleNamespace(),
+    )
+
+    assert response.meta.technical_window == DateRangeModel(
+        start=technical_start,
+        end=SELECTED_END,
+    )
+    assert captured
+    assert captured_windows == [
+        DateRangeModel(
+            start=technical_start,
+            end=SELECTED_END,
+        )
+    ]
+    assert {point.date for point in captured} >= {technical_start, SELECTED_END}
 
 
 @pytest.mark.asyncio
@@ -1268,6 +1336,7 @@ async def test_fx_backward_fill_is_preserved_for_technical_and_deduplicated():
         event_points: Any = (),
         *,
         events_loaded: bool = True,
+        source_capability: Any = None,
     ) -> TechnicalTargetResult:
         captured.extend(price_points)
         return await _empty_technical(
@@ -1275,6 +1344,7 @@ async def test_fx_backward_fill_is_preserved_for_technical_and_deduplicated():
             price_points,
             event_points,
             events_loaded=events_loaded,
+            source_capability=source_capability,
         )
 
     converter = _FxConverter(backfill_weekends=True)

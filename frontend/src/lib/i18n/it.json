@@ -208,7 +208,9 @@
             "askProviderHint": "Recupera identificativi dal provider assegnato",
             "addIdentifier": "Aggiungi identificativo",
             "deleteSelected": "Elimina identificatori selezionati",
-            "deleteConfirmMessage": "Eliminare {n} identificatori?"
+            "deleteConfirmMessage": "Eliminare {n} identificatori?",
+            "otherLabel": "Altri identificatori",
+            "otherPlaceholder": "Aggiungi codice o nome, poi Invio"
         },
         "confirm": {
             "saveWithoutTest": "Salvare senza test?",
@@ -463,7 +465,11 @@
             "high": "Alta confidenza: forte corrispondenza di simbolo o ISIN",
             "medium": "Media confidenza: solo simbolo (tipo non verificato)",
             "low": "Bassa confidenza: corrispondenza parziale o solo per nome"
-        }
+        },
+        "brokerOpeningMsg": "{count} transazione/i datata/e prima dell'apertura del broker ({openedAt}). Più vecchia: {minDate}.",
+        "autoFixOpening": "Imposta apertura a {date}",
+        "autoFixOpeningTip": "Imposta la data di apertura del broker alla sua transazione più vecchia, così le righe diventano importabili.",
+        "autoFixFailed": "Impossibile aggiornare la data di apertura del broker."
     },
     "brokers": {
         "title": "Broker",

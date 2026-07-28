@@ -126,7 +126,7 @@ BROKER_TASK_SPECS = (
     TaskSpec(
         domain=AiExportDomain.BROKER,
         task=AiExportTask.BROKER_FIFO_LOT_REVIEW,
-        required_sections=("facts.summary", "facts.positions", "facts.fifo_summary", "coverage", "semantics"),
+        required_sections=("facts.summary", "facts.positions", "facts.fifo_summary", "facts.fifo_lots", "coverage", "semantics"),
         optional_sections=("states", "technical", "events", "domain_notes"),
         applicability_code="broker_accessible_via_broker_user_access",
         frontend_response_contract_id="broker.broker_fifo_lot_review",
@@ -138,6 +138,14 @@ BROKER_TASK_SPECS = (
             10,
             metric="residual_cost_basis",
             ordering="descending",
+            # Explicit per-lot selection rule for facts.fifo_lots (distinct from the asset-level
+            # position/detail selection above): 7 largest open/partial lots by absolute residual
+            # cost basis + 3 most recently closed lots, backfilling unused quota from the other
+            # category up to a fixed limit of 10. See assemblers/fifo.py.
+            lot_selection_rule="largest_open_residual_plus_most_recent_closed",
+            lot_entity_limit=10,
+            lot_open_quota=7,
+            lot_closed_quota=3,
         ),
         technical_by_detail=_asset_technical(
             TechnicalDepth.NONE,

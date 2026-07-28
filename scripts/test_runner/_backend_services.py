@@ -24,6 +24,11 @@ from ._common import (
 AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_asset_fx.py",
     "backend/test_scripts/test_services/test_ai_export_component_runtime.py",
+    "backend/test_scripts/test_services/test_ai_export_components_asset.py",
+    "backend/test_scripts/test_services/test_ai_export_components_fx.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py",
+    "backend/test_scripts/test_services/test_ai_export_components_technical.py",
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_coverage.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",

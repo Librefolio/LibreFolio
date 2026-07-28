@@ -38,9 +38,10 @@ LibreFolio interface language.
 |---|---|
 | **Analysis type** | **Data Snapshot** is always first and copies factual data only. Every other choice is an analysis that automatically includes its task instructions and response contract. |
 | **Detail level** | **Compact** uses latest values/aggregates only with no series and an explicit compact entity selection where applicable. **Standard** includes all applicable entities with up to 7 recent daily points plus 8 preceding weekly points. **Full** includes all applicable entities with 7 recent daily points plus weekly points across the full technical window. A task/profile may omit unavailable or non-applicable sections. |
+| **Technical window** | Select **3M** (default), **6M**, **1Y**, or a custom duration in days, weeks, months, or years. It controls how far back technical signals and series are evaluated, always ending on the snapshot date; it does not change the selected financial date range. |
 | **Notes for the AI** | Available for supported analyses. Adds optional user context as a safely serialized data block. |
 
-Draft task, detail, and notes are remembered per authenticated user and page
+Draft task, detail, technical window, and notes are remembered per authenticated user and page
 context. Closing the panel or navigating away does not discard them.
 
 ## 🗂️ Available Tasks
@@ -53,6 +54,7 @@ context. Closing the panel or navigating away does not discard them.
 | Portfolio Rebalancing | Compare current allocation with diversification and target-allocation context. |
 | Performance Attribution | Identify the main contributors to performance over the selected period. |
 | Portfolio Income Review | Review dividends, interest, and other portfolio income. |
+| Portfolio FIFO Lot Review | Review all open lots plus lots closed during the previous three months across the active Dashboard broker scope. |
 | Technical Breadth | Summarize technical signal breadth across portfolio assets. |
 | Portfolio Description | Produce a factual overview of composition, allocation, and recent activity. |
 
@@ -63,7 +65,7 @@ context. Closing the panel or navigating away does not discard them.
 | Broker Review | Summarize holdings, cash, activity, performance, and data coverage for one broker. |
 | Broker Cost Efficiency | Review fees, taxes, turnover, and cost patterns. |
 | Broker Concentration Context | Review concentration by assets, currencies, and portfolio share. |
-| FIFO Lot Review | Summarize aggregate open/partial/closed FIFO counts, residual cost basis, age, and result components for one broker. |
+| FIFO Lot Review | Review all open lots plus lots closed during the previous three months for one broker. |
 
 ### 📈 Asset
 

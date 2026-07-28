@@ -188,6 +188,69 @@ async def test_buy_sell_summary_converts_to_target_currency(session, test_user, 
     assert lot.total_value == Decimal("1690")
     assert lot.pnl == Decimal("490")
     assert lot.states == ["LONG", "PARTIALLY_CLOSED"]
+    assert lot.closing_date is None
+
+
+@pytest.mark.asyncio
+async def test_closing_date_set_only_for_fully_closed_lot(session, test_user, asset, broker):
+    """closing_date must be the max LotClosure.close_date when open_quantity == 0, else None."""
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 2, 1),
+                quantity=Decimal("-6"),
+                amount=Decimal("780"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 3, 15),
+                quantity=Decimal("-4"),
+                amount=Decimal("560"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 3, 15),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    assert result.lots is not None
+    assert len(result.lots) == 1
+    lot = result.lots[0]
+    assert lot.open_quantity == Decimal("0")
+    assert lot.closing_date == date(2025, 3, 15)
 
 
 @pytest.mark.asyncio

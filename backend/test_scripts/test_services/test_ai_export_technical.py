@@ -23,6 +23,7 @@ from backend.app.schemas.ai_export import (
     AiExportPortfolioTask,
 )
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint
 from backend.app.schemas.signals import (
     SignalAnnotation,
     SignalAnnotationDirection,
@@ -34,8 +35,10 @@ from backend.app.schemas.signals import (
     SignalPricePoint,
     SignalResult,
     SignalSeriesKind,
+    SignalSourceCapability,
     SignalStatus,
     SignalValuePoint,
+    SignalVolumeKind,
 )
 from backend.app.services.ai_export.resolver import resolve_profile
 from backend.app.services.ai_export.sampling import NumericPoint, sample_numeric_points
@@ -45,6 +48,7 @@ from backend.app.services.ai_export.technical import (
     execute_technical_target,
     prepare_technical_target,
 )
+from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.provider_registry import SignalPluginRegistry
 
 ASSET_TARGET = AiExportAssetTargetReference(kind="asset", asset_id=11)
@@ -71,7 +75,9 @@ class FakeExecutionService:
         event_points=(),
         *,
         events_loaded=False,
+        source_capability=None,
     ):
+        self.captured_source_capability = source_capability
         return list(self.results)
 
 
@@ -512,8 +518,14 @@ async def test_real_standard_asset_and_fx_runs_have_sufficient_history(domain):
         volume=volume,
         base=Decimal("1.1") if domain == "fx" else Decimal("100"),
     )
+    # Numeric volume alone must not grant eligibility: the runner only trusts
+    # volume semantics when the caller threads an authoritative capability
+    # derived from the observed source_plugin_key (e.g. Yahoo/Borsa-like
+    # providers). Asset callers pass it explicitly here; FX has no meaningful
+    # volume source and is left unset (unknown/false).
+    source_capability = SignalSourceCapability(supports_meaningful_volume=True, volume_kind=SignalVolumeKind.TRADED_SHARES) if domain == "asset" else None
 
-    result = await execute_technical_target(prepared, points)
+    result = await execute_technical_target(prepared, points, source_capability=source_capability)
 
     assert result.technical_target is not None
     signal_ids = [signal.instance_id for signal in result.technical_target.signals]
@@ -533,6 +545,71 @@ async def test_real_standard_asset_and_fx_runs_have_sufficient_history(domain):
     else:
         assert result.target_coverage.volume_eligible is False
         assert result.target_coverage.volume_analyzed is False
+
+
+@pytest.mark.asyncio
+async def test_manual_or_unknown_source_leaves_volume_signal_unanalyzed_despite_numeric_volume():
+    """Regression guard for the AI Export/Signal source-capability contract:
+    a MANUAL/unresolved source can still populate numeric ``volume`` values,
+    but without an authoritative capability the runner must not treat that
+    numeric presence as license to run volume-dependent signals (MFI/OBV).
+    Structural eligibility (``volume_eligible``) stays true because the data
+    is present; semantic analysis (``volume_analyzed``) must stay false.
+    """
+    prepared = _prepare(profile=_profile(), target=ASSET_TARGET)
+    assert prepared is not None
+    points = _price_points(
+        prepared.calculation_range.start,
+        prepared.calculation_range.end,
+        volume=True,
+    )
+
+    # No source_capability threaded (as if derived from MANUAL/unregistered/
+    # mixed sources): defaults to unknown/false.
+    result = await execute_technical_target(prepared, points)
+
+    assert result.target_coverage.analyzed is True
+    assert result.target_coverage.volume_eligible is True
+    assert result.target_coverage.volume_analyzed is False
+    signal_ids = {signal.instance_id for signal in result.technical_target.signals} if result.technical_target is not None else set()
+    assert "mfi_14" not in signal_ids
+
+
+@pytest.mark.asyncio
+async def test_backward_filled_only_source_is_not_evidence_and_leaves_volume_unanalyzed():
+    """Integration guard: even when every observed point nominally carries a
+    real provider's ``source_plugin_key`` (e.g. ``"yfinance"``), if all of
+    them are backward-filled (no date was ever directly observed by that
+    source) ``AssetSourceManager.derive_signal_source_capability`` must fail
+    closed, and that closed verdict must actually suppress volume-dependent
+    signal analysis once threaded through ``execute_technical_target``.
+    """
+    prepared = _prepare(profile=_profile(), target=ASSET_TARGET)
+    assert prepared is not None
+
+    fa_points = [
+        FAPricePoint(
+            date=prepared.calculation_range.start + timedelta(days=index),
+            close=Decimal("100") + Decimal(index),
+            volume=Decimal("1000"),
+            source_plugin_key="yfinance",
+            backward_fill_info=AssetBackwardFillInfo(actual_rate_date=prepared.calculation_range.start, days_back=index),
+        )
+        for index in range((prepared.calculation_range.end - prepared.calculation_range.start).days + 1)
+    ]
+    capability = AssetSourceManager.derive_signal_source_capability(fa_points)
+    assert capability.supports_meaningful_volume is False
+
+    points = _price_points(
+        prepared.calculation_range.start,
+        prepared.calculation_range.end,
+        volume=True,
+    )
+
+    result = await execute_technical_target(prepared, points, source_capability=capability)
+
+    assert result.target_coverage.volume_eligible is True
+    assert result.target_coverage.volume_analyzed is False
 
 
 @pytest.mark.asyncio

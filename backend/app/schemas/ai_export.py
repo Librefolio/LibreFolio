@@ -110,6 +110,7 @@ class AiExportTask(StrEnum):
     REBALANCING = "rebalancing"
     PERFORMANCE_ATTRIBUTION = "performance_attribution"
     INCOME_REVIEW = "income_review"
+    PORTFOLIO_FIFO_LOT_REVIEW = "portfolio_fifo_lot_review"
     TECHNICAL_BREADTH = "technical_breadth"
     PORTFOLIO_DESCRIPTION = "portfolio_description"
     ASSET_SNAPSHOT = "asset_snapshot"
@@ -131,6 +132,7 @@ class AiExportPortfolioTask(StrEnum):
     REBALANCING = "rebalancing"
     PERFORMANCE_ATTRIBUTION = "performance_attribution"
     INCOME_REVIEW = "income_review"
+    PORTFOLIO_FIFO_LOT_REVIEW = "portfolio_fifo_lot_review"
     TECHNICAL_BREADTH = "technical_breadth"
     PORTFOLIO_DESCRIPTION = "portfolio_description"
 
@@ -237,7 +239,21 @@ class AiExportSnapshotRequestBase(AiExportModel):
     task: AiExportTask
     detail_level: AiExportDetailLevel
     date_range: DateRangeModel
+    technical_window: DateRangeModel | None = Field(
+        None,
+        description="Optional inclusive technical-analysis window. Its end must equal snapshot_as_of; omitted defaults to 3 calendar months.",
+    )
     target_currency: CurrencyCode
+
+    @model_validator(mode="after")
+    def validate_technical_window(self) -> Self:
+        if self.technical_window is None:
+            return self
+        snapshot_as_of = self.date_range.end or self.date_range.start
+        technical_end = self.technical_window.end or self.technical_window.start
+        if technical_end != snapshot_as_of:
+            raise ValueError("technical_window.end must equal snapshot_as_of")
+        return self
 
 
 class AiExportPortfolioSnapshotRequest(AiExportSnapshotRequestBase):
@@ -800,15 +816,63 @@ class AiExportPortfolioSummary(AiExportModel):
     roi_cumulative_pct: SafeDecimal | None = None
 
 
-class AiExportPortfolioFacts(AiExportModel):
-    summary: AiExportPortfolioSummary
-    positions: list[AiExportPosition] = Field(default_factory=list)
-    contributions: list[AiExportContribution] = Field(default_factory=list)
-    unallocated_contributions: list[AiExportUnallocatedContribution] = Field(default_factory=list)
-    other_period_effects: list[AiExportOtherPeriodEffect] = Field(default_factory=list)
-    allocations: AiExportPortfolioAllocations = Field(default_factory=AiExportPortfolioAllocations)
-    cash_context: AiExportCashContext | None = None
-    selection: AiExportSelectionMetadata | None = None
+class AiExportFifoLotDirection(StrEnum):
+    LONG = "LONG"
+    SHORT = "SHORT"
+
+
+class AiExportFifoLotStatus(StrEnum):
+    OPEN = "open"
+    PARTIAL = "partial"
+    CLOSED = "closed"
+
+
+class AiExportFifoLotValueSource(StrEnum):
+    MARKET_PRICE = "MARKET_PRICE"
+    ESTIMATED_AT_COST = "ESTIMATED_AT_COST"
+
+
+class AiExportFifoLotRow(AiExportModel):
+    """One authoritative FIFO lot row: every open/partial lot plus fully closed lots whose
+    authoritative closing_date falls within the reporting cutoff (previous 3 calendar months
+    relative to snapshot_as_of). Primary identity is asset + opening_date + opening broker;
+    lot_id/opening_transaction_id are internal engine identifiers and are never serialized.
+    """
+
+    asset_id: PositiveInt
+    asset_name: str = Field(..., min_length=1, max_length=300)
+    asset_symbol: str | None = Field(None, min_length=1, max_length=64)
+    opening_broker_id: PositiveInt
+    opening_broker_name: str | None = Field(None, min_length=1, max_length=300)
+    opening_date: date
+    closing_date: date | None = Field(None, description="Authoritative closing date; set only when status=closed.")
+    direction: AiExportFifoLotDirection
+    status: AiExportFifoLotStatus
+    opening_unit_price: Currency
+    original_quantity: SafeDecimal
+    open_quantity: SafeDecimal
+    realized_quantity: SafeDecimal
+    original_cost: Currency
+    residual_cost_basis: Currency = Field(..., description="original_cost * open_quantity / original_quantity; 0 for closed lots.")
+    cumulative_proceeds: Currency
+    open_value: Currency | None = None
+    realized_pnl: Currency
+    unrealized_pnl: Currency | None = None
+    total_pnl: Currency | None = None
+    income: Currency
+    fees: Currency
+    taxes: Currency
+    net_total_pnl: Currency | None = None
+    value_source: AiExportFifoLotValueSource | None = None
+    states: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_closing_date(self) -> Self:
+        if self.status == AiExportFifoLotStatus.CLOSED and self.closing_date is None:
+            raise ValueError("closed lot rows require closing_date")
+        if self.status != AiExportFifoLotStatus.CLOSED and self.closing_date is not None:
+            raise ValueError("only closed lot rows may set closing_date")
+        return self
 
 
 class AiExportFifoSummary(AiExportModel):
@@ -825,6 +889,20 @@ class AiExportFifoSummary(AiExportModel):
     in_transit_quantity: SafeDecimal | None = None
     short_quantity: SafeDecimal | None = None
     estimated_at_cost_value: Currency | None = None
+
+
+class AiExportPortfolioFacts(AiExportModel):
+    summary: AiExportPortfolioSummary
+    positions: list[AiExportPosition] = Field(default_factory=list)
+    contributions: list[AiExportContribution] = Field(default_factory=list)
+    unallocated_contributions: list[AiExportUnallocatedContribution] = Field(default_factory=list)
+    other_period_effects: list[AiExportOtherPeriodEffect] = Field(default_factory=list)
+    allocations: AiExportPortfolioAllocations = Field(default_factory=AiExportPortfolioAllocations)
+    cash_context: AiExportCashContext | None = None
+    fifo_summary: AiExportFifoSummary | None = None
+    fifo_lots: list[AiExportFifoLotRow] = Field(default_factory=list)
+    fifo_lot_selection: AiExportSelectionMetadata | None = None
+    selection: AiExportSelectionMetadata | None = None
 
 
 class AiExportNormalizedReturnPoint(AiExportModel):
@@ -1075,6 +1153,8 @@ class AiExportBrokerFacts(AiExportModel):
     concentration: AiExportBrokerConcentration | None = None
     latest_transaction: AiExportLatestTransaction | None = None
     fifo_summary: AiExportFifoSummary | None = None
+    fifo_lots: list[AiExportFifoLotRow] = Field(default_factory=list)
+    fifo_lot_selection: AiExportSelectionMetadata | None = None
     selection: AiExportSelectionMetadata | None = None
 
 

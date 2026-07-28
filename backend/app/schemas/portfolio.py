@@ -583,6 +583,7 @@ class LotSummarySchema(BaseModel):
     direction: LotDirection
     opening_broker_id: int
     opening_date: date_type
+    closing_date: Optional[date_type] = Field(None, description="Authoritative closing date (max LotClosure.close_date) when fully closed (open_quantity == 0). None otherwise.")
     opening_unit_price: SafeDecimal = Field(..., description="Opening unit price converted to response target_currency.")
     original_quantity: SafeDecimal
     original_cost: SafeDecimal = Field(..., description="Original lot cost in response target_currency.")

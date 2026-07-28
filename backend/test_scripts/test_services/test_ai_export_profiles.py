@@ -39,6 +39,7 @@ EXPECTED_TASK_IDS = (
     "portfolio.rebalancing",
     "portfolio.performance_attribution",
     "portfolio.income_review",
+    "portfolio.portfolio_fifo_lot_review",
     "portfolio.technical_breadth",
     "portfolio.portfolio_description",
     "asset.asset_snapshot",
@@ -60,6 +61,7 @@ EXPECTED_METADATA = {
     "portfolio.rebalancing": ("largest_nav", 12, "portfolio_accessible", True, True),
     "portfolio.performance_attribution": ("period_pnl_positive_and_negative", 10, "selected_range_has_data", True, False),
     "portfolio.income_review": ("largest_period_income", 10, "portfolio_accessible", True, False),
+    "portfolio.portfolio_fifo_lot_review": ("largest_residual_cost_basis", 10, "portfolio_accessible", True, False),
     "portfolio.technical_breadth": ("recent_events_weighted_by_nav", 10, "portfolio_accessible_technical_optional", False, True),
     "portfolio.portfolio_description": ("largest_nav", 10, "portfolio_accessible", True, False),
     "asset.asset_snapshot": ("single_entity", 1, "asset_exists", True, True),
@@ -177,11 +179,11 @@ def _signal_signature(signal_spec):
 
 
 def test_catalog_has_exact_frozen_counts_and_domain_distribution():
-    assert len(TASK_SPECS) == 18
+    assert len(TASK_SPECS) == 19
     assert len(DETAIL_OVERLAYS) == 3
-    assert len(ALL_PROFILES) == 54
+    assert len(ALL_PROFILES) == 57
     assert Counter(profile.domain for profile in ALL_PROFILES) == {
-        AiExportDomain.PORTFOLIO: 18,
+        AiExportDomain.PORTFOLIO: 21,
         AiExportDomain.ASSET: 15,
         AiExportDomain.FX: 9,
         AiExportDomain.BROKER: 12,
@@ -311,6 +313,9 @@ def test_portfolio_and_broker_technical_profiles_reference_asset_bundle_by_detai
         AiExportTask.BROKER_COST_EFFICIENCY,
         AiExportTask.BROKER_FIFO_LOT_REVIEW,
     }
+    no_technical_all_levels = {
+        AiExportTask.PORTFOLIO_FIFO_LOT_REVIEW,
+    }
     asset_bundle_by_detail = {
         AiExportDetailLevel.COMPACT: ASSET_COMPACT_BUNDLE,
         AiExportDetailLevel.STANDARD: ASSET_STANDARD_BUNDLE,
@@ -319,7 +324,7 @@ def test_portfolio_and_broker_technical_profiles_reference_asset_bundle_by_detai
     for profile in ALL_PROFILES:
         if profile.domain not in (AiExportDomain.PORTFOLIO, AiExportDomain.BROKER):
             continue
-        if profile.detail_level == AiExportDetailLevel.COMPACT and profile.task in no_technical_compact:
+        if profile.task in no_technical_all_levels or (profile.detail_level == AiExportDetailLevel.COMPACT and profile.task in no_technical_compact):
             assert profile.technical_depth == TechnicalDepth.NONE
             assert profile.technical_bundle is None
         else:
@@ -396,7 +401,7 @@ def test_portfolio_contribution_sections_are_profile_gated_for_every_task_and_de
         assert contribution_sections <= set(profile.optional_sections)
         assert contribution_sections.isdisjoint(profile.required_sections)
     else:
-        assert task == AiExportPortfolioTask.TECHNICAL_BREADTH
+        assert task in {AiExportPortfolioTask.TECHNICAL_BREADTH, AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW}
         assert contribution_sections.isdisjoint(profile.required_sections)
         assert contribution_sections.isdisjoint(profile.optional_sections)
 
@@ -426,7 +431,7 @@ def test_catalog_conversion_validates_through_schema_and_exposes_no_prompt_or_la
     response = to_catalog_response()
     validated = AiExportCatalogResponse.model_validate(response.model_dump(mode="json"))
     assert validated.schema_version == 1
-    assert len(validated.entries) == 54
+    assert len(validated.entries) == 57
     assert [entry.profile_id for entry in validated.entries] == list(SUPPORTED_PROFILE_IDS)
     expected_entry_keys = {
         "domain",

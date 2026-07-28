@@ -26,6 +26,7 @@ interface AiExportSnapshotRequestInputBase<D extends AiExportGeneratedDomain, T>
     task: T;
     detail_level: AiExportGeneratedDetailLevel;
     date_range: AiExportDateRangeInput;
+    technical_window?: AiExportDateRangeInput | null;
     target_currency: string;
 }
 
@@ -177,6 +178,7 @@ export function canonicalizeAiExportSnapshotRequest(request: AiExportSnapshotReq
     if (request === null || typeof request !== 'object') return request;
 
     const dateRange = canonicalizeDateRange(request.date_range);
+    const technicalWindow = request.technical_window ? canonicalizeDateRange(request.technical_window) : request.technical_window;
     const targetCurrency = canonicalizeCurrency(request.target_currency);
 
     switch (request.domain) {
@@ -184,6 +186,7 @@ export function canonicalizeAiExportSnapshotRequest(request: AiExportSnapshotReq
             return {
                 ...request,
                 date_range: dateRange,
+                technical_window: technicalWindow,
                 target_currency: targetCurrency,
                 broker_ids: canonicalizeBrokerIds(request.broker_ids),
             };
@@ -191,6 +194,7 @@ export function canonicalizeAiExportSnapshotRequest(request: AiExportSnapshotReq
             return {
                 ...request,
                 date_range: dateRange,
+                technical_window: technicalWindow,
                 target_currency: targetCurrency,
                 broker_ids: canonicalizeBrokerIds(request.broker_ids),
             };
@@ -198,6 +202,7 @@ export function canonicalizeAiExportSnapshotRequest(request: AiExportSnapshotReq
             return {
                 ...request,
                 date_range: dateRange,
+                technical_window: technicalWindow,
                 target_currency: targetCurrency,
                 base_currency: canonicalizeCurrency(request.base_currency),
                 quote_currency: canonicalizeCurrency(request.quote_currency),
@@ -207,6 +212,7 @@ export function canonicalizeAiExportSnapshotRequest(request: AiExportSnapshotReq
             return {
                 ...request,
                 date_range: dateRange,
+                technical_window: technicalWindow,
                 target_currency: targetCurrency,
             };
     }
@@ -360,6 +366,15 @@ function assertSnapshotContract(request: AiExportSnapshotRequest, choice: AiExpo
 
     addMismatch(mismatches, 'response.meta.selected_range.start', request.date_range.start, response.meta.selected_range.start);
     addMismatch(mismatches, 'response.meta.selected_range.end', normalizeOptionalDate(request.date_range.end), normalizeOptionalDate(response.meta.selected_range.end));
+    if (request.technical_window) {
+        const responseTechnicalWindow = response.meta.technical_window;
+        if (!responseTechnicalWindow || Array.isArray(responseTechnicalWindow)) {
+            addMismatch(mismatches, 'response.meta.technical_window', true, false);
+        } else {
+            addMismatch(mismatches, 'response.meta.technical_window.start', request.technical_window.start, responseTechnicalWindow.start);
+            addMismatch(mismatches, 'response.meta.technical_window.end', normalizeOptionalDate(request.technical_window.end), normalizeOptionalDate(responseTechnicalWindow.end));
+        }
+    }
     addMismatch(mismatches, 'response.meta.target_currency', request.target_currency, response.meta.target_currency);
 
     if (request.domain === 'asset' && response.domain === 'asset') {

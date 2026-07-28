@@ -835,6 +835,7 @@
                 responseLanguage: options.responseLanguage,
                 userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
                 webResearch: options.webResearch,
+                technicalWindow: options.technicalWindow,
                 compatibility: fxAiExportCompatibility,
             });
             if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, fxAiExportContextGeneration, fxAiExportContextFingerprint)) {

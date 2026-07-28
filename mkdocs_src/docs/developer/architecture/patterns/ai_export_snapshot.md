@@ -132,22 +132,22 @@ The backend catalog keeps `supports_web_research` compatibility metadata for
 internal/backward-compatible rendering paths, but this panel exposes no web
 research control and always passes `webResearch: false`.
 
-Panel dirty state compares normalized effective task, detail, render mode,
-language, notes, and forced-false web research against the values captured when
-the panel opened. Outside click, Escape, and trigger-close requests use the
-shared discard `ConfirmModal`; a successful export commits and closes directly.
+Panel drafts persist per authenticated user and page context. Portfolio and
+Broker use one key per scope, while Asset and FX use one key per entity. Closing
+and reopening the panel restores task, detail, and notes without a discard
+confirmation.
 
 ## 🗂️ Curated Profile Catalog
 
-The allow-list is the Cartesian product of **18 frozen tasks** and the three
-detail overlays `compact`, `standard`, and `full`: **54 profiles**.
+The allow-list is the Cartesian product of **19 frozen tasks** and the three
+detail overlays `compact`, `standard`, and `full`: **57 profiles**.
 
-| Domain    | Tasks                                                                                                                        | Count |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------- | ----: |
-| Portfolio | recurring investment planning, rebalancing, performance attribution, income review, technical breadth, portfolio description |     6 |
-| Asset     | snapshot, trend analysis, position review, recurring investment timing, drawdown and recovery                                |     5 |
-| FX        | trend review, exposure impact, conversion timing context                                                                     |     3 |
-| Broker    | review, cost efficiency, concentration context, FIFO lot review                                                              |     4 |
+| Domain    | Tasks                                                                                                                                         | Count |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----: |
+| Portfolio | recurring investment planning, rebalancing, performance attribution, income review, FIFO lot review, technical breadth, portfolio description |     7 |
+| Asset     | snapshot, trend analysis, position review, recurring investment timing, drawdown and recovery                                                 |     5 |
+| FX        | trend review, exposure impact, conversion timing context                                                                                      |     3 |
+| Broker    | review, cost efficiency, concentration context, FIFO lot review                                                                               |     4 |
 
 `resolve_profile()` performs an exact lookup. It does not normalize unsupported
 values, choose defaults, auto-enrol signal plugins, or fall back to another
@@ -161,6 +161,12 @@ Detail overlays control cardinality, sampling, precision, and event limits:
   samples.
 - **Full** includes all applicable entities and weekly samples across the full
   technical window.
+
+The request can provide an explicit `technical_window`. The UI offers 3M
+(default), 6M, 1Y, and a custom positive duration in days, weeks, months, or
+years. It resolves the duration to exact inclusive dates ending at
+`snapshot_as_of`; `date_range` remains the independent financial analysis
+period. Older clients that omit the field retain the backend 3M default.
 
 ## 🏗️ Backend Assembly Boundary
 
@@ -179,13 +185,31 @@ math:
 | Source seam                                       | AI Export use                                                                                       |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `PortfolioService` / `PortfolioCalculationEngine` | NAV, holdings, WAC-based cost and P&L, contributions, allocations, history, and cash decomposition. |
-| `LotsAnalysisService`                             | Runtime FIFO lot summaries for Asset and Broker tasks.                                              |
+| `LotsAnalysisService`                             | Runtime FIFO aggregates and eligible per-lot summaries for Asset, Portfolio, and Broker tasks.       |
 | `AssetSourceManager` and Asset metadata           | Bulk prices/events, identity, classification, and valuation context.                                |
 | FX `convert_bulk`                                 | Historical pair observations and snapshot-date currency conversion.                                 |
 | `SignalService`                                   | Plugin planning, warm-up, coverage, calculation, canonical outputs, states, and annotations.        |
 
 Source failures are translated into stable typed problems; assemblers do not
 silently invent missing facts.
+
+### 🧱 FIFO Row Boundary
+
+Portfolio and Broker FIFO reviews export point-in-time lot rows, not histories.
+The eligible universe contains every open or partially closed lot plus fully
+closed lots whose authoritative closing date falls within the three calendar
+months before `snapshot_as_of`. Historical transaction asset IDs are loaded for
+the active broker scope so recently closed assets are not lost merely because
+they are absent from current holdings.
+
+`compact` selects up to ten rows: seven largest open/partial residual cost bases
+and three most recent closures, with unused quota filled from the other group.
+`standard` and `full` retain every eligible row. Internal lot IDs are stable
+tie-breakers only and never cross the AI Export response boundary.
+
+The FIFO row expansion remains part of the unreleased version-1 contract. All
+current AI Export response contracts therefore remain at version 1; a future
+released breaking change will require an explicit version bump.
 
 ## 📐 Financial Semantics
 

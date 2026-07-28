@@ -8,7 +8,7 @@ export interface AiExportResponseContractSection {
 export interface AiExportResponseContractTemplate {
     readonly templateId: string;
     readonly contractId: string;
-    readonly version: typeof AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION;
+    readonly version: number;
     readonly domain: AiExportDomain;
     readonly task: AiExportTask;
     readonly sections: readonly AiExportResponseContractSection[];
@@ -18,12 +18,12 @@ function section(title: string, ...requirements: readonly string[]): AiExportRes
     return {title, requirements};
 }
 
-function defineResponseContract<D extends AiExportDomain>(domain: D, task: AiExportTaskForDomain<D>, sections: readonly AiExportResponseContractSection[]): AiExportResponseContractTemplate {
+function defineResponseContract<D extends AiExportDomain>(domain: D, task: AiExportTaskForDomain<D>, sections: readonly AiExportResponseContractSection[], version: number = AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION): AiExportResponseContractTemplate {
     const contractId = `${domain}.${task}`;
     return {
-        templateId: `aiExport.responseContracts.${contractId}.v1`,
+        templateId: `aiExport.responseContracts.${contractId}.v${version}`,
         contractId,
-        version: AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION,
+        version,
         domain,
         task,
         sections,
@@ -67,6 +67,16 @@ export const AI_EXPORT_RESPONSE_CONTRACTS = {
         section('Reinvestment or Spending Context', 'Frame implications conditionally on user goals.'),
         section('Data Gaps and Assumptions', 'List missing yield, tax, timing, or classification information.'),
         section('Neutral Options to Evaluate', 'Present non-prescriptive considerations supported by the snapshot.'),
+    ]),
+    portfolio_fifo_lot_review: defineResponseContract('portfolio', 'portfolio_fifo_lot_review', [
+        section('FIFO Scope and Eligibility', 'State the active Dashboard broker scope, snapshot date, matching method, recent-closure cutoff, and compact selection rule when applicable.'),
+        section('Open and Partial Lot Table', 'Summarize the exported current lot rows by asset and opening date.'),
+        section('Recently Closed Lot Table', 'Summarize only rows closed within the declared three-month window.'),
+        section('Residual Cost and Current Value', 'Keep remaining cost basis, current value, and valuation source separate.'),
+        section('Realized, Unrealized, and Net Results', 'Keep each result component and unavailable value distinct.'),
+        section('Concentration by Asset and Broker', 'Describe material lot concentration without inventing a preferred allocation.'),
+        section('Income, Fees, and Taxes', 'Keep each component and semantic separate.'),
+        section('Data Limits and Questions', 'State that rows are point-in-time summaries without lot histories, then list coverage and valuation limits.'),
     ]),
     technical_breadth: defineResponseContract('portfolio', 'technical_breadth', [
         section('Coverage', 'State eligible, analyzed, and omitted universe and NAV coverage.'),
@@ -189,14 +199,14 @@ export const AI_EXPORT_RESPONSE_CONTRACTS = {
         section('Neutral Diversification Questions', 'Frame unresolved diversification choices as questions.'),
     ]),
     broker_fifo_lot_review: defineResponseContract('broker', 'broker_fifo_lot_review', [
-        section('FIFO Scope and Method', 'State broker scope, matching method, selected range, and aggregation level.'),
-        section('Open and Partial Lots', 'Summarize counts, values, and residual cost basis.'),
-        section('Closed-Lot Summary', 'Report aggregate closure facts without implying fragment history.'),
-        section('Residual Cost Basis', 'Describe residual basis and valuation source separately.'),
+        section('FIFO Scope and Eligibility', 'State broker scope, snapshot date, matching method, recent-closure cutoff, and compact selection rule when applicable.'),
+        section('Open and Partial Lot Table', 'Summarize the exported current lot rows by asset and opening date.'),
+        section('Recently Closed Lot Table', 'Summarize only rows closed within the declared three-month window.'),
+        section('Residual Cost and Current Value', 'Keep remaining cost basis, current value, and valuation source separate.'),
         section('Realized and Unrealized Results', 'Keep result components separate.'),
-        section('Lot Age and Concentration', 'Describe average age, oldest lots, and concentration.'),
+        section('Lot Age and Concentration', 'Describe lot age and material concentration.'),
         section('Income, Fees, and Taxes', 'Keep each component and semantic separate.'),
-        section('Data Limits and Questions', 'State aggregation, coverage, estimated-at-cost, short, and in-transit limits.'),
+        section('Data Limits and Questions', 'State that rows are point-in-time summaries without lot histories, then list coverage, estimated-at-cost, short, and in-transit limits.'),
     ]),
 } satisfies Readonly<Record<AiExportTask, AiExportResponseContractTemplate>>;
 

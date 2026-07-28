@@ -48,10 +48,10 @@ const compatibilityFixture = z
     .parse(compatibilityFixtureJson);
 
 describe('AI Export v2 prompt templates', () => {
-    it('defines and renders unique v1 instructions and response contracts for all 18 tasks', () => {
-        expect(AI_EXPORT_TASK_CATALOG).toHaveLength(18);
-        expect(Object.keys(AI_EXPORT_TASK_INSTRUCTIONS)).toHaveLength(18);
-        expect(Object.keys(AI_EXPORT_RESPONSE_CONTRACTS)).toHaveLength(18);
+    it('defines and renders unique v1 instructions and response contracts for all 19 tasks', () => {
+        expect(AI_EXPORT_TASK_CATALOG).toHaveLength(19);
+        expect(Object.keys(AI_EXPORT_TASK_INSTRUCTIONS)).toHaveLength(19);
+        expect(Object.keys(AI_EXPORT_RESPONSE_CONTRACTS)).toHaveLength(19);
 
         const instructionBodies = new Set<string>();
         const contractBodies = new Set<string>();
@@ -62,7 +62,7 @@ describe('AI Export v2 prompt templates', () => {
             if (!instruction || !contract) throw new Error(`Missing templates for ${taskDefinition.domain}.${taskDefinition.backendTask}`);
 
             expect(instruction.version).toBe(1);
-            expect(contract.version).toBe(1);
+            expect(contract.version).toBe(taskDefinition.frontendResponseContract.version);
             expect(instruction.id).toBe(taskDefinition.instructionTemplateId);
             expect(contract.templateId).toBe(taskDefinition.responseContractTemplateId);
             expect(contract.contractId).toBe(taskDefinition.frontendResponseContract.id);
@@ -80,11 +80,11 @@ describe('AI Export v2 prompt templates', () => {
                 renderMode: 'full_prompt',
                 responseLanguage: 'English',
             });
-            expect(rendered.prompt).toContain(`Contract: ${contract.contractId} v1`);
+            expect(rendered.prompt).toContain(`Contract: ${contract.contractId} v${contract.version}`);
         }
 
-        expect(instructionBodies.size).toBe(18);
-        expect(contractBodies.size).toBe(18);
+        expect(instructionBodies.size).toBe(19);
+        expect(contractBodies.size).toBe(19);
     });
 
     it('preserves the approved detailed response structures', () => {
@@ -98,8 +98,28 @@ describe('AI Export v2 prompt templates', () => {
             'Optional Recent Web Context',
         ]);
         expect(sectionTitles('performance_attribution')).toEqual(['Absolute Result', 'Positive Contributors', 'Negative Contributors', 'Realized vs Unrealized', 'Income, Costs, and Taxes', 'TWRR, MWRR, and ROI Interpretation', 'Cash Flow Effect']);
+        expect(sectionTitles('portfolio_fifo_lot_review')).toEqual([
+            'FIFO Scope and Eligibility',
+            'Open and Partial Lot Table',
+            'Recently Closed Lot Table',
+            'Residual Cost and Current Value',
+            'Realized, Unrealized, and Net Results',
+            'Concentration by Asset and Broker',
+            'Income, Fees, and Taxes',
+            'Data Limits and Questions',
+        ]);
         expect(sectionTitles('technical_breadth')).toEqual(['Coverage', 'Long-Term Trend Breadth', 'Short/Medium Trend Breadth', 'Momentum Breadth', 'Volatility Observations', 'Recent Technical Events', 'Limits of Analyzed Universe']);
         expect(sectionTitles('asset_pac_timing_context')).toEqual(['Long-Term Trend', 'Distance from Averages', 'Momentum', 'Volatility/Drawdown', 'Recent Technical Events', 'Optional Web Context', 'Neutral Timing Scenarios']);
+        expect(sectionTitles('broker_fifo_lot_review')).toEqual([
+            'FIFO Scope and Eligibility',
+            'Open and Partial Lot Table',
+            'Recently Closed Lot Table',
+            'Residual Cost and Current Value',
+            'Realized and Unrealized Results',
+            'Lot Age and Concentration',
+            'Income, Fees, and Taxes',
+            'Data Limits and Questions',
+        ]);
     });
 
     it('includes exact shared boundaries and only enables trusted web instructions on request', () => {

@@ -8,6 +8,7 @@ import {FX_AI_EXPORT_TASKS} from '../catalog/fxTasks';
 import {PORTFOLIO_AI_EXPORT_TASKS} from '../catalog/portfolioTasks';
 import type {AiExportDetailLevel, AiExportDomain, AiExportTask, AiExportTaskDefinition} from '../catalog/shared';
 import {
+    AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
     AI_EXPORT_SNAPSHOT_SELECTION_ID,
     AI_EXPORT_SNAPSHOT_TASK_BY_DOMAIN,
     AI_EXPORT_TOKEN_LARGE_THRESHOLD,
@@ -129,6 +130,7 @@ describe('AI Export v2 option helpers', () => {
             responseLanguage: 'Italian',
             userNotes: undefined,
             webResearch: false,
+            technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
         });
 
         expect(
@@ -147,6 +149,7 @@ describe('AI Export v2 option helpers', () => {
             responseLanguage: 'English',
             userNotes: 'Keep fees visible.',
             webResearch: false,
+            technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
         });
 
         expect(
@@ -325,6 +328,8 @@ describe('AI Export v2 option helpers', () => {
             {...options, responseLanguage: 'Italian'},
             {...options, userNotes: 'Different note.'},
             {...options, webResearch: false},
+            {...options, technicalWindow: {preset: '6m', customAmount: 3, customUnit: 'months'}},
+            {...options, technicalWindow: {preset: 'custom', customAmount: 9, customUnit: 'weeks'}},
         ];
         const stats: AiExportPromptStats = {
             finalPrompt: {

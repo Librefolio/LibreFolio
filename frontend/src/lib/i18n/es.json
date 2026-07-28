@@ -208,7 +208,9 @@
             "askProviderHint": "Obtener identificadores del proveedor asignado",
             "addIdentifier": "Añadir identificador",
             "deleteSelected": "Eliminar identificadores seleccionados",
-            "deleteConfirmMessage": "¿Eliminar {n} identificadores?"
+            "deleteConfirmMessage": "¿Eliminar {n} identificadores?",
+            "otherLabel": "Otros identificadores",
+            "otherPlaceholder": "Añadir código o nombre, luego Enter"
         },
         "confirm": {
             "saveWithoutTest": "¿Guardar sin probar?",
@@ -463,7 +465,11 @@
             "high": "Alta confianza: fuerte coincidencia de símbolo o ISIN",
             "medium": "Confianza media: solo símbolo (tipo no verificado)",
             "low": "Baja confianza: coincidencia parcial o solo por nombre"
-        }
+        },
+        "brokerOpeningMsg": "{count} transacción(es) con fecha anterior a la apertura del bróker ({openedAt}). Más antigua: {minDate}.",
+        "autoFixOpening": "Fijar apertura en {date}",
+        "autoFixOpeningTip": "Fija la fecha de apertura del bróker en su transacción más antigua para que sus filas se puedan importar.",
+        "autoFixFailed": "No se pudo actualizar la fecha de apertura del bróker."
     },
     "brokers": {
         "title": "Brókeres",

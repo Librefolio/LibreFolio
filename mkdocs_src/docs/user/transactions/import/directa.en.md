@@ -12,13 +12,13 @@ LibreFolio supports the **CSV** format exported from Directa SIM. The screenshot
 
 Log in to [Directa](https://www.directatrading.com) and click the **CONTO** tab (❶). Then click the transactions filter icon on the left (❷) and select the time period you want — e.g. **6M** (❸).
 
-![Directa SIM — CONTO tab, transaction list, time period selector](../../../static/broker-guides/Directa_1.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+![Directa SIM — CONTO tab, transaction list, time period selector](../../../static/broker-guides/directa/Directa_1.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
 ### Step 2 — Export as CSV
 
 Click the export icon (the spreadsheet icon with the green **X**) at the top of the table. In the dialog that opens, select **File separato da virgole (csv)** and click **ESTRAI**.
 
-![Directa SIM — Export dialog, CSV option selected](../../../static/broker-guides/Directa_2.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+![Directa SIM — Export dialog, CSV option selected](../../../static/broker-guides/directa/Directa_2.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
 Save the file without opening or modifying it in Excel, then import it into LibreFolio.
 
@@ -28,5 +28,4 @@ Save the file without opening or modifying it in Excel, then import it into Libr
 - Only the **CSV** format is supported — not xlsx or ods.
 - Account operations are denominated in EUR.
 - The export covers up to 3,000 rows per file. For longer histories, export multiple periods and import them in sequence.
-
 

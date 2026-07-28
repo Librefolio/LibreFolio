@@ -130,7 +130,11 @@ test.describe('FX List Page', () => {
         const dropdown = page.getByTestId('column-visibility-dropdown');
         await expect(dropdown).toBeVisible();
         const box = await dropdown.boundingBox();
-        expect(box?.width ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(320);
+        const viewport = page.viewportSize();
+        if (!box || !viewport) throw new Error('Column visibility dropdown must have measurable viewport bounds.');
+        expect(box.width).toBeLessThan(320);
+        expect(box.x).toBeGreaterThanOrEqual(7);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width - 7);
 
         const rateItem = page.getByTestId('column-visibility-item-rate');
         const dailyItem = page.getByTestId('column-visibility-item-delta_1D');

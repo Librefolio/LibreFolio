@@ -1,6 +1,6 @@
 # Piano Applicativo: Phase 0 — AI Export Backend Snapshot e Hard Cutover
 
-**Stato**: ✅ COMPLETATO — review manuale approvata il 27 luglio 2026
+**Stato**: 🟡 ESTENSIONE FIFO POST-CUTOVER IN CORSO — 27 luglio 2026
 **Data**: 26 luglio 2026
 
 ← Analisi architetturale:
@@ -8,6 +8,9 @@
 
 ← Piano padre:
 [Phase 0 — Migrazione Segnali Backend](../plan-phase00SignalsBackendMigrationImplementation.prompt.md)
+
+→ Follow-up:
+[AI Export dataset/analysis refinement](./plan-phase00AiExportRefinementImplementation.prompt.md)
 
 ## 1. Obiettivo
 
@@ -37,9 +40,9 @@ Clipboard + privacy feedback
 Il risultato finale deve:
 
 - coprire Portfolio, Asset, FX e Broker;
-- implementare i 18 task approvati;
+- implementare i 19 task approvati;
 - supportare `compact`, `standard` e `full` per ogni task;
-- produrre esattamente 54 combinazioni allow-listed;
+- produrre esattamente 57 combinazioni allow-listed;
 - mantenere prompt, response contract, lingua e user notes nel frontend;
 - spostare nel backend dati e calcoli finanziari/tecnici;
 - essere invocabile senza UI e riusabile dal futuro MCP;
@@ -51,7 +54,7 @@ Il risultato finale deve:
 ## 2. Decisioni confermate
 
 1. Ogni task supporta tutti e tre i detail level.
-2. I 54 profili derivano da 18 task spec + 3 overlay condivisi.
+2. I 57 profili derivano da 19 task spec + 3 overlay condivisi.
 3. Ogni profilo risolto ha `profile_id` e `profile_version` stabili.
 4. Nessun dual path production.
 5. Il legacy può vivere solo come oracle/fixture di parità.
@@ -73,7 +76,7 @@ Il risultato finale deve:
 - snapshot endpoint autenticato;
 - request/response discriminate per dominio;
 - profile resolver allow-listed;
-- 54 profili deterministici;
+- 57 profili deterministici;
 - auth, user scope e broker access;
 - dati finanziari, FIFO, segnali, annotazioni, coverage e breadth;
 - normalized return compatibile;
@@ -163,7 +166,7 @@ Prima di ogni modifica:
 | Normalized return | fixture condivise + parity backend |
 | Band source | source `band` con `lower/middle/upper` |
 | Ultimo import broker | omesso senza fonte; usare `latest_transaction_date` |
-| Matrice | 18 task × 3 overlay = 54 |
+| Matrice | 19 task × 3 overlay = 57 |
 | Token estimate | canonical JSON + `chars_div_4_v1`; prompt finale frontend |
 | FX exposure | cash/posizioni collegabili; no look-through |
 | Note provenance | broker=user; asset=provider_or_user; event provider/manual |
@@ -267,6 +270,7 @@ Ogni riga supporta `compact`, `standard`, `full`.
 | Portfolio | `rebalancing` | legacy diretto | portfolio accessibile |
 | Portfolio | `performance_attribution` | greenfield | range con dati |
 | Portfolio | `income_review` | legacy diretto | portfolio accessibile |
+| Portfolio | `portfolio_fifo_lot_review` | greenfield post-cutover | lotti aperti/parziali o chiusi recenti |
 | Portfolio | `technical_breadth` | evolve `market_trend` | tecnica opzionale |
 | Portfolio | `portfolio_description` | evolve describe/snapshot data-only | portfolio accessibile |
 | Asset | `asset_snapshot` | legacy snapshot/classification facts | asset esistente |
@@ -444,7 +448,7 @@ range/currency semantics, facts dominio, meta/versioning e typed problem.
 
 **Stato**: ✅ COMPLETATO — 26 luglio 2026.
 
-Implementare manifest immutabili, 18 task spec, 3 overlay, 54 profili, version policy
+Implementare manifest immutabili, 19 task spec, 3 overlay, 57 profili, version policy
 e completeness metadata.
 
 > **Note implementazione**: aggiunto package `services/ai_export` con manifest frozen,
@@ -495,7 +499,7 @@ Eseguire `./dev.py api sync`; verificare discriminatori Zodios senza cast insicu
 
 **Stato**: ✅ SUPERATO — 26 luglio 2026.
 
-- catalogo 54;
+- catalogo 57;
 - endpoint autenticato;
 - service standalone;
 - client typed;
@@ -643,7 +647,7 @@ Testare 24 profili, fallback/applicability, FX paths, malicious notes e determin
 
 ## Macrofase E — Portfolio e Broker backend
 
-### E1 — Portfolio assembler: 18 profili
+### E1 — Portfolio assembler: 21 profili
 
 **Stato**: ✅ COMPLETATO — 26 luglio 2026.
 
@@ -692,7 +696,7 @@ transaction descriptions ambigue escluse.
 
 **Stato**: ✅ COMPLETATO — 26 luglio 2026.
 
-Testare 30 profili, multi-user/access, cardinalità, allocazioni, cash, FIFO, breadth e
+Testare 33 profili, multi-user/access, cardinalità, allocazioni, cash, FIFO, breadth e
 note malicious.
 
 > **Note implementazione**: servizio/API dispatchano ora tutti i quattro domini;
@@ -708,7 +712,7 @@ note malicious.
 
 **Stato**: ✅ SUPERATO — 26 luglio 2026.
 
-- backend completo 54;
+- backend completo 57;
 - quattro domini ready;
 - auth/security verdi;
 - service MCP-ready.
@@ -719,7 +723,7 @@ note malicious.
 
 **Stato**: ✅ COMPLETATO — 26 luglio 2026.
 
-18 task, tre detail, response contract version, backend intersection e fail-closed.
+19 task, tre detail, response contract version, backend intersection e fail-closed.
 
 > **Note implementazione**: creato catalogo locale per i quattro domini e handshake
 > raw+Zod fail-closed contro i 54 profili backend.
@@ -776,7 +780,7 @@ Catalog compatibility, 18 prompt contract, serializer, errors, clipboard e stats
 **Stato**: ✅ SUPERATO — 26 luglio 2026.
 
 - prompt solo da snapshot;
-- catalogo 54 fail-closed;
+- catalogo 57 fail-closed;
 - serializer robusto;
 - zero matematica AI frontend.
 
@@ -963,13 +967,113 @@ F1/F2/F3 e Macrofase F ✅; Phase 0 pronta per archiviazione.
 > verificata e indicizzata in [README.md](./README.md); la struttura dedicata
 > `Release_2/Phase_0/01_signalMigration/02_aiExport` è già la sua collocazione archivio.
 
+## Macrofase J — Estensione FIFO post-cutover
+
+> **⚠️ Fuori pista — 27 luglio 2026**: la review manuale ha chiarito che il solo
+> aggregato FIFO non è sufficiente per un AI Export utile. Il catalogo finale passa
+> quindi da 18/54 a 19/57. Le note storiche delle Macrofasi A-I conservano i conteggi
+> verificati prima di questa estensione.
+
+### J1 — Contratto righe FIFO e versioning
+
+**Stato**: ✅ COMPLETATO — 27 luglio 2026.
+
+- nuovo task `portfolio_fifo_lot_review`;
+- righe condivise senza `lot_id`;
+- tutti i lotti aperti/parziali;
+- lotti chiusi nei tre mesi di calendario precedenti;
+- compact 7 maggiori residual cost basis aperti/parziali + 3 chiusi più recenti,
+  con backfill fino a 10;
+- standard/full senza top-N;
+- tutti i response contract restano v1: l'estensione FIFO non è ancora rilasciata.
+
+> **Note implementazione**: aggiornati contratto task/profile, migration report,
+> frontend catalog, prompt contract e manuale. Il contratto v1 viene aggiornato in
+> place perché l'intera estensione è ancora pre-release.
+
+### J2 — Backend FIFO autorevole
+
+**Stato**: 🟡 IN CORSO — 27 luglio 2026.
+
+Estendere `LotSummarySchema` con la data di chiusura autorevole, scoprire anche gli
+asset storici dello scope transazioni e assemblare aggregate + righe FIFO per Broker
+e Portfolio.
+
+### J3 — Frontend e documentazione
+
+**Stato**: 🟡 IN CORSO — 27 luglio 2026.
+
+Aggiungere il task Dashboard, aggiornare Broker FIFO, 19 instruction/response
+contract, i18n EN/IT/FR/ES e manuale AI Export EN.
+
+### J4 — Gate estensione
+
+**Stato**: ⏳ DA ESEGUIRE.
+
+- test LotsAnalysis, schema/profile/API e assembler Portfolio/Broker;
+- `./dev.py api sync`;
+- unit AI Export frontend, format/check/build e i18n audit;
+- MkDocs build/link;
+- E2E AI Export e regressione colonne Asset/FX;
+- review manuale Dashboard/Broker.
+
+## Macrofase K — Refinement finestra tecnica e overlay responsive
+
+### K1 — Stabilità tooltip e menu colonne
+
+**Stato**: ✅ COMPLETATO — 27 luglio 2026.
+
+> **Note implementazione**: il tooltip non viene più chiuso da ogni evento
+> `scroll` catturato; resta aperto e ricalcola invece la posizione fixed. Il menu
+> visibilità colonne usa `max-content`, misura il proprio box dopo il mount e
+> applica un clamp orizzontale/verticale a 8 px dal viewport, sia desktop sia
+> mobile.
+
+### K2 — Finestra tecnica parametrica
+
+**Stato**: 🟡 IN CORSO — 27 luglio 2026.
+
+- preset UI `3M` (default), `6M`, `1Y`, `Custom`;
+- `Custom` = durata positiva + unità giorni/settimane/mesi/anni;
+- fine sempre uguale a `snapshot_as_of`;
+- indipendente dal `date_range` finanziario;
+- memoria per utente e contesto;
+- request backend opzionale `technical_window`, con fallback 3M per client legacy.
+
+> **Note implementazione**: frontend, memoria, fingerprint stats, request builder,
+> i18n EN/IT/FR/ES, test unitari e manuale EN completati. Restano schema/resolver
+> backend, API sync e gate integrato dopo la chiusura dell'estensione FIFO.
+
+> **Note implementazione — 28 luglio 2026**: Custom riallineato al pattern
+> DateRangePicker: il badge selezionato contiene direttamente input numerico e
+> `SimpleSelect` LibreFolio con unità corta localizzata; rimosso il select nativo.
+> Creato il
+> [riferimento funzionale compatto](./report-phase00AiExportFunctionalReference.md)
+> per review strutturata di parametri, prompt, task e interazioni detail/window.
+
+### K3 — Gate refinement
+
+**Stato**: ⛔ SUPERATO — 28 luglio 2026.
+
+- schema/resolver backend e test custom/default;
+- API sync;
+- frontend check/build;
+- E2E hover Dashboard, memoria finestra tecnica e payload;
+- E2E menu colonne desktop/mobile;
+- i18n audit e MkDocs build/link.
+
+> **⚠️ Fuori pista**: la review funzionale ha richiesto un cambio architetturale
+> completo (cataloghi dataset/analisi, periodo unico, bucket adattivi, nessun top-N).
+> Il lavoro residuo è migrato nel
+> [piano refinement](./plan-phase00AiExportRefinementImplementation.prompt.md).
+
 ## 10. Gate finale
 
-**Stato**: ✅ SUPERATO — 27 luglio 2026.
+**Stato**: 🟡 RIAPERTO PER J — 27 luglio 2026.
 
 Completamento soltanto con:
 
-- 54 profili versionati;
+- 57 profili versionati;
 - catalog/contract fail-closed;
 - zero leakage;
 - quattro domini backend;

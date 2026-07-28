@@ -167,7 +167,15 @@ def resolve_ranges(
     calculation_warmup_start: date | None = None,
 ) -> AiExportResolvedRanges:
     selected, snapshot_as_of = resolve_selected_range(prepared)
-    technical = default_technical_window(snapshot_as_of)
+    requested_technical = prepared.request.technical_window
+    technical = (
+        DateRangeModel(
+            start=requested_technical.start,
+            end=requested_technical.end or requested_technical.start,
+        )
+        if requested_technical is not None
+        else default_technical_window(snapshot_as_of)
+    )
     calculation = calculation_range or technical
     warmup_start = calculation_warmup_start or calculation.start
     return AiExportResolvedRanges(

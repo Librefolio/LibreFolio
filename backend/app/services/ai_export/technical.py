@@ -45,6 +45,7 @@ from backend.app.schemas.signals import (
     SignalRequest,
     SignalResult,
     SignalSeries,
+    SignalSourceCapability,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalThresholdDirection,
@@ -1180,8 +1181,20 @@ async def execute_technical_target(
     event_points: Sequence[SignalEventPoint] = (),
     signal_service: SignalService | None = None,
     events_loaded: bool = True,
+    source_capability: SignalSourceCapability | None = None,
 ) -> TechnicalTargetResult:
-    """Execute one prepared target against caller-owned bulk-loaded inputs."""
+    """Execute one prepared target against caller-owned bulk-loaded inputs.
+
+    ``source_capability`` carries the authoritative volume-semantics
+    verdict derived from the raw ``FAPricePoint`` series (via
+    ``AssetSourceManager.derive_signal_source_capability``) *after* prices
+    are loaded — the execution plan/context is frozen at
+    ``prepare_technical_target()`` time, before source provenance is known,
+    so it always defaults to unknown/false. Callers backed by real asset
+    price data (asset/portfolio/broker) must pass the capability derived
+    from that same series; FX targets have no meaningful volume source and
+    should leave this ``None``.
+    """
 
     if not isinstance(prepared, PreparedTechnicalTarget):
         raise TypeError("prepared must be a PreparedTechnicalTarget")
@@ -1192,6 +1205,7 @@ async def execute_technical_target(
             price_points,
             event_points,
             events_loaded=events_loaded,
+            source_capability=source_capability,
         )
     )
     observed_dates = _observed_close_dates(

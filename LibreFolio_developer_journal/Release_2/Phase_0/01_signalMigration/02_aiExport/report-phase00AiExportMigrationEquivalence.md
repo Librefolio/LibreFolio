@@ -78,6 +78,18 @@ I fatti finanziari condivisi restano confrontabili nello stesso scope, ma i quat
 
 sono greenfield e usano contratti Broker dedicati.
 
+### 2.5 Estensione FIFO post-cutover
+
+Sono greenfield anche:
+
+- `portfolio_fifo_lot_review`;
+- le righe per-lot sintetiche di `broker_fifo_lot_review`;
+- il filtro condiviso: tutti i lotti aperti/parziali più quelli chiusi nei tre
+  mesi di calendario precedenti;
+- la selezione compact 7 aperti/parziali + 3 chiusi recenti con backfill.
+
+Non esiste parità legacy perché il vecchio export non possedeva righe FIFO.
+
 ## 3. Detail level e cardinalità
 
 I detail level `compact`, `standard` e `full` sono greenfield:
@@ -119,12 +131,12 @@ Sono coperte come parità:
 
 La conformità greenfield è coperta da:
 
-- resolver statico: 18 task × 3 detail = 54 profili;
+- resolver statico: 19 task × 3 detail = 57 profili;
 - schemi discriminati per Portfolio, Asset, FX e Broker;
 - applicability e problemi typed;
 - fixture/API per tutti i domini;
 - catalog handshake frontend fail-closed;
-- 18 instruction template e 18 response contract;
+- 19 instruction template e 19 response contract;
 - serializer YAML/Markdown avversariale;
 - client, clipboard, stats e menu V2.
 
