@@ -253,14 +253,14 @@ def _typed_problem(response: httpx.Response) -> AiExportProblem:
 
 
 @pytest.mark.asyncio
-async def test_catalog_returns_exact_static_54_entry_contract():
+async def test_catalog_returns_exact_static_57_entry_contract():
     app = _app()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(f"{API_BASE}/catalog")
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload["entries"]) == 54
+    assert len(payload["entries"]) == 57
     assert all("prompt" not in key and "label" not in key for entry in payload["entries"] for key in entry)
 
 

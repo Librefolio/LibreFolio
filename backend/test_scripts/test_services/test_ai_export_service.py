@@ -173,10 +173,10 @@ async def test_prepare_request_resolves_exact_profile_into_immutable_context():
         prepared.user_id = 99
 
 
-def test_static_catalog_has_54_validated_entries_without_db_access():
+def test_static_catalog_has_57_validated_entries_without_db_access():
     catalog = AiExportSnapshotService.get_catalog()
 
-    assert len(catalog.entries) == 54
+    assert len(catalog.entries) == 57
     assert all("prompt" not in key and "label" not in key for entry in catalog.entries for key in entry.model_dump())
 
 

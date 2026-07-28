@@ -1,7 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
 import {AiExportContractMismatchError, type AiExportBackendExportStats, type AiExportSnapshotRequest, type AiExportSnapshotResponse} from '../aiExportClient';
-import {AiExportChoiceUnavailableError, copyAiExportV2, prepareAiExportV2, writePreparedAiExportV2, type AiExportV2PromptRenderer, type AiExportV2SnapshotFetcher, type CopyAiExportV2Input} from '../aiExportClipboardV2';
+import {AiExportChoiceUnavailableError, copyAiExportV2, prepareAiExportV2, resolveAiExportTechnicalWindowDateRange, writePreparedAiExportV2, type AiExportV2PromptRenderer, type AiExportV2SnapshotFetcher, type CopyAiExportV2Input} from '../aiExportClipboardV2';
 import type {AiExportCatalogCompatibilityChoice, AiExportCatalogCompatibilityResult} from '../catalog/compatibility';
 import {AI_EXPORT_LOCAL_CHOICES} from '../catalog/compatibility';
 import type {AiExportDetailLevel, AiExportDomain, AiExportTask} from '../catalog/shared';
@@ -50,6 +50,7 @@ describe('AI Export v2 clipboard orchestration', () => {
                     task: 'portfolio_description',
                     detail_level: 'standard',
                     date_range: {start: '2026-01-01', end: '2026-01-01'},
+                    technical_window: {start: '2025-10-01', end: '2026-01-01'},
                     target_currency: 'EUR',
                     broker_ids: [3, 9],
                 },
@@ -67,12 +68,14 @@ describe('AI Export v2 clipboard orchestration', () => {
                     detailLevel: 'compact',
                     renderMode: 'data_only',
                     responseLanguage: 'Italian',
+                    technicalWindow: {preset: '6m', customAmount: 3, customUnit: 'months'},
                 },
                 expectedRequest: {
                     domain: 'asset',
                     task: 'asset_snapshot',
                     detail_level: 'compact',
                     date_range: {start: '2026-02-01', end: '2026-06-30'},
+                    technical_window: {start: '2025-12-30', end: '2026-06-30'},
                     target_currency: 'USD',
                     asset_id: 42,
                     broker_ids: [1, 2],
@@ -91,12 +94,14 @@ describe('AI Export v2 clipboard orchestration', () => {
                     detailLevel: 'full',
                     renderMode: 'full_prompt',
                     responseLanguage: 'French',
+                    technicalWindow: {preset: '1y', customAmount: 3, customUnit: 'months'},
                 },
                 expectedRequest: {
                     domain: 'fx',
                     task: 'fx_trend_review',
                     detail_level: 'full',
                     date_range: {start: '2026-03-01', end: '2026-03-01'},
+                    technical_window: {start: '2025-03-01', end: '2026-03-01'},
                     target_currency: 'EUR',
                     base_currency: 'USD',
                     quote_currency: 'GBP',
@@ -115,12 +120,14 @@ describe('AI Export v2 clipboard orchestration', () => {
                     detailLevel: 'standard',
                     renderMode: 'full_prompt',
                     responseLanguage: 'Spanish',
+                    technicalWindow: {preset: 'custom', customAmount: 5, customUnit: 'weeks'},
                 },
                 expectedRequest: {
                     domain: 'broker',
                     task: 'broker_review',
                     detail_level: 'standard',
                     date_range: {start: '2026-04-01', end: '2026-05-31'},
+                    technical_window: {start: '2026-04-26', end: '2026-05-31'},
                     target_currency: 'CHF',
                     broker_id: 7,
                 },
@@ -157,9 +164,22 @@ describe('AI Export v2 clipboard orchestration', () => {
                     responseLanguage: scenario.input.responseLanguage,
                     userNotes: scenario.input.userNotes,
                     webResearch: scenario.input.renderMode === 'full_prompt' && scenario.input.webResearch === true,
+                    technicalWindow: scenario.input.technicalWindow,
                 }),
             );
         }
+    });
+
+    it('resolves preset and custom durations with calendar-month clamping', () => {
+        expect(resolveAiExportTechnicalWindowDateRange(undefined, '2026-07-27')).toEqual({start: '2026-04-27', end: '2026-07-27'});
+        expect(resolveAiExportTechnicalWindowDateRange({preset: 'custom', customAmount: 1, customUnit: 'months'}, '2026-03-31')).toEqual({
+            start: '2026-02-28',
+            end: '2026-03-31',
+        });
+        expect(resolveAiExportTechnicalWindowDateRange({preset: 'custom', customAmount: 10, customUnit: 'days'}, '2026-01-05')).toEqual({
+            start: '2025-12-26',
+            end: '2026-01-05',
+        });
     });
 
     it('reuses supplied compatibility and loads it only when absent', async () => {

@@ -41,9 +41,22 @@ from backend.app.schemas.ai_export import (
 )
 from backend.app.schemas.assets import FAClassificationParams
 from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel, OpenDateRangeModel
-from backend.app.schemas.portfolio import PortfolioReportQuery
+from backend.app.schemas.portfolio import LotAnalysisType, PortfolioReportQuery
 from backend.app.schemas.prices import FAAssetEventPointOut, FAPricePoint, FAPriceQueryItem
 from backend.app.schemas.signals import SignalEventPoint, SignalPricePoint
+from backend.app.services.ai_export.assemblers.asset import _fifo_summary
+from backend.app.services.ai_export.assemblers.fifo import (
+    COMPACT_TOTAL_LIMIT,
+    FIFO_LOT_SELECTION_RULE,
+    TransactionAssetIdsLoader,
+    asset_residual_cost_basis,
+    build_fifo_lot_selection_metadata,
+    closed_lot_cutoff_date,
+    collect_fifo_candidates,
+    default_transaction_asset_ids_loader,
+    has_nonzero_open_lot,
+    select_compact_fifo_lots,
+)
 from backend.app.services.ai_export.assemblers.shared import (
     AiExportAssemblerError,
     AiExportResolvedRanges,
@@ -56,6 +69,7 @@ from backend.app.services.ai_export.assemblers.shared import (
     finalize_response,
     neutral_export_stats,
     profile_allows,
+    profile_requires,
     resolve_ranges,
     utc_now,
 )
@@ -71,6 +85,7 @@ from backend.app.services.ai_export.technical import (
 )
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.fx import convert_bulk
+from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
 PortfolioServiceFactory = Callable[[AsyncSession], Any]
@@ -80,6 +95,7 @@ AssetMetadataLoader = Callable[[AsyncSession, Sequence[int]], Awaitable[Mapping[
 BrokerMetadataLoader = Callable[[AsyncSession, Sequence[int]], Awaitable[Mapping[int, Broker] | Sequence[Broker]]]
 TechnicalPreparer = Callable[..., PreparedTechnicalTarget | None]
 TechnicalExecutor = Callable[..., Awaitable[TechnicalTargetResult]]
+LotsServiceFactory = Callable[[AsyncSession], Any]
 
 PositionKey = tuple[int, int]
 
@@ -1032,6 +1048,7 @@ def _select_compact_details(
     raw_holdings: _RawHoldingMaps,
     contributions: Sequence[AiExportContribution],
     technical_events: Sequence[Any],
+    fifo_lots_by_asset: Mapping[int, Sequence[Any]] | None = None,
 ) -> tuple[set[PositionKey], set[int], AiExportSelectionMetadata]:
     spec = profile.compact_selection
     parameters = spec.parameters
@@ -1115,6 +1132,31 @@ def _select_compact_details(
             key=lambda asset_id: (-asset_weights.get(asset_id, Decimal("0")), asset_id),
         )
         selected_asset_ids = set((with_events + fallback)[: spec.entity_limit])
+        selected_position_keys = {key for key in positions_by_key if key[0] in selected_asset_ids}
+        metadata = _selection_metadata(
+            rule=spec.rule,
+            limit=spec.entity_limit,
+            all_keys=all_asset_ids,
+            selected_keys=selected_asset_ids,
+            weights=asset_weights,
+        )
+    elif task == AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW:
+        if fifo_lots_by_asset is None:
+            raise AiExportSourceFailureError(
+                "lots_analysis_service",
+                "missing_compact_fifo_selection_source",
+            )
+        asset_weights = raw_holdings.asset_nav_weights
+        all_asset_ids = sorted({position.asset_id for position in positions})
+        ranked = sorted(
+            all_asset_ids,
+            key=lambda asset_id: (
+                -asset_residual_cost_basis(fifo_lots_by_asset.get(asset_id, ())),
+                -asset_weights.get(asset_id, Decimal("0")),
+                asset_id,
+            ),
+        )
+        selected_asset_ids = set(ranked[: spec.entity_limit])
         selected_position_keys = {key for key in positions_by_key if key[0] in selected_asset_ids}
         metadata = _selection_metadata(
             rule=spec.rule,
@@ -1307,6 +1349,40 @@ def _metric_semantics(
                     cumulative=False,
                 )
             )
+    if facts.fifo_summary is not None:
+        semantics.append(
+            AiExportMetricSemantic(
+                metric_code="portfolio.fifo_residual_cost_basis",
+                unit="target_currency",
+                method="runtime_fifo_open_lot_cost_basis",
+                period=snapshot_period,
+                universe="all_held_assets",
+                cumulative=False,
+            )
+        )
+    if facts.fifo_lots:
+        semantics.append(
+            AiExportMetricSemantic(
+                metric_code="portfolio.fifo_lot_residual_cost_basis",
+                unit="target_currency",
+                method="runtime_fifo_per_lot_cost_basis",
+                period=snapshot_period,
+                universe="eligible_open_partial_and_recently_closed_lots",
+                cumulative=False,
+            )
+        )
+    if facts.fifo_lot_selection is not None:
+        semantics.append(
+            AiExportMetricSemantic(
+                metric_code="portfolio.fifo_lot_selection_nav_weight_pct",
+                unit="percentage_points",
+                denominator="gross_absolute_candidate_nav_exposure",
+                method=f"{facts.fifo_lot_selection.rule}_with_gross_nav_coverage",
+                period=snapshot_period,
+                universe="compact_fifo_lot_selection_candidates",
+                cumulative=False,
+            )
+        )
     if facts.selection is not None:
         semantics.append(
             AiExportMetricSemantic(
@@ -1330,23 +1406,82 @@ class AiExportPortfolioAssembler:
         *,
         portfolio_service_factory: PortfolioServiceFactory = PortfolioService,
         portfolio_service: Any | None = None,
+        lots_service_factory: LotsServiceFactory = LotsAnalysisService,
+        lots_service: Any | None = None,
         price_bulk_loader: PriceBulkLoader = AssetSourceManager.get_prices_bulk,
         convert_bulk_fn: ConvertBulk = convert_bulk,
         asset_metadata_loader: AssetMetadataLoader = _default_asset_metadata_loader,
         broker_metadata_loader: BrokerMetadataLoader = _default_broker_metadata_loader,
+        transaction_asset_ids_loader: TransactionAssetIdsLoader = default_transaction_asset_ids_loader,
         technical_preparer: TechnicalPreparer = prepare_technical_target,
         technical_executor: TechnicalExecutor = execute_technical_target,
         clock: Clock = utc_now,
     ) -> None:
         self._portfolio_service_factory = portfolio_service_factory
         self._portfolio_service = portfolio_service
+        self._lots_service_factory = lots_service_factory
+        self._lots_service = lots_service
         self._price_bulk_loader = price_bulk_loader
         self._convert_bulk = convert_bulk_fn
         self._asset_metadata_loader = asset_metadata_loader
         self._broker_metadata_loader = broker_metadata_loader
+        self._transaction_asset_ids_loader = transaction_asset_ids_loader
         self._technical_preparer = technical_preparer
         self._technical_executor = technical_executor
         self._clock = clock
+
+    async def _load_fifo_lots(
+        self,
+        *,
+        prepared: AiExportPreparedRequest,
+        session: AsyncSession,
+        asset_ids: Sequence[int],
+        broker_ids: Sequence[int],
+        ranges: AiExportResolvedRanges,
+        required: bool,
+    ) -> dict[int, list[Any]] | None:
+        service = self._lots_service or self._lots_service_factory(session)
+        scoped_broker_ids = sorted(set(broker_ids))
+        lots_by_asset: dict[int, list[Any]] = {}
+        for asset_id in sorted(set(asset_ids)):
+            try:
+                response = await service.get_lots_analysis(
+                    user_id=prepared.user_id,
+                    asset_id=asset_id,
+                    broker_ids=scoped_broker_ids,
+                    date_from=ranges.selected_range.start,
+                    date_to=ranges.snapshot_as_of,
+                    target_currency=prepared.request.target_currency,
+                    selected_lot_ids=None,
+                    requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+                )
+            except Exception as exc:
+                if not required:
+                    return None
+                raise AiExportSourceFailureError(
+                    "lots_analysis_service",
+                    "get_lots_analysis",
+                    context={
+                        "asset_id": asset_id,
+                        "broker_ids": scoped_broker_ids,
+                    },
+                ) from exc
+            status = (_enum_value(getattr(response, "calculation_status", None)) or "").upper()
+            lots = getattr(response, "lots", None)
+            if status not in {"COMPLETE", "DEGRADED"} or lots is None:
+                if not required:
+                    return None
+                raise AiExportSourceFailureError(
+                    "lots_analysis_service",
+                    "unreliable_lot_summary",
+                    context={
+                        "asset_id": asset_id,
+                        "broker_ids": scoped_broker_ids,
+                        "calculation_status": status or None,
+                    },
+                )
+            lots_by_asset[asset_id] = list(lots)
+        return lots_by_asset
 
     async def assemble(
         self,
@@ -1419,6 +1554,21 @@ class AiExportPortfolioAssembler:
 
         holdings = list(getattr(summary, "holdings", ()))
         asset_ids = sorted({int(row.asset_id) for row in (*holdings, *contribution_rows) if getattr(row, "asset_id", None) is not None})
+        historical_asset_ids: set[int] = set()
+        if request.task == AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW:
+            try:
+                historical_asset_ids = await self._transaction_asset_ids_loader(
+                    session,
+                    list(prepared.broker_scope),
+                    initial_ranges.snapshot_as_of,
+                )
+            except Exception as exc:
+                raise AiExportSourceFailureError(
+                    "transaction_store",
+                    "load_transaction_asset_ids",
+                    context={"broker_ids": list(prepared.broker_scope)},
+                ) from exc
+            asset_ids = sorted(set(asset_ids) | historical_asset_ids)
         broker_ids = sorted(
             set(prepared.broker_scope)
             | {int(row.broker_id) for row in (*holdings, *contribution_rows, *unallocated_rows, *other_effect_rows) if getattr(row, "broker_id", None) is not None}
@@ -1504,6 +1654,128 @@ class AiExportPortfolioAssembler:
 
         asset_weights = raw_holdings.asset_nav_weights
         held_asset_ids = sorted({position.asset_id for position in all_positions})
+
+        fifo_required = request.task == AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW and profile_requires(
+            prepared.resolved_profile,
+            "facts.fifo_summary",
+        )
+        fifo_scope_asset_ids = sorted(set(held_asset_ids) | historical_asset_ids) if request.task == AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW else []
+        fifo_lots_by_asset = (
+            await self._load_fifo_lots(
+                prepared=prepared,
+                session=session,
+                asset_ids=fifo_scope_asset_ids,
+                broker_ids=broker_ids,
+                ranges=initial_ranges,
+                required=fifo_required,
+            )
+            if fifo_required
+            else None
+        )
+
+        fifo_summary = None
+        if fifo_lots_by_asset is not None:
+            fifo_asset_ids = set(held_asset_ids)
+            selected_lots_by_asset = {asset_id: fifo_lots_by_asset.get(asset_id, []) for asset_id in sorted(fifo_asset_ids)}
+            try:
+                missing_open_lot_asset_ids = [asset_id for asset_id, lots in selected_lots_by_asset.items() if not has_nonzero_open_lot(lots)]
+            except Exception as exc:
+                if fifo_required:
+                    raise AiExportSourceFailureError(
+                        "lots_analysis_service",
+                        "invalid_open_lot_summary",
+                        context={
+                            "broker_ids": broker_ids,
+                            "asset_ids": sorted(fifo_asset_ids),
+                        },
+                    ) from exc
+                missing_open_lot_asset_ids = sorted(fifo_asset_ids)
+            if missing_open_lot_asset_ids:
+                if fifo_required:
+                    raise AiExportSourceFailureError(
+                        "lots_analysis_service",
+                        "missing_open_lot_summary",
+                        context={
+                            "broker_ids": broker_ids,
+                            "asset_ids": missing_open_lot_asset_ids,
+                        },
+                    )
+            elif selected_lots_by_asset:
+                combined_lots = [lot for lots in selected_lots_by_asset.values() for lot in lots]
+                try:
+                    fifo_summary = _fifo_summary(
+                        combined_lots,
+                        request.target_currency,
+                        initial_ranges.snapshot_as_of,
+                    )
+                except Exception as exc:
+                    if fifo_required:
+                        raise AiExportSourceFailureError(
+                            "lots_analysis_service",
+                            "aggregate_lot_summary",
+                            context={"broker_ids": broker_ids},
+                        ) from exc
+        if fifo_required and fifo_summary is None:
+            raise AiExportSourceFailureError(
+                "lots_analysis_service",
+                "missing_open_lot_summary",
+                context={"broker_ids": broker_ids},
+            )
+
+        fifo_rows: list[Any] = []
+        fifo_lot_selection: AiExportSelectionMetadata | None = None
+        if request.task == AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW:
+            if fifo_lots_by_asset is None:
+                raise AiExportSourceFailureError(
+                    "lots_analysis_service",
+                    "missing_fifo_lot_rows_source",
+                    context={"broker_ids": broker_ids},
+                )
+            extra_broker_ids = sorted({int(lot.opening_broker_id) for lots in fifo_lots_by_asset.values() for lot in lots} - set(brokers))
+            if extra_broker_ids:
+                try:
+                    raw_extra_brokers = await self._broker_metadata_loader(session, extra_broker_ids)
+                except Exception as exc:
+                    raise AiExportSourceFailureError(
+                        "broker_store",
+                        "load_brokers_bulk",
+                        context={"broker_ids": extra_broker_ids},
+                    ) from exc
+                brokers = {**brokers, **_entity_map(raw_extra_brokers)}
+            cutoff = closed_lot_cutoff_date(initial_ranges.snapshot_as_of)
+            try:
+                fifo_candidates = collect_fifo_candidates(
+                    fifo_lots_by_asset,
+                    currency_code=request.target_currency,
+                    cutoff=cutoff,
+                    assets=assets,
+                    brokers=brokers,
+                )
+            except Exception as exc:
+                raise AiExportSourceFailureError(
+                    "lots_analysis_service",
+                    "invalid_fifo_lot_row",
+                    context={"broker_ids": broker_ids},
+                ) from exc
+            if request.detail_level == AiExportDetailLevel.COMPACT:
+                selected_fifo_candidates = select_compact_fifo_lots(fifo_candidates)
+                fifo_lot_selection = build_fifo_lot_selection_metadata(
+                    rule=FIFO_LOT_SELECTION_RULE,
+                    limit=COMPACT_TOTAL_LIMIT,
+                    candidates=fifo_candidates,
+                    selected=selected_fifo_candidates,
+                    asset_nav_weights=asset_weights,
+                )
+            else:
+                selected_fifo_candidates = fifo_candidates
+            fifo_rows = [candidate.row for candidate in selected_fifo_candidates]
+            if not fifo_rows:
+                raise AiExportSourceFailureError(
+                    "lots_analysis_service",
+                    "missing_fifo_lot_rows",
+                    context={"broker_ids": broker_ids},
+                )
+
         prepared_targets: list[PreparedTechnicalTarget] = []
         for asset_id in held_asset_ids:
             target = AiExportAssetTargetReference(kind="asset", asset_id=asset_id)
@@ -1569,6 +1841,7 @@ class AiExportPortfolioAssembler:
                     signal_prices,
                     signal_events,
                     events_loaded=True,
+                    source_capability=AssetSourceManager.derive_signal_source_capability(getattr(price_result, "prices", ())),
                 )
             except Exception as exc:
                 raise AiExportSourceFailureError(
@@ -1590,6 +1863,7 @@ class AiExportPortfolioAssembler:
                 raw_holdings=raw_holdings,
                 contributions=all_contributions,
                 technical_events=tuple(event for result in technical_results for event in result.events),
+                fifo_lots_by_asset=fifo_lots_by_asset,
             )
 
         exported_positions = [position for position in all_positions if _position_model_key(position) in selected_position_keys]
@@ -1614,6 +1888,9 @@ class AiExportPortfolioAssembler:
             other_period_effects=exported_other_period_effects,
             allocations=exported_allocations,
             cash_context=exported_cash_context,
+            fifo_summary=fifo_summary,
+            fifo_lots=fifo_rows,
+            fifo_lot_selection=fifo_lot_selection,
             selection=selection,
         )
         response = AiExportPortfolioSnapshotResponse(
@@ -1627,6 +1904,7 @@ class AiExportPortfolioAssembler:
             ),
             methodology=build_methodology(
                 uses_weighted_average_cost=True,
+                uses_runtime_fifo=fifo_summary is not None,
                 uses_portfolio_cash_decomposition=exported_cash_context is not None,
             ),
             facts=facts,

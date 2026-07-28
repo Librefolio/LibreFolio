@@ -3,8 +3,16 @@ import {schemas} from '$lib/api';
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
 import {z} from 'zod';
 
-import type {AiExportHiddenAnalysisTasks, AiExportOptionsSelection} from './aiExportOptions';
-import {getAiExportSnapshotTask} from './aiExportOptions';
+import {
+    AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
+    AI_EXPORT_TECHNICAL_WINDOW_PRESETS,
+    AI_EXPORT_TECHNICAL_WINDOW_UNITS,
+    getAiExportSnapshotTask,
+    normalizeAiExportTechnicalWindow,
+    type AiExportHiddenAnalysisTasks,
+    type AiExportOptionsSelection,
+    type AiExportTechnicalWindowSelection,
+} from './aiExportOptions';
 import {AI_EXPORT_RENDER_MODES, type AiExportDetailLevel, type AiExportRenderMode, type AiExportTask, type AiExportTaskDefinition} from './catalog/shared';
 import type {AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
@@ -19,6 +27,7 @@ export interface AiExportMemoryDefaults {
     readonly detailLevel: AiExportDetailLevel;
     readonly renderMode: AiExportRenderMode;
     readonly userNotes?: string;
+    readonly technicalWindow?: AiExportTechnicalWindowSelection;
 }
 
 interface LoadAiExportMemoryInput {
@@ -46,6 +55,14 @@ const storedMemorySchema = z
         detailLevel: schemas.AiExportDetailLevel,
         renderMode: z.enum(AI_EXPORT_RENDER_MODES),
         notes: z.string(),
+        technicalWindow: z
+            .object({
+                preset: z.enum(AI_EXPORT_TECHNICAL_WINDOW_PRESETS),
+                customAmount: z.number().int().positive(),
+                customUnit: z.enum(AI_EXPORT_TECHNICAL_WINDOW_UNITS),
+            })
+            .strict()
+            .optional(),
     })
     .strict();
 
@@ -85,6 +102,7 @@ function defaultOptions(defaults: AiExportMemoryDefaults, responseLanguage: AiEx
         responseLanguage,
         userNotes: defaults.userNotes ?? '',
         webResearch: false,
+        technicalWindow: normalizeAiExportTechnicalWindow(defaults.technicalWindow ?? AI_EXPORT_DEFAULT_TECHNICAL_WINDOW),
     };
 }
 
@@ -103,6 +121,7 @@ function hydrateStoredMemory(stored: StoredAiExportMemory, responseLanguage: AiE
         responseLanguage,
         userNotes: stored.notes,
         webResearch: false,
+        technicalWindow: normalizeAiExportTechnicalWindow(stored.technicalWindow),
     };
 }
 
@@ -166,6 +185,7 @@ export function saveAiExportMemory(input: SaveAiExportMemoryInput): void {
         detailLevel: input.options.detailLevel,
         renderMode: input.options.renderMode,
         notes: input.userNotesDraft,
+        technicalWindow: normalizeAiExportTechnicalWindow(input.options.technicalWindow),
     });
     if (!stored.success || !isStoredMemoryApplicable(stored.data, input.taskDefinitions, input.hiddenAnalysisTasks ?? [])) return;
 

@@ -46,6 +46,20 @@ describe('AI Export v2 UI helpers', () => {
                 standard: 'aiExport.v2.detailLevelHelp.standard',
                 full: 'aiExport.v2.detailLevelHelp.full',
             },
+            technicalWindowLabel: 'aiExport.v2.technicalWindow',
+            technicalWindowHelp: 'aiExport.v2.technicalWindowHelp',
+            technicalWindowPresetLabels: {
+                '3m': '3M',
+                '6m': '6M',
+                '1y': '1Y',
+                custom: 'aiExport.v2.technicalWindowCustom',
+            },
+            technicalWindowUnitShortLabels: {
+                days: 'DATEPICKER.GRANULARITY.DAYSSHORT',
+                weeks: 'DATEPICKER.GRANULARITY.WEEKSSHORT',
+                months: 'DATEPICKER.GRANULARITY.MONTHSSHORT',
+                years: 'DATEPICKER.GRANULARITY.YEARSSHORT',
+            },
             documentationLabel: 'common.documentation',
             userNotesLabel: 'aiExport.v2.userNotes',
             userNotesPlaceholder: 'aiExport.v2.userNotesPlaceholder',
@@ -60,8 +74,8 @@ describe('AI Export v2 UI helpers', () => {
             exportLabel: 'aiExport.v2.export',
             loadingLabel: 'aiExport.v2.preparing',
         });
-        expect(Object.keys(labels.options.taskLabels)).toHaveLength(18);
-        expect(Object.keys(labels.options.taskDescriptions ?? {})).toHaveLength(18);
+        expect(Object.keys(labels.options.taskLabels)).toHaveLength(19);
+        expect(Object.keys(labels.options.taskDescriptions ?? {})).toHaveLength(19);
 
         for (const taskDefinition of AI_EXPORT_TASK_CATALOG) {
             expect(labels.options.taskLabels[taskDefinition.id]).toBe(taskDefinition.labelKey);

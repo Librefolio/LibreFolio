@@ -783,6 +783,7 @@ class AiExportAssetAssembler:
                     technical_signal_prices,
                     technical_signal_events,
                     events_loaded=True,
+                    source_capability=AssetSourceManager.derive_signal_source_capability(price_result.prices),
                 )
             except Exception as exc:
                 raise AiExportSourceFailureError(

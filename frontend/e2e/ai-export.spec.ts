@@ -257,6 +257,7 @@ test.describe('AI Export V2 panel and hard cutover', () => {
         const snapshotOption = page.getByTestId('ai-export-v2-task-option-snapshot');
         await expect(snapshotOption).toContainText('Data Snapshot');
         await expect(snapshotOption).toContainText(SNAPSHOT_DESCRIPTION);
+        await expect(page.getByTestId('ai-export-v2-task-option-portfolio_fifo_lot_review')).toContainText('Portfolio FIFO Lot Review');
         await page.keyboard.press('Escape');
         await expect(taskListbox).toBeHidden({timeout: 2_000});
         await expect(menu).toBeVisible();
@@ -276,6 +277,15 @@ test.describe('AI Export V2 panel and hard cutover', () => {
             standard: '8 preceding weekly points',
             full: 'full technical window',
         } as const;
+        const hoverHelpButton = page.getByTestId('ai-export-v2-detail-help-compact');
+        await hoverHelpButton.hover();
+        await expect(page.getByTestId('tooltip-content')).toContainText(detailHelpExpectations.compact);
+        await page.evaluate(() => window.dispatchEvent(new Event('scroll')));
+        await page.waitForTimeout(250);
+        await expect(page.getByTestId('tooltip-content')).toBeVisible();
+        await page.mouse.move(0, 0);
+        await expect(page.getByTestId('tooltip-content')).toBeHidden({timeout: 2_000});
+
         for (const [detailLevel, expectedText] of Object.entries(detailHelpExpectations)) {
             const helpButton = page.getByTestId(`ai-export-v2-detail-help-${detailLevel}`);
             await expect(helpButton).toBeVisible();
@@ -297,6 +307,19 @@ test.describe('AI Export V2 panel and hard cutover', () => {
         await page.keyboard.press('Escape');
         await expect(reopened.menu).toBeHidden({timeout: 2_000});
         await expect(reopened.trigger).toBeFocused();
+
+        const technicalWindowPanel = await openAiExportPanel(page);
+        await expect(page.getByTestId('ai-export-v2-technical-window-3m')).toHaveAttribute('aria-pressed', 'true');
+        await page.getByTestId('ai-export-v2-technical-window-custom').click();
+        await page.getByTestId('ai-export-v2-technical-window-custom-amount').fill('8');
+        await page.getByTestId('ai-export-v2-technical-window-custom-unit-button').click();
+        await page.getByTestId('ai-export-v2-technical-window-custom-unit-option-weeks').click();
+        await technicalWindowPanel.trigger.click();
+        const restoredTechnicalWindowPanel = await openAiExportPanel(page);
+        await expect(page.getByTestId('ai-export-v2-technical-window-custom-amount')).toBeVisible();
+        await expect(page.getByTestId('ai-export-v2-technical-window-custom-amount')).toHaveValue('8');
+        await expect(page.getByTestId('ai-export-v2-technical-window-custom-unit-button')).toContainText('W');
+        await restoredTechnicalWindowPanel.trigger.click();
 
         const outsideClose = await openAiExportPanel(page);
         await page.mouse.click(4, 4);
@@ -449,6 +472,9 @@ test.describe('AI Export V2 panel and hard cutover', () => {
             await expect(page.getByTestId('broker-name')).toBeVisible({timeout: UI_TIMEOUT});
             const panel = await openAiExportPanel(page);
             await assertDocsPopup(page, '/mkdocs/user/ai-export/broker/');
+            await panel.menu.getByTestId('ai-export-v2-task-select-button').click();
+            await expect(page.getByTestId('ai-export-v2-task-option-broker_fifo_lot_review')).toContainText('FIFO Lot Review');
+            await page.keyboard.press('Escape');
             await panel.trigger.click();
             await exportSnapshotAndAssert(page, {
                 domain: 'broker',
@@ -482,6 +508,9 @@ test.describe('AI Export V2 panel and hard cutover', () => {
             task: 'pac_planning',
             detail_level: 'standard',
         });
+        const requestBody = request.postDataJSON();
+        expect(requestBody.technical_window.end).toBe(requestBody.date_range.end);
+        expect(requestBody.technical_window.start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
         const clipboardText = await waitForClipboard(page, ['Task Instructions', 'Optional User Notes', notes, 'Please provide your answer in: English.'], 'Clipboard did not receive the full Dashboard analysis prompt');
         expect(clipboardText).toContain('Snapshot Data');

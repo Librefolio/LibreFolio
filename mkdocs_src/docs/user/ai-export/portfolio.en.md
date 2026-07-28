@@ -16,6 +16,7 @@ Open **Dashboard** and select **AI Export** in the top toolbar, beside
 | **Portfolio Rebalancing** | Current allocation, concentration, diversification, and target-allocation context. |
 | **Performance Attribution** | Main contributors and detractors over the selected period. |
 | **Portfolio Income Review** | Dividends, interest, fees, taxes, and other income. |
+| **Portfolio FIFO Lot Review** | Open lots and lots closed during the previous three months across the active Dashboard broker scope. |
 | **Technical Breadth** | Technical states and signals across applicable assets. |
 | **Portfolio Description** | Factual composition, allocation, valuation, and activity overview. |
 
@@ -26,12 +27,13 @@ Depending on the task, it can include portfolio totals, cash, positions,
 allocations, performance, contributions, income, data-quality context, and
 backend-computed technical results.
 
-!!! note "FIFO lot analysis is not a Portfolio task yet"
+!!! note "FIFO rows are summaries, not histories"
 
-    The Dashboard export does not currently include the FIFO Engine's per-lot
-    timelines. The Broker FIFO task is aggregate and broker-scoped. A future
-    Portfolio FIFO task would need a dedicated contract for selected lots and
-    their custody, event, value, return, and price histories.
+    Portfolio FIFO Lot Review includes every open or partially closed lot plus
+    fully closed lots whose closing date falls within the previous three calendar
+    months. Each row identifies the asset, opening date, and opening broker, then
+    summarizes quantities, residual cost, value, results, income, fees, and taxes.
+    It does not export custody, event, value, return, or price timelines.
 
 ## 📸 Snapshot and Analyses
 
@@ -46,11 +48,14 @@ backend-computed technical results.
 
 | Detail | Exact sampling |
 |---|---|
-| **Compact** | Latest values and aggregates only; no time series. Where applicable, the task profile uses an explicit compact selection of portfolio entities. |
+| **Compact** | Latest values and aggregates only; no time series. FIFO review selects up to 7 largest open/partial lots by residual cost plus 3 most recently closed lots, then fills unused quota up to 10. |
 | **Standard** | All applicable entities; up to **7 recent daily points** plus **8 preceding weekly points**. |
 | **Full** | All applicable entities; **7 recent daily points** plus weekly points across the **full technical window**. |
 
 A task/profile may omit sections whose data is unavailable or not applicable.
+The separate **Technical window** selector uses **3M** by default and can be set
+to **6M**, **1Y**, or a custom duration. It always ends on the snapshot date and
+does not change the Dashboard's selected financial range.
 
 ## 🔒 Applicability, Errors, and Privacy
 

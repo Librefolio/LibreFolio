@@ -208,7 +208,9 @@
             "askProviderHint": "Récupérer les identifiants du fournisseur attribué",
             "addIdentifier": "Ajouter identifiant",
             "deleteSelected": "Supprimer les identifiants sélectionnés",
-            "deleteConfirmMessage": "Supprimer {n} identifiants ?"
+            "deleteConfirmMessage": "Supprimer {n} identifiants ?",
+            "otherLabel": "Autres identifiants",
+            "otherPlaceholder": "Ajouter un code ou nom, puis Entrée"
         },
         "confirm": {
             "saveWithoutTest": "Enregistrer sans test ?",
@@ -463,7 +465,11 @@
             "high": "Haute confiance : forte correspondance symbole ou ISIN",
             "medium": "Confiance moyenne : correspondance symbole uniquement (type non vérifié)",
             "low": "Faible confiance : correspondance partielle ou nom seulement"
-        }
+        },
+        "brokerOpeningMsg": "{count} transaction(s) datée(s) avant l'ouverture du courtier ({openedAt}). Plus ancienne : {minDate}.",
+        "autoFixOpening": "Définir l'ouverture au {date}",
+        "autoFixOpeningTip": "Définit la date d'ouverture du courtier sur sa transaction la plus ancienne afin que ses lignes deviennent importables.",
+        "autoFixFailed": "Impossible de mettre à jour la date d'ouverture du courtier."
     },
     "brokers": {
         "title": "Courtiers",

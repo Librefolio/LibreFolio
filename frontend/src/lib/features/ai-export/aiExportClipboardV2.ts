@@ -16,7 +16,7 @@ import {
 } from './aiExportClient';
 import {AI_EXPORT_TASK_CATALOG, aiExportCatalogLoader, type AiExportCatalogCompatibilityChoice, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
 import type {AiExportDetailLevel, AiExportDomain, AiExportRenderMode, AiExportTask, AiExportTaskDefinition, AiExportTaskForDomain} from './catalog/shared';
-import {aiExportOptionsFingerprint, findAiExportCatalogChoice, isAiExportCompatibleChoice, normalizeAiExportUserNotes, normalizeAiExportWebResearch} from './aiExportOptions';
+import {AI_EXPORT_DEFAULT_TECHNICAL_WINDOW, aiExportOptionsFingerprint, findAiExportCatalogChoice, isAiExportCompatibleChoice, normalizeAiExportTechnicalWindow, normalizeAiExportUserNotes, normalizeAiExportWebResearch, type AiExportTechnicalWindowSelection} from './aiExportOptions';
 import {renderAiExportPrompt, type AiExportFinalPromptStats, type AiExportPromptStats, type AiExportResponseLanguageDisplayName, type RenderAiExportPromptInput, type RenderedAiExportPrompt} from './templates/promptRenderer';
 
 export type AiExportNonEmptyBrokerIds = readonly [number, ...number[]];
@@ -66,6 +66,7 @@ interface CopyAiExportV2InputForContext<C extends AiExportV2RequestContext> {
     readonly responseLanguage: AiExportResponseLanguageDisplayName;
     readonly userNotes?: string;
     readonly webResearch?: boolean;
+    readonly technicalWindow?: AiExportTechnicalWindowSelection;
     readonly compatibility?: AiExportCatalogCompatibilityResult;
 }
 
@@ -204,6 +205,7 @@ export async function prepareAiExportV2(input: CopyAiExportV2Input, dependencies
             responseLanguage: input.responseLanguage,
             userNotes,
             webResearch,
+            technicalWindow: input.technicalWindow,
         }),
     };
 }
@@ -268,6 +270,8 @@ function buildCanonicalSnapshotRequest(input: CopyAiExportV2Input): AiExportSnap
         start: input.context.dateRange.start,
         end: input.context.dateRange.end,
     };
+    const snapshotAsOf = input.context.dateRange.end ?? input.context.dateRange.start;
+    const technicalWindow = resolveAiExportTechnicalWindowDateRange(input.technicalWindow, snapshotAsOf);
 
     if (isCopyAiExportV2InputForDomain(input, 'portfolio')) {
         const request: AiExportPortfolioSnapshotRequestInput = {
@@ -275,6 +279,7 @@ function buildCanonicalSnapshotRequest(input: CopyAiExportV2Input): AiExportSnap
             task: input.task,
             detail_level: input.detailLevel,
             date_range: dateRange,
+            technical_window: technicalWindow,
             target_currency: input.context.targetCurrency,
             broker_ids: cloneBrokerIds(input.context.brokerIds),
         };
@@ -286,6 +291,7 @@ function buildCanonicalSnapshotRequest(input: CopyAiExportV2Input): AiExportSnap
             task: input.task,
             detail_level: input.detailLevel,
             date_range: dateRange,
+            technical_window: technicalWindow,
             target_currency: input.context.targetCurrency,
             asset_id: input.context.assetId,
             broker_ids: cloneBrokerIds(input.context.brokerIds),
@@ -298,6 +304,7 @@ function buildCanonicalSnapshotRequest(input: CopyAiExportV2Input): AiExportSnap
             task: input.task,
             detail_level: input.detailLevel,
             date_range: dateRange,
+            technical_window: technicalWindow,
             target_currency: input.context.targetCurrency,
             base_currency: input.context.baseCurrency,
             quote_currency: input.context.quoteCurrency,
@@ -311,10 +318,66 @@ function buildCanonicalSnapshotRequest(input: CopyAiExportV2Input): AiExportSnap
         task: input.task,
         detail_level: input.detailLevel,
         date_range: dateRange,
+        technical_window: technicalWindow,
         target_currency: input.context.targetCurrency,
         broker_id: input.context.brokerId,
     };
     return canonicalizeAiExportSnapshotRequest(request);
+}
+
+export function resolveAiExportTechnicalWindowDateRange(selection: AiExportTechnicalWindowSelection | undefined, snapshotAsOf: string): AiExportV2DateRange {
+    const normalized = normalizeAiExportTechnicalWindow(selection ?? AI_EXPORT_DEFAULT_TECHNICAL_WINDOW);
+    const end = parseIsoDate(snapshotAsOf);
+    let start: Date;
+
+    switch (normalized.preset) {
+        case '3m':
+            start = subtractCalendarMonths(end, 3);
+            break;
+        case '6m':
+            start = subtractCalendarMonths(end, 6);
+            break;
+        case '1y':
+            start = subtractCalendarMonths(end, 12);
+            break;
+        case 'custom':
+            start = subtractTechnicalDuration(end, normalized.customAmount, normalized.customUnit);
+            break;
+    }
+
+    return {
+        start: formatIsoDate(start),
+        end: formatIsoDate(end),
+    };
+}
+
+function subtractTechnicalDuration(end: Date, amount: number, unit: AiExportTechnicalWindowSelection['customUnit']): Date {
+    if (unit === 'months') return subtractCalendarMonths(end, amount);
+    if (unit === 'years') return subtractCalendarMonths(end, amount * 12);
+
+    const result = new Date(end);
+    result.setUTCDate(result.getUTCDate() - amount * (unit === 'weeks' ? 7 : 1));
+    return result;
+}
+
+function subtractCalendarMonths(end: Date, months: number): Date {
+    const targetMonthIndex = end.getUTCFullYear() * 12 + end.getUTCMonth() - months;
+    const targetYear = Math.floor(targetMonthIndex / 12);
+    const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+    const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(targetYear, targetMonth, Math.min(end.getUTCDate(), lastDay)));
+}
+
+function parseIsoDate(value: string): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) throw new TypeError('AI Export snapshot date must use YYYY-MM-DD');
+    const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    if (formatIsoDate(parsed) !== value) throw new TypeError('AI Export snapshot date is invalid');
+    return parsed;
+}
+
+function formatIsoDate(value: Date): string {
+    return value.toISOString().slice(0, 10);
 }
 
 function assertAiExportSnapshotDomain<D extends AiExportDomain>(domain: D, snapshot: AiExportSnapshotResponse): asserts snapshot is AiExportSnapshotForDomain<D> {

@@ -208,7 +208,9 @@
             "askProviderHint": "Fetch identifiers from the assigned provider",
             "addIdentifier": "Add identifier",
             "deleteSelected": "Delete selected identifiers",
-            "deleteConfirmMessage": "Delete {n} identifiers?"
+            "deleteConfirmMessage": "Delete {n} identifiers?",
+            "otherLabel": "Other identifiers",
+            "otherPlaceholder": "Add code or name, then Enter"
         },
         "confirm": {
             "saveWithoutTest": "Save Without Testing?",
@@ -463,7 +465,11 @@
             "high": "High confidence: strong symbol or ISIN match",
             "medium": "Medium confidence: symbol match only (type not verified)",
             "low": "Low confidence: partial or name-only match"
-        }
+        },
+        "brokerOpeningMsg": "{count} transaction(s) dated before this broker's opening ({openedAt}). Earliest: {minDate}.",
+        "autoFixOpening": "Set opening to {date}",
+        "autoFixOpeningTip": "Set the broker's opening date to its earliest transaction so its rows become importable.",
+        "autoFixFailed": "Could not update the broker's opening date."
     },
     "brokers": {
         "title": "Brokers",

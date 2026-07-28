@@ -1,0 +1,1251 @@
+"""Focused tests for the real Portfolio/Broker/Asset/FX AI Export "technical wave"
+`ComponentSpec` builders (Phase 0 AI Export refinement, "shared technical wave").
+
+Covers `backend.app.services.ai_export.components.technical_shared`,
+`portfolio_broker_technical` and `asset_fx_technical`: the one curated
+plugin bundle reused unchanged across every Asset-like target, warm-up-aware
+loading via `AssetSourceManager.get_prices_bulk`/`backend.app.services.fx.
+convert_bulk`, strict period slicing (warm-up never emitted), multi-output OHLC
+bucketing, uncapped event preservation, full portfolio/broker universe
+analysis with weighted/unweighted breadth, partial-success isolation,
+authoritative-vs-unavailable volume gating, FX no-volume gating, resource
+memoization and deterministic ordering.
+
+Mirrors `test_ai_export_components_portfolio_broker_financial.py`'s lightweight
+pattern: no real database schema (a tableless in-memory `AsyncSession` only
+satisfies `BuildContext`'s `isinstance` check). `AssetSourceManager.
+get_prices_bulk`/`PortfolioService.get_report`/`technical_shared.convert_bulk`
+are monkeypatched with deterministic synthetic data, but every monkeypatch
+still drives the **real** `SignalService.compute`/`AssetSourceManager.
+derive_signal_source_capability` so indicator/warm-up/volume-gating behavior
+is genuinely exercised, not stubbed away.
+"""
+
+from __future__ import annotations
+
+import math
+from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+from backend.app.schemas.common import Currency
+from backend.app.schemas.portfolio import (
+    AssetPeriodContribution,
+    PortfolioReportMetadata,
+    PortfolioReportResponse,
+    PositionsContribution,
+)
+from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
+from backend.app.schemas.signals import (
+    SignalBandComponent,
+    SignalBandValueSource,
+    SignalCadence,
+    SignalDomain,
+    SignalExecutionContext,
+    SignalLineCrossoverRequest,
+    SignalOutputValueSource,
+    SignalPricePoint,
+    SignalPriceValueSource,
+    SignalReferenceLevel,
+    SignalThresholdCrossingRequest,
+)
+from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_shared
+from backend.app.services.ai_export.components.envelope import SectionEnvelope
+from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.spec import ComponentSpec
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
+from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
+from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.portfolio_service import PortfolioService
+from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signal_service import SignalService
+
+#: Exact replica of legacy `ASSET_FULL_BUNDLE`'s 20 signal instance IDs
+#: (`backend/app/services/ai_export/profiles/asset.py` lines 320-437).
+ASSET_BUNDLE_INSTANCE_IDS = frozenset(
+    {
+        "ema_20",
+        "ema_50",
+        "ema_200",
+        "sma_50",
+        "sma_200",
+        "kama_20",
+        "aroon_25",
+        "adx_14",
+        "donchian_20",
+        "rsi_14",
+        "macd_12_26_9",
+        "ppo_12_26_9",
+        "roc_20",
+        "stoch_rsi_14_3",
+        "cci_20",
+        "bollinger_20_2",
+        "atr_14",
+        "natr_14",
+        "mfi_14",
+        "obv",
+    }
+)
+
+#: Exact replica of legacy `FX_FULL_BUNDLE`'s 12 signal instance IDs
+#: (`backend/app/services/ai_export/profiles/fx.py` lines 233-292).
+FX_BUNDLE_INSTANCE_IDS = frozenset(
+    {
+        "ema_20",
+        "ema_50",
+        "ema_200",
+        "sma_50",
+        "sma_200",
+        "kama_20",
+        "rsi_14",
+        "macd_12_26_9",
+        "ppo_12_26_9",
+        "roc_20",
+        "stoch_rsi_14_3",
+        "bollinger_20_2",
+    }
+)
+
+#: Exact replica of legacy `_asset_annotations(include_standard=True)`'s 19 annotation keys.
+ASSET_BUNDLE_ANNOTATION_KEYS = frozenset(
+    {
+        "price_ema_20",
+        "ema_20_ema_50",
+        "ema_50_ema_200",
+        "rsi_14_oversold_30",
+        "rsi_14_overbought_70",
+        "macd_signal",
+        "macd_histogram_zero",
+        "mfi_14_oversold_20",
+        "mfi_14_overbought_80",
+        "price_bollinger_lower",
+        "price_bollinger_middle",
+        "price_bollinger_upper",
+        "adx_14_trend_25",
+        "stoch_rsi_k_d",
+        "stoch_rsi_k_oversold_20",
+        "stoch_rsi_k_overbought_80",
+        "price_donchian_lower",
+        "price_donchian_middle",
+        "price_donchian_upper",
+    }
+)
+
+#: Exact replica of legacy `_fx_annotations(include_standard=True)`'s 14 annotation keys.
+FX_BUNDLE_ANNOTATION_KEYS = frozenset(
+    {
+        "rate_ema_20",
+        "ema_20_ema_50",
+        "ema_50_ema_200",
+        "rsi_14_oversold_30",
+        "rsi_14_overbought_70",
+        "ppo_signal",
+        "ppo_histogram_zero",
+        "rate_bollinger_lower",
+        "rate_bollinger_middle",
+        "rate_bollinger_upper",
+        "roc_20_zero",
+        "stoch_rsi_k_d",
+        "stoch_rsi_k_oversold_20",
+        "stoch_rsi_k_overbought_80",
+    }
+)
+
+CURRENCY = "USD"
+
+# =============================================================================
+# Local, DB-free stub ComponentSpecs for `asset.identity`/`fx.pair_identity`
+# =============================================================================
+#
+# The real `ASSET_IDENTITY_SPEC` (`asset_core.py`) / `fx.pair_identity`
+# (`fx_core.py`) builders issue real DB queries against `Asset`/other tables -
+# incompatible with this test file's tableless in-memory session (matching
+# `test_ai_export_components_portfolio_broker_financial.py`'s own approach of
+# never touching a live DB). These stubs satisfy `ComponentRegistry`'s
+# dependency-resolution requirement only; the technical wave's own builders
+# never read their payload.
+
+
+class _StubIdentityPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ok: bool = True
+
+
+async def _build_stub_identity(context, dependencies):  # noqa: ARG001
+    return _StubIdentityPayload()
+
+
+ASSET_IDENTITY_STUB = ComponentSpec(
+    component_id="asset.identity",
+    version=1,
+    domains=frozenset({Domain.ASSET}),
+    output_model=_StubIdentityPayload,
+    builder=_build_stub_identity,
+    period_behavior=PeriodBehavior.NONE,
+)
+
+FX_PAIR_IDENTITY_STUB = ComponentSpec(
+    component_id="fx.pair_identity",
+    version=1,
+    domains=frozenset({Domain.FX}),
+    output_model=_StubIdentityPayload,
+    builder=_build_stub_identity,
+    period_behavior=PeriodBehavior.NONE,
+)
+
+
+def _registry() -> ComponentRegistry:
+    return ComponentRegistry(
+        (
+            *portfolio_broker_technical.PORTFOLIO_BROKER_TECHNICAL_COMPONENTS,
+            *asset_fx_technical.ASSET_FX_TECHNICAL_COMPONENTS,
+            ASSET_IDENTITY_STUB,
+            FX_PAIR_IDENTITY_STUB,
+        )
+    )
+
+
+# =============================================================================
+# Scope/context construction helpers
+# =============================================================================
+
+
+def _scope(**overrides) -> BuildScope:
+    defaults = {
+        "request_id": "req-1",
+        "user_id": 1,
+        "domain": Domain.PORTFOLIO,
+        "detail_level": DetailLevel.STANDARD,
+        "period_start": date(2026, 1, 1),
+        "period_end": date(2026, 2, 28),
+        "target_currency": CURRENCY,
+        "broker_scope": (),
+    }
+    defaults.update(overrides)
+    return BuildScope(**defaults)
+
+
+def _asset_scope(asset_id: int = 1, **overrides) -> BuildScope:
+    return _scope(domain=Domain.ASSET, asset_id=asset_id, **overrides)
+
+
+def _fx_scope(base: str = "USD", quote: str = "EUR", **overrides) -> BuildScope:
+    overrides.setdefault("target_currency", quote)
+    return _scope(domain=Domain.FX, base_currency=base, quote_currency=quote, **overrides)
+
+
+def _broker_scope(broker_id: int = 1, **overrides) -> BuildScope:
+    return _scope(domain=Domain.BROKER, broker_id=broker_id, broker_scope=(broker_id,), **overrides)
+
+
+def _make_async_session() -> AsyncSession:
+    """Tableless in-memory `AsyncSession`: only satisfies `BuildContext`'s isinstance check."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    return AsyncSession(engine)
+
+
+def _make_context(scope: BuildScope, session: AsyncSession | None = None) -> BuildContext:
+    bucket_plan = build_bucket_plan_for_scope(scope)
+    return BuildContext(_registry(), request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=(session if session is not None else _make_async_session()))
+
+
+# =============================================================================
+# Deterministic synthetic price/rate generation
+# =============================================================================
+
+
+def _synthetic_close(asset_id: int, day: date) -> Decimal:
+    ordinal = day.toordinal()
+    base = 100 + asset_id * 5
+    wave = 10 * math.sin(ordinal / 7.0)
+    drift = (ordinal % 30) * 0.05
+    return Decimal(str(round(base + wave + drift, 4)))
+
+
+def _synthetic_volume(asset_id: int, day: date) -> Decimal:
+    ordinal = day.toordinal()
+    return Decimal(1000 + asset_id * 10 + (ordinal % 50) * 10)
+
+
+def _fa_price_point(asset_id: int, day: date, *, source_plugin_key: str | None = "yfinance", with_volume: bool = True) -> FAPricePoint:
+    close = _synthetic_close(asset_id, day)
+    return FAPricePoint(
+        date=day,
+        open=close,
+        high=close * Decimal("1.01"),
+        low=close * Decimal("0.99"),
+        close=close,
+        volume=(_synthetic_volume(asset_id, day) if with_volume else None),
+        currency=CURRENCY,
+        source_plugin_key=source_plugin_key,
+        backward_fill_info=None,
+    )
+
+
+def _daterange(start: date, end: date):
+    current = start
+    while current <= end:
+        yield current
+        current += timedelta(days=1)
+
+
+def _make_fake_get_prices_bulk(*, source_plugin_key: str | None = "yfinance", with_volume: bool = True):
+    """Builds a fake `AssetSourceManager.get_prices_bulk` driving the real signal engine.
+
+    For each `FAPriceQueryItem`, computes the real warm-up plan (via
+    `SignalService.prepare_plan`), generates synthetic deterministic OHLCV
+    prices over `[visible_start - warmup, visible_end]`, derives capability via
+    the real `AssetSourceManager.derive_signal_source_capability`, computes
+    real signals over the full (warm-up-inclusive) series, then slices
+    `result.prices` to the visible period only - exactly mirroring the
+    production `get_prices_bulk` contract (see `asset_source.py`'s own
+    "Signal computation and response slicing" section).
+    """
+    calls: list[int] = []
+
+    async def _fake(requests, session):  # noqa: ARG001
+        calls.append(len(requests))
+        signal_service = SignalService()
+        results: list[FAPriceQueryResult] = []
+        for req in requests:
+            visible_start = req.date_range.start
+            visible_end = req.date_range.end or visible_start
+            signal_context = SignalExecutionContext(
+                domain=SignalDomain.ASSET,
+                requested_range=req.date_range,
+                cadence=SignalCadence.DAILY,
+                source_reference=f"asset:{req.asset_id}",
+            )
+            plan = signal_service.prepare_plan(req.signals, signal_context, req.annotation_requests)
+            warmup_days = min(plan.max_history_points_before_visible, (visible_start - date.min).days)
+            load_start = visible_start - timedelta(days=warmup_days)
+
+            fa_points = [_fa_price_point(req.asset_id, day, source_plugin_key=source_plugin_key, with_volume=with_volume) for day in _daterange(load_start, visible_end)]
+            signal_points = [SignalPricePoint(date=p.date, open=p.open, high=p.high, low=p.low, close=p.close, volume=p.volume) for p in fa_points]
+            capability = AssetSourceManager.derive_signal_source_capability(fa_points)
+            signals = await signal_service.compute(
+                req.signals,
+                signal_points,
+                signal_context,
+                annotation_requests=req.annotation_requests,
+                source_capability=capability,
+            )
+            visible_prices = [p for p in fa_points if visible_start <= p.date <= visible_end] if req.include_price else []
+            results.append(FAPriceQueryResult(asset_id=req.asset_id, prices=visible_prices, events=[], errors=[], signals=signals))
+        return results
+
+    return _fake, calls
+
+
+def _patch_get_prices_bulk(monkeypatch: pytest.MonkeyPatch, *, source_plugin_key: str | None = "yfinance", with_volume: bool = True) -> list[int]:
+    fake, calls = _make_fake_get_prices_bulk(source_plugin_key=source_plugin_key, with_volume=with_volume)
+    monkeypatch.setattr(AssetSourceManager, "get_prices_bulk", staticmethod(fake))
+    return calls
+
+
+def _synthetic_fx_rate(day: date) -> Decimal:
+    ordinal = day.toordinal()
+    return Decimal(str(round(1.1 + (ordinal % 20) * 0.005 + 0.05 * math.sin(ordinal / 5.0), 6)))
+
+
+def _patch_convert_bulk(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Monkeypatches `technical_shared.convert_bulk` with a deterministic synthetic FX rate function."""
+    calls: list[int] = []
+
+    async def _fake_convert_bulk(session, conversions, raise_on_error=True):  # noqa: ARG001
+        calls.append(len(conversions))
+        results = []
+        for amount_currency, to_currency, as_of_date in conversions:
+            rate = _synthetic_fx_rate(as_of_date)
+            converted = Currency(code=to_currency, amount=amount_currency.amount * rate)
+            results.append((converted, as_of_date, False))
+        return results, []
+
+    monkeypatch.setattr(technical_shared, "convert_bulk", _fake_convert_bulk)
+    return calls
+
+
+# =============================================================================
+# Portfolio/Broker report fixtures
+# =============================================================================
+
+
+def _contribution(asset_id: int, *, end_value: object = 1000, is_fully_sold: bool = False, broker_id: int = 1) -> AssetPeriodContribution:
+    return AssetPeriodContribution(
+        asset_id=asset_id,
+        asset_name=f"Asset {asset_id}",
+        asset_type="EQUITY",
+        broker_id=broker_id,
+        broker_name=f"Broker {broker_id}",
+        end_value=(Decimal(str(end_value)) if end_value is not None else None),
+        is_fully_sold=is_fully_sold,
+    )
+
+
+def _report(scope: BuildScope, positions: list[AssetPeriodContribution]) -> PortfolioReportResponse:
+    return PortfolioReportResponse(
+        metadata=PortfolioReportMetadata(target_currency=scope.target_currency, generated_at=scope.snapshot_as_of),
+        positions_contribution=PositionsContribution(positions=positions),
+    )
+
+
+def _patch_get_report(monkeypatch: pytest.MonkeyPatch, report: PortfolioReportResponse) -> list[int]:
+    calls: list[int] = []
+
+    async def _fake_get_report(self, user_id, query):  # noqa: ARG001
+        calls.append(1)
+        return report
+
+    monkeypatch.setattr(PortfolioService, "get_report", _fake_get_report)
+    return calls
+
+
+def _envelope_payload(envelope: SectionEnvelope | None) -> dict:
+    assert envelope is not None
+    return envelope.payload
+
+
+# =============================================================================
+# 1. Curated bundle stability across detail levels (requirement 1, 8, 9)
+# =============================================================================
+
+
+class TestCuratedBundleAcrossDetailLevels:
+    @pytest.mark.asyncio
+    async def test_same_indicator_and_event_cardinality_across_detail_levels_asset(self, monkeypatch):
+        payloads = {}
+        for detail_level in (DetailLevel.COMPACT, DetailLevel.STANDARD, DetailLevel.FULL):
+            _patch_get_prices_bulk(monkeypatch)
+            scope = _asset_scope(detail_level=detail_level)
+            context = _make_context(scope)
+            indicators_envelope = await context.resolve("asset.indicators", required=True)
+            events_envelope = await context.resolve("asset.states_events", required=True)
+            payloads[detail_level] = (_envelope_payload(indicators_envelope), _envelope_payload(events_envelope), context)
+
+        compact_ind, compact_events, compact_ctx = payloads[DetailLevel.COMPACT]
+        standard_ind, standard_events, standard_ctx = payloads[DetailLevel.STANDARD]
+        full_ind, full_events, full_ctx = payloads[DetailLevel.FULL]
+
+        compact_keys = sorted((entry["instance_id"], entry["output_key"]) for entry in compact_ind["indicators"])
+        standard_keys = sorted((entry["instance_id"], entry["output_key"]) for entry in standard_ind["indicators"])
+        full_keys = sorted((entry["instance_id"], entry["output_key"]) for entry in full_ind["indicators"])
+        assert compact_keys == standard_keys == full_keys
+        assert compact_keys  # non-empty: curated bundle actually produced output series
+
+        assert compact_events["total_event_count"] == standard_events["total_event_count"] == full_events["total_event_count"]
+
+        # Bucket *counts* differ (K=30/14/7 changes temporal granularity) while
+        # the signal/entity/event set is identical - requirement 8.
+        compact_buckets = len(compact_ind["indicators"][0]["buckets"])
+        standard_buckets = len(standard_ind["indicators"][0]["buckets"])
+        full_buckets = len(full_ind["indicators"][0]["buckets"])
+        assert compact_buckets == len(compact_ctx.bucket_plan.buckets)
+        assert standard_buckets == len(standard_ctx.bucket_plan.buckets)
+        assert full_buckets == len(full_ctx.bucket_plan.buckets)
+        assert compact_buckets <= standard_buckets <= full_buckets
+        assert compact_buckets < full_buckets
+
+
+# =============================================================================
+# 1b. Exact domain-specific fixed bundle composition/topology (requirement 1, 9)
+# =============================================================================
+#
+# Parent product review rejected an earlier 8-plugin curation as an
+# unapproved regression from legacy Full-detail behavior; these tests pin
+# the new bundles to the *exact* legacy `ASSET_FULL_BUNDLE` (20 instances) /
+# `FX_FULL_BUNDLE` (12 instances) signal sets and their exact annotation
+# topology (never re-derived from `profiles/` at runtime - only replicated
+# here) so a future regression back to a smaller curated set fails loudly.
+
+
+class TestExactBundleComposition:
+    def test_asset_bundle_has_exact_20_instance_set(self):
+        signals = technical_shared.ASSET_CURATED_SIGNALS
+        assert len(signals) == 20
+        assert {spec.instance_id for spec in signals} == ASSET_BUNDLE_INSTANCE_IDS
+
+    def test_fx_bundle_has_exact_12_instance_set(self):
+        signals = technical_shared.FX_CURATED_SIGNALS
+        assert len(signals) == 12
+        assert {spec.instance_id for spec in signals} == FX_BUNDLE_INSTANCE_IDS
+
+    def test_asset_signal_requests_match_curated_spec_1_to_1(self):
+        requests = technical_shared.build_asset_signal_requests()
+        assert len(requests) == 20
+        assert {request.instance_id for request in requests} == ASSET_BUNDLE_INSTANCE_IDS
+        by_id = {request.instance_id: request for request in requests}
+        assert by_id["rsi_14"].params == {"period": 14, "overbought": 70, "oversold": 30}
+        assert by_id["mfi_14"].params == {"period": 14, "overbought": 80, "oversold": 20}
+        assert by_id["macd_12_26_9"].params == {"fastPeriod": 12, "slowPeriod": 26, "signalPeriod": 9}
+        assert by_id["bollinger_20_2"].params == {"period": 20, "multiplier": 2.0}
+        assert by_id["obv"].params == {}
+
+    def test_fx_signal_requests_match_curated_spec_1_to_1(self):
+        requests = technical_shared.build_fx_signal_requests()
+        assert len(requests) == 12
+        assert {request.instance_id for request in requests} == FX_BUNDLE_INSTANCE_IDS
+
+    def test_asset_annotation_requests_have_exact_19_key_set(self):
+        annotations = technical_shared.build_asset_annotation_requests()
+        assert len(annotations) == 19
+        assert {annotation.key for annotation in annotations} == ASSET_BUNDLE_ANNOTATION_KEYS
+
+    def test_fx_annotation_requests_have_exact_14_key_set(self):
+        annotations = technical_shared.build_fx_annotation_requests()
+        assert len(annotations) == 14
+        assert {annotation.key for annotation in annotations} == FX_BUNDLE_ANNOTATION_KEYS
+
+    def test_asset_annotation_topology_matches_legacy_exactly(self):
+        by_key = {annotation.key: annotation for annotation in technical_shared.build_asset_annotation_requests()}
+
+        price_ema_20 = by_key["price_ema_20"]
+        assert isinstance(price_ema_20, SignalLineCrossoverRequest)
+        assert price_ema_20.attach_to_instance_id == "ema_20"
+        assert isinstance(price_ema_20.left, SignalPriceValueSource)
+        assert price_ema_20.right == SignalOutputValueSource(instance_id="ema_20", series_key="ema")
+
+        ema_20_ema_50 = by_key["ema_20_ema_50"]
+        assert ema_20_ema_50.attach_to_instance_id == "ema_20"
+        assert ema_20_ema_50.left == SignalOutputValueSource(instance_id="ema_20", series_key="ema")
+        assert ema_20_ema_50.right == SignalOutputValueSource(instance_id="ema_50", series_key="ema")
+
+        ema_50_ema_200 = by_key["ema_50_ema_200"]
+        assert ema_50_ema_200.attach_to_instance_id == "ema_50"
+        assert ema_50_ema_200.left == SignalOutputValueSource(instance_id="ema_50", series_key="ema")
+        assert ema_50_ema_200.right == SignalOutputValueSource(instance_id="ema_200", series_key="ema")
+
+        rsi_oversold = by_key["rsi_14_oversold_30"]
+        assert isinstance(rsi_oversold, SignalThresholdCrossingRequest)
+        assert rsi_oversold.attach_to_instance_id == "rsi_14"
+        assert rsi_oversold.source == SignalOutputValueSource(instance_id="rsi_14", series_key="rsi")
+        assert rsi_oversold.threshold == 30
+        assert by_key["rsi_14_overbought_70"].threshold == 70
+
+        macd_signal = by_key["macd_signal"]
+        assert macd_signal.attach_to_instance_id == "macd_12_26_9"
+        assert macd_signal.left == SignalOutputValueSource(instance_id="macd_12_26_9", series_key="macd")
+        assert macd_signal.right == SignalOutputValueSource(instance_id="macd_12_26_9", series_key="signal")
+
+        macd_zero = by_key["macd_histogram_zero"]
+        assert macd_zero.attach_to_instance_id == "macd_12_26_9"
+        assert macd_zero.source == SignalOutputValueSource(instance_id="macd_12_26_9", series_key="histogram")
+        assert macd_zero.threshold == 0
+
+        assert by_key["mfi_14_oversold_20"].threshold == 20
+        assert by_key["mfi_14_overbought_80"].threshold == 80
+        assert by_key["mfi_14_oversold_20"].source == SignalOutputValueSource(instance_id="mfi_14", series_key="mfi")
+
+        for suffix, component in (("lower", SignalBandComponent.LOWER), ("middle", SignalBandComponent.MIDDLE), ("upper", SignalBandComponent.UPPER)):
+            bollinger = by_key[f"price_bollinger_{suffix}"]
+            assert bollinger.attach_to_instance_id == "bollinger_20_2"
+            assert isinstance(bollinger.left, SignalPriceValueSource)
+            assert bollinger.right == SignalBandValueSource(instance_id="bollinger_20_2", series_key="bands", component=component)
+
+            donchian = by_key[f"price_donchian_{suffix}"]
+            assert donchian.attach_to_instance_id == "donchian_20"
+            assert isinstance(donchian.left, SignalPriceValueSource)
+            assert donchian.right == SignalBandValueSource(instance_id="donchian_20", series_key="channels", component=component)
+
+        adx = by_key["adx_14_trend_25"]
+        assert adx.attach_to_instance_id == "adx_14"
+        assert adx.source == SignalOutputValueSource(instance_id="adx_14", series_key="adx")
+        assert adx.threshold == 25
+
+        stoch_kd = by_key["stoch_rsi_k_d"]
+        assert stoch_kd.attach_to_instance_id == "stoch_rsi_14_3"
+        assert stoch_kd.left == SignalOutputValueSource(instance_id="stoch_rsi_14_3", series_key="k")
+        assert stoch_kd.right == SignalOutputValueSource(instance_id="stoch_rsi_14_3", series_key="d")
+        assert by_key["stoch_rsi_k_oversold_20"].threshold == 20
+        assert by_key["stoch_rsi_k_overbought_80"].threshold == 80
+        assert by_key["stoch_rsi_k_oversold_20"].source == SignalOutputValueSource(instance_id="stoch_rsi_14_3", series_key="k")
+
+    def test_fx_annotation_topology_matches_legacy_exactly(self):
+        by_key = {annotation.key: annotation for annotation in technical_shared.build_fx_annotation_requests()}
+
+        rate_ema_20 = by_key["rate_ema_20"]
+        assert rate_ema_20.attach_to_instance_id == "ema_20"
+        assert isinstance(rate_ema_20.left, SignalPriceValueSource)
+        assert rate_ema_20.right == SignalOutputValueSource(instance_id="ema_20", series_key="ema")
+
+        ppo_signal = by_key["ppo_signal"]
+        assert ppo_signal.attach_to_instance_id == "ppo_12_26_9"
+        assert ppo_signal.left == SignalOutputValueSource(instance_id="ppo_12_26_9", series_key="ppo")
+        assert ppo_signal.right == SignalOutputValueSource(instance_id="ppo_12_26_9", series_key="signal")
+
+        ppo_zero = by_key["ppo_histogram_zero"]
+        assert ppo_zero.attach_to_instance_id == "ppo_12_26_9"
+        assert ppo_zero.source == SignalOutputValueSource(instance_id="ppo_12_26_9", series_key="histogram")
+        assert ppo_zero.threshold == 0
+
+        roc_zero = by_key["roc_20_zero"]
+        assert roc_zero.attach_to_instance_id == "roc_20"
+        assert roc_zero.source == SignalOutputValueSource(instance_id="roc_20", series_key="roc")
+        assert roc_zero.threshold == 0
+
+        # No MACD-based annotation in the FX topology (unlike Asset) - FX uses
+        # PPO for the line/hist-zero pair instead, exactly like legacy.
+        assert not any(key.startswith("macd") for key in by_key)
+        # No ADX/Donchian annotations in FX (neither signal is in the FX bundle).
+        assert not any("adx" in key or "donchian" in key for key in by_key)
+
+    @pytest.mark.asyncio
+    async def test_portfolio_per_asset_technical_uses_the_exact_asset_bundle(self, monkeypatch):
+        """Portfolio/Broker per-asset technical analysis shares the *same* fixed
+        Asset bundle (20 instances) - not a separately-curated subset."""
+        positions = [_contribution(1)]
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _scope()
+        report = _report(scope, positions)
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("portfolio.technical_indicators", required=True))
+
+        asset_entry = next(asset for asset in payload["assets"] if asset["asset_id"] == 1)
+        instance_ids = {entry["instance_id"] for entry in asset_entry["indicators"]}
+        assert instance_ids == ASSET_BUNDLE_INSTANCE_IDS
+
+
+# =============================================================================
+# 2. Warm-up exclusion (requirement 2, 3)
+# =============================================================================
+
+
+class TestWarmupExclusion:
+    @pytest.mark.asyncio
+    async def test_asset_ohlc_returns_never_emits_before_scope_start(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        envelope = await context.resolve("asset.ohlc_returns", required=True)
+        payload = _envelope_payload(envelope)
+
+        assert payload["buckets"][0]["start_date"] == scope.period_start.isoformat()
+        assert payload["buckets"][-1]["end_date"] == scope.period_end.isoformat()
+        for bucket in payload["buckets"]:
+            assert date.fromisoformat(bucket["start_date"]) >= scope.period_start
+            assert date.fromisoformat(bucket["end_date"]) <= scope.period_end
+
+    @pytest.mark.asyncio
+    async def test_indicator_series_never_emits_before_scope_start(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        envelope = await context.resolve("asset.indicators", required=True)
+        payload = _envelope_payload(envelope)
+
+        assert payload["indicators"], "expected at least one curated indicator output"
+        for indicator in payload["indicators"]:
+            for bucket in indicator["buckets"]:
+                assert date.fromisoformat(bucket["start_date"]) >= scope.period_start
+                assert date.fromisoformat(bucket["end_date"]) <= scope.period_end
+
+    @pytest.mark.asyncio
+    async def test_events_never_emit_before_scope_start(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        envelope = await context.resolve("asset.states_events", required=True)
+        payload = _envelope_payload(envelope)
+
+        for bucket in payload["buckets"]:
+            for event in bucket["events"]:
+                assert date.fromisoformat(event["date"]) >= scope.period_start
+                assert date.fromisoformat(event["date"]) <= scope.period_end
+
+
+# =============================================================================
+# 3. Multi-output OHLC (requirement 3)
+# =============================================================================
+
+
+class TestMultiOutputOhlc:
+    @pytest.mark.asyncio
+    async def test_price_buckets_carry_first_min_max_last_and_simple_return(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.ohlc_returns", required=True))
+
+        non_empty = [bucket for bucket in payload["buckets"] if bucket["observation_count"] > 0]
+        assert non_empty
+        for bucket in non_empty:
+            assert set(bucket["first"]) == {"close"}
+            assert set(bucket["last"]) == {"close"}
+            assert set(bucket["minimum"]) == {"close"}
+            assert set(bucket["maximum"]) == {"close"}
+            assert bucket["minimum"]["close"] <= bucket["first"]["close"] <= bucket["maximum"]["close"]
+            assert bucket["minimum"]["close"] <= bucket["last"]["close"] <= bucket["maximum"]["close"]
+
+    @pytest.mark.asyncio
+    async def test_bollinger_band_buckets_use_lower_middle_upper_keys(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.indicators", required=True))
+
+        band_entries = [entry for entry in payload["indicators"] if entry["signal_code"] == "BOLLINGER"]
+        assert band_entries, "expected BOLLINGER outputs in the curated bundle"
+        for entry in band_entries:
+            assert entry["kind"] == "band"
+            populated = [bucket for bucket in entry["buckets"] if bucket["observation_count"] > 0]
+            assert populated
+            for bucket in populated:
+                assert set(bucket["last"]).issubset({"lower", "middle", "upper"})
+                assert set(bucket["last"])
+
+    @pytest.mark.asyncio
+    async def test_fx_rate_ohlc_uses_rate_key(self, monkeypatch):
+        _patch_convert_bulk(monkeypatch)
+        scope = _fx_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("fx.rate_ohlc", required=True))
+
+        non_empty = [bucket for bucket in payload["buckets"] if bucket["observation_count"] > 0]
+        assert non_empty
+        for bucket in non_empty:
+            assert set(bucket["first"]) == {"rate"}
+            assert bucket["first"]["rate"] > 0
+
+
+# =============================================================================
+# 4. Event preservation / no caps (requirement 4)
+# =============================================================================
+
+
+class TestEventPreservationNoCaps:
+    @pytest.mark.asyncio
+    async def test_all_annotation_events_preserved_no_legacy_caps(self, monkeypatch):
+        # A long, high-oscillation period generates many more than 10/40/120
+        # crossovers across the curated bundle - the legacy caps this
+        # requirement forbids.
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope(period_start=date(2025, 1, 1), period_end=date(2026, 6, 30), detail_level=DetailLevel.FULL)
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.states_events", required=True))
+
+        total_from_buckets = sum(bucket["event_count"] for bucket in payload["buckets"])
+        assert total_from_buckets == payload["total_event_count"]
+        assert payload["total_event_count"] > 120
+
+        # Every bucket's event list matches its own event_count exactly (no
+        # truncation within a bucket either).
+        for bucket in payload["buckets"]:
+            assert len(bucket["events"]) == bucket["event_count"]
+
+    @pytest.mark.asyncio
+    async def test_empty_event_list_is_a_valid_payload(self, monkeypatch):
+        # A very short, flat period yields no crossovers at all - a valid
+        # empty payload, never a placeholder/error.
+        async def _flat_get_prices_bulk(requests, session):  # noqa: ARG001
+            signal_service = SignalService()
+            results = []
+            for req in requests:
+                visible_start = req.date_range.start
+                visible_end = req.date_range.end or visible_start
+                signal_context = SignalExecutionContext(domain=SignalDomain.ASSET, requested_range=req.date_range, cadence=SignalCadence.DAILY, source_reference=f"asset:{req.asset_id}")
+                plan = signal_service.prepare_plan(req.signals, signal_context, req.annotation_requests)
+                warmup_days = min(plan.max_history_points_before_visible, (visible_start - date.min).days)
+                load_start = visible_start - timedelta(days=warmup_days)
+                flat_close = Decimal("100")
+                fa_points = [FAPricePoint(date=day, open=flat_close, high=flat_close, low=flat_close, close=flat_close, volume=Decimal(1000), currency=CURRENCY, source_plugin_key="yfinance", backward_fill_info=None) for day in _daterange(load_start, visible_end)]
+                signal_points = [SignalPricePoint(date=p.date, open=p.open, high=p.high, low=p.low, close=p.close, volume=p.volume) for p in fa_points]
+                capability = AssetSourceManager.derive_signal_source_capability(fa_points)
+                signals = await signal_service.compute(req.signals, signal_points, signal_context, annotation_requests=req.annotation_requests, source_capability=capability)
+                visible_prices = [p for p in fa_points if visible_start <= p.date <= visible_end]
+                results.append(FAPriceQueryResult(asset_id=req.asset_id, prices=visible_prices, events=[], errors=[], signals=signals))
+            return results
+
+        monkeypatch.setattr(AssetSourceManager, "get_prices_bulk", staticmethod(_flat_get_prices_bulk))
+        scope = _asset_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.states_events", required=True))
+
+        assert payload["total_event_count"] == 0
+        assert all(bucket["event_count"] == 0 for bucket in payload["buckets"])
+        assert all(bucket["events"] == () or bucket["events"] == [] for bucket in payload["buckets"])
+
+
+# =============================================================================
+# 5. Plugin-owned descriptions (requirement 1)
+# =============================================================================
+
+
+class TestPluginOwnedDescriptions:
+    @pytest.mark.asyncio
+    async def test_semantic_metadata_matches_plugin_describe_for_ai(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.indicators", required=True))
+
+        assert payload["indicators"]
+        for entry in payload["indicators"]:
+            plugin_class = SignalPluginRegistry.get_plugin(entry["signal_code"])
+            assert plugin_class is not None
+            ai_description = plugin_class.describe_for_ai()
+            output_description = next(output for output in ai_description.outputs if output.key == entry["output_key"])
+            assert entry["semantic_id"] == output_description.semantic_id
+            assert entry["semantic_description"] == output_description.semantic_description
+            assert entry["unit"] == output_description.unit.value
+            assert entry["category"] == ai_description.category.value
+
+
+# =============================================================================
+# 6. Partial success / unavailable isolation (requirement 7)
+# =============================================================================
+
+
+class TestUnavailableIsolation:
+    @pytest.mark.asyncio
+    async def test_insufficient_warmup_omits_only_the_affected_signal(self, monkeypatch):
+        """`ema_50`/`sma_50` (50-period) and `ema_200`/`sma_200` (200-period) each
+        need far more warm-up than a deliberately-short 45-day load window
+        (35 warm-up + 10 visible) provides; every other curated instance
+        (<=34-period warm-up requirement) still succeeds - proving sibling
+        plugins are not affected by one instance's unavailability, and that
+        the omission is a real "insufficient history -> UNAVAILABLE" capability
+        outcome, never curation."""
+
+        async def _short_history_get_prices_bulk(requests, session):  # noqa: ARG001
+            signal_service = SignalService()
+            results = []
+            for req in requests:
+                visible_start = req.date_range.start
+                visible_end = req.date_range.end or visible_start
+                signal_context = SignalExecutionContext(domain=SignalDomain.ASSET, requested_range=req.date_range, cadence=SignalCadence.DAILY, source_reference=f"asset:{req.asset_id}")
+                # Only 35 days of warm-up regardless of what the plan actually
+                # needs (the 50/200-period instances need far more) - simulates
+                # a young/newly-listed asset.
+                load_start = visible_start - timedelta(days=35)
+                fa_points = [_fa_price_point(req.asset_id, day) for day in _daterange(load_start, visible_end)]
+                signal_points = [SignalPricePoint(date=p.date, open=p.open, high=p.high, low=p.low, close=p.close, volume=p.volume) for p in fa_points]
+                capability = AssetSourceManager.derive_signal_source_capability(fa_points)
+                signals = await signal_service.compute(req.signals, signal_points, signal_context, annotation_requests=req.annotation_requests, source_capability=capability)
+                visible_prices = [p for p in fa_points if visible_start <= p.date <= visible_end]
+                results.append(FAPriceQueryResult(asset_id=req.asset_id, prices=visible_prices, events=[], errors=[], signals=signals))
+            return results
+
+        monkeypatch.setattr(AssetSourceManager, "get_prices_bulk", staticmethod(_short_history_get_prices_bulk))
+        scope = _asset_scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 10))
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.indicators", required=True))
+
+        instance_ids = {entry["instance_id"] for entry in payload["indicators"]}
+        excluded = {"ema_50", "sma_50", "ema_200", "sma_200"}
+        assert instance_ids.isdisjoint(excluded), "50/200-period instances should be omitted (insufficient warm-up), not a placeholder"
+        # Every other curated instance needs far less warm-up and should still succeed.
+        assert instance_ids == ASSET_BUNDLE_INSTANCE_IDS - excluded
+
+        # No error/placeholder entries - just fewer indicators than the full bundle.
+        for entry in payload["indicators"]:
+            assert entry["instance_id"] not in excluded
+
+
+# =============================================================================
+# 7. Volume capability gating (requirement 2, 7, 9)
+# =============================================================================
+
+
+class TestVolumeCapabilityGating:
+    @pytest.mark.asyncio
+    async def test_authoritative_volume_source_includes_mfi_and_obv(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch, source_plugin_key="yfinance", with_volume=True)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.indicators", required=True))
+
+        signal_codes = {entry["signal_code"] for entry in payload["indicators"]}
+        assert "MFI" in signal_codes
+        assert "OBV" in signal_codes
+        assert "ATR" in signal_codes
+
+    @pytest.mark.asyncio
+    async def test_manual_unregistered_source_excludes_mfi_and_obv(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch, source_plugin_key="MANUAL", with_volume=True)
+        scope = _asset_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.indicators", required=True))
+
+        signal_codes = {entry["signal_code"] for entry in payload["indicators"]}
+        assert "MFI" not in signal_codes
+        assert "OBV" not in signal_codes
+        # ATR only needs high/low/close (structural), not meaningful volume -
+        # still present even from an unregistered/manual source.
+        assert "ATR" in signal_codes
+        # Non-volume plugins remain fully unaffected.
+        assert "RSI" in signal_codes
+        assert "SMA" in signal_codes
+
+
+# =============================================================================
+# 8. FX no-volume (requirement 6, 9)
+# =============================================================================
+
+
+class TestFxNoVolume:
+    @pytest.mark.asyncio
+    async def test_fx_indicators_never_include_volume_or_high_low_only_plugins(self, monkeypatch):
+        _patch_convert_bulk(monkeypatch)
+        scope = _fx_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("fx.indicators", required=True))
+
+        signal_codes = {entry["signal_code"] for entry in payload["indicators"]}
+        assert "MFI" not in signal_codes
+        assert "OBV" not in signal_codes
+        assert "ATR" not in signal_codes
+        # Close-only plugins remain available.
+        assert "RSI" in signal_codes
+        assert "SMA" in signal_codes
+        assert "EMA" in signal_codes
+        assert "MACD" in signal_codes
+        assert "BOLLINGER" in signal_codes
+
+    @pytest.mark.asyncio
+    async def test_fx_returns_volatility_computed_from_rate_series(self, monkeypatch):
+        _patch_convert_bulk(monkeypatch)
+        scope = _fx_scope()
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("fx.returns_volatility", required=True))
+
+        populated = [bucket for bucket in payload["buckets"] if bucket["observation_count"] >= 2]
+        assert populated
+        assert any(bucket["volatility"] is not None for bucket in populated)
+
+
+# =============================================================================
+# 9. Full portfolio/broker universe analysis + breadth reconciliation (requirement 5, 9)
+# =============================================================================
+
+
+class TestClassifyReferenceLevelState:
+    """Direct unit tests for `classify_reference_level_state`'s degenerate
+    (single-level) vs region (2+-level) semantics - no hardcoded thresholds,
+    only the plugin's own declared level key/value (requirement: breadth bugfix).
+    """
+
+    _ZERO = SignalReferenceLevel(key="zero", label_key="signals.reference.zero", semantic="zero", value=0)
+    _OVERSOLD = SignalReferenceLevel(key="oversold", label_key="signals.reference.oversold", semantic="oversold", value=30)
+    _OVERBOUGHT = SignalReferenceLevel(key="overbought", label_key="signals.reference.overbought", semantic="overbought", value=70)
+
+    def test_single_level_negative_value_is_below(self):
+        assert technical_shared.classify_reference_level_state(-12.5, [self._ZERO]) == "below_zero"
+
+    def test_single_level_zero_value_is_at(self):
+        assert technical_shared.classify_reference_level_state(0.0, [self._ZERO]) == "at_zero"
+
+    def test_single_level_positive_value_is_above(self):
+        assert technical_shared.classify_reference_level_state(12.5, [self._ZERO]) == "above_zero"
+
+    def test_single_level_tiny_float_noise_still_classified_at(self):
+        # Residual float noise from Decimal->float conversion must not flip
+        # an economically-zero value into below/above.
+        assert technical_shared.classify_reference_level_state(1e-12, [self._ZERO]) == "at_zero"
+        assert technical_shared.classify_reference_level_state(-1e-12, [self._ZERO]) == "at_zero"
+
+    def test_single_level_never_returns_neutral(self):
+        for value in (-100.0, -0.001, 0.0, 0.001, 100.0):
+            state = technical_shared.classify_reference_level_state(value, [self._ZERO])
+            assert state != "neutral"
+            assert state in {"below_zero", "at_zero", "above_zero"}
+
+    def test_two_levels_region_semantics_preserved(self):
+        levels = [self._OVERSOLD, self._OVERBOUGHT]
+        assert technical_shared.classify_reference_level_state(20.0, levels) == "oversold"
+        assert technical_shared.classify_reference_level_state(50.0, levels) == "neutral"
+        assert technical_shared.classify_reference_level_state(80.0, levels) == "overbought"
+        # Boundary values belong to the matching declared level, not "neutral".
+        assert technical_shared.classify_reference_level_state(30.0, levels) == "oversold"
+        assert technical_shared.classify_reference_level_state(70.0, levels) == "overbought"
+
+    def test_no_levels_returns_none(self):
+        assert technical_shared.classify_reference_level_state(42.0, []) is None
+
+
+class TestPortfolioUniverseAndBreadth:
+    @pytest.mark.asyncio
+    async def test_all_held_assets_analyzed_no_compact_truncation(self, monkeypatch):
+        positions = [_contribution(asset_id) for asset_id in (1, 2, 3, 4, 5)]
+        for detail_level in (DetailLevel.COMPACT, DetailLevel.STANDARD, DetailLevel.FULL):
+            _patch_get_prices_bulk(monkeypatch)
+            scope = _scope(detail_level=detail_level)
+            report = _report(scope, positions)
+            _patch_get_report(monkeypatch, report)
+            context = _make_context(scope)
+            payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+            assert payload["eligible_asset_count"] == 5
+            assert payload["considered_asset_count"] == 5
+            assert len(payload["assets"]) == 5
+            asset_ids = [asset["asset_id"] for asset in payload["assets"]]
+            assert asset_ids == sorted(asset_ids), "assets must be deterministically ordered by asset_id"
+
+    @pytest.mark.asyncio
+    async def test_empty_portfolio_yields_valid_empty_technical_payload(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _scope()
+        report = _report(scope, [])
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+
+        prices_payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+        indicators_payload = _envelope_payload(await context.resolve("portfolio.technical_indicators", required=True))
+        breadth_payload = _envelope_payload(await context.resolve("portfolio.technical_breadth", required=True))
+        events_payload = _envelope_payload(await context.resolve("portfolio.technical_events", required=True))
+
+        assert prices_payload["assets"] == []
+        assert prices_payload["eligible_asset_count"] == 0
+        assert indicators_payload["assets"] == []
+        assert breadth_payload["eligible_asset_count"] == 0
+        assert breadth_payload["covered_asset_count"] == 0
+        assert breadth_payload["states"] == []
+        assert events_payload["total_event_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_fully_sold_positions_excluded_from_eligible_universe(self, monkeypatch):
+        positions = [_contribution(1, end_value=1000), _contribution(2, end_value=0, is_fully_sold=True)]
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _scope()
+        report = _report(scope, positions)
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+
+        assert payload["eligible_asset_count"] == 1
+        assert payload["considered_asset_count"] == 2
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1]
+
+    @pytest.mark.asyncio
+    async def test_breadth_ratios_reconcile_to_one_weighted_and_unweighted(self, monkeypatch):
+        # Two assets with equal NAV weight (500/500): a perfectly balanced
+        # unweighted/weighted breadth split is easy to verify exactly.
+        positions = [_contribution(1, end_value=500), _contribution(2, end_value=500)]
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _scope()
+        report = _report(scope, positions)
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("portfolio.technical_breadth", required=True))
+
+        assert payload["eligible_asset_count"] == 2
+        assert payload["states"], "expected at least one reference-level breadth bucket (RSI/MFI)"
+
+        by_indicator: dict[tuple[str, str], list[dict]] = {}
+        for state in payload["states"]:
+            by_indicator.setdefault((state["signal_code"], state["output_key"]), []).append(state)
+        for _key, states in by_indicator.items():
+            unweighted_total = sum(s["unweighted_ratio"] for s in states)
+            weighted_total = sum(s["weighted_ratio"] for s in states)
+            assert unweighted_total == pytest.approx(1.0)
+            assert weighted_total == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    async def test_weighted_breadth_differs_from_unweighted_with_unequal_weights(self, monkeypatch):
+        # Asset 1 dominates NAV (9000 vs 1000): if the two assets land in
+        # different reference-level states, weighted and unweighted ratios
+        # must diverge (proves weighting is real, not a no-op).
+        positions = [_contribution(1, end_value=9000), _contribution(2, end_value=1000)]
+
+        async def _divergent_get_prices_bulk(requests, session):  # noqa: ARG001
+            signal_service = SignalService()
+            results = []
+            for req in requests:
+                visible_start = req.date_range.start
+                visible_end = req.date_range.end or visible_start
+                signal_context = SignalExecutionContext(domain=SignalDomain.ASSET, requested_range=req.date_range, cadence=SignalCadence.DAILY, source_reference=f"asset:{req.asset_id}")
+                plan = signal_service.prepare_plan(req.signals, signal_context, req.annotation_requests)
+                warmup_days = min(plan.max_history_points_before_visible, (visible_start - date.min).days)
+                load_start = visible_start - timedelta(days=warmup_days)
+                fa_points = []
+                for day in _daterange(load_start, visible_end):
+                    # Asset 1: strong monotonic uptrend (drives RSI toward
+                    # overbought). Asset 2: strong monotonic downtrend (drives
+                    # RSI toward oversold) - deterministically divergent states.
+                    ordinal = (day - load_start).days
+                    if req.asset_id == 1:
+                        close = Decimal(str(100 + ordinal * 2))
+                    else:
+                        close = Decimal(str(max(1, 500 - ordinal * 2)))
+                    fa_points.append(FAPricePoint(date=day, open=close, high=close, low=close, close=close, volume=Decimal(1000), currency=CURRENCY, source_plugin_key="yfinance", backward_fill_info=None))
+                signal_points = [SignalPricePoint(date=p.date, open=p.open, high=p.high, low=p.low, close=p.close, volume=p.volume) for p in fa_points]
+                capability = AssetSourceManager.derive_signal_source_capability(fa_points)
+                signals = await signal_service.compute(req.signals, signal_points, signal_context, annotation_requests=req.annotation_requests, source_capability=capability)
+                visible_prices = [p for p in fa_points if visible_start <= p.date <= visible_end]
+                results.append(FAPriceQueryResult(asset_id=req.asset_id, prices=visible_prices, events=[], errors=[], signals=signals))
+            return results
+
+        monkeypatch.setattr(AssetSourceManager, "get_prices_bulk", staticmethod(_divergent_get_prices_bulk))
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 20))
+        report = _report(scope, positions)
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("portfolio.technical_breadth", required=True))
+
+        rsi_states = [s for s in payload["states"] if s["signal_code"] == "RSI"]
+        assert rsi_states
+        distinct_states = {s["state"] for s in rsi_states}
+        if len(distinct_states) > 1:
+            # Divergent states -> weighted (90/10) must differ from unweighted (50/50).
+            assert any(s["weighted_ratio"] != pytest.approx(s["unweighted_ratio"]) for s in rsi_states)
+
+    @pytest.mark.asyncio
+    async def test_degenerate_single_level_breadth_is_informative_not_neutral(self, monkeypatch):
+        # ROC declares exactly one reference level ("zero"): with assets on
+        # both sides of it, breadth must classify each into below_zero/
+        # above_zero - never collapse everything into a single "zero"/
+        # "neutral" bucket (the bug this test guards against).
+        positions = [_contribution(1, end_value=9000), _contribution(2, end_value=1000)]
+
+        async def _divergent_get_prices_bulk(requests, session):  # noqa: ARG001
+            signal_service = SignalService()
+            results = []
+            for req in requests:
+                visible_start = req.date_range.start
+                visible_end = req.date_range.end or visible_start
+                signal_context = SignalExecutionContext(domain=SignalDomain.ASSET, requested_range=req.date_range, cadence=SignalCadence.DAILY, source_reference=f"asset:{req.asset_id}")
+                plan = signal_service.prepare_plan(req.signals, signal_context, req.annotation_requests)
+                warmup_days = min(plan.max_history_points_before_visible, (visible_start - date.min).days)
+                load_start = visible_start - timedelta(days=warmup_days)
+                fa_points = []
+                for day in _daterange(load_start, visible_end):
+                    # Asset 1: exponential uptrend (ROC stably positive ->
+                    # above_zero). Asset 2: exponential decay (ROC stably
+                    # negative -> below_zero) - deterministically on opposite
+                    # sides of the single "zero" reference level, regardless
+                    # of how far back EMA200's stabilization warm-up (6x
+                    # period = 1200 calendar days) reaches - a linear ramp
+                    # would eventually floor/saturate over such a long window.
+                    ordinal = (day - load_start).days
+                    if req.asset_id == 1:
+                        close = Decimal(str(100 * (1.001**ordinal)))
+                    else:
+                        close = Decimal(str(500 * (0.999**ordinal)))
+                    fa_points.append(FAPricePoint(date=day, open=close, high=close, low=close, close=close, volume=Decimal(1000), currency=CURRENCY, source_plugin_key="yfinance", backward_fill_info=None))
+                signal_points = [SignalPricePoint(date=p.date, open=p.open, high=p.high, low=p.low, close=p.close, volume=p.volume) for p in fa_points]
+                capability = AssetSourceManager.derive_signal_source_capability(fa_points)
+                signals = await signal_service.compute(req.signals, signal_points, signal_context, annotation_requests=req.annotation_requests, source_capability=capability)
+                visible_prices = [p for p in fa_points if visible_start <= p.date <= visible_end]
+                results.append(FAPriceQueryResult(asset_id=req.asset_id, prices=visible_prices, events=[], errors=[], signals=signals))
+            return results
+
+        monkeypatch.setattr(AssetSourceManager, "get_prices_bulk", staticmethod(_divergent_get_prices_bulk))
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 20))
+        report = _report(scope, positions)
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("portfolio.technical_breadth", required=True))
+
+        roc_states = [s for s in payload["states"] if s["signal_code"] == "ROC"]
+        assert roc_states, "ROC declares a single 'zero' reference level and must appear in breadth"
+        distinct_state_keys = {s["state"] for s in roc_states}
+        # The bug under test collapsed every value to "zero"; the fix must
+        # surface both sides and never a "neutral"/single-bucket collapse.
+        assert distinct_state_keys == {"below_zero", "above_zero"}
+        assert "neutral" not in distinct_state_keys
+        assert "zero" not in distinct_state_keys
+
+        unweighted_total = sum(s["unweighted_ratio"] for s in roc_states)
+        weighted_total = sum(s["weighted_ratio"] for s in roc_states)
+        assert unweighted_total == pytest.approx(1.0)
+        assert weighted_total == pytest.approx(1.0)
+        # Unequal NAV weights (90/10) with divergent states -> weighted must
+        # diverge from unweighted (50/50).
+        assert any(s["weighted_ratio"] != pytest.approx(s["unweighted_ratio"]) for s in roc_states)
+
+    @pytest.mark.asyncio
+    async def test_broker_domain_scopes_to_broker_report_resource(self, monkeypatch):
+        positions = [_contribution(1, end_value=1000, broker_id=7)]
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _broker_scope(broker_id=7)
+        report = _report(scope, positions)
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+
+        payload = _envelope_payload(await context.resolve("broker.technical_indicators", required=True))
+        assert payload["eligible_asset_count"] == 1
+        assert len(payload["assets"]) == 1
+
+
+# =============================================================================
+# 10. Resource memoization (requirement 5)
+# =============================================================================
+
+
+class TestResourceMemoization:
+    @pytest.mark.asyncio
+    async def test_single_report_and_price_load_shared_across_all_portfolio_technical_components(self, monkeypatch):
+        positions = [_contribution(1), _contribution(2)]
+        price_calls = _patch_get_prices_bulk(monkeypatch)
+        scope = _scope()
+        report = _report(scope, positions)
+        report_calls = _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+
+        for component_id in ("portfolio.technical_prices", "portfolio.technical_indicators", "portfolio.technical_breadth", "portfolio.technical_events"):
+            await context.resolve(component_id, required=True)
+
+        assert len(report_calls) == 1
+        # One `get_prices_bulk` call, batching every held asset in one request.
+        assert len(price_calls) == 1
+        assert price_calls[0] == len(positions)
+
+    @pytest.mark.asyncio
+    async def test_single_asset_price_load_shared_across_asset_components(self, monkeypatch):
+        price_calls = _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope()
+        context = _make_context(scope)
+
+        for component_id in ("asset.ohlc_returns", "asset.indicators", "asset.states_events"):
+            await context.resolve(component_id, required=True)
+
+        assert len(price_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_single_fx_rate_load_shared_across_fx_components(self, monkeypatch):
+        rate_calls = _patch_convert_bulk(monkeypatch)
+        scope = _fx_scope()
+        context = _make_context(scope)
+
+        for component_id in ("fx.rate_ohlc", "fx.returns_volatility", "fx.indicators", "fx.states_events"):
+            await context.resolve(component_id, required=True)
+
+        # `convert_bulk` is called exactly once (the shared rate series load) -
+        # every one of the four FX technical components reuses it.
+        assert len(rate_calls) == 1
+
+
+# =============================================================================
+# 11. Deterministic ordering / JSON-safety (requirement 8)
+# =============================================================================
+
+
+class TestDeterministicOutput:
+    @pytest.mark.asyncio
+    async def test_asset_ids_sorted_in_universe_payloads(self, monkeypatch):
+        positions = [_contribution(3), _contribution(1), _contribution(2)]
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _scope()
+        report = _report(scope, positions)
+        _patch_get_report(monkeypatch, report)
+        context = _make_context(scope)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_indicators", required=True))
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1, 2, 3]
+
+    @pytest.mark.asyncio
+    async def test_repeated_build_is_deterministic(self, monkeypatch):
+        positions = [_contribution(1), _contribution(2)]
+        scope = _scope()
+        report = _report(scope, positions)
+
+        payloads = []
+        for _ in range(2):
+            _patch_get_prices_bulk(monkeypatch)
+            _patch_get_report(monkeypatch, report)
+            context = _make_context(scope)
+            payloads.append(_envelope_payload(await context.resolve("portfolio.technical_indicators", required=True)))
+
+        assert payloads[0] == payloads[1]

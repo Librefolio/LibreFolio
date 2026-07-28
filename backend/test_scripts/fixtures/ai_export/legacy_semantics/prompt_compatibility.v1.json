@@ -54,6 +54,11 @@
           "target_task": "performance_attribution",
           "render_modes": ["data_only", "full_prompt"],
           "classification": "greenfield"
+        },
+        {
+          "target_task": "portfolio_fifo_lot_review",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
         }
       ]
     },

@@ -20,6 +20,7 @@ from backend.app.schemas.ai_export import (
     AiExportDomain,
     AiExportEvent,
     AiExportEventDirection,
+    AiExportFifoLotStatus,
     AiExportPortfolioSnapshotRequest,
     AiExportPortfolioSnapshotResponse,
     AiExportPortfolioTask,
@@ -385,6 +386,7 @@ class _TechnicalExecutor:
         event_points: list[Any],
         *,
         events_loaded: bool,
+        source_capability: Any = None,
     ) -> TechnicalTargetResult:
         asset_id = prepared.target.asset_id
         self.calls.append((asset_id, len(price_points)))
@@ -498,19 +500,25 @@ def _assembler(
     technical_preparer: Any = None,
     convert_bulk_fn: Any = None,
     reverse_metadata: bool = False,
+    lots_service: Any | None = None,
+    transaction_asset_ids_loader: Any | None = None,
 ) -> tuple[AiExportPortfolioAssembler, _PortfolioService, _PriceLoader]:
     service = _PortfolioService(report)
     prices = price_loader or _PriceLoader()
+    historical_assets = transaction_asset_ids_loader or _TransactionAssetIdsLoader()
     kwargs: dict[str, Any] = {}
     if technical_preparer is not None:
         kwargs["technical_preparer"] = technical_preparer
     if convert_bulk_fn is not None:
         kwargs["convert_bulk_fn"] = convert_bulk_fn
+    if lots_service is not None:
+        kwargs["lots_service"] = lots_service
     assembler = AiExportPortfolioAssembler(
         portfolio_service=service,
         price_bulk_loader=prices,
         asset_metadata_loader=_MetadataLoader(assets, reverse=reverse_metadata),
         broker_metadata_loader=_MetadataLoader(brokers, reverse=reverse_metadata),
+        transaction_asset_ids_loader=historical_assets,
         technical_executor=technical_executor or _TechnicalExecutor(),
         clock=_fixed_clock,
         **kwargs,
@@ -525,7 +533,7 @@ DETAIL_LEVELS = tuple(AiExportDetailLevel)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("task", PORTFOLIO_TASKS)
 @pytest.mark.parametrize("detail", DETAIL_LEVELS)
-async def test_all_18_portfolio_profiles_are_schema_and_meta_valid(task: AiExportPortfolioTask, detail: AiExportDetailLevel):
+async def test_all_21_portfolio_profiles_are_schema_and_meta_valid(task: AiExportPortfolioTask, detail: AiExportDetailLevel):
     assets = [_asset(1), _asset(2, currency="EUR")]
     brokers = [_broker(1)]
     report = _report(
@@ -535,7 +543,13 @@ async def test_all_18_portfolio_profiles_are_schema_and_meta_valid(task: AiExpor
         other_effects=[_other_effect("Portfolio adjustment", category="Other", amount="-3")],
         brokers=brokers,
     )
-    assembler, _service, _prices = _assembler(report, assets=assets, brokers=brokers)
+    lots = _LotsService(
+        {
+            1: _lots_response([_lot(101, original_cost="240", open_value="300", market_pnl="60")]),
+            2: _lots_response([_lot(201, original_cost="400", open_value="500", market_pnl="100")]),
+        }
+    )
+    assembler, _service, _prices = _assembler(report, assets=assets, brokers=brokers, lots_service=lots)
 
     response = await assembler.assemble(_prepared(task, detail), None)
     validated = AiExportPortfolioSnapshotResponse.model_validate(response.model_dump())
@@ -545,7 +559,7 @@ async def test_all_18_portfolio_profiles_are_schema_and_meta_valid(task: AiExpor
     assert validated.meta.target_currency == "EUR"
     assert (validated.facts.selection is not None) is (detail == AiExportDetailLevel.COMPACT)
     assert validated.export_stats.canonical_json.positions == len(validated.facts.positions)
-    contribution_context_allowed = task != AiExportPortfolioTask.TECHNICAL_BREADTH
+    contribution_context_allowed = task not in {AiExportPortfolioTask.TECHNICAL_BREADTH, AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW}
     assert bool(validated.facts.contributions) is contribution_context_allowed
     assert bool(validated.facts.unallocated_contributions) is contribution_context_allowed
     assert bool(validated.facts.other_period_effects) is contribution_context_allowed
@@ -1423,6 +1437,7 @@ def _lot(
     lot_id: int,
     *,
     opened: date = START,
+    closing_date: date | None = None,
     original_quantity: str = "10",
     open_quantity: str = "10",
     realized_quantity: str = "0",
@@ -1434,6 +1449,14 @@ def _lot(
     value_source: str = "MARKET_PRICE",
     direction: str = "LONG",
     in_transit: str = "0",
+    opening_broker_id: int = 1,
+    opening_unit_price: str = "80",
+    cumulative_proceeds: str = "0",
+    allocated_fees: str = "0",
+    allocated_taxes: str = "0",
+    total_pnl: str | None = None,
+    net_total_pnl: str | None = None,
+    states: list[str] | None = None,
 ) -> SimpleNamespace:
     custody = []
     if Decimal(in_transit) != 0:
@@ -1441,6 +1464,7 @@ def _lot(
     return SimpleNamespace(
         lot_id=lot_id,
         opening_date=opened,
+        closing_date=closing_date,
         original_quantity=Decimal(original_quantity),
         open_quantity=Decimal(open_quantity),
         realized_quantity=Decimal(realized_quantity),
@@ -1452,7 +1476,16 @@ def _lot(
         value_source=value_source,
         direction=direction,
         current_custody=custody,
+        opening_broker_id=opening_broker_id,
+        opening_unit_price=Decimal(opening_unit_price),
+        cumulative_proceeds=Decimal(cumulative_proceeds),
+        allocated_fees=Decimal(allocated_fees),
+        allocated_taxes=Decimal(allocated_taxes),
+        total_pnl=Decimal(total_pnl) if total_pnl is not None else None,
+        net_total_pnl=Decimal(net_total_pnl) if net_total_pnl is not None else None,
+        states=list(states) if states is not None else [],
     )
+
 
 
 def _lots_response(
@@ -1497,6 +1530,23 @@ class _LatestTransactionLoader:
         return self.transaction
 
 
+class _TransactionAssetIdsLoader:
+    """Fake historical transaction asset-id discovery loader; defaults to no extra assets."""
+
+    def __init__(self, asset_ids: set[int] | None = None) -> None:
+        self.asset_ids = set(asset_ids) if asset_ids else set()
+        self.calls: list[tuple[Any, list[int], date]] = []
+
+    async def __call__(
+        self,
+        session: Any,
+        broker_ids: list[int],
+        snapshot_as_of: date,
+    ) -> set[int]:
+        self.calls.append((session, list(broker_ids), snapshot_as_of))
+        return set(self.asset_ids)
+
+
 def _prepared_broker(
     task: AiExportBrokerTask,
     detail: AiExportDetailLevel,
@@ -1529,6 +1579,7 @@ def _broker_assembler(
     price_loader: _PriceLoader | None = None,
     technical_executor: _TechnicalExecutor | None = None,
     technical_preparer: Any = None,
+    transaction_asset_ids_loader: _TransactionAssetIdsLoader | None = None,
     reverse_metadata: bool = False,
 ) -> tuple[
     AiExportBrokerAssembler,
@@ -1541,6 +1592,7 @@ def _broker_assembler(
     prices = price_loader or _PriceLoader()
     lots = lots_service or _LotsService()
     latest = latest_loader or _LatestTransactionLoader()
+    historical_assets = transaction_asset_ids_loader or _TransactionAssetIdsLoader()
     kwargs: dict[str, Any] = {}
     if technical_preparer is not None:
         kwargs["technical_preparer"] = technical_preparer
@@ -1551,6 +1603,7 @@ def _broker_assembler(
         asset_metadata_loader=_MetadataLoader(assets, reverse=reverse_metadata),
         broker_metadata_loader=_MetadataLoader(brokers, reverse=reverse_metadata),
         latest_transaction_loader=latest,
+        transaction_asset_ids_loader=historical_assets,
         technical_executor=technical_executor or _TechnicalExecutor(),
         clock=_fixed_clock,
         **kwargs,
@@ -2198,3 +2251,279 @@ async def test_broker_output_and_stats_are_deterministic_for_reversed_sources():
     assert response_a.model_dump(mode="json") == response_b.model_dump(mode="json")
     assert [position.asset_id for position in response_a.facts.positions] == [1, 2, 3]
     assert response_a.export_stats.canonical_json.positions == 3
+
+
+# ---------------------------------------------------------------------------
+# fifo_lots / fifo_lot_selection per-lot row export (Broker + Portfolio)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_broker_fifo_lot_rows_never_serialize_lot_id_and_apply_the_3_month_closed_cutoff():
+    assets = [_asset(1)]
+    brokers = [_broker(1)]
+    report = _report(
+        holdings=[_holding(1, 1, nav_weight="80", current_value="800")],
+        contributions=[_contribution(1, 1)],
+        brokers=brokers,
+    )
+    lots = _LotsService(
+        {
+            1: _lots_response(
+                [
+                    _lot(301, opened=START, original_cost="500", open_value="500", market_pnl="0"),
+                    _lot(302, opened=START, closing_date=START, open_quantity="0", realized_quantity="10", original_cost="200", open_value="0", market_pnl="0"),
+                    _lot(303, opened=START, closing_date=START - timedelta(days=1), open_quantity="0", realized_quantity="10", original_cost="150", open_value="0", market_pnl="0"),
+                ]
+            )
+        }
+    )
+    assembler, _service, _prices, _used_lots, _latest = _broker_assembler(
+        report,
+        assets=assets,
+        brokers=brokers,
+        lots_service=lots,
+        technical_preparer=lambda *args, **kwargs: None,
+    )
+
+    response = await assembler.assemble(_prepared_broker(AiExportBrokerTask.BROKER_FIFO_LOT_REVIEW, AiExportDetailLevel.STANDARD), None)
+
+    assert len(response.facts.fifo_lots) == 2
+    statuses = {row.status for row in response.facts.fifo_lots}
+    assert statuses == {AiExportFifoLotStatus.OPEN, AiExportFifoLotStatus.CLOSED}
+    closed_row = next(row for row in response.facts.fifo_lots if row.status == AiExportFifoLotStatus.CLOSED)
+    assert closed_row.closing_date == START
+    for row in response.facts.fifo_lots:
+        dumped_keys = set(row.model_dump().keys())
+        assert "lot_id" not in dumped_keys
+        assert "opening_transaction_id" not in dumped_keys
+    dumped_json = response.model_dump_json()
+    assert "lot_id" not in dumped_json
+    assert "opening_transaction_id" not in dumped_json
+
+
+@pytest.mark.asyncio
+async def test_broker_fifo_lot_review_scopes_lots_service_to_selected_broker_and_includes_historical_asset_no_longer_held():
+    assets = [_asset(1), _asset(2)]
+    brokers = [_broker(1)]
+    report = _report(
+        holdings=[_holding(1, 1, nav_weight="80", current_value="800")],
+        contributions=[_contribution(1, 1)],
+        brokers=brokers,
+    )
+    lots = _LotsService(
+        {
+            1: _lots_response([_lot(401, opened=START, original_cost="500", open_value="500", market_pnl="0")]),
+            2: _lots_response(
+                [
+                    _lot(
+                        402,
+                        opened=START,
+                        closing_date=END,
+                        open_quantity="0",
+                        realized_quantity="10",
+                        original_cost="300",
+                        open_value="0",
+                        market_pnl="0",
+                    )
+                ]
+            ),
+        }
+    )
+    historical = _TransactionAssetIdsLoader({2})
+    assembler, _service, _prices, used_lots, _latest = _broker_assembler(
+        report,
+        assets=assets,
+        brokers=brokers,
+        lots_service=lots,
+        transaction_asset_ids_loader=historical,
+        technical_preparer=lambda *args, **kwargs: None,
+    )
+
+    response = await assembler.assemble(_prepared_broker(AiExportBrokerTask.BROKER_FIFO_LOT_REVIEW, AiExportDetailLevel.STANDARD), None)
+
+    assert historical.calls == [(None, [1], END)]
+    assert {call["asset_id"] for call in used_lots.calls} == {1, 2}
+    assert all(call["broker_ids"] == [1] for call in used_lots.calls)
+    fifo_asset_ids = {row.asset_id for row in response.facts.fifo_lots}
+    assert fifo_asset_ids == {1, 2}
+    assert {position.asset_id for position in response.facts.positions} == {1}
+    assert response.facts.fifo_summary is not None
+
+
+@pytest.mark.asyncio
+async def test_broker_fifo_compact_selection_backfills_quota_deterministically():
+    assets = [_asset(1)]
+    brokers = [_broker(1)]
+    report = _report(
+        holdings=[_holding(1, 1, nav_weight="80", current_value="800")],
+        contributions=[_contribution(1, 1)],
+        brokers=brokers,
+    )
+    open_costs = ["1000", "900", "800", "700", "600", "500", "400", "300", "200", "100", "50"]
+    open_lots = [_lot(500 + idx, opened=START, original_cost=cost, open_value=cost, market_pnl="0") for idx, cost in enumerate(open_costs)]
+    closed_lot = _lot(600, opened=START, closing_date=END, open_quantity="0", realized_quantity="10", original_cost="999", open_value="0", market_pnl="0")
+    lots = _LotsService({1: _lots_response(open_lots + [closed_lot])})
+    assembler, _service, _prices, _used_lots, _latest = _broker_assembler(
+        report,
+        assets=assets,
+        brokers=brokers,
+        lots_service=lots,
+        technical_preparer=lambda *args, **kwargs: None,
+    )
+
+    response_1 = await assembler.assemble(_prepared_broker(AiExportBrokerTask.BROKER_FIFO_LOT_REVIEW, AiExportDetailLevel.COMPACT), None)
+    response_2 = await assembler.assemble(_prepared_broker(AiExportBrokerTask.BROKER_FIFO_LOT_REVIEW, AiExportDetailLevel.COMPACT), None)
+
+    selection = response_1.facts.fifo_lot_selection
+    assert selection is not None
+    assert selection.rule == "largest_open_residual_plus_most_recent_closed"
+    assert selection.limit == 10
+    assert selection.total_entity_count == 12
+    assert selection.included_entity_count == 10
+    included_costs = sorted((row.residual_cost_basis.amount for row in response_1.facts.fifo_lots), reverse=True)
+    assert included_costs == [Decimal(value) for value in ["1000", "900", "800", "700", "600", "500", "400", "300", "200", "0"]]
+    assert response_1.model_dump(mode="json") == response_2.model_dump(mode="json")
+
+
+@pytest.mark.asyncio
+async def test_broker_fifo_standard_and_full_export_all_eligible_rows_without_compact_limit():
+    assets = [_asset(1)]
+    brokers = [_broker(1)]
+    report = _report(
+        holdings=[_holding(1, 1, nav_weight="80", current_value="800")],
+        contributions=[_contribution(1, 1)],
+        brokers=brokers,
+    )
+    open_lots = [_lot(700 + idx, opened=START, original_cost=str(1000 - idx * 10), open_value=str(1000 - idx * 10), market_pnl="0") for idx in range(12)]
+    lots = _LotsService({1: _lots_response(open_lots)})
+    assembler, _service, _prices, _used_lots, _latest = _broker_assembler(
+        report,
+        assets=assets,
+        brokers=brokers,
+        lots_service=lots,
+        technical_preparer=lambda *args, **kwargs: None,
+    )
+
+    standard = await assembler.assemble(_prepared_broker(AiExportBrokerTask.BROKER_FIFO_LOT_REVIEW, AiExportDetailLevel.STANDARD), None)
+    full = await assembler.assemble(_prepared_broker(AiExportBrokerTask.BROKER_FIFO_LOT_REVIEW, AiExportDetailLevel.FULL), None)
+
+    assert len(standard.facts.fifo_lots) == 12
+    assert len(full.facts.fifo_lots) == 12
+    assert standard.facts.fifo_lot_selection is None
+    assert full.facts.fifo_lot_selection is None
+
+
+@pytest.mark.asyncio
+async def test_portfolio_fifo_lot_rows_never_serialize_lot_id_and_apply_the_3_month_closed_cutoff():
+    assets = [_asset(1)]
+    brokers = [_broker(1)]
+    report = _report(
+        holdings=[_holding(1, 1, nav_weight="80", current_value="800")],
+        contributions=[_contribution(1, 1)],
+        brokers=brokers,
+    )
+    lots = _LotsService(
+        {
+            1: _lots_response(
+                [
+                    _lot(801, opened=START, original_cost="500", open_value="500", market_pnl="0"),
+                    _lot(802, opened=START, closing_date=START, open_quantity="0", realized_quantity="10", original_cost="200", open_value="0", market_pnl="0"),
+                    _lot(803, opened=START, closing_date=START - timedelta(days=1), open_quantity="0", realized_quantity="10", original_cost="150", open_value="0", market_pnl="0"),
+                ]
+            )
+        }
+    )
+    assembler, _service, _prices = _assembler(report, assets=assets, brokers=brokers, lots_service=lots)
+
+    response = await assembler.assemble(_prepared(AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW, AiExportDetailLevel.STANDARD), None)
+
+    assert len(response.facts.fifo_lots) == 2
+    statuses = {row.status for row in response.facts.fifo_lots}
+    assert statuses == {AiExportFifoLotStatus.OPEN, AiExportFifoLotStatus.CLOSED}
+    closed_row = next(row for row in response.facts.fifo_lots if row.status == AiExportFifoLotStatus.CLOSED)
+    assert closed_row.closing_date == START
+    for row in response.facts.fifo_lots:
+        dumped_keys = set(row.model_dump().keys())
+        assert "lot_id" not in dumped_keys
+        assert "opening_transaction_id" not in dumped_keys
+    dumped_json = response.model_dump_json()
+    assert "lot_id" not in dumped_json
+    assert "opening_transaction_id" not in dumped_json
+
+
+@pytest.mark.asyncio
+async def test_portfolio_fifo_lot_review_passes_active_broker_scope_and_includes_historical_asset_no_longer_held():
+    assets = [_asset(1), _asset(3)]
+    brokers = [_broker(1), _broker(2)]
+    report = _report(
+        holdings=[_holding(1, 1, nav_weight="80", current_value="800")],
+        contributions=[_contribution(1, 1)],
+        brokers=brokers,
+    )
+    lots = _LotsService(
+        {
+            1: _lots_response([_lot(901, opened=START, original_cost="500", open_value="500", market_pnl="0")]),
+            3: _lots_response(
+                [
+                    _lot(
+                        902,
+                        opened=START,
+                        closing_date=END,
+                        open_quantity="0",
+                        realized_quantity="10",
+                        original_cost="300",
+                        open_value="0",
+                        market_pnl="0",
+                    )
+                ]
+            ),
+        }
+    )
+    historical = _TransactionAssetIdsLoader({3})
+    assembler, _service, _prices = _assembler(
+        report,
+        assets=assets,
+        brokers=brokers,
+        lots_service=lots,
+        transaction_asset_ids_loader=historical,
+    )
+
+    response = await assembler.assemble(_prepared(AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW, AiExportDetailLevel.STANDARD, broker_ids=(1, 2)), None)
+
+    assert historical.calls == [(None, [1, 2], END)]
+    assert {call["asset_id"] for call in lots.calls} == {1, 3}
+    assert all(call["broker_ids"] == [1, 2] for call in lots.calls)
+    fifo_asset_ids = {row.asset_id for row in response.facts.fifo_lots}
+    assert fifo_asset_ids == {1, 3}
+    assert {position.asset_id for position in response.facts.positions} == {1}
+    assert response.facts.fifo_summary is not None
+
+
+@pytest.mark.asyncio
+async def test_portfolio_fifo_compact_selection_backfills_quota_deterministically():
+    assets = [_asset(1)]
+    brokers = [_broker(1)]
+    report = _report(
+        holdings=[_holding(1, 1, nav_weight="80", current_value="800")],
+        contributions=[_contribution(1, 1)],
+        brokers=brokers,
+    )
+    open_costs = ["1000", "900", "800", "700", "600", "500", "400", "300", "200", "100", "50"]
+    open_lots = [_lot(1000 + idx, opened=START, original_cost=cost, open_value=cost, market_pnl="0") for idx, cost in enumerate(open_costs)]
+    closed_lot = _lot(1100, opened=START, closing_date=END, open_quantity="0", realized_quantity="10", original_cost="999", open_value="0", market_pnl="0")
+    lots = _LotsService({1: _lots_response(open_lots + [closed_lot])})
+    assembler, _service, _prices = _assembler(report, assets=assets, brokers=brokers, lots_service=lots)
+
+    response_1 = await assembler.assemble(_prepared(AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW, AiExportDetailLevel.COMPACT), None)
+    response_2 = await assembler.assemble(_prepared(AiExportPortfolioTask.PORTFOLIO_FIFO_LOT_REVIEW, AiExportDetailLevel.COMPACT), None)
+
+    selection = response_1.facts.fifo_lot_selection
+    assert selection is not None
+    assert selection.rule == "largest_open_residual_plus_most_recent_closed"
+    assert selection.limit == 10
+    assert selection.total_entity_count == 12
+    assert selection.included_entity_count == 10
+    included_costs = sorted((row.residual_cost_basis.amount for row in response_1.facts.fifo_lots), reverse=True)
+    assert included_costs == [Decimal(value) for value in ["1000", "900", "800", "700", "600", "500", "400", "300", "200", "0"]]
+    assert response_1.model_dump(mode="json") == response_2.model_dump(mode="json")

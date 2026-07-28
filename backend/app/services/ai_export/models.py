@@ -23,8 +23,8 @@ from backend.app.schemas.ai_export import (
 SCHEMA_VERSION = 1
 PROFILE_VERSION = 1
 FRONTEND_RESPONSE_CONTRACT_VERSION = 1
-EXPECTED_TASK_COUNT = 18
-EXPECTED_PROFILE_COUNT = 54
+EXPECTED_TASK_COUNT = 19
+EXPECTED_PROFILE_COUNT = 57
 
 DETAIL_LEVEL_ORDER = (
     AiExportDetailLevel.COMPACT,
@@ -533,7 +533,7 @@ def validate_task_specs(task_specs: Sequence[TaskSpec]) -> None:
     if len(contracts) != len(set(contracts)):
         raise ValueError("AI Export response contract IDs must be unique")
     if {spec.task for spec in task_specs} != set(AiExportTask):
-        raise ValueError("AI Export task specs must cover the frozen 18-task schema")
+        raise ValueError("AI Export task specs must cover the frozen 19-task schema")
     for spec in task_specs:
         if _TASK_DOMAIN_BY_VALUE.get(spec.task.value) != spec.domain:
             raise ValueError(f"task {spec.task.value} does not belong to domain {spec.domain.value}")

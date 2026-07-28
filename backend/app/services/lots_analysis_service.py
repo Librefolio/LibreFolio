@@ -1306,6 +1306,11 @@ class LotsAnalysisService:
                 net_total_pnl = total_pnl - allocated_fees - allocated_taxes
                 if opening_value is not None and opening_value > Decimal("0"):
                     net_total_return = net_total_pnl / opening_value
+            closing_date = None
+            if lot.open_quantity == Decimal("0"):
+                lot_closures = closures_by_lot.get(lot_id, [])
+                if lot_closures:
+                    closing_date = max(closure.close_date for closure in lot_closures)
             out.append(
                 LotSummarySchema(
                     lot_id=lot.lot_id,
@@ -1314,6 +1319,7 @@ class LotsAnalysisService:
                     direction=lot.direction,
                     opening_broker_id=lot.opening_broker_id,
                     opening_date=lot.opening_date,
+                    closing_date=closing_date,
                     opening_unit_price=opening_unit_price if opening_unit_price is not None else lot.opening_unit_price,
                     original_quantity=lot.original_quantity,
                     original_cost=converted_original_cost if converted_original_cost is not None else lot.original_cost,

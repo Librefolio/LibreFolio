@@ -12,6 +12,9 @@
     import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
     import {
         AI_EXPORT_SNAPSHOT_SELECTION_ID,
+        AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
+        AI_EXPORT_TECHNICAL_WINDOW_PRESETS,
+        AI_EXPORT_TECHNICAL_WINDOW_UNITS,
         aiExportOptionsFingerprint,
         estimateAiExportTokenSeverity,
         findCompatibleAiExportChoice,
@@ -23,6 +26,7 @@
         isAiExportAnalysisSelection,
         isAiExportSnapshotSelection,
         normalizeAiExportPanelOptions,
+        normalizeAiExportTechnicalWindow,
         reconcileAiExportAnalysisAndDetail,
         type AiExportAnalysisSelection,
         type AiExportHiddenAnalysisTasks,
@@ -30,6 +34,9 @@
         type AiExportOptionsPanelLabels,
         type AiExportOptionsSelection,
         type AiExportTokenSeverity,
+        type AiExportTechnicalWindowPreset,
+        type AiExportTechnicalWindowSelection,
+        type AiExportTechnicalWindowUnit,
     } from './aiExportOptions';
 
     const AI_EXPORT_ICON_COMPONENTS = {
@@ -72,6 +79,7 @@
         initialTask: AiExportTask;
         initialDetailLevel: AiExportDetailLevel;
         initialRenderMode: AiExportRenderMode;
+        initialTechnicalWindow?: AiExportTechnicalWindowSelection;
         responseLanguage: AiExportResponseLanguageDisplayName;
         initialUserNotes?: string;
         hiddenAnalysisTasks?: AiExportHiddenAnalysisTasks;
@@ -84,7 +92,24 @@
         ondraftchange?: (options: AiExportOptionsSelection, metadata: AiExportOptionsPanelCallbackMetadata) => void;
     }
 
-    let {domainTaskDefinitions, compatibility, initialTask, initialDetailLevel, initialRenderMode, responseLanguage, initialUserNotes = '', hiddenAnalysisTasks = [], lastStats, lastStatsFingerprint, disabled = false, loading = false, labels, onexport, ondraftchange}: Props = $props();
+    let {
+        domainTaskDefinitions,
+        compatibility,
+        initialTask,
+        initialDetailLevel,
+        initialRenderMode,
+        initialTechnicalWindow = AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
+        responseLanguage,
+        initialUserNotes = '',
+        hiddenAnalysisTasks = [],
+        lastStats,
+        lastStatsFingerprint,
+        disabled = false,
+        loading = false,
+        labels,
+        onexport,
+        ondraftchange,
+    }: Props = $props();
 
     const componentId = $props.id();
     const userNotesId = `${componentId}-notes`;
@@ -99,6 +124,10 @@
     let selectedAnalysis = $state<AiExportAnalysisSelection>(initialReconciled.analysis);
     let selectedDetailLevel = $state<AiExportDetailLevel>(initialReconciled.detailLevel);
     let userNotes = $state(untrack(() => initialUserNotes));
+    const normalizedInitialTechnicalWindow = untrack(() => normalizeAiExportTechnicalWindow(initialTechnicalWindow));
+    let technicalWindowPreset = $state<AiExportTechnicalWindowPreset>(normalizedInitialTechnicalWindow.preset);
+    let customTechnicalWindowAmount = $state(normalizedInitialTechnicalWindow.customAmount);
+    let customTechnicalWindowUnit = $state<AiExportTechnicalWindowUnit>(normalizedInitialTechnicalWindow.customUnit);
 
     let analysisOptions = $derived(getAiExportAnalysisOptions(domainTaskDefinitions, compatibility, domain, hiddenAnalysisTasks));
     let analysisSelectOptions = $derived<SelectOption[]>(
@@ -109,12 +138,26 @@
             disabled: option.disabled,
         })),
     );
+    let technicalWindowUnitOptions = $derived<SelectOption[]>(
+        AI_EXPORT_TECHNICAL_WINDOW_UNITS.map((unit) => ({
+            value: unit,
+            label: labels.technicalWindowUnitShortLabels[unit],
+            searchText: labels.technicalWindowUnitLabels[unit],
+        })),
+    );
     let selectedTask = $derived(getAiExportTaskForAnalysisSelection(domain, selectedAnalysis));
     let selectedDefinition = $derived(domainTaskDefinitions.find((definition) => definition.domain === domain && definition.backendTask === selectedTask));
     let detailOptions = $derived(getAiExportDetailOptions(selectedDefinition, compatibility));
     let selectedChoice = $derived(selectedDefinition ? findCompatibleAiExportChoice(compatibility, selectedDefinition.domain, selectedDefinition.backendTask, selectedDetailLevel) : undefined);
     let snapshotSelected = $derived(isAiExportSnapshotSelection(selectedAnalysis));
     let controlsDisabled = $derived(disabled || loading);
+    let technicalWindow = $derived(
+        normalizeAiExportTechnicalWindow({
+            preset: technicalWindowPreset,
+            customAmount: customTechnicalWindowAmount,
+            customUnit: customTechnicalWindowUnit,
+        }),
+    );
     let currentOptions = $derived<AiExportOptionsSelection>(
         normalizeAiExportPanelOptions({
             domain,
@@ -122,6 +165,7 @@
             detailLevel: selectedDetailLevel,
             responseLanguage,
             userNotes,
+            technicalWindow,
             taskDefinitions: domainTaskDefinitions,
         }),
     );
@@ -168,6 +212,14 @@
     function handleAnalysisChange(value: string) {
         if (!isAiExportAnalysisSelection(value, domainTaskDefinitions, hiddenAnalysisTasks)) return;
         selectedAnalysis = value;
+    }
+
+    function isTechnicalWindowPreset(value: string): value is AiExportTechnicalWindowPreset {
+        return AI_EXPORT_TECHNICAL_WINDOW_PRESETS.includes(value as AiExportTechnicalWindowPreset);
+    }
+
+    function isTechnicalWindowUnit(value: string): value is AiExportTechnicalWindowUnit {
+        return AI_EXPORT_TECHNICAL_WINDOW_UNITS.includes(value as AiExportTechnicalWindowUnit);
     }
 
     function handleSubmit(event: SubmitEvent) {
@@ -250,6 +302,83 @@
                     </span>
                 </div>
             {/each}
+        </div>
+    </fieldset>
+
+    <fieldset class="flex flex-col gap-2">
+        <legend class="sr-only">{labels.technicalWindowLabel}</legend>
+        <div class="flex items-center gap-1.5">
+            <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.technicalWindowLabel}</span>
+            <Tooltip text={labels.technicalWindowHelp} position="right" maxWidth="320px" interactiveChild>
+                <button
+                    type="button"
+                    aria-label={`${labels.technicalWindowLabel}: ${labels.technicalWindowHelp}`}
+                    class="inline-flex rounded-sm p-0.5 text-gray-400 transition-colors hover:text-purple-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:text-gray-500 dark:hover:text-purple-300"
+                    data-testid="ai-export-v2-technical-window-help"
+                >
+                    <CircleHelp size={13} aria-hidden="true" />
+                </button>
+            </Tooltip>
+        </div>
+        <div class="flex min-w-0 items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-900">
+            {#each AI_EXPORT_TECHNICAL_WINDOW_PRESETS.filter((preset) => preset !== 'custom') as preset}
+                <button
+                    type="button"
+                    disabled={controlsDisabled}
+                    aria-pressed={technicalWindowPreset === preset}
+                    class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 {technicalWindowPreset === preset
+                        ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300'
+                        : 'text-gray-600 hover:bg-white/70 dark:text-gray-300 dark:hover:bg-slate-700/70'}"
+                    onclick={() => {
+                        if (isTechnicalWindowPreset(preset)) technicalWindowPreset = preset;
+                    }}
+                    data-testid={`ai-export-v2-technical-window-${preset}`}
+                >
+                    {labels.technicalWindowPresetLabels[preset]}
+                </button>
+            {/each}
+
+            {#if technicalWindowPreset === 'custom'}
+                <div class="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-purple-400/40 bg-purple-500/10 px-1.5 py-0.5 dark:bg-purple-500/20" role="group" data-testid="ai-export-v2-technical-window-custom">
+                    <input
+                        type="number"
+                        min="1"
+                        max="999"
+                        step="1"
+                        bind:value={customTechnicalWindowAmount}
+                        disabled={controlsDisabled}
+                        aria-label={labels.technicalWindowPresetLabels.custom}
+                        class="w-8 appearance-none border-none bg-transparent px-0.5 py-0.5 text-center text-xs text-purple-700 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-purple-300 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        data-testid="ai-export-v2-technical-window-custom-amount"
+                    />
+                    <SimpleSelect
+                        value={customTechnicalWindowUnit}
+                        options={technicalWindowUnitOptions}
+                        disabled={controlsDisabled}
+                        onchange={(value) => {
+                            if (isTechnicalWindowUnit(value)) customTechnicalWindowUnit = value;
+                        }}
+                        class="inline-block w-auto"
+                        dropdownPosition="auto"
+                        compact
+                        showChevron={false}
+                        testId="ai-export-v2-technical-window-custom-unit"
+                        ariaLabel={labels.technicalWindowPresetLabels.custom}
+                        optionTestId={(option) => `ai-export-v2-technical-window-custom-unit-option-${option.value}`}
+                    />
+                </div>
+            {:else}
+                <button
+                    type="button"
+                    disabled={controlsDisabled}
+                    aria-pressed="false"
+                    class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:bg-slate-700/70"
+                    onclick={() => (technicalWindowPreset = 'custom')}
+                    data-testid="ai-export-v2-technical-window-custom"
+                >
+                    {labels.technicalWindowPresetLabels.custom}
+                </button>
+            {/if}
         </div>
     </fieldset>
 

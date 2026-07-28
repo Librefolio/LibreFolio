@@ -33,6 +33,7 @@ from backend.app.schemas.ai_export import (
     AiExportTechnicalSnapshot,
     AiExportValuationReference,
 )
+from backend.app.schemas.common import DateRangeModel
 
 START = date(2026, 1, 1)
 END = date(2026, 7, 25)
@@ -502,8 +503,8 @@ def normalized_return_payload() -> dict[str, object]:
     }
 
 
-def test_global_task_enum_contains_all_18_ids():
-    assert len(AiExportTask) == 18
+def test_global_task_enum_contains_all_19_ids():
+    assert len(AiExportTask) == 19
 
 
 @pytest.mark.parametrize(
@@ -524,6 +525,29 @@ def test_valid_request_per_domain(domain: str, task: str, domain_fields: dict[st
     assert request.domain.value == domain
     assert request.task.value == task
     assert request.target_currency == "EUR"
+
+
+def test_request_accepts_explicit_technical_window_ending_at_snapshot():
+    payload = request_payload("portfolio", "pac_planning")
+    payload["technical_window"] = {
+        "start": date(2025, 7, 25),
+        "end": END,
+    }
+
+    request = TypeAdapter(AiExportSnapshotRequest).validate_python(payload)
+
+    assert request.technical_window == DateRangeModel(start=date(2025, 7, 25), end=END)
+
+
+def test_request_rejects_technical_window_not_ending_at_snapshot():
+    payload = request_payload("portfolio", "pac_planning")
+    payload["technical_window"] = {
+        "start": date(2025, 7, 1),
+        "end": date(2026, 7, 24),
+    }
+
+    with pytest.raises(ValidationError, match="technical_window.end must equal snapshot_as_of"):
+        TypeAdapter(AiExportSnapshotRequest).validate_python(payload)
 
 
 def test_request_and_response_json_schema_expose_domain_discriminator():

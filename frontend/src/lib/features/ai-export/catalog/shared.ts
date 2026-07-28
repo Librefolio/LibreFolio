@@ -37,7 +37,7 @@ export type AiExportExpectedProfiles = Readonly<Record<AiExportDetailLevel, AiEx
 
 export interface AiExportFrontendResponseContract {
     readonly id: string;
-    readonly version: typeof AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION;
+    readonly version: number;
 }
 
 export interface AiExportTaskDefinition<D extends AiExportDomain = AiExportDomain> {
@@ -64,10 +64,12 @@ interface AiExportTaskDefinitionInput<D extends AiExportDomain> {
     readonly icon: AiExportTaskIconName;
     readonly supportsUserNotes: boolean;
     readonly supportsWebResearch: boolean;
+    readonly frontendResponseContractVersion?: number;
 }
 
 export function defineAiExportTask<const D extends AiExportDomain>(input: AiExportTaskDefinitionInput<D>): AiExportTaskDefinition<D> {
     const taskPath = `${input.domain}.${input.backendTask}`;
+    const frontendResponseContractVersion = input.frontendResponseContractVersion ?? AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION;
 
     return {
         id: input.backendTask,
@@ -94,13 +96,13 @@ export function defineAiExportTask<const D extends AiExportDomain>(input: AiExpo
         },
         frontendResponseContract: {
             id: taskPath,
-            version: AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION,
+            version: frontendResponseContractVersion,
         },
         supportsUserNotes: input.supportsUserNotes,
         supportsWebResearch: input.supportsWebResearch,
         renderModes: AI_EXPORT_RENDER_MODES,
         instructionTemplateId: `aiExport.instructions.${taskPath}.v1`,
-        responseContractTemplateId: `aiExport.responseContracts.${taskPath}.v1`,
+        responseContractTemplateId: `aiExport.responseContracts.${taskPath}.v${frontendResponseContractVersion}`,
     };
 }
 
@@ -113,7 +115,7 @@ export interface AiExportLocalCatalogChoice {
     readonly profileId: string;
     readonly profileVersion: typeof AI_EXPORT_PROFILE_VERSION;
     readonly frontendResponseContractId: string;
-    readonly frontendResponseContractVersion: typeof AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION;
+    readonly frontendResponseContractVersion: number;
     readonly supportsUserNotes: boolean;
     readonly supportsWebResearch: boolean;
 }

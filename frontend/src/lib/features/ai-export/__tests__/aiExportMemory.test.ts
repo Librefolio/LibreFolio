@@ -3,12 +3,12 @@ import {beforeEach, describe, expect, it} from 'vitest';
 import {getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
 
 import {clearAiExportMemoryCache, buildAiExportMemoryStorageKey, loadAiExportMemory, saveAiExportMemory, type AiExportMemoryDefaults, type AiExportMemoryKey} from '../aiExportMemory';
-import type {AiExportHiddenAnalysisTasks, AiExportOptionsSelection} from '../aiExportOptions';
+import {AI_EXPORT_DEFAULT_TECHNICAL_WINDOW, type AiExportHiddenAnalysisTasks, type AiExportOptionsSelection} from '../aiExportOptions';
 import {ASSET_AI_EXPORT_TASKS} from '../catalog/assetTasks';
 import {BROKER_AI_EXPORT_TASKS} from '../catalog/brokerTasks';
 import {FX_AI_EXPORT_TASKS} from '../catalog/fxTasks';
 import {PORTFOLIO_AI_EXPORT_TASKS} from '../catalog/portfolioTasks';
-import type {AiExportTaskDefinition} from '../catalog/shared';
+import type {AiExportTask, AiExportTaskDefinition} from '../catalog/shared';
 import type {AiExportResponseLanguageDisplayName} from '../templates/promptRenderer';
 
 class MemoryStorage implements Storage {
@@ -46,6 +46,7 @@ interface MemoryScenario {
     readonly options: AiExportOptionsSelection;
     readonly userNotesDraft: string;
     readonly hiddenAnalysisTasks?: AiExportHiddenAnalysisTasks;
+    readonly expectedDefaultTask?: AiExportTask;
 }
 
 let storage: MemoryStorage;
@@ -82,7 +83,7 @@ const scenarios: readonly MemoryScenario[] = [
     {
         key: 'portfolio',
         definitions: PORTFOLIO_AI_EXPORT_TASKS,
-        defaults: {task: 'pac_planning', detailLevel: 'standard', renderMode: 'full_prompt'},
+        defaults: {task: 'pac_planning', detailLevel: 'standard', renderMode: 'full_prompt', technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW},
         options: {
             task: 'rebalancing',
             detailLevel: 'full',
@@ -90,13 +91,14 @@ const scenarios: readonly MemoryScenario[] = [
             responseLanguage: 'English',
             userNotes: 'Portfolio draft',
             webResearch: false,
+            technicalWindow: {preset: '6m', customAmount: 3, customUnit: 'months'},
         },
         userNotesDraft: 'Portfolio draft',
     },
     {
         key: 'broker:17',
         definitions: BROKER_AI_EXPORT_TASKS,
-        defaults: {task: 'broker_review', detailLevel: 'standard', renderMode: 'full_prompt'},
+        defaults: {task: 'broker_review', detailLevel: 'standard', renderMode: 'full_prompt', technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW},
         options: {
             task: 'broker_cost_efficiency',
             detailLevel: 'compact',
@@ -104,13 +106,14 @@ const scenarios: readonly MemoryScenario[] = [
             responseLanguage: 'English',
             userNotes: 'Broker draft',
             webResearch: false,
+            technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
         },
         userNotesDraft: 'Broker draft',
     },
     {
         key: 'asset:23',
         definitions: ASSET_AI_EXPORT_TASKS,
-        defaults: {task: 'asset_snapshot', detailLevel: 'standard', renderMode: 'full_prompt'},
+        defaults: {task: 'asset_snapshot', detailLevel: 'standard', renderMode: 'full_prompt', technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW},
         options: {
             task: 'asset_snapshot',
             detailLevel: 'compact',
@@ -118,14 +121,16 @@ const scenarios: readonly MemoryScenario[] = [
             responseLanguage: 'English',
             userNotes: undefined,
             webResearch: false,
+            technicalWindow: {preset: '1y', customAmount: 3, customUnit: 'months'},
         },
         userNotesDraft: 'Hidden Snapshot draft',
         hiddenAnalysisTasks: ['asset_snapshot', 'asset_pac_timing_context'],
+        expectedDefaultTask: 'asset_trend_analysis',
     },
     {
         key: 'fx:EUR-USD',
         definitions: FX_AI_EXPORT_TASKS,
-        defaults: {task: 'fx_trend_review', detailLevel: 'standard', renderMode: 'full_prompt'},
+        defaults: {task: 'fx_trend_review', detailLevel: 'standard', renderMode: 'full_prompt', technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW},
         options: {
             task: 'fx_conversion_timing_context',
             detailLevel: 'full',
@@ -133,6 +138,7 @@ const scenarios: readonly MemoryScenario[] = [
             responseLanguage: 'English',
             userNotes: 'FX draft',
             webResearch: false,
+            technicalWindow: {preset: 'custom', customAmount: 8, customUnit: 'weeks'},
         },
         userNotesDraft: 'FX draft',
     },
@@ -153,7 +159,15 @@ describe('AI Export memory', () => {
         for (const scenario of scenarios) expect(loadScenario(scenario)).toEqual({...scenario.options, userNotes: scenario.userNotesDraft, webResearch: false});
 
         transitionToUser(`${userA}-other`);
-        for (const scenario of scenarios) expect(loadScenario(scenario)).toEqual({...scenario.defaults, responseLanguage: 'English', userNotes: '', webResearch: false});
+        for (const scenario of scenarios) {
+            expect(loadScenario(scenario)).toEqual({
+                ...scenario.defaults,
+                task: scenario.expectedDefaultTask ?? scenario.defaults.task,
+                responseLanguage: 'English',
+                userNotes: '',
+                webResearch: false,
+            });
+        }
 
         transitionToUser(userA);
         for (const scenario of scenarios) expect(loadScenario(scenario)).toEqual({...scenario.options, userNotes: scenario.userNotesDraft, webResearch: false});
@@ -211,6 +225,7 @@ describe('AI Export memory', () => {
                 responseLanguage: 'English',
                 userNotes: 'Analysis draft',
                 webResearch: false,
+                technicalWindow: {preset: 'custom', customAmount: 18, customUnit: 'months'},
             },
             userNotesDraft: 'Analysis draft',
         };
@@ -256,6 +271,7 @@ describe('AI Export memory', () => {
             responseLanguage: 'English',
             userNotes: '',
             webResearch: false,
+            technicalWindow: AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
         });
         expect(storage.getItem(storageKey)).toBeNull();
     });
@@ -270,6 +286,7 @@ describe('AI Export memory', () => {
                 responseLanguage: 'English',
                 userNotes: 'Old asset draft',
                 webResearch: false,
+                technicalWindow: {preset: '6m', customAmount: 3, customUnit: 'months'},
             },
             userNotesDraft: 'Old asset draft',
         };
