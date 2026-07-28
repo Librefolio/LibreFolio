@@ -109,6 +109,8 @@ graph TD
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
 | `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. |
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
+| `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
+| `resolve_url(url)` | `None` | Inverse of `get_asset_url`: open a provider page URL → return a search-item dict (or `None`). Enables the last-resort external search stack. |
 | `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown) |
 | `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, sector, identifiers) from the provider |
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
@@ -142,6 +144,26 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 !!! info "`supports_search` detection"
 
     The `list_providers` endpoint checks `instance.test_search_query is not None` (a local property) to determine search support. This avoids cold-start HTTP calls.
+
+### 🧵 Last-resort external fallback (optional)
+
+A provider can go beyond its own on-site search. When `search()` returns **0** results, the
+orchestration can fall back to an external engine to find candidate **provider-domain** URLs and
+then resolve them back into search-items. To opt in, a provider sets `resolvable_url_domains` and
+implements `resolve_url(url)` (see the [Optional overrides](#optional-override) list). The caller
+may also pass **`hints`** (extra identifiers/names, e.g. from a broker report) to narrow the
+external query and post-filter the results by known identifier.
+
+This whole stack — the `web_link_finder` module, the two-stage "stringone", and the identifier
+post-filter — is documented on its own page:
+
+- 🔎 **[Asset Search & Link-Finder](../../backend/assets/search_link_finder.md)** — the generic
+  three-layer resolution (on-site → link-finder → `resolve_url`), config, and invariants.
+
+!!! warning "Never on price fetches"
+
+    The external stack is interactive-only. Once an asset exists it must be priced by its stored
+    identifier / `provider_params`, never by re-searching.
 
 ### 🌐 API Endpoints
 

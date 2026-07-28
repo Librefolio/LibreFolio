@@ -228,7 +228,7 @@ report during import), it passes them as **`hints`**. Hints do two things:
 
 `_build_link_finder_queries(query, hints)` produces an ordered, de-duplicated candidate list:
 
-1. **Rich "stringone"** — every hint plus the base query concatenated
+1. **Rich string** — every hint plus the base query concatenated
    (whitespace-collapsed, capped). Example:
    `"LU2178929613 EURIZON NEXT 2.0 DIVERSIFICATO 40 P"`.
 2. **Base query** — the bare query as a fallback.

@@ -20,7 +20,7 @@
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isFakeAssetId, FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';
-    import {getIndexColor} from '$lib/utils/colors';
+    import {getIndexColor, getStringColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/stores/transactions/transactionTypeStore';
@@ -141,6 +141,10 @@
     let selectedFiles = $state<FileSelection[]>([]);
     let brokerFilesMap = $state<Map<number, BrimFile[]>>(new Map());
     let brokerFilesLoading = $state(false);
+
+    // Step 2: delete-report (broker import file) confirmation
+    let showDeleteFileConfirm = $state(false);
+    let pendingDeleteFile = $state<{fileId: string; brokerId: number; fileName: string} | null>(null);
     let expandedBrokers = $state<Set<number>>(new Set());
     let filePluginOverrides = $state<Map<string, string>>(new Map());
 
@@ -695,6 +699,17 @@
         mergedTransactions = mergedTransactions.map((t) => (!isBeforeOpening(t) && !t.selected && t.duplicateStatus !== 'likely' ? {...t, selected: true} : t));
     }
 
+    /**
+     * Normalize a transaction's `tags` into a clean `string[]`.
+     * The generated `TXCreateItem.tags` type is a Zodios union
+     * (`string[] | (string[] | null)[] | null`); at runtime BRIM plugins always
+     * emit a flat list of strings, so we keep only the string entries.
+     */
+    function txTagsToArray(tags: TransactionCreateItem['tags']): string[] {
+        if (Array.isArray(tags)) return tags.filter((t): t is string => typeof t === 'string');
+        return [];
+    }
+
     let step4Columns = $derived.by<ColumnDef<MergedTx>[]>(() => {
         const doneFilesCount = parseResults.filter((r) => r.status === 'done').length;
         const columns: ColumnDef<MergedTx>[] = [
@@ -809,7 +824,7 @@
                 header: () => $t('common.date'),
                 type: 'date',
                 sortable: true,
-                filterable: false,
+                filterable: true,
                 width: 120,
                 minWidth: 100,
                 cell: (mt) => ({type: 'date', value: mt.tx.date ?? '', format: 'date'}),
@@ -987,11 +1002,32 @@ ${arrow}<span>${label}</span></span>`,
             {
                 id: 'cash',
                 header: () => $t('common.cash'),
-                type: 'text',
-                sortable: false,
-                filterable: false,
+                type: 'currency-stack',
+                sortable: true,
+                filterable: true,
                 width: 220,
                 minWidth: 160,
+                align: 'right' as const,
+                currencyOptions: [
+                    ...new Set(
+                        mergedTransactions
+                            .map((mt) => mt.tx.cash)
+                            .filter((c): c is {code: string; amount: string} => !!c && typeof c === 'object' && !Array.isArray(c))
+                            .map((c) => c.code),
+                    ),
+                ].sort(),
+                getValue: (mt) => {
+                    const cash = mt.tx.cash;
+                    return cash && typeof cash === 'object' && !Array.isArray(cash) ? Number((cash as {amount: string}).amount) : 0;
+                },
+                getCurrencyValue: (mt) => {
+                    const cash = mt.tx.cash;
+                    if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
+                        const c = cash as {code: string; amount: string};
+                        return {code: c.code, amount: Number(c.amount)};
+                    }
+                    return null;
+                },
                 cell: (mt) => {
                     const cash = mt.tx.cash;
                     if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
@@ -999,6 +1035,36 @@ ${arrow}<span>${label}</span></span>`,
                         return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
                     }
                     return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                },
+            },
+            {
+                id: 'tags',
+                header: () => $t('common.tags'),
+                type: 'multi-enum',
+                sortable: true,
+                filterable: true,
+                width: 160,
+                minWidth: 100,
+                enumOptions: (() => {
+                    const tagSet = new Set<string>();
+                    for (const mt of mergedTransactions) {
+                        for (const tag of txTagsToArray(mt.tx.tags)) tagSet.add(tag);
+                    }
+                    return [...tagSet].sort().map((tag) => ({value: tag, label: tag, dotColor: getStringColor(tag).bg}));
+                })(),
+                getValue: (mt) => txTagsToArray(mt.tx.tags).join(','),
+                getMultiValue: (mt) => txTagsToArray(mt.tx.tags),
+                cell: (mt) => {
+                    const tags = txTagsToArray(mt.tx.tags);
+                    if (tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    const html = tags
+                        .map((tag) => {
+                            const escaped = tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            const c = getStringColor(tag);
+                            return `<span class="inline-block px-1.5 py-0.5 text-[10px] rounded mr-0.5 mb-0.5" style="background:${c.bg};color:${c.text}">${escaped}</span>`;
+                        })
+                        .join('');
+                    return {type: 'html', html: `<span class="flex flex-wrap gap-0.5" data-testid="import-wizard-tags-${mt.index}">${html}</span>`};
                 },
             },
         ];
@@ -1460,6 +1526,41 @@ ${arrow}<span>${label}</span></span>`,
         if (file.status === 'parsed') return 'parsed';
         if (file.status === 'failed') return 'error';
         return 'uploaded';
+    }
+
+    /** Ask for confirmation before deleting a broker import file (report) from Step 2. */
+    function requestDeleteFile(file: BrimFile, brokerId: number) {
+        pendingDeleteFile = {fileId: file.file_id, brokerId, fileName: file.filename};
+        showDeleteFileConfirm = true;
+    }
+
+    /** Delete the pending report server-side, then drop it from local selection + broker map. */
+    async function confirmDeleteFile() {
+        const target = pendingDeleteFile;
+        if (!target) return;
+        try {
+            await zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
+                params: {file_id: target.fileId},
+            });
+            selectedFiles = selectedFiles.filter((f) => f.fileId !== target.fileId);
+            const map = new Map(brokerFilesMap);
+            map.set(
+                target.brokerId,
+                (map.get(target.brokerId) ?? []).filter((f) => f.file_id !== target.fileId),
+            );
+            brokerFilesMap = map;
+        } catch (e) {
+            console.error('Delete report failed:', e);
+            toasts.error($t('files.deleteFailed'));
+        } finally {
+            showDeleteFileConfirm = false;
+            pendingDeleteFile = null;
+        }
+    }
+
+    function cancelDeleteFile() {
+        showDeleteFileConfirm = false;
+        pendingDeleteFile = null;
     }
 
     // =========================================================================
@@ -2121,7 +2222,10 @@ ${arrow}<span>${label}</span></span>`,
                                             onRowDoubleClick={(row) => openPreview(row.file_id)}
                                             enableActions={true}
                                             actionsColumnWidth="64px"
-                                            rowActions={[{id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)}]}
+                                            rowActions={[
+                                                {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)},
+                                                {id: 'delete', icon: Trash2, label: $t('common.delete'), variant: 'danger', onClick: (row) => requestDeleteFile(row, broker.id)},
+                                            ]}
                                             enableSorting={true}
                                             enableColumnFilters={true}
                                             enableColumnResize={true}
@@ -2533,6 +2637,20 @@ ${arrow}<span>${label}</span></span>`,
 <!-- Unsaved guard -->
 <ConfirmModal open={confirmCloseOpen} title={$t('common.discardImport')} message={$t('common.discardChangesMessage')} confirmText={$t('common.discard')} warning zIndex={80} onConfirm={confirmDiscard} onCancel={() => (confirmCloseOpen = false)} />
 
+<!-- Step 2: delete-report (broker import file) confirmation -->
+<ConfirmModal
+    open={showDeleteFileConfirm}
+    title={$t('common.confirmDelete')}
+    message={$t('uploads.deleteConfirm')}
+    items={pendingDeleteFile ? [pendingDeleteFile.fileName] : undefined}
+    itemsLabel={$t('uploads.filesToDelete')}
+    confirmText={$t('common.delete')}
+    danger
+    zIndex={85}
+    onConfirm={confirmDeleteFile}
+    onCancel={cancelDeleteFile}
+/>
+
 <!-- Step 3 → 4: warning acknowledgement (custom modal with accordion) -->
 <ModalBase open={showWarningConfirm} maxWidth="lg" zIndex={85} onRequestClose={() => (showWarningConfirm = false)}>
     <!-- Header -->
@@ -2632,6 +2750,7 @@ ${arrow}<span>${label}</span></span>`,
                   ...(_createRes.extractedName ? [{label: _createRes.extractedName, value: _createRes.extractedName}] : []),
               ]
             : []}
+        searchHints={_createRes ? [...(_createRes.extractedIsin ? [_createRes.extractedIsin] : []), ...(_createRes.extractedSymbol ? [_createRes.extractedSymbol] : []), ..._createNames] : []}
         initialSearchQuery=""
         zIndex={90}
         initialNoProvider={true}

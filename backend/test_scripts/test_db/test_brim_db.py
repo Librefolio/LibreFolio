@@ -236,6 +236,49 @@ class TestAssetCandidateSearch:
         if len(candidates) > 1:
             assert auto_selected is None, "Should NOT auto-select when multiple candidates"
 
+    @pytest.mark.asyncio
+    async def test_search_by_soft_identifier_other(self, async_session: AsyncSession):
+        """
+        AC-008: Soft-identifier match against the identifier_other JSON list.
+
+        An asset whose ISIN / soft broker label lives only in identifier_other (not in a
+        dedicated column) is still detected — MEDIUM for an ISIN hit, and found for a soft
+        name hit. Exercises the additive JSON-list search.
+        """
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+        suffix = uuid.uuid4().hex[:8].upper()
+        soft_isin = f"SOFT{suffix}00"
+        soft_name = f"BTP 1/12/2026 {suffix} 1.25%"
+        asset = Asset(
+            display_name=f"Opaque Bond {suffix}",
+            asset_type=AssetType.BOND,
+            currency="EUR",
+            identifier_isin=None,
+            identifier_ticker=None,
+            identifier_other=[soft_name, soft_isin],
+            active=True,
+        )
+        async_session.add(asset)
+        await async_session.commit()
+        await async_session.refresh(asset)
+
+        try:
+            # ISIN present only in identifier_other → MEDIUM soft match (not found by the
+            # dedicated-column ISIN search, which requires identifier_isin).
+            candidates, auto_selected = await search_asset_candidates(async_session, extracted_symbol=None, extracted_isin=soft_isin, extracted_name=None)
+            assert any(c.asset_id == asset.id for c in candidates), "ISIN in identifier_other should match"
+            matched = next(c for c in candidates if c.asset_id == asset.id)
+            assert matched.match_confidence == BRIMMatchConfidence.MEDIUM
+            assert auto_selected == asset.id
+
+            # Soft broker label present only in identifier_other → detected via the list search.
+            candidates_name, _ = await search_asset_candidates(async_session, extracted_symbol=None, extracted_isin=None, extracted_name=soft_name)
+            assert any(c.asset_id == asset.id for c in candidates_name), "Soft name in identifier_other should match"
+        finally:
+            await async_session.delete(asset)
+            await async_session.commit()
+
 
 # =============================================================================
 # CATEGORY 4: DUPLICATE DETECTION (DD-*)

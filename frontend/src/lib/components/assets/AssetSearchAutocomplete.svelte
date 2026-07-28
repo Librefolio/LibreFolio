@@ -31,6 +31,7 @@
         asset_type?: string | null;
         provider_url?: string | null;
         provider_params?: Record<string, any> | null;
+        via_web?: boolean;
     }
 
     interface ProviderInfo {
@@ -51,9 +52,16 @@
         initialQuery?: string;
         /** When true, hides the "Search Online" section title (caller renders it externally). */
         hideTitle?: boolean;
+        /**
+         * Extra search terms (e.g. ISIN + all candidate names extracted from a broker
+         * report). Forwarded as `hints` to the backend; used only by the link-finder
+         * fallback to build a specific query when a provider's on-site search finds
+         * nothing (e.g. a fund whose bare ISIN surfaces several sibling share classes).
+         */
+        hints?: string[];
     }
 
-    let {onselect, disabled = false, initialQuery = '', hideTitle = false}: Props = $props();
+    let {onselect, disabled = false, initialQuery = '', hideTitle = false, hints = []}: Props = $props();
 
     // =========================================================================
     // State
@@ -77,6 +85,12 @@
 
     let searchableProviders = $derived(providers.filter((p) => p.supports_search));
     let hasResults = $derived(results.length > 0);
+    // Rank among web-resolved (link-finder) results only, in display order. 0 = native result
+    // (no badge). Web results are ordered best-first by the finder, so #1 is the most likely match.
+    let webRanks = $derived.by(() => {
+        let n = 0;
+        return results.map((r) => (r.via_web ? ++n : 0));
+    });
 
     // =========================================================================
     // Lifecycle — Load providers
@@ -148,6 +162,20 @@
 
         const providerCodes = [...selectedProviders].join(',');
 
+        // Extra terms (ISIN + candidate names) for the backend link-finder fallback.
+        // Deduped case-insensitively; the query itself is always included server-side.
+        const seenHints = new Set<string>();
+        const hintsParam = (hints ?? [])
+            .map((h) => (h ?? '').trim())
+            .filter((h) => {
+                const key = h.toLowerCase();
+                if (h.length === 0 || seenHints.has(key)) return false;
+                seenHints.add(key);
+                return true;
+            })
+            .map((h) => `&hints=${encodeURIComponent(h)}`)
+            .join('');
+
         const controller = new AbortController();
         let timedOut = false;
         const timeoutId = setTimeout(() => {
@@ -157,7 +185,7 @@
 
         try {
             // Try SSE streaming first
-            const response = await fetch(`/api/v1/assets/provider/search/stream?q=${encodeURIComponent(q)}&providers=${encodeURIComponent(providerCodes)}`, {signal: controller.signal});
+            const response = await fetch(`/api/v1/assets/provider/search/stream?q=${encodeURIComponent(q)}&providers=${encodeURIComponent(providerCodes)}${hintsParam}`, {signal: controller.signal});
 
             if (!response.ok || !response.body) {
                 throw new Error('SSE not available');
@@ -197,6 +225,7 @@
                                 asset_type: r.asset_type,
                                 provider_url: r.provider_url,
                                 provider_params: r.provider_params,
+                                via_web: r.via_web ?? false,
                             }));
                             results = [...results, ...newItems];
                         } else if (event.event === 'provider_error') {
@@ -249,6 +278,8 @@
                     currency: r.currency,
                     asset_type: r.asset_type,
                     provider_url: r.provider_url,
+                    provider_params: r.provider_params,
+                    via_web: r.via_web ?? false,
                 }));
             } catch (e: any) {
                 if (mySearchId !== searchId) return;
@@ -384,7 +415,7 @@
                         <span>{$t('assets.search.searching')} ({providersDone}/{providersTotal})</span>
                     </div>
                 {/if}
-                {#each results as result}
+                {#each results as result, i}
                     <button type="button" class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0" onclick={() => selectResult(result)}>
                         <!-- Icon placeholder -->
                         <AssetIcon assetType={result.asset_type} iconUrl={null} altText={result.display_name} size="sm" />
@@ -395,6 +426,13 @@
                                 <span class="truncate">{result.display_name}</span>
                             </div>
                             <div class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                                {#if webRanks[i] > 0}
+                                    <span class="font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.search.rankHint')}>
+                                        <span class="sm:hidden">DDG#{webRanks[i]}</span>
+                                        <span class="hidden sm:inline">DuckDuckGo#{webRanks[i]}</span>
+                                    </span>
+                                    <span class="mx-0.5">·</span>
+                                {/if}
                                 <span class="font-mono">{result.identifier}</span>
                                 {#if result.currency}
                                     <span class="mx-0.5">·</span>

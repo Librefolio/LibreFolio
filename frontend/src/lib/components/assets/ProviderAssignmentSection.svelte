@@ -262,8 +262,14 @@
     // Test Configuration
     // =========================================================================
 
-    /** Classify whether a failed test is just a "not supported" warning vs real error */
-    function isNotSupportedWarning(detail: string | undefined): boolean {
+    /** Provider error codes that mean "config is fine, just no data here" — a warning, not a hard failure. */
+    const SOFT_FAIL_CODES = new Set(['NO_DATA', 'NOT_IMPLEMENTED']);
+
+    /** Classify whether a failed test is a soft failure (warning) vs a real error.
+     *  A structured ``error_code`` (NO_DATA / NOT_IMPLEMENTED) is authoritative; the
+     *  message-text heuristic is a fallback for providers that don't set a code. */
+    function isNotSupportedWarning(detail: string | undefined, errorCode?: string | null): boolean {
+        if (errorCode && SOFT_FAIL_CODES.has(errorCode.toUpperCase())) return true;
         if (!detail) return false;
         const lower = detail.toLowerCase();
         return lower.includes('not_implemented') || lower.includes('not supported') || lower.includes('not implemented');
@@ -312,7 +318,7 @@
                 const detail = cp.success ? `${Number(cp.value).toFixed(2)} ${ccyLabel}${cp.as_of_date ? ` (${cp.as_of_date})` : ''}` : cp.error;
                 items.push({
                     success: cp.success,
-                    status: cp.success ? 'success' : isNotSupportedWarning(cp.error) ? 'warning' : 'error',
+                    status: cp.success ? 'success' : isNotSupportedWarning(cp.error, cp.error_code) ? 'warning' : 'error',
                     label: $t('common.currentPrice'),
                     detail,
                     summary: cp.success ? detail : summarizeError(cp.error),
@@ -330,7 +336,7 @@
                 const detail = h.success ? `${h.points_count} points${ccyLabel ? ` (${ccyLabel})` : ''}${h.date_range ? ` — ${h.date_range}` : ''}` : h.error;
                 items.push({
                     success: h.success,
-                    status: h.success ? 'success' : isNotSupportedWarning(h.error) ? 'warning' : 'error',
+                    status: h.success ? 'success' : isNotSupportedWarning(h.error, h.error_code) ? 'warning' : 'error',
                     label: $t('assets.probe.history'),
                     detail,
                     summary: h.success ? detail : summarizeError(h.error),

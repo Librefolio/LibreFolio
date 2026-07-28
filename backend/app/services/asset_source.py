@@ -34,7 +34,7 @@ from decimal import Decimal
 from typing import AsyncGenerator, Dict, List, Literal, Optional
 
 import structlog
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import String, and_, cast, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -103,6 +103,7 @@ from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
+    FAVolumeKind,
     ProbeCurrentPriceResult,
     ProbeHistoryResult,
     ProbeMetadataResult,
@@ -341,6 +342,38 @@ class AssetSourceProvider(ABC):
         params change requires a destructive-confirm dialog.
         """
         return FAProviderKind.ONLINE_SCRAPER
+
+    @property
+    def supports_meaningful_volume(self) -> bool:
+        """
+        Declares whether this provider's ``volume`` field represents real,
+        comparable trading activity (e.g. exchange-traded share volume)
+        rather than being absent, synthetic, or of unverified origin.
+
+        Default is ``False`` (safe/unknown). Override to ``True`` only when
+        the source's semantics are unambiguous — e.g. a provider that
+        surfaces genuine exchange-traded share volume for the instruments it
+        serves. Do NOT infer this per-asset-type; a provider that mixes
+        volume-bearing and volume-less request paths (e.g. NAV-priced funds
+        vs ISIN-quoted stocks under the same provider) should still declare
+        the provider-level truth here, and rely on downstream structural
+        validation (sufficient non-null observed volume) to reject the
+        volume-less paths at the signal level.
+
+        Consumed by ``AssetSourceService`` to derive
+        ``SignalSourceCapability`` for volume-dependent signals (MFI, OBV),
+        and surfaced to the frontend via ``FAProviderInfo.supports_meaningful_volume``.
+        """
+        return False
+
+    @property
+    def volume_kind(self) -> FAVolumeKind:
+        """
+        Semantic kind of the volume field when ``supports_meaningful_volume``
+        is ``True``. Default ``FAVolumeKind.UNKNOWN``; override alongside
+        ``supports_meaningful_volume`` (e.g. ``FAVolumeKind.TRADED_SHARES``).
+        """
+        return FAVolumeKind.UNKNOWN
 
     @property
     def get_icon(self) -> str | None:
@@ -775,22 +808,29 @@ class AssetSourceProvider(ABC):
         """Whether this provider implements ``resolve_url`` (derived from the domains)."""
         return bool(self.resolvable_url_domains)
 
-    async def resolve_url(self, url: str) -> dict | None:
-        """Resolve a provider page URL into a search-item dict (inverse of ``get_asset_url``).
+    async def resolve_url(self, url: str) -> dict | list[dict] | None:
+        """Resolve a provider page URL into search-item(s) (inverse of ``get_asset_url``).
 
         Given a URL on one of ``resolvable_url_domains``, open and extract it, then
-        return a dict with the SAME shape a ``search`` result item uses::
+        return the SAME shape ``search`` produces — either a single item dict or a
+        list of them::
 
             {identifier, identifier_type, display_name, currency, type, provider_params}
 
-        This lets an externally-found page (e.g. via ``web_link_finder``) be turned
-        into a selectable asset exactly like an on-site search hit — funds priced by
-        their stored ``provider_params`` afterwards, never by external search.
+        ``resolve_url`` is only an alternative **entry point** into search: when a
+        single page maps to several canonical rows (e.g. one per language, like an
+        on-site search hit), return them all as a list; the orchestration flattens and
+        de-duplicates by ``(identifier, language)``. This lets an externally-found page
+        (e.g. via ``web_link_finder``) be turned into selectable assets exactly like an
+        on-site search — funds priced by their stored ``provider_params`` afterwards,
+        never by external search.
 
         PLUGIN RESPONSIBILITY:
         - Recognise whether ``url`` is one of your asset pages; return ``None`` if not.
         - Extract identifier/name/currency/type and any ``provider_params`` needed
           to price the asset later.
+        - Return one item, or the full canonical set (list) the same instrument would
+          yield from ``search``.
         - Handle errors gracefully (return ``None`` rather than raising).
 
         Like other provider methods this runs inside the provider thread, so sync
@@ -800,7 +840,8 @@ class AssetSourceProvider(ABC):
             url: A candidate provider page URL.
 
         Returns:
-            A search-item dict, or ``None`` if the URL is not a recognised asset page.
+            A search-item dict, a list of them, or ``None`` if the URL is not a
+            recognised asset page.
         """
         return None
 
@@ -1827,6 +1868,7 @@ class AssetSourceManager:
                 return ProbeCurrentPriceResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1863,6 +1905,7 @@ class AssetSourceManager:
                 return ProbeHistoryResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -3756,9 +3799,11 @@ class AssetCRUDService:
         if filters.uuid:
             conditions.append(Asset.identifier_uuid == filters.uuid)
 
-        # identifier_other uses partial match (LIKE) since it can contain anything
+        # identifier_other is a JSON list of soft identifiers: cast the column to text
+        # and substring-match, so any element of the list can match.
+        # NOTE: SQLite LIKE is case-insensitive for ASCII; on Postgres switch to .ilike().
         if filters.identifier_other:
-            conditions.append(Asset.identifier_other.ilike(f"%{filters.identifier_other}%"))
+            conditions.append(cast(Asset.identifier_other, String).like(f"%{filters.identifier_other}%"))
 
         # Partial identifier match (across all identifier columns)
         if filters.identifier_contains:
@@ -3771,7 +3816,7 @@ class AssetCRUDService:
                     Asset.identifier_sedol.ilike(pattern),
                     Asset.identifier_figi.ilike(pattern),
                     Asset.identifier_uuid.ilike(pattern),
-                    Asset.identifier_other.ilike(pattern),
+                    cast(Asset.identifier_other, String).like(pattern),
                 )
             )
 
@@ -4298,12 +4343,54 @@ class AssetSearchService:
     """
 
     @staticmethod
-    async def _augment_with_link_finder(code: str, provider: "AssetSourceProvider", query: str) -> list[dict]:
+    def _build_link_finder_queries(query: str, hints: Optional[list[str]] = None) -> list[str]:
+        """Ordered DDG queries for the link-finder: rich stringone first, base query last.
+
+        The rich query concatenates every hint (all report-extracted identifiers +
+        candidate names) together with the base ``query``, in the order supplied, deduped
+        and whitespace-collapsed. Nothing is sanitised, truncated or reordered — the whole
+        concatenation is handed to DuckDuckGo, which is left to do the ranking. If the rich
+        query yields no URLs the finder falls back to the bare base query. When no hints
+        are supplied this returns just the base query (legacy behaviour).
+        """
+        base = " ".join((query or "").split())
+        terms: list[str] = []
+        seen: set[str] = set()
+
+        def _add(value: str) -> None:
+            value = " ".join((value or "").split())
+            key = value.lower()
+            if value and key not in seen:
+                seen.add(key)
+                terms.append(value)
+
+        for hint in hints or []:
+            _add(hint)
+        _add(base)  # keep the base query terms inside the rich string too
+
+        rich = " ".join(terms).strip()
+
+        candidates: list[str] = []
+        seen_candidates: set[str] = set()
+        for candidate in (rich, base):
+            candidate = candidate.strip()
+            if candidate and candidate.lower() not in seen_candidates:
+                seen_candidates.add(candidate.lower())
+                candidates.append(candidate)
+        return candidates
+
+    @staticmethod
+    async def _augment_with_link_finder(code: str, provider: "AssetSourceProvider", query: str, hints: Optional[list[str]] = None) -> list[dict]:
         """Last-resort fallback when a provider's on-site search yields nothing.
 
-        Uses the external :mod:`web_link_finder` to turn ``query`` into candidate
+        Uses the external :mod:`web_link_finder` to turn a query into candidate
         provider-domain URLs, then asks the provider to ``resolve_url`` each into a
         search-item dict. Best-effort: any failure returns ``[]`` and is never fatal.
+
+        When ``hints`` are supplied (report-extracted identifiers + names) the finder
+        tries a rich concatenated query first and falls back to the bare ``query`` — a
+        specific ISIN+name query resolves to a single fund page, whereas a bare ISIN can
+        surface several sibling share classes.
 
         Only runs for providers that opt in via ``supports_url_resolution`` and only
         when the link-finder is enabled. Provider ``resolve_url`` calls go through the
@@ -4313,29 +4400,86 @@ class AssetSearchService:
             if not getattr(provider, "supports_url_resolution", False) or not web_link_finder.is_enabled():
                 return []
 
-            urls = await web_link_finder.find_candidate_urls(query, provider.resolvable_url_domains)
-            if not urls:
-                return []
-
-            items: list[dict] = []
-            for url in urls:
-                try:
-                    item = await _run_provider_in_thread(lambda u=url: provider.resolve_url(u), timeout=20.0)
-                except Exception as e:
-                    logger.debug(f"link-finder: resolve_url failed for '{url}' on provider '{code}': {e}")
+            for candidate_query in AssetSearchService._build_link_finder_queries(query, hints):
+                urls = await web_link_finder.find_candidate_urls(candidate_query, provider.resolvable_url_domains)
+                if not urls:
                     continue
-                if item:
-                    items.append(item)
 
-            if items:
-                logger.info(f"link-finder: provider '{code}' resolved {len(items)} item(s) via web for '{query}'")
-            return items
+                items: list[dict] = []
+                seen_items: set[tuple[str, str]] = set()
+                for url in urls:
+                    try:
+                        resolved = await _run_provider_in_thread(lambda u=url: provider.resolve_url(u), timeout=20.0)
+                    except Exception as e:
+                        logger.debug(f"link-finder: resolve_url failed for '{url}' on provider '{code}': {e}")
+                        continue
+                    if not resolved:
+                        continue
+                    # resolve_url may return one item or the full canonical set (list),
+                    # e.g. one row per language. Flatten and de-dup by (identifier, language)
+                    # so sibling language-URLs of the same instrument don't pile up.
+                    for it in resolved if isinstance(resolved, list) else [resolved]:
+                        if not it:
+                            continue
+                        key = (str(it.get("identifier", "")).strip().upper(), str((it.get("provider_params") or {}).get("language", "")).strip().lower())
+                        if key in seen_items:
+                            continue
+                        seen_items.add(key)
+                        items.append(it)
+
+                if items:
+                    items = AssetSearchService._filter_items_by_known_identifiers(items, [*(hints or []), query])
+                    for it in items:
+                        it["_via_web"] = True
+                    logger.info(f"link-finder: provider '{code}' resolved {len(items)} item(s) via web for '{candidate_query}'")
+                    return items
+
+            return []
         except Exception as e:
             logger.debug(f"link-finder: augmentation error on provider '{code}': {e}")
             return []
 
     @staticmethod
-    async def search(query: str, provider_codes: Optional[list[str]] = None) -> FAProviderSearchResponse:
+    def _filter_items_by_known_identifiers(items: list[dict], known_terms: Optional[list[str]]) -> list[dict]:
+        """Narrow link-finder results to those whose identifier matches a known one.
+
+        The web link-finder can surface sibling instruments (e.g. a bare ISIN search on
+        Borsa Italiana returns every share class of a fund family). When we already hold
+        technical identifiers — the searched query and any report-extracted ``hints`` —
+        and at least one resolved item's ``identifier`` matches one of them, only the
+        matching items are kept. If nothing matches (the terms were only free-text names,
+        or none of the pages carried a known identifier) every item is returned so the
+        user still gets candidates to choose from. Matching is case-insensitive and
+        whitespace-trimmed; non-identifier terms (names) are inert because they never
+        equal an ISIN/ticker identifier.
+        """
+        if not items or not known_terms:
+            return items
+        known = {t.strip().upper() for t in known_terms if t and t.strip()}
+        if not known:
+            return items
+        matching = [it for it in items if str(it.get("identifier", "")).strip().upper() in known]
+        return matching or items
+
+    @staticmethod
+    def _provider_url_for_item(code: str, item: dict) -> Optional[str]:
+        """Compute a search result's ``provider_url`` via the provider's ``get_asset_url``.
+
+        ``provider_params`` MUST be forwarded: some providers (e.g. Borsa Italiana funds)
+        derive the correct page URL from params such as ``codice_fondo`` rather than from
+        the identifier alone. Dropping the params yields a wrong/dead link for those assets.
+        """
+        provider_instance = AssetProviderRegistry.get_provider_instance(code)
+        if not provider_instance:
+            return None
+        return provider_instance.get_asset_url(
+            item.get("identifier", ""),
+            item.get("identifier_type"),
+            item.get("provider_params"),
+        )
+
+    @staticmethod
+    async def search(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse:
         """
         Search for assets across one or more providers in parallel.
 
@@ -4343,6 +4487,9 @@ class AssetSearchService:
             query: Search query string
             provider_codes: Optional list of provider codes to query.
                            If None, queries all providers.
+            hints: Optional extra search terms (report-extracted identifiers + names).
+                   Used only by the link-finder fallback to build a specific query when
+                   a provider's on-site search returns nothing.
 
         Returns:
             FAProviderSearchResponse with aggregated results from all providers.
@@ -4406,7 +4553,7 @@ class AssetSearchService:
                 )
                 # Last-resort: no on-site hits → try the external link-finder + resolve_url.
                 if not search_results:
-                    search_results = await AssetSearchService._augment_with_link_finder(code, provider, query)
+                    search_results = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 _search_query_cache.set(query_cache_key, search_results)
                 return (code, search_results, None)
@@ -4444,14 +4591,8 @@ class AssetSearchService:
 
             # Convert provider results to response schema
             for item in items:
-                # Compute provider_url from provider instance
-                provider_instance = AssetProviderRegistry.get_provider_instance(code)
-                item_provider_url = None
-                if provider_instance:
-                    item_provider_url = provider_instance.get_asset_url(
-                        item.get("identifier", ""),
-                        item.get("identifier_type"),
-                    )
+                # Compute provider_url (forwards provider_params for fund-style URLs)
+                item_provider_url = AssetSearchService._provider_url_for_item(code, item)
 
                 # Validate asset_type: fallback to OTHER if unknown
                 raw_asset_type = item.get("type")
@@ -4469,6 +4610,7 @@ class AssetSearchService:
                         asset_type=raw_asset_type,
                         provider_url=item_provider_url,
                         provider_params=item.get("provider_params"),
+                        via_web=bool(item.get("_via_web", False)),
                     )
                 )
 
@@ -4481,7 +4623,7 @@ class AssetSearchService:
         )
 
     @staticmethod
-    async def search_stream(query: str, provider_codes: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover
+    async def search_stream(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover
         """
         Stream search results as SSE events, one event per provider completion.
 
@@ -4538,7 +4680,7 @@ class AssetSearchService:
                 )
                 # Last-resort: no on-site hits → try the external link-finder + resolve_url.
                 if not items:
-                    items = await AssetSearchService._augment_with_link_finder(code, provider, query)
+                    items = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 _search_query_cache.set(query_cache_key, items)
                 await queue.put((code, items, None))
@@ -4564,14 +4706,8 @@ class AssetSearchService:
             # Convert items to serializable dicts
             result_items = []
             for item in items:
-                # Compute provider_url
-                provider_instance = AssetProviderRegistry.get_provider_instance(code)
-                item_provider_url = None
-                if provider_instance:
-                    item_provider_url = provider_instance.get_asset_url(
-                        item.get("identifier", ""),
-                        item.get("identifier_type"),
-                    )
+                # Compute provider_url (forwards provider_params for fund-style URLs)
+                item_provider_url = AssetSearchService._provider_url_for_item(code, item)
 
                 # Validate asset_type
                 raw_asset_type = item.get("type")
@@ -4592,6 +4728,7 @@ class AssetSearchService:
                         "asset_type": raw_asset_type,
                         "provider_url": item_provider_url,
                         "provider_params": item.get("provider_params"),
+                        "via_web": bool(item.get("_via_web", False)),
                     }
                 )
 

@@ -68,6 +68,24 @@ class FAProviderKind(StrEnum):
 
 
 # ============================================================================
+# FA VOLUME KIND
+# ============================================================================
+
+
+class FAVolumeKind(StrEnum):
+    """Semantic meaning of a provider's volume field, when meaningful.
+
+    Mirrors backend.app.schemas.signals.SignalVolumeKind but is kept as an
+    independent enum so asset-provider schemas do not depend on the signal
+    contract module; the two are mapped 1:1 by value where capability is
+    propagated into signal execution (see AssetSourceService).
+    """
+
+    UNKNOWN = "unknown"
+    TRADED_SHARES = "traded_shares"
+
+
+# ============================================================================
 # FA PROVIDER PARAM FIELD
 # ============================================================================
 
@@ -122,6 +140,27 @@ class FAProviderInfo(BaseModel):
     params_schema: List[FAProviderParamField] = Field(default_factory=list, description="Form field definitions for provider_params")
     accepted_identifier_types: List[str] = Field(default_factory=list, description="Identifier types accepted by this provider")
     provider_help_url: Optional[str] = Field(None, description="URL to provider documentation")
+    supports_meaningful_volume: bool = Field(
+        False,
+        description=(
+            "Whether this provider's `volume` field represents real, comparable "
+            "trading activity (e.g. exchange-traded share volume) rather than being "
+            "absent, synthetic, or of unverified origin. Declared authoritatively only "
+            "when the source's semantics are unambiguous (e.g. Yahoo Finance, Borsa "
+            "Italiana traded instruments); defaults to False for NAV-based, synthetic, "
+            "or unknown sources so volume-dependent signals (e.g. MFI, OBV) fail closed."
+        ),
+    )
+    volume_kind: FAVolumeKind = Field(
+        FAVolumeKind.UNKNOWN,
+        description="Semantic kind of the volume field when supports_meaningful_volume is true.",
+    )
+
+    @model_validator(mode="after")
+    def validate_volume_capability(self) -> FAProviderInfo:
+        if not self.supports_meaningful_volume and self.volume_kind != FAVolumeKind.UNKNOWN:
+            raise ValueError("volume_kind requires supports_meaningful_volume=true")
+        return self
 
 
 # ============================================================================
@@ -334,6 +373,7 @@ class BaseProbeOperationResult(BaseModel):
 
     success: bool = Field(..., description="Whether the operation succeeded")
     error: Optional[str] = Field(None, description="Error message if failed")
+    error_code: Optional[str] = Field(None, description="Structured provider error code (e.g. 'NO_DATA', 'NOT_IMPLEMENTED', 'FETCH_ERROR') — lets the UI treat expected-empty results as a warning rather than a hard failure")
     execution_time_ms: int = Field(..., description="Backend execution time in milliseconds")
 
 
@@ -401,6 +441,7 @@ class FAProviderSearchResultItem(BaseModel):
     asset_type: Optional[str] = Field(None, description="Asset type (ETF, stock, bond, etc.)")
     provider_url: Optional[str] = Field(None, description="URL to asset page on provider site")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific params to carry over (e.g. language)")
+    via_web: bool = Field(False, description="True if resolved via the external web link-finder (last-resort), not the provider's native on-site search")
 
 
 class FAProviderSearchResponse(BaseModel):
