@@ -42,6 +42,9 @@ from backend.app.services.provider_registry import (
     FXProviderRegistry,
     SignalPluginRegistry,
 )
+from backend.app.services.risk.quant.workers import (
+    shutdown_quant_worker_pools,
+)
 from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.signal_runtime import validate_signal_runtime
@@ -197,6 +200,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     AssetProviderRegistry.shutdown_all_providers()
     FXProviderRegistry.shutdown_all_providers()
     BRIMProviderRegistry.shutdown_all_providers()
+    await shutdown_quant_worker_pools()
 
     # Close all TTL caches (stop timer wheel threads for clean exit)
     close_all_caches()

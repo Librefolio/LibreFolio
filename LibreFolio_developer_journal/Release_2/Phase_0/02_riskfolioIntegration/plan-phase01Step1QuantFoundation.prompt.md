@@ -1,6 +1,7 @@
 # Step 1 — Quant Foundation (P0)
 
-**Stato**: ✅ COMPLETATO — 27 Luglio 2026; Gate G1 chiuso.
+**Stato**: ✅ COMPLETATO — 27 Luglio 2026; 🔁 RIVALUTATO E RI-CHIUSO —
+28 Luglio 2026.
 
 ← Master:
 [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md)
@@ -83,9 +84,17 @@ Verificare:
 > open-source disponibili. Gate respinto: NumPy `<2.5`, circa 1 GiB di layer
 > aggiuntivo e warning CVXPY deprecati.
 
+> **⚠️ Revisione 28 Luglio 2026**: la conclusione sopra era specifica a
+> Riskfolio-Lib 7.3.0 e alla sua dipendenza packaging `vectorbt`. Rivalutato
+> Riskfolio-Lib **7.0.1** con Python 3.13 + NumPy **2.5.1**: host macOS arm64 e
+> container Linux arm64/amd64 verdi; `vectorbt` e `numba` assenti; CLARABEL
+> completa min-risk, max-Sharpe, risk parity, covariance `hist`/Ledoit/OAS,
+> bound lineari, frontiera e infeasible detection. RSS massima del probe:
+> ~256 MiB host, ~288 MiB arm64, ~352 MiB amd64 emulato.
+
 ### 1.4 — Docker/CI/costo
 
-**Stato**: ✅ COMPLETATO — 27 Luglio 2026.
+**Stato**: ✅ COMPLETATO — 27 Luglio 2026; 🔁 REVISIONATO — 28 Luglio 2026.
 
 Misurare:
 
@@ -96,19 +105,21 @@ Misurare:
 - comportamento release workflow;
 - piattaforme realmente supportate.
 
-> **Note implementazione**: probe wheel/container arm64+amd64 verdi; QuantLib
-> aggiunge 86,8–89,4 MiB, lo stack Riskfolio 1.065–1.098 MiB. Lock minimale
-> verificato. Il build LibreFolio finale è verde; immagine arm64
-> `librefolio:v1.0.1-15-g8346fdc7-dirty` di 2.433.002.858 byte, con import
-> container di QuantLib 1.43 riuscito.
+> **Note implementazione — revisione**: probe wheel/container arm64+amd64 verdi;
+> QuantLib aggiunge 86,8–89,4 MiB; Riskfolio 7.0.1 oltre QuantLib aggiunge
+> 644,4 MiB arm64 / 672,9 MiB amd64. Il build LibreFolio finale arm64
+> `librefolio:g5-quantlib-riskfolio-final` è verde: 2.756.004.428 byte, digest
+> `sha256:fd8d79d6584dd7cf8087f54508f8c73cc66bbcacebe5a206bf46821117bd7999`.
+> Smoke container: QuantLib 1.43, NumPy 2.5.1, Riskfolio 7.0.1, FastAPI app,
+> nessun `vectorbt`/`numba`.
 
 > **⚠️ Fuori pista**: un primo `pipenv lock` aveva aggiornato dipendenze
 > transitive `*`; recuperato il preimage automatico della sessione e ricostruito
-> il lock aggiungendo esclusivamente QuantLib.
+> il lock aggiungendo QuantLib e la sola closure Riskfolio 7.0.1 sulla baseline.
 
 ### 1.5 — Decisione e adozione
 
-**Stato**: ✅ COMPLETATO — 27 Luglio 2026.
+**Stato**: ✅ RIVALUTATO E COMPLETATO — 28 Luglio 2026.
 
 Per ogni libreria:
 
@@ -120,6 +131,13 @@ Per ogni libreria:
 > `PARTIAL` con fallback SciPy, Riskfolio `REJECTED` per Release 2. Manifest,
 > lock, smoke host e smoke container completati. P13 è chiuso senza
 > dipendenze/endpoint/UI morti.
+
+> **Note implementazione — revisione**: Riskfolio-Lib **7.0.1 ADOPTED** e pinata
+> nel runtime. Il lock mantiene NumPy **2.5.1** anche nella sezione develop e
+> aggiunge solo il closure transitivo Riskfolio; nessun `vectorbt`, nessun
+> `numba`. La precedente decisione `REJECTED` è superseded. RQMC viene rimosso
+> dal prodotto: P11 production espone soltanto QuantLib MC/QMC. P13 è riaperto
+> come analytic backend senza UI in questo round.
 
 ## 4. File candidati
 
@@ -151,9 +169,11 @@ Completato quando:
 
 ## 7. Rischi/fallback
 
-- QuantLib non installabile → NumPy/SciPy adapter.
-- RQMC non wrappato → `scipy.stats.qmc`.
-- Riskfolio troppo pesante/incompatibile → P13 non spedito.
+- QuantLib non installabile → stop del gate; nessun adapter production alternativo.
+- QMC QuantLib non conforme agli oracle → stop e confronto utente, nessun
+  fallback production silenzioso.
+- Riskfolio 7.0.1 incompatibile → stop e confronto utente, nessun cambio
+  versione/downgrade NumPy silenzioso.
 - Nessuna soglia arbitraria nascosta: trade-off registrato nel report.
 
 ## 8. Progress rule

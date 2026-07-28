@@ -11,17 +11,18 @@
 |---|---|---|
 | QuantLib 1.43 | **ADOPTED** | Dipendenza runtime pinata; adapter P11 dietro boundary serializzabile e processo `spawn`. |
 | Sobol QMC QuantLib | **ADOPTED** | Generator e multi-path specializzati disponibili. |
-| Burley-2020 RQMC QuantLib | **PARTIAL** | Sequenze gaussiane scrambled disponibili; manca un path-generator Burley specializzato. P11 comporrà evoluzione propria o userà `scipy.stats.qmc`. |
-| Riskfolio-Lib 7.3.0 | **REJECTED per Release 2** | Nessuna dipendenza/endpoint/UI frontier. P13 chiuso intenzionalmente dal gate. |
+| Burley-2020 RQMC QuantLib | **NON ADOTTATO** | Binding disponibile, ma RQMC è stato rimosso dal contratto P11; production espone solo MC/QMC. |
+| Riskfolio-Lib 7.0.1 | **ADOPTED — revisione 28 Luglio 2026** | Dipendenza runtime pinata; P13 backend riaperto dietro worker `spawn` separato. |
 
-La decisione Riskfolio non dipende dalla correttezza matematica della libreria:
-min-risk, max-Sharpe e risk parity funzionano. Il blocco è operativo:
+La prima valutazione su Riskfolio 7.3.0 era viziata dalla scelta della release:
+`vectorbt -> numba -> numpy <2.5` appartiene al packaging 7.3.0, non alle API
+P13 necessarie. Riskfolio 7.0.1:
 
-1. `vectorbt 1.1.0 -> numba 0.66.0 -> numpy < 2.5`, incompatibile con il
-   lock production LibreFolio `numpy 2.5.1` e con il lock development `2.5.0`;
-2. richiede downgrade a `numpy 2.4.6`;
-3. aggiunge circa **0,98–1,01 GiB** oltre all'immagine probe con QuantLib;
-4. espone warning CVXPY per moltiplicazione matriciale deprecata.
+1. richiede direttamente `numpy>=1.24.0`;
+2. funziona con il lock LibreFolio `numpy==2.5.1`;
+3. non installa `vectorbt` né `numba`;
+4. espone tutte le API P13 richieste;
+5. aggiunge circa 644 MiB arm64 / 673 MiB amd64 oltre al probe QuantLib.
 
 ## 2. Artefatti riproducibili
 
@@ -48,7 +49,7 @@ capability, shape, riproducibilità, solver, pesi e tempi.
 | pandas | 3.0.3 |
 | SciPy | 1.18.0 |
 | QuantLib | 1.43, BSD-3-Clause |
-| Riskfolio-Lib probe | 7.3.0, BSD 3-clause |
+| Riskfolio-Lib probe/runtime | 7.0.1, BSD 3-clause |
 
 ## 4. QuantLib
 
@@ -109,12 +110,12 @@ distruzione anticipata degli oggetti C++ sottostanti.
 
 | Pacchetto | Versione |
 |---|---|
-| Riskfolio-Lib | 7.3.0 |
-| NumPy | 2.4.6 |
-| pandas | 3.0.3 |
+| Riskfolio-Lib | 7.0.1 |
+| NumPy | 2.5.1 |
+| pandas | 3.0.5 |
 | SciPy | 1.18.0 |
-| vectorbt | 1.1.0 |
-| Numba | 0.66.0 |
+| vectorbt | assente |
+| Numba | assente |
 | CVXPY | 1.9.2 |
 
 Solver rilevati: `CLARABEL`, `SCS`, `SCIPY`, `HIGHS`, `OSQP`.
@@ -127,9 +128,10 @@ Solver rilevati: `CLARABEL`, `SCS`, `SCIPY`, `HIGHS`, `OSQP`.
 | max-Sharpe stimato | 1,0 | 0,0 | ok |
 | risk parity | 1,0 | 0,0 | ok |
 
-Tutti i pesi sono finiti e non negativi. Tempo host per sei solve
-(due ripetizioni per strategia): circa 2,45 s; Linux arm64 circa 3,79 s;
-Linux amd64 emulato circa 5,57 s.
+Tutti i pesi sono finiti, rispettano bound 5%-80%, sommano a uno e sono
+ripetibili. Verificati anche covariance storica/Ledoit/OAS PSD, frontiera a cinque
+punti e vincoli infeasible. Probe completo: ~2,59 s host, ~2,14 s Linux arm64,
+~4,43 s Linux amd64 emulato.
 
 ## 6. Costo container
 
@@ -139,57 +141,66 @@ Dimensioni Docker non compresse:
 |---|---:|---:|---:|---:|
 | base Python 3.13 slim | 143.141.964 B | — | 117.913.151 B | — |
 | + QuantLib | 234.137.933 B | +86,8 MiB | 211.611.758 B | +89,4 MiB |
-| + QuantLib + Riskfolio stack | 1.260.190.434 B | +1.065,3 MiB | 1.269.421.635 B | +1.098,2 MiB |
-| Riskfolio stack oltre QuantLib | — | +978,5 MiB | — | +1.008,8 MiB |
+| + QuantLib + Riskfolio 7.0.1 | 909.800.578 B | +731,2 MiB | 917.232.656 B | +762,7 MiB |
+| Riskfolio 7.0.1 oltre QuantLib | — | +644,4 MiB | — | +672,9 MiB |
 
 Ambienti virtuali host:
 
 - QuantLib isolato: 70.620 KiB;
-- stack combinato Riskfolio: 918.224 KiB.
+- stack host Riskfolio: RSS massima probe 268.615.680 B.
+
+RSS massima container: 302.424.064 B arm64 e 368.697.344 B amd64 emulato.
 
 ## 7. Integrazione adottata
 
-- `Pipfile`: `quantlib = "==1.43"`;
-- `Pipfile.lock`: solo hash Pipfile + entry QuantLib aggiunti; nessun upgrade
-  transitivo;
+- `Pipfile`: `quantlib = "==1.43"` e `riskfolio-lib = "==7.0.1"`;
+- `Pipfile.lock`: closure Riskfolio 7.0.1 ricostruita sulla baseline, NumPy 2.5.1
+  preservato, `vectorbt`/`numba` assenti;
 - smoke offline registrato nel test runner service;
 - build probe arm64/amd64 verde;
 - import QuantLib nell'immagine LibreFolio verificato.
 
-Il build finale LibreFolio dal lock minimale è verde:
+Il build finale LibreFolio con entrambi i runtime è verde:
 
-- immagine: `librefolio:v1.0.1-15-g8346fdc7-dirty`;
-- digest locale: `sha256:e7d08448e02e1997e90f370a6b58fa7cc8d03978e6adcd42d000dcadaa9e653d`;
-- dimensione arm64 non compressa: 2.433.002.858 byte;
-- install layer dipendenze: 33,2 s con cache wheel;
-- smoke container: `QuantLib.__version__ == "1.43"`.
+- immagine: `librefolio:g5-quantlib-riskfolio-final`;
+- digest locale:
+  `sha256:fd8d79d6584dd7cf8087f54508f8c73cc66bbcacebe5a206bf46821117bd7999`;
+- dimensione arm64 non compressa: 2.756.004.428 byte;
+- smoke container: QuantLib `1.43`, NumPy `2.5.1`, Riskfolio `7.0.1`;
+- import FastAPI application riuscito;
+- `vectorbt` e `numba` assenti nel container.
 
 ## 8. Conseguenze per P11-P13
 
 - P11 può usare QuantLib dietro adapter senza esporre oggetti SWIG.
 - QuantLib deve essere creato/eseguito nel worker `spawn`; niente concorrenza
   `asyncio.to_thread`.
-- QMC può usare i path-generator QuantLib.
-- RQMC userà Burley solo se P11 dimostra una composizione semplice e testabile;
-  fallback già disponibile: `scipy.stats.qmc`.
-- P13/frontiera non viene implementato né mostrato nel capability catalog/UI.
-- Una futura rivalutazione Riskfolio richiede packaging opzionale separato o una
-  dipendenza significativamente più leggera, non un downgrade silenzioso dello
-  stack numerico principale.
+- QMC usa Sobol QuantLib con `skipTo` e
+  `StochasticProcessArray.evolve`.
+- RQMC e il fallback SciPy sono rimossi.
+- P13/frontiera viene implementato nel backend con Riskfolio 7.0.1 e worker
+  `spawn` separato.
+- Nessuna UI P13 in questo round; il catalogo/API restano la superficie prevista.
+- NumPy resta 2.5.1; nessun packaging vectorbt/Commons Clause entra nel runtime.
 
 ## 9. Verifica
 
 - harness host QuantLib: verde;
-- harness host combinato: verde;
+- harness host Riskfolio 7.0.1 + NumPy 2.5.1: verde;
 - Docker probe Linux arm64: verde;
 - Docker probe Linux amd64: verde;
+- solver/bound/frontiera/infeasible/covariance estimators: verdi;
+- `vectorbt`/`numba`: assenti;
 - build immagine LibreFolio arm64: verde;
 - import QuantLib 1.43 nell'immagine LibreFolio: verde;
-- `./dev.py test services quantlib-runtime`: 2 test verdi;
+- `./dev.py test services risk-all`: 68 test verdi;
+- `./dev.py test api risk`: 7 test verdi sul DB popolato;
+- frontend check/build: verdi;
+- API sync: idempotente;
+- immagine finale arm64 + smoke runtime: verdi;
 - lint Ruff + formato Black: verdi.
 
-La suite services completa raggiunge un failure preesistente nel catalogo segnali
-(`test_registry_discovers_core_plugins_and_schema_driven_catalog`: stringa
-`color` nel payload serializzato), non collegato a QuantLib. Il punto viene
-riassorbito nel gate Step 2, che deve congelare e riallineare la regressione del
-framework segnali prima dell'estrazione della pipeline serie.
+La suite backend completa è attualmente bloccata da lavoro concorrente sul provider
+Borsa Italiana: il modulo non espone ancora `ottieni_storico` e marca la libreria
+come non disponibile nei test external. I gate risk dedicati, API e container sono
+verdi; nessuna modifica provider è stata effettuata in G5.

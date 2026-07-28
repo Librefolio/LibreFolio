@@ -1,6 +1,6 @@
 # Step 6 — Risk Frontend Integration (UI P4/P6-P13)
 
-**Stato**: ⏳ NON INIZIATO.
+**Stato**: ⏸️ PARZIALMENTE MATERIALIZZATO, NON RIALLINEATO/CHIUSO.
 
 ← Step precedente:
 [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md)
@@ -12,6 +12,13 @@
 
 Collegare backend già verificato alle quattro superfici UI. Scope limitato a
 funzionalità, render e i18n; design finale resta all'utente.
+
+> **Rettifica stato — 28 Luglio 2026**: prima della riapertura correttiva G5 erano
+> già stati creati store, componenti risk condivisi, wiring sui quattro scope e
+> test funzionali mock. Dopo la correzione QuantLib/Riskfolio l'utente ha chiesto
+> di fermarsi al backend: questi file non sono stati riallineati e ricertificati
+> come gate G6. La UI P13 `portfolio_optimization` è assente. Fonte di handoff:
+> [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md).
 
 ## 2. Vincoli
 
@@ -27,7 +34,7 @@ funzionalità, render e i18n; design finale resta all'utente.
 
 ### 6.1 — Client/store
 
-**Stato**: ⏳.
+**Stato**: 🟡 MATERIALIZZATO, DA RICERTIFICARE.
 
 - `./dev.py api sync`;
 - transport/runtime mapping;
@@ -37,14 +44,14 @@ funzionalità, render e i18n; design finale resta all'utente.
 
 ### 6.2 — Rolling risk Asset Detail
 
-**Stato**: ⏳.
+**Stato**: ✅ PREESISTENTE DA G3; DA INCLUDERE NEL GATE G6.
 
 Riusare catalogo/renderer segnali. Aggiungere picker comparison asset
 metadata-driven con `AssetSearchAutocomplete`.
 
 ### 6.3 — Asset Global Correlation
 
-**Stato**: ⏳.
+**Stato**: 🟡 MATERIALIZZATO, DA RICERTIFICARE.
 
 - tab Assets/Correlation;
 - broker filter → asset set, nessun peso;
@@ -54,7 +61,7 @@ metadata-driven con `AssetSearchAutocomplete`.
 
 ### 6.4 — Dashboard/Broker Risk
 
-**Stato**: ⏳.
+**Stato**: 🟡 MATERIALIZZATO, DA RICERTIFICARE.
 
 - tab Risk;
 - KPI;
@@ -66,14 +73,14 @@ metadata-driven con `AssetSearchAutocomplete`.
 
 ### 6.5 — Comparison/Scenarios Asset Detail
 
-**Stato**: ⏳.
+**Stato**: 🟡 MATERIALIZZATO, DA RICERTIFICARE.
 
 Pannello risk-free vs comparison asset, cumulative/relative metrics, stress e
 metadata.
 
 ### 6.6 — Simulation/Frontier
 
-**Stato**: ⏳.
+**Stato**: 🟡 SIMULATION PRESENTE; FRONTIER/P13 ASSENTE.
 
 - percentile bands via `LineChart`;
 - label "simulato";
@@ -82,14 +89,14 @@ metadata.
 
 ### 6.7 — Data quality/sync
 
-**Stato**: ⏳.
+**Stato**: 🟡 MATERIALIZZATO, DA RICERTIFICARE.
 
 Riusare `DataQualityBanner` e `PageSyncModal`; prezzi+FX preselezionati; utente
 avvia; pagina ricarica a `onsynced`.
 
 ### 6.8 — Functional E2E
 
-**Stato**: ⏳.
+**Stato**: 🟡 TEST MOCK PRESENTE E REGISTRATO, DA RICERTIFICARE.
 
 Creare suite risk mirata e registrarla nel test runner.
 

@@ -57,6 +57,8 @@ class RiskOutputKind(StrEnum):
     STRESS = "stress"
     COMPARISON = "comparison"
     VAR_CVAR = "var_cvar"
+    SIMULATION = "simulation"
+    OPTIMIZATION = "optimization"
 
 
 class RiskResultStatus(StrEnum):
@@ -86,6 +88,11 @@ class RiskErrorCode(StrEnum):
     INSUFFICIENT_HISTORY = "insufficient_history"
     UNDEFINED_METRIC = "undefined_metric"
     DATA_UNAVAILABLE = "data_unavailable"
+    INVALID_COVARIANCE = "invalid_covariance"
+    RESOURCE_LIMIT = "resource_limit"
+    WORKER_BUSY = "worker_busy"
+    EXECUTION_TIMEOUT = "execution_timeout"
+    OPTIMIZATION_INFEASIBLE = "optimization_infeasible"
     EXECUTION_FAILED = "execution_failed"
 
 
@@ -94,6 +101,54 @@ class RiskStressMethod(StrEnum):
 
     HYPOTHETICAL = "hypothetical"
     HISTORICAL_REPLAY = "historical_replay"
+
+
+class RiskSimulationProcess(StrEnum):
+    """Stochastic process exposed by the first simulation implementation."""
+
+    GBM = "gbm"
+
+
+class RiskSamplingStrategy(StrEnum):
+    """Sampling strategy used for stochastic simulation."""
+
+    MC = "mc"
+    QMC = "qmc"
+
+
+class RiskOptimizationStrategy(StrEnum):
+    """Mean-variance strategies exposed by portfolio optimization."""
+
+    MIN_RISK = "min_risk"
+    MAX_SHARPE = "max_sharpe"
+    RISK_PARITY = "risk_parity"
+
+
+class RiskCovarianceEstimator(StrEnum):
+    """Riskfolio covariance estimators approved for production."""
+
+    HISTORICAL = "historical"
+    LEDOIT_WOLF = "ledoit_wolf"
+    OAS = "oas"
+
+
+class RiskOptimizationSolver(StrEnum):
+    """Open-source solvers accepted by the optimization worker."""
+
+    CLARABEL = "clarabel"
+    SCS = "scs"
+
+
+class RiskSimulationDriftEstimator(StrEnum):
+    """Drift estimator disclosed by simulation results."""
+
+    HISTORICAL_LOG_MLE = "historical_log_mle"
+
+
+class RiskSimulationCovarianceEstimator(StrEnum):
+    """Covariance estimator disclosed by simulation results."""
+
+    SAMPLE_LOG_RETURNS = "sample_log_returns"
 
 
 class RiskExcludedAsset(BaseModel):
@@ -590,6 +645,129 @@ class RiskVarCvarOutput(BaseModel):
         return self
 
 
+class RiskSimulationBandPoint(BaseModel):
+    """One cumulative-return percentile band at a simulated day."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    day: int = Field(..., ge=0)
+    p05: FiniteFloat = Field(..., gt=-1)
+    p50: FiniteFloat = Field(..., gt=-1)
+    p95: FiniteFloat = Field(..., gt=-1)
+
+    @model_validator(mode="after")
+    def validate_percentile_order(self) -> RiskSimulationBandPoint:
+        if not self.p05 <= self.p50 <= self.p95:
+            raise ValueError("simulation percentiles must satisfy p05 <= p50 <= p95")
+        return self
+
+
+class RiskSimulationOutput(BaseModel):
+    """Renderer-neutral conditional simulation result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal[RiskOutputKind.SIMULATION] = Field(default=RiskOutputKind.SIMULATION, json_schema_extra={"enum": ["simulation"]})
+    process: RiskSimulationProcess
+    sampling: RiskSamplingStrategy
+    horizon_days: PositiveInt
+    paths: PositiveInt
+    drift_estimator: RiskSimulationDriftEstimator
+    covariance_estimator: RiskSimulationCovarianceEstimator
+    aggregation_policy: RiskCompositionPolicy
+    costs_included: bool = False
+    cash_flows_included: bool = False
+    inflation_included: bool = False
+    rebalanced: bool = False
+    percentile_bands: List[RiskSimulationBandPoint] = Field(..., min_length=2)
+    terminal_mean_return: FiniteFloat = Field(..., gt=-1)
+    terminal_volatility: FiniteFloat = Field(..., ge=0)
+    probability_of_loss: FiniteFloat = Field(..., ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_band_horizon(self) -> RiskSimulationOutput:
+        expected_days = list(range(self.horizon_days + 1))
+        if [point.day for point in self.percentile_bands] != expected_days:
+            raise ValueError("simulation percentile bands must cover every day from zero through horizon_days")
+        initial = self.percentile_bands[0]
+        if not all(math.isclose(value, 0.0, rel_tol=0.0, abs_tol=1e-12) for value in (initial.p05, initial.p50, initial.p95)):
+            raise ValueError("simulation percentile bands must start at zero cumulative return")
+        return self
+
+
+class RiskOptimizationWeight(BaseModel):
+    """One optimized asset weight and its volatility contribution."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    weight: FiniteFloat = Field(..., ge=0, le=1)
+    marginal_risk_contribution: FiniteFloat
+    component_risk_contribution: FiniteFloat
+    percentage_risk_contribution: FiniteFloat
+
+
+class RiskOptimizationConstraintSummary(BaseModel):
+    """Effective long-only budget constraints."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_weight: FiniteFloat = Field(..., ge=0, le=1)
+    max_weight: FiniteFloat = Field(..., ge=0, le=1)
+    budget: Literal[1] = 1
+    long_only: Literal[True] = True
+    leverage_allowed: Literal[False] = False
+
+
+class RiskOptimizationFrontierPoint(BaseModel):
+    """One portfolio on the efficient frontier."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_annual_return: FiniteFloat
+    annual_volatility: FiniteFloat = Field(..., ge=0)
+    sharpe_ratio: Optional[FiniteFloat] = None
+    weights: List[RiskOptimizationWeight] = Field(..., min_length=2)
+
+
+class RiskOptimizationSensitivityPoint(BaseModel):
+    """Recomputed solution under another covariance estimator."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    covariance_estimator: RiskCovarianceEstimator
+    expected_annual_return: FiniteFloat
+    annual_volatility: FiniteFloat = Field(..., ge=0)
+    max_absolute_weight_delta: FiniteFloat = Field(..., ge=0)
+    weights: List[RiskOptimizationWeight] = Field(..., min_length=2)
+
+
+class RiskPortfolioOptimizationOutput(BaseModel):
+    """Renderer-neutral long-only portfolio optimization result."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal[RiskOutputKind.OPTIMIZATION] = Field(
+        default=RiskOutputKind.OPTIMIZATION,
+        json_schema_extra={"enum": ["optimization"]},
+    )
+    strategy: RiskOptimizationStrategy
+    covariance_estimator: RiskCovarianceEstimator
+    solver: RiskOptimizationSolver
+    solver_status: str = Field(..., min_length=1)
+    risk_free_annual_rate: Optional[FiniteFloat] = None
+    expected_period_return: FiniteFloat
+    expected_annual_return: FiniteFloat
+    annual_volatility: FiniteFloat = Field(..., ge=0)
+    sharpe_ratio: Optional[FiniteFloat] = None
+    weights: List[RiskOptimizationWeight] = Field(..., min_length=2)
+    constraints: RiskOptimizationConstraintSummary
+    frontier: List[RiskOptimizationFrontierPoint] = Field(default_factory=list)
+    sensitivity: List[RiskOptimizationSensitivityPoint] = Field(default_factory=list)
+    method: str = Field(..., min_length=1)
+    algorithm_version: str = Field(..., min_length=1)
+
+
 RiskAnalyticOutput = Annotated[
     Union[
         RiskKpiOutput,
@@ -598,6 +776,8 @@ RiskAnalyticOutput = Annotated[
         RiskStressOutput,
         RiskComparisonOutput,
         RiskVarCvarOutput,
+        RiskSimulationOutput,
+        RiskPortfolioOptimizationOutput,
     ],
     Field(discriminator="kind"),
 ]
@@ -690,12 +870,18 @@ __all__ = [
     "RiskResultMetadata",
     "RiskResultStatus",
     "RiskReturnBasis",
+    "RiskSimulationCovarianceEstimator",
+    "RiskSimulationDriftEstimator",
+    "RiskSamplingStrategy",
     "RiskScope",
     "RiskScopeBase",
     "RiskScopeKind",
     "RiskStressImpact",
     "RiskStressMethod",
     "RiskStressOutput",
+    "RiskSimulationBandPoint",
+    "RiskSimulationOutput",
+    "RiskSimulationProcess",
     "RiskValueStatus",
     "RiskVarCvarOutput",
     "RiskWarning",

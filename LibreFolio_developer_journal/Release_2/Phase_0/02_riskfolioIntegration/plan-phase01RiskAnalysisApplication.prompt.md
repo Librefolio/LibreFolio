@@ -10,6 +10,11 @@
 > `review-`, `README`); codice reale di LibreFolio (evidenza `file:linea`);
 > decisioni definitive del prompt di revisione del piano (2026-07-27); ispezione
 > API/doc ufficiali delle librerie con versioni verificate su PyPI.
+>
+> **Aggiornamento esecuzione — 28 Luglio 2026:** P0-P13 backend sono stati
+> implementati. P11 usa esclusivamente QuantLib MC/QMC in worker `spawn`; RQMC è
+> rimosso; P12 usa pool persistenti separati; P13 usa Riskfolio-Lib 7.0.1.
+> Le note di esito sotto prevalgono sulle alternative originariamente pianificate.
 
 ## Indice
 - [0. Principi vincolanti](#0-principi-vincolanti)
@@ -65,13 +70,12 @@ Confermate esplicitamente e vincolanti per tutti gli step:
 | D8 | **Correlazione primaria in Asset Global** (tab `Correlation`); un solo contratto riusato in Dashboard/Broker/Asset Detail; broker = solo SET di asset (no pesi/quantità/lotti/carico) |
 | D9 | **Stress differenziato per scope**, una sola definizione di scenario (Asset Detail % · Asset Global % multi · Dashboard/Broker € ) |
 | D10 | **QuantLib** = motore quantitativo/simulazione principale (dietro adapter); **Riskfolio-Lib** = frontiera/ottimizzazione (ruolo separato). **Entrambe verificate e, se confermate, installate definitivamente in `P0`.** |
-| D11 | **MC / QMC / RQMC** valutati via spike: **QuantLib vs NumPy/SciPy**. QMCPy **non** fa parte del piano iniziale (solo eventuale fallback futuro per gap dimostrato) |
-| D12 | Parallelismo eventuale **solo `spawn`** (multiprocessing/ProcessPoolExecutor), mai `fork` di default, mai thread per calcoli QuantLib; solo dopo benchmark |
+| D11 | Production espone **MC / QMC QuantLib**. RQMC è rimosso; NumPy/SciPy restano algebra/oracle, non adapter alternativo. QMCPy è fuori piano. |
+| D12 | Calcoli QuantLib/Riskfolio **sempre** in processi `spawn` persistenti e separati. P12 decide il numero di worker, non l'isolamento. |
 
-> **Esito esecuzione P0 — 27 Luglio 2026**: QuantLib 1.43 è `ADOPTED`;
-> Sobol QMC è disponibile; Burley-2020 RQMC è `PARTIAL` perché manca un
-> path-generator specializzato. Riskfolio-Lib 7.3.0 è `REJECTED` per Release 2:
-> richiede NumPy `<2.5` e aggiunge circa 1 GiB al container. Evidenza:
+> **Esito corretto P0/G5 — 28 Luglio 2026**: QuantLib 1.43 e Riskfolio-Lib
+> 7.0.1 sono `ADOPTED` con NumPy 2.5.1; `vectorbt`/`numba` assenti. Host e
+> Linux arm64/amd64 superano i probe. RQMC è escluso dal prodotto. Evidenza:
 > [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md).
 
 ---
@@ -94,7 +98,8 @@ Confermate esplicitamente e vincolanti per tutti gli step:
   - **Processi stocastici:** `GeneralizedBlackScholesProcess` (GBM), `BlackScholesMertonProcess`, `HestonProcess`, `Merton76Process` (jump-diffusion), `VarianceGammaProcess`, processi sui tassi (Vasicek, Hull-White, CIR).
   - **Generatori:** `MersenneTwisterUniformRng` (pseudo), **`SobolRsg`** (low-discrepancy), `InverseCumulativeRsg` (gaussianizzazione).
   - **Path generator:** `GaussianPathGenerator` (single), **`GaussianMultiPathGenerator` / `MultiPathGenerator`** (multi-asset correlato via matrice/Cholesky).
-  - **QMC/RQMC:** Sobol esposto; **scrambling/randomizzazione (RQMC)** da verificare nel binding SWIG (potenziale gap → in tal caso comporre con `scipy.stats.qmc`, §2.3 e P11).
+  - **QMC:** Sobol esposto; production usa `skipTo` come indice iniziale deterministico.
+    Le API Burley/RQMC non fanno parte del contratto prodotto.
   - **Infrastruttura quant:** `Calendar` (calendari di mercato), `DayCounter` (Actual/Actual, 30/360…), curve tassi (`YieldTermStructure`, `FlatForward`, bootstrap), **obbligazioni** (`FixedRateBond`, `ZeroCouponBond`), **duration/convexity** (`BondFunctions.duration/convexity`), pricing Black-Scholes/analitico.
 - **⚠️ Thread-safety (decisione D12):** QuantLib **non è thread-safe** — stato globale (evaluation date non thread-local), lazy-eval/caching → **non** condividere oggetti tra thread. Modello «un thread / un contesto di mercato»; per il parallelismo usare **process `spawn`** con oggetti locali al worker.
 - **Differenza API Python vs C++:** alcuni template C++ (scrambled Sobol, alcuni engine MC) potrebbero **non** essere wrappati in SWIG → assunzione da confermare con probe (P0).
@@ -104,22 +109,22 @@ Confermate esplicitamente e vincolanti per tutti gli step:
 > il path-generator Burley specializzato non lo è.
 
 ### 2.2 Riskfolio-Lib — frontiera / ottimizzazione
-- **Versione:** `7.3.0` (PyPI). **Licenza:** **BSD-3-Clause** (OSI). `requires_python >=3.10` (compatibilità 3.13 comunque da provare in P0).
+- **Versione adottata:** `7.0.1`. **Licenza:** **BSD-3-Clause** (OSI).
 - **Fonti:** <https://pypi.org/project/riskfolio-lib/>, <https://riskfolio-lib.readthedocs.io/>.
 - **Dipendenze pesanti:** `cvxpy (≥1.7)`, `clarabel`, `SCS`, `scikit-learn`, `statsmodels`, `arch`, `xlsxwriter`, `networkx`, `astropy`, `pybind11`, oltre a numpy/scipy/pandas/matplotlib. → **impatto Docker single-image, durata build, conflitti NumPy/SciPy/pandas, solver disponibili** da misurare **in P0**.
-- **Ruolo (separato da QuantLib):** frontiera efficiente, ottimizzazione (min-risk, max-Sharpe **stimato**, max-utility, risk-parity), 22+ misure di rischio convesse. **Non** fa simulazione forward: il MC resta QuantLib/NumPy-SciPy.
+- **Ruolo (separato da QuantLib):** frontiera efficiente, ottimizzazione (min-risk, max-Sharpe **stimato**, max-utility, risk-parity), 22+ misure di rischio convesse. **Non** fa simulazione forward: MC/QMC restano QuantLib.
 - **Installazione:** **verificata e installata in P0 se confermata**, anche se l'uso applicativo principale è nello step finale della frontiera (P13).
 - **Solver:** via CVXPY (ECOS/SCS/Clarabel default; MOSEK/Gurobi opzionali). Nessun solver commerciale richiesto.
 
-> **Esito P0**: min-risk, max-Sharpe e risk parity validati con solver open-source,
-> ma la libreria non è stata adottata. Il vincolo NumPy `<2.5` confligge con il
-> lock LibreFolio e il layer aggiuntivo misura circa 0,98–1,01 GiB oltre QuantLib.
+> **Esito corretto P0/G5**: adottata 7.0.1 con NumPy 2.5.1. CLARABEL completa
+> min-risk, max-Sharpe, risk parity, frontiera, bound, covariance
+> historical/Ledoit-Wolf/OAS e infeasible detection. Delta oltre QuantLib:
+> 644,4 MiB arm64 / 672,9 MiB amd64.
 
-### 2.3 NumPy / SciPy — base e fallback (già presenti)
+### 2.3 NumPy / SciPy — algebra e oracle (già presenti)
 - **Presenti** nell'ambiente: numpy 2.5, scipy 1.18, pandas 3.0.
-- **Ruolo:** algebra matriciale, generatori, **`scipy.stats.qmc.Sobol` con scrambling
-  (QMC/RQMC)**, primitive statistiche; **fallback** dietro lo stesso adapter del motore
-  quantitativo quando QuantLib non copre un requisito (es. RQMC nel binding, multi-asset).
+- **Ruolo:** algebra matriciale, aggregazione, primitive statistiche e oracle
+  indipendenti. Nessun sampling/evoluzione production e nessun fallback silenzioso.
 
 ### 2.4 QMCPy — non pianificata (nota fallback futuro)
 - **Non** candidata all'installazione in P0, **non** nel critical path, **non** nei
@@ -134,8 +139,7 @@ Confermate esplicitamente e vincolanti per tutti gli step:
 
 ## 3. Matrice capability → libreria
 
-Scelta **per capability**, non per libreria. `⇒` = raccomandazione. Confronto
-simulazione: **QuantLib vs NumPy/SciPy** (QMCPy escluso dal piano iniziale).
+Scelta **per capability**, non per libreria. `⇒` = decisione finale.
 
 | Capability | LibreFolio esistente | QuantLib | Riskfolio-Lib | NumPy/SciPy | ⇒ Scelta | Motivo |
 |---|---|---|---|---|---|---|
@@ -144,10 +148,10 @@ simulazione: **QuantLib vs NumPy/SciPy** (QMCPy escluso dal piano iniziale).
 | Correlazione/covarianza | `pandas.corr` | ✓ | ✓ (stimatori) | ✓ | **pandas/NumPy** (shrinkage: Riskfolio se serve) | leggero |
 | PCTR (MCTR/CCTR/PCTR) | — | — | ✓ | ✓ | **NumPy** (formula chiusa) | contratto §6.7 |
 | VaR/CVaR historical/param | — | ✓ | ✓ | ✓ | **NumPy/SciPy** | `CVaR≥VaR≥0`, controllo pieno |
-| GBM single-asset simulato | — | ✓ | — | ✓ | **spike P11** (QuantLib default) | processi nativi + seed |
-| Multi-asset correlato (path) | — | ✓ (`MultiPathGenerator`) | — | ✓ (Cholesky) | **spike P11** | correlazione nativa |
-| QMC (Sobol) | — | ✓ (`SobolRsg`) | — | ✓ (`scipy.stats.qmc.Sobol`) | **spike P11** | entrambe coprono |
-| RQMC (Sobol scrambled + seed) | — | ⚠️ scrambling da verificare nel binding | — | ✓ (`scipy.stats.qmc.Sobol(scramble=True)`) | **QuantLib se esposto, altrimenti SciPy** | evita QMCPy |
+| GBM single-asset simulato | — | ✓ | — | ✓ | **QuantLib** | processo/RNG/evoluzione production |
+| Multi-asset correlato (path) | — | ✓ (`StochasticProcessArray`) | — | ✓ (Cholesky) | **QuantLib** | correlazione nativa |
+| QMC (Sobol) | — | ✓ (`SobolRsg`) | — | ✓ | **QuantLib** | `skipTo` + evoluzione QuantLib |
+| RQMC (Sobol scrambled + seed) | — | parziale | — | ✓ | **non esposto** | rimosso dal contratto |
 | Calendari/day-count/curve tassi | parziale | ✓ **robusto** | — | — | **QuantLib** (adapter) | standard di settore |
 | Bond duration/convexity, stress tassi | limitato | ✓ | — | — | **QuantLib** (evoluzione) | BTP/obbligazioni |
 | Frontiera efficiente / ottimizzazione / risk-parity | — | — | ✓ **specializzato** | (QP manuale) | **Riskfolio-Lib** (R9/P13) | evita QP a mano |
@@ -196,8 +200,8 @@ gap backend?
 
 ### P0 — Probe e installazione definitiva delle librerie
 
-- **Stato esecuzione:** 🟡 chiusura build finale in corso; decisioni già fissate:
-  QuantLib `ADOPTED`, Riskfolio `REJECTED`, RQMC QuantLib `PARTIAL`.
+- **Stato esecuzione:** ✅ completato e rivalutato: QuantLib 1.43 e Riskfolio
+  7.0.1 `ADOPTED`; RQMC rimosso.
 - **Obiettivo:** verificare nell'ambiente **reale** di LibreFolio le capability, la
   licenza e la compatibilità di **QuantLib** e **Riskfolio-Lib** e, se confermate,
   **installarle definitivamente** (manifest + lock + Docker + CI). Non è un semplice
@@ -215,10 +219,8 @@ gap backend?
   P0.h — Misurazione dell'impatto sull'immagine
   ```
 
-- **Stato attuale:** installate numpy 2.5 / pandas 3.0 / scipy 1.18 / ta-lib 0.7.1 /
-  pandas-ta-classic 0.6.52; **assenti** QuantLib / Riskfolio-Lib / cvxpy.
-- **Gap:** compatibilità 3.13 non provata; API reali del binding SWIG ignote; impatto
-  Docker/lock/CI non misurato; solver Riskfolio non verificati.
+- **Esito:** Python 3.13, host, Linux arm64/amd64, wheel, solver, lock e costo
+  immagine verificati; immagine finale arm64 importabile.
 - **File/componenti:** manifest dipendenze (`Pipfile`/`requirements.txt`/`pyproject.toml`),
   lock file, `Dockerfile`/build, pipeline CI, script di probe/smoke-test.
 - **Contratto/Schema/Service/Frontend:** nessuno.
@@ -228,7 +230,7 @@ gap backend?
 - **Verifiche obbligatorie QuantLib (stesso ambiente Python+Docker):** wheel compatibile ·
   install senza compilazioni impreviste · import binding · versione · licenza ·
   costruzione processo stocastico · path single · multi-path · generatori pseudo ·
-  `SobolRsg` · API QMC · scrambling/RQMC esposto o gap documentato · calendari ·
+  `SobolRsg` · API QMC · esclusione RQMC documentata · calendari ·
   day-counter · curve · obbligazioni · duration/convexity · build Docker · CI.
 - **Verifiche obbligatorie Riskfolio-Lib:** install reale · versione · licenza ·
   compatibilità Python · dipendenze transitive · solver disponibili · import ·
@@ -239,17 +241,17 @@ gap backend?
 - **Migrazione:** nessuna (schema/DB invariati). **Compatibilità:** provare su Python
   3.13 nel container di progetto.
 - **Output obbligatori:** versione+licenza QuantLib confermate · compatibilità 3.13
-  provata o respinta · wheel/build strategy · API Python disponibili · MC/QMC/RQMC
-  disponibili o gap documentato · multi-path · processi utili · adapter boundary
+  provata o respinta · wheel/build strategy · API Python disponibili · MC/QMC
+  disponibili · RQMC escluso · multi-path · processi utili · adapter boundary
   confermato · Riskfolio installabile · solver · impatto Docker misurato · lock
   aggiornato · CI verde · decisione definitiva registrata.
 - **Criteri di completamento:** le librerie confermate risultano **nel manifest, nel
   lock, nell'immagine, importabili, coperte da smoke test, compatibili con la CI**. Non
   basta un test locale temporaneo.
-- **Rischi:** binding SWIG incompleto (scrambling/RQMC); QuantLib senza wheel 3.13 →
-  compilazione nativa nel container; Riskfolio-Lib troppo pesante o in conflitto solver.
-- **Fallback:** RQMC via `scipy.stats.qmc`; se QuantLib non installabile → NumPy/SciPy
-  dietro adapter; se Riskfolio troppo pesante → frontiera rimandata/non spedita.
+- **Rischi verificati:** costo binding QMC, RAM/cold import Riskfolio e peso immagine;
+  wheel Python 3.13 e solver sono confermati.
+- **Fallback:** nessuno nel path production. Fallimento QuantLib/Riskfolio chiude il
+  gate con errore esplicito.
 - **Parallelizzabile:** ✅ (parte subito con P1, P2). **Bloccante per:** P11, P13.
 
 ### P1 — Utility comune di preparazione delle serie (D5)
@@ -554,41 +556,33 @@ gap backend?
 - **Rischi:** interpretazione utente. **Fallback:** solo historical simulation.
 - **Parallelizzabile:** dopo P5.
 
-### P11 — Motore di simulazione stocastica MC/QMC/RQMC (D10, D11, D12)
-- **Obiettivo:** motore stocastico **componibile** (non un «fan chart»), dietro adapter,
-  con **QuantLib** come candidata principale.
-- **Stato attuale:** in P0 QuantLib è (se confermata) già installata; nessun motore.
+### P11 — Motore di simulazione stocastica MC/QMC (D10, D11, D12)
+- **Stato esecuzione:** ✅ completato con QuantLib 1.43.
+- **Obiettivo:** motore stocastico componibile dietro boundary serializzabile.
 - **Gap:** processo/sampling/config/aggregazione/metriche/metadata/rendering separati.
-- **File/componenti:** `services/risk/quant/` con adapter
-  (`Contratti LibreFolio → Quantitative Engine Adapter → QuantLib/NumPy-SciPy → risultati
-  serializzabili`); **nessun** oggetto QuantLib esposto a dominio/API.
+- **File/componenti:** `services/risk/quant/`:
+  `Contratti LibreFolio → worker QuantLib → risultati serializzabili`; nessun
+  oggetto QuantLib esposto a dominio/API.
 - **Contratto backend:** separare `StochasticProcess` · `SamplingStrategy`
-  (MC IID / QMC Sobol / RQMC scrambled+seed) · `SimulationConfig` · `PortfolioAggregation`
+  (MC IID / QMC Sobol) · `SimulationConfig` · `PortfolioAggregation`
   · `RiskMetrics` · `ResultMetadata` · `Rendering` (il grafico a bande/percentili è
   **soltanto uno** dei renderer).
-- **Spike (obbligatorio, dopo P0):** confronto **QuantLib vs NumPy/SciPy** su
-  MC/QMC/RQMC · single vs portafoglio correlato · seed/riproducibilità · performance ·
-  memoria · ergonomia binding · testabilità · qualità · manutenzione. **Decisione:**
-  QuantLib copre processi/path/multi-asset → **adapter QuantLib**; QuantLib copre il
-  processo ma non RQMC nel binding → **QuantLib + `scipy.stats.qmc`**; binding QuantLib
-  insufficiente sul multi-asset → **NumPy/SciPy dietro lo stesso adapter**. Se la
-  composizione QuantLib+SciPy è pulita e testabile, **non** aggiungere altre librerie.
+- **Implementazione:** MC usa generator multi-path QuantLib; QMC usa
+  `SobolRsg.skipTo(seed)`, gaussianizzazione QuantLib e
+  `StochasticProcessArray.evolve`. NumPy aggrega soltanto dopo l'evoluzione.
 - **Frontend:** cono percentili su band `LineChart` (riuso Bollinger), label «simulato».
 - **Dipendenze:** QuantLib (BSD-3, installata in P0) + NumPy/SciPy. **Migrazione:** nessuna.
 - **Test:** seed/riproducibilità; MC vs QMC su casi noti; dimensioni/correlazioni;
   adapter; convergenza/stabilità; serialize/deserialize input.
 - **Criteri:** adapter unico, seed deterministico, metriche corrette.
-- **Rischi:** binding SWIG incompleto (scrambling). **Fallback:** NumPy/SciPy
-  (`scipy.stats.qmc.Sobol`) dietro l'adapter.
+- **Rischi:** costo SWIG/copia path QMC. **Fallback:** nessuno silenzioso.
 - **Parallelizzabile:** spike sì; integrazione dopo P5. **Bloccante per:** P12.
 
-### P12 — Parallelismo `spawn` (solo se giustificato) (D12)
-- **Obiettivo:** parallelismo sicuro **solo** se i benchmark lo richiedono.
-- **Stato attuale:** prima implementazione = esecuzione singola (oggetti QuantLib
-  locali, seed esplicito, benchmark), calcoli in `asyncio.to_thread`.
-- **Gap:** nessun pool; QuantLib non thread-safe.
-- **File/componenti:** worker `spawn` isolati (`ProcessPoolExecutor`,
-  `multiprocessing context=spawn`).
+### P12 — Isolamento e scala `spawn` (D12)
+- **Stato esecuzione:** ✅ completato.
+- **Obiettivo:** process isolation obbligatorio; benchmark per scegliere il numero
+  di worker.
+- **File/componenti:** due pool `spawn` custom separati, lazy, persistenti e bounded.
 - **Contratto backend:** ogni subprocess importa QuantLib autonomamente, crea localmente
   processi/curve/generatori/handle e configurazioni, riceve **solo input serializzabili**
   (Pydantic/dataclass), restituisce output serializzabili, **non** condivide oggetti
@@ -599,23 +593,25 @@ gap backend?
   distribuzioni/percentili/VaR/CVaR — mai media dei quantili).
 - **Operatività:** max worker (default conservativo self-hosted), coda, timeout,
   cancellazione, error handling, shutdown ordinato, protezione RAM, dedup richieste,
-  metriche tempo/memoria, fallback single-process.
+  metriche tempo/memoria; nessun fallback in-process.
 - **Dipendenze:** stdlib. **Migrazione:** nessuna.
 - **Test:** spawn isolation; serialize/deserialize; timeout/error propagation;
   riproducibilità cross-worker; pool vs single.
-- **Criteri:** benchmark che **dimostrano** la necessità prima di attivare il pool.
-- **Rischi:** costo IPC/spawn. **Fallback:** esecuzione singola in `to_thread`.
+- **Esito benchmark:** default 1 worker/pool; `>1` configurabile. Due worker:
+  `1,938x` simulation, `1,477x` optimization, circa doppio RSS.
+- **Rischi:** cold import e RAM. **Mitigazione:** persistenza, cache, limiti e
+  configurazione separata.
 - **Parallelizzabile:** no (dipende da P11 + benchmark). **Bloccante:** nessuno.
 
 ### P13 — Frontiera e ottimizzazione con Riskfolio-Lib (opzionale, R9)
-- **Stato esecuzione:** 🚫 **CHIUSO DAL GATE P0 — 27 Luglio 2026**.
-- **Decisione:** non creare adapter, endpoint, capability catalog o UI frontier in
-  Release 2.
-- **Evidenza:** formule/solver validati, ma Riskfolio richiede NumPy `<2.5` e circa
-  1 GiB di layer aggiuntivo.
-- **Fallback applicato:** non spedire la capability opzionale; nessun codice morto.
-- **Rivalutazione futura:** solo con packaging opzionale separato o stack
-  significativamente più leggero.
+- **Stato esecuzione:** ✅ backend completato — 28 Luglio 2026.
+- **Decisione:** `portfolio_optimization` usa Riskfolio-Lib 7.0.1 in worker
+  separato per scope portfolio/broker/asset-set.
+- **Capability:** min-risk, max-Sharpe, risk parity; historical/Ledoit-Wolf/OAS;
+  bound globali; CLARABEL/SCS; frontiera e sensitivity opzionali.
+- **Output:** pesi, rendimento/volatilità/Sharpe, contributi di rischio, vincoli,
+  solver/status, frontier/sensitivity e metadata. Nessuna raccomandazione.
+- **Frontend:** non sviluppato in questo round.
 
 ---
 
@@ -637,7 +633,7 @@ warning; insufficient data; empty/error; responsive; dark/light; tooltip metodol
 accessibilità; checklist manuale UI/UX.
 
 **Benchmark:** single asset e portafoglio; 5/20/50 asset; 1k/10k/100k percorsi;
-orizzonte 1/5/10 anni; MC/QMC/RQMC; **QuantLib vs NumPy/SciPy**; tempo; memoria;
+orizzonte 1/5/10 anni; MC/QMC QuantLib; tempo; memoria;
 riproducibilità; convergenza; stabilità dei percentili; VaR/CVaR; costo IPC; spawn
 startup; pool vs singolo.
 
@@ -651,7 +647,7 @@ Il piano distingue **due percorsi** che possono avanzare in parallelo.
 `P1 (utility serie) → P5 (RiskAnalytic + AssetReturnSeries) → P6/P7 (UI) → P8/P9/P10`.
 
 **Percorso librerie quantitative:**
-`P0 (probe+installazione) → P11 (motore MC/QMC/RQMC) → eventuale P12 (spawn) → P13 (frontiera)`.
+`P0 (probe+installazione) → P11 (motore MC/QMC) → P12 (spawn) → P13 (frontiera)`.
 
 **Parte subito (parallelo):** P0 (probe+install), P1 (utility), P2 (metadata) — indipendenti.
 
@@ -665,30 +661,24 @@ P11 blocca P12.
 (P3) + funzioni comparative (Sharpe/beta/correlazione/drawdown da P4/P5) + componenti host
 Asset/Dashboard/Broker (P7). Nessuna dipendenza artificiale.
 
-**Spike obbligatori:** (1) probe API + installazione librerie in P0; (2) confronto
-simulazione **QuantLib vs NumPy/SciPy** in P11; (3) benchmark parallelismo prima di P12.
+**Spike obbligatori:** (1) probe API + installazione librerie in P0; (2) oracle
+analitici QuantLib in P11; (3) benchmark worker count in P12.
 
-**Rischi principali:** compatibilità **QuantLib ↔ Python 3.13** e disponibilità wheel nel
-container (P0); binding SWIG incompleto (scrambling/RQMC); peso Docker/solver di
-Riskfolio-Lib+cvxpy (P0); costo di `AssetReturnSeries`; regressione segnali
-nell'estrazione della utility (P1).
+**Rischi principali verificati:** costo SWIG/copia QMC; cold import Riskfolio;
+RAM per worker; limiti Sobol/risorse. Compatibilità Python/container e solver sono
+chiusi dai probe.
 
 ---
 
 ## 8. Questioni aperte residue
 
-Solo verifiche/misure implementative reali:
-- Compatibilità QuantLib ↔ Python 3.13 (wheel, binding, container, CI) — probe P0
-- API SWIG effettivamente esposte; scrambling/RQMC nel binding — probe P0
-- Composizione QuantLib + `scipy.stats.qmc` per RQMC — spike P11
-- Peso Docker/durata build di QuantLib — misura P0
-- Peso Docker/durata build di Riskfolio-Lib e solver disponibili — misura P0
-- Soglia di percorsi/asset oltre cui serve il pool `spawn` — benchmark P12
-- Forma minima del `comparison_asset` nell'execution context (`comparison_asset_series`) — P3
-- Forma finale del risultato tipizzato delle serie (`AssetReturnSeries` DTO/projection) — P1
+- tuning operativo del numero worker per installazione self-hosted;
+- UI dedicata P13/frontiera, rinviata a G6/fase successiva;
+- polish visuale e test UI oltre il funzionale minimo;
+- suite backend globale da rilanciare dopo la chiusura del lavoro concorrente sul
+  provider Borsa Italiana.
 
-> QMCPy resta fuori dal piano: nessuna installazione, benchmark o licenza da risolvere;
-> solo eventuale fallback futuro per un gap dimostrato (§2.4).
+> QMCPy resta fuori dal piano; non è un fallback production.
 
 ---
 

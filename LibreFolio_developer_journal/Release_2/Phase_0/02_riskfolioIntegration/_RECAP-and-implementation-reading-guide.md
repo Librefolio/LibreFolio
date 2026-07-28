@@ -1,179 +1,422 @@
-# Riepilogo & Prompt di ripresa — Risk Analysis (Fase 0.1)
+# Recap corretto — Risk Analysis backend (G0-G5)
 
-> **Scopo di questo file.** Punto d'ingresso unico per riprendere il lavoro sulla
-> Risk Analysis. Contiene: (1) cosa c'è in questa cartella e in che ordine leggerlo,
-> (2) un **prompt di ripresa** copiabile per una nuova sessione, (3) un **suggerimento
-> di lettura** in ottica di piano implementativo multi-fase. **Documentale, nessun
-> codice.**
+**Data**: 28 Luglio 2026
+**Stato**: backend G0-G5 completato; stop prima di riprendere G6.
 
----
+## 1. Esito
 
-## 1. Contenuto della cartella (mappa)
+La correzione richiesta è completa:
 
-| Ordine | File | Cos'è | Righe | Stato |
-|--------|------|-------|-------|-------|
-| 0 | [`contract-phase01RiskMetricsMathematical.md`](./contract-phase01RiskMetricsMathematical.md) | **Contratto matematico/semantico fondativo.** Serie da consumare (TWRR portafoglio, close asset), annualizzazione osservata (§2.1), calendario congiunto + ultimo prezzo (§2.2), qualità+sync (§2.3), `RiskResultMetadata` (§4), allineamento (§5), schede per-metrica (beta §6.5, PCTR §6.7, VaR/CVaR §6.8, stress §6.10, risk-free/benchmark §6.11), gap `AssetReturnSeries` (§7), dipendenze (§10). | 805 | approvato |
-| 1 | [`analysis-phase01RiskModularityAndPlacement.md`](./analysis-phase01RiskModularityAndPlacement.md) | **Spina dorsale architetturale.** Tassonomia output, `RiskAnalytic` vs `SignalPlugin` (§4), utility comune serie (§4.1), inventario riuso backend (§4.2), matrice posizionamento UI (§5), policy libreria/componenti (§7/7.1/7.2), roadmap R0–R9 (§8), conclusione due-binari (§9). | 496 | approvato |
-| 2 | [`brainstorm-phase01RiskUiConcepts.md`](./brainstorm-phase01RiskUiConcepts.md) | **Brainstorming visivo.** 9 concept UI (A–I) con ASCII art + «cosa fa notare» + costo/valore; D-bis (Asset Global Correlation), D-ter (asset-centric), E-bis (multi-asset % stress), banner→PageSyncModal. | 553 | approvato |
-| 3 | [`review-risk-analysis-feedback.md`](./review-risk-analysis-feedback.md) | **Log decisionale critico** (Capitoli 1–4). 18 osservazioni valutate ACCETTO/CON MODIFICHE/RESPINGO/RIMANDO con evidenza dal codice; Cap. 4 = decisioni review-4 + skeleton del piano. | 851 | approvato |
-| 4 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | **Piano applicativo P0–P13.** Principi, decisioni D1–D12, librerie (QuantLib/Riskfolio in P0, NumPy/SciPy, QMCPy fuori), matrice capability, classificazione invalidazione, step verificabili, test+benchmark, doppio critical path, tracciabilità R0–R9↔P0–P13. | 709 | **da eseguire** |
-| 5 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | **Master implementativo backend-first.** Coordina 6 sub-plan: Quant Foundation · serie/metadata · rolling backend · multi-asset backend · simulazione/scala/frontiera · frontend funzionale. | vivo | **G0-G3 chiusi** |
-| 6 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | **Esito P0.** QuantLib adottata, RQMC partial, Riskfolio respinta; probe e misure host/container riproducibili. | vivo | **G1 chiuso** |
-| — | [`README.md`](./README.md) | Indice + TL;DR + punti decisionali review-2/3/4. | 155 | vivo |
-| — | `_RECAP-and-implementation-reading-guide.md` | **Questo file** — riepilogo, prompt di ripresa, guida di lettura. | — | vivo |
+- nessun adapter production NumPy/SciPy;
+- simulazione MC/QMC production con QuantLib 1.43;
+- calcolo nativo in processi `spawn`, mai nel thread web;
+- due pool separati, lazy e persistenti;
+- Riskfolio-Lib 7.0.1 adottata per P13;
+- RQMC rimosso;
+- test matematici basati su oracle motivati;
+- benchmark dei pool production reali;
+- service/API/client compatibili;
+- nessuna migrazione DB;
+- nessun lavoro frontend P13 avviato.
 
-**Catena logica:** contratto (*cosa è vero*) → analisi (*dove va nel sistema*) →
-brainstorm (*che aspetto ha*) → review (*perché così, cosa scartato*) → piano
-applicativo (*cosa costruire*) → master+sub-plan implementativi (*come eseguirlo e
-verificarlo*).
+Le vecchie conclusioni «NumPy più veloce quindi production», «single
+`asyncio.to_thread`» e «P13 respinto» sono superseded.
 
-### Stato esecutivo — 27 Luglio 2026
+## 2. Documenti da leggere
 
-- ✅ G0 piano e sub-plan;
-- ✅ G1 Quant Foundation, incluso build Docker e import QuantLib 1.43;
-- ✅ G2 serie canoniche, FX, qualità e metadata;
-- ✅ G3 cinque rolling risk, client OpenAPI e render funzionale Asset Detail;
-- 🟡 Step 4 / G4 avviato: contratti schema multi-asset 4.1 completati; registry,
-  matematica, service e API in corso.
+| Ordine | Documento | Ruolo |
+|---:|---|---|
+| 0 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | Handoff autosufficiente per agente di alto livello: richieste, falsa pista, stato reale, gap e decisioni aperte. |
+| 1 | [`contract-phase01RiskMetricsMathematical.md`](./contract-phase01RiskMetricsMathematical.md) | Contratto matematico fondativo. |
+| 2 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | Piano P0-P13 aggiornato con gli esiti. |
+| 3 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | Master G0-G6 e stato corrente. |
+| 4 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | Implementazione corretta P11-P13. |
+| 5 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | Versioni, solver, lock, Docker arm64/amd64. |
+| 6 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | Oracle MC/QMC QuantLib. |
+| 7 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | Cold/warm, RSS, cache, concorrenza, recycle. |
 
----
+## 3. Architettura backend finale
 
-## 2. Decisioni cardine già consolidate (non riaprire)
+### 3.1 Process boundary
 
-- **Backend calcola, frontend presenta.** Riuso prima di nuove astrazioni.
-- **Due binari:** rolling asset-scoped → `SignalPlugin` (nuova `SignalCategory.RISK`);
-  portafoglio/multi-asset → contratto `RiskAnalytic`. Renderer segnali riusato in entrambi.
-- **Calcolo sempre giornaliero**; annualizzazione **osservata** `A = N_incl × 365 / D_cal`
-  (né 252 né 365 fissi); calendario congiunto + ultimo prezzo (mai forward-fill dei
-  rendimenti); `CVaR ≥ VaR ≥ 0`.
-- **Rolling beta solo con asset reale** (`comparison_asset` / `comparison_asset_id`);
-  nessun benchmark sintetico. Risk-free solo parametro dello Sharpe.
-- **Utility comune** di preparazione serie (unico punto, estratta da `SignalService`).
-- **Estendere `DataQualityReport`** (qualità sorgente) separato da `RiskResultMetadata`
-  (contesto esecuzione).
-- **Sync via `PageSyncModal`** (prezzi+FX); la cache portfolio è **content-keyed** →
-  auto-invalidante (nessun nuovo sistema di invalidazione).
-- **UI:** Correlazione primaria in Asset Global (tab); Dashboard/Broker Risk; stress
-  differenziato per scope (% / % multi / €).
-- **Librerie — esito P0:** QuantLib 1.43 **adottata**; Sobol QMC disponibile;
-  Burley RQMC `PARTIAL` con fallback SciPy. Riskfolio-Lib **respinta per Release 2**
-  (NumPy `<2.5`, circa 1 GiB); P13 non spedito. **QMCPy fuori dal piano**.
-  Parallelismo QuantLib **solo `spawn`**, dopo benchmark.
+`SpawnWorkerPool` implementa:
 
----
+- start method `spawn`;
+- lane persistenti create alla prima richiesta;
+- coda bounded e backpressure;
+- timeout hard per job;
+- recycle della sola lane dopo timeout, crash o errore remoto;
+- shutdown idempotente nel lifespan FastAPI;
+- metriche PID, cold/warm, queue wait, execution, round trip e peak RSS;
+- payload/result serializzabili.
 
-## 3. Prompt di ripresa (copiabile in una nuova sessione)
+Pool separati:
 
-```text
-Contesto: LibreFolio, Fase 0.1 — Risk Analysis. Lo studio è APPROVATO e il piano
-applicativo è scritto. Tutti i documenti sono in:
-LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/
+1. simulation → QuantLib;
+2. optimization → Riskfolio/CVXPY.
 
-Leggi in quest'ordine:
-1. _RECAP-and-implementation-reading-guide.md  (mappa + decisioni cardine)
-2. contract-phase01RiskMetricsMathematical.md  (verità matematica/semantica)
-3. analysis-phase01RiskModularityAndPlacement.md (architettura, R0–R9)
-4. plan-phase01RiskAnalysisApplication.prompt.md (piano applicativo P0–P13)
-Consulta brainstorm-* (UI/ASCII) e review-* (razionale) solo quando servono.
+Il request channel usa una `multiprocessing.Queue`; il response channel una pipe
+one-way. La pipe elimina i semaphore leak osservati nei test di crash forzato.
 
-Vincoli non negoziabili (già decisi, NON riaprire):
-- backend calcola / frontend presenta; riuso prima di nuove astrazioni;
-- due binari: SignalPlugin (rolling, SignalCategory.RISK) vs RiskAnalytic (multi-asset);
-- calcolo giornaliero + annualizzazione osservata + calendario congiunto; CVaR≥VaR≥0;
-- rolling beta solo con comparison_asset reale; risk-free solo per lo Sharpe;
-- utility comune di preparazione serie; DataQualityReport esteso vs RiskResultMetadata;
-- sync via PageSyncModal; cache content-keyed (niente nuovo sistema di invalidazione);
-- QuantLib 1.43 adottata in P0; RQMC via QuantLib/SciPy secondo spike P11;
-  Riskfolio/P13 respinti per Release 2; QMCPy fuori; parallelismo solo spawn.
+La cache parent:
 
-Obiettivo di questa sessione: Step 4 / G4 — backend deterministico multi-asset
-P5-P10. Per ogni step del piano rispetta i campi
-obiettivo/gap/file/contratto/schema/service/frontend/deps/test/migrazione/criteri/
-rischi/fallback. Verifica sempre contro il codice reale (evidenza file:linea) prima di
-proporre nuovi elementi. Documenta prima di implementare; niente dipendenze/migrazioni/
-endpoint finché la fase non lo prevede.
-```
+- è content-keyed;
+- collassa miss concorrenti identici;
+- protegge il future condiviso dalla cancellazione dei follower;
+- cancella esplicitamente i follower se il leader viene cancellato;
+- non lascia future irrisolti.
 
----
+`asyncio.to_thread` resta solo per IPC/join bloccanti o analytics leggere. QuantLib
+e Riskfolio calcolano esclusivamente nel child.
 
-## 4. Come leggere i documenti per un piano implementativo multi-fase
+### 3.2 QuantLib P11
 
-Il piano ha **13 step (P0–P13)** ma **non vanno eseguiti 1-a-1 in sequenza lineare**.
-Il suggerimento è raggrupparli in **fasi di consegna coese**, ciascuna con un valore
-utente o un rischio da abbattere. Due percorsi avanzano in parallelo (funzionale vs
-librerie quantitative).
+MC:
 
 ```text
-                 PERCORSO FUNZIONALE                 PERCORSO LIBRERIE QUANT
-                 (valore utente)                     (abbatti rischio infra)
-
-  Fase A ─ Fondamenta      P1 · P2                    P0  (QuantLib sì; Riskfolio no)
-              │                                          │
-  Fase B ─ Rolling & UI    P3 · P4 (Asset Detail)        │  (spike simulazione in prep.)
-              │                                          │
-  Fase C ─ Multi-asset     P5 · P6 · P7                   │
-              │            (correlazione/PCTR/KPI)        │
-  Fase D ─ Scenari & conf. P8 · P9 · P10                  │
-              │            (stress/confronto/VaR)         │
-  Fase E ─ Simulazione     ───────────────────────────►  P11 (MC/QMC/RQMC)
-              │                                          │
-  Fase F ─ Scala & advanced                              P12 (spawn) · P13 (frontiera)
+UniformRandomGenerator
+→ Gaussian sequence
+→ GaussianMultiPathGenerator
+→ StochasticProcessArray
 ```
 
-### Ordine di lettura consigliato per PIANIFICARE ogni fase
+QMC:
 
-1. **Parti dal `contract-`** per la fase in oggetto: fissa formule, convenzioni,
-   metadata e casi limite *prima* di toccare architettura o UI. È la fonte di verità.
-2. **Poi `analysis-` §4/§4.1/§4.2 e §5**: decidi *dove* vive il codice (SignalPlugin vs
-   RiskAnalytic vs utility) e quali elementi esistenti riusare — evita di reinventare.
-3. **Poi la sezione P-corrispondente del `plan-`**: è la checklist operativa (file,
-   contratto, service, frontend, test, criteri, rischi, fallback, dipendenze).
-4. **`brainstorm-`** solo quando pianifichi la UI di quella fase (ASCII → layout,
-   «cosa fa notare all'utente» → priorità dei widget).
-5. **`review-`** come corte d'appello: se qualcosa sembra ambiguo, la decisione e il
-   razionale sono lì (evita di riaprire scelte già chiuse).
+```text
+SobolRsg.skipTo(seed)
+→ InvCumulativeSobolGaussianRsg
+→ StochasticProcessArray.evolve
+```
 
-### Fasi suggerite (raggruppamento dei P0–P13)
+Regole:
 
-- **Fase A — Fondamenta invisibili** (`P0` + `P1` + `P2`). Nessuna UI. Sblocca tutto:
-  librerie installate/validate, utility serie unica, `DataQualityReport`+metadata.
-  *Criterio di uscita:* segnali esistenti invariati; CI verde con le nuove librerie.
-- **Fase B — Primo valore utente** (`P3` + `P4`). Rolling risk in Asset Detail
-  (drawdown, vol, return, Sharpe, beta con `comparison_asset`). *Criterio:* 5 plugin nel
-  catalogo, renderizzati, con warning corretti.
-- **Fase C — Vista di portafoglio** (`P5` + `P6` + `P7`). `RiskAnalytic`, correlazione
-  in Asset Global, KPI/PCTR in Dashboard e Broker Risk. *Criterio:* heatmap + PCTR +
-  KPI storici su TWRR, con qualità dati.
-- **Fase D — Scenari e confronto** (`P8` + `P9` + `P10`). Stress per scope, confronto
-  risk-free/comparison_asset multi-scope, VaR/CVaR. *Criterio:* uno scenario → output
-  %/€; confronto A/B; `CVaR≥VaR≥0`.
-- **Fase E — Simulazione** (`P11`). Motore MC/QMC/RQMC componibile dietro adapter, dopo
-  lo spike QuantLib vs NumPy/SciPy. *Criterio:* seed deterministico, metriche corrette.
-- **Fase F — Scala & advanced** (`P12`; `P13` chiuso). Parallelismo `spawn`
-  **solo se i benchmark lo giustificano**; frontiera Riskfolio non spedita.
+- stato iniziale asset normalizzato a `1`;
+- griglia giornaliera, `dt=1/365`;
+- GBM correlato multi-asset;
+- seed MC deterministico;
+- seed QMC = indice iniziale Sobol;
+- path QMC in potenza di due;
+- limite `asset × horizon_days <= 21.201`;
+- NumPy solo per algebra, aggregazione e oracle;
+- nessun fallback production.
 
-### Principi trasversali per ogni fase
-- **Spike prima del commitment:** P0 (probe+install) e lo spike simulazione (P11) sono
-  cancelli: non progettare adapter contro mock, decidi con evidenza.
-- **Ogni nuovo elemento** dichiara gap + alternativa esistente valutata + test di
-  non-regressione (principio del piano §0).
-- **Tracciabilità:** ogni PR mappa a uno step P e, a ritroso, a un requisito R0–R9
-  (tabella in fondo al piano).
-- **Confini stabili:** i risultati sono DTO serializzabili; nessun oggetto QuantLib in
-  dominio/API; matematica mai nel frontend.
+### 3.3 Riskfolio P13
 
----
+Nuovo analytic: `portfolio_optimization`.
 
-## 5. Cosa NON è ancora deciso (rimane ai probe/spike)
-Composizione finale Burley QuantLib vs `scipy.stats.qmc` (P11) · soglia per
-attivare il pool `spawn` (P12). P0-P3, `AssetReturnSeries` e
-`comparison_asset_series` sono chiusi; compatibilità/wheel/peso P0 sono registrati
-nel [`report dello spike`](./spike-phase01QuantLibraries.md).
+Scope:
 
----
+- `portfolio`;
+- `broker`;
+- `asset_set`.
 
-## Riferimenti
-- Indice cartella: [`README.md`](./README.md)
-- Piano applicativo: [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md)
-- Master implementativo: [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md)
-- Esito Quant Foundation: [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md)
+Strategie:
+
+- minimum variance;
+- maximum Sharpe;
+- equal risk contribution/risk parity.
+
+Covariance:
+
+- historical;
+- Ledoit-Wolf;
+- OAS.
+
+Vincoli:
+
+- long-only;
+- budget `1`;
+- no leverage;
+- `min_weight`/`max_weight` globali validati;
+- infeasibilità → errore esplicito.
+
+Solver allowlisted:
+
+- CLARABEL;
+- SCS.
+
+Output:
+
+- pesi ordinati;
+- rendimento periodico/annuo;
+- volatilità annua;
+- Sharpe;
+- contributi marginali/assoluti/percentuali;
+- solver/status;
+- constraint summary;
+- frontiera e sensitivity opzionali;
+- warning e metadata.
+
+Il minimo production è 30 osservazioni allineate. Il DB fixture popolato dispone
+di 13 osservazioni congiunte per alcuni scope e restituisce correttamente
+`insufficient_history`; fixture sintetiche provano l'esecuzione completa.
+
+## 4. Evidenza matematica
+
+Per `Y_i = log(S_i(T)/S_i(0))`:
+
+```text
+E[Y_i] = (mu_i - 0,5 Sigma_ii) T
+Cov(Y_i, Y_j) = Sigma_ij T
+```
+
+MC, 8.192 path:
+
+| Verifica | Errore massimo | Gate |
+|---|---:|---:|
+| media | 0,935 SE | 4,5 SE |
+| covarianza completa | 1,695 SE | 4,5 SE |
+| correlazione Fisher-z | 1,523 SE | 4,5 SE |
+
+QMC:
+
+| Path | Errore media L2 | Errore covarianza Frobenius |
+|---:|---:|---:|
+| 256 | 6,592e-4 | 8,024e-3 |
+| 1.024 | 1,597e-4 | 6,552e-3 |
+| 4.096 | 4,933e-5 | 2,586e-3 |
+
+Slope log2:
+
+- media `-0,648`;
+- covarianza `-0,283`.
+
+Probe finale:
+
+- `status=ok`;
+- direct/spawn identici;
+- covariance PSD, correlazione perfetta e volatilità zero coperte;
+- percentile ordering, probability of loss, shape e seed coperti.
+
+## 5. Prestazioni finali
+
+### Simulation
+
+| Caso | Cold | Warm | Peak RSS |
+|---|---:|---:|---:|
+| 1 asset · 1.024 · 30g MC | 1,286 s | 0,071 s | 171,3 MB |
+| 1 asset · 1.024 · 30g QMC | 1,244 s | 0,133 s | 171,7 MB |
+| 5 asset · 4.096 · 90g MC | 1,824 s | 0,766 s | 174,9 MB |
+| 5 asset · 4.096 · 90g QMC | 3,404 s | 2,353 s | 175,3 MB |
+| 1 asset · 2.048 · 365g MC | 1,437 s | 0,329 s | 184,0 MB |
+
+QMC medio:
+
+- RNG `0,089 s`;
+- evolve `0,515 s`;
+- copia/aggregazione path `1,256 s`;
+- result aggregation `0,007 s`.
+
+Il costo QMC è soprattutto nel bridge SWIG/copia path, non in calcoli matematici
+aggiuntivi nascosti.
+
+Cache simulation:
+
+- first cold `1,523 s`;
+- hit `0,000190 s`;
+- nessun worker sul hit.
+
+### Optimization
+
+- cold `2,863 s`;
+- warm `0,0159 s`;
+- peak RSS ~340,6 MB.
+
+### Concorrenza warm
+
+| Dominio | 1 worker | 2 worker | Speedup mediano | RSS 1→2 |
+|---|---:|---:|---:|---:|
+| simulation | ~1,53 s | ~0,79 s | 1,938x | ~176→349 MB |
+| optimization | ~0,087 s | ~0,059 s | 1,477x | ~342→683 MB |
+
+Decisione:
+
+- default `1` worker per pool;
+- `>1` configurabile;
+- process isolation sempre attivo.
+
+Timeout:
+
+- PID job bloccato terminato;
+- lane ricreata con PID nuovo;
+- richiesta successiva completata.
+
+Matrice P12:
+
+- 72 celle;
+- 32 accepted;
+- 12 dimension limit;
+- 28 resource limit.
+
+## 6. Dipendenze e container
+
+Versioni finali:
+
+- Python 3.13.14;
+- NumPy 2.5.1;
+- QuantLib 1.43;
+- Riskfolio-Lib 7.0.1;
+- CVXPY 1.9.2;
+- CLARABEL 0.11.1;
+- SCS 3.2.11;
+- `vectorbt` assente;
+- `numba` assente.
+
+`pipenv verify` è verde anche dopo l'update intenzionale del lock.
+
+Probe:
+
+- macOS arm64;
+- Linux arm64;
+- Linux amd64.
+
+Immagine finale:
+
+- tag `librefolio:g5-quantlib-riskfolio-final`;
+- digest
+  `sha256:fd8d79d6584dd7cf8087f54508f8c73cc66bbcacebe5a206bf46821117bd7999`;
+- dimensione non compressa `2.756.004.428` byte;
+- smoke: QuantLib/NumPy/Riskfolio + import FastAPI app verdi.
+
+## 7. Superfici modificate
+
+Backend principale:
+
+- `backend/app/services/risk/quant/spawn_worker.py`;
+- `backend/app/services/risk/quant/workers.py`;
+- `backend/app/services/risk/quant/quantlib_worker.py`;
+- `backend/app/services/risk/quant/engine.py`;
+- `backend/app/services/risk/quant/optimization_models.py`;
+- `backend/app/services/risk/quant/optimization_engine.py`;
+- `backend/app/services/risk/quant/riskfolio_worker.py`;
+- `backend/app/services/risk_plugins/simulation.py`;
+- `backend/app/services/risk_plugins/portfolio_optimization.py`;
+- `backend/app/services/risk/base.py`;
+- `backend/app/services/risk/service.py`;
+- `backend/app/schemas/risk.py`;
+- `backend/app/config.py`;
+- `backend/app/main.py`.
+
+Test:
+
+- simulation QuantLib;
+- optimization Riskfolio;
+- worker lifecycle;
+- analytic/service;
+- API risk.
+
+CLI test:
+
+- `./dev.py test services risk-simulation`;
+- `./dev.py test services risk-optimization`;
+- `./dev.py test services risk-workers`;
+- `./dev.py test services risk-all`.
+
+Compatibilità:
+
+- RQMC rimosso dal contratto e dal controllo frontend già esistente;
+- client OpenAPI rigenerato e idempotente;
+- nessuna UI P13 aggiunta.
+
+## 8. Validazione
+
+- risk service suite: **68 passed**;
+- risk API: **7 passed**;
+- worker lifecycle: **6 passed**, senza resource-tracker warning;
+- oracle QuantLib: `status=ok`;
+- benchmark pool: `status=ok`;
+- Ruff/Black target: verdi;
+- Pipenv lock/import smoke: verde;
+- Docker build/smoke: verde;
+- frontend check/build di compatibilità: verdi;
+- API sync: idempotente.
+
+Suite backend globale:
+
+- external: verde;
+- DB: verde;
+- service action: 56/57 verdi;
+- AI Export: 633 passed, 1 failure concorrente su
+  `TargetCoverage.volume_analyzed`;
+- il runner si ferma lì, quindi utils/schemas/API/E2E globali non vengono eseguiti
+  in quella invocazione;
+- il failure non appartiene al dominio risk e non è stato modificato.
+
+## 9. Problemi imprevisti
+
+1. Il primo confronto QuantLib/NumPy non era neutrale e usava un cutoff di
+   correlazione arbitrario. Risolto con oracle analitici e standard error.
+2. Il seed constructor Sobol QuantLib non sposta lo stream. Risolto con
+   `SobolRsg.skipTo(seed)`.
+3. Riskfolio 7.3.0 portava `vectorbt → numba → numpy<2.5`; la capability richiesta
+   funziona con Riskfolio 7.0.1 e NumPy 2.5.1.
+4. Un primo lock aveva incluso upgrade wildcard non correlati. Ricostruita la
+   closure minima; il successivo `pipenv update` utente è stato preservato.
+5. La cancellazione di follower/leader cache poteva cancellare o lasciare sospeso
+   il future condiviso. Aggiunti `shield` e gestione esplicita.
+6. La response `multiprocessing.Queue` lasciava tre semaphore registrati dopo un
+   crash forzato. Sostituita con pipe one-way.
+7. Un backtick nel docstring provider rompeva il TypeScript generato. Corretto il
+   testo documentale dello schema.
+8. Il DB test è stato trovato vuoto durante una verifica concorrente; ripopolato
+   con la fixture standard.
+9. La suite globale resta bloccata da un singolo test AI Export concorrente,
+   estraneo a G5.
+
+## 10. Stato rispetto al piano originale
+
+| Gate | Stato |
+|---|---|
+| G0 — piano implementativo | ✅ |
+| G1 — Quant foundation | ✅ |
+| G2 — serie/metadata | ✅ |
+| G3 — rolling risk | ✅ |
+| G4 — multi-asset deterministico | ✅ |
+| G5 — simulazione/scala/ottimizzazione | ✅ corretto |
+| G6 — frontend funzionale | ⏸️ non ripreso |
+| GF — chiusura integrata | 🟡 dipende da G6 e dal failure AI Export concorrente |
+
+P0-P13 backend:
+
+- P0-P2: completati;
+- P3-P4 backend: completati;
+- P5-P10 backend/API: completati;
+- P11 QuantLib MC/QMC: completato;
+- P12 process isolation/benchmark: completato;
+- P13 Riskfolio backend: completato.
+
+## 11. Cosa resta
+
+Nessun lavoro backend G5 rimasto.
+
+Rispetto al piano originale:
+
+1. riprendere G6 solo su nuova richiesta;
+2. completare/verificare il wiring funzionale multi-scope già parzialmente presente;
+3. decidere e implementare la UI P13/frontiera;
+4. aggiungere i test funzionali frontend mancanti;
+5. lasciare fillings/polish/design finale all'utente;
+6. rilanciare la suite backend globale quando il test AI Export concorrente è
+   riallineato;
+7. chiudere GF e archiviare la catena di piano.
+
+## 12. Prompt di ripresa
+
+```text
+Contesto: LibreFolio Risk Analysis. Backend G0-G5 completato e corretto.
+Leggi:
+1. _RECAP-and-implementation-reading-guide.md
+2. plan-phase01RiskAnalysisImplementation.prompt.md
+3. plan-phase01Step6RiskFrontendIntegration.prompt.md
+
+Vincoli:
+- non riaprire QuantLib MC/QMC, spawn obbligatorio o Riskfolio 7.0.1;
+- nessun adapter NumPy/SciPy production;
+- RQMC resta rimosso;
+- backend calcola, frontend presenta;
+- niente redesign/polish salvo richiesta;
+- verificare il lavoro frontend già presente prima di aggiungere codice;
+- la suite globale ha un failure AI Export concorrente estraneo al risk backend.
+
+Obiettivo successivo: G6 frontend funzionale, solo quando richiesto.
+```

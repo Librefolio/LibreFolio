@@ -1,6 +1,6 @@
 # Step 4 — Multi-Asset Deterministic Backend (P5 + backend P6-P10)
 
-**Stato**: 🟡 IN ESECUZIONE — 4.1 completato.
+**Stato**: ✅ COMPLETATO — Gate G4 chiuso il 27 Luglio 2026.
 
 ← Step precedente:
 [`plan-phase01Step3RollingRiskBackend.prompt.md`](./plan-phase01Step3RollingRiskBackend.prompt.md)
@@ -229,11 +229,29 @@ rendimenti composti; parametric solo dopo default verde.
 
 ## 6. Gate G4
 
-- catalog/service/API verdi;
-- analytics P5/P8/P9/P10 deterministiche verdi;
-- backend contracts per P6/P7 pronti;
-- OpenAPI/client sync stabile;
-- nessun frontend risk ancora necessario per validare matematica.
+- ✅ catalog/service/API verdi;
+- ✅ analytics P5/P8/P9/P10 deterministiche verdi;
+- ✅ backend contracts per P6/P7 pronti;
+- ✅ OpenAPI/client sync stabile;
+- ✅ nessun frontend risk necessario per validare matematica.
+
+> **Verifica chiusura G4 — 27 Luglio 2026**: suite schema risk, registry,
+> matematica, plugin, service e API verdi; il test API `risk` è registrato nel
+> runner e include una query reale sul DB test popolato per broker scope,
+> `historical` + `current_composition`, coprendo tutti i sei analytics. Verificati
+> anche `CVaR >= VaR >= 0` e `ΣPCTR = 1` sul percorso completo
+> router → sessione DB → PortfolioService → serie canoniche → plugin. Il client
+> OpenAPI è rigenerato; frontend type-check/build verdi; audit i18n con zero chiavi
+> backend mancanti dopo l'aggiunta delle 17 label/descrizioni risk EN/IT/FR/ES.
+> Review indipendente ad alta confidenza: nessun bug matematico, auth, async o
+> schema trovato.
+>
+> **⚠️ Baseline non bloccante**: lint repository-wide resta rosso su 33 violazioni
+> preesistenti in settings/scheduler/ROI test; il format check frontend segnala
+> `backendRenderer.ts`, file non modificato dal delta Risk. Il primo run aggregato
+> API/backend ha inoltre esposto lock/reset del DB nel runner multi-gruppo; i gruppi
+> risk e adiacenti eseguiti isolatamente sono verdi. Questi elementi non alterano
+> il gate matematico/API G4 e restano da rivalutare nel gate finale GF.
 
 ## 7. Rischi/fallback
 

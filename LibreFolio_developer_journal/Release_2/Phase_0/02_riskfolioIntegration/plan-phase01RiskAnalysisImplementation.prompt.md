@@ -1,6 +1,6 @@
 # Piano Implementativo — Risk Analysis (Fase 0.1)
 
-**Stato**: 🟡 IN ESECUZIONE — Gate G0-G3 chiusi; Step 4 avviato (4.1 completato).
+**Stato**: ⏸️ PAUSA RICHIESTA — G0-G5 backend chiusi; G6 non ripreso.
 
 **Data avvio**: 27 Luglio 2026
 
@@ -57,7 +57,7 @@ precedente non necessariamente committato:
 12. QuantLib/Riskfolio adottati solo dopo probe reale.
 13. QuantLib mai concorrente in thread; isolamento `spawn`.
 14. P12 scala a più worker solo con benchmark.
-15. P13 resta capability condizionata al gate Riskfolio.
+15. P13 usa Riskfolio-Lib 7.0.1 dopo gate host/Linux arm64/amd64.
 16. UI: wiring, i18n, stati, render e test funzionali; niente polish/gallery.
 17. Nessuna migrazione DB prevista.
 18. Nessun `git commit`, push o history rewrite.
@@ -69,15 +69,40 @@ precedente non necessariamente committato:
 | 1 | [`plan-phase01Step1QuantFoundation.prompt.md`](./plan-phase01Step1QuantFoundation.prompt.md) | P0 | ✅ G1 |
 | 2 | [`plan-phase01Step2CanonicalSeriesMetadata.prompt.md`](./plan-phase01Step2CanonicalSeriesMetadata.prompt.md) | P1-P2 | ✅ G2 |
 | 3 | [`plan-phase01Step3RollingRiskBackend.prompt.md`](./plan-phase01Step3RollingRiskBackend.prompt.md) | P3-P4 backend | ✅ G3 |
-| 4 | [`plan-phase01Step4MultiAssetRiskBackend.prompt.md`](./plan-phase01Step4MultiAssetRiskBackend.prompt.md) | P5 + backend P6-P10 | ⏳ |
-| 5 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | P11-P13 | ⏳ P11-P12 · 🚫 P13 |
-| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | UI P4/P6-P13 | ⏳ |
+| 4 | [`plan-phase01Step4MultiAssetRiskBackend.prompt.md`](./plan-phase01Step4MultiAssetRiskBackend.prompt.md) | P5 + backend P6-P10 | ✅ G4 |
+| 5 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | P11-P13 | ✅ G5 corretto e verificato |
+| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | UI P4/P6-P13 | ⏸️ parzialmente materializzato; non riallineato/chiuso, non riprendere in questa esecuzione |
 
 > **Note implementazione G1/G3 — 27 Luglio 2026**: QuantLib 1.43 è importabile
 > nell'immagine LibreFolio finale; Riskfolio/P13 restano esclusi. I cinque rolling
 > risk sono completi dal caricamento bulk alla UI metadata-driven: client sync,
 > categoria Risk, picker asset persistito, request gating, EN/IT/FR/ES ed E2E
 > funzionale. Nessuna matematica è stata aggiunta al frontend.
+>
+> **Note implementazione G4 — 27 Luglio 2026**: introdotti contratto e registry
+> `RiskAnalytic`, service bulk e API autenticata per KPI TWRR, correlazione, PCTR,
+> stress, confronto e historical VaR/CVaR. Il percorso reale sul DB test popolato
+> copre tutti i sei analytics; OpenAPI/client e 17 chiavi backend-driven EN/IT/FR/ES
+> sono sincronizzati. Review indipendente senza finding ad alta confidenza.
+>
+> **Note implementazione G5 correttivo — 28 Luglio 2026**: sostituito il motore
+> NumPy/thread con QuantLib MC/QMC in worker `spawn` persistente. Aggiunto
+> `portfolio_optimization` Riskfolio 7.0.1 in pool separato; P12 misura speedup
+> warm `1,938x`/`1,477x` con due worker e mantiene default configurabile 1 per
+> budget RAM. Oracle GBM analitici, QMC convergence, solver/frontier/bound,
+> timeout/recycle e cache sono coperti. RQMC rimosso.
+>
+> **⚠️ Fuori pista G5 — 28 Luglio 2026**: il primo lock rigenerato aveva incluso
+> upgrade wildcard non correlati; ricostruita la baseline e mantenuta soltanto la
+> closure Riskfolio. `api sync` ha inoltre richiesto la correzione documentale di
+> un backtick provider che rompeva il TypeScript generato.
+>
+> **Rettifica G6 — 28 Luglio 2026**: il sub-plan risultava “non iniziato”, ma la
+> worktree contiene già store, componenti, quattro route ed E2E mock risk creati
+> prima della correzione G5. Nessun nuovo lavoro G6 è stato svolto dopo lo stop
+> backend; il materiale esistente resta da auditare e ricertificare, e P13 UI è
+> assente. Vedi
+> [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md).
 
 ## 5. Convenzioni di esecuzione
 
@@ -101,8 +126,8 @@ Per ogni task:
 | G1 — Quant | ✅ decisione riproducibile su QuantLib/Riskfolio; lock/Docker/CI coerenti |
 | G2 — Serie | ✅ parità segnali + joint calendar/FX/metadata testati |
 | G3 — Rolling | ✅ 5 plugin nel catalogo, formule/status/client/render testati |
-| G4 — Deterministico | RiskAnalytic/API P5-P10 testati, OpenAPI stabile |
-| G5 — Avanzato | adapter simulazione verde; P12/P13 con decisione misurata |
+| G4 — Deterministico | ✅ RiskAnalytic/API P5-P10 testati, OpenAPI stabile |
+| G5 — Avanzato | QuantLib MC/QMC + spawn + Riskfolio P13; oracle e benchmark verdi |
 | G6 — Frontend | quattro scope renderizzati e funzionali |
 | GF — Finale | backend/frontend/Docker/docs/graph verdi |
 
@@ -135,7 +160,7 @@ Invarianti minimi:
 - nessun endpoint/UI per capability assente;
 - schema additive dove possibile;
 - risultati non persistiti;
-- P12/P13 possono chiudersi con decisione documentata di non attivazione;
+- worker count >1 può restare disattivato di default con benchmark documentato;
 - modifiche preesistenti mai ripristinate.
 
 ## 9. Fuori scope

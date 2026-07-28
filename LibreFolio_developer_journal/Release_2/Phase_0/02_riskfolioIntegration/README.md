@@ -1,4 +1,4 @@
-# Fase 0.1 — Integrazione Risk Analysis (Riskfolio-Lib) · Studio Preliminare
+# Fase 0.1 — Integrazione Risk Analysis · Studio e implementazione
 
 Questa cartella contiene lo studio di alto livello e il **piano applicativo**
 della Fase 0.1 (Monte Carlo & Risk Metrics Engine). Lo scopo dello studio è
@@ -16,10 +16,13 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
 | 1 | [`analysis-phase01RiskModularityAndPlacement.md`](./analysis-phase01RiskModularityAndPlacement.md) | Analisi architetturale. Tassonomia degli output di rischio, la proposta `RiskAnalytic` (distinta da `SignalPlugin`) + "widget primitives", matrice di posizionamento UI per pagina, cosa implementare / rimandare / evitare, scelta libreria e async safety, roadmap R0–R9. |
 | 2 | [`brainstorm-phase01RiskUiConcepts.md`](./brainstorm-phase01RiskUiConcepts.md) | Brainstorming visivo. **9 concept UI** (A–I) con **ASCII art** e, per ciascuno, "cosa fa notare all'utente" + costo/valore. Information architecture della Risk tab + banner qualità dati trasversale. |
 | 3 | [`review-risk-analysis-feedback.md`](./review-risk-analysis-feedback.md) | **Revisione critica punto-per-punto.** Le 18 osservazioni valutate (ACCETTO / ACCETTO CON MODIFICHE / RESPINGO / RIMANDO) con evidenza dal codice, razionale finanziario/tecnico, conseguenze architetturali e modifiche apportate ai documenti. |
-| 4 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | **Piano applicativo incrementale (P0–P13).** Decisioni consolidate (D1–D12), gate librerie, matrice capability→libreria, invalidazione post-sync, step verificabili, test+benchmark e tracciabilità R0–R9↔P0–P13. L'esecuzione P0 ha adottato QuantLib e respinto Riskfolio per conflitto NumPy/peso container. |
+| 4 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | **Piano applicativo incrementale (P0–P13).** Decisioni consolidate, gate librerie, step verificabili, test+benchmark e tracciabilità. Aggiornato con gli esiti QuantLib/Riskfolio reali. |
 | 5 | [`_RECAP-and-implementation-reading-guide.md`](./_RECAP-and-implementation-reading-guide.md) | **Punto d'ingresso / ripresa.** Mappa dei documenti, decisioni cardine consolidate, **prompt di ripresa** copiabile e **guida di lettura** per pianificare l'implementazione in fasi (A–F, raggruppamento di P0–P13, doppio percorso funzionale/librerie). |
-| 6 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | **Master implementativo backend-first.** Coordina sei sub-plan eseguibili, gate G0–G6, test matematici, fallback P12/P13 e tracking task-per-task. |
-| 7 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | **Evidenza esecutiva P0.** Probe host/container arm64+amd64, capability QuantLib, solver Riskfolio, dimensioni, lock, decisioni `ADOPTED/PARTIAL/REJECTED`. |
+| 6 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | **Master implementativo backend-first.** Coordina sei sub-plan, gate G0–G6 e tracking task-per-task. G5 è stato corretto con process isolation obbligatorio. |
+| 7 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | **Evidenza P0.** QuantLib 1.43 + Riskfolio-Lib 7.0.1 su host/Linux arm64/amd64, solver, lock e costo container. |
+| 8 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | **Evidenza P11.** Oracle analitici GBM, gate MC a standard error, convergenza QMC e equivalenza direct/spawn. |
+| 9 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | **Evidenza P12.** Cold/warm, cache, RSS, concorrenza e timeout/recycle dei pool production. |
+| 10 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | **Report autosufficiente per handoff.** Richieste vs stato reale, falsa pista NumPy/thread, correzione QuantLib/Riskfolio, lavoro completato/rimandato/eliminato, problemi inattesi e decisioni ancora aperte. |
 
 ## TL;DR delle conclusioni (revisionate)
 
@@ -52,17 +55,20 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
    presenti (`SignalStatus`, `SignalWarningCode`, `DataQualityReport`), non inventarne.
 8. **Priorità rivista:** risk contribution (PCTR) e stress test **precedono** il Monte
    Carlo, che scende per il rischio di falsa precisione (review §9, §13).
-9. **Gate librerie eseguito.** QuantLib 1.43 è adottata per il boundary
-   quantitativo; Riskfolio-Lib non viene spedita in Release 2 perché richiede
-   NumPy `<2.5` e circa 1 GiB aggiuntivo. P13/frontiera è quindi chiuso senza
-   endpoint/UI morti.
-10. **Esecuzione G0-G3 completata.** Serie canoniche e metadata sono condivisi;
-    cinque rolling risk sono nel catalogo Asset, calcolati nel backend e
-    renderizzati con controllo beta su asset persistito. Prossimo gate: G4,
-    analytics deterministici multi-asset P5-P10.
+9. **Gate librerie corretto.** QuantLib 1.43 e Riskfolio-Lib 7.0.1 sono adottate
+   con NumPy 2.5.1; `vectorbt`/`numba` assenti. Probe host/Linux arm64/amd64 e
+   immagine finale arm64 sono verdi.
+10. **Esecuzione G0-G4 completata.** Serie canoniche e metadata sono condivisi;
+    cinque rolling risk sono nel catalogo Asset; sei analytics deterministici
+    multi-asset sono disponibili via service/API bulk con test matematici e query
+    reale sul DB popolato.
+11. **G5 corretto.** P11 usa QuantLib MC/QMC in worker `spawn`; P12 usa pool
+    simulation/optimization separati e persistenti; P13 espone
+    `portfolio_optimization` Riskfolio nei tre scope. RQMC e l'adapter
+    NumPy/SciPy production sono rimossi. G6 non viene ripreso in questo round.
 
-> **Vincolo dello studio:** solo documentazione — nessun codice applicativo, nessuna
-> nuova dipendenza, nessuna migrazione.
+> **Nota:** i documenti 0–4 nascono come studio; il master e le evidenze successive
+> registrano ora anche l'implementazione. Nessuna migrazione DB è stata necessaria.
 
 ### Precisazioni della 2ª revisione (review-2)
 
@@ -145,12 +151,9 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
     preselezionati**, avvio esplicito dell'utente; invalidazione/ricalcolo a carico
     della pagina (`onsynced`). È comportamento **frontend**, fuori dal dominio.
     (contratto §2.3, brainstorm §qualità dati)
-31. **Monte Carlo (inventario reale):** installate `numpy 2.5.0`/`pandas 3.0.3`/
-    `scipy 1.18.0`/`ta-lib 0.7.1`/`pandas-ta-classic 0.6.52`; **assenti** Riskfolio-Lib
-    e cvxpy; le TA-lib **non** hanno simboli MC. Strategia: **GBM vettorizzato numpy**
-    (`Generator.multivariate_normal`/`scipy.stats`) in `asyncio.to_thread`; process
-    pool **solo dopo benchmark**. Riskfolio-Lib **non** fa MC forward (solo frontiera,
-    R9, install differito). (analisi §7)
+31. **Monte Carlo — decisione originaria superseded.** L'inventario iniziale
+    proponeva GBM NumPy in `asyncio.to_thread`; G5 corretto usa invece QuantLib
+    MC/QMC sempre in worker `spawn`. Riskfolio 7.0.1 è installata per P13.
 32. **Policy di riuso:** librerie (numpy/pandas/scipy → estensione minima → nuova lib
     solo se giustificata) e componenti UI custom (custom → variante → estensione →
     primitive → lib → ad-hoc). I nomi semantici del contratto non sono nomi di classe

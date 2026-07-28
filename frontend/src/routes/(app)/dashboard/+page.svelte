@@ -16,7 +16,7 @@
     import {onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet} from 'lucide-svelte';
+    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
     import AiExportMenuV2 from '$lib/features/ai-export/AiExportMenuV2.svelte';
     import {copyAiExportV2, type AiExportNonEmptyBrokerIds, type AiExportPortfolioRequestContext} from '$lib/features/ai-export/aiExportClipboardV2';
     import {aiExportStatsContextFingerprint, isAiExportStatsRequestCurrent, normalizeAiExportUserNotes, type AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -41,6 +41,7 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
+    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
     import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -237,7 +238,7 @@
 
     /** Tab navigation — mirrors the broker detail page's structure (no "Info" tab
      *  here: there's no portfolio-wide metadata/sharing concept at this level). */
-    const DASHBOARD_TAB_IDS = ['panoramica', 'posizioni', 'transazioni'] as const;
+    const DASHBOARD_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni'] as const;
     type DashboardTabId = (typeof DASHBOARD_TAB_IDS)[number];
     const DEFAULT_DASHBOARD_TAB: DashboardTabId = 'panoramica';
 
@@ -249,6 +250,7 @@
     const dashboardTabs = $derived([
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'dashboard-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
+        {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'dashboard-tab-risk'},
         {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'dashboard-tab-transazioni'},
     ]);
 
@@ -500,6 +502,7 @@
                 responseLanguage: options.responseLanguage,
                 userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
                 webResearch: options.webResearch,
+                technicalWindow: options.technicalWindow,
                 compatibility: aiExportCompatibility,
             });
             if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, aiExportContextGeneration, aiExportContextFingerprint)) {
@@ -774,6 +777,22 @@
         <div data-testid="dashboard-positions-tab">
             <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
             <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)} brokers={allBrokers} currency={activeAsset?.currency ?? appliedCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+        </div>
+    {:else if activeTab === 'rischio'}
+        <div data-testid="dashboard-risk-tab">
+            <RiskAnalysisPanel
+                scope={{kind: 'portfolio'}}
+                dateStart={dateRangeCtl.start}
+                dateEnd={dateRangeCtl.end}
+                targetCurrency={appliedCurrency}
+                assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                title={$_('risk.dashboardTitle')}
+                subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
+                onsynced={async () => {
+                    invalidate();
+                    await loadAll(true);
+                }}
+            />
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">

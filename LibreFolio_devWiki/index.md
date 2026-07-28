@@ -67,6 +67,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/risk-quant-engine-process-boundary]] | QuantLib simulation and Riskfolio optimization run in separate lazy persistent spawn pools; no in-process native math or silent fallback | 2026-07-28 | backend, risk, quantlib, riskfolio, multiprocessing |
 | [[decisions/ai-export-contextual-ui-memory]] | AI Export drafts persist in browser storage per client-session user and Portfolio/Broker/Asset/canonical-FX context; Snapshot remembers hidden notes but never exports them | 2026-07-27 | frontend, ai-export, ui-memory, auth, privacy |
 | [[decisions/ai-export-versioned-snapshot-boundary]] | Backend owns 54 versioned factual snapshots; frontend owns fail-closed prompt/clipboard UX, synthetic Snapshot, locale-derived language, and contextual memory | 2026-07-26 | ai-export, backend, frontend, snapshot, security, mcp |
 | [[decisions/credit-agricole-securities-only-cash-neutral-brim]] | Crédit Agricole securities-only BRIM imports trades cash-neutral; succession legs become faithful BUY+DEPOSIT pairs | 2026-07-25 | backend, brim, broker, credit-agricole, cash |
@@ -130,6 +131,7 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/cancellation-safe-inflight-deduplication]] | Shield followers and explicitly resolve leader cancellation when collapsing identical expensive async jobs | backend, async, cache, cancellation, risk |
 | [[concepts/d1-income-eligibility-window]] | Income eligibility = open quantity at end of D-1, never same-day state | backend, fifo, dividend |
 | [[concepts/deterministic-cost-matching-ladder]] | Ordered FEE/TAX target search (same-day trades → prev-day trades → open holdings → orphan) | backend, fifo, fee, tax |
 | [[concepts/asset-orphan-vs-portfolio-level-cost]] | Asset orphan (unmatched but asset-linked) vs assetless portfolio-level cost — different buckets | backend, fifo, data-quality |
@@ -175,6 +177,9 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/quantlib-sobol-seed-skipto]] | QuantLib Sobol constructor seed did not implement LibreFolio's stream-offset contract; QMC now uses `skipTo(seed)` | resolved | backend, risk, quantlib, sobol, qmc |
+| [[problems/spawn-worker-response-queue-semaphore-leak]] | Forced worker crashes leaked response-queue semaphores; one-way response pipes removed the leak | resolved | backend, multiprocessing, spawn, ipc |
+| [[problems/riskfolio-numpy-vectorbt-dependency-trap]] | A newer Riskfolio closure conflicted with NumPy through vectorbt/numba; exact 7.0.1 provides P13 without either dependency | resolved | backend, riskfolio, numpy, dependencies |
 | [[problems/ai-export-drawdown-selected-history-fallback]] | Asset drawdown returned 409 when the technical window was empty despite valid selected-period history; market context now falls back to selected observations | resolved | backend, ai-export, asset, drawdown |
 | [[problems/ai-export-clipboard-fallback-unreachable]] | Non-modern clipboard fallback was unreachable; V2 now prepares once and uses `writeText`/`execCommand` while preserving the immediate `ClipboardItem` path | resolved | frontend, ai-export, clipboard, compatibility |
 | [[problems/ai-export-cash-fx-valuation-basis-mismatch]] | Invalid equality between transaction-date engine cash and snapshot-date native-cash exposure caused Portfolio AI Export 503; currency allocation now uses its declared own denominator | resolved | backend, ai-export, portfolio, cash, fx |
@@ -243,6 +248,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-risk-analysis-backend]] | Completed `Release_2/Phase_0/02_riskfolioIntegration/` backend G0-G5 chain; G6 paused | 2026-07-28 | phase0, backend, risk, quantlib, riskfolio |
 | [[sources/phase00-ai-export-backend-snapshot]] | Completed `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` chain: plan + frozen profile contract + equivalence report + approved final UI ✅ | 2026-07-27 | phase0, ai-export, snapshot, hard-cutover, ui-memory, mcp |
 | [[sources/fifo-v4-fee-tax-integration]] | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/` | 2026-07-22 | backend, fifo, fee, tax, dividend, cost-basis |
 | [[sources/roadmap-v1-summary]] | `RoadMapV1/01-Riassunto_generale.md` | 2026-04-24 | roadmap, architecture, history |

@@ -320,7 +320,7 @@ class SignalPluginRegistry(AbstractPluginRegistry):
 
 
 class RiskAnalyticRegistry(AbstractPluginRegistry):
-    """Strict registry for deterministic multi-asset risk analytics."""
+    """Strict registry for multi-asset risk analytics."""
 
     @classmethod
     def _get_plugin_folder(cls) -> str:

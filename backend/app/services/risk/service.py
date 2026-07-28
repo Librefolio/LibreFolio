@@ -1,8 +1,7 @@
-"""Bulk orchestration for deterministic risk analytics."""
+"""Bulk orchestration for risk analytics."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -207,8 +206,7 @@ class RiskService:
                 )
                 continue
             try:
-                computation = await asyncio.to_thread(
-                    plan.analytic.compute,
+                computation = await plan.analytic.execute(
                     plan.params,
                     context,
                 )
@@ -525,7 +523,10 @@ class RiskService:
     ) -> Optional[int]:
         if plan.request.analytic_code == "correlation":
             return None
-        if plan.request.analytic_code == "risk_contribution":
+        if plan.request.analytic_code in {
+            "risk_contribution",
+            "portfolio_optimization",
+        }:
             return context.prepared_series.n_observations if context.prepared_series is not None else 0
         if plan.request.analytic_code == "stress":
             if getattr(plan.params, "method", None) == RiskStressMethod.HYPOTHETICAL:
@@ -550,6 +551,7 @@ class RiskService:
             "stress",
             "comparison",
             "historical_var",
+            "simulation",
         }
 
     def _success(
@@ -655,6 +657,7 @@ class RiskService:
             excluded_assets=list(exclusions),
             algorithm_version=plan.analytic_class.algorithm_version,
             computed_at=datetime.now(UTC),
+            seed=computation.seed if computation is not None else None,
         )
 
     @staticmethod

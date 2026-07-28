@@ -4,6 +4,12 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-07-28] file | Phase 0 Risk Analysis backend G0-G5
+
+Filed the corrected quantitative backend: QuantLib MC/QMC and Riskfolio 7.0.1 in separate persistent spawn pools, cancellation-safe content-key deduplication, Sobol `skipTo` seed semantics, crash-safe response pipes, and the exact-version dependency resolution that preserves NumPy 2.5.1 without vectorbt/numba.
+Created: [[sources/phase00-risk-analysis-backend]], [[decisions/risk-quant-engine-process-boundary]], [[concepts/cancellation-safe-inflight-deduplication]], [[problems/quantlib-sobol-seed-skipto]], [[problems/spawn-worker-response-queue-semaphore-leak]], [[problems/riskfolio-numpy-vectorbt-dependency-trap]].
+Graph: semantic update merged all six pages, reclustered 1,525 nodes / 1,986 edges into 273 communities, and regenerated `graph.html`.
+
 ## [2026-07-27] update | Phase 0 AI Export final UI closure and manual approval
 
 Source: completed `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` chain @ git:`untracked`. Recorded the custom icon/name/description analysis select; synthetic Data Snapshot → `data_only`; real analyses → `full_prompt`; locale-owned response language; hidden web/compatibility controls; body portal; domain-aware manuals; and final desktop/mobile approval.

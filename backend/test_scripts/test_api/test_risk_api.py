@@ -2,21 +2,30 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from fastapi import FastAPI, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.api.v1.risk import get_risk_service, router
+from backend.app.config import set_test_mode
+from backend.app.db.models import User
+from backend.app.db.session import get_async_engine
 from backend.app.schemas.risk import (
     RiskAnalyticResult,
     RiskError,
     RiskErrorCode,
     RiskQueryResponse,
     RiskResultStatus,
+)
+from backend.app.services.risk.quant.workers import (
+    shutdown_quant_worker_pools,
 )
 from backend.app.services.risk.service import (
     RiskScopeAccessError,
@@ -99,7 +108,9 @@ async def test_risk_catalog_requires_auth_and_lists_plugins():
             "correlation",
             "historical_var",
             "portfolio_kpi",
+            "portfolio_optimization",
             "risk_contribution",
+            "simulation",
             "stress",
         ]
 
@@ -182,3 +193,243 @@ async def test_risk_query_rejects_invalid_discriminator_before_service():
 
     assert response.status_code == 422
     service.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_risk_query_runs_all_analytics_against_populated_test_database():
+    set_test_mode(True)
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        user_id = (await session.execute(select(User.id).where(User.username == "e2e_test_user"))).scalar_one()
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+
+    async def current_user():
+        return SimpleNamespace(id=user_id)
+
+    app.dependency_overrides[get_current_user] = current_user
+    end = date.today() - timedelta(days=3)
+    start = end - timedelta(days=297)
+
+    historical_payload = {
+        "scope": {"kind": "broker", "broker_id": 3},
+        "date_range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+        },
+        "target_currency": "EUR",
+        "mode": "historical",
+        "analytics": [
+            {"instance_id": "kpi", "analytic_code": "portfolio_kpi"},
+            {"instance_id": "matrix", "analytic_code": "correlation"},
+            {
+                "instance_id": "var",
+                "analytic_code": "historical_var",
+                "parameters": {
+                    "confidence_level": 0.95,
+                    "horizon_days": 5,
+                },
+            },
+            {
+                "instance_id": "comparison",
+                "analytic_code": "comparison",
+                "parameters": {"comparison_asset_id": 1},
+            },
+            {
+                "instance_id": "optimization",
+                "analytic_code": "portfolio_optimization",
+                "parameters": {
+                    "strategy": "min_risk",
+                    "include_frontier": True,
+                    "frontier_points": 5,
+                },
+            },
+        ],
+    }
+    current_payload = {
+        "scope": {"kind": "broker", "broker_id": 3},
+        "date_range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+        },
+        "target_currency": "EUR",
+        "mode": "current_composition",
+        "composition_policy": "current_buy_and_hold",
+        "analytics": [
+            {
+                "instance_id": "pctr",
+                "analytic_code": "risk_contribution",
+            },
+            {
+                "instance_id": "stress",
+                "analytic_code": "stress",
+                "parameters": {
+                    "method": "hypothetical",
+                    "shocks": {"3": -0.2},
+                },
+            },
+            {"instance_id": "var", "analytic_code": "historical_var"},
+            {
+                "instance_id": "simulation",
+                "analytic_code": "simulation",
+                "parameters": {
+                    "horizon_days": 30,
+                    "paths": 256,
+                    "seed": 123,
+                },
+            },
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            historical_response = await client.post(
+                f"{API_BASE}/query",
+                json=historical_payload,
+            )
+            current_response = await client.post(
+                f"{API_BASE}/query",
+                json=current_payload,
+            )
+    finally:
+        await shutdown_quant_worker_pools()
+
+    assert historical_response.status_code == 200
+    assert current_response.status_code == 200
+    historical_items = historical_response.json()["items"]
+    current_items = current_response.json()["items"]
+    assert all(item["status"] in {"ok", "partial"} and item["output"] is not None for item in [*historical_items, *current_items])
+    historical_var = next(item["output"] for item in historical_items if item["analytic_code"] == "historical_var")
+    assert historical_var["conditional_value_at_risk"] >= historical_var["value_at_risk"] >= 0
+    optimization = next(item["output"] for item in historical_items if item["analytic_code"] == "portfolio_optimization")
+    assert optimization["kind"] == "optimization"
+    assert sum(item["weight"] for item in optimization["weights"]) == pytest.approx(1.0, abs=1e-6)
+    assert len(optimization["frontier"]) == 5
+    contribution = next(item["output"] for item in current_items if item["analytic_code"] == "risk_contribution")
+    assert sum(item["percentage_contribution"] for item in contribution["items"]) == pytest.approx(1.0)
+    simulation = next(item["output"] for item in current_items if item["analytic_code"] == "simulation")
+    assert simulation["kind"] == "simulation"
+    assert simulation["percentile_bands"][0] == {
+        "day": 0,
+        "p05": pytest.approx(0),
+        "p50": pytest.approx(0),
+        "p95": pytest.approx(0),
+    }
+    assert len(simulation["percentile_bands"]) == 31
+
+
+@pytest.mark.asyncio
+async def test_portfolio_optimization_supports_all_scopes_and_strategies():
+    set_test_mode(True)
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        user_id = (
+            await session.execute(
+                select(User.id).where(
+                    User.username == "e2e_test_user",
+                ),
+            )
+        ).scalar_one()
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+
+    async def current_user():
+        return SimpleNamespace(id=user_id)
+
+    app.dependency_overrides[get_current_user] = current_user
+    end = date.today() - timedelta(days=3)
+    start = end - timedelta(days=297)
+    cases = [
+        (
+            {"kind": "broker", "broker_id": 3},
+            "max_sharpe",
+            {"ok", "partial"},
+        ),
+        (
+            {"kind": "asset_set", "asset_ids": [1, 2]},
+            "risk_parity",
+            {"ok", "partial"},
+        ),
+        (
+            {"kind": "portfolio"},
+            "min_risk",
+            {"unavailable"},
+        ),
+    ]
+
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            for scope, strategy, expected_statuses in cases:
+                response = await client.post(
+                    f"{API_BASE}/query",
+                    json={
+                        "scope": scope,
+                        "date_range": {
+                            "start": start.isoformat(),
+                            "end": end.isoformat(),
+                        },
+                        "target_currency": "EUR",
+                        "mode": "historical",
+                        "analytics": [
+                            {
+                                "instance_id": strategy,
+                                "analytic_code": ("portfolio_optimization"),
+                                "parameters": {
+                                    "strategy": strategy,
+                                },
+                            },
+                        ],
+                    },
+                )
+                assert response.status_code == 200
+                item = response.json()["items"][0]
+                assert item["status"] in expected_statuses, item.get("error")
+                if item["output"] is not None:
+                    assert item["output"]["strategy"] == strategy
+                    assert sum(weight["weight"] for weight in item["output"]["weights"]) == pytest.approx(1.0, abs=1e-6)
+                else:
+                    assert item["error"]["code"] == "insufficient_history"
+
+            invalid = await client.post(
+                f"{API_BASE}/query",
+                json={
+                    "scope": {
+                        "kind": "asset_set",
+                        "asset_ids": [1, 2],
+                    },
+                    "date_range": {
+                        "start": start.isoformat(),
+                        "end": end.isoformat(),
+                    },
+                    "target_currency": "EUR",
+                    "mode": "historical",
+                    "analytics": [
+                        {
+                            "instance_id": "invalid",
+                            "analytic_code": ("portfolio_optimization"),
+                            "parameters": {
+                                "max_weight": 0.4,
+                            },
+                        },
+                    ],
+                },
+            )
+    finally:
+        await shutdown_quant_worker_pools()
+
+    assert invalid.status_code == 200
+    invalid_item = invalid.json()["items"][0]
+    assert invalid_item["status"] == "unavailable"
+    assert invalid_item["error"]["code"] == "invalid_parameters"

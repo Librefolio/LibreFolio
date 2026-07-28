@@ -11,7 +11,7 @@
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {currentLanguage} from '$lib/stores/app/language';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
@@ -21,6 +21,7 @@
     import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
+    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
@@ -110,7 +111,7 @@
     let txCurrentPage = 1;
     let txTableComponent: TransactionsTable | undefined;
 
-    const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'transazioni', 'info'] as const;
+    const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni', 'info'] as const;
     type BrokerTabId = (typeof BROKER_TAB_IDS)[number];
     const DEFAULT_BROKER_TAB: BrokerTabId = 'panoramica';
 
@@ -210,6 +211,7 @@
     $: brokerTabs = [
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica'},
         {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'broker-tab-posizioni'},
+        {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'broker-tab-risk'},
         {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'broker-tab-transazioni'},
         {id: 'info', label: $_('brokers.info'), icon: Info, testId: 'broker-tab-info'},
     ];
@@ -270,6 +272,7 @@
                 responseLanguage: options.responseLanguage,
                 userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
                 webResearch: options.webResearch,
+                technicalWindow: options.technicalWindow,
                 compatibility: aiExportCompatibility,
             });
             if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, aiExportContextGeneration, aiExportContextFingerprint)) {
@@ -630,6 +633,22 @@
             <div data-testid="broker-holdings">
                 <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
                 <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
+            </div>
+        {:else if activeTab === 'rischio'}
+            <div data-testid="broker-risk-tab">
+                <RiskAnalysisPanel
+                    scope={{kind: 'broker', broker_id: broker.id}}
+                    dateStart={dateFrom}
+                    dateEnd={dateTo}
+                    targetCurrency={targetCurrency || baseCurrency}
+                    assetIds={[...new Set((portfolioSummary?.holdings ?? []).map((holding) => holding.asset_id))]}
+                    title={$_('risk.brokerTitle')}
+                    internalSubset={true}
+                    onsynced={async () => {
+                        invalidate();
+                        await Promise.all([loadBroker(), loadOverview(true)]);
+                    }}
+                />
             </div>
         {:else if activeTab === 'transazioni'}
             <div class="space-y-4" data-testid="broker-transactions-tab">

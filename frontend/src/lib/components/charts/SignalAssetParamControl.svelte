@@ -8,9 +8,11 @@
     interface Props {
         value: unknown;
         onchange: (value: number) => void;
+        excludeAssetIds?: number[];
+        testId?: string;
     }
 
-    let {value, onchange}: Props = $props();
+    let {value, onchange, excludeAssetIds = [], testId = 'signal-comparison-asset-select'}: Props = $props();
     let loading = $state(false);
     let loadFailed = $state(false);
     let loadStarted = false;
@@ -18,10 +20,11 @@
     let options: SelectOption[] = $derived.by(() => {
         $assetStoreVersion;
         return getAllAssets()
+            .filter((asset) => !excludeAssetIds.includes(asset.id))
             .map((asset) => ({
                 value: String(asset.id),
                 label: asset.display_name,
-                searchText: [asset.display_name, asset.currency, asset.identifier_ticker, asset.identifier_isin, asset.identifier_other].filter(Boolean).join(' '),
+                searchText: [asset.display_name, asset.currency, asset.identifier_ticker, asset.identifier_isin, ...(Array.isArray(asset.identifier_other) ? asset.identifier_other : [asset.identifier_other])].filter(Boolean).join(' '),
                 icon: asset.icon_url ?? getAssetTypeIconUrl(asset.asset_type),
                 badge: asset.currency,
             }))
@@ -51,8 +54,8 @@
     }
 </script>
 
-<div class="w-64" data-testid="signal-comparison-asset-control">
-    <SearchSelect value={selectedValue()} {options} {loading} compact inlineSearch dropdownPosition="auto" dropdownMinWidth={280} placeholder={$t('signals.comparisonAsset.placeholder')} testId="signal-comparison-asset-select" onchange={handleChange} />
+<div class="w-64" data-testid="{testId}-control">
+    <SearchSelect value={selectedValue()} {options} {loading} compact inlineSearch dropdownPosition="auto" dropdownMinWidth={280} placeholder={$t('signals.comparisonAsset.placeholder')} {testId} onchange={handleChange} />
     {#if loadFailed}
         <p class="mt-1 text-[10px] text-red-500" data-testid="signal-comparison-asset-error">
             {$t('signals.comparisonAsset.loadError')}

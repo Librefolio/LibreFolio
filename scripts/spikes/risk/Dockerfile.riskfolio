@@ -4,10 +4,10 @@ WORKDIR /probe
 
 RUN python -m pip install --no-cache-dir --only-binary=:all: \
     QuantLib==1.43 \
-    numpy==2.4.6 \
-    pandas==3.0.3 \
+    numpy==2.5.1 \
+    pandas==3.0.5 \
     scipy==1.18.0 \
-    riskfolio-lib==7.3.0
+    riskfolio-lib==7.0.1
 
 COPY scripts/spikes/risk/run_quant_library_probe.py /probe/
 COPY backend/test_scripts/fixtures/risk/quant_library_probe.json /probe/
@@ -16,6 +16,9 @@ RUN python run_quant_library_probe.py \
     --fixture /probe/quant_library_probe.json \
     --require-quantlib \
     --require-riskfolio \
+    --expected-numpy-version 2.5.1 \
+    --expected-riskfolio-version 7.0.1 \
+    --forbid-package vectorbt \
     --output /probe/report.json
 
 CMD ["cat", "/probe/report.json"]
