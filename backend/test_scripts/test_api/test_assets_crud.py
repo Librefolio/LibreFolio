@@ -638,12 +638,24 @@ async def test_list_asset_providers(test_server):
             assert "name" in provider, "Provider should have 'name'"
             assert "description" in provider, "Provider should have 'description'"
             assert "supports_search" in provider, "Provider should have 'supports_search'"
+            assert "supports_meaningful_volume" in provider, "Provider should have 'supports_meaningful_volume'"
+            assert "volume_kind" in provider, "Provider should have 'volume_kind'"
 
         # Note: `mockprov` is intentionally hidden from the public /assets/provider
         # list (see backend/app/api/v1/assets.py::list_providers). It remains usable
         # internally by tests that reference it by code, but must NOT appear here.
         mock_provider = next((p for p in providers if p["code"] == "mockprov"), None)
         assert mock_provider is None, "mockprov must be hidden from the public provider list"
+
+        # Only sources with an unambiguous traded-volume meaning declare support
+        # (workstream B, item 4) — audited here at the API surface.
+        by_code = {p["code"]: p for p in providers}
+        for code in ("yfinance", "borsa_italiana"):
+            assert by_code[code]["supports_meaningful_volume"] is True, f"{code} should declare meaningful volume support"
+            assert by_code[code]["volume_kind"] == "traded_shares", f"{code} should declare traded_shares volume kind"
+        for code in ("justetf", "css_scraper", "scheduled_investment"):
+            assert by_code[code]["supports_meaningful_volume"] is False, f"{code} should NOT declare meaningful volume support"
+            assert by_code[code]["volume_kind"] == "unknown", f"{code} should default to unknown volume kind"
 
         print_success(f"✓ Listed {len(providers)} providers")
         print_info(f"  Providers: {', '.join([p['code'] for p in providers])}")
@@ -836,8 +848,12 @@ async def test_bulk_read_get_all_list_and_delete_identifier_variants(test_server
 
         contains_resp = await client.get(f"{API_BASE}/assets/query", params={"identifier_contains": "ORD-"}, timeout=TIMEOUT)
         assert contains_resp.status_code == 200, contains_resp.text
-        contains_ids = [row["id"] for row in contains_resp.json()]
+        contains_rows = contains_resp.json()
+        contains_ids = [row["id"] for row in contains_rows]
         assert asset2_id in contains_ids
+        # identifier_other is a JSON list: a scalar create input is coerced to a one-element list, round-tripped via FAinfoResponse
+        asset2_row = next(row for row in contains_rows if row["id"] == asset2_id)
+        assert asset2_row["identifier_other"] == item2.identifier_other
         print_success("✓ /assets/query handles identifier filters")
 
         delete_resp = await client.delete(

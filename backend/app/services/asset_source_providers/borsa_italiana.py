@@ -24,6 +24,7 @@ from backend.app.schemas.assets import (
     FAPricePoint,
     FASectorArea,
 )
+from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 
@@ -49,6 +50,12 @@ except ImportError:
     BORSA_ITALIANA_AVAILABLE = False
 
 logger = get_logger(__name__)
+
+# ISIN (optionally followed by a ``-MIC`` market segment) embedded in a Borsa
+# Italiana stock/bond/ETF scheda URL, e.g. ``…/scheda/IT0005436693-MOTX.html``.
+# Used by ``resolve_url`` to turn a web link-finder hit into a search item for
+# instruments the on-site search can't match by descriptive name.
+_SCHEDA_ISIN_RE = re.compile(r"/([A-Z]{2}[A-Z0-9]{9}[0-9])(?:-([A-Za-z0-9]+))?\.html")
 
 # Shared session instance — reused across calls, closed on shutdown
 _shared_session: Sessione | None = None
@@ -252,6 +259,20 @@ class BorsaItalianaProvider(AssetSourceProvider):
         return "Borsa Italiana"
 
     @property
+    def supports_meaningful_volume(self) -> bool:
+        """Borsa Italiana reports real exchange-traded share volume for
+        ISIN-quoted stocks/bonds/ETFs (via `ottieni_storico`). The fund-NAV
+        path (`codice_fondo` param) never populates volume — that is safely
+        handled by MFI/OBV structural validation (insufficient non-null
+        observed volume) rather than requiring per-instrument capability
+        inference here."""
+        return True
+
+    @property
+    def volume_kind(self) -> FAVolumeKind:
+        return FAVolumeKind.TRADED_SHARES
+
+    @property
     def accepted_identifier_types(self) -> list:
         return [ProviderInputType.ISIN]
 
@@ -267,6 +288,12 @@ class BorsaItalianaProvider(AssetSourceProvider):
     def get_asset_url(self, identifier, identifier_type=None, provider_params=None) -> str | None:
         """Generate URL to Borsa Italiana instrument page."""
         lingua = self._get_lingua(provider_params)
+        codice_fondo = (provider_params or {}).get("codice_fondo")
+        if codice_fondo:
+            # Mutual funds live on the dedicated fund-detail page keyed by the internal
+            # BI code; the generic search/scheda page does not resolve a fund by ISIN,
+            # so building the URL from the ISIN identifier yields a dead page.
+            return f"https://www.borsaitaliana.it/borsa/fondi/dettaglio/{codice_fondo}.html?lang={lingua}"
         return f"https://www.borsaitaliana.it/borsa/search/scheda.html?code={identifier}&lang={lingua}"
 
     @property
@@ -527,31 +554,92 @@ class BorsaItalianaProvider(AssetSourceProvider):
             "provider_params": {"codice_fondo": dati.codice, "language": lingua},
         }
 
+    def _fund_search_items_all_langs(self, dati: DatiFondo) -> list[dict]:
+        """Emit the full canonical search-item set for a resolved fund page.
+
+        ``resolve_url`` is only an alternative **entry point** into search: just like
+        an on-site ``cerca`` hit, it returns one row per supported language (Italian
+        first) with a flag suffix in ``display_name``, so the user picks the language
+        exactly as with a normal search result — instead of a single "neutral" row.
+        """
+        preferred = ("it", "en")
+        emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
+        return [self._fund_search_item(dati, lingua, display_name=f"{dati.nome} {self.LANGUAGE_FLAGS[lingua]}") for lingua in emit_language_order]
+
+    def _scheda_search_items_all_langs(self, isin: str, mic: str | None) -> list[dict] | None:
+        """Emit the canonical search-item set for a resolved stock/bond/ETF page.
+
+        Mirrors :meth:`_fund_search_items_all_langs` for ISIN-priced instruments: the
+        scheda is fetched once (ISIN, currency and type are language-independent) and
+        one row per supported language is emitted with a flag suffix, so a web
+        link-finder hit behaves exactly like an on-site ``cerca`` result. Returns
+        ``None`` when the page can't be fetched or parsed.
+        """
+        try:
+            scheda = ottieni_scheda(isin, mic, "it", sessione=_get_session())
+        except (StrumentoNonTrovato, DatiNonDisponibili):
+            return None
+        except Exception as e:  # best-effort — never fatal to search
+            logger.debug(f"Borsa Italiana resolve_url (scheda) failed for '{isin}': {e}")
+            return None
+        asset_type = _map_asset_type(scheda.tipo)
+        real_isin = scheda.isin or isin
+        preferred = ("it", "en")
+        emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
+        return [
+            {
+                "identifier": real_isin,
+                "identifier_type": IdentifierType.ISIN,
+                "display_name": f"{scheda.nome} {self.LANGUAGE_FLAGS[lingua]}",
+                "currency": scheda.valuta or "EUR",
+                "type": asset_type.value if asset_type else scheda.tipo,
+                "provider_params": {"language": lingua},
+            }
+            for lingua in emit_language_order
+        ]
+
     # ── URL resolution (inverse of get_asset_url) ───────────────────────
 
     @property
     def resolvable_url_domains(self) -> list[str]:
         return ["borsaitaliana.it"]
 
-    async def resolve_url(self, url: str) -> dict | None:
-        """Resolve a Borsa Italiana fund page URL into a search-item dict.
+    async def resolve_url(self, url: str) -> list[dict] | None:
+        """Resolve a Borsa Italiana page URL into search-item(s).
 
-        Recognises fund detail pages (``/borsa/fondi/dettaglio/{code}.html``) and
-        ``?code=`` links. Fetches the page and returns a fund search-item with the
-        real ISIN as identifier and the internal code in provider_params. Returns
-        ``None`` for anything that is not a recognisable Borsa Italiana fund page.
+        Two page families are recognised, both returning the **same canonical set a
+        normal search would emit** — one item per supported language (Italian first,
+        with a flag suffix), each carrying the real ISIN and the params needed to price
+        the asset afterwards:
+
+        * **Fund detail pages** (``/borsa/fondi/dettaglio/{code}.html``) — NAV-by-code;
+          the real ISIN + NAV come from the page, the internal code goes to
+          ``provider_params``.
+        * **Stock / bond / ETF scheda pages** (``…/scheda/{ISIN}[-{MIC}].html``) —
+          priced by ISIN. The ISIN (and optional market segment) is read straight from
+          the URL, so the web link-finder can surface instruments the on-site search
+          can't match by name (e.g. a BTP searched by its descriptive name).
+
+        Returns ``None`` for anything that is not a recognisable Borsa Italiana page.
         """
         self._check_availability()
-        if not url or "borsaitaliana.it" not in url.lower() or not estrai_codice_da_url(url):
+        if not url or "borsaitaliana.it" not in url.lower():
             return None
-        try:
-            dati = ottieni_dati_fondo_da_url(url, sessione=_get_session())
-        except (StrumentoNonTrovato, DatiNonDisponibili):
+        # Fund detail pages (NAV-by-code): keep the dedicated fund path.
+        if estrai_codice_da_url(url):
+            try:
+                dati = ottieni_dati_fondo_da_url(url, sessione=_get_session())
+            except (StrumentoNonTrovato, DatiNonDisponibili):
+                return None
+            except Exception as e:  # best-effort — never fatal to search
+                logger.debug(f"Borsa Italiana resolve_url (fund) failed for '{url}': {e}")
+                return None
+            return self._fund_search_items_all_langs(dati)
+        # Stock / bond / ETF scheda pages keyed by ISIN (optionally ``-MIC``).
+        match = _SCHEDA_ISIN_RE.search(url)
+        if not match:
             return None
-        except Exception as e:  # best-effort — never fatal to search
-            logger.debug(f"Borsa Italiana resolve_url failed for '{url}': {e}")
-            return None
-        return self._fund_search_item(dati, "it")
+        return self._scheda_search_items_all_langs(match.group(1), match.group(2))
 
     # ── Search ──────────────────────────────────────────────────────────
 
@@ -576,17 +664,31 @@ class BorsaItalianaProvider(AssetSourceProvider):
                         results_by_lang[lingua].append(result)
 
             items = []
-            seen_pairs: set[tuple[str, str]] = set()  # (isin, lingua) dedup
             fund_cache: dict[str, DatiFondo | None] = {}  # code → fund data, fetched once per search
 
-            # Use EN results as primary (usually same ISINs), then fill from IT
+            # Group each instrument's language variants together and emit Italian before
+            # English within every group. The cerca-level ``isin`` is the grouping key
+            # (internal code for funds, real ISIN otherwise) and stays stable across
+            # languages, so the two rows of a fund never interleave with a sibling fund.
+            ordered_keys: list[str] = []
+            by_key_lang: dict[str, dict[str, object]] = {}
             for lingua in self.SUPPORTED_LANGUAGES:
-                flag = self.LANGUAGE_FLAGS[lingua]
                 for r in results_by_lang[lingua]:
-                    pair = (r.isin, lingua)
-                    if pair in seen_pairs:
+                    if r.isin not in by_key_lang:
+                        by_key_lang[r.isin] = {}
+                        ordered_keys.append(r.isin)
+                    by_key_lang[r.isin].setdefault(lingua, r)
+
+            # Italian first, then any other supported language (English today).
+            preferred = ("it", "en")
+            emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
+
+            for key in ordered_keys:
+                for lingua in emit_language_order:
+                    r = by_key_lang[key].get(lingua)
+                    if r is None:
                         continue
-                    seen_pairs.add(pair)
+                    flag = self.LANGUAGE_FLAGS[lingua]
                     asset_type = _map_asset_type(r.tipo)
 
                     if asset_type == AssetType.FUND:
@@ -643,6 +745,64 @@ class BorsaItalianaProvider(AssetSourceProvider):
 
     # ── Metadata ────────────────────────────────────────────────────────
 
+    def _build_fund_description(self, dati: DatiFondo) -> str | None:
+        """Compose a fund's short description from the detail-page sections.
+
+        Includes the name, the real ISIN and the non-"N.D." entries scraped from
+        the Caratteristiche / Società di Gestione / Costi sections of the fund
+        page. The section fields are read defensively (``getattr``) so this
+        degrades to just name+ISIN if the installed scraping library predates
+        the enriched ``DatiFondo``.
+        """
+        parts: List[str] = []
+        if dati.nome:
+            parts.append(dati.nome)
+        if dati.isin:
+            parts.append(f"ISIN: {dati.isin}")
+        for key, value in (getattr(dati, "caratteristiche", None) or {}).items():
+            parts.append(f"{key}: {value}")
+        for key, value in (getattr(dati, "societa_gestione", None) or {}).items():
+            parts.append(f"Società di Gestione — {key}: {value}")
+        for key, value in (getattr(dati, "costi", None) or {}).items():
+            parts.append(f"Costi — {key}: {value}")
+        return " | ".join(parts) if parts else None
+
+    def _fund_metadata(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        codice_fondo: str,
+        provider_params: Dict | None,
+    ) -> FAAssetPatchItem | None:
+        """Build metadata for a mutual fund from its detail page (NAV-by-code funds).
+
+        Funds are not on the XMIL scheda, so the standard ISIN path can't describe
+        them; instead we fetch the fund detail page by internal code and derive a
+        description from its Caratteristiche / Società di Gestione / Costi sections.
+        """
+        try:
+            dati = self._fetch_fund(codice_fondo)
+        except AssetSourceError as e:
+            logger.warning(f"Could not fetch fund metadata for code '{codice_fondo}' from Borsa Italiana: {e}")
+            return None
+
+        lingua = self._get_lingua(provider_params)
+        short_description = self._build_fund_description(dati)
+        if short_description and len(short_description) > 500:
+            short_description = short_description[:497] + "..."
+
+        classification = FAClassificationParams(short_description=short_description) if short_description else None
+        isin = dati.isin or (identifier if identifier_type == IdentifierType.ISIN else None)
+        return FAAssetPatchItem(
+            asset_id=0,  # Placeholder — caller sets the real ID
+            display_name=f"{dati.nome} {self.LANGUAGE_FLAGS[lingua]}",
+            currency=dati.valuta or "EUR",
+            asset_type=AssetType.FUND,
+            classification_params=classification,
+            identifier_isin=isin,
+            identifier_other=[codice_fondo],
+        )
+
     async def fetch_asset_metadata(
         self,
         identifier: str,
@@ -651,6 +811,14 @@ class BorsaItalianaProvider(AssetSourceProvider):
     ) -> FAAssetPatchItem | None:
         """Fetch asset metadata from Borsa Italiana instrument page."""
         self._check_availability()
+
+        # Mutual funds are priced by internal code and are not on the XMIL scheda:
+        # route them to the fund-page metadata builder (name + ISIN + Caratteristiche/
+        # Società di Gestione/Costi), instead of the ISIN-based scheda path below.
+        codice_fondo = (provider_params or {}).get("codice_fondo")
+        if codice_fondo:
+            return self._fund_metadata(identifier, identifier_type, codice_fondo, provider_params)
+
         if identifier_type != IdentifierType.ISIN:
             return None
 

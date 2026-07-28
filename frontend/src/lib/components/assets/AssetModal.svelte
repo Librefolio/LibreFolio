@@ -65,7 +65,7 @@
         identifier_sedol?: string | null;
         identifier_figi?: string | null;
         identifier_uuid?: string | null;
-        identifier_other?: string | null;
+        identifier_other?: string | string[] | null;
         // Provider
         provider_code?: string | null;
         provider_identifier?: string;
@@ -104,6 +104,13 @@
          */
         initialSearchBadges?: Array<{label: string; value: string}>;
         /**
+         * Extra search terms (ISIN + all candidate names extracted from the report),
+         * forwarded to the provider search as `hints`. Used only by the link-finder
+         * fallback to build a specific query when a provider's on-site search finds
+         * nothing (e.g. a fund whose bare ISIN surfaces several sibling share classes).
+         */
+        searchHints?: string[];
+        /**
          * When true, open the provider section with "No provider" pre-selected.
          * Used by the BRIM import wizard: assets created manually don't come
          * from an online search, so the UI should default to no-provider mode.
@@ -114,7 +121,7 @@
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], initialNoProvider = false, oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], searchHints = [], initialNoProvider = false, oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -144,6 +151,10 @@
 
     // Classification
     let shortDescription = $state('');
+    // True while shortDescription holds a BRIM-import prefill (identified-names block) that
+    // was auto-populated, not typed by the user. Lets provider enrichment merge over it
+    // instead of routing to the diff modal. Cleared on manual edit or provider autofill.
+    let descriptionFromPrefill = $state(false);
     let sectorDistribution: Record<string, number> = $state({});
     let geographicDistribution: Record<string, number> = $state({});
 
@@ -286,29 +297,47 @@
     function columnsToIdentifierRows(data: AssetData): IdentifierRow[] {
         const rows: IdentifierRow[] = [];
         for (const idType of IDENTIFIER_TYPES) {
-            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
-            const value = (data[key] as string) ?? '';
-            if (value) rows.push({id: generateUUID(), type: idType, value});
+            if (idType === 'OTHER') {
+                // identifier_other is a JSON list of soft identifiers → one row per element
+                // (tolerate a legacy scalar string too).
+                const raw = data.identifier_other;
+                const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+                for (const v of values) {
+                    if (v && v.trim()) rows.push({id: generateUUID(), type: 'OTHER', value: v});
+                }
+            } else {
+                const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
+                const value = (data[key] as string) ?? '';
+                if (value) rows.push({id: generateUUID(), type: idType, value});
+            }
         }
         return rows;
     }
 
-    function identifierRowsToColumns(rows: IdentifierRow[]): Record<string, string | undefined> {
-        const result: Record<string, string | undefined> = {};
+    function identifierRowsToColumns(rows: IdentifierRow[]): Record<string, string | string[] | undefined> {
+        const result: Record<string, string | string[] | undefined> = {};
         for (const idType of IDENTIFIER_TYPES) {
             result[`identifier_${idType.toLowerCase()}`] = undefined;
         }
+        // OTHER is additive: collect every non-empty OTHER row into a JSON list.
+        const others: string[] = [];
         for (const row of rows) {
             if (!row.value.trim()) continue;
-            result[`identifier_${row.type.toLowerCase()}`] = row.value.trim();
+            if (row.type === 'OTHER') {
+                others.push(row.value.trim());
+            } else {
+                result[`identifier_${row.type.toLowerCase()}`] = row.value.trim();
+            }
         }
+        result.identifier_other = others.length > 0 ? others : undefined;
         return result;
     }
 
     function addIdentifierRow() {
-        // Find first unused type
+        // Prefer a not-yet-used single-valued type; fall back to OTHER, which is a JSON list
+        // and may be added multiple times (one row per soft identifier).
         const usedTypes = new Set(identifierRows.map((r) => r.type));
-        const availableType = IDENTIFIER_TYPES.find((t) => !usedTypes.has(t)) ?? 'TICKER';
+        const availableType = IDENTIFIER_TYPES.find((t) => t !== 'OTHER' && !usedTypes.has(t)) ?? 'OTHER';
         identifierRows = [...identifierRows, {id: generateUUID(), type: availableType, value: ''}];
     }
 
@@ -469,6 +498,7 @@
         active = true;
         identifierRows = [];
         shortDescription = '';
+        descriptionFromPrefill = false;
         sectorDistribution = {};
         geographicDistribution = {};
         providerCode = '';
@@ -501,14 +531,12 @@
         if (data.currency) currency = data.currency;
         if (data.asset_type) assetType = data.asset_type;
         if (data.quote_base_quantity && data.quote_base_quantity > 0) quoteBaseQuantity = data.quote_base_quantity;
-        if (data.classification_params?.short_description) shortDescription = data.classification_params.short_description;
-        // Build identifier rows from prefilled columns
-        const rows: IdentifierRow[] = [];
-        for (const idType of IDENTIFIER_TYPES) {
-            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
-            const value = (data[key] as string) ?? '';
-            if (value) rows.push({id: generateUUID(), type: idType, value});
+        if (data.classification_params?.short_description) {
+            shortDescription = data.classification_params.short_description;
+            descriptionFromPrefill = true;
         }
+        // Build identifier rows from prefilled columns (handles OTHER as a JSON list)
+        const rows = columnsToIdentifierRows(data as AssetData);
         if (rows.length > 0) {
             identifierRows = rows;
             moreInfoExpanded = true;
@@ -617,8 +645,21 @@
 
             const cp = response.current_price;
             const h = response.history;
-            const allSuccess = (cp?.success ?? false) && h?.success !== false;
-            providerTestStatus = allSuccess ? 'passed' : 'failed';
+            // Mirror ProviderAssignmentSection.testConfiguration: a probe is "passed"
+            // unless an operation fails with a *real* error. Expected-empty results —
+            // NO_DATA (e.g. a fund whose NAV isn't dated today) or NOT_IMPLEMENTED —
+            // are soft failures: the provider is correctly configured, so they must not
+            // gate the "Save Without Testing?" warning.
+            const softFailCodes = new Set(['NO_DATA', 'NOT_IMPLEMENTED']);
+            const isRealError = (op: any): boolean => {
+                if (!op || op.success) return false;
+                const code = (op.error_code ?? '').toUpperCase();
+                if (softFailCodes.has(code)) return false;
+                const msg = (op.error ?? '').toLowerCase();
+                return !(msg.includes('not_implemented') || msg.includes('not supported') || msg.includes('not implemented'));
+            };
+            const hasRealError = isRealError(cp) || isRealError(h);
+            providerTestStatus = hasRealError ? 'failed' : 'passed';
 
             if (response.provider_url) providerUrl = response.provider_url;
         } catch {
@@ -726,7 +767,19 @@
 
             if (scope === 'all') {
                 if (cpData?.short_description) {
-                    compareStringField('short_description', 'Description', shortDescription, cpData.short_description);
+                    const provDesc = cpData.short_description;
+                    // BRIM prefill (auto-populated identified-names, not user-typed): merge the
+                    // provider enrichment (head) with the identified-names prefill (tail) instead
+                    // of routing to the diff modal, so the rich description always lands even
+                    // though the import wizard pre-populated the field.
+                    if (descriptionFromPrefill && shortDescription.trim() && shortDescription.trim() !== provDesc.trim()) {
+                        const tail = shortDescription.trim();
+                        shortDescription = provDesc.includes(tail) ? provDesc : `${provDesc}\n\n${tail}`;
+                        descriptionFromPrefill = false;
+                        autoFilledFields = new Set([...autoFilledFields, 'short_description']);
+                    } else {
+                        compareStringField('short_description', 'Description', shortDescription, provDesc);
+                    }
                 }
             }
 
@@ -795,6 +848,7 @@
                     break;
                 case 'short_description':
                     shortDescription = value;
+                    descriptionFromPrefill = false;
                     break;
             }
         }
@@ -1195,12 +1249,12 @@
                     {/each}
                 </div>
                 {#key activeSearchQuery}
-                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} />
+                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} />
                 {/key}
             </div>
         {:else}
             {#key activeSearchQuery}
-                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} />
+                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} />
             {/key}
         {/if}
 
@@ -1371,6 +1425,7 @@
                 id="asset-description"
                 data-testid="asset-modal-description"
                 bind:value={shortDescription}
+                oninput={() => (descriptionFromPrefill = false)}
                 rows={2}
                 placeholder="Brief description of the asset…"
                 class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg

@@ -14,10 +14,11 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from pydantic import field_validator
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     Column,
     ForeignKey,
@@ -31,6 +32,7 @@ from sqlalchemy import (
 from sqlmodel import Field, Relationship, SQLModel
 
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.identifier_utils import normalize_other_identifiers
 
 # =============================================================================
 # CURRENCY VALIDATION HELPER
@@ -514,7 +516,7 @@ class Asset(SQLModel, table=True):
     identifier_sedol: Optional[str] = Field(default=None, max_length=7, description="SEDOL code (7 chars)")
     identifier_figi: Optional[str] = Field(default=None, max_length=12, description="FIGI code (12 chars)")
     identifier_uuid: Optional[str] = Field(default=None, max_length=36, description="UUID for custom assets")
-    identifier_other: Optional[str] = Field(default=None, max_length=100, description="Other identifier")
+    identifier_other: Optional[List[str]] = Field(default=None, sa_column=Column(JSON), description="JSON list of other/soft identifiers (technical codes without a dedicated column + soft broker labels); additive across imports")
 
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
@@ -543,6 +545,12 @@ class Asset(SQLModel, table=True):
         if v is None or v == "":
             return None
         return str(v).strip().upper()
+
+    @field_validator("identifier_other", mode="before")
+    @classmethod
+    def validate_identifier_other(cls, v: Any) -> Optional[List[str]]:
+        """Coerce str/list/None into a clean, de-duplicated soft-identifier list."""
+        return normalize_other_identifiers(v)
 
     @field_validator("classification_params")
     def validate_classification_params(cls, v):

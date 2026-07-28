@@ -52,7 +52,7 @@ async def test_borsa_italiana_search_retries_fund_abbreviations(monkeypatch):
 
     results = await BorsaItalianaProvider().search("EURIZON NEXT 2.0 - STRATEGIA OBBLIGAZIONARIA P")
 
-    assert [item["provider_params"]["language"] for item in results] == ["en", "it"]
+    assert [item["provider_params"]["language"] for item in results] == ["it", "en"]
     # identifier is now the REAL ISIN from the fund page, not the internal code
     assert all(item["identifier"] == "IT0005TESTFND" for item in results)
     assert all(item["identifier_type"] == IdentifierType.ISIN for item in results)
