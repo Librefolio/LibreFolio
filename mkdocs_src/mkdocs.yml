@@ -876,6 +876,7 @@ nav:
                   - Providers List: developer/backend/brim/providers_list.md
           - "📈 Assets (Pricing)":
               - Architecture: developer/backend/assets/architecture.md
+              - Search & Link-Finder: developer/backend/assets/search_link_finder.md
               - 🔌 Providers:
                   - Overview Providers: developer/backend/assets/system_providers.md
                   - Yahoo Finance Tech: developer/backend/assets/provider_yahoo_finance.md

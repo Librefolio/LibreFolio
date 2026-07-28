@@ -22,8 +22,10 @@ priced by its stored provider params (e.g. a fund's internal code), not by searc
 Configuration (environment variables, all optional)
 ----------------------------------------------------
 - ``LIBREFOLIO_WEB_LINK_FINDER_ENABLED``  ``"1"``/``"0"`` (default ``"1"``)
-- ``LIBREFOLIO_WEB_LINK_FINDER_ENGINE``   ``"duckduckgo"`` | ``"apikey"`` (default ``"duckduckgo"``)
+- ``LIBREFOLIO_WEB_LINK_FINDER_ENGINE``   ``"ddgs"`` | ``"apikey"`` (default ``"ddgs"``)
 - ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY``  key for the ``"apikey"`` engine (default ``""``)
+- ``LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION``   ddgs region, e.g. ``"wt-wt"``/``"it-it"`` (default ``"wt-wt"``)
+- ``LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND``  ddgs backend(s), e.g. ``"auto"``/``"google,bing"`` (default ``"auto"``)
 - ``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``  per-request timeout, seconds (default ``"6"``)
 - ``LIBREFOLIO_WEB_LINK_FINDER_MAX``      max candidate URLs returned (default ``"5"``)
 """
@@ -37,15 +39,13 @@ import time
 import urllib.parse
 from typing import Protocol, runtime_checkable
 
-try:  # optional web-scraping deps (mirrors css_scraper's defensive import)
-    import httpx
-    from bs4 import BeautifulSoup
+try:  # optional metasearch dep (graceful degradation, mirrors css_scraper's defensive import)
+    from ddgs import DDGS
 
-    _WEB_DEPS_OK = True
-except ImportError:  # pragma: no cover - optional deps missing
-    httpx = None  # type: ignore[assignment]
-    BeautifulSoup = None  # type: ignore[assignment]
-    _WEB_DEPS_OK = False
+    _DDGS_OK = True
+except ImportError:  # pragma: no cover - optional dep missing
+    DDGS = None  # type: ignore[assignment,misc]
+    _DDGS_OK = False
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,6 @@ _DEFAULT_TIMEOUT = 6.0
 _DEFAULT_MAX_RESULTS = 5
 _CACHE_TTL_SECONDS = 15 * 60
 _OVER_FETCH_FACTOR = 4  # fetch more raw hits than needed; the domain filter narrows
-
-_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 
 # Tiny TTL cache keyed by (query, domains, path_hint, max): value = (expires_at, urls).
 _cache: dict[tuple, tuple[float, list[str]]] = {}
@@ -78,53 +76,31 @@ class _SearchEngine(Protocol):
     def search(self, query: str, *, timeout: float, max_results: int) -> list[str]: ...
 
 
-def _unwrap_ddg(href: str | None) -> str | None:
-    """Resolve a DuckDuckGo redirect link (``/l/?uddg=...``) to the real URL."""
-    if not href:
-        return None
-    if href.startswith("//"):
-        href = "https:" + href
-    try:
-        parsed = urllib.parse.urlparse(href)
-    except ValueError:
-        return None
-    if "duckduckgo.com" in parsed.netloc and parsed.path.startswith("/l/"):
-        uddg = urllib.parse.parse_qs(parsed.query).get("uddg", [None])[0]
-        return urllib.parse.unquote(uddg) if uddg else None
-    return href if href.startswith("http") else None
+class DdgsEngine:
+    """Multi-engine metasearch via the ``ddgs`` library (the maintained successor of
+    ``duckduckgo_search``).
 
-
-class DuckDuckGoEngine:
-    """Free, keyless engine that scrapes the DuckDuckGo HTML endpoint.
-
-    Fragile by nature (may rate-limit or serve an anomaly page); all errors are
-    surfaced as exceptions and swallowed by :func:`find_candidate_urls`.
+    Aggregates several upstream engines (bing / brave / google / duckduckgo /
+    startpage / …) behind one synchronous ``text()`` call with ``backend="auto"``,
+    so a single rate-limited upstream can no longer starve the result set. Transport
+    or library errors are surfaced as exceptions and swallowed by
+    :func:`find_candidate_urls`; a legitimate empty result set is returned as ``[]``.
     """
 
-    _ENDPOINT = "https://html.duckduckgo.com/html/"
+    def __init__(self, *, region: str, backend: str) -> None:
+        self._region = region
+        self._backend = backend
 
     def search(self, query: str, *, timeout: float, max_results: int) -> list[str]:
-        headers = {"User-Agent": _USER_AGENT, "Accept-Language": "en,it;q=0.8"}
-        with httpx.Client(timeout=timeout, headers=headers, follow_redirects=True) as client:
-            resp = client.get(self._ENDPOINT, params={"q": query})
-            resp.raise_for_status()
-
-        soup = BeautifulSoup(resp.text, "lxml")
-        urls: list[str] = []
-
-        for anchor in soup.select("a.result__a"):
-            real = _unwrap_ddg(anchor.get("href"))
-            if real:
-                urls.append(real)
-
-        # Fallback: scan every anchor if the primary selector matched nothing.
-        if not urls:
-            for anchor in soup.find_all("a", href=True):
-                real = _unwrap_ddg(anchor["href"])
-                if real and real.startswith("http"):
-                    urls.append(real)
-
-        return urls[: max_results * _OVER_FETCH_FACTOR]
+        if DDGS is None:  # pragma: no cover - guarded by _build_engine / find_candidate_urls
+            return []
+        results = DDGS(timeout=int(timeout) or None).text(
+            query,
+            region=self._region,
+            max_results=max_results * _OVER_FETCH_FACTOR,
+            backend=self._backend,
+        )
+        return [href for href in (r.get("href") for r in results) if href]
 
 
 class ApiKeyEngine:
@@ -145,17 +121,24 @@ class ApiKeyEngine:
 
 def _build_engine() -> _SearchEngine | None:
     """Instantiate the configured engine, or ``None`` if it can't be used."""
-    engine = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_ENGINE", "duckduckgo").strip().lower()
-    if engine in ("", "duckduckgo", "ddg"):
-        return DuckDuckGoEngine()
+    engine = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_ENGINE", "ddgs").strip().lower()
     if engine in ("apikey", "api", "brave", "bing", "serpapi"):
         key = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_API_KEY", "").strip()
         if not key:
             logger.warning("web_link_finder: engine '%s' requires LIBREFOLIO_WEB_LINK_FINDER_API_KEY; disabling", engine)
             return None
         return ApiKeyEngine(key)
-    logger.warning("web_link_finder: unknown engine '%s'; falling back to DuckDuckGo", engine)
-    return DuckDuckGoEngine()
+    if engine == "searxng":
+        # Reserved for the deferred SearXNG metasearch adapter (Fase B); until then use ddgs.
+        logger.debug("web_link_finder: engine 'searxng' is not implemented yet (Fase B); using ddgs")
+    elif engine not in ("", "ddgs", "duckduckgo", "ddg"):
+        logger.warning("web_link_finder: unknown engine '%s'; falling back to ddgs", engine)
+    if not _DDGS_OK:  # pragma: no cover - ddgs is a hard dependency in the Pipfile
+        logger.warning("web_link_finder: ddgs library not importable; link-finder disabled")
+        return None
+    region = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION", "wt-wt").strip() or "wt-wt"
+    backend = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND", "auto").strip() or "auto"
+    return DdgsEngine(region=region, backend=backend)
 
 
 # --------------------------------------------------------------------------- #
@@ -237,7 +220,7 @@ async def find_candidate_urls(
         **Never raises** — any error yields ``[]``.
     """
     query = (query or "").strip()
-    if not query or not allowed_domains or not is_enabled() or not _WEB_DEPS_OK:
+    if not query or not allowed_domains or not is_enabled() or not _DDGS_OK:
         return []
 
     if max_results is None:

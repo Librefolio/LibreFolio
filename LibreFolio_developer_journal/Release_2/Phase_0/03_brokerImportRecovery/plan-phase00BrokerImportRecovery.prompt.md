@@ -201,6 +201,12 @@ NAV extractor** (piece 1) — ISIN-first and name-normalize do **not** cover fun
 Ship the fund-page extractor first; add the BI-scoped meta-search (piece 2) only if broader
 name-based fund discovery is still needed afterwards.
 
+> **Follow-up (2026-07-28):** the meta-search transport was implemented as a DDG HTML scraper
+> and hit DDG bot-detection (HTTP 202 "anomaly" → 0 results, cached 15 min). It is being
+> replaced by the **ddgs** multi-engine metasearch library — see
+> `../04_webSearchEngine/plan-phase00DdgsMetasearchEngine.prompt.md`
+> (SearXNG remains an optional Fase B: `../04_webSearchEngine/plan-phase00SearxngMetasearch.prompt.md`).
+
 ---
 
 ## 6. Notes / caveats
