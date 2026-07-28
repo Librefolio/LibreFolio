@@ -34,6 +34,7 @@ from backend.app.schemas.risk import (
     RiskResultMetadata,
     RiskResultStatus,
     RiskReturnBasis,
+    RiskSamplingStrategy,
     RiskScopeKind,
     RiskVarCvarOutput,
 )
@@ -181,6 +182,26 @@ def test_risk_result_metadata_enforces_observed_annualization_and_mode():
         computed_at=datetime(2026, 1, 5, tzinfo=UTC),
     )
     assert metadata.frequency.value == "daily"
+
+    simulation_metadata = RiskResultMetadata.model_validate(
+        {
+            **metadata.model_dump(mode="json"),
+            "sampling_method": RiskSamplingStrategy.QMC,
+            "path_count": 1024,
+            "sobol_start_index": 4096,
+        },
+    )
+    assert simulation_metadata.sobol_start_index == 4096
+
+    with pytest.raises(ValidationError, match="QMC metadata"):
+        RiskResultMetadata.model_validate(
+            {
+                **metadata.model_dump(mode="json"),
+                "sampling_method": "qmc",
+                "path_count": 1024,
+                "random_seed": 1,
+            },
+        )
 
     with pytest.raises(ValidationError, match="annualization_factor"):
         RiskResultMetadata(

@@ -2436,7 +2436,8 @@
             "process": "Proceso estocástico",
             "sampling": "Estrategia de muestreo",
             "paths": "Trayectorias simuladas",
-            "seed": "Semilla aleatoria"
+            "randomSeed": "Semilla aleatoria",
+            "sobolStartIndex": "Índice inicial de Sobol"
         },
         "title": "Riesgo",
         "dashboardTitle": "Riesgo de la cartera",

@@ -162,6 +162,77 @@ def test_register_plugin_decorator_and_catalog_definition():
     assert InlineSignalRegistry.get_plugin(" decorated ") is DecoratedSignal
 
 
+def test_catalog_definition_default_ai_description_derives_from_catalog_metadata():
+    """describe_for_ai() default derives outputs/semantics purely from
+    existing plugin-owned metadata — no per-plugin AI boilerplate needed."""
+
+    @register_plugin(InlineSignalRegistry)
+    class AiDescribedSignal(DemoSignalPlugin):
+        signal_code = "AI_DESCRIBED"
+
+    definition = InlineSignalRegistry.list_definitions()[0]
+
+    assert definition.ai_description is not None
+    assert definition.ai_description.signal_code == "AI_DESCRIBED"
+    assert definition.ai_description.semantic_id == AiDescribedSignal.semantic_id
+    assert definition.ai_description.semantic_description == AiDescribedSignal.semantic_description
+    assert definition.ai_description.category == AiDescribedSignal.category
+    assert len(definition.ai_description.outputs) == 1
+    assert definition.ai_description.outputs[0].semantic_id == "demo_signal.value"
+    assert definition.ai_description.outputs[0].semantic_description == "Test signal output value."
+    assert definition.ai_events == []
+
+
+def test_describe_events_for_ai_default_derives_one_entry_per_event_type():
+    """A plugin declaring requires_events with explicit event_types gets one
+    describe_events_for_ai() entry per type by default, with no override."""
+
+    class EventAwareParams(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+    class EventAwareSignal(DemoSignalPlugin):
+        signal_code = "EVENT_AWARE"
+        params_model = EventAwareParams
+        input_requirements = SignalInputRequirements(
+            requires_events=True,
+            event_types=["DIVIDEND", "SPLIT"],
+        )
+
+    events = EventAwareSignal.describe_events_for_ai()
+
+    assert len(events) == 2
+    assert {event.event_type for event in events} == {"DIVIDEND", "SPLIT"}
+    assert all(event.semantic_description == EventAwareSignal.semantic_description for event in events)
+    assert all(event.deduplicate is True for event in events)
+
+
+def test_validate_input_and_validate_output_hooks_default_to_no_op():
+    """Default validate_input/validate_output hooks are no-ops that never
+    raise, so plugins that don't override them are unaffected."""
+    params = DemoSignalPlugin.validate_params({"length": 20, "required_mode": "loose"})
+    context = SignalExecutionContext(
+        domain=SignalDomain.ASSET,
+        requested_range=DateRangeModel(start=date(2026, 1, 1)),
+        source_reference="asset:1",
+    )
+
+    assert DemoSignalPlugin.validate_input([], [], params, context) is None
+    computation = SignalComputation(
+        series=[
+            SignalLineSeries(
+                key="demo",
+                label_key="signals.demo.output",
+                semantic_id="demo_signal.value",
+                semantic_description="Test signal output value.",
+                unit=SignalUnit.PRICE,
+                axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
+                points=[SignalValuePoint(date=date(2026, 1, 1), value=1.0)],
+            )
+        ]
+    )
+    assert DemoSignalPlugin.validate_output(computation, [], [], params, context) is None
+
+
 def test_plugin_validates_and_normalizes_params():
     params = DemoSignalPlugin.validate_params({"length": 30, "required_mode": "strict"})
     context = SignalExecutionContext(

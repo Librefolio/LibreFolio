@@ -56,20 +56,22 @@ def parse_args() -> argparse.Namespace:
 def make_request(
     fixture: dict[str, Any],
     *,
-    sampling: str,
-    paths: int,
-    seed: int,
+    sampling_method: str,
+    path_count: int,
+    random_seed: int | None = None,
+    sobol_start_index: int | None = None,
 ) -> SimulationEngineRequest:
     return SimulationEngineRequest(
-        sampling=sampling,
+        sampling_method=sampling_method,
         asset_ids=fixture["asset_ids"],
         annual_drifts=fixture["annual_drifts"],
         annual_covariance=fixture["annual_covariance"],
         weights=fixture["weights"],
         cash_weight=fixture["cash_weight"],
         horizon_days=fixture["horizon_days"],
-        paths=paths,
-        seed=seed,
+        path_count=path_count,
+        random_seed=random_seed,
+        sobol_start_index=sobol_start_index,
     )
 
 
@@ -109,7 +111,7 @@ def mc_oracle_report(
         result.terminal_asset_log_covariance,
     )
     mean_standard_error = np.sqrt(
-        np.diag(expected_covariance) / request.paths,
+        np.diag(expected_covariance) / request.path_count,
     )
     mean_z = np.divide(
         np.abs(observed_mean - expected_mean),
@@ -121,7 +123,7 @@ def mc_oracle_report(
     for row in range(len(request.asset_ids)):
         for column in range(len(request.asset_ids)):
             standard_error = math.sqrt(
-                (expected_covariance[row, column] ** 2 + expected_covariance[row, row] * expected_covariance[column, column]) / (request.paths - 1),
+                (expected_covariance[row, column] ** 2 + expected_covariance[row, row] * expected_covariance[column, column]) / (request.path_count - 1),
             )
             if standard_error > 0:
                 covariance_z[row, column] = (
@@ -145,7 +147,7 @@ def mc_oracle_report(
             if abs(expected_correlation) >= 1:
                 continue
             fisher_z_scores.append(
-                abs(np.arctanh(observed_correlation) - np.arctanh(expected_correlation)) * math.sqrt(request.paths - 3),
+                abs(np.arctanh(observed_correlation) - np.arctanh(expected_correlation)) * math.sqrt(request.path_count - 3),
             )
     max_mean_z = float(np.max(mean_z))
     max_covariance_z = float(np.max(covariance_z))
@@ -153,7 +155,7 @@ def mc_oracle_report(
         max(fisher_z_scores, default=0.0),
     )
     return {
-        "paths": request.paths,
+        "path_count": request.path_count,
         "confidence_sigma": confidence_sigma,
         "max_mean_standard_errors": max_mean_z,
         "max_covariance_standard_errors": (max_covariance_z),
@@ -167,12 +169,12 @@ def qmc_convergence_report(
 ) -> tuple[dict[str, Any], SimulationEngineResult]:
     rows = []
     largest_result = None
-    for paths in fixture["qmc_path_counts"]:
+    for path_count in fixture["qmc_path_counts"]:
         request = make_request(
             fixture,
-            sampling="qmc",
-            paths=paths,
-            seed=fixture["qmc_start_index"],
+            sampling_method="qmc",
+            path_count=path_count,
+            sobol_start_index=fixture["sobol_start_index"],
         )
         result = run_direct(request)
         expected_mean, expected_covariance = analytical_moments(request)
@@ -195,14 +197,14 @@ def qmc_convergence_report(
         )
         rows.append(
             {
-                "paths": paths,
+                "path_count": path_count,
                 "mean_l2_error": mean_error,
                 "covariance_frobenius_error": (covariance_error),
             },
         )
         largest_result = result
     exponents = np.log2(
-        [row["paths"] for row in rows],
+        [row["path_count"] for row in rows],
     )
     mean_slope = float(
         np.polyfit(
@@ -223,7 +225,7 @@ def qmc_convergence_report(
         )[0],
     )
     report = {
-        "start_index": fixture["qmc_start_index"],
+        "sobol_start_index": fixture["sobol_start_index"],
         "rows": rows,
         "mean_log2_slope": mean_slope,
         "covariance_log2_slope": covariance_slope,
@@ -268,9 +270,9 @@ def main() -> int:
     )
     mc_request = make_request(
         fixture,
-        sampling="mc",
-        paths=fixture["mc_paths"],
-        seed=fixture["seed"],
+        sampling_method="mc",
+        path_count=fixture["mc_path_count"],
+        random_seed=fixture["random_seed"],
     )
     mc_result = run_direct(mc_request)
     mc_report = mc_oracle_report(
@@ -283,9 +285,9 @@ def main() -> int:
     )
     largest_qmc_request = make_request(
         fixture,
-        sampling="qmc",
-        paths=fixture["qmc_path_counts"][-1],
-        seed=fixture["qmc_start_index"],
+        sampling_method="qmc",
+        path_count=fixture["qmc_path_counts"][-1],
+        sobol_start_index=fixture["sobol_start_index"],
     )
     process_report = asyncio.run(
         spawned_equivalence(

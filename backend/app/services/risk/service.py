@@ -648,7 +648,7 @@ class RiskService:
             currency=context.target_currency,
             scope=context.scope_kind,
             method=computation.method if computation is not None else None,
-            params=plan.params.model_dump(mode="json"),
+            params=plan.params.model_dump(mode="json", exclude_none=True),
             mode=context.mode,
             composition_policy=context.composition_policy,
             return_basis=(computation.return_basis if computation is not None and computation.return_basis is not None else context.primary_return_basis),
@@ -657,7 +657,10 @@ class RiskService:
             excluded_assets=list(exclusions),
             algorithm_version=plan.analytic_class.algorithm_version,
             computed_at=datetime.now(UTC),
-            seed=computation.seed if computation is not None else None,
+            sampling_method=(computation.sampling_method if computation is not None else None),
+            path_count=computation.path_count if computation is not None else None,
+            random_seed=(computation.random_seed if computation is not None else None),
+            sobol_start_index=(computation.sobol_start_index if computation is not None else None),
         )
 
     @staticmethod

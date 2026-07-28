@@ -19,6 +19,14 @@ from backend.app.services.risk.quant.spawn_worker import (
 HANDLER_PATH = "backend.test_scripts.test_services.worker_handlers:" "dispatch_worker_fixture"
 
 
+async def wait_until(predicate, *, timeout: float = 3.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError("condition was not met before timeout")
+        await asyncio.sleep(0.01)
+
+
 @pytest.mark.asyncio
 async def test_spawn_worker_is_lazy_and_persistent() -> None:
     pool = SpawnWorkerPool(
@@ -46,6 +54,144 @@ async def test_spawn_worker_is_lazy_and_persistent() -> None:
         assert pool.process_ids == (first.worker_pid,)
     finally:
         await pool.shutdown()
+
+    assert pool.process_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_spawn_worker_reaps_idle_lane_and_restarts_lazily() -> None:
+    pool = SpawnWorkerPool(
+        name="fixture",
+        handler_path=HANDLER_PATH,
+        workers=1,
+        queue_capacity=0,
+        timeout_seconds=2,
+        idle_timeout_seconds=0.1,
+    )
+    try:
+        first = await pool.submit(
+            {"action": "echo", "value": "first"},
+        )
+        assert pool.process_ids == (first.worker_pid,)
+
+        await wait_until(lambda: pool.process_ids == ())
+
+        restarted = await pool.submit(
+            {"action": "echo", "value": "restarted"},
+        )
+        assert restarted.payload["value"] == "restarted"
+        assert restarted.cold_start is True
+        assert restarted.worker_pid != first.worker_pid
+    finally:
+        await pool.shutdown()
+
+    assert pool.process_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_spawn_worker_never_reaps_queued_or_inflight_jobs() -> None:
+    pool = SpawnWorkerPool(
+        name="fixture",
+        handler_path=HANDLER_PATH,
+        workers=1,
+        queue_capacity=1,
+        timeout_seconds=2,
+        idle_timeout_seconds=0.05,
+    )
+    try:
+        first = asyncio.create_task(
+            pool.submit({"action": "sleep", "seconds": 0.2}),
+        )
+        await wait_until(lambda: len(pool.process_ids) == 1)
+        active_pid = pool.process_ids[0]
+        second = asyncio.create_task(
+            pool.submit({"action": "sleep", "seconds": 0.15}),
+        )
+
+        await asyncio.sleep(0.12)
+        assert pool.process_ids == (active_pid,)
+
+        await first
+        await second
+        await wait_until(lambda: pool.process_ids == ())
+    finally:
+        await pool.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_spawn_worker_repeats_idle_restart_cycles_without_orphans() -> None:
+    pool = SpawnWorkerPool(
+        name="fixture",
+        handler_path=HANDLER_PATH,
+        workers=1,
+        queue_capacity=0,
+        timeout_seconds=2,
+        idle_timeout_seconds=0.05,
+    )
+    seen_pids = []
+    try:
+        for cycle in range(3):
+            result = await pool.submit(
+                {"action": "echo", "value": cycle},
+            )
+            seen_pids.append(result.worker_pid)
+            await wait_until(lambda: pool.process_ids == ())
+    finally:
+        await pool.shutdown()
+        await pool.shutdown()
+
+    assert len(set(seen_pids)) == 3
+    assert pool.process_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_spawn_worker_reaps_and_restarts_every_lane() -> None:
+    pool = SpawnWorkerPool(
+        name="fixture",
+        handler_path=HANDLER_PATH,
+        workers=2,
+        queue_capacity=0,
+        timeout_seconds=2,
+        idle_timeout_seconds=0.05,
+    )
+    try:
+        first_cycle = await asyncio.gather(
+            pool.submit({"action": "sleep", "seconds": 0.05}),
+            pool.submit({"action": "sleep", "seconds": 0.05}),
+        )
+        first_pids = {result.worker_pid for result in first_cycle}
+        assert len(first_pids) == 2
+
+        await wait_until(lambda: pool.process_ids == ())
+
+        second_cycle = await asyncio.gather(
+            pool.submit({"action": "sleep", "seconds": 0.05}),
+            pool.submit({"action": "sleep", "seconds": 0.05}),
+        )
+        second_pids = {result.worker_pid for result in second_cycle}
+        assert len(second_pids) == 2
+        assert first_pids.isdisjoint(second_pids)
+        assert all(result.cold_start for result in second_cycle)
+    finally:
+        await pool.shutdown()
+
+    assert pool.process_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_spawn_worker_shutdown_cancels_pending_idle_reap() -> None:
+    pool = SpawnWorkerPool(
+        name="fixture",
+        handler_path=HANDLER_PATH,
+        workers=1,
+        queue_capacity=0,
+        timeout_seconds=2,
+        idle_timeout_seconds=0.2,
+    )
+    await pool.submit({"action": "echo", "value": "done"})
+
+    await pool.shutdown()
+    await asyncio.sleep(0.25)
 
     assert pool.process_ids == ()
 

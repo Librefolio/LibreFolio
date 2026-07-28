@@ -145,6 +145,7 @@ from backend.app.schemas.provider import (
     FAProviderInfo,
     FAProviderRefreshFieldsDetail,
     FAProviderRemovalResult,
+    FAVolumeKind,
 )
 from backend.app.schemas.refresh import (
     CHANGED_POINTS_PAYLOAD_CAP,
@@ -158,6 +159,9 @@ from backend.app.schemas.refresh import (
     SyncStatus,
 )
 from backend.app.schemas.signals import (
+    SignalAiDescription,
+    SignalAiEventDescription,
+    SignalAiOutputDescription,
     SignalAnnotation,
     SignalAnnotationDirection,
     SignalAnnotationRequest,
@@ -200,6 +204,7 @@ from backend.app.schemas.signals import (
     SignalResult,
     SignalSeries,
     SignalSeriesKind,
+    SignalSourceCapability,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalThresholdDirection,
@@ -208,6 +213,7 @@ from backend.app.schemas.signals import (
     SignalValueRegion,
     SignalValueSource,
     SignalViewTransform,
+    SignalVolumeKind,
     SignalWarmupMetadata,
     SignalWarmupRequirement,
     SignalWarning,
@@ -318,6 +324,7 @@ __all__ = [
     "FABulkAssetDeleteResponse",
     # Provider
     "FAProviderInfo",
+    "FAVolumeKind",
     "FABulkAssignResponse",
     "FABulkRemoveResponse",
     "FAProviderAssignmentItem",
@@ -366,6 +373,8 @@ __all__ = [
     "SignalEventPoint",
     "SignalInputData",
     "SignalExecutionContext",
+    "SignalSourceCapability",
+    "SignalVolumeKind",
     "SignalWarmupRequirement",
     "SignalWarmupMetadata",
     "SignalInputRequirements",
@@ -397,6 +406,9 @@ __all__ = [
     "SignalRequest",
     "SignalCatalogDefinition",
     "SignalCatalogResponse",
+    "SignalAiDescription",
+    "SignalAiOutputDescription",
+    "SignalAiEventDescription",
     "SignalResult",
     # FX
     "FXProviderInfo",

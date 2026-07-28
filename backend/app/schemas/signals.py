@@ -113,6 +113,19 @@ class SignalPriceField(StrEnum):
     VOLUME = "volume"
 
 
+class SignalVolumeKind(StrEnum):
+    """Semantic meaning of a source's `volume` field, when meaningful.
+
+    Kept intentionally minimal: sources declare only whether their volume
+    field is unambiguous exchange-traded share volume. Extend with additional
+    kinds only when a new source class needs one (e.g. on-chain transfer
+    counts); avoid speculative values with no current producer.
+    """
+
+    UNKNOWN = "unknown"
+    TRADED_SHARES = "traded_shares"
+
+
 class SignalDataPolicy(StrEnum):
     STRICT_CONTIGUOUS = "strict_contiguous"
     ALLOW_PARTIAL_CONTIGUOUS = "allow_partial_contiguous"
@@ -193,6 +206,7 @@ class SignalAvailabilityReason(StrEnum):
     PARTIAL_EVENT_COVERAGE = "partial_event_coverage"
     PARTIAL_UNDEFINED_METRIC = "partial_undefined_metric"
     DATA_GAP = "data_gap"
+    MISSING_SOURCE_CAPABILITY = "missing_source_capability"
 
 
 class SignalWarningCode(StrEnum):
@@ -266,6 +280,32 @@ class SignalInputData(SignalModel):
         return self
 
 
+class SignalSourceCapability(SignalModel):
+    """Semantic capability declaration for the market-data source(s) backing
+    the series a signal computes over.
+
+    Distinct from `SignalInputCoverage` (which describes what data is
+    *present*): this describes what the present data *means*. A source can
+    have complete, finite, non-null volume and still fail
+    `supports_meaningful_volume` — e.g. a source that never reports volume
+    (`None` everywhere) trivially reports "complete" coverage of zero
+    non-null values, while a source with unreliable/synthetic volume could
+    still populate the field. Safe default: unknown/false, so callers that
+    do not populate this (e.g. tests, FX contexts, ad-hoc scripts) never
+    accidentally grant volume-dependent signals a capability nobody vouched
+    for.
+    """
+
+    supports_meaningful_volume: bool = False
+    volume_kind: SignalVolumeKind = SignalVolumeKind.UNKNOWN
+
+    @model_validator(mode="after")
+    def validate_capability(self) -> SignalSourceCapability:
+        if not self.supports_meaningful_volume and self.volume_kind != SignalVolumeKind.UNKNOWN:
+            raise ValueError("volume_kind requires supports_meaningful_volume=true")
+        return self
+
+
 class SignalExecutionContext(SignalModel):
     domain: SignalDomain
     requested_range: DateRangeModel
@@ -274,6 +314,7 @@ class SignalExecutionContext(SignalModel):
     source_reference: str = Field(..., min_length=1)
     target_currency: Optional[str] = Field(None, min_length=3, max_length=3)
     observed_only: bool = False
+    source_capability: SignalSourceCapability = Field(default_factory=SignalSourceCapability)
     primary_asset_series: Optional[PreparedAssetSeries] = Field(None, exclude=True)
     comparison_asset_series: Optional[PreparedAssetSeries] = Field(None, exclude=True)
     annualization_factor: Optional[FiniteFloat] = Field(None, gt=0, exclude=True)
@@ -333,6 +374,17 @@ class SignalInputRequirements(SignalModel):
     minimum_coverage: FiniteFloat = Field(1.0, ge=0, le=1)
     uses_prepared_asset_series: bool = False
     comparison_asset_param: Optional[str] = Field(None, pattern=_KEY_PATTERN)
+    requires_meaningful_volume: bool = Field(
+        False,
+        description=(
+            "Declares that the plugin's semantics only hold when the source's volume "
+            "field represents real, comparable trading activity (see "
+            "SignalSourceCapability.supports_meaningful_volume) rather than being "
+            "absent, synthetic, or of unverified origin. SignalService gates "
+            "availability on this before invoking the plugin, independent of the "
+            "structural presence/coverage of the volume field."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_requirements(self) -> SignalInputRequirements:
@@ -344,6 +396,8 @@ class SignalInputRequirements(SignalModel):
             raise ValueError("event_types require requires_events=true")
         if self.comparison_asset_param is not None and not self.uses_prepared_asset_series:
             raise ValueError("comparison_asset_param requires uses_prepared_asset_series=true")
+        if self.requires_meaningful_volume and SignalPriceField.VOLUME not in self.price_fields:
+            raise ValueError("requires_meaningful_volume requires volume in price_fields")
         return self
 
 
@@ -774,6 +828,46 @@ class SignalRequest(SignalModel):
         return _ensure_json_safe(value, "params")
 
 
+class SignalAiOutputDescription(SignalModel):
+    """AI-consumable description of a single output series, reusing the
+    same semantic identifiers already carried by `SignalOutputSpec` so no
+    indicator knowledge needs to be duplicated by AI Export."""
+
+    key: str = Field(..., pattern=_KEY_PATTERN)
+    semantic_id: SignalSemanticId
+    semantic_description: SignalSemanticDescription
+    unit: SignalUnit
+
+
+class SignalAiEventDescription(SignalModel):
+    """AI-consumable description of an event type a signal consumes,
+    including whether AI Export should deduplicate repeated events of this
+    type when summarizing (e.g. collapsing consecutive identical crossings)."""
+
+    event_type: str = Field(..., min_length=1)
+    semantic_description: SignalSemanticDescription
+    deduplicate: bool = True
+
+
+class SignalAiDescription(SignalModel):
+    """Plugin-owned AI semantics for a signal, derived by default from
+    existing catalog metadata (`semantic_id`/`semantic_description`/
+    `category`/`output_specs`) so plugins need no boilerplate unless they
+    want to override the derived description."""
+
+    signal_code: str = Field(..., min_length=1, max_length=64)
+    semantic_id: SignalSemanticId
+    semantic_description: SignalSemanticDescription
+    category: SignalCategory
+    outputs: tuple[SignalAiOutputDescription, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def validate_outputs(self) -> SignalAiDescription:
+        _ensure_unique([output.key for output in self.outputs], "ai output keys")
+        _ensure_unique([output.semantic_id for output in self.outputs], "ai output semantic_ids")
+        return self
+
+
 class SignalCatalogDefinition(SignalModel):
     signal_code: str = Field(..., min_length=1, max_length=64)
     implementation_version: str = Field(..., min_length=1, max_length=64)
@@ -790,6 +884,8 @@ class SignalCatalogDefinition(SignalModel):
     output_specs: List[SignalOutputSpec] = Field(..., min_length=1)
     compatible_domains: List[SignalDomain] = Field(..., min_length=1)
     annotation_capabilities: List[str] = Field(default_factory=list)
+    ai_description: Optional[SignalAiDescription] = None
+    ai_events: List[SignalAiEventDescription] = Field(default_factory=list)
 
     @field_validator("signal_code", mode="before")
     @classmethod
@@ -816,6 +912,26 @@ class SignalCatalogDefinition(SignalModel):
         )
         _ensure_unique(self.compatible_domains, "compatible_domains")
         _ensure_unique(self.annotation_capabilities, "annotation_capabilities")
+        if self.ai_description is None:
+            # Default derivation keeps existing catalog construction sites
+            # (and test factories) working unchanged: plugins only need to
+            # provide an explicit `ai_description` when they want AI-facing
+            # semantics to diverge from the catalog's own metadata.
+            self.ai_description = SignalAiDescription(
+                signal_code=self.signal_code,
+                semantic_id=self.semantic_id,
+                semantic_description=self.semantic_description,
+                category=self.category,
+                outputs=tuple(
+                    SignalAiOutputDescription(
+                        key=spec.key,
+                        semantic_id=spec.semantic_id,
+                        semantic_description=spec.semantic_description,
+                        unit=spec.unit,
+                    )
+                    for spec in self.output_specs
+                ),
+            )
         return self
 
 

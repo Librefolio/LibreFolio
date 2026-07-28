@@ -57,6 +57,7 @@ class ObvSignalPlugin(SignalPlugin):
         ],
         data_policy=SignalDataPolicy.ALLOW_PARTIAL_CONTIGUOUS,
         minimum_coverage=0.5,
+        requires_meaningful_volume=True,
     )
     output_specs = (
         SignalOutputSpec(
@@ -86,6 +87,19 @@ class ObvSignalPlugin(SignalPlugin):
             stabilization_points=0,
             total_points=1,
             normalized_tolerance=1e-6,
+        )
+
+    @classmethod
+    def validate_input(
+        cls,
+        price_points: Sequence[SignalPricePoint],
+        event_points: Sequence[SignalEventPoint],
+        params: ObvSignalParams,
+        context: SignalExecutionContext,
+    ) -> None:
+        cls.validate_meaningful_volume_input(
+            price_points,
+            minimum_coverage=cls.input_requirements.minimum_coverage,
         )
 
     def compute(

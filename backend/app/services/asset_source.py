@@ -28,6 +28,7 @@ import hashlib
 import json
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -73,6 +74,8 @@ from backend.app.schemas import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalPricePoint,
+    SignalSourceCapability,
+    SignalVolumeKind,
     SyncStatus,
 )
 from backend.app.schemas.assets import (
@@ -2025,6 +2028,46 @@ class AssetSourceManager:
         return results
 
     @staticmethod
+    def derive_signal_source_capability(prices: Sequence[FAPricePoint]) -> SignalSourceCapability:
+        """Derive the semantic volume capability of a neutral price series
+        from the source plugin(s) that directly observed it.
+
+        Fails closed (unknown/false) whenever:
+        - no point was directly observed (all backward-filled, or empty series),
+        - any observed source_plugin_key does not resolve to a registered
+          provider (e.g. "MANUAL" upserts, test/legacy sentinel keys), or
+        - observed sources disagree (mixed providers with different capability).
+
+        Only points with ``backward_fill_info is None`` count as evidence:
+        backward-filled rows copy the seed price's ``source_plugin_key`` onto
+        dates that source never actually reported, so counting them would let
+        a stale source's capability leak onto data it didn't produce.
+        """
+        observed_keys = {point.source_plugin_key for point in prices if point.backward_fill_info is None and point.source_plugin_key}
+        if not observed_keys:
+            return SignalSourceCapability()
+
+        capabilities: set[tuple[bool, FAVolumeKind]] = set()
+        for key in observed_keys:
+            provider = AssetProviderRegistry.get_provider_instance(key)
+            if provider is None:
+                # Unknown/manual source (e.g. "MANUAL") — fail closed.
+                return SignalSourceCapability()
+            capabilities.add((provider.supports_meaningful_volume, provider.volume_kind))
+
+        if len(capabilities) != 1:
+            # Mixed sources with disagreeing capability — fail closed.
+            return SignalSourceCapability()
+
+        supports_meaningful_volume, volume_kind = next(iter(capabilities))
+        if not supports_meaningful_volume:
+            return SignalSourceCapability()
+        return SignalSourceCapability(
+            supports_meaningful_volume=True,
+            volume_kind=SignalVolumeKind(volume_kind.value),
+        )
+
+    @staticmethod
     async def get_prices_bulk(
         requests: list,
         session: AsyncSession,
@@ -2536,6 +2579,7 @@ class AssetSourceManager:
                     neutral_events,
                     events_loaded=(plan.requires_events and event_conversion_complete),
                     prepared_series_bundle=prepared_series_bundle,
+                    source_capability=AssetSourceManager.derive_signal_source_capability(result.prices),
                 )
 
             requested_start, requested_end = requested_range

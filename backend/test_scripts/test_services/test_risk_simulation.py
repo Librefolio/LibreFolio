@@ -41,11 +41,12 @@ from backend.app.services.risk.quant.spawn_worker import SpawnWorkerResult
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
+from backend.app.services.risk_plugins.simulation import SimulationParams
 
 
 def engine_request(**overrides) -> SimulationEngineRequest:
     payload = {
-        "sampling": "mc",
+        "sampling_method": "mc",
         "asset_ids": [1, 2],
         "annual_drifts": [0.05, 0.03],
         "annual_covariance": [
@@ -55,10 +56,12 @@ def engine_request(**overrides) -> SimulationEngineRequest:
         "weights": [0.6, 0.3],
         "cash_weight": 0.1,
         "horizon_days": 30,
-        "paths": 1024,
-        "seed": 123456,
+        "path_count": 1024,
     }
     payload.update(overrides)
+    if "random_seed" not in payload and "sobol_start_index" not in payload:
+        sequence_field = "sobol_start_index" if payload["sampling_method"] == "qmc" else "random_seed"
+        payload[sequence_field] = 123456
     return SimulationEngineRequest.model_validate(payload)
 
 
@@ -85,23 +88,28 @@ def test_simulation_contract_is_serializable_and_content_keyed():
     payload = request.model_dump(mode="json")
 
     assert payload["process"] == "gbm"
-    assert payload["sampling"] == "mc"
+    assert payload["sampling_method"] == "mc"
+    assert payload["random_seed"] == 123456
+    assert payload["sobol_start_index"] is None
+    assert "sampling" not in payload
+    assert "paths" not in payload
+    assert "seed" not in payload
     assert sum(payload["weights"]) + payload["cash_weight"] == pytest.approx(1.0)
 
     first_key = simulation_cache_key(
         request,
-        algorithm_version="simulation@2.0.0",
+        algorithm_version="simulation@2.1.0",
     )
     assert len(first_key) == 64
     assert first_key == simulation_cache_key(
         SimulationEngineRequest.model_validate_json(
             request.model_dump_json(),
         ),
-        algorithm_version="simulation@2.0.0",
+        algorithm_version="simulation@2.1.0",
     )
     assert first_key != simulation_cache_key(
-        engine_request(seed=123457),
-        algorithm_version="simulation@2.0.0",
+        engine_request(random_seed=123457),
+        algorithm_version="simulation@2.1.0",
     )
 
 
@@ -119,27 +127,94 @@ def test_simulation_contract_rejects_invalid_dimensions_and_sampling():
             ],
         )
     with pytest.raises(ValidationError):
-        engine_request(sampling="rqmc")
+        engine_request(sampling_method="rqmc")
     with pytest.raises(ValidationError, match="power of two"):
-        engine_request(sampling="qmc", paths=1000)
+        engine_request(
+            sampling_method="qmc",
+            path_count=1000,
+            sobol_start_index=0,
+        )
 
     seeded_qmc = engine_request(
-        sampling="qmc",
-        paths=1024,
-        seed=4096,
+        sampling_method="qmc",
+        path_count=1024,
+        sobol_start_index=4096,
     )
-    assert seeded_qmc.seed == 4096
+    assert seeded_qmc.sobol_start_index == 4096
+    assert seeded_qmc.random_seed is None
+
+    with pytest.raises(ValidationError, match="forbids sobol_start_index"):
+        engine_request(sobol_start_index=4096)
+    with pytest.raises(ValidationError, match="forbids random_seed"):
+        engine_request(
+            sampling_method="qmc",
+            random_seed=4096,
+        )
 
     with pytest.raises(ValidationError, match="Sobol dimension"):
         engine_request(
-            sampling="qmc",
+            sampling_method="qmc",
             asset_ids=list(range(1, 22)),
             annual_drifts=[0.03] * 21,
             annual_covariance=[[0.04 if row == column else 0.0 for column in range(21)] for row in range(21)],
             weights=[1 / 21] * 21,
             cash_weight=0,
             horizon_days=1010,
-            paths=1024,
+            path_count=1024,
+            sobol_start_index=0,
+        )
+
+
+def test_simulation_params_normalize_legacy_sequence_contract():
+    legacy_mc = SimulationParams.model_validate(
+        {
+            "sampling": "mc",
+            "paths": 1024,
+            "seed": 7,
+        },
+    )
+    legacy_qmc = SimulationParams.model_validate(
+        {
+            "sampling": "qmc",
+            "paths": 1024,
+            "seed": 4096,
+        },
+    )
+    canonical_mc = SimulationParams(
+        sampling_method="mc",
+        path_count=1024,
+        random_seed=7,
+    )
+    canonical_qmc = SimulationParams(
+        sampling_method="qmc",
+        path_count=1024,
+        sobol_start_index=4096,
+    )
+
+    assert legacy_mc == canonical_mc
+    assert legacy_qmc == canonical_qmc
+    assert legacy_mc.model_dump(mode="json", exclude_none=True) == {
+        "process": "gbm",
+        "sampling_method": "mc",
+        "horizon_days": 365,
+        "path_count": 1024,
+        "random_seed": 7,
+    }
+    assert legacy_qmc.model_dump(mode="json", exclude_none=True) == {
+        "process": "gbm",
+        "sampling_method": "qmc",
+        "horizon_days": 365,
+        "path_count": 1024,
+        "sobol_start_index": 4096,
+    }
+
+    with pytest.raises(ValidationError, match="conflicts"):
+        SimulationParams.model_validate(
+            {
+                "sampling_method": "mc",
+                "random_seed": 1,
+                "seed": 2,
+            },
         )
 
 
@@ -158,9 +233,9 @@ def test_simulation_result_contract_enforces_shapes_and_order():
     )
     output = RiskSimulationOutput(
         process=RiskSimulationProcess.GBM,
-        sampling=RiskSamplingStrategy.QMC,
+        sampling_method=RiskSamplingStrategy.QMC,
         horizon_days=2,
-        paths=1024,
+        path_count=1024,
         **output_assumptions(),
         percentile_bands=[
             RiskSimulationBandPoint(
@@ -248,7 +323,7 @@ def _assert_mc_log_moments(
     observed_covariance = np.asarray(
         result.terminal_asset_log_covariance,
     )
-    sample_count = request.paths
+    sample_count = request.path_count
 
     mean_standard_error = np.sqrt(
         np.diag(expected_covariance) / sample_count,
@@ -330,14 +405,14 @@ def test_quantlib_mc_matches_multivariate_gbm_oracle(
 ):
     asset_count = len(drifts)
     request = SimulationEngineRequest(
-        sampling="mc",
+        sampling_method="mc",
         asset_ids=list(range(1, asset_count + 1)),
         annual_drifts=drifts,
         annual_covariance=covariance,
         weights=[1 / asset_count] * asset_count,
         horizon_days=60,
-        paths=paths,
-        seed=123456,
+        path_count=paths,
+        random_seed=123456,
     )
 
     first = run_direct(request)
@@ -358,7 +433,7 @@ def test_quantlib_mc_matches_multivariate_gbm_oracle(
 
 def test_quantlib_handles_positive_semidefinite_and_zero_volatility():
     request = SimulationEngineRequest(
-        sampling="qmc",
+        sampling_method="qmc",
         asset_ids=[1, 2, 3],
         annual_drifts=[0.05, 0.05, 0.01],
         annual_covariance=[
@@ -368,8 +443,8 @@ def test_quantlib_handles_positive_semidefinite_and_zero_volatility():
         ],
         weights=[0.4, 0.4, 0.2],
         horizon_days=30,
-        paths=1024,
-        seed=0,
+        path_count=1024,
+        sobol_start_index=0,
     )
 
     result = run_direct(request)
@@ -400,14 +475,14 @@ def test_quantlib_qmc_converges_over_dyadic_path_counts():
     for paths in (256, 1024, 4096):
         result = run_direct(
             SimulationEngineRequest(
-                sampling="qmc",
+                sampling_method="qmc",
                 asset_ids=[1, 2],
                 annual_drifts=drifts.tolist(),
                 annual_covariance=covariance.tolist(),
                 weights=[0.5, 0.5],
                 horizon_days=horizon_days,
-                paths=paths,
-                seed=0,
+                path_count=paths,
+                sobol_start_index=0,
             ),
         )
         mean_errors.append(
@@ -450,25 +525,26 @@ def test_quantlib_qmc_converges_over_dyadic_path_counts():
 
 
 @pytest.mark.parametrize(
-    "sampling",
+    "sampling_method",
     [
         RiskSamplingStrategy.MC,
         RiskSamplingStrategy.QMC,
     ],
 )
-def test_quantlib_seed_is_repeatable_and_selects_another_stream(
-    sampling,
+def test_quantlib_sequence_control_is_repeatable_and_selects_another_stream(
+    sampling_method,
 ):
+    sequence_field = "random_seed" if sampling_method == RiskSamplingStrategy.MC else "sobol_start_index"
     base = engine_request(
-        sampling=sampling,
+        sampling_method=sampling_method,
         horizon_days=10,
-        paths=256,
-        seed=128,
+        path_count=256,
+        **{sequence_field: 128},
     )
     same = run_direct(base)
     repeated = run_direct(base)
     different = run_direct(
-        base.model_copy(update={"seed": 512}),
+        base.model_copy(update={sequence_field: 512}),
     )
 
     assert repeated == same
@@ -479,20 +555,20 @@ def test_quantlib_seed_is_repeatable_and_selects_another_stream(
 async def test_spawned_quantlib_matches_direct_result_and_cache():
     clear_simulation_cache()
     request = engine_request(
-        sampling="qmc",
+        sampling_method="qmc",
         horizon_days=10,
-        paths=256,
-        seed=64,
+        path_count=256,
+        sobol_start_index=64,
     )
     direct = run_direct(request)
     try:
         first, first_hit, worker = await run_simulation(
             request,
-            algorithm_version="simulation@2.0.0",
+            algorithm_version="simulation@2.1.0",
         )
         second, second_hit, cached_worker = await run_simulation(
             request,
-            algorithm_version="simulation@2.0.0",
+            algorithm_version="simulation@2.1.0",
         )
     finally:
         await shutdown_quant_worker_pools()
@@ -511,7 +587,7 @@ async def test_cancelled_cache_follower_does_not_cancel_shared_simulation(
     monkeypatch,
 ):
     clear_simulation_cache()
-    request = engine_request(horizon_days=5, paths=256)
+    request = engine_request(horizon_days=5, path_count=256)
     expected = run_direct(request)
 
     class ControlledPool:
@@ -577,7 +653,7 @@ async def test_cancelled_cache_follower_does_not_cancel_shared_simulation(
 def test_simulation_resource_limits_are_explicit():
     oversized = engine_request(
         horizon_days=365,
-        paths=100_000,
+        path_count=100_000,
     )
     with pytest.raises(
         SimulationResourceLimitError,

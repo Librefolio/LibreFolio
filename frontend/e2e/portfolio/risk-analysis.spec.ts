@@ -232,17 +232,17 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
         }
         case 'simulation': {
             const horizonDays = Number(analytic.parameters?.horizon_days ?? 365);
-            const paths = Number(analytic.parameters?.paths ?? 8192);
-            const sampling = String(analytic.parameters?.sampling ?? 'mc');
+            const pathCount = Number(analytic.parameters?.path_count ?? 8192);
+            const samplingMethod = String(analytic.parameters?.sampling_method ?? 'mc');
             return {
                 ...base,
                 status: 'ok',
                 output: {
                     kind: 'simulation',
                     process: 'gbm',
-                    sampling,
+                    sampling_method: samplingMethod,
                     horizon_days: horizonDays,
-                    paths,
+                    path_count: pathCount,
                     drift_estimator: 'historical_log_mle',
                     covariance_estimator: 'sample_log_returns',
                     aggregation_policy: 'current_buy_and_hold',
@@ -468,5 +468,13 @@ test.describe('Risk analysis functional integration', () => {
                 return new Set(assetRequests.flatMap((request) => request.analytics.map((analytic) => analytic.analytic_code)));
             })
             .toEqual(new Set(['comparison', 'historical_var', 'simulation', 'stress']));
+
+        const simulationRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'simulation');
+        expect(simulationRequest?.parameters).toMatchObject({
+            sampling_method: 'mc',
+            path_count: 8192,
+            random_seed: 123456,
+        });
+        expect(simulationRequest?.parameters).not.toHaveProperty('seed');
     });
 });

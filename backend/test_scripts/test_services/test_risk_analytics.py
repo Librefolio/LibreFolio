@@ -338,8 +338,8 @@ async def test_simulation_uses_current_composition_and_discloses_assumptions():
         computation = await SimulationAnalytic().execute(
             SimulationParams(
                 horizon_days=10,
-                paths=256,
-                seed=123,
+                path_count=256,
+                random_seed=123,
             ),
             context,
         )
@@ -348,14 +348,16 @@ async def test_simulation_uses_current_composition_and_discloses_assumptions():
     output = computation.output
 
     assert output.process.value == "gbm"
-    assert output.sampling.value == "mc"
+    assert output.sampling_method.value == "mc"
+    assert output.path_count == 256
     assert output.aggregation_policy.value == "current_buy_and_hold"
     assert output.costs_included is False
     assert output.cash_flows_included is False
     assert output.rebalanced is False
     assert len(output.percentile_bands) == 11
     assert computation.n_observations == 40
-    assert computation.seed == 123
+    assert computation.random_seed == 123
+    assert computation.sobol_start_index is None
     assert "quantlib" in computation.method
     assert PortfolioOptimizationAnalytic.output_kind.value == "optimization"
 

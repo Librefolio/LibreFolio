@@ -49,7 +49,7 @@ class SimulationParams(BaseModel):
             "x-control-order": 1,
         },
     )
-    sampling: RiskSamplingStrategy = Field(
+    sampling_method: RiskSamplingStrategy = Field(
         RiskSamplingStrategy.MC,
         json_schema_extra={
             "x-i18n-key": "risk.params.sampling",
@@ -67,7 +67,7 @@ class SimulationParams(BaseModel):
             "x-suffix": "days",
         },
     )
-    paths: int = Field(
+    path_count: int = Field(
         8192,
         ge=256,
         le=100_000,
@@ -77,20 +77,67 @@ class SimulationParams(BaseModel):
             "x-step": 256,
         },
     )
-    seed: int = Field(
-        123456,
+    random_seed: int | None = Field(
+        None,
         ge=0,
         le=2**32 - 1,
         json_schema_extra={
-            "x-i18n-key": "risk.params.seed",
+            "x-i18n-key": "risk.params.randomSeed",
             "x-control-order": 5,
             "x-step": 1,
+            "x-visible-when": {"sampling_method": "mc"},
+        },
+    )
+    sobol_start_index: int | None = Field(
+        None,
+        ge=0,
+        le=2**32 - 1,
+        json_schema_extra={
+            "x-i18n-key": "risk.params.sobolStartIndex",
+            "x-control-order": 5,
+            "x-step": 1,
+            "x-visible-when": {"sampling_method": "qmc"},
         },
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_contract(cls, value):
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+
+        for legacy, canonical in (
+            ("sampling", "sampling_method"),
+            ("paths", "path_count"),
+        ):
+            if legacy not in data:
+                continue
+            legacy_value = data.pop(legacy)
+            if canonical in data and data[canonical] != legacy_value:
+                raise ValueError(f"{legacy} conflicts with {canonical}")
+            data.setdefault(canonical, legacy_value)
+
+        sampling = data.get("sampling_method", RiskSamplingStrategy.MC)
+        sampling_value = sampling.value if isinstance(sampling, RiskSamplingStrategy) else sampling
+        target = "sobol_start_index" if sampling_value == RiskSamplingStrategy.QMC.value else "random_seed"
+        if "seed" in data:
+            legacy_seed = data.pop("seed")
+            if legacy_seed is not None:
+                if target in data and data[target] != legacy_seed:
+                    raise ValueError(f"seed conflicts with {target}")
+                data.setdefault(target, legacy_seed)
+        data.setdefault(target, 123456)
+        return data
+
     @model_validator(mode="after")
     def validate_sampling(self) -> SimulationParams:
-        if self.sampling == RiskSamplingStrategy.QMC and self.paths & (self.paths - 1):
+        if self.sampling_method == RiskSamplingStrategy.MC:
+            if self.random_seed is None or self.sobol_start_index is not None:
+                raise ValueError("MC simulation requires random_seed and forbids sobol_start_index")
+        elif self.sobol_start_index is None or self.random_seed is not None:
+            raise ValueError("QMC simulation requires sobol_start_index and forbids random_seed")
+        if self.sampling_method == RiskSamplingStrategy.QMC and self.path_count & (self.path_count - 1):
             raise ValueError("QMC paths must be a power of two")
         return self
 
@@ -98,7 +145,7 @@ class SimulationParams(BaseModel):
 @register_plugin(RiskAnalyticRegistry)
 class SimulationAnalytic(RiskAnalytic):
     analytic_code = "simulation"
-    algorithm_version = "2.0.0-quantlib-1.43"
+    algorithm_version = "2.1.0-quantlib-1.43"
     name_i18n_key = "risk.analytics.simulation.name"
     description_i18n_key = "risk.analytics.simulation.description"
     output_kind = RiskOutputKind.SIMULATION
@@ -145,15 +192,16 @@ class SimulationAnalytic(RiskAnalytic):
 
         engine_request = SimulationEngineRequest(
             process=params.process,
-            sampling=params.sampling,
+            sampling_method=params.sampling_method,
             asset_ids=list(estimates.asset_ids),
             annual_drifts=list(estimates.annual_drifts),
             annual_covariance=[list(row) for row in estimates.annual_covariance],
             weights=weights,
             cash_weight=cash_weight,
             horizon_days=params.horizon_days,
-            paths=params.paths,
-            seed=params.seed,
+            path_count=params.path_count,
+            random_seed=params.random_seed,
+            sobol_start_index=params.sobol_start_index,
         )
         try:
             engine_result, _cache_hit, _worker_result = await run_simulation(
@@ -200,9 +248,9 @@ class SimulationAnalytic(RiskAnalytic):
         return RiskComputation(
             output=RiskSimulationOutput(
                 process=params.process,
-                sampling=params.sampling,
+                sampling_method=params.sampling_method,
                 horizon_days=params.horizon_days,
-                paths=params.paths,
+                path_count=params.path_count,
                 drift_estimator=(RiskSimulationDriftEstimator.HISTORICAL_LOG_MLE),
                 covariance_estimator=(RiskSimulationCovarianceEstimator.SAMPLE_LOG_RETURNS),
                 aggregation_policy=(RiskCompositionPolicy.CURRENT_BUY_AND_HOLD),
@@ -213,5 +261,8 @@ class SimulationAnalytic(RiskAnalytic):
             ),
             method=("quantlib_geometric_brownian_motion_" "historical_log_mle_sample_covariance"),
             n_observations=estimates.observations,
-            seed=params.seed,
+            sampling_method=params.sampling_method,
+            path_count=params.path_count,
+            random_seed=params.random_seed,
+            sobol_start_index=params.sobol_start_index,
         )

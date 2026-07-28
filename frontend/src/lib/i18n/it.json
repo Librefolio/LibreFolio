@@ -2436,7 +2436,8 @@
             "process": "Processo stocastico",
             "sampling": "Strategia di campionamento",
             "paths": "Percorsi simulati",
-            "seed": "Seed casuale"
+            "randomSeed": "Seed casuale",
+            "sobolStartIndex": "Indice iniziale Sobol"
         },
         "title": "Rischio",
         "dashboardTitle": "Rischio portafoglio",

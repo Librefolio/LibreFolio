@@ -60,14 +60,14 @@
   ],
   "cash_weight": 0.05,
   "horizon_days": 90,
-  "mc_paths": 8192,
+  "mc_path_count": 8192,
   "qmc_path_counts": [
     256,
     1024,
     4096
   ],
-  "seed": 123456,
-  "qmc_start_index": 0,
+  "random_seed": 123456,
+  "sobol_start_index": 0,
   "confidence_sigma": 4.5,
-  "algorithm_version": "quantlib-gbm-spike@2.0.0"
+  "algorithm_version": "quantlib-gbm-spike@2.1.0"
 }

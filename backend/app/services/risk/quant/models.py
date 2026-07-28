@@ -20,15 +20,16 @@ class SimulationEngineRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     process: RiskSimulationProcess = RiskSimulationProcess.GBM
-    sampling: RiskSamplingStrategy
+    sampling_method: RiskSamplingStrategy
     asset_ids: List[PositiveInt] = Field(..., min_length=1, max_length=100)
     annual_drifts: List[FiniteFloat] = Field(..., min_length=1)
     annual_covariance: List[List[FiniteFloat]] = Field(..., min_length=1)
     weights: List[FiniteFloat] = Field(..., min_length=1)
     cash_weight: FiniteFloat = Field(0.0, ge=0, le=1)
     horizon_days: int = Field(..., ge=1, le=3650)
-    paths: int = Field(..., ge=256, le=100_000)
-    seed: int = Field(..., ge=0, le=2**32 - 1)
+    path_count: int = Field(..., ge=256, le=100_000)
+    random_seed: int | None = Field(None, ge=0, le=2**32 - 1)
+    sobol_start_index: int | None = Field(None, ge=0, le=2**32 - 1)
     diagnostics: bool = False
 
     @model_validator(mode="after")
@@ -50,8 +51,13 @@ class SimulationEngineRequest(BaseModel):
             for column_index, value in enumerate(row):
                 if not math.isclose(value, self.annual_covariance[column_index][row_index], rel_tol=1e-10, abs_tol=1e-12):
                     raise ValueError("simulation covariance must be symmetric")
-        if self.sampling == RiskSamplingStrategy.QMC:
-            if self.paths & (self.paths - 1):
+        if self.sampling_method == RiskSamplingStrategy.MC:
+            if self.random_seed is None or self.sobol_start_index is not None:
+                raise ValueError("MC simulation requires random_seed and forbids sobol_start_index")
+        else:
+            if self.sobol_start_index is None or self.random_seed is not None:
+                raise ValueError("QMC simulation requires sobol_start_index and forbids random_seed")
+            if self.path_count & (self.path_count - 1):
                 raise ValueError("QMC paths must be a power of two")
             if asset_count * self.horizon_days > MAX_SOBOL_DIMENSION:
                 raise ValueError(f"Sobol dimension exceeds the supported maximum of {MAX_SOBOL_DIMENSION}")

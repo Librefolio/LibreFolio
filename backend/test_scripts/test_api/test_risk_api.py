@@ -314,7 +314,16 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
     contribution = next(item["output"] for item in current_items if item["analytic_code"] == "risk_contribution")
     assert sum(item["percentage_contribution"] for item in contribution["items"]) == pytest.approx(1.0)
     simulation = next(item["output"] for item in current_items if item["analytic_code"] == "simulation")
+    simulation_result = next(item for item in current_items if item["analytic_code"] == "simulation")
     assert simulation["kind"] == "simulation"
+    assert simulation["sampling_method"] == "mc"
+    assert simulation["path_count"] == 256
+    assert "sampling" not in simulation
+    assert "paths" not in simulation
+    assert simulation_result["metadata"]["random_seed"] == 123
+    assert simulation_result["metadata"]["sobol_start_index"] is None
+    assert simulation_result["metadata"]["params"]["random_seed"] == 123
+    assert "seed" not in simulation_result["metadata"]["params"]
     assert simulation["percentile_bands"][0] == {
         "day": 0,
         "p05": pytest.approx(0),

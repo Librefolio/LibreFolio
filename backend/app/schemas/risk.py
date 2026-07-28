@@ -388,7 +388,10 @@ class RiskResultMetadata(BaseModel):
     excluded_assets: List[RiskExcludedAsset] = Field(default_factory=list)
     algorithm_version: str = Field(..., min_length=1)
     computed_at: datetime
-    seed: Optional[int] = Field(None, ge=0)
+    sampling_method: Optional[RiskSamplingStrategy] = None
+    path_count: Optional[int] = Field(None, ge=1)
+    random_seed: Optional[int] = Field(None, ge=0, le=2**32 - 1)
+    sobol_start_index: Optional[int] = Field(None, ge=0, le=2**32 - 1)
 
     @field_validator("currency")
     @classmethod
@@ -417,6 +420,16 @@ class RiskResultMetadata(BaseModel):
             raise ValueError("historical mode cannot declare a composition policy")
         if self.mode == RiskMode.CURRENT_COMPOSITION and self.composition_policy is None:
             raise ValueError("current_composition requires a composition policy")
+        if self.sampling_method is None:
+            if self.path_count is not None or self.random_seed is not None or self.sobol_start_index is not None:
+                raise ValueError("simulation metadata fields require sampling_method")
+        elif self.path_count is None:
+            raise ValueError("simulation metadata requires path_count")
+        elif self.sampling_method == RiskSamplingStrategy.MC:
+            if self.random_seed is None or self.sobol_start_index is not None:
+                raise ValueError("MC metadata requires random_seed and forbids sobol_start_index")
+        elif self.sobol_start_index is None or self.random_seed is not None:
+            raise ValueError("QMC metadata requires sobol_start_index and forbids random_seed")
         return self
 
 
@@ -669,9 +682,9 @@ class RiskSimulationOutput(BaseModel):
 
     kind: Literal[RiskOutputKind.SIMULATION] = Field(default=RiskOutputKind.SIMULATION, json_schema_extra={"enum": ["simulation"]})
     process: RiskSimulationProcess
-    sampling: RiskSamplingStrategy
+    sampling_method: RiskSamplingStrategy
     horizon_days: PositiveInt
-    paths: PositiveInt
+    path_count: PositiveInt
     drift_estimator: RiskSimulationDriftEstimator
     covariance_estimator: RiskSimulationCovarianceEstimator
     aggregation_policy: RiskCompositionPolicy

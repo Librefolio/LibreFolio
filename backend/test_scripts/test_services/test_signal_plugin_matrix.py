@@ -20,7 +20,9 @@ from backend.app.schemas.signals import (
     SignalExecutionContext,
     SignalPriceField,
     SignalRequest,
+    SignalSourceCapability,
     SignalStatus,
+    SignalVolumeKind,
     SignalWarningCode,
 )
 from backend.app.services.provider_registry import SignalPluginRegistry
@@ -218,6 +220,14 @@ def test_registry_has_twenty_two_complete_definitions():
         ]
         assert all(description.strip() for description in semantic_descriptions)
         assert all(re.search(r"(?<![A-Za-z])(?:buy|sell)(?![A-Za-z])", description, re.IGNORECASE) is None for description in semantic_descriptions)
+        # Every real, discovered plugin must yield a validated AI description
+        # through the catalog by default derivation alone — the registry must
+        # never break mid-migration for plugins that don't override
+        # describe_for_ai()/describe_events_for_ai().
+        assert definition.ai_description is not None
+        assert definition.ai_description.signal_code == definition.signal_code
+        assert len(definition.ai_description.outputs) == len(definition.output_specs)
+        assert isinstance(definition.ai_events, list)
         plugin_class = SignalPluginRegistry.get_plugin(definition.signal_code)
         required_params = set(definition.params_schema.get("required", []))
         if required_params:
@@ -356,6 +366,10 @@ async def test_exact_minimum_history_is_partial_not_failed(
             end=points[-1].date,
         ),
         source_reference=f"asset:minimum:{signal_code}",
+        source_capability=SignalSourceCapability(
+            supports_meaningful_volume=True,
+            volume_kind=SignalVolumeKind.TRADED_SHARES,
+        ),
     )
     result = (
         await SignalService().compute(
@@ -457,6 +471,10 @@ async def test_all_plugins_preserve_same_internal_date_gap_without_compaction(
                 end=points[-1].date,
             ),
             source_reference="asset:matrix-gap",
+            source_capability=SignalSourceCapability(
+                supports_meaningful_volume=True,
+                volume_kind=SignalVolumeKind.TRADED_SHARES,
+            ),
         ),
     )
 
