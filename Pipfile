@@ -46,9 +46,11 @@ PyJWT = "*"
 mkdocs-static-i18n = "*"
 scipy = "*"
 quantlib = "==1.43"
+riskfolio-lib = "==7.0.1"
 justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", ref = "main"}
 xlrd = "*"
 borsa-italiana-scraping = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git", ref = "main"}
+ddgs = "*"
 
 [dev-packages]
 pytest = "*"

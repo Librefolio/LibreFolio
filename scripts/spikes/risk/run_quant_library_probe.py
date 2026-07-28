@@ -7,6 +7,7 @@ import argparse
 import importlib
 import json
 import platform
+import resource
 import sys
 import traceback
 import warnings
@@ -31,6 +32,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--require-quantlib", action="store_true")
     parser.add_argument("--require-riskfolio", action="store_true")
+    parser.add_argument("--expected-numpy-version")
+    parser.add_argument("--expected-riskfolio-version")
+    parser.add_argument("--forbid-package", action="append", default=[])
     return parser.parse_args()
 
 
@@ -53,15 +57,31 @@ def distribution_size_bytes(name: str) -> int | None:
 
 def package_metadata(name: str) -> dict[str, Any]:
     try:
+        dist = distribution(name)
         info = metadata(name)
         return {
             "version": version(name),
             "license": info.get("License"),
             "requires_python": info.get("Requires-Python"),
             "distribution_size_bytes": distribution_size_bytes(name),
+            "requires": sorted(dist.requires or ()),
         }
     except PackageNotFoundError:
         return {"installed": False}
+
+
+def installed_version(name: str) -> str | None:
+    try:
+        return version(name)
+    except PackageNotFoundError:
+        return None
+
+
+def max_rss_bytes() -> int:
+    value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if sys.platform == "darwin":
+        return int(value)
+    return int(value * 1024)
 
 
 def ql_path_values(path: Any) -> list[float]:
@@ -380,14 +400,20 @@ def probe_quantlib(fixture: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def probe_riskfolio(fixture: dict[str, Any]) -> dict[str, Any]:
+def probe_riskfolio(
+    fixture: dict[str, Any],
+    *,
+    expected_numpy_version: str | None,
+    expected_riskfolio_version: str | None,
+    forbidden_packages: list[str],
+) -> dict[str, Any]:
     started = perf_counter()
     try:
         rp = importlib.import_module("riskfolio")
         cp = importlib.import_module("cvxpy")
         np = importlib.import_module("numpy")
         pd = importlib.import_module("pandas")
-        scipy = importlib.import_module("scipy")
+        importlib.import_module("scipy")
     except Exception as exc:
         return {
             "status": "unavailable",
@@ -397,72 +423,200 @@ def probe_riskfolio(fixture: dict[str, Any]) -> dict[str, Any]:
 
     try:
         returns = pd.DataFrame(fixture["riskfolio_returns"])
+        solvers = list(cp.installed_solvers())
+        solver = next(
+            (candidate for candidate in ("CLARABEL", "SCS") if candidate in solvers),
+            None,
+        )
+        if solver is None:
+            raise RuntimeError(
+                "Riskfolio probe requires CLARABEL or SCS",
+            )
+        min_weight = 0.05
+        max_weight = 0.8
 
-        def optimize(strategy: str) -> Any:
+        def configure_portfolio(
+            *,
+            covariance_method: str = "hist",
+            infeasible: bool = False,
+        ) -> Any:
             portfolio = rp.Portfolio(returns=returns)
             portfolio.assets_stats(
                 method_mu="hist",
-                method_cov="hist",
+                method_cov=covariance_method,
+            )
+            portfolio.sht = False
+            portfolio.budget = 1
+            portfolio.upperlng = max_weight
+            portfolio.solvers = [solver]
+            asset_count = returns.shape[1]
+            lower = 0.5 if infeasible else min_weight
+            portfolio.ainequality = np.vstack(
+                [
+                    np.eye(asset_count),
+                    -np.eye(asset_count),
+                ]
+            )
+            portfolio.binequality = np.concatenate(
+                [
+                    np.full(asset_count, max_weight),
+                    np.full(asset_count, -lower),
+                ]
+            ).reshape(-1, 1)
+            return portfolio
+
+        def optimize(
+            strategy: str,
+            *,
+            covariance_method: str = "hist",
+        ) -> tuple[Any, Any]:
+            portfolio = configure_portfolio(
+                covariance_method=covariance_method,
             )
             if strategy == "risk_parity":
-                return portfolio.rp_optimization(
+                weights = portfolio.rp_optimization(
                     model="Classic",
                     rm="MV",
                     rf=0,
                     b=None,
                     hist=True,
                 )
-            objective = "MinRisk" if strategy == "min_risk" else "Sharpe"
-            return portfolio.optimization(
-                model="Classic",
-                rm="MV",
-                obj=objective,
-                rf=0,
-                l=0,
-                hist=True,
-            )
+            else:
+                objective = "MinRisk" if strategy == "min_risk" else "Sharpe"
+                weights = portfolio.optimization(
+                    model="Classic",
+                    rm="MV",
+                    obj=objective,
+                    rf=0,
+                    l=0,
+                    hist=True,
+                )
+            return portfolio, weights
 
         optimization_checks = {}
         with warnings.catch_warnings(record=True) as warning_records:
             warnings.simplefilter("always")
             for strategy in ("min_risk", "max_sharpe", "risk_parity"):
-                first = optimize(strategy)
-                second = optimize(strategy)
+                first_portfolio, first = optimize(strategy)
+                _, second = optimize(strategy)
                 if first is None or second is None:
                     raise RuntimeError(f"Riskfolio {strategy} optimization returned no weights")
                 first_weights = first["weights"]
                 second_weights = second["weights"]
                 first_array = first_weights.to_numpy(dtype=float)
                 second_array = second_weights.to_numpy(dtype=float)
+                covariance = first_portfolio.cov.to_numpy(dtype=float)
+                variance = float(first_array @ covariance @ first_array)
+                percentage_contributions = first_array * (covariance @ first_array) / variance
                 optimization_checks[strategy] = {
                     "weights": {str(asset): float(value) for asset, value in first_weights.items()},
                     "weight_sum": float(first_weights.sum()),
                     "weights_finite": bool(np.isfinite(first_array).all()),
-                    "weights_non_negative": bool((first_array >= -1e-8).all()),
+                    "weights_within_bounds": bool((first_array >= min_weight - 1e-7).all() and (first_array <= max_weight + 1e-7).all()),
                     "repeat_max_abs_delta": float(np.max(np.abs(first_array - second_array))),
+                    "portfolio_variance": variance,
+                    "percentage_risk_contributions": [float(value) for value in percentage_contributions],
                 }
 
-        checks = {
-            "solvers": list(cp.installed_solvers()),
-            "optimizations": optimization_checks,
-            "warnings": sorted({f"{record.category.__name__}: {record.message}" for record in warning_records}),
-            "dependency_versions": {
-                "numpy": np.__version__,
-                "pandas": pd.__version__,
-                "scipy": scipy.__version__,
-                "cvxpy": cp.__version__,
-                "vectorbt": version("vectorbt"),
-                "numba": version("numba"),
-            },
+            covariance_checks = {}
+            for method in ("hist", "ledoit", "oas"):
+                portfolio = configure_portfolio(
+                    covariance_method=method,
+                )
+                covariance = portfolio.cov.to_numpy(dtype=float)
+                covariance_checks[method] = {
+                    "finite": bool(np.isfinite(covariance).all()),
+                    "symmetric": bool(
+                        np.allclose(
+                            covariance,
+                            covariance.T,
+                            rtol=0,
+                            atol=1e-12,
+                        )
+                    ),
+                    "min_eigenvalue": float(np.linalg.eigvalsh(covariance).min()),
+                }
+
+            frontier_portfolio = configure_portfolio()
+            frontier = frontier_portfolio.efficient_frontier(
+                model="Classic",
+                rm="MV",
+                points=5,
+                rf=0,
+                solver=solver,
+                hist=True,
+            )
+            if frontier is None:
+                raise RuntimeError("Riskfolio efficient frontier returned no weights")
+            frontier_array = frontier.to_numpy(dtype=float)
+            frontier_check = {
+                "shape": list(frontier_array.shape),
+                "finite": bool(np.isfinite(frontier_array).all()),
+                "weight_sums": [float(value) for value in frontier_array.sum(axis=0)],
+            }
+
+            infeasible_portfolio = configure_portfolio(
+                infeasible=True,
+            )
+            infeasible_result = infeasible_portfolio.optimization(
+                model="Classic",
+                rm="MV",
+                obj="MinRisk",
+                rf=0,
+                l=0,
+                hist=True,
+            )
+
+        forbidden_versions = {name: installed_version(name) for name in forbidden_packages}
+        dependency_versions = {
+            name: installed_version(name)
+            for name in (
+                "numpy",
+                "pandas",
+                "scipy",
+                "cvxpy",
+                "clarabel",
+                "scikit-learn",
+                "statsmodels",
+                "arch",
+                "astropy",
+                "vectorbt",
+                "numba",
+            )
         }
+        checks = {
+            "solvers": solvers,
+            "selected_solver": solver,
+            "optimizations": optimization_checks,
+            "covariance_estimators": covariance_checks,
+            "frontier": frontier_check,
+            "infeasible_returns_none": infeasible_result is None,
+            "warnings": sorted({f"{record.category.__name__}: {record.message}" for record in warning_records}),
+            "dependency_versions": dependency_versions,
+            "forbidden_packages": forbidden_versions,
+            "max_rss_bytes": max_rss_bytes(),
+        }
+        version_checks = {
+            "numpy": (expected_numpy_version is None or np.__version__ == expected_numpy_version),
+            "riskfolio": (expected_riskfolio_version is None or getattr(rp, "__version__", None) == expected_riskfolio_version),
+            "forbidden_packages_absent": all(value is None for value in forbidden_versions.values()),
+        }
+        risk_parity_contributions = optimization_checks["risk_parity"]["percentage_risk_contributions"]
         hard_checks = (
-            bool(checks["solvers"]),
-            all(result["weights_finite"] and result["weights_non_negative"] and abs(result["weight_sum"] - 1.0) <= 1e-6 and result["repeat_max_abs_delta"] <= 1e-6 for result in optimization_checks.values()),
+            all(version_checks.values()),
+            all(result["weights_finite"] and result["weights_within_bounds"] and abs(result["weight_sum"] - 1.0) <= 1e-6 and result["repeat_max_abs_delta"] <= 1e-6 for result in optimization_checks.values()),
+            max(risk_parity_contributions) - min(risk_parity_contributions) <= 1e-4,
+            all(result["finite"] and result["symmetric"] and result["min_eigenvalue"] >= -1e-10 for result in covariance_checks.values()),
+            frontier_check["finite"],
+            len(frontier_check["weight_sums"]) >= 2,
+            all(abs(weight_sum - 1.0) <= 1e-6 for weight_sum in frontier_check["weight_sums"]),
+            checks["infeasible_returns_none"],
         )
         return {
             "status": "ok" if all(hard_checks) else "failed",
             "package": package_metadata("riskfolio-lib"),
             "imported_version": getattr(rp, "__version__", None),
+            "version_checks": version_checks,
             "checks": checks,
             "elapsed_seconds": perf_counter() - started,
         }
@@ -488,7 +642,12 @@ def main() -> int:
             "executable": sys.executable,
         },
         "quantlib": probe_quantlib(fixture),
-        "riskfolio": probe_riskfolio(fixture),
+        "riskfolio": probe_riskfolio(
+            fixture,
+            expected_numpy_version=args.expected_numpy_version,
+            expected_riskfolio_version=(args.expected_riskfolio_version),
+            forbidden_packages=args.forbid_package,
+        ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True))

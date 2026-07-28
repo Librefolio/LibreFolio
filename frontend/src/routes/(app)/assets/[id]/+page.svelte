@@ -39,6 +39,7 @@
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
+    import RiskAnalysisPanel from '$lib/components/risk/RiskAnalysisPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
@@ -1395,6 +1396,7 @@
                 responseLanguage: options.responseLanguage,
                 userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
                 webResearch: options.webResearch,
+                technicalWindow: options.technicalWindow,
                 compatibility: assetAiExportCompatibility,
             });
             if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, assetAiExportContextGeneration, assetAiExportContextFingerprint)) {
@@ -2128,6 +2130,12 @@
             </div>
         {/if}
     </div>
+
+    {#if assetInfo && displayCurrency}
+        <div data-testid="asset-detail-risk-panel">
+            <RiskAnalysisPanel scope={{kind: 'asset', asset_id: data.assetId}} {dateStart} {dateEnd} targetCurrency={displayCurrency} assetIds={[data.assetId]} title={$t('risk.assetTitle')} subtitle={$t('risk.assetRollingHint')} onsynced={handlePageSyncComplete} />
+        </div>
+    {/if}
 
     <!-- ======================================================================= -->
     <!-- Data Editor Placeholder -->

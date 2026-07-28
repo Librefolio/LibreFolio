@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -25,6 +26,12 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import RiskExecutionContext
+from backend.app.services.risk.quant.optimization_engine import (
+    clear_optimization_cache,
+)
+from backend.app.services.risk.quant.workers import (
+    shutdown_quant_worker_pools,
+)
 from backend.app.services.risk_plugins.comparison import (
     ComparisonAnalytic,
     ComparisonParams,
@@ -41,9 +48,17 @@ from backend.app.services.risk_plugins.portfolio_kpi import (
     PortfolioKpiAnalytic,
     PortfolioKpiParams,
 )
+from backend.app.services.risk_plugins.portfolio_optimization import (
+    PortfolioOptimizationAnalytic,
+    PortfolioOptimizationParams,
+)
 from backend.app.services.risk_plugins.risk_contribution import (
     RiskContributionAnalytic,
     RiskContributionParams,
+)
+from backend.app.services.risk_plugins.simulation import (
+    SimulationAnalytic,
+    SimulationParams,
 )
 from backend.app.services.risk_plugins.stress import StressAnalytic, StressParams
 
@@ -169,7 +184,9 @@ def test_registry_discovers_all_deterministic_analytics():
         "correlation",
         "historical_var",
         "portfolio_kpi",
+        "portfolio_optimization",
         "risk_contribution",
+        "simulation",
         "stress",
     ]
 
@@ -305,3 +322,67 @@ def test_comparison_identity_and_historical_var_invariants():
         .output
     )
     assert tail.conditional_value_at_risk >= tail.value_at_risk >= 0
+
+
+@pytest.mark.asyncio
+async def test_simulation_uses_current_composition_and_discloses_assumptions():
+    driver = [0.01, -0.005, 0.002, -0.001] * 10
+    context = make_context(
+        {
+            1: driver,
+            2: [value * 0.5 for value in driver],
+        },
+        mode=RiskMode.CURRENT_COMPOSITION,
+    )
+    try:
+        computation = await SimulationAnalytic().execute(
+            SimulationParams(
+                horizon_days=10,
+                paths=256,
+                seed=123,
+            ),
+            context,
+        )
+    finally:
+        await shutdown_quant_worker_pools()
+    output = computation.output
+
+    assert output.process.value == "gbm"
+    assert output.sampling.value == "mc"
+    assert output.aggregation_policy.value == "current_buy_and_hold"
+    assert output.costs_included is False
+    assert output.cash_flows_included is False
+    assert output.rebalanced is False
+    assert len(output.percentile_bands) == 11
+    assert computation.n_observations == 40
+    assert computation.seed == 123
+    assert "quantlib" in computation.method
+    assert PortfolioOptimizationAnalytic.output_kind.value == "optimization"
+
+
+@pytest.mark.asyncio
+async def test_portfolio_optimization_executes_for_all_supported_scopes():
+    clear_optimization_cache()
+    returns_by_asset = {
+        1: [0.001 + 0.01 * math.sin(index / 4) for index in range(60)],
+        2: [0.0005 + 0.007 * math.cos(index / 5) for index in range(60)],
+    }
+    outputs = []
+    try:
+        for scope_kind in (
+            RiskScopeKind.PORTFOLIO,
+            RiskScopeKind.BROKER,
+            RiskScopeKind.ASSET_SET,
+        ):
+            computation = await PortfolioOptimizationAnalytic().execute(
+                PortfolioOptimizationParams(),
+                make_context(
+                    returns_by_asset,
+                    scope_kind=scope_kind,
+                ),
+            )
+            outputs.append(computation.output)
+    finally:
+        await shutdown_quant_worker_pools()
+
+    assert all(sum(item.weight for item in output.weights) == pytest.approx(1.0, abs=1e-6) for output in outputs)

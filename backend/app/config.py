@@ -23,12 +23,14 @@ Environment Variables (see .env):
     LOG_LEVEL: Logging level (default: INFO)
     PORTFOLIO_BASE_CURRENCY: Base currency ISO 4217 (default: EUR)
     PREVIEW_CACHE_MAX_MB: Image preview cache size in MB (default: 50)
+    RISK_SIMULATION_WORKERS: Spawned simulation workers (default: 1)
+    RISK_OPTIMIZATION_WORKERS: Spawned optimization workers (default: 1)
 """
 
 import os
 from pathlib import Path
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 # =============================================================================
@@ -104,6 +106,14 @@ class Settings(BaseSettings):
 
     # Image Preview Cache
     PREVIEW_CACHE_MAX_MB: int = 50
+
+    # Native quantitative engines
+    RISK_SIMULATION_WORKERS: int = Field(1, ge=1, le=8)
+    RISK_OPTIMIZATION_WORKERS: int = Field(1, ge=1, le=8)
+    RISK_SIMULATION_QUEUE_CAPACITY: int = Field(2, ge=0, le=64)
+    RISK_OPTIMIZATION_QUEUE_CAPACITY: int = Field(2, ge=0, le=64)
+    RISK_SIMULATION_TIMEOUT_SECONDS: float = Field(120.0, gt=0)
+    RISK_OPTIMIZATION_TIMEOUT_SECONDS: float = Field(60.0, gt=0)
 
     model_config = ConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),

@@ -1,10 +1,11 @@
-"""Pure execution contract for deterministic multi-asset risk analytics."""
+"""Pure execution contract for multi-asset risk analytics."""
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import re
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
@@ -100,10 +101,11 @@ class RiskComputation:
     annualization_factor: Optional[float] = None
     coverage: Optional[float] = None
     return_basis: Optional[RiskReturnBasis] = None
+    seed: Optional[int] = None
 
 
 class RiskAnalytic(ABC):
-    """Complete implementation boundary for one deterministic risk analytic."""
+    """Complete implementation boundary for one risk analytic."""
 
     analytic_code: ClassVar[str]
     algorithm_version: ClassVar[str]
@@ -182,19 +184,35 @@ class RiskAnalytic(ABC):
             raise ValueError("risk params_model must use ConfigDict(extra='forbid')")
         if not isinstance(cls.min_observations, int) or isinstance(cls.min_observations, bool) or cls.min_observations <= 0:
             raise ValueError("min_observations must be a positive integer")
+        if cls.compute is RiskAnalytic.compute and cls.execute is RiskAnalytic.execute:
+            raise TypeError(
+                "risk analytics must implement compute() or execute()",
+            )
         try:
             inspect.signature(cls).bind()
         except TypeError as exc:
             raise TypeError("risk analytics must be instantiable without arguments") from exc
         cls.catalog_definition()
 
-    @abstractmethod
     def compute(
         self,
         params: BaseModel,
         context: RiskExecutionContext,
     ) -> RiskComputation:
         """Compute a result from already prepared, I/O-free inputs."""
+        raise NotImplementedError
+
+    async def execute(
+        self,
+        params: BaseModel,
+        context: RiskExecutionContext,
+    ) -> RiskComputation:
+        """Execute lightweight analytics without blocking the event loop."""
+        return await asyncio.to_thread(
+            self.compute,
+            params,
+            context,
+        )
 
 
 __all__ = [

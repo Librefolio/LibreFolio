@@ -15,9 +15,10 @@
      */
     import {onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
+    import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, Check, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
@@ -38,6 +39,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
+    import AssetSetRiskPanel from '$lib/components/risk/AssetSetRiskPanel.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
@@ -49,6 +51,8 @@
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
+    import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
 
     // =========================================================================
     // Types
@@ -159,6 +163,24 @@
 
     // View mode
     let viewMode = $state<'grid' | 'list'>('grid');
+
+    const ASSET_TAB_IDS = ['assets', 'correlation'] as const;
+    type AssetTabId = (typeof ASSET_TAB_IDS)[number];
+    let activeTab = $state<AssetTabId>('assets');
+    let assetTabs = $derived([
+        {id: 'assets', label: $t('risk.assetSet.assetsTab'), icon: BarChart3, testId: 'assets-tab-list'},
+        {id: 'correlation', label: $t('risk.assetSet.correlationTab'), icon: Network, testId: 'assets-tab-correlation'},
+    ]);
+
+    $effect(() => {
+        activeTab = getResolvedTabParam($page.url.searchParams, ASSET_TAB_IDS, 'assets');
+    });
+
+    function handleAssetTabChange(tabId: string): void {
+        if (!ASSET_TAB_IDS.includes(tabId as AssetTabId)) return;
+        activeTab = tabId as AssetTabId;
+        void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
+    }
 
     // Grid delta display mode: absolute or percentage (E3)
     let globalViewMode = $state<'percentage' | 'absolute'>('percentage');
@@ -1057,7 +1079,7 @@
          stackFilters: [ datepicker                     | col  ]
                       [ search active currency type ×  | btns ]
          oneColumn:    [ datepicker ] [ search active × ] [ currency type ] [ 2×2 btns, now BELOW ] -->
-    <PageToolbar thresholds={{oneRow: 1340, denseRow: 850, stackFilters: 440, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
+    <PageToolbar thresholds={{oneRow: 1340, denseRow: 850, stackFilters: 440, oneColumn: 400, labelHideActions: 250, labelHideTabs: 370}} tabs={assetTabs} {activeTab} ontabchange={handleAssetTabChange} testId="assets-controls" filterRowTestId="assets-filter-bar" layoutDebugName="assetsList">
         {#snippet filters({layoutMode, filtersStacked})}
             <!-- DateRangePicker. Round 14 bugfix: this wrapper is `contents` (exits the box
                  model — data-testid stays queryable, it's just a DOM attribute) rather than
@@ -1305,7 +1327,29 @@
     </PageToolbar>
 
     <!-- Content -->
-    {#if loading}
+    {#if activeTab === 'correlation'}
+        {#if loading}
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+                <RefreshCw class="text-libre-green animate-spin mx-auto" size={32} />
+            </div>
+        {:else if error}
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
+                <p class="text-red-600 dark:text-red-400">{error}</p>
+            </div>
+        {:else}
+            <AssetSetRiskPanel
+                {assets}
+                {dateStart}
+                {dateEnd}
+                targetCurrency={$globalSettings.default_currency || 'EUR'}
+                onsynced={async () => {
+                    for (const asset of assets) invalidateAssetPriceStore(asset.id);
+                    rearmMaxPendingBeforeReload();
+                    await fetchAllPriceData();
+                }}
+            />
+        {/if}
+    {:else if loading}
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
                 <RefreshCw class="text-libre-green animate-spin" size={32} />

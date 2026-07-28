@@ -1,4 +1,4 @@
-"""Catalog and bulk query endpoints for deterministic risk analytics."""
+"""Catalog and bulk query endpoints for risk analytics."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +29,7 @@ def get_risk_service(
 @router.get(
     "/catalog",
     response_model=RiskCatalogResponse,
-    summary="List deterministic risk analytics",
+    summary="List risk analytics",
 )
 async def get_risk_catalog(
     _current_user: User = Depends(get_current_user),
@@ -40,7 +40,7 @@ async def get_risk_catalog(
 @router.post(
     "/query",
     response_model=RiskQueryResponse,
-    summary="Execute a bulk deterministic risk query",
+    summary="Execute a bulk risk query",
     responses={
         403: {"description": "Requested broker scope is not accessible."},
         404: {"description": "Requested risk scope does not exist."},
