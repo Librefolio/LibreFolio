@@ -23,6 +23,7 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
 | 8 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | **Evidenza P11.** Oracle analitici GBM, gate MC a standard error, convergenza QMC e equivalenza direct/spawn. |
 | 9 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | **Evidenza P12.** Cold/warm, cache, RSS, concorrenza e timeout/recycle dei pool production. |
 | 10 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | **Report autosufficiente per handoff.** Richieste vs stato reale, falsa pista NumPy/thread, correzione QuantLib/Riskfolio, lavoro completato/rimandato/eliminato, problemi inattesi e decisioni ancora aperte. |
+| 11 | [`workItems/`](./workItems/README.md) | **Snapshot dei 37 work item operativi.** Scomposizione P0-P13 per gate G0-G6/GF, stato, dipendenze e descrizioni originali del tracker interno. |
 
 ## TL;DR delle conclusioni (revisionate)
 

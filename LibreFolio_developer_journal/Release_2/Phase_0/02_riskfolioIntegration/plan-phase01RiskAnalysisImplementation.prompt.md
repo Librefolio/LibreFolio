@@ -177,6 +177,9 @@ Invarianti minimi:
 
 ## 10. Tracking
 
+Snapshot persistente dei 37 work item:
+[`workItems/README.md`](./workItems/README.md).
+
 ### D0 — Materializzazione piano
 
 **Stato**: ✅ COMPLETATO — 27 Luglio 2026.
