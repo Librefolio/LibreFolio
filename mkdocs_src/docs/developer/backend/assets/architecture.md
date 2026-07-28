@@ -190,11 +190,19 @@ If a price is requested for a date where no data exists (e.g., Sunday), the syst
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 
+!!! tip "Interactive search internals"
+
+    The two `provider/search` endpoints are the entry point of a three-layer stack (on-site
+    search → `ddgs` web link-finder → `resolve_url`). See
+    **[Asset Search & Link-Finder](search_link_finder.md)** for the orchestration, the `hints`
+    two-stage query, and the identifier post-filter.
+
 ---
 
 ## 🔗 Related Documentation
 
 - 📊 [Assets & Pricing ER Diagram](../../architecture/database/assets_pricing.md) — Database schema
+- 🔎 [Asset Search & Link-Finder](search_link_finder.md) — Three-layer interactive search (`ddgs` metasearch last resort)
 - 📅 [Asset Events](events.md) — Event types, dedup strategy, auto-generation
 - 🔌 [System Providers](system_providers.md) — CSS Scraper & Scheduled Investment
 - 📦 [Providers Overview](system_providers.md) — All available providers
