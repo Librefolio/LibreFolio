@@ -77,7 +77,6 @@ EXPECTED_ANALYSIS_MAPPING = {
     "broker.fifo_review": (("broker.overview", "broker.fifo"), ()),
     "asset.trend_analysis": (("asset.overview", "asset.market_technical"), ()),
     "asset.position_review": (("asset.overview", "asset.position_performance"), ("asset.market_technical",)),
-    "asset.drawdown_recovery": (("asset.overview", "asset.market_technical"), ("asset.position_performance",)),
     "fx.trend_review": (("fx.overview", "fx.market_technical"), ()),
     "fx.conversion_timing": (("fx.overview", "fx.market_technical"), ("fx.direct_exposure",)),
     "fx.exposure_impact": (("fx.overview", "fx.direct_exposure"), ("fx.market_technical",)),
@@ -162,12 +161,12 @@ class TestIntegratedComponentCatalog:
 
 
 class TestAnalysisCatalog:
-    def test_expected_analysis_count_is_17(self):
-        assert EXPECTED_ANALYSIS_COUNT == 17
-        assert len(ALL_ANALYSES) == 17
+    def test_expected_analysis_count_is_16(self):
+        assert EXPECTED_ANALYSIS_COUNT == 16
+        assert len(ALL_ANALYSES) == 16
 
-    def test_analysis_registry_has_exactly_17_entries(self, analysis_registry: AnalysisRegistry):
-        assert len(analysis_registry) == 17
+    def test_analysis_registry_has_exactly_16_entries(self, analysis_registry: AnalysisRegistry):
+        assert len(analysis_registry) == 16
 
     def test_analysis_ids_match_frozen_mapping_exactly(self, analysis_registry: AnalysisRegistry):
         actual_ids = {spec.analysis_id for spec in analysis_registry}

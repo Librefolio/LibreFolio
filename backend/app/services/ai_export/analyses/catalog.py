@@ -1,4 +1,4 @@
-"""Frozen 17-analysis catalog for the AI Export Phase 0 refinement (workstream D).
+"""Frozen 16-analysis catalog for the AI Export Phase 0 refinement (workstream D).
 
 Analysis IDs and required/optional dataset mapping are frozen per the refinement
 plan (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 5):
@@ -18,7 +18,6 @@ plan (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 5):
 | broker.fifo_review | overview, fifo | - |
 | asset.trend_analysis | overview, market_technical | - |
 | asset.position_review | overview, position_performance | market_technical |
-| asset.drawdown_recovery | overview, market_technical | position_performance |
 | fx.trend_review | overview, market_technical | - |
 | fx.conversion_timing | overview, market_technical | direct_exposure |
 | fx.exposure_impact | overview, direct_exposure | market_technical |
@@ -47,7 +46,7 @@ from backend.app.services.ai_export.components.types import Domain
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry
 
-EXPECTED_ANALYSIS_COUNT = 17
+EXPECTED_ANALYSIS_COUNT = 16
 
 _DOMAIN_PAGES: dict[Domain, tuple[str, ...]] = {
     Domain.PORTFOLIO: ("dashboard",),
@@ -112,14 +111,6 @@ _ASSET_ANALYSES: tuple[AnalysisSpec, ...] = (
         optional=("asset.market_technical",),
         applicability_code="requires_position",
     ),
-    _analysis(
-        Domain.ASSET,
-        "drawdown_recovery",
-        icon="trending-down",
-        required=("asset.overview", "asset.market_technical"),
-        optional=("asset.position_performance",),
-        applicability_code="requires_price_history",
-    ),
 )
 
 _FX_ANALYSES: tuple[AnalysisSpec, ...] = (
@@ -141,6 +132,6 @@ assert len(ALL_ANALYSES) == EXPECTED_ANALYSIS_COUNT
 
 
 def build_analysis_registry(dataset_registry: DatasetRegistry | None = None) -> AnalysisRegistry:
-    """Builds the `AnalysisRegistry` for the frozen 17-analysis catalog."""
+    """Builds the `AnalysisRegistry` for the frozen 16-analysis catalog."""
     registry = dataset_registry or build_dataset_registry()
     return AnalysisRegistry(ALL_ANALYSES, dataset_registry=registry)

@@ -2480,10 +2480,6 @@
         "position_review": {
           "display": "Position Review",
           "description": "Review position value, cost, P&L, broker scope, and FIFO context."
-        },
-        "drawdown_recovery": {
-          "display": "Drawdown & Recovery",
-          "description": "Describe peak, trough, recovery progress, and technical context."
         }
       },
       "fx": {

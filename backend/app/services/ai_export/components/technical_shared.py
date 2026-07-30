@@ -35,7 +35,7 @@ from types import MappingProxyType
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
     PortfolioReportResponse,
@@ -93,10 +93,9 @@ from backend.app.services.ai_export.components.types import BuildScope, Resource
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.ai_export.temporal.aggregators import (
     BandBucketStatistics,
-    ContinuousMultiOutputBucketAggregate,
     DatedValue,
     ScalarBucketStatistics,
-    aggregate_continuous_multi_output,
+    aggregate_scalar_statistics,
     aggregate_signal_buckets,
     assign_discrete_events,
 )
@@ -126,6 +125,9 @@ SIGNAL_PROFILE_BUCKET_AGGREGATOR = TemporalAggregatorSpec(
     kind="signal_profile_bucket",
     description="Plugin-declared signal profile aggregation with dated row cells",
 )
+
+_AI_EXPORT_ANNOTATION_ABSOLUTE_EPSILON = 1e-12
+_AI_EXPORT_ANNOTATION_RELATIVE_EPSILON = 1e-12
 
 
 # =============================================================================
@@ -249,11 +251,27 @@ def _declared_zero_level(signal_code: str, output_key: str) -> float:
 
 
 def _line_crossover(key: str, attach_to_instance_id: str, left, right) -> SignalLineCrossoverRequest:
-    return SignalLineCrossoverRequest(key=key, attach_to_instance_id=attach_to_instance_id, left=left, right=right)
+    return SignalLineCrossoverRequest(
+        key=key,
+        attach_to_instance_id=attach_to_instance_id,
+        left=left,
+        right=right,
+        observed_only=True,
+        epsilon=_AI_EXPORT_ANNOTATION_ABSOLUTE_EPSILON,
+        relative_epsilon=_AI_EXPORT_ANNOTATION_RELATIVE_EPSILON,
+    )
 
 
 def _threshold_crossing(key: str, attach_to_instance_id: str, source, threshold: float) -> SignalThresholdCrossingRequest:
-    return SignalThresholdCrossingRequest(key=key, attach_to_instance_id=attach_to_instance_id, source=source, threshold=threshold)
+    return SignalThresholdCrossingRequest(
+        key=key,
+        attach_to_instance_id=attach_to_instance_id,
+        source=source,
+        threshold=threshold,
+        observed_only=True,
+        epsilon=_AI_EXPORT_ANNOTATION_ABSOLUTE_EPSILON,
+        relative_epsilon=_AI_EXPORT_ANNOTATION_RELATIVE_EPSILON,
+    )
 
 
 def _price_source() -> SignalPriceValueSource:
@@ -275,9 +293,9 @@ def build_asset_annotation_requests() -> tuple[SignalAnnotationRequest, ...]:
     wherever available (RSI/MFI/STOCH_RSI's own `overbought`/`oversold`
     params); ADX's trend threshold (25) and MACD's histogram-zero threshold
     (0) have no plugin-declared reference level to source from, so they are
-    explicit topology values (allowed per requirement). Never sets ``limit``
-    or a non-zero ``min_gap_days``/``epsilon`` - no legacy 10/40/120 caps
-    (requirement 4).
+    explicit topology values (allowed per requirement). Events are restricted
+    to observed market dates and use a deterministic absolute+relative epsilon.
+    No legacy 10/40/120 caps are applied.
     """
     specs = ASSET_CURATED_SIGNALS
     return (
@@ -338,11 +356,13 @@ def build_fx_annotation_requests() -> tuple[SignalAnnotationRequest, ...]:
 
 
 async def load_asset_price_results(context: BuildContext) -> PriceResultsResource:
-    """Loads the single Asset target's prices + curated signals via `get_prices_bulk`.
+    """Loads a homogeneous native-market series plus curated signals.
 
     Warm-up is computed internally by `AssetSourceManager.get_prices_bulk` from
     the `SignalService` plan, and the returned `result.prices`/signal series are
-    already sliced to the requested visible period - see requirement 2.
+    already sliced to the requested visible period. Financial valuation uses a
+    separate target-currency resource so technical calculations never mix
+    native and converted observations.
     """
     scope = context.scope
     assert scope is not None and scope.asset_id is not None
@@ -353,7 +373,7 @@ async def load_asset_price_results(context: BuildContext) -> PriceResultsResourc
             date_range=DateRangeModel(start=scope.period_start, end=scope.period_end),
             include_price=True,
             include_events=False,
-            target_currency=scope.target_currency,
+            target_currency=None,
             signals=list(build_asset_signal_requests()),
             annotation_requests=list(build_asset_annotation_requests()),
         )
@@ -412,10 +432,19 @@ def compute_nav_weights(positions: Sequence[AssetPeriodContribution]) -> Mapping
     Returns an empty mapping when total gross exposure is zero (e.g. an
     all-cash or genuinely empty eligible universe).
     """
-    total = sum((abs(position.end_value) for position in positions if position.end_value is not None), Decimal(0))
+    gross_by_asset: dict[int, Decimal] = {}
+    for position in positions:
+        if position.end_value is None:
+            continue
+        gross_by_asset[position.asset_id] = gross_by_asset.get(
+            position.asset_id,
+            Decimal(0),
+        ) + abs(position.end_value)
+
+    total = sum(gross_by_asset.values(), Decimal(0))
     if total <= 0:
         return MappingProxyType({})
-    return MappingProxyType({position.asset_id: (abs(position.end_value) / total) for position in positions if position.end_value is not None})
+    return MappingProxyType({asset_id: gross_value / total for asset_id, gross_value in sorted(gross_by_asset.items())})
 
 
 @dataclass(frozen=True, slots=True)
@@ -423,6 +452,7 @@ class TechnicalUniverseBundle:
     """Held-asset universe + bulk price/signal results for one Portfolio/Broker technical request."""
 
     positions: tuple[AssetPeriodContribution, ...]
+    asset_ids: tuple[int, ...]
     considered_count: int
     weights: Mapping[int, Decimal]
     price_results: PriceResultsResource
@@ -450,31 +480,38 @@ async def load_technical_universe_bundle(
     async def _build() -> TechnicalUniverseBundle:
         report = await load_portfolio_or_broker_report(context, report_key=report_key)
         positions = eligible_positions(report)
+        asset_ids = tuple(sorted({position.asset_id for position in positions}))
         considered = considered_position_count(report)
         weights = compute_nav_weights(positions)
 
         async def _price_loader(session: AsyncSession) -> PriceResultsResource:
-            if not positions:
+            if not asset_ids:
                 return PriceResultsResource.from_results([])
             signals = list(build_asset_signal_requests())
             annotations = list(build_asset_annotation_requests())
             items = [
                 FAPriceQueryItem(
-                    asset_id=position.asset_id,
+                    asset_id=asset_id,
                     date_range=DateRangeModel(start=scope.period_start, end=scope.period_end),
                     include_price=True,
                     include_events=False,
-                    target_currency=scope.target_currency,
+                    target_currency=None,
                     signals=signals,
                     annotation_requests=annotations,
                 )
-                for position in positions
+                for asset_id in asset_ids
             ]
             results = await AssetSourceManager.get_prices_bulk(items, session)
             return PriceResultsResource.from_results(results)
 
         price_results = await context.db_resource(price_key, _price_loader)
-        return TechnicalUniverseBundle(positions=positions, considered_count=considered, weights=weights, price_results=price_results)
+        return TechnicalUniverseBundle(
+            positions=positions,
+            asset_ids=asset_ids,
+            considered_count=considered,
+            weights=weights,
+            price_results=price_results,
+        )
 
     return await context.resource(bundle_key, _build)
 
@@ -590,7 +627,21 @@ async def load_fx_technical_bundle(context: BuildContext) -> FxTechnicalBundle:
 
     async def _build() -> FxTechnicalBundle:
         rate_series = await load_fx_rate_series(context)
-        price_points = tuple(SignalPricePoint(date=observation.requested_date, close=observation.rate) for observation in rate_series.observations)
+        price_points = tuple(
+            SignalPricePoint(
+                date=observation.requested_date,
+                close=observation.rate,
+                backward_fill_info=(
+                    BackwardFillInfo(
+                        actual_rate_date=observation.actual_date,
+                        days_back=(observation.requested_date - observation.actual_date).days,
+                    )
+                    if observation.backward_filled or observation.actual_date != observation.requested_date
+                    else None
+                ),
+            )
+            for observation in rate_series.observations
+        )
         signal_context = SignalExecutionContext(
             domain=SignalDomain.FX,
             requested_range=DateRangeModel(start=scope.period_start, end=scope.period_end),
@@ -614,45 +665,74 @@ async def load_fx_technical_bundle(context: BuildContext) -> FxTechnicalBundle:
 # =============================================================================
 
 
-def observations_to_rate_points(rate_series: FxRateSeriesResource, *, start: date, end: date) -> tuple[ContinuousMultiOutputPoint, ...]:
-    points = tuple(ContinuousMultiOutputPoint(date=observation.requested_date, values={"rate": observation.rate}) for observation in rate_series.observations)
+def observations_to_rate_points(
+    rate_series: FxRateSeriesResource,
+    *,
+    start: date,
+    end: date,
+    observed_only: bool = True,
+) -> tuple[ContinuousMultiOutputPoint, ...]:
+    points = tuple(
+        ContinuousMultiOutputPoint(
+            date=observation.requested_date,
+            values={"rate": observation.rate},
+        )
+        for observation in rate_series.observations
+        if not observed_only or (not observation.backward_filled and observation.actual_date == observation.requested_date)
+    )
     return slice_to_requested_period(points, start, end)
+
+
+def coherent_price_currency(result: FAPriceQueryResult | None) -> str | None:
+    """Return the single series currency, or ``None`` for empty/mixed series."""
+    if result is None:
+        return None
+    currencies = {point.currency for point in result.prices if point.currency}
+    if len(currencies) != 1:
+        return None
+    return next(iter(currencies))
 
 
 def price_result_to_close_points(result: FAPriceQueryResult, *, start: date, end: date) -> tuple[ContinuousMultiOutputPoint, ...]:
-    points = tuple(ContinuousMultiOutputPoint(date=point.date, values={"close": point.close}) for point in result.prices)
+    if coherent_price_currency(result) is None:
+        return ()
+    points = tuple(ContinuousMultiOutputPoint(date=point.date, values={"close": point.close}) for point in result.prices if point.backward_fill_info is None or point.backward_fill_info.days_back == 0)
     return slice_to_requested_period(points, start, end)
 
 
-def _decimal_mapping_to_float(mapping: Mapping[str, Decimal] | None) -> dict[str, float] | None:
-    if mapping is None:
-        return None
-    return {key: float(value) for key, value in mapping.items()}
-
-
-def _bucket_kwargs(aggregate: ContinuousMultiOutputBucketAggregate) -> dict[str, object]:
-    return {
-        "start_date": aggregate.bucket.start_date,
-        "end_date": aggregate.bucket.end_date,
-        "calendar_days": aggregate.bucket.day_count,
-        "first": _decimal_mapping_to_float(aggregate.first),
-        "minimum": _decimal_mapping_to_float(aggregate.minimum),
-        "maximum": _decimal_mapping_to_float(aggregate.maximum),
-        "last": _decimal_mapping_to_float(aggregate.last),
-        "observation_count": aggregate.observation_count,
-    }
-
-
 def build_price_buckets(points: Sequence[ContinuousMultiOutputPoint], plan: BucketPlan, *, key: str = "close") -> tuple[PriceBucket, ...]:
-    """OHLC-buckets a price/rate series (single ``key``) plus its bucket-local simple return."""
-    aggregates = aggregate_continuous_multi_output(points, plan)
+    """OHLC-bucket a series and compare each close with the previous bucket close."""
+    statistics = aggregate_scalar_statistics(
+        tuple(ObservedPoint(date=point.date, value=point.values[key]) for point in points),
+        plan,
+    )
     buckets: list[PriceBucket] = []
-    for aggregate in aggregates:
-        kwargs = _bucket_kwargs(aggregate)
-        first_value = (aggregate.first or {}).get(key)
-        last_value = (aggregate.last or {}).get(key)
-        simple_return = float(last_value / first_value - 1) if first_value not in (None, 0) and last_value is not None else None
-        buckets.append(PriceBucket(simple_return=simple_return, **kwargs))
+    previous_close: DatedValue | None = None
+    for statistic in statistics:
+        simple_return = None
+        return_start_date = None
+        if statistic.last is not None and previous_close is not None and previous_close.value != 0:
+            simple_return = float(statistic.last.value / previous_close.value - Decimal(1))
+            return_start_date = previous_close.observed_date
+
+        buckets.append(
+            PriceBucket(
+                start_date=statistic.bucket.start_date,
+                end_date=statistic.bucket.end_date,
+                calendar_days=statistic.bucket.day_count,
+                first=({key: float(statistic.first.value)} if statistic.first is not None else None),
+                minimum=({key: float(statistic.minimum.value)} if statistic.minimum is not None else None),
+                maximum=({key: float(statistic.maximum.value)} if statistic.maximum is not None else None),
+                last=({key: float(statistic.last.value)} if statistic.last is not None else None),
+                observation_count=statistic.observation_count,
+                minimum_date=(statistic.minimum.observed_date if statistic.minimum is not None else None),
+                maximum_date=(statistic.maximum.observed_date if statistic.maximum is not None else None),
+                return_start_date=return_start_date,
+                simple_return=simple_return,
+            )
+        )
+        if statistic.last is not None:
+            previous_close = statistic.last
     return tuple(buckets)
 
 
@@ -963,7 +1043,7 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
     all-MANUAL/mixed-volume universe via `SignalService`'s own
     volume-capability gating - no manual gating here.
     """
-    eligible_asset_count = len(universe.positions)
+    eligible_asset_count = len(universe.asset_ids)
     considered_asset_count = universe.considered_count
     total_weight = float(sum(universe.weights.values(), Decimal(0)))
 
@@ -971,11 +1051,11 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
     classifications: dict[tuple[str, str], dict[int, tuple[str, float]]] = {}
     covered_asset_ids: set[int] = set()
 
-    for position in universe.positions:
-        result_by_asset = universe.price_results.by_asset_id.get(position.asset_id)
+    for asset_id in universe.asset_ids:
+        result_by_asset = universe.price_results.by_asset_id.get(asset_id)
         if result_by_asset is None:
             continue
-        weight = float(universe.weights.get(position.asset_id, Decimal(0)))
+        weight = float(universe.weights.get(asset_id, Decimal(0)))
         signals_by_instance = {result.instance_id: result for result in result_by_asset.signals}
         for spec in ASSET_CURATED_SIGNALS:
             result = signals_by_instance.get(spec.instance_id)
@@ -997,8 +1077,8 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
                 if state is None:
                     continue
                 bucket_key = (spec.signal_code, output_spec.key)
-                classifications.setdefault(bucket_key, {})[position.asset_id] = (state, weight)
-                covered_asset_ids.add(position.asset_id)
+                classifications.setdefault(bucket_key, {})[asset_id] = (state, weight)
+                covered_asset_ids.add(asset_id)
 
     states: list[BreadthStateBucket] = []
     for signal_code, output_key in sorted(classifications):

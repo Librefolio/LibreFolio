@@ -2537,8 +2537,12 @@ class AssetSourceManager:
         ):
             if req.signals:
                 target = req.target_currency
-                conversion_complete = not target or all(point.currency == target for point in result.prices)
+                price_currencies = {point.currency for point in result.prices if point.currency}
+                currency_coherent = len(price_currencies) <= 1 and (not target or not price_currencies or price_currencies == {target})
                 event_conversion_complete = not target or all(event.value.code == target for event in result.events)
+                if not currency_coherent:
+                    currencies = ", ".join(sorted(price_currencies))
+                    result.errors.append("Technical signal computation skipped because the price " f"series contains mixed currencies: {currencies}")
                 neutral_prices = (
                     [
                         SignalPricePoint(
@@ -2552,7 +2556,7 @@ class AssetSourceManager:
                         )
                         for point in result.prices
                     ]
-                    if conversion_complete
+                    if currency_coherent
                     else []
                 )
                 neutral_events = (

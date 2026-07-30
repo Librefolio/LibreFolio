@@ -107,7 +107,14 @@ def _report_metadata(scope: BuildScope) -> PortfolioReportMetadata:
     return PortfolioReportMetadata(target_currency=scope.target_currency, generated_at=scope.snapshot_as_of)
 
 
-def _history_point(day: date, *, nav: object, capital_baseline: object, total_pnl: object) -> PortfolioHistoryPoint:
+def _history_point(
+    day: date,
+    *,
+    nav: object,
+    capital_baseline: object,
+    total_pnl: object,
+    twrr: object | None = None,
+) -> PortfolioHistoryPoint:
     return PortfolioHistoryPoint(
         date=day,
         cash_value=_money(0),
@@ -118,6 +125,7 @@ def _history_point(day: date, *, nav: object, capital_baseline: object, total_pn
         cash_from_contributed_capital=_money(0),
         cash_from_generated_returns=_money(0),
         total_pnl=_money(total_pnl),
+        twrr=(Decimal(str(twrr)) if twrr is not None else None),
     )
 
 
@@ -513,6 +521,9 @@ class TestPerformanceBuckets:
         buckets = envelope.payload["buckets"]
 
         assert buckets[0]["start_date"] == "2026-01-01"
+        assert buckets[0]["return_percent"] is None
+        assert buckets[0]["period_pnl"] is None
+        assert buckets[0]["variation_start_date"] is None
         assert buckets[-1]["end_date"] == "2026-01-10"
         empty_buckets = [bucket for bucket in buckets if not bucket["has_data"]]
         assert empty_buckets, "expected at least one explicit empty bucket for the uncovered tail of the period"
@@ -521,37 +532,88 @@ class TestPerformanceBuckets:
             assert bucket["end_value"] is None
             assert bucket["return_percent"] is None
 
+    @pytest.mark.parametrize(
+        ("domain", "component_id", "components"),
+        (
+            (
+                Domain.PORTFOLIO,
+                "portfolio.performance",
+                portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS,
+            ),
+            (
+                Domain.BROKER,
+                "broker.performance",
+                broker_financial.BROKER_FINANCIAL_COMPONENTS,
+            ),
+        ),
+    )
     @pytest.mark.asyncio
-    async def test_bucket_reconciliation_diff_is_zero_when_flow_and_pnl_explain_full_delta(self, monkeypatch):
-        # A period far longer than the ramp-start offset (7 days) so the oldest
-        # bucket is wide enough (COMPACT policy, up to 30 days) to span the two
-        # history points below in a single bucket - a short period would put
-        # each day in its own single-point (daily) bucket, making any
-        # within-bucket flow/return check trivially vacuous.
-        scope = _scope(period_start=date(2025, 1, 1), period_end=date(2026, 1, 10), detail_level=DetailLevel.COMPACT)
-        bucket_plan = build_bucket_plan_for_scope(scope)
-        oldest_bucket = bucket_plan.buckets[0]
-        start_day = oldest_bucket.start_date
-        end_day = min(oldest_bucket.end_date, start_day + timedelta(days=5))
+    async def test_one_day_bucket_uses_previous_close_and_engine_twrr(
+        self,
+        monkeypatch,
+        domain,
+        component_id,
+        components,
+    ):
+        scope_kwargs = {
+            "period_start": date(2026, 1, 1),
+            "period_end": date(2026, 1, 3),
+            "domain": domain,
+        }
+        if domain is Domain.BROKER:
+            scope_kwargs.update({"broker_id": 7, "broker_scope": (7,)})
+        scope = _scope(**scope_kwargs)
         history = [
-            _history_point(start_day, nav=1000, capital_baseline=1000, total_pnl=0),
-            _history_point(end_day, nav=1110, capital_baseline=1100, total_pnl=10),
+            _history_point(
+                date(2026, 1, 1),
+                nav=1000,
+                capital_baseline=1000,
+                total_pnl=0,
+                twrr=0,
+            ),
+            _history_point(
+                date(2026, 1, 2),
+                nav=1110,
+                capital_baseline=1100,
+                total_pnl=10,
+                twrr="0.01",
+            ),
+            _history_point(
+                date(2026, 1, 3),
+                nav=1120,
+                capital_baseline=1100,
+                total_pnl=20,
+                twrr="0.02",
+            ),
         ]
         report = _report(scope, summary=_summary(), history=history)
         _patch_report(monkeypatch, report)
         _patch_lots(monkeypatch, {})
         _patch_metadata(monkeypatch)
-        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        registry = _registry(components)
         context = _make_context(scope, registry, _make_async_session())
 
-        envelope = await context.resolve("portfolio.performance", required=True)
-        bucket = envelope.payload["buckets"][0]
+        envelope = await context.resolve(component_id, required=True)
+        first, second, third = envelope.payload["buckets"]
 
-        assert Decimal(bucket["net_external_flow"]["amount"]) == Decimal("100")
-        assert Decimal(bucket["period_pnl"]["amount"]) == Decimal("10")
-        assert Decimal(bucket["reconciliation_diff"]["amount"]) == Decimal("0")
-        # A non-zero external flow means no simple return% is reported (never re-derives TWRR).
-        assert bucket["return_percent"] is None
+        assert first["return_percent"] is None
+        assert first["period_pnl"] is None
+        assert first["net_external_flow"] is None
+        assert first["variation_start_date"] is None
+
+        assert second["variation_start_date"] == "2026-01-01"
+        assert Decimal(second["variation_start_value"]["amount"]) == Decimal("1000")
+        assert Decimal(second["net_external_flow"]["amount"]) == Decimal("100")
+        assert Decimal(second["period_pnl"]["amount"]) == Decimal("10")
+        assert Decimal(second["reconciliation_diff"]["amount"]) == Decimal("0")
+        assert Decimal(second["return_percent"]) == Decimal("0.01")
+        assert second["min_date"] == second["max_date"] == "2026-01-02"
+
+        assert third["variation_start_date"] == "2026-01-02"
+        assert Decimal(third["net_external_flow"]["amount"]) == Decimal("0")
+        assert Decimal(third["period_pnl"]["amount"]) == Decimal("10")
+        assert Decimal(third["reconciliation_diff"]["amount"]) == Decimal("0")
+        assert Decimal(third["return_percent"]) == (Decimal("1.02") / Decimal("1.01") - Decimal(1))
 
 
 # =============================================================================

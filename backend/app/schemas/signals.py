@@ -644,7 +644,16 @@ class SignalAnnotationRequestBase(SignalModel):
     key: str = Field(..., pattern=_KEY_PATTERN)
     attach_to_instance_id: str = Field(..., min_length=1, max_length=128)
     observed_only: bool = False
-    epsilon: FiniteFloat = Field(0.0, ge=0)
+    epsilon: FiniteFloat = Field(
+        0.0,
+        ge=0,
+        description="Absolute numerical tolerance for equality/crossover detection.",
+    )
+    relative_epsilon: FiniteFloat = Field(
+        0.0,
+        ge=0,
+        description="Scale-aware tolerance multiplied by max(abs(left), abs(right)).",
+    )
     min_gap_days: int = Field(0, ge=0)
     limit: Optional[int] = Field(None, ge=1)
     sampling: SignalAnnotationSampling = SignalAnnotationSampling.RECENT

@@ -8,12 +8,12 @@ describe('AI Export catalog compatibility', () => {
         const compatibility = reconcileAiExportCatalog(backendCatalogFixture());
 
         expect(compatibility.status).toBe('compatible');
-        expect(compatibility.selections).toHaveLength(35);
+        expect(compatibility.selections).toHaveLength(34);
         expect(selectionsForDomain(compatibility, 'portfolio', 'dataset')).toHaveLength(5);
         expect(selectionsForDomain(compatibility, 'broker', 'analysis')).toHaveLength(4);
-        expect(selectionsForDomain(compatibility, 'asset')).toHaveLength(7);
+        expect(selectionsForDomain(compatibility, 'asset')).toHaveLength(6);
         expect(selectionsForDomain(compatibility, 'fx')).toHaveLength(7);
-        expect(findCompatibleAiExportSelection(compatibility, 'analysis', 'asset.drawdown_recovery')).toBeDefined();
+        expect(findCompatibleAiExportSelection(compatibility, 'analysis', 'asset.trend_analysis')).toBeDefined();
     });
 
     it('fails closed on catalog count or contract identity drift', () => {

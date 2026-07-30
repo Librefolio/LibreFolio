@@ -2480,10 +2480,6 @@
         "position_review": {
           "display": "Revue de la position",
           "description": "Examine valeur, coût, P&L, périmètre courtier et contexte FIFO de la position."
-        },
-        "drawdown_recovery": {
-          "display": "Drawdown et récupération",
-          "description": "Décrit pic, creux, progression de récupération et contexte technique."
         }
       },
       "fx": {

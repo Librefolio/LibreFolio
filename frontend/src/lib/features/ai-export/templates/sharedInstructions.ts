@@ -86,7 +86,7 @@ export const AI_EXPORT_ANALYSIS_INSTRUCTIONS: Readonly<Record<AiExportAnalysisId
     ]),
     'broker.fifo_review': defineAnalysisInstruction('broker.fifo_review', 'Review FIFO lots within the selected broker.', ['Separate open/partial lots from period closures.', 'Keep value and result components distinct.', 'Describe age, concentration, valuation, short, and transfer limits.']),
     'asset.trend_analysis': defineAnalysisInstruction('asset.trend_analysis', 'Explain the selected asset trend using market and technical evidence.', [
-        'Separate long-, medium-, and short-horizon trend, momentum, volatility, and drawdown.',
+        'Separate long-, medium-, and short-horizon trend, momentum, and volatility.',
         'Use bucket extrema and their real dates where material.',
         'Treat technical states as descriptive rather than predictive.',
     ]),
@@ -95,18 +95,13 @@ export const AI_EXPORT_ANALYSIS_INSTRUCTIONS: Readonly<Record<AiExportAnalysisId
         'Separate aggregate performance from FIFO lot facts.',
         'State missing prices, estimated values, and concentration limits.',
     ]),
-    'asset.drawdown_recovery': defineAnalysisInstruction('asset.drawdown_recovery', 'Describe measured drawdown and recovery state.', [
-        'Identify peak, trough, current level, magnitude, and real observation dates.',
-        'Separate price recovery from trend, momentum, and volatility interpretation.',
-        'State period, bucket, and coverage limits.',
-    ]),
     'fx.trend_review': defineAnalysisInstruction('fx.trend_review', 'Explain the selected FX pair trend in quote-per-base direction.', [
         'State current rate, period movement, extrema, source, and direction semantics.',
-        'Separate trend, momentum, volatility, drawdown, and events.',
+        'Separate trend, momentum, volatility, and events.',
         'Keep observed rate facts distinct from external interpretation.',
     ]),
     'fx.conversion_timing': defineAnalysisInstruction('fx.conversion_timing', 'Provide neutral conversion-timing context under uncertainty.', [
-        'Describe rate location, trend, momentum, volatility, drawdown, and events.',
+        'Describe rate location, trend, momentum, volatility, and events.',
         'Present multiple conditional timing approaches without point forecasts.',
         'State horizon, execution, provider, and exposure assumptions.',
     ]),

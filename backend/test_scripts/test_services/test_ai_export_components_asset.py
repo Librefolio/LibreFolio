@@ -276,10 +276,17 @@ def _patch_metadata(monkeypatch: pytest.MonkeyPatch, outcome: AssetMetadataResou
 
 
 def _patch_market_snapshot(monkeypatch: pytest.MonkeyPatch, price_results: PriceResultsResource) -> None:
-    async def _fake_load_asset_price_results(context):  # noqa: ARG001
-        return price_results
+    def _fake_load_asset_market_prices(scope):  # noqa: ARG001
+        async def _load(session):  # noqa: ARG001
+            return price_results
 
-    monkeypatch.setattr(asset_core, "load_asset_price_results", _fake_load_asset_price_results)
+        return _load
+
+    monkeypatch.setattr(
+        asset_core,
+        "load_asset_market_prices",
+        _fake_load_asset_market_prices,
+    )
 
 
 def _patch_report(monkeypatch: pytest.MonkeyPatch, report: PortfolioReportResponse) -> list[int]:

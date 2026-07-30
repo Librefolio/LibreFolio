@@ -50,6 +50,7 @@ from backend.app.schemas.portfolio import (
     LotsAnalysisResponse,
     LotSummarySchema,
     OtherPeriodEffect,
+    PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportQuery,
     PortfolioReportResponse,
@@ -67,6 +68,7 @@ from backend.app.services.ai_export.assemblers.fifo import (  # noqa: E402  _LEG
 )
 from backend.app.services.ai_export.components.resources import LotsResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
+from backend.app.services.ai_export.temporal.plan import BucketPlan
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -83,6 +85,7 @@ __all__ = [
     "PositionRow",
     "UnallocatedRow",
     "discover_transacted_asset_ids",
+    "build_performance_bucket_rows",
     "has_nonzero_open_lot",
     "load_lots_results",
     "load_portfolio_report",
@@ -199,11 +202,16 @@ class EffectRow(BaseModel):
 
 
 class PerformanceBucketRow(BaseModel):
-    """One `BucketPlan` bucket's start/end/min/max value, flow, P&L and reconciliation.
+    """One bucket's internal NAV statistics plus inter-bucket performance.
 
     `has_data=False` (all other fields `None`) is an explicit, valid outcome for a
     bucket with no daily history points (e.g. a bucket entirely before the first
     transaction) - never fabricated as zero.
+
+    `start_value`/`end_value` are the first/last observations inside the bucket.
+    Variation fields use the previous non-empty bucket close, exposed separately
+    as `variation_start_*`. The first populated bucket therefore has null
+    variation fields unless a deterministic pre-period observation was loaded.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -216,10 +224,90 @@ class PerformanceBucketRow(BaseModel):
     end_value: Currency | None = None
     min_value: Currency | None = None
     max_value: Currency | None = None
+    min_date: Date | None = None
+    max_date: Date | None = None
+    variation_start_date: Date | None = None
+    variation_start_value: Currency | None = None
     net_external_flow: Currency | None = None
     period_pnl: Currency | None = None
     return_percent: SafeDecimal | None = None
     reconciliation_diff: Currency | None = None
+
+
+def build_performance_bucket_rows(
+    history: Sequence[PortfolioHistoryPoint],
+    bucket_plan: BucketPlan,
+    *,
+    currency_code: str,
+) -> tuple[PerformanceBucketRow, ...]:
+    """Map engine history to flow-aware inter-bucket returns and P&L."""
+    ordered_history = tuple(sorted(history, key=lambda point: point.date))
+    previous_close: PortfolioHistoryPoint | None = None
+    rows: list[PerformanceBucketRow] = []
+
+    for bucket in bucket_plan.buckets:
+        bucket_points = tuple(point for point in ordered_history if bucket.start_date <= point.date <= bucket.end_date)
+        if not bucket_points:
+            rows.append(
+                PerformanceBucketRow(
+                    index=bucket.index,
+                    start_date=bucket.start_date,
+                    end_date=bucket.end_date,
+                    has_data=False,
+                )
+            )
+            continue
+
+        first_point = bucket_points[0]
+        end_point = bucket_points[-1]
+        min_point = min(bucket_points, key=lambda point: point.nav_value.amount)
+        max_point = max(bucket_points, key=lambda point: point.nav_value.amount)
+
+        net_external_flow = None
+        period_pnl = None
+        return_percent = None
+        reconciliation_diff = None
+        if previous_close is not None:
+            net_external_flow = Currency(
+                code=currency_code,
+                amount=(end_point.capital_baseline.amount - previous_close.capital_baseline.amount),
+            )
+            period_pnl = Currency(
+                code=currency_code,
+                amount=end_point.total_pnl.amount - previous_close.total_pnl.amount,
+            )
+            reconciliation_diff = Currency(
+                code=currency_code,
+                amount=(end_point.nav_value.amount - previous_close.nav_value.amount - net_external_flow.amount - period_pnl.amount),
+            )
+            if previous_close.twrr is not None and end_point.twrr is not None:
+                denominator = Decimal(1) + Decimal(previous_close.twrr)
+                if denominator != 0:
+                    return_percent = ((Decimal(1) + Decimal(end_point.twrr)) / denominator) - Decimal(1)
+
+        rows.append(
+            PerformanceBucketRow(
+                index=bucket.index,
+                start_date=bucket.start_date,
+                end_date=bucket.end_date,
+                has_data=True,
+                start_value=first_point.nav_value,
+                end_value=end_point.nav_value,
+                min_value=min_point.nav_value,
+                max_value=max_point.nav_value,
+                min_date=min_point.date,
+                max_date=max_point.date,
+                variation_start_date=(previous_close.date if previous_close is not None else None),
+                variation_start_value=(previous_close.nav_value if previous_close is not None else None),
+                net_external_flow=net_external_flow,
+                period_pnl=period_pnl,
+                return_percent=return_percent,
+                reconciliation_diff=reconciliation_diff,
+            )
+        )
+        previous_close = end_point
+
+    return tuple(rows)
 
 
 class FifoAssetSummaryRow(BaseModel):

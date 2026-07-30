@@ -74,7 +74,10 @@ from backend.app.services.ai_export.components.fx_payloads import FxExposureConv
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.composer import Composer
-from backend.app.services.ai_export.datasets.catalog import EXPECTED_DATASET_COUNT
+from backend.app.services.ai_export.datasets.catalog import (
+    EXPECTED_DATASET_COUNT,
+    build_dataset_registry,
+)
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     RequiredComponentBuildError,
@@ -155,6 +158,27 @@ def _fx_scope(*, user_id: int, base: str, quote: str, start: date, end: date, ta
         broker_scope=broker_scope,
         base_currency=base,
         quote_currency=quote,
+    )
+
+
+def _portfolio_scope(
+    *,
+    user_id: int,
+    start: date,
+    end: date,
+    broker_scope: tuple[int, ...],
+    target: str = CURRENCY,
+    detail_level: DetailLevel = DetailLevel.STANDARD,
+) -> BuildScope:
+    return BuildScope(
+        request_id=f"req-portfolio-{user_id}-{end.isoformat()}-{detail_level.value}",
+        user_id=user_id,
+        domain=Domain.PORTFOLIO,
+        detail_level=detail_level,
+        period_start=start,
+        period_end=end,
+        target_currency=target,
+        broker_scope=broker_scope,
     )
 
 
@@ -421,10 +445,10 @@ class TestDatasetAnalysisRegistryConstruction:
 
     def test_analysis_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_analysis_registry()
-        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 17
+        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 16
         asset_analyses = {a.analysis_id for a in registry.for_domain(Domain.ASSET)}
         fx_analyses = {a.analysis_id for a in registry.for_domain(Domain.FX)}
-        assert asset_analyses == {"asset.trend_analysis", "asset.position_review", "asset.drawdown_recovery"}
+        assert asset_analyses == {"asset.trend_analysis", "asset.position_review"}
         assert fx_analyses == {"fx.trend_review", "fx.conversion_timing", "fx.exposure_impact"}
 
     def test_dataset_registry_builds_over_supplied_component_registry(self):
@@ -435,7 +459,7 @@ class TestDatasetAnalysisRegistryConstruction:
     def test_analysis_registry_builds_over_supplied_dataset_registry(self):
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == 17
+        assert len(analysis_registry) == 16
 
 
 # =============================================================================
@@ -518,13 +542,18 @@ def _asset_fx_context(session, *, user_id: int, base: str = "EUR", quote: str = 
 
 class TestResourceSharingAsset:
     @pytest.mark.asyncio
-    async def test_one_price_results_call_shared_across_market_snapshot_and_technical(self, session, test_user, scenario):
+    async def test_market_snapshot_and_technical_use_separate_currency_coherent_loads(
+        self,
+        session,
+        test_user,
+        scenario,
+    ):
         real_get_prices_bulk = AssetSourceManager.get_prices_bulk
         calls = []
 
         @staticmethod
         async def _counting(*args, **kwargs):
-            calls.append(1)
+            calls.append(tuple((request.target_currency, len(request.signals)) for request in args[0]))
             return await real_get_prices_bulk(*args, **kwargs)
 
         AssetSourceManager.get_prices_bulk = _counting
@@ -532,11 +561,24 @@ class TestResourceSharingAsset:
             context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
             registry = build_asset_fx_dataset_registry()
             composer = Composer()
-            await composer.compose_dataset(registry.get("asset.overview"), context, detail_level=DetailLevel.STANDARD)
-            await composer.compose_dataset(registry.get("asset.market_technical"), context, detail_level=DetailLevel.STANDARD)
+            overview = await composer.compose_dataset(
+                registry.get("asset.overview"),
+                context,
+                detail_level=DetailLevel.STANDARD,
+            )
+            technical = await composer.compose_dataset(
+                registry.get("asset.market_technical"),
+                context,
+                detail_level=DetailLevel.STANDARD,
+            )
         finally:
             AssetSourceManager.get_prices_bulk = real_get_prices_bulk
-        assert len(calls) == 1
+
+        assert calls == [((CURRENCY, 0),), ((None, 20),)]
+        market_snapshot = next(section.payload for section in overview.sections if section.component_id == "asset.market_snapshot")
+        ohlc = next(section.payload for section in technical.sections if section.component_id == "asset.ohlc_returns")
+        assert market_snapshot["converted_price"]["code"] == CURRENCY
+        assert ohlc["currency"] == scenario.usd_asset.currency
 
     @pytest.mark.asyncio
     async def test_one_report_call_shared_across_positions_cost_performance_lots(self, session, test_user, scenario):
@@ -599,7 +641,12 @@ class TestResourceSharingFx:
         assert len(calls) == 1
 
     @pytest.mark.asyncio
-    async def test_one_exposure_report_call_shared_across_exposure_components(self, session, test_user, scenario):
+    async def test_one_exposure_report_call_shared_across_exposure_components(
+        self,
+        session,
+        test_user,
+        scenario,
+    ):
         real_get_report = PortfolioService.get_report
         calls = []
 
@@ -612,10 +659,77 @@ class TestResourceSharingFx:
             context = _asset_fx_context(session, user_id=test_user.id)
             registry = build_asset_fx_dataset_registry()
             composer = Composer()
-            await composer.compose_dataset(registry.get("fx.direct_exposure"), context, detail_level=DetailLevel.STANDARD)
+            await composer.compose_dataset(
+                registry.get("fx.direct_exposure"),
+                context,
+                detail_level=DetailLevel.STANDARD,
+            )
         finally:
             PortfolioService.get_report = real_get_report
         assert len(calls) == 1
+
+
+class TestRealMultiBrokerTechnicalUniverse:
+    @pytest.mark.asyncio
+    async def test_same_asset_in_two_brokers_is_aggregated_once(
+        self,
+        session,
+        test_user,
+        scenario,
+    ):
+        scope = _portfolio_scope(
+            user_id=test_user.id,
+            start=PERIOD_START,
+            end=PERIOD_END,
+            broker_scope=(scenario.broker1.id, scenario.broker2.id),
+        )
+        context = _context(session, scope)
+        composition = await Composer().compose_dataset(
+            build_dataset_registry().get("portfolio.technical"),
+            context,
+            detail_level=DetailLevel.STANDARD,
+        )
+        sections = {section.component_id: section.payload for section in composition.sections}
+        universe = await technical_shared_module.load_technical_universe_bundle(
+            context,
+            **technical_shared_module.PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS,
+        )
+
+        assert len(universe.positions) == 3
+        assert universe.asset_ids == tuple(sorted((scenario.usd_asset.id, scenario.jpy_asset.id)))
+        assert len(universe.price_results.results) == 2
+        expected_weights = technical_shared_module.compute_nav_weights(universe.positions)
+        assert universe.weights == expected_weights
+        assert sum(universe.weights.values(), Decimal(0)) == Decimal(1)
+
+        prices = sections["portfolio.technical_prices"]
+        indicators = sections["portfolio.technical_indicators"]
+        breadth = sections["portfolio.technical_breadth"]
+        events = sections["portfolio.technical_events"]
+        expected_asset_ids = list(universe.asset_ids)
+
+        assert prices["considered_asset_count"] == 3
+        assert prices["eligible_asset_count"] == 2
+        assert [asset["asset_id"] for asset in prices["assets"]] == expected_asset_ids
+        assert [asset["asset_id"] for asset in indicators["assets"]] == expected_asset_ids
+        assert breadth["considered_asset_count"] == 3
+        assert breadth["eligible_asset_count"] == 2
+        assert breadth["covered_asset_count"] <= 2
+        assert breadth["total_weight"] == pytest.approx(1.0)
+
+        flat_events = [event for bucket in events["buckets"] for event in bucket["events"]]
+        event_identities = {
+            (
+                event["date"],
+                event["key"],
+                event["signal_code"],
+                event["asset_id"],
+                event["direction"],
+                tuple(sorted(event["values"].items())),
+            )
+            for event in flat_events
+        }
+        assert len(flat_events) == len(event_identities)
 
 
 # =============================================================================
@@ -712,9 +826,6 @@ class TestAnalysisComposition:
 
         review = await composer.compose_analysis(analysis_registry.get("asset.position_review"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
         assert {"asset.overview", "asset.position_performance"} <= set(review.dataset_ids)
-
-        drawdown = await composer.compose_analysis(analysis_registry.get("asset.drawdown_recovery"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
-        assert {"asset.overview", "asset.market_technical"} <= set(drawdown.dataset_ids)
 
     @pytest.mark.asyncio
     async def test_fx_analyses_compose_with_expected_datasets(self, session, test_user, scenario):

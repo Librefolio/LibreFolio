@@ -51,11 +51,13 @@ from backend.app.services.ai_export.components.technical_shared import (
     build_events_payload,
     build_indicator_table_payloads,
     build_price_buckets,
+    coherent_price_currency,
     latest_point_value,
     load_asset_price_results,
     load_fx_rate_series,
     load_fx_technical_bundle,
     observations_to_rate_points,
+    price_result_to_close_points,
     signal_results_to_discrete_events,
 )
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
@@ -75,13 +77,19 @@ async def _build_asset_ohlc_returns(context: BuildContext, dependencies: Mapping
     assert scope is not None and scope.asset_id is not None
     price_results = await load_asset_price_results(context)
     result = price_results.by_asset_id.get(scope.asset_id)
-    prices = result.prices if result is not None else ()
 
-    points = tuple(ContinuousMultiOutputPoint(date=point.date, values={"close": point.close}) for point in prices)
-    points = slice_to_requested_period(points, scope.period_start, scope.period_end)
+    points = (
+        price_result_to_close_points(
+            result,
+            start=scope.period_start,
+            end=scope.period_end,
+        )
+        if result is not None
+        else ()
+    )
     buckets = build_price_buckets(points, context.bucket_plan, key="close")
     latest_close, latest_date = latest_point_value(points, key="close")
-    currency = prices[0].currency if prices and prices[0].currency else scope.target_currency
+    currency = coherent_price_currency(result)
 
     return AssetOhlcReturnsPayload(
         asset_id=scope.asset_id,
@@ -197,8 +205,8 @@ FX_RATE_OHLC_SPEC = ComponentSpec(
 
 
 def _daily_return_points(rate_series: FxRateSeriesResource, *, start, end) -> tuple[ContinuousMultiOutputPoint, ...]:
-    """Day-over-day pct-change of the already-authoritative rate series (no invented economics)."""
-    observations = rate_series.observations
+    """Return changes between genuine FX observations, excluding carry-forward."""
+    observations = tuple(observation for observation in rate_series.observations if (not observation.backward_filled and observation.actual_date == observation.requested_date))
     points: list[ContinuousMultiOutputPoint] = []
     for previous, current in zip(observations, observations[1:], strict=False):
         if previous.rate == 0:

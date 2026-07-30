@@ -6,7 +6,7 @@ import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtime
 describe('AI Export prompt renderer', () => {
     it('renders analysis sections in the exact deterministic order', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('analysis', 'asset.drawdown_recovery');
+        const selection = selectionFixture('analysis', 'asset.trend_analysis');
         const rendered = renderAiExportPrompt({
             selection,
             compatibility,
@@ -66,7 +66,7 @@ describe('AI Export prompt renderer', () => {
 
     it('fails closed when snapshot identity differs from selection', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('analysis', 'asset.drawdown_recovery');
+        const selection = selectionFixture('analysis', 'asset.position_review');
         const other = selectionFixture('analysis', 'asset.trend_analysis');
 
         expect(() =>
