@@ -577,6 +577,36 @@ def services_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "AI Export service tests", verbose=verbose)
 
 
+def services_borsa_italiana_search(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Borsa Italiana provider search (single-fetch, IT+EN variants, ISIN hit)."""
+    print_section("Services: Borsa Italiana Search")
+    print_info("Testing: backend/app/services/asset_source_providers/borsa_italiana.py (search)")
+    print_info("External engine mocked — no live Borsa Italiana calls")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_borsa_italiana_search.py", test_names)
+    return run_command(cmd, "Borsa Italiana search tests", verbose=verbose)
+
+
+def services_borsa_italiana_funds(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Borsa Italiana mutual-fund NAV path + resolve_url capability."""
+    print_section("Services: Borsa Italiana Funds")
+    print_info("Testing: fund detail-page NAV via provider_params.codice_fondo")
+    print_info("Scraping library mocked — no live Borsa Italiana calls")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_borsa_italiana_funds.py", test_names)
+    return run_command(cmd, "Borsa Italiana funds tests", verbose=verbose)
+
+
+def services_web_link_finder(verbose: bool = False, test_names: list = None) -> bool:
+    """Test web_link_finder unit behaviour + search orchestration augmentation."""
+    print_section("Services: Web Link Finder")
+    print_info("Testing: backend/app/services/web_link_finder.py")
+    print_info("External engine mocked — no live ddgs/network call")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_web_link_finder.py", test_names)
+    return run_command(cmd, "Web link finder tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     print_header("LibreFolio Backend Services Tests")
@@ -675,5 +705,8 @@ Note: No backend server required.
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
     add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")
     add_test(cat, "ai-export", services_ai_export, name="AI Export", desc="All AI Export service test files in one pytest invocation")
+    add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
+    add_test(cat, "borsa-italiana-funds", services_borsa_italiana_funds, name="Borsa Italiana Funds", desc="Mutual-fund NAV via codice_fondo detail page + resolve_url (scraper mocked)")
+    add_test(cat, "web-link-finder", services_web_link_finder, name="Web Link Finder", desc="find_candidate_urls + search orchestration augmentation (ddgs mocked)")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

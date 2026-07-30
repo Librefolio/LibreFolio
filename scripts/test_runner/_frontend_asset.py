@@ -24,6 +24,8 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/charts/signals/__tests__/localSignalRegression.test.ts",
         "src/lib/workers/__tests__/workerPool.test.ts",
         "src/lib/workers/__tests__/priceProcessingPool.test.ts",
+        "src/lib/workers/__tests__/priceProcessing.worker.test.ts",
+        "src/lib/stores/signalCatalogStore.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
