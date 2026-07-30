@@ -19,6 +19,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
 )
 from backend.app.schemas.signals import (
+    SignalAreaSeries,
     SignalAvailabilityReason,
     SignalDomain,
     SignalExecutionContext,
@@ -209,6 +210,7 @@ async def test_signal_service_computes_five_risk_plugins_from_prepared_series():
     assert results[-1].risk_metadata.comparison_asset_id == 2
     assert results[-1].series[0].points[-1].value == pytest.approx(2.0)
     assert results[0].series[0].points[-1].value == pytest.approx(-8.0)
+    assert isinstance(results[0].series[0], SignalAreaSeries)
 
     rolling_return = results[2].series[0].points
     assert rolling_return[-1].value == pytest.approx(5.8)

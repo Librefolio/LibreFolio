@@ -39,7 +39,7 @@ class RiskContributionAnalytic(RiskAnalytic):
     name_i18n_key = "risk.analytics.riskContribution.name"
     description_i18n_key = "risk.analytics.riskContribution.description"
     output_kind = RiskOutputKind.CONTRIBUTION
-    supported_scopes = (RiskScopeKind.PORTFOLIO, RiskScopeKind.BROKER)
+    supported_scopes = (RiskScopeKind.PORTFOLIO,)
     supported_modes = (RiskMode.CURRENT_COMPOSITION,)
     params_model = RiskContributionParams
     min_observations = 20

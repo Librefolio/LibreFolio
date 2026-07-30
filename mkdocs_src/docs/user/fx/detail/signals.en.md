@@ -48,7 +48,7 @@ A **volatility envelope** around the price. The bands widen during volatile peri
 
 ## 🧠 AI Export
 
-The **AI Export** (:material-brain:) button in the Signals header offers three FX
+The **AI Export** (:material-brain:) button in the page toolbar offers three FX
 tasks:
 
 - **FX Trend Review**

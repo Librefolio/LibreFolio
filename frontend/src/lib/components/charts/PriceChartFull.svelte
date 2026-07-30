@@ -135,6 +135,8 @@
         disableCandlestick?: boolean;
         /** Callback when chart type changes (for external state sync) */
         onChartTypeChange?: (type: ChartType) => void;
+        /** Callback when view mode changes (for parent-owned signal/measure state) */
+        onViewModeChange?: (mode: ViewMode) => void;
     }
 
     let {
@@ -174,6 +176,7 @@
         mainCurrencyFlag: mainCurrencyFlagProp,
         disableCandlestick = false,
         onChartTypeChange: onChartTypeChangeProp,
+        onViewModeChange: onViewModeChangeProp,
     }: Props = $props();
 
     // =========================================================================
@@ -282,6 +285,7 @@
 
     function handleViewModeChange(mode: ViewMode) {
         viewMode = mode;
+        onViewModeChangeProp?.(mode);
     }
 
     function handlePointClick(date: string, value: number) {
@@ -1222,25 +1226,42 @@
 
     <!-- Unified Chart -->
     <div class="relative">
-        {#if !disableCandlestick}
-            <!-- Floating chart-type toggle (top-left on chart) -->
-            <div class="absolute top-2 left-12 z-10 flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity">
-                <button
-                    class="p-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    data-testid="chart-type-line"
-                    title="Line chart"
-                    onclick={() => handleChartTypeChange('line')}><ChartLine size={14} /></button
-                >
-                <button
-                    class="p-1.5 transition-colors {chartType === 'candlestick' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    data-testid="chart-type-candlestick"
-                    title="Candlestick chart"
-                    onclick={() => handleChartTypeChange('candlestick')}><ChartCandlestick size={14} /></button
-                >
+        <div class="absolute top-2 left-12 z-10 flex flex-wrap items-center gap-1.5 pr-24">
+            {#if !disableCandlestick}
+                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity">
+                    <button
+                        class="p-1.5 transition-colors {chartType === 'line' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="chart-type-line"
+                        title="Line chart"
+                        onclick={() => handleChartTypeChange('line')}><ChartLine size={14} /></button
+                    >
+                    <button
+                        class="p-1.5 transition-colors {chartType === 'candlestick' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="chart-type-candlestick"
+                        title="Candlestick chart"
+                        onclick={() => handleChartTypeChange('candlestick')}><ChartCandlestick size={14} /></button
+                    >
+                </div>
+            {/if}
+            {#if hideToolbar}
+                <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
+                    <button
+                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="chart-view-absolute"
+                        aria-pressed={viewMode === 'absolute'}
+                        onclick={() => handleViewModeChange('absolute')}>Abs</button
+                    >
+                    <button
+                        class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        data-testid="chart-view-percentage"
+                        aria-pressed={viewMode === 'percentage'}
+                        onclick={() => handleViewModeChange('percentage')}>%</button
+                    >
+                </div>
+            {/if}
+            <div class="pointer-events-none">
+                <ResolutionBadge {resolution} />
             </div>
-        {/if}
-        <div class="absolute top-2 left-28 z-10 pointer-events-none">
-            <ResolutionBadge {resolution} />
         </div>
         {#if chartType === 'line'}
             <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode}></div>

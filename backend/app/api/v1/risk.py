@@ -11,6 +11,10 @@ from backend.app.schemas.risk import (
     RiskQueryRequest,
     RiskQueryResponse,
 )
+from backend.app.schemas.risk_scenarios import RiskScenarioCatalogResponse
+from backend.app.services.risk.scenario_catalog import (
+    get_loaded_risk_scenario_catalog,
+)
 from backend.app.services.risk.service import (
     RiskScopeAccessError,
     RiskScopeNotFoundError,
@@ -26,6 +30,16 @@ def get_risk_service(
     return RiskService(session)
 
 
+def get_risk_scenario_catalog() -> RiskScenarioCatalogResponse:
+    try:
+        return get_loaded_risk_scenario_catalog()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+        ) from exc
+
+
 @router.get(
     "/catalog",
     response_model=RiskCatalogResponse,
@@ -37,12 +51,24 @@ async def get_risk_catalog(
     return RiskCatalogResponse(items=RiskService.catalog())
 
 
+@router.get(
+    "/scenario-catalog",
+    response_model=RiskScenarioCatalogResponse,
+    summary="List typed risk scenarios",
+)
+async def get_scenario_catalog(
+    _current_user: User = Depends(get_current_user),
+    catalog: RiskScenarioCatalogResponse = Depends(get_risk_scenario_catalog),
+) -> RiskScenarioCatalogResponse:
+    return catalog
+
+
 @router.post(
     "/query",
     response_model=RiskQueryResponse,
     summary="Execute a bulk risk query",
     responses={
-        403: {"description": "Requested broker scope is not accessible."},
+        403: {"description": "Requested portfolio broker subset is not fully accessible."},
         404: {"description": "Requested risk scope does not exist."},
     },
 )

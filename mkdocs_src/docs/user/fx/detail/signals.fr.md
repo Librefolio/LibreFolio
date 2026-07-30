@@ -48,8 +48,8 @@ Une **enveloppe de volatilité** autour du prix. Les bandes s'élargissent penda
 
 ## 🧠 Export IA
 
-Le bouton **Export IA** (:material-brain:) dans l'en-tête Signaux propose trois
-tâches FX :
+Le bouton **Export IA** (:material-brain:) dans la barre d'outils de la page
+propose trois tâches FX :
 
 - **Analyse de la tendance de change**
 - **Impact de l'exposition de change**

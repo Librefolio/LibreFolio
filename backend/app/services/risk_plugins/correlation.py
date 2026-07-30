@@ -54,7 +54,6 @@ class CorrelationAnalytic(RiskAnalytic):
     supported_scopes = (
         RiskScopeKind.ASSET_SET,
         RiskScopeKind.PORTFOLIO,
-        RiskScopeKind.BROKER,
     )
     supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
     params_model = CorrelationParams

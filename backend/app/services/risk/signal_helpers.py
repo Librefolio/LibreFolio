@@ -6,12 +6,14 @@ from collections.abc import Callable, Sequence
 from typing import Optional
 
 from backend.app.schemas.signals import (
+    SignalAreaSeries,
     SignalAvailabilityReason,
     SignalComputation,
     SignalExecutionContext,
     SignalLineSeries,
     SignalOutputSpec,
     SignalPricePoint,
+    SignalSeriesKind,
     SignalValuePoint,
     SignalWarning,
     SignalWarningCode,
@@ -129,9 +131,12 @@ def build_line_computation(
     """Build one line output while preserving the declared catalog contract."""
     if len(values) != len(price_points):
         raise ValueError("risk metric output must align exactly to signal input")
+    if output_spec.kind not in (SignalSeriesKind.LINE, SignalSeriesKind.AREA):
+        raise ValueError("build_line_computation requires a line or area output spec")
+    series_type = SignalAreaSeries if output_spec.kind == SignalSeriesKind.AREA else SignalLineSeries
     return SignalComputation(
         series=[
-            SignalLineSeries(
+            series_type(
                 key=output_spec.key,
                 label_key=output_spec.label_key,
                 semantic_id=output_spec.semantic_id,

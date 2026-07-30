@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, BrokerUserAccess
 from backend.app.logging_config import get_logger
+from backend.app.schemas.assets import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio import (
     DataQualityReport,
@@ -25,7 +26,6 @@ from backend.app.schemas.prices import FAPriceQueryItem
 from backend.app.schemas.risk import (
     AssetRiskScope,
     AssetSetRiskScope,
-    BrokerRiskScope,
     PortfolioRiskScope,
     PreparedAssetSeriesSet,
     RiskAnalyticRequest,
@@ -48,13 +48,18 @@ from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import RiskAnalyticRegistry
 from backend.app.services.risk.base import (
     RiskAnalytic,
+    RiskAssetClassification,
     RiskComputation,
     RiskExecutionContext,
+    RiskHistoricalReplayContext,
     RiskUnavailableError,
 )
 from backend.app.services.risk.metrics import (
     current_buy_and_hold_returns,
     period_returns_from_cumulative,
+)
+from backend.app.services.risk.scenario_catalog import (
+    get_loaded_risk_scenario_catalog,
 )
 from backend.app.services.series_preparation import prepare_asset_series_set
 
@@ -88,6 +93,8 @@ class _ScopeInputs:
     data_quality: DataQualityReport
     warnings: tuple[RiskWarning, ...]
     composition_error: Optional[str] = None
+    broker_ids: tuple[int, ...] = ()
+    composition_as_of: Optional[date] = None
 
 
 class RiskService:
@@ -152,21 +159,29 @@ class RiskService:
             user_id=user_id,
             request=request,
         )
-        dependency_asset_ids = {int(comparison_asset_id) for plan in plans.values() if (comparison_asset_id := getattr(plan.params, "comparison_asset_id", None)) is not None}
-        existing_asset_ids = await self._existing_asset_ids(set(scope_inputs.requested_asset_ids) | dependency_asset_ids)
+        comparison_dependency_asset_ids = {int(comparison_asset_id) for plan in plans.values() if (comparison_asset_id := getattr(plan.params, "comparison_asset_id", None)) is not None}
+        replay_proxy_asset_ids = {int(proxy.proxy_asset_id) for plan in plans.values() if _is_historical_replay_plan(plan) for proxy in getattr(plan.params, "proxy_assets", ())}
+        existing_asset_ids = await self._existing_asset_ids(set(scope_inputs.requested_asset_ids) | comparison_dependency_asset_ids | replay_proxy_asset_ids)
         missing_scope_asset_ids = set(scope_inputs.requested_asset_ids) - existing_asset_ids
         if missing_scope_asset_ids:
             raise RiskScopeNotFoundError(f"Unknown asset IDs in risk scope: {sorted(missing_scope_asset_ids)}")
 
         prepared = await self._prepare_asset_series(
-            asset_ids=tuple(sorted(set(scope_inputs.requested_asset_ids) | (dependency_asset_ids & existing_asset_ids))),
-            request=request,
+            asset_ids=tuple(sorted(set(scope_inputs.requested_asset_ids) | (comparison_dependency_asset_ids & existing_asset_ids))),
+            date_range=request.date_range,
+            target_currency=request.target_currency,
         )
         context = self._build_context(
             request=request,
             scope_inputs=scope_inputs,
             prepared=prepared,
         )
+        if any(_is_hypothetical_plan(plan) for plan in plans.values()):
+            context = replace(
+                context,
+                asset_classifications=await self._load_asset_classifications(scope_inputs.requested_asset_ids),
+                geography_groups=(self._geography_group_members() if any(_is_geography_hypothetical_plan(plan) for plan in plans.values()) else {}),
+            )
 
         for index, plan in plans.items():
             if index in results:
@@ -191,7 +206,27 @@ class RiskService:
                     data_quality=self._data_quality(plan, context),
                 )
                 continue
-            observations = self._available_observations(plan, context)
+            plan_context = context
+            if _is_historical_replay_plan(plan):
+                try:
+                    plan_context = await self._prepare_historical_replay_context(
+                        plan=plan,
+                        context=context,
+                        scope_inputs=scope_inputs,
+                        existing_asset_ids=existing_asset_ids,
+                        target_currency=request.target_currency,
+                    )
+                except RiskUnavailableError as exc:
+                    results[index] = self._unavailable(
+                        plan.request,
+                        exc.code,
+                        str(exc),
+                        details=exc.details,
+                        metadata=self._metadata(plan, context),
+                        data_quality=self._data_quality(plan, context),
+                    )
+                    continue
+            observations = self._available_observations(plan, plan_context)
             if observations is not None and observations < plan.analytic_class.min_observations:
                 results[index] = self._unavailable(
                     plan.request,
@@ -201,14 +236,14 @@ class RiskService:
                         "observations": observations,
                         "required": plan.analytic_class.min_observations,
                     },
-                    metadata=self._metadata(plan, context),
-                    data_quality=self._data_quality(plan, context),
+                    metadata=self._metadata(plan, plan_context),
+                    data_quality=self._data_quality(plan, plan_context),
                 )
                 continue
             try:
                 computation = await plan.analytic.execute(
                     plan.params,
-                    context,
+                    plan_context,
                 )
             except RiskUnavailableError as exc:
                 results[index] = self._unavailable(
@@ -216,8 +251,8 @@ class RiskService:
                     exc.code,
                     str(exc),
                     details=exc.details,
-                    metadata=self._metadata(plan, context),
-                    data_quality=self._data_quality(plan, context),
+                    metadata=self._metadata(plan, plan_context),
+                    data_quality=self._data_quality(plan, plan_context),
                 )
                 continue
             except (ValueError, ArithmeticError) as exc:
@@ -225,8 +260,8 @@ class RiskService:
                     plan.request,
                     RiskErrorCode.UNDEFINED_METRIC,
                     str(exc),
-                    metadata=self._metadata(plan, context),
-                    data_quality=self._data_quality(plan, context),
+                    metadata=self._metadata(plan, plan_context),
+                    data_quality=self._data_quality(plan, plan_context),
                 )
                 continue
             except Exception as exc:  # pragma: no cover - defensive isolation boundary
@@ -239,8 +274,8 @@ class RiskService:
                     instance_id=plan.request.instance_id,
                     analytic_code=plan.request.analytic_code,
                     status=RiskResultStatus.FAILED,
-                    metadata=self._metadata(plan, context),
-                    data_quality=self._data_quality(plan, context),
+                    metadata=self._metadata(plan, plan_context),
+                    data_quality=self._data_quality(plan, plan_context),
                     error=RiskError(
                         code=RiskErrorCode.EXECUTION_FAILED,
                         message="Risk analytic execution failed",
@@ -250,7 +285,7 @@ class RiskService:
                 continue
             results[index] = self._success(
                 plan=plan,
-                context=context,
+                context=plan_context,
                 computation=computation,
             )
 
@@ -286,25 +321,27 @@ class RiskService:
                 warnings=(),
             )
 
-        broker_ids: Optional[list[int]]
-        if isinstance(scope, BrokerRiskScope):
-            access_stmt = select(BrokerUserAccess.id).where(
-                BrokerUserAccess.user_id == user_id,
-                BrokerUserAccess.broker_id == scope.broker_id,
-            )
-            if (await self.db.execute(access_stmt)).scalar_one_or_none() is None:
-                raise RiskScopeAccessError(f"Broker {scope.broker_id} is not accessible")
-            broker_ids = [scope.broker_id]
-        elif isinstance(scope, PortfolioRiskScope):
-            broker_ids = None
-        else:  # pragma: no cover - discriminated Pydantic union prevents this
+        if not isinstance(scope, PortfolioRiskScope):  # pragma: no cover - discriminated Pydantic union prevents this
             raise TypeError(f"Unsupported risk scope: {type(scope).__name__}")
+
+        accessible_broker_ids = await self._accessible_broker_ids(user_id)
+        requested_broker_ids = tuple(scope.broker_ids or ())
+        if requested_broker_ids:
+            inaccessible_broker_ids = tuple(sorted(set(requested_broker_ids) - set(accessible_broker_ids)))
+            if inaccessible_broker_ids:
+                broker_list = ", ".join(str(broker_id) for broker_id in inaccessible_broker_ids)
+                raise RiskScopeAccessError(f"Broker subset is not fully accessible: {broker_list}")
+            effective_broker_ids = requested_broker_ids
+            report_broker_ids: Optional[list[int]] = list(effective_broker_ids)
+        else:
+            effective_broker_ids = accessible_broker_ids
+            report_broker_ids = None
 
         date_end = request.date_range.end or request.date_range.start
         report = await PortfolioService(self.db).get_report(
             user_id=user_id,
             query=PortfolioReportQuery(
-                broker_ids=broker_ids,
+                broker_ids=report_broker_ids,
                 date_range=OpenDateRangeModel(
                     start=request.date_range.start,
                     end=date_end,
@@ -364,7 +401,13 @@ class RiskService:
             data_quality=report.data_quality or DataQualityReport(),
             warnings=tuple(warnings),
             composition_error=composition_error,
+            broker_ids=effective_broker_ids,
+            composition_as_of=date_end,
         )
+
+    async def _accessible_broker_ids(self, user_id: int) -> tuple[int, ...]:
+        result = await self.db.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id))
+        return tuple(sorted(set(result.scalars().all())))
 
     async def _existing_asset_ids(self, asset_ids: set[int]) -> set[int]:
         if not asset_ids:
@@ -372,14 +415,61 @@ class RiskService:
         result = await self.db.execute(select(Asset.id).where(Asset.id.in_(asset_ids)))
         return set(result.scalars().all())
 
+    async def _load_asset_classifications(
+        self,
+        asset_ids: tuple[int, ...],
+    ) -> dict[int, RiskAssetClassification]:
+        if not asset_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                Asset.id,
+                Asset.asset_type,
+                Asset.classification_params,
+            ).where(Asset.id.in_(asset_ids))
+        )
+        classifications: dict[int, RiskAssetClassification] = {}
+        for asset_id, asset_type, raw_classification in result.all():
+            parsed: Optional[FAClassificationParams] = None
+            metadata_error: Optional[str] = None
+            if raw_classification:
+                try:
+                    parsed = FAClassificationParams.model_validate_json(raw_classification) if isinstance(raw_classification, str) else FAClassificationParams.model_validate(raw_classification)
+                except (TypeError, ValueError, ValidationError) as exc:
+                    metadata_error = "invalid_classification_metadata"
+                    logger.error(
+                        "Invalid asset classification metadata",
+                        asset_id=asset_id,
+                        error=str(exc),
+                    )
+            classifications[int(asset_id)] = RiskAssetClassification(
+                asset_class=(asset_type.value if hasattr(asset_type, "value") else str(asset_type)),
+                sector_exposures=({bucket: float(weight) for bucket, weight in parsed.sector_area.distribution.items()} if parsed is not None and parsed.sector_area is not None else None),
+                geography_exposures=({bucket: float(weight) for bucket, weight in parsed.geographic_area.distribution.items()} if parsed is not None and parsed.geographic_area is not None else None),
+                metadata_error=metadata_error,
+            )
+        return classifications
+
+    @staticmethod
+    def _geography_group_members() -> dict[str, frozenset[str]]:
+        catalog = get_loaded_risk_scenario_catalog()
+        return {group.id: frozenset(group.members) for group in catalog.geography_groups}
+
     async def _prepare_asset_series(
         self,
         *,
         asset_ids: tuple[int, ...],
-        request: RiskQueryRequest,
+        date_range: DateRangeModel,
+        target_currency: str,
     ) -> PreparedAssetSeriesSet:
-        date_end = request.date_range.end or request.date_range.start
-        load_start = request.date_range.start
+        if not asset_ids:
+            return prepare_asset_series_set(
+                [],
+                requested_range=date_range,
+                target_currency=target_currency,
+            )
+        date_end = date_range.end or date_range.start
+        load_start = date_range.start
         if load_start > date.min:
             load_start -= timedelta(days=1)
         price_results = await AssetSourceManager.get_prices_bulk(
@@ -390,7 +480,7 @@ class RiskService:
                         start=load_start,
                         end=date_end,
                     ),
-                    target_currency=request.target_currency,
+                    target_currency=target_currency,
                 )
                 for asset_id in asset_ids
             ],
@@ -398,8 +488,71 @@ class RiskService:
         )
         return prepare_asset_series_set(
             price_results,
-            requested_range=request.date_range,
-            target_currency=request.target_currency,
+            requested_range=date_range,
+            target_currency=target_currency,
+        )
+
+    async def _prepare_historical_replay_context(
+        self,
+        *,
+        plan: _AnalyticPlan,
+        context: RiskExecutionContext,
+        scope_inputs: _ScopeInputs,
+        existing_asset_ids: set[int],
+        target_currency: str,
+    ) -> RiskExecutionContext:
+        replay_range = getattr(plan.params, "replay_range", None)
+        if not isinstance(replay_range, DateRangeModel):
+            raise RiskUnavailableError(
+                "Historical replay requires a valid replay range",
+                code=RiskErrorCode.INVALID_PARAMETERS,
+            )
+
+        scope_asset_ids = set(scope_inputs.requested_asset_ids)
+        proxy_assets = tuple(getattr(plan.params, "proxy_assets", ()))
+        excluded_asset_ids = tuple(getattr(plan.params, "excluded_assets", ()))
+        proxy_by_asset = {int(proxy.asset_id): int(proxy.proxy_asset_id) for proxy in proxy_assets}
+        referenced_scope_asset_ids = set(proxy_by_asset) | set(excluded_asset_ids)
+        outside_scope_asset_ids = sorted(referenced_scope_asset_ids - scope_asset_ids)
+        if outside_scope_asset_ids:
+            raise RiskUnavailableError(
+                "Historical replay options reference assets outside the selected scope",
+                code=RiskErrorCode.INVALID_PARAMETERS,
+                details={"asset_ids": outside_scope_asset_ids},
+            )
+
+        missing_proxy_asset_ids = sorted(set(proxy_by_asset.values()) - existing_asset_ids)
+        if missing_proxy_asset_ids:
+            raise RiskUnavailableError(
+                "One or more historical replay proxy assets do not exist",
+                code=RiskErrorCode.INVALID_PARAMETERS,
+                details={"proxy_asset_ids": missing_proxy_asset_ids},
+            )
+
+        excluded_set = set(excluded_asset_ids)
+        source_asset_ids = {asset_id: proxy_by_asset.get(asset_id, asset_id) for asset_id in scope_inputs.requested_asset_ids if asset_id not in excluded_set}
+        prepared = await self._prepare_asset_series(
+            asset_ids=tuple(sorted(set(source_asset_ids.values()))),
+            date_range=replay_range,
+            target_currency=target_currency,
+        )
+        replay_data_quality = _merge_data_quality(
+            scope_inputs.data_quality,
+            prepared.data_quality,
+        )
+        return replace(
+            context,
+            scope_asset_ids=scope_inputs.requested_asset_ids,
+            excluded_assets=(),
+            execution_warnings=scope_inputs.warnings,
+            prepared_data_quality=prepared.data_quality,
+            cash_weight=scope_inputs.cash_weight,
+            historical_replay=RiskHistoricalReplayContext(
+                prepared_series=prepared,
+                source_asset_ids=source_asset_ids,
+                excluded_asset_ids=tuple(sorted(excluded_asset_ids)),
+                data_quality=replay_data_quality,
+            ),
         )
 
     def _build_context(
@@ -442,14 +595,7 @@ class RiskService:
         calendar_days = prepared.calendar_days
         coverage = prepared.calendar_coverage
 
-        if (
-            request.scope.kind
-            in {
-                RiskScopeKind.PORTFOLIO,
-                RiskScopeKind.BROKER,
-            }
-            and request.mode == RiskMode.HISTORICAL
-        ):
+        if request.scope.kind == RiskScopeKind.PORTFOLIO and request.mode == RiskMode.HISTORICAL:
             (
                 primary_baseline_date,
                 primary_return_dates,
@@ -459,10 +605,7 @@ class RiskService:
                 coverage,
             ) = _portfolio_twrr_returns(scope_inputs.portfolio_report)
             primary_return_basis = RiskReturnBasis.TWRR
-        elif request.scope.kind in {
-            RiskScopeKind.PORTFOLIO,
-            RiskScopeKind.BROKER,
-        }:
+        elif request.scope.kind == RiskScopeKind.PORTFOLIO:
             rows = {asset_id: tuple(float(point.value) for point in prepared_by_asset[asset_id].returns.points) for asset_id in usable_scope_asset_ids}
             usable_weights = {asset_id: scope_inputs.weights.get(asset_id, 0.0) for asset_id in usable_scope_asset_ids}
             usable_cash_weight = max(
@@ -490,7 +633,10 @@ class RiskService:
         usable_cash_weight = max(0.0, 1.0 - sum(usable_weights.values())) if scope_inputs.weights else scope_inputs.cash_weight
         return RiskExecutionContext(
             scope_kind=request.scope.kind,
-            scope_reference=_scope_reference(request),
+            scope_reference=_scope_reference(
+                request,
+                broker_ids=scope_inputs.broker_ids,
+            ),
             requested_range=request.date_range,
             target_currency=request.target_currency,
             mode=request.mode,
@@ -514,6 +660,8 @@ class RiskService:
             asset_values=scope_inputs.asset_values,
             cash_weight=usable_cash_weight,
             scope_value=scope_inputs.scope_value,
+            broker_ids=scope_inputs.broker_ids,
+            composition_as_of=scope_inputs.composition_as_of,
         )
 
     @staticmethod
@@ -531,7 +679,11 @@ class RiskService:
         if plan.request.analytic_code == "stress":
             if getattr(plan.params, "method", None) == RiskStressMethod.HYPOTHETICAL:
                 return None
-            return context.prepared_series.n_observations if context.prepared_series is not None else 0
+            if context.historical_replay is None:
+                return 0
+            if not context.historical_replay.source_asset_ids:
+                return None
+            return context.historical_replay.prepared_series.n_observations
         return context.n_observations
 
     @staticmethod
@@ -541,10 +693,7 @@ class RiskService:
     ) -> bool:
         if context.mode != RiskMode.CURRENT_COMPOSITION:
             return False
-        if context.scope_kind not in {
-            RiskScopeKind.PORTFOLIO,
-            RiskScopeKind.BROKER,
-        }:
+        if context.scope_kind != RiskScopeKind.PORTFOLIO:
             return False
         return plan.request.analytic_code in {
             "risk_contribution",
@@ -562,9 +711,14 @@ class RiskService:
         computation: RiskComputation,
     ) -> RiskAnalyticResult:
         data_quality = self._data_quality(plan, context)
+        context_warnings = context.execution_warnings
+        context_exclusions = context.excluded_assets
+        if _is_hypothetical_plan(plan):
+            context_warnings = tuple(warning for warning in context_warnings if warning.code != "assets_excluded")
+            context_exclusions = ()
         warnings = _dedupe_warnings(
             (
-                *context.execution_warnings,
+                *context_warnings,
                 *computation.warnings,
             )
         )
@@ -579,7 +733,7 @@ class RiskService:
                     ),
                 )
             )
-        status = RiskResultStatus.PARTIAL if warnings or context.excluded_assets or data_quality.data_quality_status != DataQualityStatus.OK else RiskResultStatus.OK
+        status = RiskResultStatus.PARTIAL if any(warning.degrades_result for warning in warnings) or context_exclusions or computation.excluded_assets or data_quality.data_quality_status != DataQualityStatus.OK else RiskResultStatus.OK
         return RiskAnalyticResult(
             instance_id=plan.request.instance_id,
             analytic_code=plan.request.analytic_code,
@@ -599,16 +753,18 @@ class RiskService:
         plan: _AnalyticPlan,
         context: RiskExecutionContext,
     ) -> DataQualityReport:
+        if _is_historical_replay_plan(plan) and context.historical_replay is not None:
+            return context.historical_replay.data_quality
+        if _is_hypothetical_plan(plan):
+            if context.scope_kind == RiskScopeKind.PORTFOLIO and context.portfolio_data_quality is not None:
+                return context.portfolio_data_quality
+            return DataQualityReport()
         if (
             context.mode == RiskMode.HISTORICAL
-            and context.scope_kind
-            in {
-                RiskScopeKind.PORTFOLIO,
-                RiskScopeKind.BROKER,
-            }
+            and context.scope_kind == RiskScopeKind.PORTFOLIO
             and plan.request.analytic_code
             in {
-                "portfolio_kpi",
+                "historical_kpi",
                 "historical_var",
             }
             and context.portfolio_data_quality is not None
@@ -632,10 +788,11 @@ class RiskService:
             annualization_factor = None
 
         analyzed_range = computation.analyzed_range if computation is not None and computation.analyzed_range is not None else _context_analyzed_range(context)
+        context_exclusions = () if _is_hypothetical_plan(plan) else context.excluded_assets
         computation_exclusions = computation.excluded_assets if computation is not None else ()
         exclusions = _dedupe_exclusions(
             (
-                *context.excluded_assets,
+                *context_exclusions,
                 *computation_exclusions,
             )
         )
@@ -647,6 +804,9 @@ class RiskService:
             coverage=max(0.0, min(1.0, coverage)),
             currency=context.target_currency,
             scope=context.scope_kind,
+            scope_reference=context.scope_reference,
+            broker_ids=(list(context.broker_ids) if context.scope_kind == RiskScopeKind.PORTFOLIO else None),
+            composition_as_of=(context.composition_as_of if context.scope_kind == RiskScopeKind.PORTFOLIO else None),
             method=computation.method if computation is not None else None,
             params=plan.params.model_dump(mode="json", exclude_none=True),
             mode=context.mode,
@@ -661,6 +821,7 @@ class RiskService:
             path_count=computation.path_count if computation is not None else None,
             random_seed=(computation.random_seed if computation is not None else None),
             sobol_start_index=(computation.sobol_start_index if computation is not None else None),
+            historical_replay_audit=(computation.historical_replay_audit if computation is not None else None),
         )
 
     @staticmethod
@@ -719,15 +880,18 @@ def _portfolio_twrr_returns(
     )
 
 
-def _scope_reference(request: RiskQueryRequest) -> str:
+def _scope_reference(
+    request: RiskQueryRequest,
+    *,
+    broker_ids: tuple[int, ...] = (),
+) -> str:
     scope = request.scope
     if isinstance(scope, AssetRiskScope):
         return f"asset:{scope.asset_id}"
     if isinstance(scope, AssetSetRiskScope):
         return "asset_set:" + ",".join(str(asset_id) for asset_id in scope.asset_ids)
-    if isinstance(scope, BrokerRiskScope):
-        return f"broker:{scope.broker_id}"
-    return "portfolio"
+    suffix = ",".join(str(broker_id) for broker_id in broker_ids) or "none"
+    return f"portfolio:{suffix}"
 
 
 def _context_analyzed_range(
@@ -741,6 +905,18 @@ def _context_analyzed_range(
     if context.prepared_series is not None and context.prepared_series.effective_range is not None:
         return context.prepared_series.effective_range
     return context.requested_range
+
+
+def _is_historical_replay_plan(plan: _AnalyticPlan) -> bool:
+    return plan.request.analytic_code == "stress" and getattr(plan.params, "method", None) == RiskStressMethod.HISTORICAL_REPLAY
+
+
+def _is_hypothetical_plan(plan: _AnalyticPlan) -> bool:
+    return plan.request.analytic_code == "stress" and getattr(plan.params, "method", None) == RiskStressMethod.HYPOTHETICAL
+
+
+def _is_geography_hypothetical_plan(plan: _AnalyticPlan) -> bool:
+    return _is_hypothetical_plan(plan) and getattr(getattr(plan, "params", None), "dimension", None).value == "geography"
 
 
 def _dedupe_warnings(

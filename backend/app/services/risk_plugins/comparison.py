@@ -52,7 +52,6 @@ class ComparisonAnalytic(RiskAnalytic):
     supported_scopes = (
         RiskScopeKind.ASSET,
         RiskScopeKind.PORTFOLIO,
-        RiskScopeKind.BROKER,
     )
     supported_modes = (RiskMode.HISTORICAL, RiskMode.CURRENT_COMPOSITION)
     params_model = ComparisonParams

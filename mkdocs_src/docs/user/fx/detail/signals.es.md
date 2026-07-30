@@ -48,8 +48,8 @@ Una **envolvente de volatilidad** alrededor del precio. Las bandas se ensanchan 
 
 ## 🧠 Exportación de IA
 
-El botón **Exportación de IA** (:material-brain:) del encabezado Señales ofrece
-tres tareas de FX:
+El botón **Exportación de IA** (:material-brain:) de la barra de herramientas de
+la página ofrece tres tareas de FX:
 
 - **Análisis de tendencia cambiaria**
 - **Impacto de la exposición cambiaria**

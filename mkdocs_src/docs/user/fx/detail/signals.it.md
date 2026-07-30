@@ -48,8 +48,8 @@ Un **inviluppo di volatilità** attorno al prezzo. Le bande si allargano durante
 
 ## 🧠 Esportazione AI
 
-Il pulsante **Esportazione AI** (:material-brain:) nell'intestazione Segnali
-offre tre task FX:
+Il pulsante **Esportazione AI** (:material-brain:) nella barra degli strumenti
+della pagina offre tre task FX:
 
 - **Analisi del trend valutario**
 - **Impatto dell'esposizione valutaria**

@@ -84,6 +84,18 @@ test.describe('FX Detail Page', () => {
         await expect(page.getByTestId('fx-detail-signals-panel')).not.toBeVisible();
     });
 
+    test('AI Export lives in the page toolbar instead of Signals', async ({page}) => {
+        await goToFxDetailPage(page, 'EUR-USD');
+        const aiExportButton = page.getByTestId('fx-detail-filter-bar').getByTestId('ai-export-button');
+        await expect(aiExportButton).toBeVisible({timeout: 10_000});
+        await expect(aiExportButton).toBeEnabled({timeout: 10_000});
+        await aiExportButton.click();
+        await expect(page.getByTestId('ai-export-menu-panel')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('ai-export-menu-panel')).toBeHidden();
+        await expect(page.getByTestId('fx-detail-signals-header').getByTestId('ai-export-button')).toHaveCount(0);
+    });
+
     // ========================================================================
     // Test 8: Measures panel fold/unfold
     // ========================================================================
@@ -101,17 +113,20 @@ test.describe('FX Detail Page', () => {
     // ========================================================================
     // Test 9: Toggle Abs/%
     // ========================================================================
-    test('Abs/% toggle switches view mode', async ({page}) => {
+    test('Abs/% control is chart-local and synchronizes page view mode', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         const filterBar = page.getByTestId('fx-detail-filter-bar');
-        // Find the % button and click it
-        const pctBtn = filterBar.getByRole('button', {name: '%'});
-        if (await pctBtn.isVisible()) {
-            await pctBtn.click();
-            await page.waitForTimeout(300);
-            // The button should now be active (has green bg class)
-            await expect(pctBtn).toHaveClass(/bg-libre-green/);
-        }
+        const chart = page.getByTestId('fx-detail-chart');
+        await expect(filterBar.getByTestId('chart-view-mode-toggle')).toHaveCount(0);
+        await expect(chart.getByTestId('chart-view-mode-toggle')).toBeVisible({timeout: 10_000});
+        await expect(chart).toHaveAttribute('data-view-mode', 'percentage');
+
+        await chart.getByTestId('chart-view-absolute').click();
+        await expect(chart).toHaveAttribute('data-view-mode', 'absolute');
+        await expect(chart.getByTestId('chart-view-absolute')).toHaveAttribute('aria-pressed', 'true');
+
+        await chart.getByTestId('chart-view-percentage').click();
+        await expect(chart).toHaveAttribute('data-view-mode', 'percentage');
     });
 
     // ========================================================================

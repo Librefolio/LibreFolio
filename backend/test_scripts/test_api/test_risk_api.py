@@ -13,7 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
-from backend.app.api.v1.risk import get_risk_service, router
+from backend.app.api.v1.risk import (
+    get_risk_scenario_catalog,
+    get_risk_service,
+    router,
+)
 from backend.app.config import set_test_mode
 from backend.app.db.models import User
 from backend.app.db.session import get_async_engine
@@ -26,6 +30,9 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
+)
+from backend.app.services.risk.scenario_catalog import (
+    load_risk_scenario_catalog,
 )
 from backend.app.services.risk.service import (
     RiskScopeAccessError,
@@ -106,13 +113,51 @@ async def test_risk_catalog_requires_auth_and_lists_plugins():
         assert [item["analytic_code"] for item in response.json()["items"]] == [
             "comparison",
             "correlation",
+            "historical_kpi",
             "historical_var",
-            "portfolio_kpi",
             "portfolio_optimization",
             "risk_contribution",
             "simulation",
             "stress",
         ]
+        historical_kpi = next(item for item in response.json()["items"] if item["analytic_code"] == "historical_kpi")
+        assert historical_kpi["supported_scopes"] == ["asset", "portfolio"]
+        assert historical_kpi["supported_modes"] == ["historical"]
+
+
+@pytest.mark.asyncio
+async def test_scenario_catalog_requires_auth_and_publishes_typed_entries(tmp_path):
+    catalog = load_risk_scenario_catalog(host_dir=tmp_path / "host")
+    service = AsyncMock(spec=RiskService)
+    unauthenticated = app_with_service(service, authenticated=False)
+    authenticated = app_with_service(service, authenticated=True)
+    unauthenticated.dependency_overrides[get_risk_scenario_catalog] = lambda: catalog
+    authenticated.dependency_overrides[get_risk_scenario_catalog] = lambda: catalog
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=unauthenticated),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(f"{API_BASE}/scenario-catalog")
+        assert response.status_code == 401
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=authenticated),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(f"{API_BASE}/scenario-catalog")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"]["schema_version"] == 1
+    assert payload["status"]["built_in_count"] == 8
+    assert payload["status"]["host_count"] == 0
+    assert payload["status"]["warning_count"] == 0
+    assert {item["scenario"]["id"] for item in payload["items"]} >= {
+        "covid_crash_2020",
+        "european_union_shock",
+    }
+    assert payload["geography_groups"][0]["id"] == "european_union"
 
 
 @pytest.mark.asyncio
@@ -151,6 +196,71 @@ async def test_risk_query_delegates_authenticated_bulk_request():
 
 
 @pytest.mark.asyncio
+async def test_risk_query_accepts_typed_historical_replay_options():
+    service = AsyncMock(spec=RiskService)
+    service.execute.return_value = RiskQueryResponse(
+        items=[
+            RiskAnalyticResult(
+                instance_id="replay",
+                analytic_code="stress",
+                status=RiskResultStatus.UNAVAILABLE,
+                error=RiskError(
+                    code=RiskErrorCode.INSUFFICIENT_HISTORY,
+                    message="Fixture response",
+                ),
+            )
+        ]
+    )
+    app = app_with_service(service, authenticated=True)
+    payload = {
+        "scope": {"kind": "asset_set", "asset_ids": [1, 2, 4]},
+        "date_range": {
+            "start": "2026-01-01",
+            "end": "2026-01-31",
+        },
+        "target_currency": "EUR",
+        "mode": "current_composition",
+        "composition_policy": "current_buy_and_hold",
+        "analytics": [
+            {
+                "instance_id": "replay",
+                "analytic_code": "stress",
+                "parameters": {
+                    "method": "historical_replay",
+                    "replay_range": {
+                        "start": "2020-02-01",
+                        "end": "2020-03-31",
+                    },
+                    "proxy_assets": [
+                        {"asset_id": 4, "proxy_asset_id": 9},
+                        {"asset_id": 1, "proxy_asset_id": 8},
+                    ],
+                    "excluded_assets": [2],
+                },
+            }
+        ],
+    }
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"{API_BASE}/query",
+            json=payload,
+        )
+
+    assert response.status_code == 200
+    request = service.execute.await_args.kwargs["request"]
+    parameters = request.analytics[0].parameters
+    assert parameters["proxy_assets"] == [
+        {"asset_id": 4, "proxy_asset_id": 9},
+        {"asset_id": 1, "proxy_asset_id": 8},
+    ]
+    assert parameters["excluded_assets"] == [2]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("error", "status_code"),
     [
@@ -176,11 +286,18 @@ async def test_risk_query_maps_scope_errors(error, status_code):
 
 
 @pytest.mark.asyncio
-async def test_risk_query_rejects_invalid_discriminator_before_service():
+@pytest.mark.parametrize(
+    "scope",
+    [
+        {"kind": "unknown"},
+        {"kind": "broker", "broker_id": 3},
+    ],
+)
+async def test_risk_query_rejects_invalid_discriminator_before_service(scope):
     service = AsyncMock(spec=RiskService)
     app = app_with_service(service, authenticated=True)
     payload = query_payload()
-    payload["scope"] = {"kind": "unknown"}
+    payload["scope"] = scope
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -215,7 +332,7 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
     start = end - timedelta(days=297)
 
     historical_payload = {
-        "scope": {"kind": "broker", "broker_id": 3},
+        "scope": {"kind": "portfolio", "broker_ids": [3]},
         "date_range": {
             "start": start.isoformat(),
             "end": end.isoformat(),
@@ -223,7 +340,7 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
         "target_currency": "EUR",
         "mode": "historical",
         "analytics": [
-            {"instance_id": "kpi", "analytic_code": "portfolio_kpi"},
+            {"instance_id": "kpi", "analytic_code": "historical_kpi"},
             {"instance_id": "matrix", "analytic_code": "correlation"},
             {
                 "instance_id": "var",
@@ -250,7 +367,7 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
         ],
     }
     current_payload = {
-        "scope": {"kind": "broker", "broker_id": 3},
+        "scope": {"kind": "portfolio", "broker_ids": [3]},
         "date_range": {
             "start": start.isoformat(),
             "end": end.isoformat(),
@@ -268,7 +385,8 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
                 "analytic_code": "stress",
                 "parameters": {
                     "method": "hypothetical",
-                    "shocks": {"3": -0.2},
+                    "dimension": "sector",
+                    "bucket_shocks": {"Other": -0.2},
                 },
             },
             {"instance_id": "var", "analytic_code": "historical_var"},
@@ -305,6 +423,11 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
     historical_items = historical_response.json()["items"]
     current_items = current_response.json()["items"]
     assert all(item["status"] in {"ok", "partial"} and item["output"] is not None for item in [*historical_items, *current_items])
+    for item in [*historical_items, *current_items]:
+        assert item["metadata"]["scope"] == "portfolio"
+        assert item["metadata"]["scope_reference"] == "portfolio:3"
+        assert item["metadata"]["broker_ids"] == [3]
+        assert item["metadata"]["composition_as_of"] == end.isoformat()
     historical_var = next(item["output"] for item in historical_items if item["analytic_code"] == "historical_var")
     assert historical_var["conditional_value_at_risk"] >= historical_var["value_at_risk"] >= 0
     optimization = next(item["output"] for item in historical_items if item["analytic_code"] == "portfolio_optimization")
@@ -313,6 +436,11 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
     assert len(optimization["frontier"]) == 5
     contribution = next(item["output"] for item in current_items if item["analytic_code"] == "risk_contribution")
     assert sum(item["percentage_contribution"] for item in contribution["items"]) == pytest.approx(1.0)
+    stress_result = next(item for item in current_items if item["analytic_code"] == "stress")
+    stress = stress_result["output"]
+    assert stress["dimension"] == "sector"
+    assert stress_result["metadata"]["params"]["bucket_shocks"] == {"Other": -0.2}
+    assert all(impact["bucket_audit"] and impact["bucket_audit"][0]["applied_bucket_id"] == "Other" for impact in stress["impacts"])
     simulation = next(item["output"] for item in current_items if item["analytic_code"] == "simulation")
     simulation_result = next(item for item in current_items if item["analytic_code"] == "simulation")
     assert simulation["kind"] == "simulation"
@@ -359,7 +487,7 @@ async def test_portfolio_optimization_supports_all_scopes_and_strategies():
     start = end - timedelta(days=297)
     cases = [
         (
-            {"kind": "broker", "broker_id": 3},
+            {"kind": "portfolio", "broker_ids": [3]},
             "max_sharpe",
             {"ok", "partial"},
         ),
