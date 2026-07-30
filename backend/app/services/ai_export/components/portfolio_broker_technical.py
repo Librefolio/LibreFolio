@@ -45,10 +45,11 @@ from backend.app.services.ai_export.components.technical_shared import (
     BROKER_TECHNICAL_UNIVERSE_KWARGS,
     OHLC_BUCKET_AGGREGATOR,
     PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS,
+    SIGNAL_PROFILE_BUCKET_AGGREGATOR,
     TechnicalUniverseBundle,
     build_breadth_payload,
     build_events_payload,
-    build_indicator_series_payloads,
+    build_indicator_table_payloads,
     build_price_buckets,
     latest_point_value,
     load_technical_universe_bundle,
@@ -121,7 +122,7 @@ async def _build_universe_technical_indicators(context: BuildContext, *, univers
         result = universe.price_results.by_asset_id.get(position.asset_id)
         if result is None:
             continue
-        indicators = build_indicator_series_payloads(result.signals, context.bucket_plan)
+        indicators = build_indicator_table_payloads(result.signals, context.bucket_plan)
         weight = universe.weights.get(position.asset_id)
         assets.append(
             AssetIndicatorsPayload(
@@ -155,7 +156,7 @@ PORTFOLIO_TECHNICAL_INDICATORS_SPEC = ComponentSpec(
     builder=_build_portfolio_technical_indicators,
     dependencies=("portfolio.technical_prices",),
     period_behavior=PeriodBehavior.AGGREGATED,
-    aggregator=OHLC_BUCKET_AGGREGATOR,
+    aggregator=SIGNAL_PROFILE_BUCKET_AGGREGATOR,
 )
 
 BROKER_TECHNICAL_INDICATORS_SPEC = ComponentSpec(
@@ -165,7 +166,7 @@ BROKER_TECHNICAL_INDICATORS_SPEC = ComponentSpec(
     output_model=UniverseIndicatorsPayload,
     builder=_build_broker_technical_indicators,
     period_behavior=PeriodBehavior.AGGREGATED,
-    aggregator=OHLC_BUCKET_AGGREGATOR,
+    aggregator=SIGNAL_PROFILE_BUCKET_AGGREGATOR,
 )
 
 

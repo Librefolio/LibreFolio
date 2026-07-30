@@ -57,7 +57,11 @@ from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalPrice
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
 from backend.app.services.ai_export.components import broker_financial, portfolio_financial
 from backend.app.services.ai_export.components import portfolio_broker_registry as portfolio_broker_registry_module
-from backend.app.services.ai_export.components.catalog import ALL_FOUNDATION_COMPONENTS, ComponentNotImplementedError
+from backend.app.services.ai_export.components.catalog import (
+    ALL_FOUNDATION_COMPONENTS,
+    ComponentNotImplementedError,
+    build_component_registry,
+)
 from backend.app.services.ai_export.components.payloads import portfolio_broker as shared_payloads
 from backend.app.services.ai_export.components.portfolio_broker_registry import (
     BROKER_REAL_COMPONENT_COUNT,
@@ -403,7 +407,7 @@ def _patch_get_prices_bulk(monkeypatch: pytest.MonkeyPatch) -> list[int]:
 
 
 def _full_registry() -> ComponentRegistry:
-    return build_portfolio_broker_component_registry()
+    return build_component_registry()
 
 
 def _full_context(scope: BuildScope, session: AsyncSession) -> BuildContext:

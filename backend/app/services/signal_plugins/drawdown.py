@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -59,7 +60,8 @@ class DrawdownPlugin(SignalPlugin):
             description_key="signals.riskDrawdown.outputDescription",
             semantic_id="underwater_drawdown.value",
             semantic_description="Peak-relative price-only drawdown, never above zero.",
-            kind=SignalSeriesKind.LINE,
+            kind=SignalSeriesKind.AREA,
+            aggregation_profile=SignalAggregationProfile.MIN_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=SignalAxisSpec(
                 key="risk_drawdown",

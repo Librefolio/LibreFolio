@@ -843,8 +843,14 @@
             });
         }
 
-        const downsampledOverlaySignals = activeResolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, activeResolution, dates)).filter((signal) => signal.data.length > 0);
+        const downsampledOverlaySignals = activeResolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, activeResolution, resolvedLineData)).filter((signal) => signal.data.length > 0);
         const resolvedOverlaySignals = assignOverlaySignalAxes(downsampledOverlaySignals);
+        const overlayPointMeta = new Map<string, LineDataPoint>();
+        for (const signal of resolvedOverlaySignals) {
+            for (const point of signal.data) {
+                overlayPointMeta.set(`${signal.label}|${point.date}`, point);
+            }
+        }
 
         series.push(...buildOverlaySignalSeries(resolvedOverlaySignals, dates, isDark, 0));
 
@@ -1142,6 +1148,10 @@
                             }
                         }
                         let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                        const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
+                        if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
+                            rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                        }
                         if (isGhostRow) {
                             rowHtml = `<span style="opacity:0.7">${rowHtml}</span>`;
                         }

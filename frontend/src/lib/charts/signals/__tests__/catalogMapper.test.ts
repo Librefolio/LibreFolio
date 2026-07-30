@@ -45,6 +45,7 @@ function makeCatalog(signalCode: string, domains: Array<'asset' | 'fx'> = ['asse
                 unit: 'price',
                 axis: {key: 'price', role: 'price'},
                 kind: 'line',
+                aggregation_profile: 'last_with_range',
             },
         ],
         compatible_domains: domains,
@@ -150,6 +151,7 @@ describe('signal catalog mapper', () => {
             lineType: 'solid',
             lineWidthDelta: 1,
             opacity: 0.8,
+            fillOpacity: 0.2,
         });
         expect(definition.visualComponents?.[0].fullyPartitioned).toBe(false);
         expect(definition.visualPartitions).toMatchObject([
@@ -198,5 +200,31 @@ describe('signal catalog mapper', () => {
 
         catalog.output_specs[0].default_value_regions = catalog.output_specs[0].default_value_regions?.slice(1);
         expect(mapBackendSignalDefinition(catalog).visualComponents?.[0].fullyPartitioned).toBe(false);
+    });
+
+    it('maps AREA and plugin-owned aggregation/fill metadata generically', () => {
+        const catalog = makeCatalog('RISK_DRAWDOWN', ['asset']);
+        catalog.output_specs[0].kind = 'area';
+        catalog.output_specs[0].aggregation_profile = 'min_with_range';
+        catalog.output_specs[0].style = {
+            color_role: 'negative',
+            fill_opacity: 0.35,
+        };
+
+        expect(mapBackendSignalDefinition(catalog).visualComponents?.[0]).toMatchObject({
+            kind: 'area',
+            aggregationProfile: 'min_with_range',
+            style: {
+                colorRole: 'negative',
+                fillOpacity: 0.35,
+            },
+        });
+    });
+
+    it('fails closed when a production output omits aggregation metadata', () => {
+        const catalog = makeCatalog('EMA');
+        delete catalog.output_specs[0].aggregation_profile;
+
+        expect(() => mapBackendSignalDefinition(catalog)).toThrow('missing signal aggregation profile');
     });
 });

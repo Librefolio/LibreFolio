@@ -1,6 +1,8 @@
-"""Focused ASGI tests for AI Export snapshot integration."""
+"""Focused ASGI tests for the component-based AI Export v1 API."""
 
-import re
+from __future__ import annotations
+
+import json
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -9,60 +11,33 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from pydantic import TypeAdapter
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.ai_export import get_ai_export_snapshot_service, router
 from backend.app.api.v1.auth import get_current_user
-from backend.app.db.session import get_session_generator
-from backend.app.schemas.ai_export import (
-    AiExportAssetSnapshotResponse,
-    AiExportBrokerAccessDeniedProblem,
-    AiExportBrokerSnapshotResponse,
-    AiExportEntityNotFoundProblem,
-    AiExportFxSnapshotResponse,
-    AiExportPortfolioSnapshotResponse,
+from backend.app.schemas.ai_export_runtime import (
     AiExportProblem,
     AiExportProblemResponse,
     AiExportSnapshotResponse,
-    AiExportSnapshotSourceFailureProblem,
-    AiExportTaskNotApplicableProblem,
 )
-from backend.app.services.ai_export.assemblers import (
+from backend.app.services.ai_export.runtime_service import (
+    AiExportBrokerAccessDeniedError,
     AiExportEntityNotFoundError,
-    AiExportSourceFailureError,
-    AiExportTaskNotApplicableError,
+    AiExportSelectionNotApplicableError,
+    AiExportSnapshotService,
+    AiExportSnapshotSourceError,
+    AiExportUnsupportedSelectionError,
+    AiExportVersionMismatchError,
 )
-from backend.app.services.ai_export.service import AiExportSnapshotService
 
 API_BASE = "/api/v1/ai-export"
 USER_ID = 41
 START = date(2026, 1, 1)
-END = date(2026, 7, 26)
+END = date(2026, 3, 31)
 
 
-def _session_with_accessible_brokers(broker_ids: list[int]) -> AsyncMock:
-    session = AsyncMock(spec=AsyncSession)
-    result = MagicMock()
-    result.scalars.return_value.all.return_value = broker_ids
-    session.execute.return_value = result
-    return session
-
-
-def _app(
-    session: AsyncSession | None = None,
-    *,
-    authenticated: bool = False,
-    service: AiExportSnapshotService | None = None,
-) -> FastAPI:
+def _app(*, authenticated: bool = False, service=None) -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
-
-    if session is not None:
-
-        async def override_session():
-            yield session
-
-        app.dependency_overrides[get_session_generator] = override_session
 
     if authenticated:
 
@@ -81,170 +56,101 @@ def _app(
     return app
 
 
-def _portfolio_payload(broker_ids: list[int] | None = None) -> dict[str, object]:
+def _dataset_selection(domain: str) -> dict[str, object]:
     return {
-        "domain": "portfolio",
-        "task": "pac_planning",
-        "detail_level": "standard",
-        "date_range": {"start": "2026-01-01", "end": "2026-07-26"},
-        "target_currency": "EUR",
-        "broker_ids": broker_ids,
+        "kind": "dataset",
+        "id": f"{domain}.overview",
+        "version": 1,
     }
 
 
-def _asset_payload(
-    *,
-    task: str = "asset_snapshot",
-    broker_ids: list[int] | None = None,
-) -> dict[str, object]:
-    return {
-        "domain": "asset",
-        "task": task,
-        "detail_level": "compact",
-        "date_range": {"start": START.isoformat(), "end": END.isoformat()},
-        "target_currency": "EUR",
-        "asset_id": 7,
-        "broker_ids": broker_ids,
-    }
-
-
-def _broker_payload(
-    *,
-    task: str = "broker_review",
-    broker_id: int = 1,
-) -> dict[str, object]:
-    return {
-        "domain": "broker",
-        "task": task,
-        "detail_level": "compact",
-        "date_range": {"start": START.isoformat(), "end": END.isoformat()},
-        "target_currency": "EUR",
-        "broker_id": broker_id,
-    }
-
-
-def _fx_payload(
-    *,
-    task: str = "fx_trend_review",
-    broker_ids: list[int] | None = None,
-) -> dict[str, object]:
-    return {
-        "domain": "fx",
-        "task": task,
-        "detail_level": "compact",
-        "date_range": {"start": START.isoformat(), "end": END.isoformat()},
-        "target_currency": "EUR",
-        "base_currency": "EUR",
-        "quote_currency": "USD",
-        "broker_ids": broker_ids,
-    }
-
-
-def _response_base(domain: str, task: str, *, detail_level: str = "compact") -> dict[str, object]:
-    return {
+def _payload(domain: str) -> dict[str, object]:
+    payload: dict[str, object] = {
         "domain": domain,
-        "task": task,
-        "detail_level": detail_level,
-        "meta": {
-            "schema_version": 1,
-            "profile_id": f"{domain}.{task}.{detail_level}",
-            "profile_version": 1,
-            "frontend_response_contract_id": f"{domain}.{task}",
-            "frontend_response_contract_version": 1,
-            "generated_at": datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
-            "snapshot_as_of": END,
-            "selected_range": {"start": START, "end": END},
-            "target_currency": "EUR",
-        },
-        "methodology": {},
-        "export_stats": {
-            "canonical_json": {"serialized_characters": 0},
-            "token_estimate": {
-                "method": "chars_div_4_v1",
-                "estimated_tokens": 0,
-            },
-        },
+        "selection": _dataset_selection(domain),
+        "detail_level": "standard",
+        "period": {"start": START.isoformat(), "end": END.isoformat()},
+        "target_currency": "EUR",
+        "expected_catalog_version": 1,
+    }
+    if domain == "broker":
+        payload["broker_id"] = 1
+    elif domain == "asset":
+        payload["asset_id"] = 7
+    elif domain == "fx":
+        payload["base_currency"] = "USD"
+        payload["quote_currency"] = "EUR"
+    return payload
+
+
+def _target(domain: str) -> dict[str, object]:
+    if domain == "portfolio":
+        return {"kind": "portfolio"}
+    if domain == "broker":
+        return {"kind": "broker", "broker_id": 1}
+    if domain == "asset":
+        return {"kind": "asset", "asset_id": 7}
+    return {
+        "kind": "fx_pair",
+        "base_currency": "USD",
+        "quote_currency": "EUR",
     }
 
 
-def _money(amount: str = "0") -> dict[str, str]:
-    return {"code": "EUR", "amount": amount}
-
-
-def _portfolio_response() -> AiExportPortfolioSnapshotResponse:
-    return AiExportPortfolioSnapshotResponse.model_validate(
+def _response(domain: str) -> AiExportSnapshotResponse:
+    component_id = {
+        "portfolio": "portfolio.summary",
+        "broker": "broker.summary",
+        "asset": "asset.identity",
+        "fx": "fx.pair_identity",
+    }[domain]
+    return AiExportSnapshotResponse.model_validate(
         {
-            **_response_base("portfolio", "pac_planning", detail_level="standard"),
-            "facts": {
-                "summary": {
-                    "base_currency": "EUR",
-                    "nav": _money(),
-                    "market_value": _money(),
-                    "cash": _money(),
-                    "book_value": _money(),
+            "domain": domain,
+            "selection": _dataset_selection(domain),
+            "detail_level": "standard",
+            "target": _target(domain),
+            "meta": {
+                "request_id": f"req-{domain}",
+                "generated_at": datetime(2026, 3, 31, tzinfo=UTC),
+                "snapshot_as_of": END,
+                "exported_period": {"start": START, "end": END},
+                "calculation_range": None,
+                "warmup_policy": "component_owned",
+                "earliest_calculation_date": None,
+                "target_currency": "EUR",
+            },
+            "dataset_manifest": [
+                {
+                    "dataset_id": f"{domain}.overview",
+                    "dataset_version": 1,
+                    "role": "selected",
                 }
-            },
-        }
-    )
-
-
-def _asset_response() -> AiExportAssetSnapshotResponse:
-    return AiExportAssetSnapshotResponse.model_validate(
-        {
-            **_response_base("asset", "asset_snapshot"),
-            "facts": {
-                "identity": {
-                    "asset_id": 7,
-                    "name": "Mock Asset",
-                    "trading_currency": "USD",
-                    "valuation_currency": "EUR",
+            ],
+            "sections": [
+                {
+                    "component_id": component_id,
+                    "component_version": 1,
+                    "schema_id": component_id,
+                    "schema_version": 1,
+                    "payload": {"ok": True},
                 }
+            ],
+            "stats": {
+                "dataset_count": 1,
+                "section_count": 1,
+                "serialized_characters": 100,
+                "estimated_tokens": 25,
+                "token_estimation_method": "chars_div_4_v1",
             },
         }
     )
 
 
-def _fx_response() -> AiExportFxSnapshotResponse:
-    return AiExportFxSnapshotResponse.model_validate(
-        {
-            **_response_base("fx", "fx_trend_review"),
-            "facts": {
-                "identity": {
-                    "base_currency": "EUR",
-                    "quote_currency": "USD",
-                },
-                "current_rate": {
-                    "date": END,
-                    "rate": "1.10",
-                    "provider": "mock",
-                },
-            },
-        }
-    )
-
-
-def _broker_response() -> AiExportBrokerSnapshotResponse:
-    return AiExportBrokerSnapshotResponse.model_validate(
-        {
-            **_response_base("broker", "broker_review"),
-            "facts": {
-                "summary": {
-                    "broker_id": 1,
-                    "name": "Mock Broker",
-                    "base_currency": "EUR",
-                    "nav": _money(),
-                    "market_value": _money(),
-                    "cash": _money(),
-                }
-            },
-        }
-    )
-
-
-def _assembler(*, result: object | None = None, error: Exception | None = None) -> MagicMock:
-    assembler = MagicMock()
-    assembler.assemble = AsyncMock(return_value=result, side_effect=error)
-    return assembler
+def _service(*, result=None, error: BaseException | None = None):
+    service = MagicMock(spec=AiExportSnapshotService)
+    service.build_snapshot = AsyncMock(return_value=result, side_effect=error)
+    return service
 
 
 def _typed_problem(response: httpx.Response) -> AiExportProblem:
@@ -253,251 +159,148 @@ def _typed_problem(response: httpx.Response) -> AiExportProblem:
 
 
 @pytest.mark.asyncio
-async def test_catalog_returns_exact_static_57_entry_contract():
+async def test_catalog_returns_18_datasets_and_17_analyses():
     app = _app()
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
         response = await client.get(f"{API_BASE}/catalog")
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload["entries"]) == 57
-    assert all("prompt" not in key and "label" not in key for entry in payload["entries"] for key in entry)
+    assert payload["schema_version"] == 1
+    assert payload["catalog_version"] == 1
+    assert len(payload["datasets"]) == 18
+    assert len(payload["analyses"]) == 17
+    serialized = json.dumps(payload).lower()
+    assert "prompt" not in serialized
+    assert "web_research" not in serialized
 
 
 @pytest.mark.asyncio
 async def test_snapshot_requires_authentication():
-    session = _session_with_accessible_brokers([1])
-    app = _app(session)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(f"{API_BASE}/snapshot", json=_portfolio_payload([1]))
+    app = _app(service=_service(result=_response("portfolio")))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"{API_BASE}/snapshot",
+            json=_payload("portfolio"),
+        )
 
     assert response.status_code == 401
-    session.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("payload", "response_model", "assembler_name"),
-    [
-        (_portfolio_payload(broker_ids=[1]), _portfolio_response(), "portfolio"),
-        (_asset_payload(broker_ids=[1]), _asset_response(), "asset"),
-        (_fx_payload(broker_ids=[1]), _fx_response(), "fx"),
-        (_broker_payload(broker_id=1), _broker_response(), "broker"),
-    ],
-)
-async def test_authenticated_all_four_domains_succeed_via_mocked_assemblers(
-    payload: dict[str, object],
-    response_model: AiExportSnapshotResponse,
-    assembler_name: str,
-):
-    session = _session_with_accessible_brokers([1])
-    assembler = _assembler(result=response_model)
-    service = AiExportSnapshotService(
-        session,
-        **{f"{assembler_name}_assembler": assembler},
-    )
+@pytest.mark.parametrize("domain", ["portfolio", "broker", "asset", "fx"])
+async def test_authenticated_four_domains_return_new_snapshot_contract(domain: str):
+    expected = _response(domain)
+    service = _service(result=expected)
     app = _app(authenticated=True, service=service)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(f"{API_BASE}/snapshot", json=payload)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"{API_BASE}/snapshot",
+            json=_payload(domain),
+        )
 
     assert response.status_code == 200
-    validated = TypeAdapter(AiExportSnapshotResponse).validate_python(response.json())
-    assert isinstance(validated, type(response_model))
-    assembler.assemble.assert_awaited_once()
+    validated = AiExportSnapshotResponse.model_validate(response.json())
+    assert validated.domain == domain
+    assert validated.selection.kind == "dataset"
+    service.build_snapshot.assert_awaited_once()
+    assert service.build_snapshot.await_args.args[0] == USER_ID
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("payload", "assembler_name", "entity_type", "entity_id", "expected_reference"),
+    ("error", "status_code", "code"),
     [
         (
-            _portfolio_payload(broker_ids=[1]),
-            "portfolio",
-            "portfolio",
-            "all",
-            {"kind": "portfolio"},
+            AiExportBrokerAccessDeniedError((3, 2)),
+            403,
+            "broker_access_denied",
+        ),
+        (AiExportEntityNotFoundError("missing"), 404, "entity_not_found"),
+        (
+            AiExportVersionMismatchError(
+                "selection.version",
+                expected=1,
+                actual=2,
+            ),
+            409,
+            "version_mismatch",
         ),
         (
-            _asset_payload(broker_ids=[1]),
-            "asset",
-            "asset",
-            7,
-            {"kind": "asset", "asset_id": 7},
+            AiExportUnsupportedSelectionError("portfolio.unknown"),
+            422,
+            "unsupported_selection",
         ),
         (
-            _broker_payload(broker_id=1),
-            "broker",
-            "broker",
-            1,
-            {"kind": "broker", "broker_id": 1},
+            AiExportSelectionNotApplicableError(
+                "requires_position",
+                "no_position",
+            ),
+            422,
+            "selection_not_applicable",
+        ),
+        (
+            AiExportSnapshotSourceError(
+                "portfolio.summary",
+                retryable=False,
+            ),
+            503,
+            "snapshot_source_failure",
         ),
     ],
 )
-async def test_entity_not_found_mapping_includes_portfolio_and_broker(
-    payload: dict[str, object],
-    assembler_name: str,
-    entity_type: str,
-    entity_id: int | str,
-    expected_reference: dict[str, object],
-):
-    session = _session_with_accessible_brokers([1])
-    assembler = _assembler(
-        error=AiExportEntityNotFoundError(
-            entity_type,
-            entity_id,
-            context={"account_number": "SECRET-ACCOUNT"},
+async def test_typed_problem_mapping(error, status_code: int, code: str):
+    app = _app(authenticated=True, service=_service(error=error))
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"{API_BASE}/snapshot",
+            json=_payload("portfolio"),
         )
-    )
-    service = AiExportSnapshotService(
-        session,
-        **{f"{assembler_name}_assembler": assembler},
-    )
-    app = _app(authenticated=True, service=service)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(f"{API_BASE}/snapshot", json=payload)
 
-    assert response.status_code == 404
+    assert response.status_code == status_code
     problem = _typed_problem(response)
-    assert isinstance(problem, AiExportEntityNotFoundProblem)
-    assert problem.entity_reference.model_dump(mode="json", exclude_none=True) == expected_reference
-    assert "SECRET-ACCOUNT" not in response.text
-    assert f"{entity_type} {entity_id} was not found" not in response.text
+    assert problem.code == code
+    assert problem.selection_id == "portfolio.overview"
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("payload", "assembler_name", "applicability_code", "reason_code"),
-    [
-        (
-            _asset_payload(task="position_review", broker_ids=[1]),
-            "asset",
-            "positive_open_quantity_in_scope",
-            "no_positive_open_position",
-        ),
-        (
-            _fx_payload(task="fx_exposure_impact", broker_ids=[1]),
-            "fx",
-            "linked_cash_or_position_available",
-            "no_linked_exposure",
-        ),
-        (
-            _portfolio_payload(broker_ids=[1]),
-            "portfolio",
-            "portfolio_has_eligible_positions",
-            "no_eligible_positions",
-        ),
-        (
-            _broker_payload(task="broker_review", broker_id=1),
-            "broker",
-            "broker_has_activity",
-            "no_broker_activity",
-        ),
-    ],
-)
-async def test_not_applicable_mapping_includes_portfolio_and_broker(
-    payload: dict[str, object],
-    assembler_name: str,
-    applicability_code: str,
-    reason_code: str,
-):
-    session = _session_with_accessible_brokers([1])
-    assembler = _assembler(
-        error=AiExportTaskNotApplicableError(
-            applicability_code,
-            reason_code,
-            context={"account_number": "SECRET-ACCOUNT"},
-        )
+async def test_legacy_task_payload_is_rejected_by_public_v1_contract():
+    payload = _payload("portfolio")
+    payload["task"] = "pac_planning"
+    payload["date_range"] = payload.pop("period")
+    app = _app(
+        authenticated=True,
+        service=_service(result=_response("portfolio")),
     )
-    service = AiExportSnapshotService(
-        session,
-        **{f"{assembler_name}_assembler": assembler},
-    )
-    app = _app(authenticated=True, service=service)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
         response = await client.post(f"{API_BASE}/snapshot", json=payload)
 
-    assert response.status_code == 409
-    problem = _typed_problem(response)
-    assert isinstance(problem, AiExportTaskNotApplicableProblem)
-    assert problem.applicability_code == applicability_code
-    assert problem.reason_code == reason_code
-    assert "SECRET-ACCOUNT" not in response.text
+    assert response.status_code == 422
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("payload", "assembler_name", "source_code"),
-    [
-        (_portfolio_payload(broker_ids=[1]), "portfolio", "portfolio_service"),
-        (_asset_payload(broker_ids=[1]), "asset", "asset_source"),
-        (_fx_payload(broker_ids=[1]), "fx", "fx_service"),
-        (_broker_payload(broker_id=1), "broker", "broker_service"),
-    ],
-)
-async def test_source_failure_mapping_includes_portfolio_and_broker(
-    payload: dict[str, object],
-    assembler_name: str,
-    source_code: str,
-):
-    session = _session_with_accessible_brokers([1])
-    assembler = _assembler(
-        error=AiExportSourceFailureError(
-            source_code,
-            "load_snapshot",
-            retryable=True,
-            context={"account_number": "SECRET-ACCOUNT"},
-        )
-    )
-    service = AiExportSnapshotService(
-        session,
-        **{f"{assembler_name}_assembler": assembler},
-    )
-    app = _app(authenticated=True, service=service)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(f"{API_BASE}/snapshot", json=payload)
-
-    assert response.status_code == 503
-    problem = _typed_problem(response)
-    assert isinstance(problem, AiExportSnapshotSourceFailureProblem)
-    assert problem.source_code == f"{source_code}.load_snapshot"
-    assert re.fullmatch(r"[a-z][a-z0-9_.-]*", problem.source_code)
-    assert problem.retryable is True
-    assert "SECRET-ACCOUNT" not in response.text
-    assert "AI Export source failed" not in response.text
-
-
-@pytest.mark.asyncio
-async def test_inaccessible_brokers_return_typed_403_without_silent_filtering():
-    session = _session_with_accessible_brokers([1, 5])
-    app = _app(session, authenticated=True)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(f"{API_BASE}/snapshot", json=_portfolio_payload([5, 4, 1, 3]))
-
-    assert response.status_code == 403
-    problem = _typed_problem(response)
-    assert isinstance(problem, AiExportBrokerAccessDeniedProblem)
-    assert problem.denied_broker_ids == [3, 4]
-    assert "facts" not in response.json()
-    session.execute.assert_awaited_once()
-
-
-def test_openapi_declares_unchanged_snapshot_and_problem_response_models():
+def test_openapi_declares_new_discriminators_and_typed_problem_statuses():
     schema = _app().openapi()
-    responses = schema["paths"][f"{API_BASE}/snapshot"]["post"]["responses"]
-    success_schema = responses["200"]["content"]["application/json"]["schema"]
-    expected_mapping = {
-        "portfolio": "#/components/schemas/AiExportPortfolioSnapshotResponse",
-        "asset": "#/components/schemas/AiExportAssetSnapshotResponse",
-        "fx": "#/components/schemas/AiExportFxSnapshotResponse",
-        "broker": "#/components/schemas/AiExportBrokerSnapshotResponse",
-    }
+    operation = schema["paths"][f"{API_BASE}/snapshot"]["post"]
+    request_schema = operation["requestBody"]["content"]["application/json"]["schema"]
 
-    assert success_schema["oneOf"] == [{"$ref": reference} for reference in expected_mapping.values()]
-    assert success_schema["discriminator"] == {
-        "propertyName": "domain",
-        "mapping": expected_mapping,
-    }
-
-    for status in ("403", "404", "409", "422", "503"):
-        response_schema = responses[status]["content"]["application/json"]["schema"]
-        assert response_schema == {"$ref": "#/components/schemas/AiExportProblemResponse"}
+    assert request_schema["discriminator"]["propertyName"] == "domain"
+    assert {"403", "404", "409", "422", "503"} <= set(operation["responses"])
+    schema_text = json.dumps(schema)
+    assert '"AiExportDatasetSelection"' in schema_text
+    assert '"AiExportAnalysisSelection"' in schema_text
+    assert '"task"' not in json.dumps(request_schema)

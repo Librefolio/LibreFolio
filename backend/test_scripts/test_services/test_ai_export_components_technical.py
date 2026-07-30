@@ -6,7 +6,7 @@ Covers `backend.app.services.ai_export.components.technical_shared`,
 plugin bundle reused unchanged across every Asset-like target, warm-up-aware
 loading via `AssetSourceManager.get_prices_bulk`/`backend.app.services.fx.
 convert_bulk`, strict period slicing (warm-up never emitted), multi-output OHLC
-bucketing, uncapped event preservation, full portfolio/broker universe
+row bucketing with dated cells, uncapped event preservation, full portfolio/broker universe
 analysis with weighted/unweighted breadth, partial-success isolation,
 authoritative-vs-unavailable volume gating, FX no-volume gating, resource
 memoization and deterministic ordering.
@@ -26,6 +26,7 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from pydantic import BaseModel, ConfigDict
@@ -41,6 +42,8 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.signals import (
     SignalBandComponent,
+    SignalBandPoint,
+    SignalBandSeries,
     SignalBandValueSource,
     SignalCadence,
     SignalDomain,
@@ -50,6 +53,7 @@ from backend.app.schemas.signals import (
     SignalPricePoint,
     SignalPriceValueSource,
     SignalReferenceLevel,
+    SignalStatus,
     SignalThresholdCrossingRequest,
 )
 from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_shared
@@ -58,9 +62,11 @@ from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
+from backend.app.services.ai_export.temporal import Bucket, BucketingPolicy, BucketPlan
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import SignalPluginRegistry
+from backend.app.services.signal_plugins.drawdown import DrawdownParams, DrawdownPlugin
 from backend.app.services.signal_service import SignalService
 
 #: Exact replica of legacy `ASSET_FULL_BUNDLE`'s 20 signal instance IDs
@@ -429,19 +435,20 @@ class TestCuratedBundleAcrossDetailLevels:
         standard_ind, standard_events, standard_ctx = payloads[DetailLevel.STANDARD]
         full_ind, full_events, full_ctx = payloads[DetailLevel.FULL]
 
-        compact_keys = sorted((entry["instance_id"], entry["output_key"]) for entry in compact_ind["indicators"])
-        standard_keys = sorted((entry["instance_id"], entry["output_key"]) for entry in standard_ind["indicators"])
-        full_keys = sorted((entry["instance_id"], entry["output_key"]) for entry in full_ind["indicators"])
+        compact_keys = sorted((entry["instance_id"], column["column_key"]) for entry in compact_ind["indicators"] for column in entry["columns"])
+        standard_keys = sorted((entry["instance_id"], column["column_key"]) for entry in standard_ind["indicators"] for column in entry["columns"])
+        full_keys = sorted((entry["instance_id"], column["column_key"]) for entry in full_ind["indicators"] for column in entry["columns"])
         assert compact_keys == standard_keys == full_keys
         assert compact_keys  # non-empty: curated bundle actually produced output series
+        assert len(compact_ind["indicators"]) == 20
 
         assert compact_events["total_event_count"] == standard_events["total_event_count"] == full_events["total_event_count"]
 
         # Bucket *counts* differ (K=30/14/7 changes temporal granularity) while
         # the signal/entity/event set is identical - requirement 8.
-        compact_buckets = len(compact_ind["indicators"][0]["buckets"])
-        standard_buckets = len(standard_ind["indicators"][0]["buckets"])
-        full_buckets = len(full_ind["indicators"][0]["buckets"])
+        compact_buckets = len(compact_ind["indicators"][0]["rows"])
+        standard_buckets = len(standard_ind["indicators"][0]["rows"])
+        full_buckets = len(full_ind["indicators"][0]["rows"])
         assert compact_buckets == len(compact_ctx.bucket_plan.buckets)
         assert standard_buckets == len(standard_ctx.bucket_plan.buckets)
         assert full_buckets == len(full_ctx.bucket_plan.buckets)
@@ -638,9 +645,9 @@ class TestWarmupExclusion:
 
         assert payload["indicators"], "expected at least one curated indicator output"
         for indicator in payload["indicators"]:
-            for bucket in indicator["buckets"]:
-                assert date.fromisoformat(bucket["start_date"]) >= scope.period_start
-                assert date.fromisoformat(bucket["end_date"]) <= scope.period_end
+            for row in indicator["rows"]:
+                assert date.fromisoformat(row["start_date"]) >= scope.period_start
+                assert date.fromisoformat(row["end_date"]) <= scope.period_end
 
     @pytest.mark.asyncio
     async def test_events_never_emit_before_scope_start(self, monkeypatch):
@@ -672,6 +679,7 @@ class TestMultiOutputOhlc:
         non_empty = [bucket for bucket in payload["buckets"] if bucket["observation_count"] > 0]
         assert non_empty
         for bucket in non_empty:
+            assert bucket["calendar_days"] == (date.fromisoformat(bucket["end_date"]) - date.fromisoformat(bucket["start_date"])).days + 1
             assert set(bucket["first"]) == {"close"}
             assert set(bucket["last"]) == {"close"}
             assert set(bucket["minimum"]) == {"close"}
@@ -689,12 +697,149 @@ class TestMultiOutputOhlc:
         band_entries = [entry for entry in payload["indicators"] if entry["signal_code"] == "BOLLINGER"]
         assert band_entries, "expected BOLLINGER outputs in the curated bundle"
         for entry in band_entries:
-            assert entry["kind"] == "band"
-            populated = [bucket for bucket in entry["buckets"] if bucket["observation_count"] > 0]
+            assert [column["column_key"] for column in entry["columns"]] == [
+                "bands.lower",
+                "bands.middle",
+                "bands.upper",
+            ]
+            assert {column["kind"] for column in entry["columns"]} == {"band"}
+            assert {column["aggregation_profile"] for column in entry["columns"]} == {"band_envelope"}
+            populated = [row for row in entry["rows"] if row["observation_count"] > 0]
             assert populated
-            for bucket in populated:
-                assert set(bucket["last"]).issubset({"lower", "middle", "upper"})
-                assert set(bucket["last"])
+            for row in populated:
+                assert set(row["cells"]) == {
+                    "bands.lower",
+                    "bands.middle",
+                    "bands.upper",
+                }
+            range_cells = [cell for row in populated for cell in row["cells"].values() if cell is not None and cell["kind"] == "range"]
+            assert range_cells
+            assert all(
+                set(cell)
+                == {
+                    "kind",
+                    "observation_count",
+                    "first",
+                    "min",
+                    "max",
+                    "last",
+                }
+                for cell in range_cells
+            )
+
+    @pytest.mark.asyncio
+    async def test_macd_outputs_share_one_temporally_local_row_table(self, monkeypatch):
+        _patch_get_prices_bulk(monkeypatch)
+        context = _make_context(_asset_scope())
+        payload = _envelope_payload(await context.resolve("asset.indicators", required=True))
+
+        macd = next(entry for entry in payload["indicators"] if entry["instance_id"] == "macd_12_26_9")
+        expected_columns = {"macd", "signal", "histogram"}
+        assert {column["column_key"] for column in macd["columns"]} == expected_columns
+        assert all(set(row["cells"]) == expected_columns for row in macd["rows"])
+        assert all(row["calendar_days"] == (date.fromisoformat(row["end_date"]) - date.fromisoformat(row["start_date"])).days + 1 for row in macd["rows"])
+        macd_cells = [row["cells"]["macd"] for row in macd["rows"] if row["cells"]["macd"] is not None]
+        assert any(cell["kind"] == "single" for cell in macd_cells)
+        assert any(cell["kind"] == "range" for cell in macd_cells)
+
+    def test_band_columns_keep_independent_extrema_dates(self):
+        start = date(2026, 1, 1)
+        end = date(2026, 1, 3)
+        plugin_class = SignalPluginRegistry.get_plugin("BOLLINGER")
+        assert plugin_class is not None
+        output = plugin_class.output_specs[0]
+        series = SignalBandSeries(
+            key=output.key,
+            label_key=output.label_key,
+            description_key=output.description_key,
+            semantic_id=output.semantic_id,
+            semantic_description=output.semantic_description,
+            unit=output.unit,
+            axis=output.axis.model_copy(deep=True),
+            view_transform=output.view_transform,
+            style=output.style.model_copy(deep=True),
+            points=[
+                SignalBandPoint(date=start, lower=8, middle=10, upper=12),
+                SignalBandPoint(
+                    date=start + timedelta(days=1),
+                    lower=4,
+                    middle=11,
+                    upper=15,
+                ),
+                SignalBandPoint(date=end, lower=6, middle=9, upper=13),
+            ],
+        )
+        result = SimpleNamespace(
+            instance_id="bollinger",
+            signal_code="BOLLINGER",
+            status=SignalStatus.OK,
+            series=(series,),
+        )
+        plan = BucketPlan(
+            start=start,
+            end=end,
+            policy=BucketingPolicy(max_bucket_days=3),
+            buckets=(Bucket(index=0, start_date=start, end_date=end),),
+        )
+
+        row = technical_shared.build_indicator_table_payloads(
+            (result,),
+            plan,
+        )[
+            0
+        ].model_dump(mode="json")[
+            "rows"
+        ][0]
+
+        assert row["cells"]["bands.lower"]["min"]["date"] == "2026-01-02"
+        assert row["cells"]["bands.middle"]["last"]["date"] == "2026-01-03"
+        assert row["cells"]["bands.upper"]["max"]["date"] == "2026-01-02"
+
+    def test_drawdown_area_bucket_preserves_trough_date_and_last_value(self):
+        start = date(2026, 1, 1)
+        end = date(2026, 1, 3)
+        signal_context = SignalExecutionContext(
+            domain=SignalDomain.ASSET,
+            requested_range={"start": start, "end": end},
+            cadence=SignalCadence.DAILY,
+            source_reference="asset:1",
+        )
+        price_points = (
+            SignalPricePoint(date=start, close=Decimal("100")),
+            SignalPricePoint(date=start + timedelta(days=1), close=Decimal("80")),
+            SignalPricePoint(date=end, close=Decimal("90")),
+        )
+        computation = DrawdownPlugin().compute(
+            price_points,
+            (),
+            DrawdownParams(),
+            signal_context,
+        )
+        result = SimpleNamespace(
+            instance_id="drawdown",
+            signal_code="RISK_DRAWDOWN",
+            status=SignalStatus.OK,
+            series=computation.series,
+        )
+        plan = BucketPlan(
+            start=start,
+            end=end,
+            policy=BucketingPolicy(max_bucket_days=3),
+            buckets=(Bucket(index=0, start_date=start, end_date=end),),
+        )
+
+        table = technical_shared.build_indicator_table_payloads((result,), plan)[0]
+        payload = table.model_dump(mode="json")
+        column = payload["columns"][0]
+        cell = payload["rows"][0]["cells"]["drawdown"]
+
+        assert column["kind"] == "area"
+        assert column["aggregation_profile"] == "min_with_range"
+        assert cell["kind"] == "range"
+        assert cell["min"]["date"] == "2026-01-02"
+        assert cell["min"]["value"] == pytest.approx(-20.0)
+        assert cell["last"]["date"] == "2026-01-03"
+        assert cell["last"]["value"] == pytest.approx(-10.0)
 
     @pytest.mark.asyncio
     async def test_fx_rate_ohlc_uses_rate_key(self, monkeypatch):
@@ -786,11 +931,14 @@ class TestPluginOwnedDescriptions:
             plugin_class = SignalPluginRegistry.get_plugin(entry["signal_code"])
             assert plugin_class is not None
             ai_description = plugin_class.describe_for_ai()
-            output_description = next(output for output in ai_description.outputs if output.key == entry["output_key"])
-            assert entry["semantic_id"] == output_description.semantic_id
-            assert entry["semantic_description"] == output_description.semantic_description
-            assert entry["unit"] == output_description.unit.value
             assert entry["category"] == ai_description.category.value
+            assert entry["semantic_id"] == ai_description.semantic_id
+            assert entry["semantic_description"] == ai_description.semantic_description
+            for column in entry["columns"]:
+                output_description = next(output for output in ai_description.outputs if output.key == column["output_key"])
+                assert column["semantic_id"] == output_description.semantic_id
+                assert column["semantic_description"] == output_description.semantic_description
+                assert column["unit"] == output_description.unit.value
 
 
 # =============================================================================

@@ -1,7 +1,7 @@
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 
-import type {BackendSignalBandSeries, BackendSignalBarSeries, BackendSignalLineSeries, BackendSignalOutputStyle, BackendSignalResult, BackendSignalValueRegion} from './backendTypes';
-import type {RenderedSignal, SignalConfig, SignalStyle, SignalVisualStyle} from './ChartSignal';
+import type {BackendSignalAreaSeries, BackendSignalBandSeries, BackendSignalBarSeries, BackendSignalLineSeries, BackendSignalOutputStyle, BackendSignalResult, BackendSignalValueRegion} from './backendTypes';
+import type {RenderedSignal, SignalConfig, SignalDefinition, SignalStyle, SignalVisualComponent, SignalVisualStyle} from './ChartSignal';
 import {defaultSignalVisualStyle, resolveVisualSignalStyle} from './signalVisualStyle';
 
 export interface BackendSignalRenderOutcome {
@@ -14,6 +14,7 @@ export interface BackendSignalRenderOutcome {
 export interface BackendSignalRendererOptions {
     baseData: LineDataPoint[];
     viewMode: 'absolute' | 'percentage';
+    definition: SignalDefinition;
     translate?: (key: string) => string;
 }
 
@@ -30,9 +31,10 @@ function transformValue(value: number, baseValue: number | null, shouldTransform
 
 type FlexibleDescription<T> = Omit<T, 'description_key'> & {description_key?: unknown};
 type RenderLineSeries = FlexibleDescription<BackendSignalLineSeries>;
+type RenderAreaSeries = FlexibleDescription<BackendSignalAreaSeries>;
 type RenderBarSeries = FlexibleDescription<BackendSignalBarSeries>;
 type RenderBandSeries = FlexibleDescription<BackendSignalBandSeries>;
-type RenderSeries = RenderLineSeries | RenderBarSeries | RenderBandSeries;
+type RenderSeries = RenderLineSeries | RenderAreaSeries | RenderBarSeries | RenderBandSeries;
 
 function axisLabel(series: RenderSeries): string {
     return series.axis.key.replaceAll('_', ' ').toUpperCase();
@@ -64,7 +66,15 @@ function normalizedOutputStyle(value: BackendSignalOutputStyle | undefined): Sig
         lineType: normalizedLinePattern(value.line_pattern),
         lineWidthDelta: value.width_delta ?? 0,
         opacity: value.opacity ?? 1,
+        fillOpacity: value.fill_opacity ?? 0.2,
     };
+}
+
+function visualComponent(definition: SignalDefinition, seriesKey: string): SignalVisualComponent {
+    if (definition.source !== 'backend') throw new Error(`Signal definition '${definition.type}' is not backend-owned`);
+    const component = definition.visualComponents?.find((candidate) => candidate.key === seriesKey);
+    if (!component) throw new Error(`Signal definition '${definition.type}' has no output component '${seriesKey}'`);
+    return component;
 }
 
 function mapValueRegions(series: RenderSeries, baseValue: number | null, componentStyle: SignalStyle, config: SignalConfig, shouldTransform: boolean, translate?: (key: string) => string): RenderedValueRegion[] {
@@ -77,6 +87,7 @@ function mapValueRegions(series: RenderSeries, baseValue: number | null, compone
                   lineType: lineStyle.pattern,
                   lineWidthDelta: lineStyle.width_delta ?? 0,
                   opacity: lineStyle.opacity ?? 1,
+                  fillOpacity: 0.2,
               })
             : null;
         const effectiveStyle = config.partitionStyles?.[partitionKey] ?? defaultStyle;
@@ -190,7 +201,7 @@ function applyValueRegionLineStyles(signal: RenderedSignal): RenderedSignal[] {
     }));
 }
 
-function renderScalarSeries(series: RenderLineSeries | RenderBarSeries, config: SignalConfig, seriesIndex: number, baseValue: number | null, shouldTransform: boolean, translate?: (key: string) => string): RenderedSignal[] {
+function renderScalarSeries(series: RenderLineSeries | RenderAreaSeries | RenderBarSeries, component: SignalVisualComponent, config: SignalConfig, seriesIndex: number, baseValue: number | null, shouldTransform: boolean, translate?: (key: string) => string): RenderedSignal[] {
     const data = (series.points ?? [])
         .filter((point): point is typeof point & {value: number} => typeof point.value === 'number')
         .map((point) => ({
@@ -199,16 +210,16 @@ function renderScalarSeries(series: RenderLineSeries | RenderBarSeries, config: 
         }));
 
     const visualStyle = normalizedOutputStyle(series.style);
-        const fallbackStyle: SignalStyle =
-            seriesIndex === 0
-                ? config.style
-                : {
-                      ...config.style,
-                      lineType: 'dashed',
-                      markerStart: null,
-                      markerEnd: null,
-                  };
-        const defaultStyle = resolveVisualSignalStyle(fallbackStyle, visualStyle, seriesIndex === 0 && series.kind === 'line');
+    const fallbackStyle: SignalStyle =
+        seriesIndex === 0
+            ? config.style
+            : {
+                  ...config.style,
+                  lineType: 'dashed',
+                  markerStart: null,
+                  markerEnd: null,
+              };
+    const defaultStyle = resolveVisualSignalStyle(fallbackStyle, visualStyle, seriesIndex === 0 && (series.kind === 'line' || series.kind === 'area'));
     const componentStyle = config.componentStyles?.[series.key] ?? defaultStyle;
     const rendered: RenderedSignal = {
         id: `${config.id}:${series.key}`,
@@ -220,8 +231,10 @@ function renderScalarSeries(series: RenderLineSeries | RenderBarSeries, config: 
         markerStart: componentStyle.markerStart,
         markerEnd: componentStyle.markerEnd,
         seriesType: series.kind,
+        aggregationProfile: component.aggregationProfile,
         barColorMode: series.kind === 'bar' && config.componentStyles?.[series.key] ? 'single' : 'signed',
         opacity: visualStyle.opacity,
+        fillOpacity: visualStyle.fillOpacity,
         axisKey: series.axis.key,
         axisRole: series.axis.role,
         axisMinimum: typeof series.axis.minimum === 'number' ? series.axis.minimum : undefined,
@@ -239,7 +252,7 @@ function renderScalarSeries(series: RenderLineSeries | RenderBarSeries, config: 
     return series.kind === 'line' ? applyValueRegionLineStyles(rendered) : [rendered];
 }
 
-function renderBandSeries(series: RenderBandSeries, config: SignalConfig, baseValue: number | null, shouldTransform: boolean, translate?: (key: string) => string): RenderedSignal {
+function renderBandSeries(series: RenderBandSeries, component: SignalVisualComponent, config: SignalConfig, baseValue: number | null, shouldTransform: boolean, translate?: (key: string) => string): RenderedSignal {
     const completePoints = (series.points ?? []).filter((point): point is typeof point & {lower: number; middle: number; upper: number} => typeof point.lower === 'number' && typeof point.middle === 'number' && typeof point.upper === 'number');
     const data = completePoints.map((point) => ({
         date: point.date,
@@ -259,7 +272,9 @@ function renderBandSeries(series: RenderBandSeries, config: SignalConfig, baseVa
         markerStart: componentStyle.markerStart,
         markerEnd: componentStyle.markerEnd,
         seriesType: 'band',
+        aggregationProfile: component.aggregationProfile,
         opacity: visualStyle.opacity,
+        fillOpacity: visualStyle.fillOpacity,
         bandData: {
             lower: completePoints.map((point) => transformValue(point.lower, baseValue, shouldTransform)),
             middle: data.map((point) => point.value),
@@ -286,7 +301,8 @@ export function renderBackendSignalResult(result: BackendSignalResult, config: S
     const signals = (result.series ?? [])
         .flatMap((series, seriesIndex) => {
             const shouldTransform = options.viewMode === 'percentage' && series.view_transform === 'base_percentage';
-            return series.kind === 'band' ? [renderBandSeries(series, config, baseValue, shouldTransform, options.translate)] : renderScalarSeries(series, config, seriesIndex, baseValue, shouldTransform, options.translate);
+            const component = visualComponent(options.definition, series.key);
+            return series.kind === 'band' ? [renderBandSeries(series, component, config, baseValue, shouldTransform, options.translate)] : renderScalarSeries(series, component, config, seriesIndex, baseValue, shouldTransform, options.translate);
         })
         .filter((signal) => signal.data.length > 0);
 

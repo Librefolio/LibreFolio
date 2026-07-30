@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
@@ -79,6 +80,7 @@ class DonchianSignalPlugin(SignalPlugin):
             semantic_id="donchian_channels.envelope",
             semantic_description="Rolling lower, midpoint, and upper price boundaries.",
             kind=SignalSeriesKind.BAND,
+            aggregation_profile=SignalAggregationProfile.BAND_ENVELOPE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",

@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBarSeries,
@@ -117,6 +118,7 @@ class MacdSignalPlugin(SignalPlugin):
             semantic_id="moving_average_convergence_divergence.line",
             semantic_description="Difference between fast and slow exponential moving averages.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
             style=SignalOutputStyle(
@@ -132,6 +134,7 @@ class MacdSignalPlugin(SignalPlugin):
             semantic_id="moving_average_convergence_divergence.signal",
             semantic_description="Smoothed average of the MACD line.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
             style=SignalOutputStyle(
@@ -146,6 +149,7 @@ class MacdSignalPlugin(SignalPlugin):
             semantic_id="moving_average_convergence_divergence.histogram",
             semantic_description="Difference between the MACD line and its signal line.",
             kind=SignalSeriesKind.BAR,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=_MACD_AXIS,
             style=SignalOutputStyle(color_role=SignalColorRole.NEUTRAL),

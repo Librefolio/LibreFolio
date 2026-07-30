@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -77,6 +78,7 @@ class RollingReturnPlugin(SignalPlugin):
             semantic_id="rolling_compounded_return.value",
             semantic_description="Compounded price-only holding-period return.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=SignalAxisSpec(
                 key="risk_return",

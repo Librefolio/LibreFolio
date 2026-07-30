@@ -159,6 +159,7 @@ from backend.app.schemas.refresh import (
     SyncStatus,
 )
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAiDescription,
     SignalAiEventDescription,
     SignalAiOutputDescription,
@@ -167,6 +168,7 @@ from backend.app.schemas.signals import (
     SignalAnnotationRequest,
     SignalAnnotationRequestBase,
     SignalAnnotationSampling,
+    SignalAreaSeries,
     SignalAvailability,
     SignalAvailabilityReason,
     SignalAxisRole,
@@ -358,6 +360,7 @@ __all__ = [
     "SignalPriceField",
     "SignalDataPolicy",
     "SignalCadence",
+    "SignalAggregationProfile",
     "SignalSeriesKind",
     "SignalAxisRole",
     "SignalUnit",
@@ -385,6 +388,7 @@ __all__ = [
     "SignalValuePoint",
     "SignalBandPoint",
     "SignalLineSeries",
+    "SignalAreaSeries",
     "SignalBarSeries",
     "SignalBandSeries",
     "SignalBandComponent",

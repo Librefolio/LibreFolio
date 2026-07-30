@@ -45,6 +45,12 @@ export type SignalProblemSeverity = 'notice' | 'warning' | 'error';
 export function getSignalProblemSeverity(problem: SignalProblem): SignalProblemSeverity {
     if (problem.status === 'failed' || problem.status === 'unavailable' || problem.status === 'missing') return 'error';
 
+    if (problem.code === 'incomplete_warmup') {
+        if (problem.requestedPoints === null || problem.requestedPoints <= 0 || problem.warmupUsedPoints === null || problem.warmupRequiredPoints === null) return 'warning';
+        const shortfall = Math.max(0, problem.warmupRequiredPoints - problem.warmupUsedPoints);
+        return shortfall / problem.requestedPoints >= 0.05 ? 'warning' : 'notice';
+    }
+
     const isCoverageNotice = problem.code === 'partial_input_coverage' || problem.code === 'data_gap';
     if (!isCoverageNotice || problem.coverageRatio === null) return 'warning';
     const maximumMissingRun = problem.maxConsecutiveMissingPoints ?? (problem.missingPoints !== null && problem.missingPoints <= 7 ? problem.missingPoints : null);

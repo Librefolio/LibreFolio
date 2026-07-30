@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -97,6 +98,7 @@ class AroonSignalPlugin(SignalPlugin):
             semantic_id="aroon.up",
             semantic_description="Recency score for the highest high in the lookback window.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
             style=SignalOutputStyle(
@@ -111,6 +113,7 @@ class AroonSignalPlugin(SignalPlugin):
             semantic_id="aroon.down",
             semantic_description="Recency score for the lowest low in the lookback window.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
             style=SignalOutputStyle(
@@ -125,6 +128,7 @@ class AroonSignalPlugin(SignalPlugin):
             semantic_id="aroon.oscillator",
             semantic_description="Difference between the Aroon up and down scores.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
             style=SignalOutputStyle(

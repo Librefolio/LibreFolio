@@ -1,5 +1,5 @@
 import type {BackendSignalCatalogDefinition} from './backendTypes';
-import type {SignalColorRole, SignalDefinition, SignalDomain, SignalIndicatorGroup, SignalInputField, SignalVisualComponent, SignalVisualPartition, SignalVisualStyle} from './ChartSignal';
+import type {SignalAggregationProfile, SignalColorRole, SignalDefinition, SignalDomain, SignalIndicatorGroup, SignalInputField, SignalVisualComponent, SignalVisualPartition, SignalVisualStyle} from './ChartSignal';
 import {mapSignalParamsSchema} from './schemaMapper';
 import {defaultSignalVisualStyle} from './signalVisualStyle';
 
@@ -43,7 +43,13 @@ function visualStyle(value: unknown): SignalVisualStyle {
         lineType: lineType === 'solid' || lineType === 'dashed' || lineType === 'dotted' ? lineType : undefined,
         lineWidthDelta: typeof record.width_delta === 'number' ? record.width_delta : 0,
         opacity: typeof record.opacity === 'number' ? record.opacity : 1,
+        fillOpacity: typeof record.fill_opacity === 'number' ? record.fill_opacity : 0.2,
     };
+}
+
+function aggregationProfile(value: unknown): SignalAggregationProfile {
+    if (value === 'last_with_range' || value === 'first_with_range' || value === 'min_with_range' || value === 'max_with_range' || value === 'band_envelope' || value === 'events_verbatim') return value;
+    throw new Error(`Unsupported or missing signal aggregation profile '${String(value)}'`);
 }
 
 function indicatorGroup(value: string): SignalIndicatorGroup {
@@ -84,6 +90,7 @@ function visualComponents(catalog: BackendSignalCatalogDefinition): SignalVisual
         labelKey: output.label_key,
         descriptionKey: optionalString(output.description_key),
         kind: output.kind,
+        aggregationProfile: aggregationProfile(output.aggregation_profile),
         style: visualStyle(output.style),
         fullyPartitioned: outputFullyPartitioned(output),
     }));

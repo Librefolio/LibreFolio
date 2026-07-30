@@ -1,272 +1,207 @@
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {Activity, ArrowLeftRight, Briefcase, CalendarClock, Camera, ChartColumn, ChartNoAxesCombined, CircleHelp, Clock, Coins, FileText, Landmark, Layers, PieChart, PiggyBank, Receipt, Scale, TrendingUp} from 'lucide-svelte';
+    import {Activity, ArrowLeftRight, Banknote, CalendarClock, CircleHelp, Clock, Coins, Database, FileText, Landmark, LayoutDashboard, ListOrdered, PieChart, Receipt, Scale, Target, TrendingDown, TrendingUp, Wallet} from 'lucide-svelte';
 
-    import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
 
-    import type {AiExportPromptStats, AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
-    import type {AiExportDetailLevel, AiExportDomain, AiExportRenderMode, AiExportTask, AiExportTaskDefinition, AiExportTaskIconName} from './catalog/shared';
-    import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
+    import type {PreparedAiExport} from './aiExportClipboard';
+    import {findCompatibleAiExportSelection, selectionsForDomain, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
+    import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
+    import {AI_EXPORT_DETAIL_LEVELS} from './catalog/shared';
     import {
-        AI_EXPORT_SNAPSHOT_SELECTION_ID,
-        AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
-        AI_EXPORT_TECHNICAL_WINDOW_PRESETS,
-        AI_EXPORT_TECHNICAL_WINDOW_UNITS,
+        AI_EXPORT_PERIOD_PRESETS,
+        AI_EXPORT_PERIOD_UNITS,
         aiExportOptionsFingerprint,
         estimateAiExportTokenSeverity,
-        findCompatibleAiExportChoice,
-        getAiExportAnalysisOptions,
-        getAiExportDetailOptions,
-        getAiExportTaskForAnalysisSelection,
-        getInitialAiExportAnalysisSelection,
-        getMatchingAiExportStats,
-        isAiExportAnalysisSelection,
-        isAiExportSnapshotSelection,
-        normalizeAiExportPanelOptions,
-        normalizeAiExportTechnicalWindow,
-        reconcileAiExportAnalysisAndDetail,
-        type AiExportAnalysisSelection,
-        type AiExportHiddenAnalysisTasks,
-        type AiExportOptionsPanelCallbackMetadata,
+        normalizeAiExportPeriod,
+        normalizeAiExportUserNotes,
+        reconcileAiExportOptions,
         type AiExportOptionsPanelLabels,
         type AiExportOptionsSelection,
-        type AiExportTokenSeverity,
-        type AiExportTechnicalWindowPreset,
-        type AiExportTechnicalWindowSelection,
-        type AiExportTechnicalWindowUnit,
+        type AiExportPeriodPreset,
+        type AiExportPeriodUnit,
     } from './aiExportOptions';
 
-    const AI_EXPORT_ICON_COMPONENTS = {
-        Activity,
-        ArrowLeftRight,
-        Briefcase,
-        CalendarClock,
-        Camera,
-        ChartColumn,
-        ChartNoAxesCombined,
-        Clock,
-        Coins,
-        FileText,
-        Landmark,
-        Layers,
-        PieChart,
-        PiggyBank,
-        Receipt,
-        Scale,
-        TrendingUp,
-    } satisfies Record<AiExportTaskIconName, typeof Camera>;
-
-    const AI_EXPORT_DOCS_PATHS = {
-        portfolio: 'user/ai-export/portfolio/',
-        broker: 'user/ai-export/broker/',
-        asset: 'user/ai-export/asset/',
-        fx: 'user/ai-export/fx/',
-    } as const satisfies Readonly<Record<AiExportDomain, string>>;
-
-    interface AiExportAnalysisPresentation {
-        readonly selection: AiExportAnalysisSelection;
-        readonly label: string;
-        readonly description: string;
-        readonly icon: AiExportTaskIconName;
-    }
-
     interface Props {
-        domainTaskDefinitions: readonly AiExportTaskDefinition[];
+        domain: AiExportDomain;
         compatibility: AiExportCatalogCompatibilityResult;
-        initialTask: AiExportTask;
-        initialDetailLevel: AiExportDetailLevel;
-        initialRenderMode: AiExportRenderMode;
-        initialTechnicalWindow?: AiExportTechnicalWindowSelection;
-        responseLanguage: AiExportResponseLanguageDisplayName;
-        initialUserNotes?: string;
-        hiddenAnalysisTasks?: AiExportHiddenAnalysisTasks;
-        lastStats?: AiExportPromptStats;
-        lastStatsFingerprint?: string;
+        initialOptions: AiExportOptionsSelection;
+        responseLanguage: AiExportOptionsSelection['responseLanguage'];
+        pending?: PreparedAiExport;
         disabled?: boolean;
         loading?: boolean;
         labels: AiExportOptionsPanelLabels;
-        onexport: (options: AiExportOptionsSelection, metadata: AiExportOptionsPanelCallbackMetadata) => void;
-        ondraftchange?: (options: AiExportOptionsSelection, metadata: AiExportOptionsPanelCallbackMetadata) => void;
+        onprepare: (options: AiExportOptionsSelection) => void;
+        oncopyanyway: () => void;
+        onusecompact: (options: AiExportOptionsSelection) => void;
+        ondraftchange?: (options: AiExportOptionsSelection) => void;
     }
 
-    let {
-        domainTaskDefinitions,
-        compatibility,
-        initialTask,
-        initialDetailLevel,
-        initialRenderMode,
-        initialTechnicalWindow = AI_EXPORT_DEFAULT_TECHNICAL_WINDOW,
-        responseLanguage,
-        initialUserNotes = '',
-        hiddenAnalysisTasks = [],
-        lastStats,
-        lastStatsFingerprint,
-        disabled = false,
-        loading = false,
-        labels,
-        onexport,
-        ondraftchange,
-    }: Props = $props();
+    let {domain, compatibility, initialOptions, responseLanguage, pending, disabled = false, loading = false, labels, onprepare, oncopyanyway, onusecompact, ondraftchange}: Props = $props();
 
     const componentId = $props.id();
-    const userNotesId = `${componentId}-notes`;
-    const domain = untrack(() => {
-        const firstDefinition = domainTaskDefinitions[0];
-        if (!firstDefinition) throw new Error('AI Export options panel requires at least one task definition');
-        return firstDefinition.domain;
-    });
-    const initialAnalysis = untrack(() => getInitialAiExportAnalysisSelection(initialTask, initialRenderMode));
-    const initialReconciled = untrack(() => reconcileAiExportAnalysisAndDetail(domainTaskDefinitions, compatibility, domain, initialAnalysis, initialDetailLevel, hiddenAnalysisTasks));
+    const selectionKinds = ['dataset', 'analysis'] as const;
+    const notesId = `${componentId}-notes`;
+    const iconComponents = {
+        activity: Activity,
+        'arrow-left-right': ArrowLeftRight,
+        banknote: Banknote,
+        'calendar-clock': CalendarClock,
+        clock: Clock,
+        coins: Coins,
+        database: Database,
+        'file-text': FileText,
+        landmark: Landmark,
+        'layout-dashboard': LayoutDashboard,
+        'list-ordered': ListOrdered,
+        'pie-chart': PieChart,
+        receipt: Receipt,
+        scale: Scale,
+        target: Target,
+        'trending-down': TrendingDown,
+        'trending-up': TrendingUp,
+        wallet: Wallet,
+    } as const;
+    const initial = untrack(() => reconcileAiExportOptions(compatibility, domain, initialOptions));
+    let selectionKind = $state<AiExportSelectionKind>(initial.selectionKind);
+    let selectionId = $state<AiExportSelectionId>(initial.selectionId);
+    let detailLevel = $state<AiExportDetailLevel>(initial.detailLevel);
+    let periodPreset = $state<AiExportPeriodPreset>(initial.period.preset);
+    let customAmount = $state(initial.period.customAmount);
+    let customUnit = $state<AiExportPeriodUnit>(initial.period.customUnit);
+    let userNotes = $state(initial.userNotes ?? '');
 
-    let selectedAnalysis = $state<AiExportAnalysisSelection>(initialReconciled.analysis);
-    let selectedDetailLevel = $state<AiExportDetailLevel>(initialReconciled.detailLevel);
-    let userNotes = $state(untrack(() => initialUserNotes));
-    const normalizedInitialTechnicalWindow = untrack(() => normalizeAiExportTechnicalWindow(initialTechnicalWindow));
-    let technicalWindowPreset = $state<AiExportTechnicalWindowPreset>(normalizedInitialTechnicalWindow.preset);
-    let customTechnicalWindowAmount = $state(normalizedInitialTechnicalWindow.customAmount);
-    let customTechnicalWindowUnit = $state<AiExportTechnicalWindowUnit>(normalizedInitialTechnicalWindow.customUnit);
-
-    let analysisOptions = $derived(getAiExportAnalysisOptions(domainTaskDefinitions, compatibility, domain, hiddenAnalysisTasks));
-    let analysisSelectOptions = $derived<SelectOption[]>(
-        analysisOptions.map((option) => ({
-            value: option.selection,
-            label: isAiExportSnapshotSelection(option.selection) ? labels.snapshotLabel : (labels.taskLabels[option.definition.id] ?? option.definition.id),
-            searchText: isAiExportSnapshotSelection(option.selection) ? labels.snapshotDescription : (labels.taskDescriptions[option.definition.id] ?? ''),
-            disabled: option.disabled,
+    let selections = $derived(selectionsForDomain(compatibility, domain, selectionKind));
+    let selectionOptions = $derived<SelectOption[]>(
+        selections.map((selection) => ({
+            value: selection.id,
+            label: labels.selectionLabels[selection.id] ?? selection.id,
+            searchText: labels.selectionDescriptions[selection.id] ?? '',
+            icon: selection.entry.icon,
         })),
     );
-    let technicalWindowUnitOptions = $derived<SelectOption[]>(
-        AI_EXPORT_TECHNICAL_WINDOW_UNITS.map((unit) => ({
-            value: unit,
-            label: labels.technicalWindowUnitShortLabels[unit],
-            searchText: labels.technicalWindowUnitLabels[unit],
-        })),
-    );
-    let selectedTask = $derived(getAiExportTaskForAnalysisSelection(domain, selectedAnalysis));
-    let selectedDefinition = $derived(domainTaskDefinitions.find((definition) => definition.domain === domain && definition.backendTask === selectedTask));
-    let detailOptions = $derived(getAiExportDetailOptions(selectedDefinition, compatibility));
-    let selectedChoice = $derived(selectedDefinition ? findCompatibleAiExportChoice(compatibility, selectedDefinition.domain, selectedDefinition.backendTask, selectedDetailLevel) : undefined);
-    let snapshotSelected = $derived(isAiExportSnapshotSelection(selectedAnalysis));
-    let controlsDisabled = $derived(disabled || loading);
-    let technicalWindow = $derived(
-        normalizeAiExportTechnicalWindow({
-            preset: technicalWindowPreset,
-            customAmount: customTechnicalWindowAmount,
-            customUnit: customTechnicalWindowUnit,
-        }),
-    );
+    let selected = $derived(findCompatibleAiExportSelection(compatibility, selectionKind, selectionId));
     let currentOptions = $derived<AiExportOptionsSelection>(
-        normalizeAiExportPanelOptions({
-            domain,
-            analysis: selectedAnalysis,
-            detailLevel: selectedDetailLevel,
+        reconcileAiExportOptions(compatibility, domain, {
+            selectionKind,
+            selectionId,
+            detailLevel,
+            period: normalizeAiExportPeriod({preset: periodPreset, customAmount, customUnit}),
             responseLanguage,
-            userNotes,
-            technicalWindow,
-            taskDefinitions: domainTaskDefinitions,
+            userNotes: normalizeAiExportUserNotes(selectionKind, userNotes),
         }),
     );
-    let selectionCompatible = $derived(selectedChoice !== undefined && selectedDefinition !== undefined && selectedDefinition.renderModes.includes(currentOptions.renderMode));
-    let exportDisabled = $derived(controlsDisabled || !selectionCompatible);
-    let currentOptionsFingerprint = $derived(aiExportOptionsFingerprint(currentOptions));
-    let currentStats = $derived(getMatchingAiExportStats(lastStats, lastStatsFingerprint, currentOptionsFingerprint));
-    let tokenSeverity = $derived<AiExportTokenSeverity | null>(currentStats ? estimateAiExportTokenSeverity(currentStats.finalPrompt.estimatedTokens) : null);
+    let controlsDisabled = $derived(disabled || loading);
+    let severity = $derived(pending ? estimateAiExportTokenSeverity(pending.stats.finalPrompt.estimatedTokens) : null);
+    let warningVisible = $derived(pending !== undefined && severity !== null && severity !== 'normal');
 
     $effect(() => {
-        const reconciled = reconcileAiExportAnalysisAndDetail(domainTaskDefinitions, compatibility, domain, selectedAnalysis, selectedDetailLevel, hiddenAnalysisTasks);
-        if (reconciled.analysis !== selectedAnalysis) selectedAnalysis = reconciled.analysis;
-        if (reconciled.detailLevel !== selectedDetailLevel) selectedDetailLevel = reconciled.detailLevel;
-    });
-
-    $effect(() => {
-        const options = currentOptions;
-        const metadata = {userNotesDraft: userNotes} satisfies AiExportOptionsPanelCallbackMetadata;
-        untrack(() => ondraftchange?.(options, metadata));
-    });
-
-    function getAnalysisPresentation(value: string): AiExportAnalysisPresentation | undefined {
-        if (!isAiExportAnalysisSelection(value, domainTaskDefinitions, hiddenAnalysisTasks)) return undefined;
-        const option = analysisOptions.find((candidate) => candidate.selection === value);
-        if (!option) return undefined;
-
-        if (option.syntheticSnapshot) {
-            return {
-                selection: AI_EXPORT_SNAPSHOT_SELECTION_ID,
-                label: labels.snapshotLabel,
-                description: labels.snapshotDescription,
-                icon: 'Camera',
-            };
+        const domainSelections = selections;
+        if (!domainSelections.some((selection) => selection.id === selectionId)) {
+            const fallback = domainSelections[0];
+            if (fallback) {
+                selectionId = fallback.id;
+                detailLevel = fallback.supportedDetailLevels.includes('standard') ? 'standard' : fallback.supportedDetailLevels[0];
+            }
         }
+    });
 
-        return {
-            selection: option.selection,
-            label: labels.taskLabels[option.definition.id] ?? option.definition.id,
-            description: labels.taskDescriptions[option.definition.id] ?? '',
-            icon: option.definition.icon,
-        };
+    $effect(() => {
+        const option = selected;
+        if (option && !option.supportedDetailLevels.includes(detailLevel)) detailLevel = option.supportedDetailLevels[0];
+    });
+
+    $effect(() => {
+        const draft = currentOptions;
+        untrack(() => ondraftchange?.(draft));
+    });
+
+    function setCategory(kind: AiExportSelectionKind) {
+        selectionKind = kind;
+        const first = selectionsForDomain(compatibility, domain, kind)[0];
+        if (first) {
+            selectionId = first.id;
+            detailLevel = first.supportedDetailLevels.includes('standard') ? 'standard' : first.supportedDetailLevels[0];
+        }
+        if (kind === 'dataset') userNotes = '';
     }
 
-    function handleAnalysisChange(value: string) {
-        if (!isAiExportAnalysisSelection(value, domainTaskDefinitions, hiddenAnalysisTasks)) return;
-        selectedAnalysis = value;
+    function handleSelection(value: string) {
+        const match = selections.find((selection) => selection.id === value);
+        if (match) selectionId = match.id;
     }
 
-    function isTechnicalWindowPreset(value: string): value is AiExportTechnicalWindowPreset {
-        return AI_EXPORT_TECHNICAL_WINDOW_PRESETS.includes(value as AiExportTechnicalWindowPreset);
+    function isAiExportIconName(value: string): value is keyof typeof iconComponents {
+        return value in iconComponents;
     }
 
-    function isTechnicalWindowUnit(value: string): value is AiExportTechnicalWindowUnit {
-        return AI_EXPORT_TECHNICAL_WINDOW_UNITS.includes(value as AiExportTechnicalWindowUnit);
+    function getSelectionIcon(icon: string | undefined) {
+        return icon && isAiExportIconName(icon) ? iconComponents[icon] : FileText;
     }
 
-    function handleSubmit(event: SubmitEvent) {
-        event.preventDefault();
-        if (exportDisabled || !selectedDefinition) return;
-        onexport(currentOptions, {userNotesDraft: userNotes});
+    function isPeriodPreset(value: string): value is AiExportPeriodPreset {
+        return AI_EXPORT_PERIOD_PRESETS.includes(value as AiExportPeriodPreset);
     }
 
-    function severityClasses(severity: AiExportTokenSeverity): string {
-        if (severity === 'large') return 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40';
-        if (severity === 'warning') return 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40';
+    function isPeriodUnit(value: string): value is AiExportPeriodUnit {
+        return AI_EXPORT_PERIOD_UNITS.includes(value as AiExportPeriodUnit);
+    }
+
+    function severityClasses(value: 'normal' | 'warning' | 'large'): string {
+        if (value === 'large') return 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40';
+        if (value === 'warning') return 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40';
         return 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40';
+    }
+
+    function submit(event: SubmitEvent) {
+        event.preventDefault();
+        if (!controlsDisabled && selected) onprepare(currentOptions);
     }
 </script>
 
-<form class="flex flex-col gap-4 p-4" onsubmit={handleSubmit} data-testid="ai-export-v2-options-panel">
-    <div class="flex flex-col gap-1.5">
-        <div class="flex items-center justify-between gap-3">
-            <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.taskLabel}</span>
-            <DocsLink path={AI_EXPORT_DOCS_PATHS[domain]} label={labels.documentationLabel} icon="book" size={16} testId="ai-export-v2-docs-link" />
+<form class="flex flex-col gap-4 p-4" onsubmit={submit} data-testid="ai-export-options-panel">
+    <fieldset class="flex flex-col gap-2">
+        <legend class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.categoryLabel}</legend>
+        <div class="grid grid-cols-2 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-900">
+            {#each selectionKinds as kind}
+                <button
+                    type="button"
+                    disabled={controlsDisabled}
+                    aria-pressed={selectionKind === kind}
+                    class="rounded-md px-2 py-1.5 text-xs font-medium transition-colors {selectionKind === kind ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-300'}"
+                    onclick={() => setCategory(kind)}
+                    data-testid={`ai-export-category-${kind}`}
+                >
+                    {labels.categoryLabels[kind]}
+                </button>
+            {/each}
         </div>
-        <SimpleSelect value={selectedAnalysis} options={analysisSelectOptions} disabled={controlsDisabled} dropdownPosition="auto" testId="ai-export-v2-task-select" ariaLabel={labels.taskLabel} optionTestId={(option) => `ai-export-v2-task-option-${option.value}`} onchange={handleAnalysisChange}>
+    </fieldset>
+
+    <div class="flex flex-col gap-1.5">
+        <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.selectionLabel}</span>
+        <SimpleSelect value={selectionId} options={selectionOptions} disabled={controlsDisabled} dropdownPosition="auto" testId="ai-export-selection" ariaLabel={labels.selectionLabel} optionTestId={(option) => `ai-export-selection-option-${option.value}`} onchange={handleSelection}>
             {#snippet selectedItem(option)}
-                {@const presentation = getAnalysisPresentation(option.value)}
-                {#if presentation}
-                    {@const TaskIcon = AI_EXPORT_ICON_COMPONENTS[presentation.icon]}
-                    <div class="flex min-w-0 flex-1 items-center gap-2.5" data-testid="ai-export-v2-task-selected">
-                        <TaskIcon class="shrink-0 text-purple-600 dark:text-purple-300" size={18} aria-hidden="true" data-testid="ai-export-v2-task-selected-icon" />
-                        <span class="min-w-0 flex-1">
-                            <span class="block truncate font-medium text-gray-900 dark:text-gray-100" data-testid="ai-export-v2-task-selected-name">{presentation.label}</span>
-                            <span class="block truncate text-[11px] leading-4 text-gray-500 dark:text-gray-400" data-testid="ai-export-v2-task-selected-description">{presentation.description}</span>
-                        </span>
-                    </div>
-                {/if}
+                {@const SelectionIcon = getSelectionIcon(option.icon)}
+                <span class="flex min-w-0 flex-1 items-center gap-2.5">
+                    <SelectionIcon class="shrink-0 text-purple-600 dark:text-purple-300" size={18} aria-hidden="true" data-testid="ai-export-selection-selected-icon" />
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate font-medium">{option.label}</span>
+                        <span class="block truncate text-[11px] text-gray-500 dark:text-gray-400">{option.searchText}</span>
+                    </span>
+                </span>
             {/snippet}
             {#snippet item(option)}
-                {@const presentation = getAnalysisPresentation(option.value)}
-                {#if presentation}
-                    {@const TaskIcon = AI_EXPORT_ICON_COMPONENTS[presentation.icon]}
-                    <div class="flex w-full min-w-0 max-w-[calc(100vw-4rem)] items-start gap-2.5 sm:max-w-sm">
-                        <TaskIcon class="mt-0.5 shrink-0 text-purple-600 dark:text-purple-300" size={18} aria-hidden="true" data-testid={`ai-export-v2-task-option-${presentation.selection}-icon`} />
-                        <span class="min-w-0 flex-1 whitespace-normal">
-                            <span class="block font-medium text-gray-900 dark:text-gray-100">{presentation.label}</span>
-                            <span class="mt-0.5 block text-xs leading-snug text-gray-500 dark:text-gray-400">{presentation.description}</span>
-                        </span>
-                    </div>
-                {/if}
+                {@const SelectionIcon = getSelectionIcon(option.icon)}
+                <span class="flex min-w-0 items-start gap-2.5 whitespace-normal">
+                    <SelectionIcon class="mt-0.5 shrink-0 text-purple-600 dark:text-purple-300" size={18} aria-hidden="true" data-testid={`ai-export-selection-option-${option.value}-icon`} />
+                    <span class="min-w-0 flex-1">
+                        <span class="block font-medium">{option.label}</span>
+                        <span class="block text-xs text-gray-500 dark:text-gray-400">{option.searchText}</span>
+                    </span>
+                </span>
             {/snippet}
         </SimpleSelect>
     </div>
@@ -274,28 +209,21 @@
     <fieldset class="flex flex-col gap-2">
         <legend class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.detailLevelLabel}</legend>
         <div class="grid grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-900">
-            {#each detailOptions as detailOption (detailOption.detailLevel)}
-                <div class="relative min-w-0">
+            {#each AI_EXPORT_DETAIL_LEVELS as detail}
+                <div class="relative">
                     <button
                         type="button"
-                        disabled={controlsDisabled || detailOption.disabled}
-                        aria-pressed={selectedDetailLevel === detailOption.detailLevel}
-                        class="w-full rounded-md py-1.5 pr-6 pl-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 {selectedDetailLevel === detailOption.detailLevel
-                            ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300'
-                            : 'text-gray-600 hover:bg-white/70 dark:text-gray-300 dark:hover:bg-slate-700/70'}"
-                        onclick={() => (selectedDetailLevel = detailOption.detailLevel)}
-                        data-testid={`ai-export-v2-detail-${detailOption.detailLevel}`}
+                        disabled={controlsDisabled || !selected?.supportedDetailLevels.includes(detail)}
+                        aria-pressed={detailLevel === detail}
+                        class="w-full rounded-md py-1.5 pr-6 pl-2 text-xs font-medium {detailLevel === detail ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-300'}"
+                        onclick={() => (detailLevel = detail)}
+                        data-testid={`ai-export-detail-${detail}`}
                     >
-                        {labels.detailLevelLabels[detailOption.detailLevel]}
+                        {labels.detailLevelLabels[detail]}
                     </button>
-                    <span class="absolute top-1/2 right-1 z-10 -translate-y-1/2">
-                        <Tooltip text={labels.detailLevelHelp[detailOption.detailLevel]} position="right" maxWidth="320px" interactiveChild>
-                            <button
-                                type="button"
-                                aria-label={`${labels.detailLevelLabels[detailOption.detailLevel]}: ${labels.detailLevelHelp[detailOption.detailLevel]}`}
-                                class="inline-flex rounded-sm p-0.5 text-gray-400 transition-colors hover:text-purple-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:text-gray-500 dark:hover:text-purple-300"
-                                data-testid={`ai-export-v2-detail-help-${detailOption.detailLevel}`}
-                            >
+                    <span class="absolute top-1/2 right-1 -translate-y-1/2">
+                        <Tooltip text={labels.detailLevelHelp[detail]} position="right" maxWidth="320px" interactiveChild>
+                            <button type="button" aria-label={`${labels.detailLevelLabels[detail]}: ${labels.detailLevelHelp[detail]}`} class="rounded-sm p-0.5 text-gray-400" data-testid={`ai-export-detail-help-${detail}`}>
                                 <CircleHelp size={13} aria-hidden="true" />
                             </button>
                         </Tooltip>
@@ -306,120 +234,73 @@
     </fieldset>
 
     <fieldset class="flex flex-col gap-2">
-        <legend class="sr-only">{labels.technicalWindowLabel}</legend>
         <div class="flex items-center gap-1.5">
-            <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.technicalWindowLabel}</span>
-            <Tooltip text={labels.technicalWindowHelp} position="right" maxWidth="320px" interactiveChild>
-                <button
-                    type="button"
-                    aria-label={`${labels.technicalWindowLabel}: ${labels.technicalWindowHelp}`}
-                    class="inline-flex rounded-sm p-0.5 text-gray-400 transition-colors hover:text-purple-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:text-gray-500 dark:hover:text-purple-300"
-                    data-testid="ai-export-v2-technical-window-help"
-                >
-                    <CircleHelp size={13} aria-hidden="true" />
-                </button>
+            <legend class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.periodLabel}</legend>
+            <Tooltip text={labels.periodHelp} position="right" maxWidth="320px" interactiveChild>
+                <button type="button" aria-label={`${labels.periodLabel}: ${labels.periodHelp}`} class="rounded-sm p-0.5 text-gray-400" data-testid="ai-export-period-help"><CircleHelp size={13} /></button>
             </Tooltip>
         </div>
         <div class="flex min-w-0 items-center gap-1 rounded-lg bg-gray-100 p-1 dark:bg-slate-900">
-            {#each AI_EXPORT_TECHNICAL_WINDOW_PRESETS.filter((preset) => preset !== 'custom') as preset}
+            {#each AI_EXPORT_PERIOD_PRESETS.filter((preset) => preset !== 'custom') as preset}
                 <button
                     type="button"
                     disabled={controlsDisabled}
-                    aria-pressed={technicalWindowPreset === preset}
-                    class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 {technicalWindowPreset === preset
-                        ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300'
-                        : 'text-gray-600 hover:bg-white/70 dark:text-gray-300 dark:hover:bg-slate-700/70'}"
-                    onclick={() => {
-                        if (isTechnicalWindowPreset(preset)) technicalWindowPreset = preset;
-                    }}
-                    data-testid={`ai-export-v2-technical-window-${preset}`}
+                    aria-pressed={periodPreset === preset}
+                    class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium {periodPreset === preset ? 'bg-white text-purple-700 shadow-sm dark:bg-slate-700 dark:text-purple-300' : 'text-gray-600 dark:text-gray-300'}"
+                    onclick={() => isPeriodPreset(preset) && (periodPreset = preset)}
+                    data-testid={`ai-export-period-${preset}`}>{labels.periodPresetLabels[preset]}</button
                 >
-                    {labels.technicalWindowPresetLabels[preset]}
-                </button>
             {/each}
-
-            {#if technicalWindowPreset === 'custom'}
-                <div class="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-purple-400/40 bg-purple-500/10 px-1.5 py-0.5 dark:bg-purple-500/20" role="group" data-testid="ai-export-v2-technical-window-custom">
-                    <input
-                        type="number"
-                        min="1"
-                        max="999"
-                        step="1"
-                        bind:value={customTechnicalWindowAmount}
-                        disabled={controlsDisabled}
-                        aria-label={labels.technicalWindowPresetLabels.custom}
-                        class="w-8 appearance-none border-none bg-transparent px-0.5 py-0.5 text-center text-xs text-purple-700 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 dark:text-purple-300 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        data-testid="ai-export-v2-technical-window-custom-amount"
-                    />
+            {#if periodPreset === 'custom'}
+                <div class="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-purple-400/40 bg-purple-500/10 px-1.5 py-0.5" data-testid="ai-export-period-custom">
+                    <input type="number" min="1" max="999" step="1" bind:value={customAmount} disabled={controlsDisabled} class="w-8 appearance-none bg-transparent text-center text-xs outline-none" data-testid="ai-export-period-custom-amount" />
                     <SimpleSelect
-                        value={customTechnicalWindowUnit}
-                        options={technicalWindowUnitOptions}
+                        value={customUnit}
+                        options={AI_EXPORT_PERIOD_UNITS.map((unit) => ({value: unit, label: labels.periodUnitShortLabels[unit], searchText: labels.periodUnitLabels[unit]}))}
                         disabled={controlsDisabled}
-                        onchange={(value) => {
-                            if (isTechnicalWindowUnit(value)) customTechnicalWindowUnit = value;
-                        }}
-                        class="inline-block w-auto"
-                        dropdownPosition="auto"
+                        onchange={(value) => isPeriodUnit(value) && (customUnit = value)}
                         compact
                         showChevron={false}
-                        testId="ai-export-v2-technical-window-custom-unit"
-                        ariaLabel={labels.technicalWindowPresetLabels.custom}
-                        optionTestId={(option) => `ai-export-v2-technical-window-custom-unit-option-${option.value}`}
+                        testId="ai-export-period-custom-unit"
+                        ariaLabel={labels.periodPresetLabels.custom}
                     />
                 </div>
             {:else}
-                <button
-                    type="button"
-                    disabled={controlsDisabled}
-                    aria-pressed="false"
-                    class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:bg-slate-700/70"
-                    onclick={() => (technicalWindowPreset = 'custom')}
-                    data-testid="ai-export-v2-technical-window-custom"
-                >
-                    {labels.technicalWindowPresetLabels.custom}
-                </button>
+                <button type="button" disabled={controlsDisabled} class="min-w-0 flex-1 rounded-md px-1 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300" onclick={() => (periodPreset = 'custom')} data-testid="ai-export-period-custom">{labels.periodPresetLabels.custom}</button>
             {/if}
         </div>
     </fieldset>
 
-    {#if !snapshotSelected}
-        {#if selectedDefinition?.supportsUserNotes}
-            <div class="flex flex-col gap-1.5">
-                <label for={userNotesId} class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.userNotesLabel}</label>
-                <textarea
-                    id={userNotesId}
-                    bind:value={userNotes}
-                    disabled={controlsDisabled}
-                    placeholder={labels.userNotesPlaceholder}
-                    rows="3"
-                    class="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
-                    data-testid="ai-export-v2-user-notes"
-                ></textarea>
-            </div>
-        {/if}
+    {#if selectionKind === 'analysis' && selected?.entry.kind === 'analysis' && selected.entry.supports_user_notes}
+        <div class="flex flex-col gap-1.5">
+            <label for={notesId} class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.userNotesLabel}</label>
+            <textarea id={notesId} bind:value={userNotes} disabled={controlsDisabled} placeholder={labels.userNotesPlaceholder} rows="3" class="w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900" data-testid="ai-export-user-notes"
+            ></textarea>
+        </div>
     {/if}
 
-    {#if currentStats && tokenSeverity}
-        <section class="rounded-lg border border-gray-200 p-3 dark:border-slate-700" aria-live="polite" data-testid="ai-export-v2-payload-stats">
-            <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.payloadStatsLabel}</h3>
-            <dl class="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+    {#if pending && severity}
+        <section class="rounded-lg border border-gray-200 p-3 dark:border-slate-700" aria-live="polite" data-testid="ai-export-payload-stats">
+            <h3 class="text-xs font-semibold">{labels.payloadStatsLabel}</h3>
+            <dl class="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
                 <dt>{labels.backendEstimatedTokensLabel}</dt>
-                <dd data-testid="ai-export-v2-backend-token-count">{currentStats.snapshotBackendStats.token_estimate.estimated_tokens}</dd>
+                <dd>{pending.stats.snapshotBackendStats.estimated_tokens}</dd>
                 <dt>{labels.finalEstimatedTokensLabel}</dt>
-                <dd data-testid="ai-export-v2-final-token-count">{currentStats.finalPrompt.estimatedTokens}</dd>
+                <dd>{pending.stats.finalPrompt.estimatedTokens}</dd>
             </dl>
-            <p class="mt-2 rounded-md px-2 py-1 text-xs font-medium {severityClasses(tokenSeverity)}" role="status" data-testid="ai-export-v2-token-severity">
-                {labels.tokenSeverityLabels[tokenSeverity]}
-            </p>
+            <p class="mt-2 rounded-md px-2 py-1 text-xs font-medium {severityClasses(severity)}" data-testid="ai-export-token-severity">{labels.tokenSeverityLabels[severity]}</p>
+            {#if warningVisible}
+                <div class="mt-2 flex gap-2">
+                    {#if currentOptions.detailLevel !== 'compact'}
+                        <button type="button" class="flex-1 rounded-md border px-2 py-1.5 text-xs font-semibold" onclick={() => onusecompact({...currentOptions, detailLevel: 'compact'})} data-testid="ai-export-use-compact">{labels.useCompactLabel}</button>
+                    {/if}
+                    <button type="button" class="flex-1 rounded-md bg-purple-600 px-2 py-1.5 text-xs font-semibold text-white" onclick={oncopyanyway} data-testid="ai-export-copy-anyway">{labels.copyAnywayLabel}</button>
+                </div>
+            {/if}
         </section>
     {/if}
 
-    <button
-        type="submit"
-        disabled={exportDisabled}
-        class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-slate-800"
-        data-testid="ai-export-v2-export-button"
-    >
-        {loading ? labels.loadingLabel : labels.exportLabel}
+    <button type="submit" disabled={controlsDisabled || !selected} class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" data-testid="ai-export-copy-button">
+        {loading ? labels.preparingLabel : labels.prepareLabel}
     </button>
 </form>

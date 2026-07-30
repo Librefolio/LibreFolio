@@ -43,13 +43,16 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,
+    SignalAreaSeries,
     SignalBandComponent,
     SignalBandSeries,
     SignalBandValueSource,
+    SignalBarSeries,
     SignalCadence,
     SignalDomain,
     SignalExecutionContext,
     SignalLineCrossoverRequest,
+    SignalLineSeries,
     SignalOutputValueSource,
     SignalPriceField,
     SignalPricePoint,
@@ -74,23 +77,36 @@ from backend.app.services.ai_export.components.resources import (
 )
 from backend.app.services.ai_export.components.technical_payloads import (
     BreadthStateBucket,
-    IndicatorSeriesPayload,
+    IndicatorBucketRow,
+    IndicatorOutputColumn,
+    IndicatorTablePayload,
     PriceBucket,
-    TechnicalBucket,
+    TechnicalDatedValue,
     TechnicalEventBucket,
     TechnicalEventPayload,
     TechnicalEventsPayload,
+    TechnicalRangeValueCell,
+    TechnicalSingleValueCell,
     UniverseBreadthPayload,
 )
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey, TemporalAggregatorSpec
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.ai_export.temporal.aggregators import (
+    BandBucketStatistics,
     ContinuousMultiOutputBucketAggregate,
+    DatedValue,
+    ScalarBucketStatistics,
     aggregate_continuous_multi_output,
+    aggregate_signal_buckets,
     assign_discrete_events,
 )
 from backend.app.services.ai_export.temporal.plan import BucketPlan
-from backend.app.services.ai_export.temporal.points import ContinuousMultiOutputPoint, DiscreteEvent
+from backend.app.services.ai_export.temporal.points import (
+    BandObservedPoint,
+    ContinuousMultiOutputPoint,
+    DiscreteEvent,
+    ObservedPoint,
+)
 from backend.app.services.ai_export.temporal.warmup import slice_to_requested_period
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.fx import convert_bulk
@@ -106,6 +122,10 @@ from backend.app.services.signal_service import SignalExecutionPlan, SignalServi
 #: for this workstream (not imported), but `TemporalAggregatorSpec` equality is
 #: value-based so both builder modules share one canonical constant.
 OHLC_BUCKET_AGGREGATOR = TemporalAggregatorSpec(kind="ohlc_bucket", description="Adaptive OHLC bucket aggregation (30/14/7 day cap), owned by the temporal engine workstream")
+SIGNAL_PROFILE_BUCKET_AGGREGATOR = TemporalAggregatorSpec(
+    kind="signal_profile_bucket",
+    description="Plugin-declared signal profile aggregation with dated row cells",
+)
 
 
 # =============================================================================
@@ -614,6 +634,7 @@ def _bucket_kwargs(aggregate: ContinuousMultiOutputBucketAggregate) -> dict[str,
     return {
         "start_date": aggregate.bucket.start_date,
         "end_date": aggregate.bucket.end_date,
+        "calendar_days": aggregate.bucket.day_count,
         "first": _decimal_mapping_to_float(aggregate.first),
         "minimum": _decimal_mapping_to_float(aggregate.minimum),
         "maximum": _decimal_mapping_to_float(aggregate.maximum),
@@ -643,62 +664,193 @@ def latest_point_value(points: Sequence[ContinuousMultiOutputPoint], *, key: str
     return (float(value) if value is not None else None), last.date
 
 
-def signal_series_to_points(series, *, event: bool = False) -> tuple[ContinuousMultiOutputPoint, ...]:
-    """Converts one plugin-owned `SignalSeries` (line/bar/band) into typed multi-output points."""
-    if isinstance(series, SignalBandSeries):
-        points = []
-        for point in series.points:
-            values = {key: Decimal(str(value)) for key, value in (("lower", point.lower), ("middle", point.middle), ("upper", point.upper)) if value is not None}
-            if values:
-                points.append(ContinuousMultiOutputPoint(date=point.date, values=values))
-        return tuple(points)
-    points = []
-    for point in series.points:
-        if point.value is not None:
-            points.append(ContinuousMultiOutputPoint(date=point.date, values={"value": Decimal(str(point.value))}))
-    return tuple(points)
+def _technical_dated_value(value: DatedValue | None) -> TechnicalDatedValue | None:
+    if value is None:
+        return None
+    return TechnicalDatedValue(value=float(value.value), date=value.observed_date)
 
 
-def build_indicator_series_payloads(results: Sequence[SignalResult], plan: BucketPlan):
-    """Builds one `IndicatorSeriesPayload` per available output series across every curated result.
+def _technical_cell(
+    statistics: ScalarBucketStatistics,
+) -> TechnicalSingleValueCell | TechnicalRangeValueCell | None:
+    if statistics.observation_count == 0:
+        return None
+    if statistics.observation_count == 1:
+        assert statistics.last is not None
+        return TechnicalSingleValueCell(
+            value=float(statistics.last.value),
+            date=statistics.last.observed_date,
+        )
+    assert statistics.first is not None
+    assert statistics.minimum is not None
+    assert statistics.maximum is not None
+    assert statistics.last is not None
+    return TechnicalRangeValueCell(
+        observation_count=statistics.observation_count,
+        first=_technical_dated_value(statistics.first),
+        min=_technical_dated_value(statistics.minimum),
+        max=_technical_dated_value(statistics.maximum),
+        last=_technical_dated_value(statistics.last),
+    )
 
-    only `OK`/`PARTIAL` results with at least one series are surfaced -
+
+def _bucket_index_by_date(plan: BucketPlan) -> dict[date, int]:
+    result: dict[date, int] = {}
+    for bucket in plan.buckets:
+        current = bucket.start_date
+        while current <= bucket.end_date:
+            result[current] = bucket.index
+            current += timedelta(days=1)
+    return result
+
+
+def _latest_observed_value(points: Sequence[ObservedPoint]) -> TechnicalDatedValue | None:
+    if not points:
+        return None
+    latest = max(points, key=lambda point: point.date)
+    return TechnicalDatedValue(value=float(latest.value), date=latest.date)
+
+
+def _scalar_series_points(
+    series: SignalLineSeries | SignalAreaSeries | SignalBarSeries,
+) -> tuple[ObservedPoint, ...]:
+    return tuple(ObservedPoint(date=point.date, value=Decimal(str(point.value))) for point in series.points if point.value is not None)
+
+
+def _band_series_points(series: SignalBandSeries) -> tuple[BandObservedPoint, ...]:
+    return tuple(
+        BandObservedPoint(
+            date=point.date,
+            lower=(Decimal(str(point.lower)) if point.lower is not None else None),
+            middle=(Decimal(str(point.middle)) if point.middle is not None else None),
+            upper=(Decimal(str(point.upper)) if point.upper is not None else None),
+        )
+        for point in series.points
+        if any(value is not None for value in (point.lower, point.middle, point.upper))
+    )
+
+
+def build_indicator_table_payloads(
+    results: Sequence[SignalResult],
+    plan: BucketPlan,
+) -> tuple[IndicatorTablePayload, ...]:
+    """Build one row-oriented table per available curated signal instance.
+
+    Only `OK`/`PARTIAL` results with at least one series are surfaced.
+    Multi-output signals share one row per temporal bucket; band components
+    become independent lower/middle/upper columns with truthful dated stats.
     `UNAVAILABLE`/`FAILED` results are silently omitted (requirement 7,
     "partial success"), never replaced with a placeholder.
     """
-    payloads: list[IndicatorSeriesPayload] = []
+
+    payloads: list[IndicatorTablePayload] = []
+    date_to_bucket = _bucket_index_by_date(plan)
     for result in results:
         if result.status not in (SignalStatus.OK, SignalStatus.PARTIAL) or not result.series:
             continue
         plugin_class = SignalPluginRegistry.get_plugin(result.signal_code)
-        ai_description = plugin_class.describe_for_ai() if plugin_class is not None else None
-        category = ai_description.category.value if ai_description is not None else "unknown"
+        if plugin_class is None:
+            raise ValueError(f"unknown signal plugin in AI Export result: {result.signal_code}")
+        ai_description = plugin_class.describe_for_ai()
+        output_specs = {output.key: output for output in plugin_class.output_specs}
+        output_descriptions = {output.key: output for output in ai_description.outputs}
+        columns: list[IndicatorOutputColumn] = []
+        cells_by_bucket: list[dict[str, object]] = [{} for _bucket in plan.buckets]
+        observed_dates_by_bucket: list[set[date]] = [set() for _bucket in plan.buckets]
+
         for series in result.series:
-            output_description = None
-            if ai_description is not None:
-                output_description = next((output for output in ai_description.outputs if output.key == series.key), None)
-            semantic_id = output_description.semantic_id if output_description is not None else series.semantic_id
-            semantic_description = output_description.semantic_description if output_description is not None else series.semantic_description
-            unit = (output_description.unit if output_description is not None else series.unit).value
-            points = signal_series_to_points(series)
-            aggregates = aggregate_continuous_multi_output(points, plan)
-            buckets = tuple(TechnicalBucket(**_bucket_kwargs(aggregate)) for aggregate in aggregates)
-            latest = points[-1] if points else None
-            payloads.append(
-                IndicatorSeriesPayload(
-                    instance_id=result.instance_id,
-                    signal_code=result.signal_code,
-                    semantic_id=semantic_id,
-                    semantic_description=semantic_description,
-                    category=category,
-                    output_key=series.key,
-                    unit=unit,
-                    kind=series.kind,
-                    buckets=buckets,
-                    latest=(_decimal_mapping_to_float(dict(latest.values)) if latest is not None else None),
-                    latest_date=(latest.date if latest is not None else None),
+            output_spec = output_specs.get(series.key)
+            output_description = output_descriptions.get(series.key)
+            if output_spec is None or output_description is None:
+                raise ValueError(f"{result.signal_code}.{series.key} is missing plugin-owned output metadata")
+            if isinstance(series, SignalBandSeries):
+                points = _band_series_points(series)
+                aggregates = aggregate_signal_buckets(
+                    output_spec.aggregation_profile,
+                    points,
+                    plan,
                 )
+                if any(not isinstance(aggregate, BandBucketStatistics) for aggregate in aggregates):
+                    raise TypeError("band aggregation returned a non-band result")
+                for point in points:
+                    observed_dates_by_bucket[date_to_bucket[point.date]].add(point.date)
+                for component in SignalBandComponent:
+                    component_points = tuple(
+                        ObservedPoint(
+                            date=point.date,
+                            value=value,
+                        )
+                        for point in points
+                        if (value := getattr(point, component.value)) is not None
+                    )
+                    column_key = f"{series.key}.{component.value}"
+                    columns.append(
+                        IndicatorOutputColumn(
+                            column_key=column_key,
+                            output_key=series.key,
+                            component=component,
+                            semantic_id=output_description.semantic_id,
+                            semantic_description=output_description.semantic_description,
+                            unit=output_description.unit.value,
+                            kind=series.kind,
+                            aggregation_profile=output_spec.aggregation_profile,
+                            latest=_latest_observed_value(component_points),
+                        )
+                    )
+                    for index, aggregate in enumerate(aggregates):
+                        cells_by_bucket[index][column_key] = _technical_cell(getattr(aggregate, component.value))
+            elif isinstance(series, (SignalLineSeries, SignalAreaSeries, SignalBarSeries)):
+                points = _scalar_series_points(series)
+                aggregates = aggregate_signal_buckets(
+                    output_spec.aggregation_profile,
+                    points,
+                    plan,
+                )
+                if any(not isinstance(aggregate, ScalarBucketStatistics) for aggregate in aggregates):
+                    raise TypeError("scalar aggregation returned a non-scalar result")
+                for point in points:
+                    observed_dates_by_bucket[date_to_bucket[point.date]].add(point.date)
+                column_key = series.key
+                columns.append(
+                    IndicatorOutputColumn(
+                        column_key=column_key,
+                        output_key=series.key,
+                        semantic_id=output_description.semantic_id,
+                        semantic_description=output_description.semantic_description,
+                        unit=output_description.unit.value,
+                        kind=series.kind,
+                        aggregation_profile=output_spec.aggregation_profile,
+                        latest=_latest_observed_value(points),
+                    )
+                )
+                for index, aggregate in enumerate(aggregates):
+                    cells_by_bucket[index][column_key] = _technical_cell(aggregate)
+            else:
+                raise TypeError(f"unsupported SignalSeries type for AI Export: {type(series).__name__}")
+
+        if not columns:
+            continue
+        rows = tuple(
+            IndicatorBucketRow(
+                start_date=bucket.start_date,
+                end_date=bucket.end_date,
+                calendar_days=bucket.day_count,
+                observation_count=len(observed_dates_by_bucket[index]),
+                cells=cells_by_bucket[index],
             )
+            for index, bucket in enumerate(plan.buckets)
+        )
+        payloads.append(
+            IndicatorTablePayload(
+                instance_id=result.instance_id,
+                signal_code=result.signal_code,
+                semantic_id=ai_description.semantic_id,
+                semantic_description=ai_description.semantic_description,
+                category=ai_description.category.value,
+                columns=tuple(columns),
+                rows=rows,
+            )
+        )
     return tuple(payloads)
 
 
@@ -745,6 +897,7 @@ def build_events_payload(events: Sequence[DiscreteEvent], plan: BucketPlan) -> T
             TechnicalEventBucket(
                 start_date=assignment.bucket.start_date,
                 end_date=assignment.bucket.end_date,
+                calendar_days=assignment.bucket.day_count,
                 events=event_payloads,
                 event_count=assignment.event_count,
             )
@@ -889,6 +1042,7 @@ __all__ = [
     "FX_CURATED_SIGNALS",
     "FxTechnicalBundle",
     "OHLC_BUCKET_AGGREGATOR",
+    "SIGNAL_PROFILE_BUCKET_AGGREGATOR",
     "PORTFOLIO_TECHNICAL_BUNDLE_RESOURCE",
     "PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS",
     "TechnicalUniverseBundle",
@@ -898,7 +1052,7 @@ __all__ = [
     "build_events_payload",
     "build_fx_annotation_requests",
     "build_fx_signal_requests",
-    "build_indicator_series_payloads",
+    "build_indicator_table_payloads",
     "build_price_buckets",
     "classify_reference_level_state",
     "compute_nav_weights",
@@ -913,5 +1067,4 @@ __all__ = [
     "observations_to_rate_points",
     "price_result_to_close_points",
     "signal_results_to_discrete_events",
-    "signal_series_to_points",
 ]

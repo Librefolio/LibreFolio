@@ -27,6 +27,7 @@ from backend.app.schemas.ai_export import (
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.signals import (
     SignalAnnotation,
+    SignalAreaSeries,
     SignalBandComponent,
     SignalBandSeries,
     SignalBandValueSource,
@@ -483,7 +484,7 @@ def _scalar_points(
     observed_dates: set[date],
 ) -> tuple[NumericPoint, ...]:
     series = _series_by_key(result, key)
-    if not isinstance(series, (SignalLineSeries, SignalBarSeries)):
+    if not isinstance(series, (SignalLineSeries, SignalAreaSeries, SignalBarSeries)):
         return ()
     points: list[NumericPoint] = []
     for point in series.points:
@@ -589,7 +590,7 @@ def _technical_components(
     components: list[AiExportTechnicalComponent] = []
     for requested_key in spec.requested_components:
         series = _series_by_key(result, requested_key)
-        if isinstance(series, (SignalLineSeries, SignalBarSeries)):
+        if isinstance(series, (SignalLineSeries, SignalAreaSeries, SignalBarSeries)):
             component = _technical_component(
                 component_code=series.key,
                 semantic_id=series.semantic_id,
@@ -1096,7 +1097,7 @@ def _present_series_keys(
     keys: list[str] = []
     for key in spec.requested_components:
         series = _series_by_key(result, key)
-        if isinstance(series, (SignalLineSeries, SignalBarSeries)):
+        if isinstance(series, (SignalLineSeries, SignalAreaSeries, SignalBarSeries)):
             if _scalar_points(result, key, prepared.technical_window, observed_dates):
                 keys.append(key)
         elif isinstance(series, SignalBandSeries):

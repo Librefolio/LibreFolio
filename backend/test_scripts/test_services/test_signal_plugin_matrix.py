@@ -12,6 +12,7 @@ import pytest
 
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAvailabilityReason,
     SignalCadence,
     SignalDataPolicy,
@@ -20,6 +21,7 @@ from backend.app.schemas.signals import (
     SignalExecutionContext,
     SignalPriceField,
     SignalRequest,
+    SignalSeriesKind,
     SignalSourceCapability,
     SignalStatus,
     SignalVolumeKind,
@@ -81,6 +83,13 @@ PARTIAL_CONTIGUOUS_CODES = {
     "MFI",
     "NATR",
     "OBV",
+}
+SPECIAL_AGGREGATION_PROFILES = {
+    "ATR": SignalAggregationProfile.MAX_WITH_RANGE,
+    "BOLLINGER": SignalAggregationProfile.BAND_ENVELOPE,
+    "DONCHIAN": SignalAggregationProfile.BAND_ENVELOPE,
+    "NATR": SignalAggregationProfile.MAX_WITH_RANGE,
+    "RISK_DRAWDOWN": SignalAggregationProfile.MIN_WITH_RANGE,
 }
 EXPECTED_SEMANTIC_IDS = {
     "ADX": (
@@ -251,6 +260,22 @@ def test_registry_has_twenty_two_complete_definitions():
         '"color"',
     ):
         assert forbidden not in serialized
+
+
+def test_all_plugin_outputs_declare_exact_aggregation_profile_matrix():
+    definitions = {definition.signal_code: definition for definition in SignalPluginRegistry.list_definitions()}
+
+    for signal_code in sorted(ALL_CODES):
+        expected = SPECIAL_AGGREGATION_PROFILES.get(
+            signal_code,
+            SignalAggregationProfile.LAST_WITH_RANGE,
+        )
+        assert {output.aggregation_profile for output in definitions[signal_code].output_specs} == {expected}
+
+    drawdown = definitions["RISK_DRAWDOWN"].output_specs
+    assert len(drawdown) == 1
+    assert drawdown[0].kind == SignalSeriesKind.AREA
+    assert drawdown[0].style.fill_opacity == pytest.approx(0.2)
 
 
 def test_backend_path_is_sixteen_delegated_plus_native_donchian():

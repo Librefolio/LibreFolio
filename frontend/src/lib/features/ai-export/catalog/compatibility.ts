@@ -1,58 +1,32 @@
 import {schemas} from '$lib/api';
 
-import {ASSET_AI_EXPORT_TASKS} from './assetTasks';
-import {BROKER_AI_EXPORT_TASKS} from './brokerTasks';
-import {FX_AI_EXPORT_TASKS} from './fxTasks';
-import {PORTFOLIO_AI_EXPORT_TASKS} from './portfolioTasks';
-import {AI_EXPORT_CATALOG_SCHEMA_VERSION, AI_EXPORT_DETAIL_LEVELS, AI_EXPORT_DOMAIN_ORDER, aiExportCatalogTupleKey, expandAiExportTaskDefinitions, type AiExportBackendCatalogEntry, type AiExportBackendCatalogResponse, type AiExportLocalCatalogChoice, type AiExportTaskDefinition} from './shared';
+import {findAiExportResponseContract} from '../templates/responseContracts';
+import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
+import {
+    AI_EXPORT_ANALYSIS_IDS,
+    AI_EXPORT_CATALOG_VERSION,
+    AI_EXPORT_DATASET_IDS,
+    AI_EXPORT_SCHEMA_VERSION,
+    aiExportSelectionKey,
+    isAiExportAnalysisId,
+    isAiExportDatasetId,
+    type AiExportAnalysisCatalogEntry,
+    type AiExportBackendCatalogResponse,
+    type AiExportCatalogEntry,
+    type AiExportCompatibleSelection,
+    type AiExportDomain,
+    type AiExportSelectionId,
+    type AiExportSelectionKind,
+} from './shared';
 
-export const AI_EXPORT_TASK_CATALOG = [...PORTFOLIO_AI_EXPORT_TASKS, ...ASSET_AI_EXPORT_TASKS, ...FX_AI_EXPORT_TASKS, ...BROKER_AI_EXPORT_TASKS] as const satisfies readonly AiExportTaskDefinition[];
-
-export const AI_EXPORT_LOCAL_CHOICES = expandAiExportTaskDefinitions(AI_EXPORT_TASK_CATALOG);
-
-export type AiExportCompatibilityReasonCode =
-    | 'backend_catalog_schema_version_mismatch'
-    | 'backend_presentation_text_present'
-    | 'backend_entry_missing'
-    | 'local_definition_missing'
-    | 'duplicate_backend_entry'
-    | 'profile_id_mismatch'
-    | 'profile_version_mismatch'
-    | 'response_contract_id_mismatch'
-    | 'response_contract_version_mismatch'
-    | 'supports_user_notes_mismatch'
-    | 'supports_web_research_mismatch';
-
-export interface AiExportCatalogCompatibilityChoice extends AiExportLocalCatalogChoice {
-    readonly status: 'compatible' | 'disabled';
-    readonly reasonCode: AiExportCompatibilityReasonCode | null;
-    readonly backendEntry?: AiExportBackendCatalogEntry;
-}
-
-export interface AiExportBackendOnlyCatalogEntry {
-    readonly key: string;
-    readonly status: 'disabled';
-    readonly reasonCode: 'local_definition_missing';
-    readonly entry: AiExportBackendCatalogEntry;
-}
+export type AiExportCompatibilityReasonCode = 'schema_version_mismatch' | 'catalog_version_mismatch' | 'dataset_catalog_mismatch' | 'analysis_catalog_mismatch' | 'selection_version_mismatch' | 'instruction_contract_mismatch' | 'response_contract_mismatch';
 
 export interface AiExportCatalogCompatibilityResult {
     readonly status: 'compatible' | 'disabled';
-    readonly choices: readonly AiExportCatalogCompatibilityChoice[];
-    readonly selectableChoices: readonly AiExportCatalogCompatibilityChoice[];
-    readonly backendOnlyEntries: readonly AiExportBackendOnlyCatalogEntry[];
+    readonly catalog: AiExportBackendCatalogResponse;
+    readonly selections: readonly AiExportCompatibleSelection[];
+    readonly byKey: ReadonlyMap<string, AiExportCompatibleSelection>;
     readonly reasonCodes: readonly AiExportCompatibilityReasonCode[];
-}
-
-const PRESENTATION_FIELD_PATTERN = /(prompt|label|instruction)/i;
-
-export class AiExportCatalogPresentationDriftError extends Error {
-    readonly kind = 'presentation_drift';
-
-    constructor(readonly fields: readonly string[]) {
-        super(`AI Export catalog contains backend presentation fields: ${fields.join(', ')}`);
-        this.name = 'AiExportCatalogPresentationDriftError';
-    }
 }
 
 export class AiExportCatalogHttpError extends Error {
@@ -67,138 +41,99 @@ export class AiExportCatalogHttpError extends Error {
     }
 }
 
-export function findBackendCatalogPresentationFields(catalog: unknown): readonly string[] {
-    const fields = new Set<string>();
-    const visited = new WeakSet<object>();
-
-    function visit(value: unknown): void {
-        if (value === null || typeof value !== 'object' || visited.has(value)) return;
-        visited.add(value);
-
-        for (const [field, nestedValue] of Object.entries(value)) {
-            if (PRESENTATION_FIELD_PATTERN.test(field)) fields.add(field);
-            visit(nestedValue);
-        }
-    }
-
-    visit(catalog);
-    return [...fields].sort();
+function idsMatch(actual: readonly string[], expected: readonly string[]): boolean {
+    return actual.length === expected.length && new Set(actual).size === actual.length && expected.every((id) => actual.includes(id));
 }
 
-function compareBackendEntries(left: AiExportBackendCatalogEntry, right: AiExportBackendCatalogEntry): number {
-    const domainOrder = AI_EXPORT_DOMAIN_ORDER.indexOf(left.domain) - AI_EXPORT_DOMAIN_ORDER.indexOf(right.domain);
-    if (domainOrder !== 0) return domainOrder;
-
-    const taskOrder = AI_EXPORT_TASK_CATALOG.findIndex((definition) => definition.backendTask === left.task) - AI_EXPORT_TASK_CATALOG.findIndex((definition) => definition.backendTask === right.task);
-    if (taskOrder !== 0) return taskOrder;
-
-    const detailOrder = AI_EXPORT_DETAIL_LEVELS.indexOf(left.detail_level) - AI_EXPORT_DETAIL_LEVELS.indexOf(right.detail_level);
-    if (detailOrder !== 0) return detailOrder;
-
-    return left.profile_id.localeCompare(right.profile_id);
+function analysisContractsMatch(entry: AiExportAnalysisCatalogEntry): boolean {
+    if (!isAiExportAnalysisId(entry.id)) return false;
+    const instruction = findAiExportAnalysisInstruction(entry.id);
+    const responseContract = findAiExportResponseContract(entry.id);
+    return instruction?.id === entry.instruction_template_id && instruction.version === entry.instruction_template_version && responseContract?.id === entry.response_contract_id && responseContract.version === entry.response_contract_version;
 }
 
-function findEntryMismatch(localChoice: AiExportLocalCatalogChoice, backendEntry: AiExportBackendCatalogEntry): AiExportCompatibilityReasonCode | null {
-    if (backendEntry.profile_id !== localChoice.profileId) return 'profile_id_mismatch';
-    if (backendEntry.profile_version !== localChoice.profileVersion) return 'profile_version_mismatch';
-    if (backendEntry.frontend_response_contract_id !== localChoice.frontendResponseContractId) return 'response_contract_id_mismatch';
-    if (backendEntry.frontend_response_contract_version !== localChoice.frontendResponseContractVersion) return 'response_contract_version_mismatch';
-    if (backendEntry.supports_user_notes !== localChoice.supportsUserNotes) return 'supports_user_notes_mismatch';
-    if (backendEntry.supports_web_research !== localChoice.supportsWebResearch) return 'supports_web_research_mismatch';
-    return null;
-}
-
-function collectReasonCodes(choices: readonly AiExportCatalogCompatibilityChoice[], backendOnlyEntries: readonly AiExportBackendOnlyCatalogEntry[]): readonly AiExportCompatibilityReasonCode[] {
-    const reasonCodes: AiExportCompatibilityReasonCode[] = [];
-    const seen = new Set<AiExportCompatibilityReasonCode>();
-
-    for (const choice of choices) {
-        if (choice.reasonCode !== null && !seen.has(choice.reasonCode)) {
-            seen.add(choice.reasonCode);
-            reasonCodes.push(choice.reasonCode);
-        }
+function compatibleSelection(entry: AiExportCatalogEntry): AiExportCompatibleSelection | undefined {
+    if (entry.version !== 1) return undefined;
+    if (entry.kind === 'dataset') {
+        if (!isAiExportDatasetId(entry.id)) return undefined;
+        return {
+            kind: 'dataset',
+            id: entry.id,
+            domain: entry.domain,
+            version: 1,
+            supportedDetailLevels: entry.supported_detail_levels,
+            entry,
+        };
     }
-    for (const backendOnlyEntry of backendOnlyEntries) {
-        if (!seen.has(backendOnlyEntry.reasonCode)) {
-            seen.add(backendOnlyEntry.reasonCode);
-            reasonCodes.push(backendOnlyEntry.reasonCode);
-        }
-    }
-
-    return reasonCodes;
+    if (!isAiExportAnalysisId(entry.id) || !analysisContractsMatch(entry)) return undefined;
+    return {
+        kind: 'analysis',
+        id: entry.id,
+        domain: entry.domain,
+        version: 1,
+        supportedDetailLevels: entry.supported_detail_levels,
+        entry,
+    };
 }
 
 export function reconcileAiExportCatalog(catalog: AiExportBackendCatalogResponse): AiExportCatalogCompatibilityResult {
-    const backendEntries = catalog.entries ?? [];
-    const localKeys = new Set(AI_EXPORT_LOCAL_CHOICES.map((choice) => choice.key));
-    const backendEntriesByKey = new Map<string, AiExportBackendCatalogEntry[]>();
+    const reasons: AiExportCompatibilityReasonCode[] = [];
+    if (catalog.schema_version !== AI_EXPORT_SCHEMA_VERSION) reasons.push('schema_version_mismatch');
+    if (catalog.catalog_version !== AI_EXPORT_CATALOG_VERSION) reasons.push('catalog_version_mismatch');
+    if (
+        !idsMatch(
+            catalog.datasets.map((entry) => entry.id),
+            AI_EXPORT_DATASET_IDS,
+        )
+    )
+        reasons.push('dataset_catalog_mismatch');
+    if (
+        !idsMatch(
+            catalog.analyses.map((entry) => entry.id),
+            AI_EXPORT_ANALYSIS_IDS,
+        )
+    )
+        reasons.push('analysis_catalog_mismatch');
 
-    for (const entry of backendEntries) {
-        const key = aiExportCatalogTupleKey(entry.domain, entry.task, entry.detail_level);
-        const entries = backendEntriesByKey.get(key);
-        if (entries) entries.push(entry);
-        else backendEntriesByKey.set(key, [entry]);
+    const selections: AiExportCompatibleSelection[] = [];
+    for (const entry of [...catalog.datasets, ...catalog.analyses]) {
+        const compatible = compatibleSelection(entry);
+        if (compatible) selections.push(compatible);
+        else if (entry.version !== 1) reasons.push('selection_version_mismatch');
+        else if (entry.kind === 'analysis') {
+            const instruction = isAiExportAnalysisId(entry.id) ? findAiExportAnalysisInstruction(entry.id) : undefined;
+            if (instruction?.id !== entry.instruction_template_id || instruction?.version !== entry.instruction_template_version) reasons.push('instruction_contract_mismatch');
+            const responseContract = isAiExportAnalysisId(entry.id) ? findAiExportResponseContract(entry.id) : undefined;
+            if (responseContract?.id !== entry.response_contract_id || responseContract?.version !== entry.response_contract_version) reasons.push('response_contract_mismatch');
+        }
     }
 
-    const backendOnlyEntries = backendEntries
-        .filter((entry) => !localKeys.has(aiExportCatalogTupleKey(entry.domain, entry.task, entry.detail_level)))
-        .sort(compareBackendEntries)
-        .map(
-            (entry): AiExportBackendOnlyCatalogEntry => ({
-                key: aiExportCatalogTupleKey(entry.domain, entry.task, entry.detail_level),
-                status: 'disabled',
-                reasonCode: 'local_definition_missing',
-                entry,
-            }),
-        );
-
-    const presentationFields = findBackendCatalogPresentationFields(catalog);
-    const globalReasonCode: AiExportCompatibilityReasonCode | null = catalog.schema_version !== AI_EXPORT_CATALOG_SCHEMA_VERSION ? 'backend_catalog_schema_version_mismatch' : presentationFields.length > 0 ? 'backend_presentation_text_present' : null;
-
-    const choices = AI_EXPORT_LOCAL_CHOICES.map((localChoice): AiExportCatalogCompatibilityChoice => {
-        if (globalReasonCode !== null) {
-            return {
-                ...localChoice,
-                status: 'disabled',
-                reasonCode: globalReasonCode,
-            };
-        }
-
-        const matchingEntries = backendEntriesByKey.get(localChoice.key);
-        if (!matchingEntries || matchingEntries.length === 0) {
-            return {
-                ...localChoice,
-                status: 'disabled',
-                reasonCode: 'backend_entry_missing',
-            };
-        }
-        if (matchingEntries.length !== 1) {
-            return {
-                ...localChoice,
-                status: 'disabled',
-                reasonCode: 'duplicate_backend_entry',
-            };
-        }
-
-        const backendEntry = matchingEntries[0];
-        const reasonCode = findEntryMismatch(localChoice, backendEntry);
-        return {
-            ...localChoice,
-            status: reasonCode === null ? 'compatible' : 'disabled',
-            reasonCode,
-            backendEntry,
-        };
-    });
-    const selectableChoices = choices.filter((choice) => choice.status === 'compatible');
-    const reasonCodes = collectReasonCodes(choices, backendOnlyEntries);
-
+    const uniqueReasons = [...new Set(reasons)];
+    const byKey = new Map(selections.map((selection) => [aiExportSelectionKey(selection.kind, selection.id), selection]));
     return {
-        status: reasonCodes.length === 0 ? 'compatible' : 'disabled',
-        choices,
-        selectableChoices,
-        backendOnlyEntries,
-        reasonCodes,
+        status: uniqueReasons.length === 0 ? 'compatible' : 'disabled',
+        catalog,
+        selections,
+        byKey,
+        reasonCodes: uniqueReasons,
     };
+}
+
+export function emptyAiExportCompatibility(): AiExportCatalogCompatibilityResult {
+    return reconcileAiExportCatalog({
+        schema_version: AI_EXPORT_SCHEMA_VERSION,
+        catalog_version: AI_EXPORT_CATALOG_VERSION,
+        datasets: [],
+        analyses: [],
+    });
+}
+
+export function findCompatibleAiExportSelection(compatibility: AiExportCatalogCompatibilityResult, kind: AiExportSelectionKind, id: AiExportSelectionId): AiExportCompatibleSelection | undefined {
+    return compatibility.byKey.get(aiExportSelectionKey(kind, id));
+}
+
+export function selectionsForDomain(compatibility: AiExportCatalogCompatibilityResult, domain: AiExportDomain, kind?: AiExportSelectionKind): readonly AiExportCompatibleSelection[] {
+    return compatibility.selections.filter((selection) => selection.domain === domain && (kind === undefined || selection.kind === kind));
 }
 
 export type AiExportCatalogFetcher = () => Promise<AiExportBackendCatalogResponse>;
@@ -208,39 +143,24 @@ export async function fetchBackendAiExportCatalog(fetcher: typeof fetch = fetch)
         credentials: 'same-origin',
         headers: {Accept: 'application/json'},
     });
-    if (!response.ok) {
-        throw new AiExportCatalogHttpError(response.status, response.statusText);
-    }
-
-    const rawCatalog: unknown = await response.json();
-    const presentationFields = findBackendCatalogPresentationFields(rawCatalog);
-    if (presentationFields.length > 0) {
-        throw new AiExportCatalogPresentationDriftError(presentationFields);
-    }
-
-    return schemas.AiExportCatalogResponse.parse(rawCatalog);
+    if (!response.ok) throw new AiExportCatalogHttpError(response.status, response.statusText);
+    return schemas.AiExportCatalogResponse.parse(await response.json());
 }
 
 export class AiExportCatalogLoader {
     private cachedResult: AiExportCatalogCompatibilityResult | undefined;
     private inFlight: Promise<AiExportCatalogCompatibilityResult> | undefined;
-    private generation = 0;
 
     constructor(private readonly fetchCatalog: AiExportCatalogFetcher = fetchBackendAiExportCatalog) {}
 
     load(): Promise<AiExportCatalogCompatibilityResult> {
         if (this.cachedResult) return Promise.resolve(this.cachedResult);
         if (this.inFlight) return this.inFlight;
-
-        const generation = this.generation;
-        const request = this.fetchCatalog().then((catalog) => {
-            const result = reconcileAiExportCatalog(catalog);
-            if (generation === this.generation) this.cachedResult = result;
-            return result;
-        });
+        const request = this.fetchCatalog().then(reconcileAiExportCatalog);
         this.inFlight = request;
         request.then(
-            () => {
+            (result) => {
+                this.cachedResult = result;
                 if (this.inFlight === request) this.inFlight = undefined;
             },
             () => {
@@ -255,7 +175,6 @@ export class AiExportCatalogLoader {
     }
 
     reset(): void {
-        this.generation += 1;
         this.cachedResult = undefined;
         this.inFlight = undefined;
     }

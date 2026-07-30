@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -160,6 +161,7 @@ class RsiSignalPlugin(SignalPlugin):
             semantic_id="relative_strength_index.value",
             semantic_description="Bounded ratio of smoothed gains to total directional movement.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_RSI_AXIS,
             supports_reference_levels=True,

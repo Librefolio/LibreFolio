@@ -66,7 +66,10 @@ from backend.app.services.ai_export.components.asset_fx_registry import (
     build_asset_fx_dataset_registry,
     validate_replacements_against_placeholders,
 )
-from backend.app.services.ai_export.components.catalog import ALL_FOUNDATION_COMPONENTS
+from backend.app.services.ai_export.components.catalog import (
+    ALL_FOUNDATION_COMPONENTS,
+    build_component_registry,
+)
 from backend.app.services.ai_export.components.fx_payloads import FxExposureConversionBasis, FxExposureKind
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
@@ -123,7 +126,7 @@ async def test_user(session) -> User:
 
 
 def _full_registry() -> ComponentRegistry:
-    return build_asset_fx_component_registry()
+    return build_component_registry()
 
 
 def _asset_scope(*, user_id: int, asset_id: int, start: date, end: date, target: str = CURRENCY, detail_level: DetailLevel = DetailLevel.STANDARD, broker_scope: tuple[int, ...] = ()) -> BuildScope:

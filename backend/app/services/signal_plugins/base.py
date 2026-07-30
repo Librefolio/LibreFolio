@@ -284,6 +284,9 @@ class SignalPlugin(ABC):
         if not isinstance(cls.semantic_description, str) or not cls.semantic_description.strip():
             raise ValueError("semantic_description must be a non-empty string")
         output_semantic_ids = [spec.semantic_id for spec in cls.output_specs]
+        implicit_aggregation = [spec.key for spec in cls.output_specs if "aggregation_profile" not in spec.model_fields_set]
+        if implicit_aggregation:
+            raise ValueError("signal output specs must declare aggregation_profile explicitly: " + ", ".join(implicit_aggregation))
         if len(output_semantic_ids) != len(set(output_semantic_ids)):
             raise ValueError("output semantic_ids must not contain duplicates")
         if cls.semantic_id in output_semantic_ids:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from backend.app.services.ai_export.components.catalog import (
+    ALL_COMPONENTS,
     ALL_FOUNDATION_COMPONENTS,
+    ALL_REAL_COMPONENTS,
     ComponentNotImplementedError,
     FoundationComponentPayload,
     build_component_registry,
@@ -35,7 +37,9 @@ from backend.app.services.ai_export.components.types import (
 
 __all__ = [
     "ALL_DETAIL_LEVELS",
+    "ALL_COMPONENTS",
     "ALL_FOUNDATION_COMPONENTS",
+    "ALL_REAL_COMPONENTS",
     "ComponentBuilder",
     "ComponentDependencyCycleError",
     "ComponentNotImplementedError",

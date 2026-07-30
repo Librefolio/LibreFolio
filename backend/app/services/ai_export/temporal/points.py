@@ -91,6 +91,31 @@ class ObservedPoint:
 
 
 @dataclass(frozen=True, slots=True)
+class BandObservedPoint:
+    """One dated band observation with independently optional components."""
+
+    date: Date
+    lower: Decimal | None = None
+    middle: Decimal | None = None
+    upper: Decimal | None = None
+
+    def __post_init__(self) -> None:
+        _require_date(self.date)
+        present = []
+        for label, value in (
+            ("lower", self.lower),
+            ("middle", self.middle),
+            ("upper", self.upper),
+        ):
+            if value is not None:
+                present.append(_require_finite_decimal(value, label))
+        if not present:
+            raise ValueError("band observation must contain at least one component")
+        if any(current > following for current, following in zip(present, present[1:], strict=False)):
+            raise ValueError("band observation values must satisfy lower <= middle <= upper")
+
+
+@dataclass(frozen=True, slots=True)
 class ContinuousMultiOutputPoint:
     """One observation with several named numeric outputs (e.g. a multi-line signal)."""
 

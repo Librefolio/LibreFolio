@@ -47,8 +47,9 @@ from backend.app.services.ai_export.components.technical_payloads import (
 )
 from backend.app.services.ai_export.components.technical_shared import (
     OHLC_BUCKET_AGGREGATOR,
+    SIGNAL_PROFILE_BUCKET_AGGREGATOR,
     build_events_payload,
-    build_indicator_series_payloads,
+    build_indicator_table_payloads,
     build_price_buckets,
     latest_point_value,
     load_asset_price_results,
@@ -114,7 +115,7 @@ async def _build_asset_indicators(context: BuildContext, dependencies: Mapping[s
     price_results = await load_asset_price_results(context)
     result = price_results.by_asset_id.get(scope.asset_id)
     signals = result.signals if result is not None else ()
-    indicators = build_indicator_series_payloads(signals, context.bucket_plan)
+    indicators = build_indicator_table_payloads(signals, context.bucket_plan)
     return SingleTargetIndicatorsPayload(indicators=indicators)
 
 
@@ -126,7 +127,7 @@ ASSET_INDICATORS_SPEC = ComponentSpec(
     builder=_build_asset_indicators,
     dependencies=("asset.ohlc_returns",),
     period_behavior=PeriodBehavior.AGGREGATED,
-    aggregator=OHLC_BUCKET_AGGREGATOR,
+    aggregator=SIGNAL_PROFILE_BUCKET_AGGREGATOR,
 )
 
 
@@ -217,6 +218,7 @@ def _build_return_volatility_buckets(points: Sequence[ContinuousMultiOutputPoint
             ReturnVolatilityBucket(
                 start_date=aggregate.bucket.start_date,
                 end_date=aggregate.bucket.end_date,
+                calendar_days=aggregate.bucket.day_count,
                 first={key: float(value) for key, value in aggregate.first.items()} if aggregate.first else None,
                 minimum={key: float(value) for key, value in aggregate.minimum.items()} if aggregate.minimum else None,
                 maximum={key: float(value) for key, value in aggregate.maximum.items()} if aggregate.maximum else None,
@@ -260,7 +262,7 @@ FX_RETURNS_VOLATILITY_SPEC = ComponentSpec(
 
 async def _build_fx_indicators(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> SingleTargetIndicatorsPayload:
     bundle = await load_fx_technical_bundle(context)
-    indicators = build_indicator_series_payloads(bundle.signal_results, context.bucket_plan)
+    indicators = build_indicator_table_payloads(bundle.signal_results, context.bucket_plan)
     return SingleTargetIndicatorsPayload(indicators=indicators)
 
 
@@ -272,7 +274,7 @@ FX_INDICATORS_SPEC = ComponentSpec(
     builder=_build_fx_indicators,
     dependencies=("fx.rate_ohlc",),
     period_behavior=PeriodBehavior.AGGREGATED,
-    aggregator=OHLC_BUCKET_AGGREGATOR,
+    aggregator=SIGNAL_PROFILE_BUCKET_AGGREGATOR,
 )
 
 

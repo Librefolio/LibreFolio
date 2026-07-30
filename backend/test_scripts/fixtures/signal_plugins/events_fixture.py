@@ -8,6 +8,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -59,6 +60,7 @@ class EventsFixturePlugin(SignalPlugin):
             semantic_id="fixture_cumulative_events.value",
             semantic_description="Test cumulative value of matching events.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(key="events", role=SignalAxisRole.INDEPENDENT),
         ),

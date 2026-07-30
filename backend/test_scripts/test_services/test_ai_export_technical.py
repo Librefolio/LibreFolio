@@ -27,6 +27,7 @@ from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint
 from backend.app.schemas.signals import (
     SignalAnnotation,
     SignalAnnotationDirection,
+    SignalAreaSeries,
     SignalBandPoint,
     SignalBandSeries,
     SignalBandValueSource,
@@ -143,7 +144,11 @@ def _output_spec(signal_code: str, key: str):
 
 def _scalar_series(signal_code: str, key: str, dates, values):
     _plugin, spec = _output_spec(signal_code, key)
-    series_type = SignalBarSeries if spec.kind == SignalSeriesKind.BAR else SignalLineSeries
+    series_type = {
+        SignalSeriesKind.AREA: SignalAreaSeries,
+        SignalSeriesKind.BAR: SignalBarSeries,
+        SignalSeriesKind.LINE: SignalLineSeries,
+    }[spec.kind]
     return series_type(
         key=spec.key,
         label_key=spec.label_key,

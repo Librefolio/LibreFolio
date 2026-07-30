@@ -4,92 +4,11 @@ import {z, ZodError} from 'zod';
 
 import {schemas, zodiosApi} from '$lib/api';
 
-import {AI_EXPORT_TASK_CATALOG} from './catalog/compatibility';
-import type {AiExportCatalogCompatibilityChoice} from './catalog/compatibility';
-import {AI_EXPORT_SNAPSHOT_SCHEMA_VERSION, type AiExportBackendCatalogEntry} from './catalog/shared';
-import {findAiExportResponseContract} from './templates/responseContracts';
+import {normalizeAiExportSnapshotResponse, type AiExportCompatibleSelection, type AiExportSnapshotResponse} from './catalog/shared';
 
-type AiExportGeneratedDomain = z.infer<typeof schemas.AiExportDomain>;
-type AiExportGeneratedDetailLevel = z.infer<typeof schemas.AiExportDetailLevel>;
-type AiExportPortfolioTask = z.infer<typeof schemas.AiExportPortfolioTask>;
-type AiExportAssetTask = z.infer<typeof schemas.AiExportAssetTask>;
-type AiExportFxTask = z.infer<typeof schemas.AiExportFxTask>;
-type AiExportBrokerTask = z.infer<typeof schemas.AiExportBrokerTask>;
-
-export interface AiExportDateRangeInput {
-    start: string;
-    end?: string | null;
-}
-
-interface AiExportSnapshotRequestInputBase<D extends AiExportGeneratedDomain, T> {
-    domain: D;
-    task: T;
-    detail_level: AiExportGeneratedDetailLevel;
-    date_range: AiExportDateRangeInput;
-    technical_window?: AiExportDateRangeInput | null;
-    target_currency: string;
-}
-
-export interface AiExportPortfolioSnapshotRequestInput extends AiExportSnapshotRequestInputBase<Extract<AiExportGeneratedDomain, 'portfolio'>, AiExportPortfolioTask> {
-    broker_ids?: number[] | null | undefined;
-}
-
-export interface AiExportAssetSnapshotRequestInput extends AiExportSnapshotRequestInputBase<Extract<AiExportGeneratedDomain, 'asset'>, AiExportAssetTask> {
-    asset_id: number;
-    broker_ids?: number[] | null | undefined;
-}
-
-export interface AiExportFxSnapshotRequestInput extends AiExportSnapshotRequestInputBase<Extract<AiExportGeneratedDomain, 'fx'>, AiExportFxTask> {
-    base_currency: string;
-    quote_currency: string;
-    broker_ids?: number[] | null | undefined;
-}
-
-export interface AiExportBrokerSnapshotRequestInput extends AiExportSnapshotRequestInputBase<Extract<AiExportGeneratedDomain, 'broker'>, AiExportBrokerTask> {
-    broker_id: number;
-}
-
-export type AiExportSnapshotRequestInput = AiExportPortfolioSnapshotRequestInput | AiExportAssetSnapshotRequestInput | AiExportFxSnapshotRequestInput | AiExportBrokerSnapshotRequestInput;
-
-export type AiExportSnapshotRequest = AiExportSnapshotRequestInput;
-export type AiExportPortfolioSnapshotResponse = z.output<typeof schemas.AiExportPortfolioSnapshotResponse>;
-export type AiExportAssetSnapshotResponse = z.output<typeof schemas.AiExportAssetSnapshotResponse>;
-export type AiExportFxSnapshotResponse = z.output<typeof schemas.AiExportFxSnapshotResponse>;
-export type AiExportBrokerSnapshotResponse = z.output<typeof schemas.AiExportBrokerSnapshotResponse>;
-export type AiExportSnapshotResponse = AiExportPortfolioSnapshotResponse | AiExportAssetSnapshotResponse | AiExportFxSnapshotResponse | AiExportBrokerSnapshotResponse;
-export type AiExportBackendExportStats = z.output<typeof schemas.AiExportExportStats>;
+export type AiExportSnapshotRequestInput = z.input<typeof schemas.build_ai_export_snapshot_api_v1_ai_export_snapshot_post_Body>;
 export type AiExportProblemDetail = z.output<typeof schemas.AiExportProblemResponse>['detail'];
 export type AiExportHttpValidationResponse = z.output<typeof schemas.HTTPValidationError>;
-
-const aiExportSnapshotRequestSchema = schemas.build_ai_export_snapshot_api_v1_ai_export_snapshot_post_Body.superRefine((request, context) => {
-    if (request.domain === 'broker') return;
-
-    const brokerIds = request.broker_ids;
-    if (brokerIds === null || brokerIds === undefined) return;
-    if (brokerIds.length === 0) {
-        context.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'broker_ids must contain at least one value',
-            path: ['broker_ids'],
-        });
-    } else if (new Set(brokerIds).size !== brokerIds.length) {
-        context.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'broker_ids must contain unique values',
-            path: ['broker_ids'],
-        });
-    }
-});
-
-export type AiExportCompatibleCatalogChoice = AiExportCatalogCompatibilityChoice & {
-    readonly status: 'compatible';
-    readonly reasonCode: null;
-    readonly backendEntry: AiExportBackendCatalogEntry;
-};
-
-export function isAiExportCompatibleCatalogChoice(choice: AiExportCatalogCompatibilityChoice): choice is AiExportCompatibleCatalogChoice {
-    return choice.status === 'compatible' && choice.reasonCode === null && choice.backendEntry !== undefined;
-}
 
 export type AiExportContractValue = string | number | boolean | null;
 
@@ -165,243 +84,139 @@ export class AiExportUnknownError extends Error {
 }
 
 export type AiExportClientError = AiExportContractMismatchError | AiExportProblemError | AiExportValidationError | AiExportNetworkError | AiExportUnknownError;
-export type AiExportSnapshotTransport = (request: AiExportSnapshotRequest) => Promise<AiExportSnapshotResponse>;
+export type AiExportSnapshotTransport = (request: AiExportSnapshotRequestInput) => Promise<unknown>;
 
 const generatedAiExportSnapshotTransport: AiExportSnapshotTransport = (request) => zodiosApi.build_ai_export_snapshot_api_v1_ai_export_snapshot_post(request);
 
-export function canonicalizeAiExportSnapshotRequest(request: AiExportPortfolioSnapshotRequestInput): AiExportPortfolioSnapshotRequestInput;
-export function canonicalizeAiExportSnapshotRequest(request: AiExportAssetSnapshotRequestInput): AiExportAssetSnapshotRequestInput;
-export function canonicalizeAiExportSnapshotRequest(request: AiExportFxSnapshotRequestInput): AiExportFxSnapshotRequestInput;
-export function canonicalizeAiExportSnapshotRequest(request: AiExportBrokerSnapshotRequestInput): AiExportBrokerSnapshotRequestInput;
-export function canonicalizeAiExportSnapshotRequest(request: AiExportSnapshotRequestInput): AiExportSnapshotRequestInput;
+function canonicalCurrency(value: string): string {
+    return value.trim().toUpperCase();
+}
+
+function canonicalBrokerIds(values: number[] | undefined): number[] | undefined {
+    return values ? [...new Set(values)].sort((left, right) => left - right) : undefined;
+}
+
 export function canonicalizeAiExportSnapshotRequest(request: AiExportSnapshotRequestInput): AiExportSnapshotRequestInput {
-    if (request === null || typeof request !== 'object') return request;
-
-    const dateRange = canonicalizeDateRange(request.date_range);
-    const technicalWindow = request.technical_window ? canonicalizeDateRange(request.technical_window) : request.technical_window;
-    const targetCurrency = canonicalizeCurrency(request.target_currency);
-
-    switch (request.domain) {
-        case 'portfolio':
-            return {
-                ...request,
-                date_range: dateRange,
-                technical_window: technicalWindow,
-                target_currency: targetCurrency,
-                broker_ids: canonicalizeBrokerIds(request.broker_ids),
-            };
-        case 'asset':
-            return {
-                ...request,
-                date_range: dateRange,
-                technical_window: technicalWindow,
-                target_currency: targetCurrency,
-                broker_ids: canonicalizeBrokerIds(request.broker_ids),
-            };
-        case 'fx':
-            return {
-                ...request,
-                date_range: dateRange,
-                technical_window: technicalWindow,
-                target_currency: targetCurrency,
-                base_currency: canonicalizeCurrency(request.base_currency),
-                quote_currency: canonicalizeCurrency(request.quote_currency),
-                broker_ids: canonicalizeBrokerIds(request.broker_ids),
-            };
-        case 'broker':
-            return {
-                ...request,
-                date_range: dateRange,
-                technical_window: technicalWindow,
-                target_currency: targetCurrency,
-            };
+    const targetCurrency = canonicalCurrency(request.target_currency);
+    const period = {...request.period};
+    const selection = {...request.selection};
+    if (request.domain === 'portfolio') {
+        return {
+            domain: 'portfolio',
+            selection,
+            detail_level: request.detail_level,
+            period,
+            target_currency: targetCurrency,
+            expected_catalog_version: request.expected_catalog_version,
+            broker_ids: canonicalBrokerIds(request.broker_ids),
+        };
     }
-
+    if (request.domain === 'broker') {
+        return {
+            domain: 'broker',
+            selection,
+            detail_level: request.detail_level,
+            period,
+            target_currency: targetCurrency,
+            expected_catalog_version: request.expected_catalog_version,
+            broker_id: request.broker_id,
+        };
+    }
+    if (request.domain === 'asset') {
+        return {
+            domain: 'asset',
+            selection,
+            detail_level: request.detail_level,
+            period,
+            target_currency: targetCurrency,
+            expected_catalog_version: request.expected_catalog_version,
+            asset_id: request.asset_id,
+            broker_ids: canonicalBrokerIds(request.broker_ids),
+        };
+    }
+    if (request.domain === 'fx') {
+        return {
+            domain: 'fx',
+            selection,
+            detail_level: request.detail_level,
+            period,
+            target_currency: targetCurrency,
+            expected_catalog_version: request.expected_catalog_version,
+            base_currency: canonicalCurrency(request.base_currency),
+            quote_currency: canonicalCurrency(request.quote_currency),
+            broker_ids: canonicalBrokerIds(request.broker_ids),
+        };
+    }
     return request;
 }
 
-function canonicalizeDateRange(dateRange: AiExportDateRangeInput): AiExportDateRangeInput {
-    if (dateRange === null || typeof dateRange !== 'object' || Array.isArray(dateRange)) return dateRange;
-    return {
-        start: dateRange.start,
-        end: dateRange.end ?? dateRange.start,
-    };
-}
-
-function canonicalizeCurrency(value: string): string {
-    return typeof value === 'string' ? value.trim().toUpperCase() : value;
-}
-
-function canonicalizeBrokerIds(brokerIds: number[] | null | undefined): number[] | null | undefined {
-    return Array.isArray(brokerIds) ? [...brokerIds].sort((left, right) => left - right) : brokerIds;
-}
-
 export function normalizeAiExportClientError(error: unknown): Exclude<AiExportClientError, AiExportContractMismatchError> {
-    if (error instanceof AiExportProblemError || error instanceof AiExportValidationError || error instanceof AiExportNetworkError || error instanceof AiExportUnknownError) {
-        return error;
-    }
-
-    if (error instanceof ZodiosError) {
-        return new AiExportValidationError('response', undefined, error, error);
-    }
-
-    if (error instanceof ZodError) {
-        return new AiExportValidationError('response', undefined, error, error);
-    }
-
+    if (error instanceof AiExportProblemError || error instanceof AiExportValidationError || error instanceof AiExportNetworkError || error instanceof AiExportUnknownError) return error;
+    if (error instanceof ZodiosError) return new AiExportValidationError('response', undefined, error, error);
+    if (error instanceof ZodError) return new AiExportValidationError('response', undefined, error, error);
     if (isAxiosError(error)) {
         const status = error.response?.status;
         const responseData = error.response?.data;
-
         const problemResult = schemas.AiExportProblemResponse.safeParse(responseData);
-        if (status !== undefined && problemResult.success) {
-            return new AiExportProblemError(status, problemResult.data.detail, error);
-        }
-
+        if (status !== undefined && problemResult.success) return new AiExportProblemError(status, problemResult.data.detail, error);
         const validationResult = schemas.HTTPValidationError.safeParse(responseData);
-        if (status !== undefined && validationResult.success && validationResult.data.detail !== undefined) {
-            return new AiExportValidationError('http', status, validationResult.data, error);
-        }
-
-        if (error.response === undefined) {
-            return new AiExportNetworkError(error.message || 'AI Export network request failed', error.code, error);
-        }
-
+        if (status !== undefined && validationResult.success && validationResult.data.detail !== undefined) return new AiExportValidationError('http', status, validationResult.data, error);
+        if (error.response === undefined) return new AiExportNetworkError(error.message || 'AI Export network request failed', error.code, error);
         return new AiExportUnknownError(error.message || 'AI Export HTTP request failed', status, error);
     }
-
-    const message = error instanceof Error ? error.message : 'Unknown AI Export error';
-    return new AiExportUnknownError(message, undefined, error);
+    return new AiExportUnknownError(error instanceof Error ? error.message : 'Unknown AI Export error', undefined, error);
 }
 
-export function fetchAiExportSnapshot(request: AiExportPortfolioSnapshotRequestInput, expectedChoice: AiExportCatalogCompatibilityChoice, transport?: AiExportSnapshotTransport): Promise<AiExportPortfolioSnapshotResponse>;
-export function fetchAiExportSnapshot(request: AiExportAssetSnapshotRequestInput, expectedChoice: AiExportCatalogCompatibilityChoice, transport?: AiExportSnapshotTransport): Promise<AiExportAssetSnapshotResponse>;
-export function fetchAiExportSnapshot(request: AiExportFxSnapshotRequestInput, expectedChoice: AiExportCatalogCompatibilityChoice, transport?: AiExportSnapshotTransport): Promise<AiExportFxSnapshotResponse>;
-export function fetchAiExportSnapshot(request: AiExportBrokerSnapshotRequestInput, expectedChoice: AiExportCatalogCompatibilityChoice, transport?: AiExportSnapshotTransport): Promise<AiExportBrokerSnapshotResponse>;
-export function fetchAiExportSnapshot(request: AiExportSnapshotRequestInput, expectedChoice: AiExportCatalogCompatibilityChoice, transport?: AiExportSnapshotTransport): Promise<AiExportSnapshotResponse>;
-export async function fetchAiExportSnapshot(request: AiExportSnapshotRequestInput, expectedChoice: AiExportCatalogCompatibilityChoice, transport: AiExportSnapshotTransport = generatedAiExportSnapshotTransport): Promise<AiExportSnapshotResponse> {
-    const canonicalRequest = canonicalizeAiExportSnapshotRequest(request);
-    const requestResult = aiExportSnapshotRequestSchema.safeParse(canonicalRequest);
-    if (!requestResult.success) {
-        throw new AiExportValidationError('request', undefined, requestResult.error, requestResult.error);
+function addMismatch(mismatches: AiExportContractMismatch[], field: string, expected: AiExportContractValue, actual: AiExportContractValue): void {
+    if (expected !== actual) mismatches.push({field, expected, actual});
+}
+
+function assertRequestMatchesSelection(request: AiExportSnapshotRequestInput, selection: AiExportCompatibleSelection): void {
+    const mismatches: AiExportContractMismatch[] = [];
+    addMismatch(mismatches, 'request.domain', selection.domain, request.domain);
+    addMismatch(mismatches, 'request.selection.kind', selection.kind, request.selection.kind);
+    addMismatch(mismatches, 'request.selection.id', selection.id, request.selection.id);
+    addMismatch(mismatches, 'request.selection.version', selection.version, request.selection.version);
+    if (!selection.supportedDetailLevels.includes(request.detail_level)) mismatches.push({field: 'request.detail_level', expected: selection.supportedDetailLevels.join(','), actual: request.detail_level});
+    if (selection.kind === 'analysis' && request.selection.kind === 'analysis' && selection.entry.kind === 'analysis') {
+        addMismatch(mismatches, 'request.selection.instruction_template_id', selection.entry.instruction_template_id, request.selection.instruction_template_id);
+        addMismatch(mismatches, 'request.selection.instruction_template_version', selection.entry.instruction_template_version, request.selection.instruction_template_version);
+        addMismatch(mismatches, 'request.selection.response_contract_id', selection.entry.response_contract_id, request.selection.response_contract_id);
+        addMismatch(mismatches, 'request.selection.response_contract_version', selection.entry.response_contract_version, request.selection.response_contract_version);
     }
+    if (mismatches.length) throw new AiExportContractMismatchError(mismatches);
+}
 
-    const normalizedRequest = requestResult.data as AiExportSnapshotRequest;
-    assertCompatibleExpectedChoice(normalizedRequest, expectedChoice);
+function assertResponseMatchesRequest(request: AiExportSnapshotRequestInput, response: AiExportSnapshotResponse): void {
+    const mismatches: AiExportContractMismatch[] = [];
+    addMismatch(mismatches, 'response.domain', request.domain, response.domain);
+    addMismatch(mismatches, 'response.selection.kind', request.selection.kind, response.selection.kind);
+    addMismatch(mismatches, 'response.selection.id', request.selection.id, response.selection.id);
+    addMismatch(mismatches, 'response.selection.version', request.selection.version, response.selection.version);
+    addMismatch(mismatches, 'response.detail_level', request.detail_level, response.detail_level);
+    addMismatch(mismatches, 'response.meta.schema_version', 1, response.meta.schema_version ?? null);
+    addMismatch(mismatches, 'response.meta.catalog_version', request.expected_catalog_version, response.meta.catalog_version ?? null);
+    addMismatch(mismatches, 'response.meta.target_currency', request.target_currency, response.meta.target_currency);
+    addMismatch(mismatches, 'response.meta.exported_period.start', request.period.start, response.meta.exported_period.start);
+    addMismatch(mismatches, 'response.meta.exported_period.end', request.period.end, response.meta.exported_period.end);
+    if (mismatches.length) throw new AiExportContractMismatchError(mismatches);
+}
 
-    let response: AiExportSnapshotResponse;
+export async function fetchAiExportSnapshot(request: AiExportSnapshotRequestInput, selection: AiExportCompatibleSelection, transport: AiExportSnapshotTransport = generatedAiExportSnapshotTransport): Promise<AiExportSnapshotResponse> {
+    const canonicalRequest = canonicalizeAiExportSnapshotRequest(request);
+    const requestResult = schemas.build_ai_export_snapshot_api_v1_ai_export_snapshot_post_Body.safeParse(canonicalRequest);
+    if (!requestResult.success) throw new AiExportValidationError('request', undefined, requestResult.error, requestResult.error);
+    assertRequestMatchesSelection(requestResult.data, selection);
+
+    let rawResponse: unknown;
     try {
-        response = await transport(normalizedRequest);
+        rawResponse = await transport(requestResult.data);
     } catch (error) {
         throw normalizeAiExportClientError(error);
     }
-
-    assertSnapshotContract(normalizedRequest, expectedChoice, response);
+    const responseResult = schemas.AiExportSnapshotResponse.safeParse(rawResponse);
+    if (!responseResult.success) throw new AiExportValidationError('response', undefined, responseResult.error, responseResult.error);
+    const response = normalizeAiExportSnapshotResponse(responseResult.data);
+    assertResponseMatchesRequest(requestResult.data, response);
     return response;
-}
-
-function assertCompatibleExpectedChoice(request: AiExportSnapshotRequest, choice: AiExportCatalogCompatibilityChoice): void {
-    const mismatches: AiExportContractMismatch[] = [];
-    const taskDefinition = AI_EXPORT_TASK_CATALOG.find((definition) => definition.domain === request.domain && definition.backendTask === request.task);
-    const responseContract = findAiExportResponseContract(request.domain, request.task);
-
-    addMismatch(mismatches, 'choice.status', 'compatible', choice.status);
-    addMismatch(mismatches, 'choice.reasonCode', null, choice.reasonCode);
-    addMismatch(mismatches, 'choice.domain', request.domain, choice.domain);
-    addMismatch(mismatches, 'choice.taskId', request.task, choice.taskId);
-    addMismatch(mismatches, 'choice.backendTask', request.task, choice.backendTask);
-    addMismatch(mismatches, 'choice.detailLevel', request.detail_level, choice.detailLevel);
-
-    if (!taskDefinition) {
-        addMismatch(mismatches, 'local.taskDefinition', true, false);
-    } else {
-        const expectedProfile = taskDefinition.expectedProfiles[request.detail_level];
-        addMismatch(mismatches, 'choice.profileId', expectedProfile.profileId, choice.profileId);
-        addMismatch(mismatches, 'choice.profileVersion', expectedProfile.profileVersion, choice.profileVersion);
-        addMismatch(mismatches, 'choice.frontendResponseContractId', taskDefinition.frontendResponseContract.id, choice.frontendResponseContractId);
-        addMismatch(mismatches, 'choice.frontendResponseContractVersion', taskDefinition.frontendResponseContract.version, choice.frontendResponseContractVersion);
-    }
-
-    if (!responseContract) {
-        addMismatch(mismatches, 'local.responseContract', true, false);
-    } else {
-        addMismatch(mismatches, 'choice.frontendResponseContractId', responseContract.contractId, choice.frontendResponseContractId);
-        addMismatch(mismatches, 'choice.frontendResponseContractVersion', responseContract.version, choice.frontendResponseContractVersion);
-    }
-
-    if (!choice.backendEntry) {
-        addMismatch(mismatches, 'choice.backendEntry', true, false);
-    } else {
-        addMismatch(mismatches, 'choice.backendEntry.domain', request.domain, choice.backendEntry.domain);
-        addMismatch(mismatches, 'choice.backendEntry.task', request.task, choice.backendEntry.task);
-        addMismatch(mismatches, 'choice.backendEntry.detail_level', request.detail_level, choice.backendEntry.detail_level);
-        addMismatch(mismatches, 'choice.backendEntry.profile_id', choice.profileId, choice.backendEntry.profile_id);
-        addMismatch(mismatches, 'choice.backendEntry.profile_version', choice.profileVersion, choice.backendEntry.profile_version);
-        addMismatch(mismatches, 'choice.backendEntry.frontend_response_contract_id', choice.frontendResponseContractId, choice.backendEntry.frontend_response_contract_id);
-        addMismatch(mismatches, 'choice.backendEntry.frontend_response_contract_version', choice.frontendResponseContractVersion, choice.backendEntry.frontend_response_contract_version);
-        addMismatch(mismatches, 'choice.backendEntry.supports_user_notes', choice.supportsUserNotes, choice.backendEntry.supports_user_notes);
-        addMismatch(mismatches, 'choice.backendEntry.supports_web_research', choice.supportsWebResearch, choice.backendEntry.supports_web_research);
-    }
-
-    if (mismatches.length > 0) throw new AiExportContractMismatchError(mismatches);
-}
-
-function assertSnapshotContract(request: AiExportSnapshotRequest, choice: AiExportCatalogCompatibilityChoice, response: AiExportSnapshotResponse): void {
-    const mismatches: AiExportContractMismatch[] = [];
-    const responseContract = findAiExportResponseContract(request.domain, request.task);
-
-    addMismatch(mismatches, 'response.domain', request.domain, response.domain);
-    addMismatch(mismatches, 'response.task', request.task, response.task);
-    addMismatch(mismatches, 'response.detail_level', request.detail_level, response.detail_level);
-    addMismatch(mismatches, 'response.meta.schema_version', AI_EXPORT_SNAPSHOT_SCHEMA_VERSION, response.meta.schema_version);
-    addMismatch(mismatches, 'response.meta.profile_id', choice.profileId, response.meta.profile_id);
-    addMismatch(mismatches, 'response.meta.profile_version', choice.profileVersion, response.meta.profile_version);
-
-    if (!responseContract) {
-        addMismatch(mismatches, 'local.responseContract', true, false);
-    } else {
-        addMismatch(mismatches, 'response.meta.frontend_response_contract_id', responseContract.contractId, response.meta.frontend_response_contract_id);
-        addMismatch(mismatches, 'response.meta.frontend_response_contract_version', responseContract.version, response.meta.frontend_response_contract_version);
-    }
-
-    addMismatch(mismatches, 'response.meta.selected_range.start', request.date_range.start, response.meta.selected_range.start);
-    addMismatch(mismatches, 'response.meta.selected_range.end', normalizeOptionalDate(request.date_range.end), normalizeOptionalDate(response.meta.selected_range.end));
-    if (request.technical_window) {
-        const responseTechnicalWindow = response.meta.technical_window;
-        if (!responseTechnicalWindow || Array.isArray(responseTechnicalWindow)) {
-            addMismatch(mismatches, 'response.meta.technical_window', true, false);
-        } else {
-            addMismatch(mismatches, 'response.meta.technical_window.start', request.technical_window.start, responseTechnicalWindow.start);
-            addMismatch(mismatches, 'response.meta.technical_window.end', normalizeOptionalDate(request.technical_window.end), normalizeOptionalDate(responseTechnicalWindow.end));
-        }
-    }
-    addMismatch(mismatches, 'response.meta.target_currency', request.target_currency, response.meta.target_currency);
-
-    if (request.domain === 'asset' && response.domain === 'asset') {
-        addMismatch(mismatches, 'response.facts.identity.asset_id', request.asset_id, response.facts.identity.asset_id);
-    } else if (request.domain === 'fx' && response.domain === 'fx') {
-        addMismatch(mismatches, 'response.facts.identity.base_currency', request.base_currency, response.facts.identity.base_currency);
-        addMismatch(mismatches, 'response.facts.identity.quote_currency', request.quote_currency, response.facts.identity.quote_currency);
-    } else if (request.domain === 'broker' && response.domain === 'broker') {
-        addMismatch(mismatches, 'response.facts.summary.broker_id', request.broker_id, response.facts.summary.broker_id);
-    }
-
-    if (mismatches.length > 0) throw new AiExportContractMismatchError(mismatches);
-}
-
-function normalizeOptionalDate(value: unknown): string | null {
-    if (value === undefined || value === null) return null;
-    return typeof value === 'string' ? value : '[invalid date value]';
-}
-
-function addMismatch(mismatches: AiExportContractMismatch[], field: string, expected: AiExportContractValue | undefined, actual: AiExportContractValue | undefined): void {
-    const normalizedExpected = expected ?? null;
-    const normalizedActual = actual ?? null;
-    if (normalizedExpected !== normalizedActual) {
-        mismatches.push({
-            field,
-            expected: normalizedExpected,
-            actual: normalizedActual,
-        });
-    }
 }
