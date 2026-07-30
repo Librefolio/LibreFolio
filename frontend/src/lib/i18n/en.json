@@ -1174,6 +1174,8 @@
     "categoryOther": "Other",
     "unrealizedPnlPercentTooltip": "Unrealized P&L as a percentage of the residual cost basis (Unrealized P&L / cost basis).",
     "pmcTooltip": "Average cost per unit of the currently open position.",
+    "oldestOpenLotDate": "Oldest open lot",
+    "oldestOpenLotDateTooltip": "Opening date of the oldest FIFO lot still open for this position.",
     "unallocatedIncome": "Unallocated income",
     "unallocatedCosts": "Unallocated costs",
     "otherReconciliationResidual": "Other / reconciliation residual"
@@ -1185,6 +1187,8 @@
     "missingPrice": "{count} asset(s) have no market price — excluded from NAV",
     "transactionImplied": "{count} asset(s) still valued at cost — no market price available for over 2 weeks (as of {as_of_date})",
     "currentPriceAssumedAtCost": "Current price unavailable — open value estimated at cost, market P&L excluded",
+    "currentPriceAssumedAtCostRange": "No market price available between {date_from} and {date_to} — open value estimated at cost, market P&L excluded",
+    "affectedLots": "Affected lots:",
     "stalePrice": "{count} asset(s) have outdated prices",
     "missingFx": "Missing FX rates for {count} pair(s) — totals may be incomplete",
     "navIncomplete": "NAV incomplete for {count} day(s) between {date_from} and {date_to}",

@@ -771,15 +771,24 @@ class DailyStateBuilder:
                                 current_wac = wac_pool_cost[key] / old_qty
                                 wac_pool_cost[key] += current_wac * tx_qty
                             wac_pool_qty[key] = max(new_qty, zero)
+                        if self._is_capital_adjustment(tx) and unit_cost_asset_ccy is not None:
+                            contributed = self._capital_flow_for_adjustment_in(tx, tx_qty, unit_cost_asset_ccy)
+                            if contributed is not None:
+                                cumulative_ecf += contributed
                     else:
                         old_qty = wac_pool_qty[key]
+                        old_cost = wac_pool_cost[key]
                         if old_qty > zero:
-                            current_wac = wac_pool_cost[key] / old_qty
+                            current_wac = old_cost / old_qty
                             wac_pool_qty[key] = max(old_qty + tx_qty, zero)
                             wac_pool_cost[key] = wac_pool_qty[key] * current_wac
                         else:
                             wac_pool_qty[key] = zero
                             wac_pool_cost[key] = zero
+                        if self._is_capital_adjustment(tx):
+                            removed_target = self._convert(old_cost - wac_pool_cost[key], self.asset_currencies.get(tx.asset_id, self.target_currency), tx.date)
+                            if removed_target is not None:
+                                cumulative_ecf -= removed_target
                     cumulative_qty[key] += tx_qty
 
         # ── 6. FRAME: [frame_start, date_to] — full daily evaluation ──
@@ -871,7 +880,6 @@ class DailyStateBuilder:
             #   4. Update period accumulators (realized, income, fees)
             ecf_today = ecf_by_date.get(current, zero)
             cumulative_ecf += ecf_today
-            capital_baseline = cumulative_ecf
 
             day_all_txs = all_txs_by_date.get(current, [])
             # Sort: additions (qty > 0) first, then reductions (qty < 0), then non-position txs
@@ -919,6 +927,13 @@ class DailyStateBuilder:
                                 wac_pool_cost[key] += cur_wac * tx_qty
                             wac_pool_qty[key] = max(new_qty, zero)
                         cumulative_qty[key] += tx_qty
+                        # In-kind ADJUSTMENT-in (priced, no cash): capital contribution.
+                        # Add the injected WAC cost to the capital baseline so total P&L
+                        # excludes it (opening equity, not profit). See _is_capital_adjustment.
+                        if self._is_capital_adjustment(tx) and unit_cost_asset_ccy is not None:
+                            contributed = self._capital_flow_for_adjustment_in(tx, tx_qty, unit_cost_asset_ccy)
+                            if contributed is not None:
+                                cumulative_ecf += contributed
                     else:
                         # Reduction: READ WAC before reducing, then reduce
                         old_qty = wac_pool_qty[key]
@@ -941,6 +956,13 @@ class DailyStateBuilder:
                             wac_pool_qty[key] = zero
                             wac_pool_cost[key] = zero
                         cumulative_qty[key] += tx_qty
+
+                        # In-kind ADJUSTMENT-out (no cash proceeds): capital distribution.
+                        # Remove the WAC cost from the capital baseline (mirror of the
+                        # in-kind contribution on ADJUSTMENT-in) so total P&L keeps
+                        # tracking unrealized instead of dumping the book into "Other".
+                        if self._is_capital_adjustment(tx):
+                            cumulative_ecf -= sell_cb_target
 
                         # 3-pool per-broker: SELL → K[bid] += cost_basis, R[bid] += gain
                         if amount_target is not None:
@@ -1073,6 +1095,9 @@ class DailyStateBuilder:
                 cash_from_contributed = min(capital_cash_pool_total, cash_like)
                 cash_from_generated = max(cash_like - cash_from_contributed, zero)
 
+            # capital_baseline includes in-kind ADJUSTMENT capital routed into
+            # cumulative_ecf inside the per-transaction loop above, so re-read it here.
+            capital_baseline = cumulative_ecf
             total_pnl = nav - capital_baseline
 
             # 4b2. Position state snapshots (start of frame + every day end)
@@ -1461,6 +1486,32 @@ class DailyStateBuilder:
                 else:
                     missing_fx.add(f"{wac_ccy}/{self.target_currency}")
         return total
+
+    def _is_capital_adjustment(self, tx: Transaction) -> bool:
+        """True when a transaction is a priced in-kind ADJUSTMENT (a capital event).
+
+        An opening / transfer / succession ADJUSTMENT that carries a per-unit
+        ``cost_basis_override`` injects (qty>0) or removes (qty<0) real book value
+        WITHOUT any cash counterpart. Economically this is a capital contribution /
+        distribution in kind (opening equity), NOT profit — so its cost must move the
+        capital baseline (``cumulative_ecf``), leaving total P&L = NAV − capital to
+        reflect only genuine market / realized / income effects. Without this the
+        injected book value leaks into the "Other / reconciliation residual".
+
+        SPLIT-linked adjustments are excluded: a split redistributes existing cost
+        over a new quantity, it neither adds nor removes economic capital.
+        """
+        return tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity is not None and tx.quantity != 0 and (tx.id is None or tx.id not in self.split_linked_tx_ids)
+
+    def _capital_flow_for_adjustment_in(self, tx: Transaction, tx_qty: Decimal, unit_cost_asset_ccy: Decimal) -> Decimal | None:
+        """Target-currency capital contributed by a priced in-kind ADJUSTMENT-in (qty>0).
+
+        Equals the WAC cost injected into the pool (per-unit cost in the asset
+        currency × share-adjusted quantity), converted to the target currency at the
+        transaction date. Returns None if the FX rate is unavailable.
+        """
+        asset_ccy = self.asset_currencies.get(tx.asset_id, self.target_currency)
+        return self._convert(unit_cost_asset_ccy * tx_qty, asset_ccy, tx.date)
 
     def _buy_unit_cost(self, tx: Transaction) -> Decimal | None:
         """Compute unit cost for a BUY/acquisition transaction in the asset's native currency.

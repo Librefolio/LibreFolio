@@ -348,6 +348,7 @@ class PortfolioHolding(BaseModel):
     gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="Daily unrealized P&L change as percentage of the previous day's absolute position market value; None if prior value is ~0")
     allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
     nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
+    oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at report end for this (asset, broker); None if fully closed")
 
 
 class AssetPeriodContribution(BaseModel):
@@ -370,6 +371,7 @@ class AssetPeriodContribution(BaseModel):
     start_value: Optional[SafeDecimal] = Field(None, description="Position value at period start (0 if there was no opening position)")
     end_value: Optional[SafeDecimal] = Field(None, description="Position value at period end (0 if the position was closed by period end)")
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
+    oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at period end for this (asset, broker); None if fully closed")
 
 
 class UnallocatedContribution(BaseModel):
@@ -719,6 +721,7 @@ class LotPriceHistoryPoint(BaseModel):
     date: date_type
     market_price: SafeDecimal
     currency: str = Field(..., description="Currency of market_price, normally equal to response target_currency.")
+    estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote.")
 
     @field_validator("currency")
     @classmethod

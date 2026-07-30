@@ -48,6 +48,7 @@
         start_value?: NumericLike;
         end_value?: NumericLike;
         is_fully_sold?: boolean;
+        oldest_open_lot_date?: NumericLike;
     }
 
     interface Props {
@@ -84,6 +85,11 @@
     }
 
     function safeInt(v: number | (number | null)[] | null | undefined): number | null {
+        if (v == null) return null;
+        return Array.isArray(v) ? (v[0] ?? null) : v;
+    }
+
+    function safeStr(v: NumericLike | undefined): string | null {
         if (v == null) return null;
         return Array.isArray(v) ? (v[0] ?? null) : v;
     }
@@ -125,6 +131,7 @@
         statusLabel: string;
         isFullySold: boolean;
         assetId: number;
+        oldestOpenLotDate: string | null;
     }
 
     let displayRows = $derived.by<DisplayRow[]>(() => {
@@ -163,6 +170,7 @@
                     statusLabel: statusLabel(status),
                     isFullySold,
                     assetId: p.asset_id,
+                    oldestOpenLotDate: safeStr(p.oldest_open_lot_date),
                 };
             })
             .sort((a, b) => Math.abs(b.pnl ?? 0) - Math.abs(a.pnl ?? 0));
@@ -404,6 +412,20 @@
                 hiddenByDefault: true,
                 getValue: (row) => row.endValue ?? 0,
                 cell: (row) => amountCell(row.endValue),
+            },
+            {
+                id: 'oldest-open-lot',
+                header: () => label('dashboard.oldestOpenLotDate', 'Oldest open lot'),
+                headerTooltip: () => label('dashboard.oldestOpenLotDateTooltip', 'Opening date of the oldest FIFO lot still open for this position.'),
+                type: 'date',
+                width: 150,
+                minWidth: 130,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
             },
             {
                 id: 'status',

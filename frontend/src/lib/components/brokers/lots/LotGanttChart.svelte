@@ -255,10 +255,10 @@
         return formatDate(value, {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
-    function formatAxisDate(value: number): string {
+    function formatAxisDate(value: number, withYear = false): string {
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, {month: 'short', day: 'numeric'});
+        return date.toLocaleDateString($currentLanguage || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
     }
 
     function formatQuantity(value: number): string {
@@ -1199,6 +1199,7 @@
         const gridColors = buildGridColors(themeDark);
         const minMs = axisRangeMs?.minMs ?? Date.now() - DAY_MS;
         const maxMs = axisRangeMs?.maxMs ?? Date.now();
+        const multiYearAxis = new Date(xAxisRange?.min ?? minMs).getFullYear() !== new Date(xAxisRange?.max ?? maxMs).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
             grid: {
@@ -1218,7 +1219,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate(value),
+                    formatter: (value: number) => formatAxisDate(value, multiYearAxis),
                 },
             },
             yAxis: {
