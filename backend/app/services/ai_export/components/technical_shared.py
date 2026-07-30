@@ -27,6 +27,7 @@ the owning plugin's own `describe_for_ai()`/`output_specs` at call time via
 from __future__ import annotations
 
 import math
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -84,13 +85,18 @@ from backend.app.services.ai_export.components.technical_payloads import (
     TechnicalDatedValue,
     TechnicalEventBucket,
     TechnicalEventPayload,
+    TechnicalEventSelectionSummary,
     TechnicalEventsPayload,
+    TechnicalIndicatorCell,
     TechnicalRangeValueCell,
     TechnicalSingleValueCell,
     UniverseBreadthPayload,
 )
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey, TemporalAggregatorSpec
-from backend.app.services.ai_export.dependencies import BuildContext
+from backend.app.services.ai_export.dependencies import (
+    BuildContext,
+    build_indicator_bucket_plan_for_scope,
+)
 from backend.app.services.ai_export.temporal.aggregators import (
     BandBucketStatistics,
     DatedValue,
@@ -99,7 +105,7 @@ from backend.app.services.ai_export.temporal.aggregators import (
     aggregate_signal_buckets,
     assign_discrete_events,
 )
-from backend.app.services.ai_export.temporal.plan import BucketPlan
+from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.points import (
     BandObservedPoint,
     ContinuousMultiOutputPoint,
@@ -128,6 +134,8 @@ SIGNAL_PROFILE_BUCKET_AGGREGATOR = TemporalAggregatorSpec(
 
 _AI_EXPORT_ANNOTATION_ABSOLUTE_EPSILON = 1e-12
 _AI_EXPORT_ANNOTATION_RELATIVE_EPSILON = 1e-12
+EVENT_SELECTION_MINIMUM_LATEST = 20
+EVENT_SELECTION_RECENT_WINDOW_DAYS = 30
 
 
 # =============================================================================
@@ -140,8 +148,10 @@ _AI_EXPORT_ANNOTATION_RELATIVE_EPSILON = 1e-12
 # `FX_FULL_BUNDLE` signal set and annotation topology (see
 # `backend/app/services/ai_export/profiles/{asset,fx}.py`, read-only
 # reference; never imported at runtime). The same bundle is requested
-# regardless of `BuildScope.detail_level` - only `BuildContext.bucket_plan`
-# (K=30/14/7) varies bucket granularity, never the signal/annotation set.
+# regardless of `BuildScope.detail_level`. Prices use the detail-owned
+# `BuildContext.bucket_plan`; each indicator resolves a plugin-owned temporal
+# class plus the request detail into its own plan. The signal/annotation set
+# itself never changes.
 #
 # Unlike the legacy profile system, no per-detail-level `EventLimitSpec`
 # (10/40/120 max events), no `SignalOutputMode`/`requested_components`
@@ -812,29 +822,50 @@ def _band_series_points(series: SignalBandSeries) -> tuple[BandObservedPoint, ..
 
 def build_indicator_table_payloads(
     results: Sequence[SignalResult],
-    plan: BucketPlan,
+    context: BuildContext,
 ) -> tuple[IndicatorTablePayload, ...]:
     """Build one row-oriented table per available curated signal instance.
 
     Only `OK`/`PARTIAL` results with at least one series are surfaced.
-    Multi-output signals share one row per temporal bucket; band components
-    become independent lower/middle/upper columns with truthful dated stats.
+    Each plugin resolves its own AI Export temporal class from normalized
+    parameters. Multi-output signals share one row per class/detail bucket;
+    band components become independent lower/middle/upper columns with
+    truthful dated stats. Full-period summary/latest values are computed before
+    temporal reduction and therefore do not change with detail/class density.
     `UNAVAILABLE`/`FAILED` results are silently omitted (requirement 7,
     "partial success"), never replaced with a placeholder.
     """
 
+    scope = context.scope
+    if scope is None:
+        raise ValueError("indicator table construction requires BuildContext.scope")
     payloads: list[IndicatorTablePayload] = []
-    date_to_bucket = _bucket_index_by_date(plan)
     for result in results:
         if result.status not in (SignalStatus.OK, SignalStatus.PARTIAL) or not result.series:
             continue
         plugin_class = SignalPluginRegistry.get_plugin(result.signal_code)
         if plugin_class is None:
             raise ValueError(f"unknown signal plugin in AI Export result: {result.signal_code}")
+        temporal_class = plugin_class.resolve_ai_export_temporal_class(result.normalized_params)
+        plan = build_indicator_bucket_plan_for_scope(scope, temporal_class)
+        date_to_bucket = _bucket_index_by_date(plan)
+        summary_plan = BucketPlan(
+            start=plan.start,
+            end=plan.end,
+            policy=plan.policy,
+            buckets=(
+                Bucket(
+                    index=0,
+                    start_date=plan.start,
+                    end_date=plan.end,
+                ),
+            ),
+        )
         ai_description = plugin_class.describe_for_ai()
         output_specs = {output.key: output for output in plugin_class.output_specs}
         output_descriptions = {output.key: output for output in ai_description.outputs}
         columns: list[IndicatorOutputColumn] = []
+        period_summary: dict[str, TechnicalIndicatorCell | None] = {}
         cells_by_bucket: list[dict[str, object]] = [{} for _bucket in plan.buckets]
         observed_dates_by_bucket: list[set[date]] = [set() for _bucket in plan.buckets]
 
@@ -877,6 +908,12 @@ def build_indicator_table_payloads(
                             latest=_latest_observed_value(component_points),
                         )
                     )
+                    period_summary[column_key] = _technical_cell(
+                        aggregate_scalar_statistics(
+                            component_points,
+                            summary_plan,
+                        )[0]
+                    )
                     for index, aggregate in enumerate(aggregates):
                         cells_by_bucket[index][column_key] = _technical_cell(getattr(aggregate, component.value))
             elif isinstance(series, (SignalLineSeries, SignalAreaSeries, SignalBarSeries)):
@@ -903,6 +940,7 @@ def build_indicator_table_payloads(
                         latest=_latest_observed_value(points),
                     )
                 )
+                period_summary[column_key] = _technical_cell(aggregate_scalar_statistics(points, summary_plan)[0])
                 for index, aggregate in enumerate(aggregates):
                     cells_by_bucket[index][column_key] = _technical_cell(aggregate)
             else:
@@ -924,12 +962,20 @@ def build_indicator_table_payloads(
             IndicatorTablePayload(
                 instance_id=result.instance_id,
                 signal_code=result.signal_code,
+                temporal_class=temporal_class,
                 semantic_id=ai_description.semantic_id,
                 semantic_description=ai_description.semantic_description,
                 category=ai_description.category.value,
                 columns=tuple(columns),
+                period_summary=period_summary,
                 rows=rows,
             )
+        )
+        context.register_indicator_sampling(
+            signal_instance_id=result.instance_id,
+            signal_code=result.signal_code,
+            temporal_class=temporal_class,
+            bucket_plan=plan,
         )
     return tuple(payloads)
 
@@ -940,10 +986,15 @@ def _annotation_semantic_description(signal_code: str, annotation) -> str:
     return f"{base_description} ({annotation.annotation_type}: {annotation.key})"
 
 
-def signal_results_to_discrete_events(results: Sequence[SignalResult], *, asset_id: int | None = None) -> tuple[DiscreteEvent, ...]:
+def signal_results_to_discrete_events(
+    results: Sequence[SignalResult],
+    *,
+    entity_id: str,
+    asset_id: int | None = None,
+) -> tuple[DiscreteEvent, ...]:
     """Converts every OK/PARTIAL result's preserved annotations into `DiscreteEvent`s, verbatim.
 
-    Dedup key is ``(asset_id, instance_id, annotation_key, date)`` -
+    Dedup key is ``(entity_id, instance_id, annotation_key, date)`` -
     deterministic and stable across rebuilds of the same request; never
     averages/merges/limits (requirement 4).
     """
@@ -953,6 +1004,7 @@ def signal_results_to_discrete_events(results: Sequence[SignalResult], *, asset_
             continue
         for annotation in result.annotations:
             payload: dict[str, object] = {
+                "entity_id": entity_id,
                 "key": annotation.key,
                 "annotation_type": annotation.annotation_type,
                 "signal_code": result.signal_code,
@@ -962,15 +1014,108 @@ def signal_results_to_discrete_events(results: Sequence[SignalResult], *, asset_
             }
             if asset_id is not None:
                 payload["asset_id"] = asset_id
-            dedup_key = (asset_id, result.instance_id, annotation.key, annotation.date.isoformat())
+            dedup_key = (
+                entity_id,
+                result.instance_id,
+                annotation.key,
+                annotation.date.isoformat(),
+            )
             events.append(DiscreteEvent(date=annotation.date, dedup_key=dedup_key, payload=payload))
     return tuple(events)
 
 
-def build_events_payload(events: Sequence[DiscreteEvent], plan: BucketPlan) -> TechnicalEventsPayload:
-    assignments = assign_discrete_events(events, plan)
+@dataclass(frozen=True, slots=True)
+class SelectedTechnicalEvents:
+    events: tuple[DiscreteEvent, ...]
+    summaries: tuple[TechnicalEventSelectionSummary, ...]
+    detected_count: int
+
+
+def select_technical_events(
+    events: Sequence[DiscreteEvent],
+    *,
+    snapshot_as_of: date,
+) -> SelectedTechnicalEvents:
+    """Apply the 30-calendar-day/minimum-latest-20 policy per event group."""
+    deduplicated: dict[object, DiscreteEvent] = {}
+    for event in events:
+        deduplicated.setdefault(event.dedup_key, event)
+
+    grouped: dict[tuple[str, str], list[DiscreteEvent]] = {}
+    for event in deduplicated.values():
+        if not isinstance(event.payload, Mapping):
+            raise TypeError("technical event payload must be a mapping")
+        entity_id = event.payload.get("entity_id")
+        annotation_key = event.payload.get("key")
+        if not isinstance(entity_id, str) or not entity_id:
+            raise ValueError("technical event payload requires entity_id")
+        if not isinstance(annotation_key, str) or not annotation_key:
+            raise ValueError("technical event payload requires annotation key")
+        grouped.setdefault((entity_id, annotation_key), []).append(event)
+
+    recent_boundary = snapshot_as_of - timedelta(days=EVENT_SELECTION_RECENT_WINDOW_DAYS)
+    selected: list[DiscreteEvent] = []
+    summaries: list[TechnicalEventSelectionSummary] = []
+    for entity_id, annotation_key in sorted(grouped):
+        detected = sorted(
+            grouped[(entity_id, annotation_key)],
+            key=lambda event: (event.date, repr(event.dedup_key)),
+            reverse=True,
+        )
+        recent_count = sum(event.date >= recent_boundary for event in detected)
+        exported_count = min(
+            len(detected),
+            max(EVENT_SELECTION_MINIMUM_LATEST, recent_count),
+        )
+        exported = detected[:exported_count]
+        selected.extend(exported)
+        directions = Counter(event.payload.get("direction") for event in detected if isinstance(event.payload, Mapping))
+        summaries.append(
+            TechnicalEventSelectionSummary(
+                entity_id=entity_id,
+                annotation_key=annotation_key,
+                detected_count=len(detected),
+                recent_30d_count=recent_count,
+                exported_count=exported_count,
+                selection_applied=exported_count < len(detected),
+                oldest_detected_event_date=detected[-1].date,
+                newest_detected_event_date=detected[0].date,
+                oldest_exported_event_date=exported[-1].date,
+                newest_exported_event_date=exported[0].date,
+                upward_count=directions["up"],
+                downward_count=directions["down"],
+            )
+        )
+
+    selected.sort(
+        key=lambda event: (
+            event.date,
+            str(event.payload.get("entity_id")),
+            str(event.payload.get("key")),
+            repr(event.dedup_key),
+        )
+    )
+    return SelectedTechnicalEvents(
+        events=tuple(selected),
+        summaries=tuple(summaries),
+        detected_count=len(deduplicated),
+    )
+
+
+def build_events_payload(
+    events: Sequence[DiscreteEvent],
+    context: BuildContext,
+) -> TechnicalEventsPayload:
+    plan = context.bucket_plan
+    if plan is None:
+        raise ValueError("event payload construction requires bucket_plan")
+    selection = select_technical_events(
+        events,
+        snapshot_as_of=plan.end,
+    )
+    assignments = assign_discrete_events(selection.events, plan)
     buckets: list[TechnicalEventBucket] = []
-    total = 0
+    exported_total = 0
     for assignment in assignments:
         event_payloads = tuple(TechnicalEventPayload(date=event.date, **event.payload) for event in assignment.events)
         buckets.append(
@@ -982,8 +1127,14 @@ def build_events_payload(events: Sequence[DiscreteEvent], plan: BucketPlan) -> T
                 event_count=assignment.event_count,
             )
         )
-        total += assignment.event_count
-    return TechnicalEventsPayload(buckets=tuple(buckets), total_event_count=total)
+        exported_total += assignment.event_count
+    context.register_event_selection()
+    return TechnicalEventsPayload(
+        buckets=tuple(buckets),
+        detected_event_count=selection.detected_count,
+        exported_event_count=exported_total,
+        selection_summaries=selection.summaries,
+    )
 
 
 # Absolute tolerance for "value == reference level" comparisons. Signal series
@@ -1119,10 +1270,13 @@ __all__ = [
     "BROKER_TECHNICAL_BUNDLE_RESOURCE",
     "BROKER_TECHNICAL_UNIVERSE_KWARGS",
     "CuratedSignalSpec",
+    "EVENT_SELECTION_MINIMUM_LATEST",
+    "EVENT_SELECTION_RECENT_WINDOW_DAYS",
     "FX_CURATED_SIGNALS",
     "FxTechnicalBundle",
     "OHLC_BUCKET_AGGREGATOR",
     "SIGNAL_PROFILE_BUCKET_AGGREGATOR",
+    "SelectedTechnicalEvents",
     "PORTFOLIO_TECHNICAL_BUNDLE_RESOURCE",
     "PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS",
     "TechnicalUniverseBundle",
@@ -1146,5 +1300,6 @@ __all__ = [
     "load_technical_universe_bundle",
     "observations_to_rate_points",
     "price_result_to_close_points",
+    "select_technical_events",
     "signal_results_to_discrete_events",
 ]

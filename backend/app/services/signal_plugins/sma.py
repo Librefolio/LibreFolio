@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -23,6 +24,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalViewTransform,
@@ -64,6 +66,16 @@ class SmaSignalPlugin(SignalPlugin):
     icon = "📏"
     docs_path = "financial-theory/technical-analysis/indicators/sma/"
     params_model = SmaSignalParams
+    ai_export_temporal_rules = (
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.SLOW,
+            parameter_match={"period": 50},
+        ),
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.VERY_SLOW,
+            parameter_match={"period": 200},
+        ),
+    )
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(

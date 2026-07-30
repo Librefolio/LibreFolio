@@ -16,6 +16,7 @@ from pydantic import (
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -34,6 +35,7 @@ from backend.app.schemas.signals import (
     SignalReferenceLevel,
     SignalRegionLineStyle,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
@@ -181,6 +183,7 @@ class StochRsiSignalPlugin(SignalPlugin):
     icon = "🎛️"
     docs_path = "financial-theory/technical-analysis/indicators/stochastic-rsi/"
     params_model = StochRsiSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.VERY_FAST),)
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(

@@ -14,15 +14,20 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportDatasetSelection,
     AiExportDetailLevel,
     AiExportDomain,
+    AiExportEventSelectionManifest,
+    AiExportIndicatorSamplingPolicy,
     AiExportManifestRole,
     AiExportPeriodSemantics,
+    AiExportPriceSamplingPolicy,
     AiExportProblem,
     AiExportSectionEnvelope,
     AiExportSnapshotMeta,
     AiExportSnapshotRequest,
     AiExportSnapshotResponse,
     AiExportSnapshotStats,
+    AiExportTechnicalSamplingManifest,
 )
+from backend.app.schemas.signals import SignalTemporalClass
 
 START = date(2026, 1, 1)
 END = date(2026, 3, 31)
@@ -199,6 +204,46 @@ def test_snapshot_response_accepts_json_sections_and_enforces_stats():
     invalid["stats"]["section_count"] = 2
     with pytest.raises(ValidationError, match="section_count"):
         AiExportSnapshotResponse.model_validate(invalid)
+
+
+def test_sampling_manifests_are_strict_deduplicated_v1_contracts():
+    price = AiExportPriceSamplingPolicy(
+        detail_level="full",
+        p=2,
+        m=30,
+        k=7,
+        bucket_count=75,
+    )
+    indicator = AiExportIndicatorSamplingPolicy(
+        signal_instance_id="ema_20",
+        signal_code="EMA",
+        temporal_class=SignalTemporalClass.MEDIUM,
+        detail_level="full",
+        p=2,
+        m=16,
+        k=10,
+        bucket_count=51,
+    )
+    manifest = AiExportTechnicalSamplingManifest(
+        price_policy=price,
+        indicator_policies=(indicator,),
+    )
+    event_policy = AiExportEventSelectionManifest()
+
+    assert manifest.price_policy.k == 7
+    assert manifest.indicator_policies[0].temporal_class == "medium"
+    assert event_policy.grouped_by == ("entity_id", "annotation_key")
+
+    with pytest.raises(ValidationError, match="unique signal_instance_id"):
+        AiExportTechnicalSamplingManifest(
+            indicator_policies=(indicator, indicator),
+        )
+    with pytest.raises(ValidationError, match="price or indicator policy"):
+        AiExportTechnicalSamplingManifest()
+    with pytest.raises(ValidationError):
+        AiExportEventSelectionManifest(
+            minimum_latest_events_per_annotation=19,
+        )
 
 
 def test_analysis_selection_requires_complete_contract_identity():

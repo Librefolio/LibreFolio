@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
@@ -24,6 +25,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalViewTransform,
     SignalWarmupRequirement,
@@ -76,6 +78,7 @@ class BollingerSignalPlugin(SignalPlugin):
     icon = "🌊"
     docs_path = "financial-theory/technical-analysis/indicators/bollinger-bands/"
     params_model = BollingerSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM_FAST),)
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(

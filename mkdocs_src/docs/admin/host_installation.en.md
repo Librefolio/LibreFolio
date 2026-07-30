@@ -105,9 +105,11 @@ cp .env.example .env
 
 The default settings work immediately. Below are the key variables:
 
-* **`PORT`**: Server bind port (default: `6040`).
-* **`LIBREFOLIO_DATA_DIR`**: Directory path where the database, uploads, and logs are stored (default: `./backend/data/prod`).
-* **`LOG_LEVEL`**: Logging verbosity (default: `INFO`).
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `6040` | Server bind port. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Directory path where the database, uploads, and logs are stored. |
+| `LOG_LEVEL` | `INFO` | Logging verbosity. |
 
 For a complete description of all supported environment variables, see the [Environment Variables Guide](configuration.md).
 

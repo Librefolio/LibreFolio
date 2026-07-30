@@ -33,6 +33,7 @@ from backend.app.schemas.signals import (
     SignalAggregationProfile,
     SignalBandComponent,
     SignalSeriesKind,
+    SignalTemporalClass,
 )
 
 
@@ -220,7 +221,7 @@ class IndicatorBucketRow(BaseModel):
 
 
 class IndicatorTablePayload(BaseModel):
-    """One plugin instance with temporally local output columns and bucket rows.
+    """One plugin instance with class-aware rows plus whole-period state.
 
     Plugin and output semantics are copied from `describe_for_ai()` and
     `SignalOutputSpec`; AI Export never re-derives indicator meaning.
@@ -230,10 +231,12 @@ class IndicatorTablePayload(BaseModel):
 
     instance_id: str
     signal_code: str
+    temporal_class: SignalTemporalClass
     semantic_id: str
     semantic_description: str
     category: str
     columns: tuple[IndicatorOutputColumn, ...] = Field(..., min_length=1)
+    period_summary: dict[str, TechnicalIndicatorCell | None]
     rows: tuple[IndicatorBucketRow, ...] = Field(..., min_length=1)
 
     @model_validator(mode="after")
@@ -242,6 +245,8 @@ class IndicatorTablePayload(BaseModel):
         if len(column_keys) != len(set(column_keys)):
             raise ValueError("indicator column keys must be unique")
         expected_keys = set(column_keys)
+        if set(self.period_summary) != expected_keys:
+            raise ValueError("period_summary must contain exactly the declared columns")
         for row in self.rows:
             if set(row.cells) != expected_keys:
                 raise ValueError("every indicator row must contain exactly the declared columns")
@@ -284,6 +289,7 @@ class TechnicalEventPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    entity_id: str = Field(..., min_length=1)
     date: date
     key: str
     annotation_type: str
@@ -295,7 +301,7 @@ class TechnicalEventPayload(BaseModel):
 
 
 class TechnicalEventBucket(BaseModel):
-    """Every deduplicated event assigned to one bucket, verbatim (never averaged/truncated)."""
+    """Every selected event assigned to one bucket, verbatim."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -318,18 +324,68 @@ class TechnicalEventBucket(BaseModel):
         return self
 
 
-class TechnicalEventsPayload(BaseModel):
-    """`*.technical_events` / `*.states_events`: the complete bucketed event timeline.
+class TechnicalEventSelectionSummary(BaseModel):
+    """Complete detection/export statistics for one entity + annotation key."""
 
-    ``total_event_count`` is the deduplicated total across every bucket (no
-    legacy top-N/10/40/120 cap - every surviving event is present in exactly
-    one bucket, and an empty event list is a valid payload).
-    """
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: str = Field(..., min_length=1)
+    annotation_key: str = Field(..., min_length=1)
+    detected_count: int = Field(..., ge=1)
+    recent_30d_count: int = Field(..., ge=0)
+    exported_count: int = Field(..., ge=1)
+    selection_applied: bool
+    oldest_detected_event_date: date
+    newest_detected_event_date: date
+    oldest_exported_event_date: date
+    newest_exported_event_date: date
+    upward_count: int = Field(..., ge=0)
+    downward_count: int = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> TechnicalEventSelectionSummary:
+        if self.recent_30d_count > self.detected_count:
+            raise ValueError("recent_30d_count cannot exceed detected_count")
+        if self.exported_count > self.detected_count:
+            raise ValueError("exported_count cannot exceed detected_count")
+        if self.selection_applied != (self.exported_count < self.detected_count):
+            raise ValueError("selection_applied must reflect whether events were omitted")
+        if self.oldest_detected_event_date > self.newest_detected_event_date:
+            raise ValueError("detected event date range must be chronological")
+        if self.oldest_exported_event_date > self.newest_exported_event_date:
+            raise ValueError("exported event date range must be chronological")
+        if self.oldest_exported_event_date < self.oldest_detected_event_date or self.newest_exported_event_date > self.newest_detected_event_date:
+            raise ValueError("exported event dates must fall inside detected event dates")
+        if self.upward_count + self.downward_count > self.detected_count:
+            raise ValueError("direction counts cannot exceed detected_count")
+        return self
+
+
+class TechnicalEventsPayload(BaseModel):
+    """Selected technical events plus complete per-group detection statistics."""
 
     model_config = ConfigDict(extra="forbid")
 
     buckets: tuple[TechnicalEventBucket, ...]
-    total_event_count: int
+    detected_event_count: int = Field(..., ge=0)
+    exported_event_count: int = Field(..., ge=0)
+    selection_summaries: tuple[TechnicalEventSelectionSummary, ...]
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> TechnicalEventsPayload:
+        bucket_total = sum(bucket.event_count for bucket in self.buckets)
+        if bucket_total != self.exported_event_count:
+            raise ValueError("exported_event_count must match the events assigned to buckets")
+        if self.exported_event_count > self.detected_event_count:
+            raise ValueError("exported_event_count cannot exceed detected_event_count")
+        if sum(summary.detected_count for summary in self.selection_summaries) != self.detected_event_count:
+            raise ValueError("selection summaries must reconcile detected_event_count")
+        if sum(summary.exported_count for summary in self.selection_summaries) != self.exported_event_count:
+            raise ValueError("selection summaries must reconcile exported_event_count")
+        keys = [(summary.entity_id, summary.annotation_key) for summary in self.selection_summaries]
+        if len(keys) != len(set(keys)):
+            raise ValueError("selection summaries must be unique by entity_id and annotation_key")
+        return self
 
 
 class BreadthStateBucket(BaseModel):

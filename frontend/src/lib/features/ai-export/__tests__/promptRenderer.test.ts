@@ -48,6 +48,52 @@ describe('AI Export prompt renderer', () => {
         expect(rendered.prompt).not.toContain('## Response Language');
     });
 
+    it('includes technical and event policy manifests in snapshot metadata', () => {
+        const compatibility = compatibilityFixture();
+        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const snapshot = {
+            ...snapshotFixture(selection),
+            technical_sampling: {
+                price_policy: {
+                    detail_level: 'standard' as const,
+                    p: 2,
+                    m: 30,
+                    k: 14,
+                    bucket_count: 46,
+                },
+                indicator_policies: [
+                    {
+                        signal_instance_id: 'ema_20',
+                        signal_code: 'EMA',
+                        temporal_class: 'medium' as const,
+                        detail_level: 'standard' as const,
+                        p: 2,
+                        m: 15,
+                        k: 20,
+                        bucket_count: 32,
+                    },
+                ],
+            },
+            event_selection: {
+                minimum_latest_events_per_annotation: 20 as const,
+                complete_recent_window_days: 30 as const,
+                grouped_by: ['entity_id', 'annotation_key'],
+            },
+        };
+        const rendered = renderAiExportPrompt({
+            selection,
+            compatibility,
+            snapshot,
+            responseLanguage: 'English',
+            translate: (key) => key,
+        });
+
+        expect(rendered.prompt).toContain('technical_sampling:');
+        expect(rendered.prompt).toContain('temporal_class: medium');
+        expect(rendered.prompt).toContain('event_selection:');
+        expect(rendered.prompt).toContain('minimum_latest_events_per_annotation: 20');
+    });
+
     it('keeps instruction-like user content inside a dynamic fenced data block', () => {
         const compatibility = compatibilityFixture();
         const selection = selectionFixture('analysis', 'portfolio.description');

@@ -81,6 +81,7 @@ from typing import TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.schemas.signals import SignalTemporalClass
 from backend.app.services.ai_export.components.envelope import SectionEnvelope, build_envelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
@@ -128,6 +129,18 @@ def build_bucket_plan_for_scope(scope: BuildScope) -> BucketPlan:
     `_ensure_bucket_plan_matches_scope`) never rejects it.
     """
     policy = BucketingPolicy.for_detail_level(map_detail_level_to_bucket_detail_level(scope.detail_level))
+    return BucketPlan.build(scope.period_start, scope.period_end, policy)
+
+
+def build_indicator_bucket_plan_for_scope(
+    scope: BuildScope,
+    temporal_class: SignalTemporalClass,
+) -> BucketPlan:
+    """Build one indicator-specific plan without changing the scope price plan."""
+    policy = BucketingPolicy.for_indicator(
+        map_detail_level_to_bucket_detail_level(scope.detail_level),
+        temporal_class,
+    )
     return BucketPlan.build(scope.period_start, scope.period_end, policy)
 
 
@@ -216,6 +229,27 @@ class ComponentDiagnostic:
     reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class PriceSamplingDiagnostic:
+    detail_level: DetailLevel
+    exponent: int
+    half_life_offset: int
+    max_bucket_days: int
+    bucket_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class IndicatorSamplingDiagnostic:
+    signal_instance_id: str
+    signal_code: str
+    temporal_class: SignalTemporalClass
+    detail_level: DetailLevel
+    exponent: int
+    half_life_offset: int
+    max_bucket_days: int
+    bucket_count: int
+
+
 @dataclass(slots=True)
 class _ComponentOutcome:
     envelope: SectionEnvelope | None
@@ -258,6 +292,9 @@ class BuildContext:
         self._build_counts: dict[str, int] = {}
         self._diagnosed: set[str] = set()
         self.diagnostics: list[ComponentDiagnostic] = []
+        self._price_sampling: PriceSamplingDiagnostic | None = None
+        self._indicator_sampling: dict[str, IndicatorSamplingDiagnostic] = {}
+        self._event_selection_used = False
 
         if (scope is None) != (bucket_plan is None):
             raise BuildContextScopeError("scope and bucket_plan must be provided together, or not at all")
@@ -329,6 +366,63 @@ class BuildContext:
         Used to assert the "at most once per request" memoization guarantee.
         """
         return self._build_counts.get(component_id, 0)
+
+    @property
+    def price_sampling(self) -> PriceSamplingDiagnostic | None:
+        return self._price_sampling
+
+    @property
+    def indicator_sampling(
+        self,
+    ) -> tuple[IndicatorSamplingDiagnostic, ...]:
+        return tuple(self._indicator_sampling[instance_id] for instance_id in sorted(self._indicator_sampling))
+
+    @property
+    def event_selection_used(self) -> bool:
+        return self._event_selection_used
+
+    def register_price_sampling(self) -> None:
+        if self.scope is None or self.bucket_plan is None:
+            raise BuildContextScopeError("price sampling registration requires scope and bucket_plan")
+        policy = self.bucket_plan.policy
+        diagnostic = PriceSamplingDiagnostic(
+            detail_level=self.scope.detail_level,
+            exponent=policy.exponent,
+            half_life_offset=policy.half_life_offset,
+            max_bucket_days=policy.max_bucket_days,
+            bucket_count=len(self.bucket_plan.buckets),
+        )
+        if self._price_sampling is not None and self._price_sampling != diagnostic:
+            raise BuildContextScopeError("conflicting price sampling diagnostics in one request")
+        self._price_sampling = diagnostic
+
+    def register_indicator_sampling(
+        self,
+        *,
+        signal_instance_id: str,
+        signal_code: str,
+        temporal_class: SignalTemporalClass,
+        bucket_plan: BucketPlan,
+    ) -> None:
+        if self.scope is None:
+            raise BuildContextScopeError("indicator sampling registration requires scope")
+        diagnostic = IndicatorSamplingDiagnostic(
+            signal_instance_id=signal_instance_id,
+            signal_code=signal_code,
+            temporal_class=temporal_class,
+            detail_level=self.scope.detail_level,
+            exponent=bucket_plan.policy.exponent,
+            half_life_offset=bucket_plan.policy.half_life_offset,
+            max_bucket_days=bucket_plan.policy.max_bucket_days,
+            bucket_count=len(bucket_plan.buckets),
+        )
+        existing = self._indicator_sampling.get(signal_instance_id)
+        if existing is not None and existing != diagnostic:
+            raise BuildContextScopeError("conflicting indicator sampling diagnostics for " f"{signal_instance_id!r}")
+        self._indicator_sampling[signal_instance_id] = diagnostic
+
+    def register_event_selection(self) -> None:
+        self._event_selection_used = True
 
     async def resolve(self, component_id: str, *, required: bool) -> SectionEnvelope | None:
         """Resolves `component_id`, memoized for the lifetime of this context.

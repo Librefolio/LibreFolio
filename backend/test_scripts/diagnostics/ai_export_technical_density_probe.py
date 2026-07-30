@@ -515,7 +515,11 @@ async def _run_annotation_policy_diagnostic(session: AsyncSession, *, asset_id: 
         name = policy["name"]
         events = []
         seen_event_keys = set()
-        for event in signal_results_to_discrete_events(result.signals, asset_id=asset_id):
+        for event in signal_results_to_discrete_events(
+            result.signals,
+            entity_id=f"asset:{asset_id}",
+            asset_id=asset_id,
+        ):
             if event.dedup_key in seen_event_keys:
                 continue
             seen_event_keys.add(event.dedup_key)

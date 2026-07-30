@@ -10,7 +10,7 @@ describe('AI Export UI helpers', () => {
     it('builds labels for every real catalog selection', () => {
         const labels = buildAiExportMenuLabels(t, compatibilityFixture(), 'AI Export', 'Preparing');
 
-        expect(Object.keys(labels.options.selectionLabels)).toHaveLength(35);
+        expect(Object.keys(labels.options.selectionLabels)).toHaveLength(34);
         expect(labels.options.categoryLabels).toEqual({dataset: 'aiExport.exportData', analysis: 'aiExport.requestAnalysis'});
     });
 

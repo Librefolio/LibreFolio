@@ -127,6 +127,7 @@
             markerStart: null,
             markerEnd: null,
             yAxisIndex: 0,
+            aggregationProfile: 'last_with_range',
         };
 
         onpendingchange?.(previewSignal);

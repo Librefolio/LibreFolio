@@ -70,6 +70,7 @@ async def _build_portfolio_technical_prices(context: BuildContext, dependencies:
     assert scope is not None
     universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
 
+    context.register_price_sampling()
     assets: list[AssetPriceSeriesPayload] = []
     for asset_id in universe.asset_ids:
         result = universe.price_results.by_asset_id.get(asset_id)
@@ -123,7 +124,7 @@ async def _build_universe_technical_indicators(context: BuildContext, *, univers
         result = universe.price_results.by_asset_id.get(asset_id)
         if result is None:
             continue
-        indicators = build_indicator_table_payloads(result.signals, context.bucket_plan)
+        indicators = build_indicator_table_payloads(result.signals, context)
         weight = universe.weights.get(asset_id)
         assets.append(
             AssetIndicatorsPayload(
@@ -223,11 +224,12 @@ async def _build_universe_technical_events(context: BuildContext, *, universe_kw
         events.extend(
             signal_results_to_discrete_events(
                 result.signals,
+                entity_id=f"asset:{asset_id}",
                 asset_id=asset_id,
             )
         )
 
-    return build_events_payload(tuple(events), context.bucket_plan)
+    return build_events_payload(tuple(events), context)
 
 
 async def _build_portfolio_technical_events(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalEventsPayload:

@@ -116,6 +116,8 @@ function renderSnapshotMetadata(snapshot: AiExportSnapshotResponse): string {
                 meta: snapshot.meta,
                 dataset_manifest: snapshot.dataset_manifest,
                 analysis_contract: snapshot.analysis_contract,
+                ...(snapshot.technical_sampling ? {technical_sampling: snapshot.technical_sampling} : {}),
+                ...(snapshot.event_selection ? {event_selection: snapshot.event_selection} : {}),
                 stats: snapshot.stats,
             }),
         ),

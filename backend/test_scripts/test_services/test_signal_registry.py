@@ -16,6 +16,7 @@ from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -27,6 +28,7 @@ from backend.app.schemas.signals import (
     SignalOutputSpec,
     SignalPriceField,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalWarmupRequirement,
@@ -162,6 +164,161 @@ def test_register_plugin_decorator_and_catalog_definition():
     assert definition.params_schema["required"] == ["required_mode"]
     assert definition.params_schema["properties"]["length"]["x-i18n-key"] == "signals.params.length"
     assert InlineSignalRegistry.get_plugin(" decorated ") is DecoratedSignal
+
+
+def test_official_ai_export_temporal_rules_serialize_in_catalog():
+    plugin_class = SignalPluginRegistry.get_plugin("EMA")
+    definition = plugin_class.catalog_definition()
+
+    assert definition.model_dump(mode="json")["ai_export_temporal_rules"] == [
+        {"temporal_class": "medium", "parameter_match": {"period": 20}},
+        {"temporal_class": "slow", "parameter_match": {"period": 50}},
+        {"temporal_class": "very_slow", "parameter_match": {"period": 200}},
+    ]
+    definition.ai_export_temporal_rules[0].parameter_match["period"] = 999
+    assert plugin_class.ai_export_temporal_rules[0].parameter_match == {"period": 20}
+
+
+@pytest.mark.parametrize(
+    ("signal_code", "expected"),
+    [
+        ("STOCH_RSI", SignalTemporalClass.VERY_FAST),
+        ("RSI", SignalTemporalClass.VERY_FAST),
+        ("MFI", SignalTemporalClass.VERY_FAST),
+        ("CCI", SignalTemporalClass.FAST),
+        ("ROC", SignalTemporalClass.FAST),
+        ("ATR", SignalTemporalClass.FAST),
+        ("NATR", SignalTemporalClass.FAST),
+        ("MACD", SignalTemporalClass.MEDIUM_FAST),
+        ("PPO", SignalTemporalClass.MEDIUM_FAST),
+        ("BOLLINGER", SignalTemporalClass.MEDIUM_FAST),
+        ("DONCHIAN", SignalTemporalClass.MEDIUM_FAST),
+        ("KAMA", SignalTemporalClass.MEDIUM),
+        ("AROON", SignalTemporalClass.MEDIUM),
+        ("ADX", SignalTemporalClass.MEDIUM),
+        ("OBV", SignalTemporalClass.MEDIUM),
+    ],
+)
+def test_fixed_ai_export_temporal_rules_resolve(signal_code, expected):
+    plugin_class = SignalPluginRegistry.get_plugin(signal_code)
+
+    assert plugin_class.resolve_ai_export_temporal_class({}) == expected
+    assert plugin_class.ai_export_temporal_rules[0].parameter_match == {}
+
+
+@pytest.mark.parametrize(
+    ("signal_code", "params", "expected"),
+    [
+        ("EMA", {"period": 20, "offset": 7.5}, SignalTemporalClass.MEDIUM),
+        ("EMA", {"period": 50, "offset": -2.0}, SignalTemporalClass.SLOW),
+        ("EMA", {"period": 200, "offset": 0.0}, SignalTemporalClass.VERY_SLOW),
+        ("SMA", {"period": 50}, SignalTemporalClass.SLOW),
+        ("SMA", {"period": 200}, SignalTemporalClass.VERY_SLOW),
+    ],
+)
+def test_period_specific_ai_export_temporal_rules_resolve(signal_code, params, expected):
+    plugin_class = SignalPluginRegistry.get_plugin(signal_code)
+    validated_params = plugin_class.validate_params(params)
+
+    assert plugin_class.resolve_ai_export_temporal_class(validated_params) == expected
+
+
+@pytest.mark.parametrize(
+    ("signal_code", "params"),
+    [
+        ("EMA", {"period": 21}),
+        ("SMA", {"period": 20}),
+    ],
+)
+def test_unknown_period_has_no_ai_export_temporal_fallback(signal_code, params):
+    plugin_class = SignalPluginRegistry.get_plugin(signal_code)
+
+    with pytest.raises(ValueError, match="found 0"):
+        plugin_class.resolve_ai_export_temporal_class(params)
+
+
+def test_ai_export_temporal_rule_declarations_reject_duplicates_and_ambiguity():
+    catch_all = SignalAiExportTemporalRule(
+        temporal_class=SignalTemporalClass.MEDIUM,
+    )
+
+    class DuplicateTemporalRules(DemoSignalPlugin):
+        signal_code = "DUPLICATE_TEMPORAL_RULES"
+        ai_export_temporal_rules = (catch_all, catch_all.model_copy(deep=True))
+
+    class ListTemporalRules(DemoSignalPlugin):
+        signal_code = "LIST_TEMPORAL_RULES"
+        ai_export_temporal_rules = [catch_all]
+
+    class AmbiguousTemporalRules(DemoSignalPlugin):
+        signal_code = "AMBIGUOUS_TEMPORAL_RULES"
+        ai_export_temporal_rules = (
+            catch_all,
+            SignalAiExportTemporalRule(
+                temporal_class=SignalTemporalClass.SLOW,
+                parameter_match={"length": 20},
+            ),
+        )
+
+    with pytest.raises(ValueError, match="duplicate rules"):
+        DuplicateTemporalRules.validate_definition()
+    with pytest.raises(TypeError, match="must be a tuple"):
+        ListTemporalRules.validate_definition()
+    with pytest.raises(ValueError, match="ambiguous rules"):
+        AmbiguousTemporalRules.validate_definition()
+    with pytest.raises(ValueError, match="found 2"):
+        AmbiguousTemporalRules.resolve_ai_export_temporal_class({"required_mode": "strict"})
+
+
+def test_ai_export_temporal_rule_parses_enum_and_is_json_safe():
+    assert SignalAiExportTemporalRule(temporal_class="fast").temporal_class == SignalTemporalClass.FAST
+    with pytest.raises(ValueError, match="non-finite float"):
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.FAST,
+            parameter_match={"period": float("nan")},
+        )
+
+
+def test_ai_export_temporal_rule_keys_use_normalized_parameter_aliases():
+    class AliasedParams(BaseModel):
+        model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+        internal_period: int = Field(20, alias="period")
+
+    class AliasedTemporalRule(DemoSignalPlugin):
+        signal_code = "ALIASED_TEMPORAL_RULE"
+        params_model = AliasedParams
+        ai_export_temporal_rules = (
+            SignalAiExportTemporalRule(
+                temporal_class=SignalTemporalClass.MEDIUM,
+                parameter_match={"period": 20},
+            ),
+        )
+
+    class InternalNameTemporalRule(AliasedTemporalRule):
+        signal_code = "INTERNAL_NAME_TEMPORAL_RULE"
+        ai_export_temporal_rules = (
+            SignalAiExportTemporalRule(
+                temporal_class=SignalTemporalClass.MEDIUM,
+                parameter_match={"internal_period": 20},
+            ),
+        )
+
+    AliasedTemporalRule.validate_definition()
+    assert AliasedTemporalRule.resolve_ai_export_temporal_class({"period": 20}) == SignalTemporalClass.MEDIUM
+    with pytest.raises(ValueError, match="unknown normalized params: internal_period"):
+        InternalNameTemporalRule.validate_definition()
+
+
+def test_non_ai_export_risk_plugin_does_not_require_temporal_rules():
+    class NonAiExportRiskSignal(DemoSignalPlugin):
+        signal_code = "NON_AI_EXPORT_RISK"
+        category = SignalCategory.RISK
+
+    NonAiExportRiskSignal.validate_definition()
+    assert NonAiExportRiskSignal.catalog_definition().ai_export_temporal_rules == []
+    with pytest.raises(ValueError, match="found 0"):
+        NonAiExportRiskSignal.resolve_ai_export_temporal_class({"required_mode": "strict"})
 
 
 def test_plugin_definition_rejects_implicit_aggregation_profile():

@@ -845,7 +845,10 @@ nav:
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
-              - AI Export Snapshot: developer/architecture/patterns/ai_export_snapshot.md
+              - 🧠 AI Export:
+                  - Overview: developer/architecture/patterns/ai_export_snapshot.md
+                  - Composition & Prompt: developer/architecture/patterns/ai_export_composition.md
+                  - Technical Sampling: developer/architecture/patterns/ai_export_sampling.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
           - ⚙️ Core Systems:
               - Security & Authentication: developer/architecture/security.md

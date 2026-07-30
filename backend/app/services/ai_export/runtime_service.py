@@ -25,18 +25,22 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportDatasetSelection,
     AiExportDetailLevel,
     AiExportDomain,
+    AiExportEventSelectionManifest,
     AiExportFxPairTargetReference,
     AiExportFxSnapshotRequest,
+    AiExportIndicatorSamplingPolicy,
     AiExportManifestRole,
     AiExportPeriodSemantics,
     AiExportPortfolioSnapshotRequest,
     AiExportPortfolioTargetReference,
+    AiExportPriceSamplingPolicy,
     AiExportSectionEnvelope,
     AiExportSnapshotMeta,
     AiExportSnapshotRequest,
     AiExportSnapshotResponse,
     AiExportSnapshotStats,
     AiExportTargetReference,
+    AiExportTechnicalSamplingManifest,
 )
 from backend.app.services.ai_export.analyses.catalog import build_analysis_registry
 from backend.app.services.ai_export.analyses.spec import (
@@ -388,6 +392,8 @@ class AiExportSnapshotService:
         meta: AiExportSnapshotMeta,
         dataset_manifest: tuple[AiExportDatasetManifestEntry, ...],
         analysis_contract: AiExportAnalysisContract | None,
+        technical_sampling: AiExportTechnicalSamplingManifest | None,
+        event_selection: AiExportEventSelectionManifest | None,
         sections: tuple[AiExportSectionEnvelope, ...],
     ) -> AiExportSnapshotResponse:
         stats = AiExportSnapshotStats(
@@ -406,6 +412,8 @@ class AiExportSnapshotService:
                 meta=meta,
                 dataset_manifest=dataset_manifest,
                 analysis_contract=analysis_contract,
+                technical_sampling=technical_sampling,
+                event_selection=event_selection,
                 sections=sections,
                 stats=stats,
             )
@@ -428,6 +436,41 @@ class AiExportSnapshotService:
             stats = updated
         assert response is not None
         return response.model_copy(update={"stats": stats})
+
+    @staticmethod
+    def _technical_sampling_manifest(
+        context: BuildContext,
+    ) -> AiExportTechnicalSamplingManifest | None:
+        indicator_policies = tuple(
+            AiExportIndicatorSamplingPolicy(
+                signal_instance_id=diagnostic.signal_instance_id,
+                signal_code=diagnostic.signal_code,
+                temporal_class=diagnostic.temporal_class,
+                detail_level=AiExportDetailLevel(diagnostic.detail_level.value),
+                p=diagnostic.exponent,
+                m=diagnostic.half_life_offset,
+                k=diagnostic.max_bucket_days,
+                bucket_count=diagnostic.bucket_count,
+            )
+            for diagnostic in context.indicator_sampling
+        )
+        price = context.price_sampling
+        if price is None and not indicator_policies:
+            return None
+        return AiExportTechnicalSamplingManifest(
+            price_policy=(
+                AiExportPriceSamplingPolicy(
+                    detail_level=AiExportDetailLevel(price.detail_level.value),
+                    p=price.exponent,
+                    m=price.half_life_offset,
+                    k=price.max_bucket_days,
+                    bucket_count=price.bucket_count,
+                )
+                if price is not None
+                else None
+            ),
+            indicator_policies=indicator_policies,
+        )
 
     async def build_snapshot(
         self,
@@ -527,6 +570,8 @@ class AiExportSnapshotService:
             meta=meta,
             dataset_manifest=dataset_manifest,
             analysis_contract=analysis_contract,
+            technical_sampling=self._technical_sampling_manifest(context),
+            event_selection=(AiExportEventSelectionManifest() if context.event_selection_used else None),
             sections=sections,
         )
 

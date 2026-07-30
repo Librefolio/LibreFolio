@@ -87,6 +87,7 @@ async def _build_asset_ohlc_returns(context: BuildContext, dependencies: Mapping
         if result is not None
         else ()
     )
+    context.register_price_sampling()
     buckets = build_price_buckets(points, context.bucket_plan, key="close")
     latest_close, latest_date = latest_point_value(points, key="close")
     currency = coherent_price_currency(result)
@@ -123,7 +124,7 @@ async def _build_asset_indicators(context: BuildContext, dependencies: Mapping[s
     price_results = await load_asset_price_results(context)
     result = price_results.by_asset_id.get(scope.asset_id)
     signals = result.signals if result is not None else ()
-    indicators = build_indicator_table_payloads(signals, context.bucket_plan)
+    indicators = build_indicator_table_payloads(signals, context)
     return SingleTargetIndicatorsPayload(indicators=indicators)
 
 
@@ -150,8 +151,12 @@ async def _build_asset_states_events(context: BuildContext, dependencies: Mappin
     price_results = await load_asset_price_results(context)
     result = price_results.by_asset_id.get(scope.asset_id)
     signals = result.signals if result is not None else ()
-    events = signal_results_to_discrete_events(signals)
-    return build_events_payload(events, context.bucket_plan)
+    events = signal_results_to_discrete_events(
+        signals,
+        entity_id=f"asset:{scope.asset_id}",
+        asset_id=scope.asset_id,
+    )
+    return build_events_payload(events, context)
 
 
 ASSET_STATES_EVENTS_SPEC = ComponentSpec(
@@ -175,6 +180,7 @@ async def _build_fx_rate_ohlc(context: BuildContext, dependencies: Mapping[str, 
     assert scope is not None and scope.base_currency is not None and scope.quote_currency is not None
     rate_series = await load_fx_rate_series(context)
     points = observations_to_rate_points(rate_series, start=scope.period_start, end=scope.period_end)
+    context.register_price_sampling()
     buckets = build_price_buckets(points, context.bucket_plan, key="rate")
     latest_rate, latest_date = latest_point_value(points, key="rate")
 
@@ -270,7 +276,7 @@ FX_RETURNS_VOLATILITY_SPEC = ComponentSpec(
 
 async def _build_fx_indicators(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> SingleTargetIndicatorsPayload:
     bundle = await load_fx_technical_bundle(context)
-    indicators = build_indicator_table_payloads(bundle.signal_results, context.bucket_plan)
+    indicators = build_indicator_table_payloads(bundle.signal_results, context)
     return SingleTargetIndicatorsPayload(indicators=indicators)
 
 
@@ -292,9 +298,14 @@ FX_INDICATORS_SPEC = ComponentSpec(
 
 
 async def _build_fx_states_events(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalEventsPayload:
+    scope = context.scope
+    assert scope is not None and scope.base_currency is not None and scope.quote_currency is not None
     bundle = await load_fx_technical_bundle(context)
-    events = signal_results_to_discrete_events(bundle.signal_results)
-    return build_events_payload(events, context.bucket_plan)
+    events = signal_results_to_discrete_events(
+        bundle.signal_results,
+        entity_id=f"fx:{scope.base_currency}/{scope.quote_currency}",
+    )
+    return build_events_payload(events, context)
 
 
 FX_STATES_EVENTS_SPEC = ComponentSpec(

@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -28,6 +29,7 @@ from backend.app.schemas.signals import (
     SignalPricePoint,
     SignalReferenceLevel,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalWarmupRequirement,
@@ -82,6 +84,7 @@ class AroonSignalPlugin(SignalPlugin):
     icon = "⏱️"
     docs_path = "financial-theory/technical-analysis/indicators/aroon/"
     params_model = AroonSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,

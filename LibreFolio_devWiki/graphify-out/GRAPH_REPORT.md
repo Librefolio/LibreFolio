@@ -1,7 +1,8 @@
 # Graph Report - corpus  (2026-07-30)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 95 files · ~45,827 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
 - 1461 nodes · 2070 edges · 142 communities (126 shown, 16 thin omitted)
@@ -9,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `92f5a8a1`
+- Built from commit: `8601c74a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -370,8 +371,8 @@ Cohesion: 0.20
 Nodes (9): 🎨 Asset Picker, 🔐 Authentication, 🖥️ Desktop Gallery, 📤 File Uploader, ✂️ Image Editor, 🔑 Login Page, 🖼️ Media & Upload, 📝 Registration - Empty Form (+1 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.20
-Nodes (9): 🔐 Authentication, 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 🔑 Login Page, 📱 Mobile Gallery, 📝 Registration, 📂 Static Resources (+1 more)
+Cohesion: 0.22
+Nodes (8): 🎨 Asset Picker, 🔐 Authentication, 📤 File Uploader, ✂️ Image Editor, 🔑 Login Page, 🖼️ Media & Upload, 📱 Mobile Gallery, 📝 Registration
 
 ### Community 48 - "Community 48"
 Cohesion: 0.20
@@ -670,8 +671,8 @@ Cohesion: 0.50
 Nodes (3): 💱 FX Rates (Currency Exchange), 📋 The FX List Page, 🔮 What's Next?
 
 ### Community 122 - "Community 122"
-Cohesion: 0.50
-Nodes (4): 🎨 Asset Picker, 📤 File Uploader, ✂️ Image Editor, 🖼️ Media & Upload
+Cohesion: 0.40
+Nodes (5): 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 📂 Static Resources, 🗂️ Static Resources - Grid View
 
 ### Community 123 - "Community 123"
 Cohesion: 0.50

@@ -4,6 +4,14 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-07-30] update | AI Export Signal Density V2 contract
+
+Updated [[decisions/ai-export-technical-series-and-density-contract]] with the
+completed beta-v1 in-place temporal-class sampling and per-entity event-selection
+contract, manifest propagation, 18/18 and 54/54 validation, measured Portfolio
+Full 1Y reduction from 2,676,781 to 1,990,718 characters, and the known
+`fx.rate_ohlc` warm-up blocker. No application, journal, or MkDocs source changed.
+
 ## [2026-07-30] file | AI Export technical series and density contract
 
 Filed the native-market/target-valuation split, unique per-asset Portfolio/Broker
