@@ -29,9 +29,11 @@ function makeCatalogItem(index: number, domain: 'asset' | 'fx'): BackendSignalCa
                 unit: 'price',
                 axis: {key: 'price', role: 'price'},
                 kind: 'line',
+                aggregation_profile: 'last_with_range',
             },
         ],
         compatible_domains: [domain],
+        ai_export_temporal_rules: [],
     };
 }
 

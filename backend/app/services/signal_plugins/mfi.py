@@ -16,6 +16,7 @@ from pydantic import (
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -33,6 +34,7 @@ from backend.app.schemas.signals import (
     SignalReferenceLevel,
     SignalRegionLineStyle,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
@@ -160,6 +162,7 @@ class MfiSignalPlugin(SignalPlugin):
     icon = "💸"
     docs_path = "financial-theory/technical-analysis/indicators/mfi/"
     params_model = MfiSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.VERY_FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,

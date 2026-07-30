@@ -17,7 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.schemas.signals import SignalAggregationProfile
+from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalTemporalClass,
+)
 from backend.app.services.ai_export.temporal import (
     BandBucketStatistics,
     BandObservedPoint,
@@ -46,6 +49,36 @@ from backend.app.services.ai_export.temporal import (
 
 SNAPSHOT = date(2026, 1, 1)
 AGGREGATION_FIXTURE = json.loads((Path(__file__).parents[1] / "fixtures" / "signals" / "aggregation_profiles.v1.json").read_text())
+
+TEMPORAL_CLASS_ORDER = (
+    SignalTemporalClass.VERY_FAST,
+    SignalTemporalClass.FAST,
+    SignalTemporalClass.MEDIUM_FAST,
+    SignalTemporalClass.MEDIUM,
+    SignalTemporalClass.SLOW,
+    SignalTemporalClass.VERY_SLOW,
+)
+
+INDICATOR_POLICY_CASES = (
+    (BucketDetailLevel.COMPACT, SignalTemporalClass.VERY_FAST, 2, 30, 30, (20, 23, 29)),
+    (BucketDetailLevel.COMPACT, SignalTemporalClass.FAST, 2, 25, 35, (18, 21, 26)),
+    (BucketDetailLevel.COMPACT, SignalTemporalClass.MEDIUM_FAST, 2, 20, 42, (16, 18, 23)),
+    (BucketDetailLevel.COMPACT, SignalTemporalClass.MEDIUM, 2, 10, 42, (14, 16, 20)),
+    (BucketDetailLevel.COMPACT, SignalTemporalClass.SLOW, 2, 5, 49, (12, 14, 17)),
+    (BucketDetailLevel.COMPACT, SignalTemporalClass.VERY_SLOW, 2, 5, 84, (11, 12, 14)),
+    (BucketDetailLevel.STANDARD, SignalTemporalClass.VERY_FAST, 2, 30, 14, (26, 33, 46)),
+    (BucketDetailLevel.STANDARD, SignalTemporalClass.FAST, 2, 21, 15, (23, 29, 41)),
+    (BucketDetailLevel.STANDARD, SignalTemporalClass.MEDIUM_FAST, 2, 20, 17, (21, 26, 37)),
+    (BucketDetailLevel.STANDARD, SignalTemporalClass.MEDIUM, 2, 15, 20, (18, 23, 32)),
+    (BucketDetailLevel.STANDARD, SignalTemporalClass.SLOW, 2, 10, 22, (16, 20, 28)),
+    (BucketDetailLevel.STANDARD, SignalTemporalClass.VERY_SLOW, 2, 5, 28, (13, 16, 23)),
+    (BucketDetailLevel.FULL, SignalTemporalClass.VERY_FAST, 2, 30, 7, (35, 49, 75)),
+    (BucketDetailLevel.FULL, SignalTemporalClass.FAST, 2, 28, 8, (32, 44, 67)),
+    (BucketDetailLevel.FULL, SignalTemporalClass.MEDIUM_FAST, 2, 23, 9, (28, 38, 59)),
+    (BucketDetailLevel.FULL, SignalTemporalClass.MEDIUM, 2, 16, 10, (24, 33, 51)),
+    (BucketDetailLevel.FULL, SignalTemporalClass.SLOW, 2, 10, 11, (21, 29, 46)),
+    (BucketDetailLevel.FULL, SignalTemporalClass.VERY_SLOW, 2, 9, 14, (18, 24, 38)),
+)
 
 
 def _start(days_back: int) -> date:
@@ -114,6 +147,119 @@ def test_bucketing_policy_rejects_invalid_construction():
         BucketingPolicy(max_bucket_days="30")  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         BucketingPolicy.for_detail_level("compact")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("detail", "temporal_class", "p", "m", "k", "_counts"),
+    INDICATOR_POLICY_CASES,
+)
+def test_indicator_policy_matrix_parameters(
+    detail: BucketDetailLevel,
+    temporal_class: SignalTemporalClass,
+    p: int,
+    m: int,
+    k: int,
+    _counts: tuple[int, int, int],
+):
+    policy = BucketingPolicy.for_indicator(detail, temporal_class)
+
+    assert policy.exponent == p
+    assert policy.half_life_offset == m
+    assert policy.max_bucket_days == k
+    assert all(policy.bucket_width(offset) == 1 for offset in range(8))
+    widths = [policy.bucket_width(offset) for offset in range(2000)]
+    assert all(current <= following for current, following in zip(widths, widths[1:], strict=False))
+    assert all(1 <= width <= k for width in widths)
+
+
+@pytest.mark.parametrize(
+    ("detail", "temporal_class", "_p", "_m", "_k", "expected_counts"),
+    INDICATOR_POLICY_CASES,
+)
+def test_indicator_policy_matrix_reference_counts(
+    detail: BucketDetailLevel,
+    temporal_class: SignalTemporalClass,
+    _p: int,
+    _m: int,
+    _k: int,
+    expected_counts: tuple[int, int, int],
+):
+    policy = BucketingPolicy.for_indicator(detail, temporal_class)
+
+    for total_days, expected_count in zip(
+        (90, 180, 365),
+        expected_counts,
+        strict=True,
+    ):
+        plan = BucketPlan.build(
+            start=_start(total_days),
+            end=SNAPSHOT,
+            policy=policy,
+        )
+        assert len(plan.buckets) == expected_count
+        _assert_boundaries(plan, _start(total_days), SNAPSHOT)
+        assert sum(bucket.day_count for bucket in plan.buckets) == total_days
+
+
+@pytest.mark.parametrize("total_days", [90, 180, 365, 7300])
+@pytest.mark.parametrize("detail", list(BucketDetailLevel))
+def test_indicator_class_density_is_monotonic(
+    total_days: int,
+    detail: BucketDetailLevel,
+):
+    counts = [
+        len(
+            BucketPlan.build(
+                start=_start(total_days),
+                end=SNAPSHOT,
+                policy=BucketingPolicy.for_indicator(detail, temporal_class),
+            ).buckets
+        )
+        for temporal_class in TEMPORAL_CLASS_ORDER
+    ]
+
+    assert all(faster >= slower for faster, slower in zip(counts, counts[1:], strict=False))
+
+
+@pytest.mark.parametrize("total_days", [90, 180, 365, 7300])
+@pytest.mark.parametrize("temporal_class", list(SignalTemporalClass))
+def test_indicator_detail_density_is_monotonic(
+    total_days: int,
+    temporal_class: SignalTemporalClass,
+):
+    counts = [
+        len(
+            BucketPlan.build(
+                start=_start(total_days),
+                end=SNAPSHOT,
+                policy=BucketingPolicy.for_indicator(detail, temporal_class),
+            ).buckets
+        )
+        for detail in (
+            BucketDetailLevel.FULL,
+            BucketDetailLevel.STANDARD,
+            BucketDetailLevel.COMPACT,
+        )
+    ]
+
+    assert counts[0] >= counts[1] >= counts[2]
+
+
+@pytest.mark.parametrize("detail", list(BucketDetailLevel))
+def test_very_fast_indicator_policy_matches_price_policy(
+    detail: BucketDetailLevel,
+):
+    assert BucketingPolicy.for_indicator(
+        detail,
+        SignalTemporalClass.VERY_FAST,
+    ) == BucketingPolicy.for_detail_level(detail)
+
+
+def test_indicator_policy_rejects_unknown_enum_values():
+    with pytest.raises(TypeError):
+        BucketingPolicy.for_indicator("compact", SignalTemporalClass.VERY_FAST)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        BucketingPolicy.for_indicator(BucketDetailLevel.COMPACT, "very_fast")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

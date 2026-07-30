@@ -67,7 +67,7 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
-| [[decisions/ai-export-technical-series-and-density-contract]] | AI Export technical inputs stay homogeneous and observed-only; Portfolio/Broker technical universes deduplicate by asset, public payloads remain untruncated, and drawdown recovery waits for deterministic Risk episodes | 2026-07-30 | ai-export, signals, timeseries, payload-size, risk |
+| [[decisions/ai-export-technical-series-and-density-contract]] | Homogeneous observed-only technical inputs now use beta-v1 plugin-owned temporal classes, central indicator density, and deterministic per-entity event selection without price changes or truncation | 2026-07-30 | ai-export, signals, timeseries, sampling, events, payload-size, risk |
 | [[decisions/risk-g6-application-contracts]] | Stable/pending-approval G6 contracts: proxy audit trail, lazy-panel cache identity, present-buckets + Show all UX, and optional inert YAML tags | 2026-07-29 | risk, frontend, scenarios, cache, yaml |
 | [[decisions/risk-quant-engine-process-boundary]] | QuantLib simulation and Riskfolio optimization run in separate lazy spawn pools with warm reuse, safe idle reap, and no in-process native math or silent fallback | 2026-07-28 | backend, risk, quantlib, riskfolio, multiprocessing |
 | [[decisions/ai-export-contextual-ui-memory]] | AI Export drafts persist in browser storage per client-session user and Portfolio/Broker/Asset/canonical-FX context; Snapshot remembers hidden notes but never exports them | 2026-07-27 | frontend, ai-export, ui-memory, auth, privacy |

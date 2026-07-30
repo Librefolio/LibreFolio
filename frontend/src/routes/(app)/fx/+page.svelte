@@ -600,9 +600,15 @@
         for (const item of signalResultsByPair.get(slug) ?? []) {
             if (item.source !== 'backend' || !item.result) continue;
             const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
+            const definition = signalDefinitionsByType.get(currentConfig.signalType);
+            if (!definition || definition.source !== 'backend') {
+                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
+                continue;
+            }
             const outcome = renderBackendSignalResult(item.result, currentConfig, {
                 baseData: absoluteData,
                 viewMode: vm,
+                definition,
                 translate: (key) => $_(key),
             });
             rendered.push(...outcome.signals);

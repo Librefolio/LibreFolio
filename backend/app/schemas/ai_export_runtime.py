@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from backend.app.schemas.common import Currency
+from backend.app.schemas.signals import SignalTemporalClass
 
 _ID_PATTERN = r"^[a-z][a-z0-9_.-]*$"
 
@@ -351,6 +352,50 @@ class AiExportSnapshotStats(AiExportModel):
     token_estimation_method: Literal["chars_div_4_v1"] = "chars_div_4_v1"
 
 
+class AiExportPriceSamplingPolicy(AiExportModel):
+    detail_level: AiExportDetailLevel
+    p: PositiveInt
+    m: PositiveInt
+    k: PositiveInt
+    bucket_count: PositiveInt
+
+
+class AiExportIndicatorSamplingPolicy(AiExportModel):
+    signal_instance_id: str = Field(..., min_length=1)
+    signal_code: str = Field(..., min_length=1)
+    temporal_class: SignalTemporalClass
+    detail_level: AiExportDetailLevel
+    p: PositiveInt
+    m: PositiveInt
+    k: PositiveInt
+    bucket_count: PositiveInt
+
+
+class AiExportTechnicalSamplingManifest(AiExportModel):
+    price_policy: AiExportPriceSamplingPolicy | None = None
+    indicator_policies: tuple[AiExportIndicatorSamplingPolicy, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_manifest(self) -> Self:
+        if self.price_policy is None and not self.indicator_policies:
+            raise ValueError("technical sampling manifest must declare a price or indicator policy")
+        instance_ids = [policy.signal_instance_id for policy in self.indicator_policies]
+        if len(instance_ids) != len(set(instance_ids)):
+            raise ValueError("indicator sampling policies must have unique signal_instance_id")
+        if instance_ids != sorted(instance_ids):
+            raise ValueError("indicator sampling policies must be sorted by signal_instance_id")
+        return self
+
+
+class AiExportEventSelectionManifest(AiExportModel):
+    minimum_latest_events_per_annotation: Literal[20] = 20
+    complete_recent_window_days: Literal[30] = 30
+    grouped_by: tuple[
+        Literal["entity_id"],
+        Literal["annotation_key"],
+    ] = ("entity_id", "annotation_key")
+
+
 class AiExportSnapshotResponse(AiExportModel):
     domain: AiExportDomain
     selection: AiExportSelection
@@ -359,6 +404,8 @@ class AiExportSnapshotResponse(AiExportModel):
     meta: AiExportSnapshotMeta
     dataset_manifest: tuple[AiExportDatasetManifestEntry, ...] = Field(..., min_length=1)
     analysis_contract: AiExportAnalysisContract | None = None
+    technical_sampling: AiExportTechnicalSamplingManifest | None = None
+    event_selection: AiExportEventSelectionManifest | None = None
     sections: tuple[AiExportSectionEnvelope, ...] = Field(..., min_length=1)
     stats: AiExportSnapshotStats
 
@@ -484,6 +531,7 @@ __all__ = [
     "AiExportProblemBase",
     "AiExportProblemCode",
     "AiExportProblemResponse",
+    "AiExportPriceSamplingPolicy",
     "AiExportSectionEnvelope",
     "AiExportSelection",
     "AiExportSelectionKind",
@@ -493,6 +541,9 @@ __all__ = [
     "AiExportSnapshotResponse",
     "AiExportSnapshotSourceFailureProblem",
     "AiExportSnapshotStats",
+    "AiExportTechnicalSamplingManifest",
+    "AiExportIndicatorSamplingPolicy",
+    "AiExportEventSelectionManifest",
     "AiExportTargetReference",
     "AiExportUnsupportedSelectionProblem",
     "AiExportVersionMismatchProblem",

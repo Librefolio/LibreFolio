@@ -5,7 +5,7 @@
     <TagInput value={tags} availableTags={allTags} onchange={(v) => tags = v} />
 
   Features:
-  - Type text → Enter/Space/Comma → creates chip
+  - Type text → Enter/Comma/Semicolon/Tab → creates chip (space is allowed inside a value)
   - Click × on chip → removes
   - Dropdown with filtered available tags
   - Arrow Up/Down navigate suggestions, Enter selects highlighted
@@ -116,13 +116,19 @@
                 const el = document.querySelector(`[data-testid="tag-suggestion-idx-${highlightedIndex}"]`);
                 el?.scrollIntoView({block: 'nearest'});
             }
-        } else if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+        } else if (e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === 'Tab') {
+            const hasHighlight = highlightedIndex >= 0 && highlightedIndex < suggestions.length;
+            const hasBuffer = inputBuffer.trim().length > 0;
+            // Tab must preserve default focus navigation when there is nothing to commit.
+            // Space is intentionally NOT a separator: identifier/tag values may contain spaces
+            // (tags are stored comma-separated, identifier_other as a JSON list).
+            if (e.key === 'Tab' && !hasHighlight && !hasBuffer) return;
             e.preventDefault();
-            if (highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
+            if (hasHighlight) {
                 addTag(suggestions[highlightedIndex]);
                 inputBuffer = '';
                 highlightedIndex = -1;
-            } else if (inputBuffer.trim()) {
+            } else if (hasBuffer) {
                 addTag(inputBuffer);
                 inputBuffer = '';
             }

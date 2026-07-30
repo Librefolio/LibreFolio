@@ -862,7 +862,8 @@ class TestAnalysisComposition:
 
         compact_events = next(e for e in compact.sections if e.component_id == "asset.states_events")
         full_events = next(e for e in full.sections if e.component_id == "asset.states_events")
-        assert compact_events.payload["total_event_count"] == full_events.payload["total_event_count"], "event dedup total must not depend on bucket granularity"
+        assert compact_events.payload["detected_event_count"] == full_events.payload["detected_event_count"], "detected event total must not depend on bucket granularity"
+        assert compact_events.payload["exported_event_count"] == full_events.payload["exported_event_count"], "event selection must not depend on bucket granularity"
 
     @pytest.mark.asyncio
     async def test_fx_indicators_cardinality_identical_across_detail_levels(self, session, test_user, scenario):

@@ -304,4 +304,6 @@ def test_openapi_declares_new_discriminators_and_typed_problem_statuses():
     schema_text = json.dumps(schema)
     assert '"AiExportDatasetSelection"' in schema_text
     assert '"AiExportAnalysisSelection"' in schema_text
+    assert '"AiExportTechnicalSamplingManifest"' in schema_text
+    assert '"AiExportEventSelectionManifest"' in schema_text
     assert '"task"' not in json.dumps(request_schema)

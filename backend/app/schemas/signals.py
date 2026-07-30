@@ -156,6 +156,15 @@ class SignalAggregationProfile(StrEnum):
     EVENTS_VERBATIM = "events_verbatim"
 
 
+class SignalTemporalClass(StrEnum):
+    VERY_FAST = "very_fast"
+    FAST = "fast"
+    MEDIUM_FAST = "medium_fast"
+    MEDIUM = "medium"
+    SLOW = "slow"
+    VERY_SLOW = "very_slow"
+
+
 class SignalBandComponent(StrEnum):
     LOWER = "lower"
     MIDDLE = "middle"
@@ -911,6 +920,18 @@ class SignalAiDescription(SignalModel):
         return self
 
 
+class SignalAiExportTemporalRule(SignalModel):
+    model_config = ConfigDict(extra="forbid")
+
+    temporal_class: SignalTemporalClass
+    parameter_match: Dict[str, JsonValue] = Field(default_factory=dict)
+
+    @field_validator("parameter_match", mode="before")
+    @classmethod
+    def validate_parameter_match(cls, value: Any) -> Any:
+        return _ensure_json_safe(value, "parameter_match")
+
+
 class SignalCatalogDefinition(SignalModel):
     signal_code: str = Field(..., min_length=1, max_length=64)
     implementation_version: str = Field(..., min_length=1, max_length=64)
@@ -929,6 +950,7 @@ class SignalCatalogDefinition(SignalModel):
     annotation_capabilities: List[str] = Field(default_factory=list)
     ai_description: Optional[SignalAiDescription] = None
     ai_events: List[SignalAiEventDescription] = Field(default_factory=list)
+    ai_export_temporal_rules: List[SignalAiExportTemporalRule] = Field(default_factory=list)
 
     @field_validator("signal_code", mode="before")
     @classmethod
@@ -1127,6 +1149,7 @@ __all__ = [
     "SignalAnnotationRequestBase",
     "SignalAnnotationSampling",
     "SignalAggregationProfile",
+    "SignalAiExportTemporalRule",
     "SignalAreaSeries",
     "SignalAvailability",
     "SignalAvailabilityReason",
@@ -1168,6 +1191,7 @@ __all__ = [
     "SignalStatus",
     "SignalThresholdCrossingRequest",
     "SignalThresholdDirection",
+    "SignalTemporalClass",
     "SignalUnit",
     "SignalValuePoint",
     "SignalValueRegion",

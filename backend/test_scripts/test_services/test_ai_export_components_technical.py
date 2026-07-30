@@ -54,6 +54,7 @@ from backend.app.schemas.signals import (
     SignalPriceValueSource,
     SignalReferenceLevel,
     SignalStatus,
+    SignalTemporalClass,
     SignalThresholdCrossingRequest,
 )
 from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_shared
@@ -65,8 +66,17 @@ from backend.app.services.ai_export.components.resources import (
 )
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
-from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
-from backend.app.services.ai_export.temporal import Bucket, BucketingPolicy, BucketPlan
+from backend.app.services.ai_export.dependencies import (
+    BuildContext,
+    build_bucket_plan_for_scope,
+    build_indicator_bucket_plan_for_scope,
+)
+from backend.app.services.ai_export.temporal import (
+    Bucket,
+    BucketingPolicy,
+    BucketPlan,
+    DiscreteEvent,
+)
 from backend.app.services.ai_export.temporal.points import ContinuousMultiOutputPoint
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.portfolio_service import PortfolioService
@@ -119,6 +129,29 @@ FX_BUNDLE_INSTANCE_IDS = frozenset(
         "bollinger_20_2",
     }
 )
+
+ASSET_TEMPORAL_CLASS_BY_INSTANCE = {
+    "ema_20": SignalTemporalClass.MEDIUM,
+    "ema_50": SignalTemporalClass.SLOW,
+    "ema_200": SignalTemporalClass.VERY_SLOW,
+    "sma_50": SignalTemporalClass.SLOW,
+    "sma_200": SignalTemporalClass.VERY_SLOW,
+    "kama_20": SignalTemporalClass.MEDIUM,
+    "aroon_25": SignalTemporalClass.MEDIUM,
+    "adx_14": SignalTemporalClass.MEDIUM,
+    "donchian_20": SignalTemporalClass.MEDIUM_FAST,
+    "rsi_14": SignalTemporalClass.VERY_FAST,
+    "macd_12_26_9": SignalTemporalClass.MEDIUM_FAST,
+    "ppo_12_26_9": SignalTemporalClass.MEDIUM_FAST,
+    "roc_20": SignalTemporalClass.FAST,
+    "stoch_rsi_14_3": SignalTemporalClass.VERY_FAST,
+    "cci_20": SignalTemporalClass.FAST,
+    "bollinger_20_2": SignalTemporalClass.MEDIUM_FAST,
+    "atr_14": SignalTemporalClass.FAST,
+    "natr_14": SignalTemporalClass.FAST,
+    "mfi_14": SignalTemporalClass.VERY_FAST,
+    "obv": SignalTemporalClass.MEDIUM,
+}
 
 #: Exact replica of legacy `_asset_annotations(include_standard=True)`'s 19 annotation keys.
 ASSET_BUNDLE_ANNOTATION_KEYS = frozenset(
@@ -447,18 +480,31 @@ class TestCuratedBundleAcrossDetailLevels:
         assert compact_keys  # non-empty: curated bundle actually produced output series
         assert len(compact_ind["indicators"]) == 20
 
-        assert compact_events["total_event_count"] == standard_events["total_event_count"] == full_events["total_event_count"]
+        assert compact_events["detected_event_count"] == standard_events["detected_event_count"] == full_events["detected_event_count"]
+        assert compact_events["exported_event_count"] == standard_events["exported_event_count"] == full_events["exported_event_count"]
 
-        # Bucket *counts* differ (K=30/14/7 changes temporal granularity) while
-        # the signal/entity/event set is identical - requirement 8.
-        compact_buckets = len(compact_ind["indicators"][0]["rows"])
-        standard_buckets = len(standard_ind["indicators"][0]["rows"])
-        full_buckets = len(full_ind["indicators"][0]["rows"])
-        assert compact_buckets == len(compact_ctx.bucket_plan.buckets)
-        assert standard_buckets == len(standard_ctx.bucket_plan.buckets)
-        assert full_buckets == len(full_ctx.bucket_plan.buckets)
-        assert compact_buckets <= standard_buckets <= full_buckets
-        assert compact_buckets < full_buckets
+        by_detail = {
+            DetailLevel.COMPACT: (compact_ind, compact_ctx),
+            DetailLevel.STANDARD: (standard_ind, standard_ctx),
+            DetailLevel.FULL: (full_ind, full_ctx),
+        }
+        for _detail_level, (payload, current_context) in by_detail.items():
+            by_instance = {indicator["instance_id"]: indicator for indicator in payload["indicators"]}
+            assert by_instance["rsi_14"]["temporal_class"] == "very_fast"
+            assert by_instance["ema_20"]["temporal_class"] == "medium"
+            assert len(by_instance["rsi_14"]["rows"]) == len(current_context.bucket_plan.buckets)
+            expected_ema_plan = build_indicator_bucket_plan_for_scope(
+                current_context.scope,
+                SignalTemporalClass.MEDIUM,
+            )
+            assert len(by_instance["ema_20"]["rows"]) == len(expected_ema_plan.buckets)
+            assert by_instance["ema_20"]["period_summary"]
+
+        compact_by_id = {item["instance_id"]: item for item in compact_ind["indicators"]}
+        full_by_id = {item["instance_id"]: item for item in full_ind["indicators"]}
+        for instance_id in compact_by_id:
+            assert compact_by_id[instance_id]["period_summary"] == full_by_id[instance_id]["period_summary"]
+            assert compact_by_id[instance_id]["columns"] == full_by_id[instance_id]["columns"]
 
 
 # =============================================================================
@@ -483,6 +529,22 @@ class TestExactBundleComposition:
         signals = technical_shared.FX_CURATED_SIGNALS
         assert len(signals) == 12
         assert {spec.instance_id for spec in signals} == FX_BUNDLE_INSTANCE_IDS
+
+    @pytest.mark.parametrize(
+        "specs",
+        (
+            technical_shared.ASSET_CURATED_SIGNALS,
+            technical_shared.FX_CURATED_SIGNALS,
+        ),
+    )
+    def test_every_curated_instance_resolves_plugin_owned_temporal_class(
+        self,
+        specs,
+    ):
+        for spec in specs:
+            plugin_class = SignalPluginRegistry.get_plugin(spec.signal_code)
+            assert plugin_class is not None
+            assert plugin_class.resolve_ai_export_temporal_class(spec.params) == ASSET_TEMPORAL_CLASS_BY_INSTANCE[spec.instance_id]
 
     def test_asset_signal_requests_match_curated_spec_1_to_1(self):
         requests = technical_shared.build_asset_signal_requests()
@@ -855,8 +917,20 @@ class TestMultiOutputOhlc:
         assert any(cell["kind"] == "range" for cell in macd_cells)
 
     def test_band_columns_keep_independent_extrema_dates(self):
-        start = date(2026, 1, 1)
-        end = date(2026, 1, 3)
+        scope = _asset_scope(
+            period_start=date(2025, 1, 1),
+            period_end=date(2026, 1, 3),
+            detail_level=DetailLevel.FULL,
+        )
+        context = _make_context(scope)
+        indicator_plan = build_indicator_bucket_plan_for_scope(
+            scope,
+            SignalTemporalClass.MEDIUM_FAST,
+        )
+        bucket = next(bucket for bucket in indicator_plan.buckets if bucket.day_count >= 3)
+        start = bucket.start_date
+        middle = start + timedelta(days=1)
+        end = start + timedelta(days=2)
         plugin_class = SignalPluginRegistry.get_plugin("BOLLINGER")
         assert plugin_class is not None
         output = plugin_class.output_specs[0]
@@ -873,7 +947,7 @@ class TestMultiOutputOhlc:
             points=[
                 SignalBandPoint(date=start, lower=8, middle=10, upper=12),
                 SignalBandPoint(
-                    date=start + timedelta(days=1),
+                    date=middle,
                     lower=4,
                     middle=11,
                     upper=15,
@@ -886,28 +960,22 @@ class TestMultiOutputOhlc:
             signal_code="BOLLINGER",
             status=SignalStatus.OK,
             series=(series,),
+            normalized_params={"period": 20, "multiplier": 2.0},
         )
-        plan = BucketPlan(
-            start=start,
-            end=end,
-            policy=BucketingPolicy(max_bucket_days=3),
-            buckets=(Bucket(index=0, start_date=start, end_date=end),),
-        )
-
-        row = technical_shared.build_indicator_table_payloads(
+        table = technical_shared.build_indicator_table_payloads(
             (result,),
-            plan,
+            context,
         )[
             0
-        ].model_dump(mode="json")[
-            "rows"
-        ][0]
+        ].model_dump(mode="json")
+        row = next(row for row in table["rows"] if row["start_date"] == bucket.start_date.isoformat() and row["end_date"] == bucket.end_date.isoformat())
 
-        assert row["cells"]["bands.lower"]["min"]["date"] == "2026-01-02"
-        assert row["cells"]["bands.middle"]["last"]["date"] == "2026-01-03"
-        assert row["cells"]["bands.upper"]["max"]["date"] == "2026-01-02"
+        assert row["cells"]["bands.lower"]["min"]["date"] == middle.isoformat()
+        assert row["cells"]["bands.middle"]["last"]["date"] == end.isoformat()
+        assert row["cells"]["bands.upper"]["max"]["date"] == middle.isoformat()
+        assert table["period_summary"]["bands.lower"]["min"]["date"] == middle.isoformat()
 
-    def test_drawdown_area_bucket_preserves_trough_date_and_last_value(self):
+    def test_unclassified_drawdown_is_not_silently_exported(self):
         start = date(2026, 1, 1)
         end = date(2026, 1, 3)
         signal_context = SignalExecutionContext(
@@ -932,26 +1000,23 @@ class TestMultiOutputOhlc:
             signal_code="RISK_DRAWDOWN",
             status=SignalStatus.OK,
             series=computation.series,
+            normalized_params={},
         )
-        plan = BucketPlan(
-            start=start,
-            end=end,
-            policy=BucketingPolicy(max_bucket_days=3),
-            buckets=(Bucket(index=0, start_date=start, end_date=end),),
+        context = _make_context(
+            _asset_scope(
+                period_start=start,
+                period_end=end,
+            )
         )
 
-        table = technical_shared.build_indicator_table_payloads((result,), plan)[0]
-        payload = table.model_dump(mode="json")
-        column = payload["columns"][0]
-        cell = payload["rows"][0]["cells"]["drawdown"]
-
-        assert column["kind"] == "area"
-        assert column["aggregation_profile"] == "min_with_range"
-        assert cell["kind"] == "range"
-        assert cell["min"]["date"] == "2026-01-02"
-        assert cell["min"]["value"] == pytest.approx(-20.0)
-        assert cell["last"]["date"] == "2026-01-03"
-        assert cell["last"]["value"] == pytest.approx(-10.0)
+        with pytest.raises(
+            ValueError,
+            match="requires exactly one matching rule",
+        ):
+            technical_shared.build_indicator_table_payloads(
+                (result,),
+                context,
+            )
 
     @pytest.mark.asyncio
     async def test_fx_rate_ohlc_uses_rate_key(self, monkeypatch):
@@ -977,27 +1042,185 @@ class TestMultiOutputOhlc:
 
 
 # =============================================================================
-# 4. Event preservation / no caps (requirement 4)
+# 4. Event selection
 # =============================================================================
 
 
-class TestEventPreservationNoCaps:
+class TestEventSelection:
+    @staticmethod
+    def _events(
+        *,
+        total: int,
+        recent: int,
+        snapshot: date,
+        entity_id: str = "asset:1",
+        annotation_key: str = "test_cross",
+    ) -> tuple[DiscreteEvent, ...]:
+        events = []
+        for index in range(total):
+            if index < recent:
+                event_date = snapshot - timedelta(days=index % 31)
+            else:
+                event_date = snapshot - timedelta(days=31 + index - recent)
+            events.append(
+                DiscreteEvent(
+                    date=event_date,
+                    dedup_key=(entity_id, annotation_key, index),
+                    payload={
+                        "entity_id": entity_id,
+                        "key": annotation_key,
+                        "annotation_type": "line_crossover",
+                        "signal_code": "EMA",
+                        "semantic_description": "Test event.",
+                        "direction": "up" if index % 2 == 0 else "down",
+                        "values": {"difference": float(index + 1)},
+                    },
+                )
+            )
+        return tuple(events)
+
+    @pytest.mark.parametrize(
+        ("total", "recent", "expected"),
+        (
+            (8, 3, 8),
+            (30, 4, 20),
+            (50, 12, 20),
+            (50, 25, 25),
+            (200, 40, 40),
+            (20, 0, 20),
+            (0, 0, 0),
+        ),
+    )
+    def test_event_selection_examples(
+        self,
+        total: int,
+        recent: int,
+        expected: int,
+    ):
+        snapshot = date(2026, 7, 30)
+
+        selection = technical_shared.select_technical_events(
+            self._events(
+                total=total,
+                recent=recent,
+                snapshot=snapshot,
+            ),
+            snapshot_as_of=snapshot,
+        )
+
+        assert len(selection.events) == expected
+        if total == 0:
+            assert selection.summaries == ()
+        else:
+            summary = selection.summaries[0]
+            assert summary.detected_count == total
+            assert summary.recent_30d_count == recent
+            assert summary.exported_count == expected
+            assert summary.selection_applied == (expected < total)
+        assert [event.date for event in selection.events] == sorted(event.date for event in selection.events)
+
+    def test_event_on_30_day_boundary_is_recent(self):
+        snapshot = date(2026, 7, 30)
+        events = (
+            *self._events(total=19, recent=19, snapshot=snapshot),
+            DiscreteEvent(
+                date=snapshot - timedelta(days=30),
+                dedup_key=("asset:1", "test_cross", "boundary"),
+                payload={
+                    "entity_id": "asset:1",
+                    "key": "test_cross",
+                    "annotation_type": "threshold_crossing",
+                    "signal_code": "RSI",
+                    "semantic_description": "Boundary event.",
+                    "direction": "up",
+                    "values": {"difference": 1.0},
+                },
+            ),
+            DiscreteEvent(
+                date=snapshot - timedelta(days=31),
+                dedup_key=("asset:1", "test_cross", "older"),
+                payload={
+                    "entity_id": "asset:1",
+                    "key": "test_cross",
+                    "annotation_type": "threshold_crossing",
+                    "signal_code": "RSI",
+                    "semantic_description": "Older event.",
+                    "direction": "down",
+                    "values": {"difference": -1.0},
+                },
+            ),
+        )
+
+        selection = technical_shared.select_technical_events(
+            events,
+            snapshot_as_of=snapshot,
+        )
+
+        summary = selection.summaries[0]
+        assert summary.detected_count == 21
+        assert summary.recent_30d_count == 20
+        assert summary.exported_count == 20
+        assert snapshot - timedelta(days=30) in {event.date for event in selection.events}
+        assert snapshot - timedelta(days=31) not in {event.date for event in selection.events}
+
+    def test_event_selection_is_independent_per_entity_and_annotation(self):
+        snapshot = date(2026, 7, 30)
+        events = (
+            *self._events(
+                total=30,
+                recent=4,
+                snapshot=snapshot,
+                entity_id="asset:1",
+                annotation_key="same_key",
+            ),
+            *self._events(
+                total=8,
+                recent=3,
+                snapshot=snapshot,
+                entity_id="asset:2",
+                annotation_key="same_key",
+            ),
+            *self._events(
+                total=50,
+                recent=25,
+                snapshot=snapshot,
+                entity_id="asset:1",
+                annotation_key="other_key",
+            ),
+        )
+
+        selection = technical_shared.select_technical_events(
+            events,
+            snapshot_as_of=snapshot,
+        )
+
+        assert {(summary.entity_id, summary.annotation_key): summary.exported_count for summary in selection.summaries} == {
+            ("asset:1", "other_key"): 25,
+            ("asset:1", "same_key"): 20,
+            ("asset:2", "same_key"): 8,
+        }
+
     @pytest.mark.asyncio
-    async def test_all_annotation_events_preserved_no_legacy_caps(self, monkeypatch):
-        # A long, high-oscillation period generates many more than 10/40/120
-        # crossovers across the curated bundle - the legacy caps this
-        # requirement forbids.
+    async def test_detected_and_exported_events_reconcile(self, monkeypatch):
         _patch_get_prices_bulk(monkeypatch)
         scope = _asset_scope(period_start=date(2025, 1, 1), period_end=date(2026, 6, 30), detail_level=DetailLevel.FULL)
         context = _make_context(scope)
         payload = _envelope_payload(await context.resolve("asset.states_events", required=True))
 
         total_from_buckets = sum(bucket["event_count"] for bucket in payload["buckets"])
-        assert total_from_buckets == payload["total_event_count"]
-        assert payload["total_event_count"] > 120
-
-        # Every bucket's event list matches its own event_count exactly (no
-        # truncation within a bucket either).
+        assert total_from_buckets == payload["exported_event_count"]
+        assert payload["detected_event_count"] >= payload["exported_event_count"]
+        assert sum(summary["detected_count"] for summary in payload["selection_summaries"]) == payload["detected_event_count"]
+        assert sum(summary["exported_count"] for summary in payload["selection_summaries"]) == payload["exported_event_count"]
+        assert any(summary["selection_applied"] for summary in payload["selection_summaries"])
+        for summary in payload["selection_summaries"]:
+            assert summary["exported_count"] == min(
+                summary["detected_count"],
+                max(
+                    technical_shared.EVENT_SELECTION_MINIMUM_LATEST,
+                    summary["recent_30d_count"],
+                ),
+            )
         for bucket in payload["buckets"]:
             assert len(bucket["events"]) == bucket["event_count"]
 
@@ -1029,7 +1252,9 @@ class TestEventPreservationNoCaps:
         context = _make_context(scope)
         payload = _envelope_payload(await context.resolve("asset.states_events", required=True))
 
-        assert payload["total_event_count"] == 0
+        assert payload["detected_event_count"] == 0
+        assert payload["exported_event_count"] == 0
+        assert payload["selection_summaries"] == []
         assert all(bucket["event_count"] == 0 for bucket in payload["buckets"])
         assert all(bucket["events"] == () or bucket["events"] == [] for bucket in payload["buckets"])
 
@@ -1172,6 +1397,19 @@ class TestFxNoVolume:
         assert "EMA" in signal_codes
         assert "MACD" in signal_codes
         assert "BOLLINGER" in signal_codes
+
+    @pytest.mark.asyncio
+    async def test_fx_event_selection_uses_canonical_pair_entity(self, monkeypatch):
+        _patch_convert_bulk(monkeypatch)
+        scope = _fx_scope()
+        context = _make_context(scope)
+
+        payload = _envelope_payload(await context.resolve("fx.states_events", required=True))
+
+        assert payload["detected_event_count"] > 0
+        assert payload["exported_event_count"] <= payload["detected_event_count"]
+        assert {summary["entity_id"] for summary in payload["selection_summaries"]} == {"fx:USD/EUR"}
+        assert all(event["entity_id"] == "fx:USD/EUR" for bucket in payload["buckets"] for event in bucket["events"])
 
     @pytest.mark.asyncio
     async def test_fx_returns_volatility_computed_from_rate_series(self, monkeypatch):
@@ -1371,6 +1609,14 @@ class TestPortfolioUniverseAndBreadth:
             for event in flat_events
         }
         assert len(flat_events) == len(identities)
+        summary_keys = {(summary["entity_id"], summary["annotation_key"]) for summary in events["selection_summaries"]}
+        assert len(summary_keys) == len(events["selection_summaries"])
+        assert {entity_id for entity_id, _key in summary_keys} <= {
+            "asset:1",
+            "asset:2",
+        }
+        assert sum(summary["detected_count"] for summary in events["selection_summaries"]) == events["detected_event_count"]
+        assert sum(summary["exported_count"] for summary in events["selection_summaries"]) == events["exported_event_count"]
 
     @pytest.mark.asyncio
     async def test_empty_portfolio_yields_valid_empty_technical_payload(self, monkeypatch):
@@ -1391,7 +1637,8 @@ class TestPortfolioUniverseAndBreadth:
         assert breadth_payload["eligible_asset_count"] == 0
         assert breadth_payload["covered_asset_count"] == 0
         assert breadth_payload["states"] == []
-        assert events_payload["total_event_count"] == 0
+        assert events_payload["detected_event_count"] == 0
+        assert events_payload["exported_event_count"] == 0
 
     @pytest.mark.asyncio
     async def test_fully_sold_positions_excluded_from_eligible_universe(self, monkeypatch):

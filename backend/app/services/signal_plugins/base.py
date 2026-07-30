@@ -14,6 +14,7 @@ from pydantic_core import to_jsonable_python
 from backend.app.schemas.signals import (
     SignalAiDescription,
     SignalAiEventDescription,
+    SignalAiExportTemporalRule,
     SignalAiOutputDescription,
     SignalAvailabilityReason,
     SignalCatalogDefinition,
@@ -25,11 +26,22 @@ from backend.app.schemas.signals import (
     SignalInputRequirements,
     SignalOutputSpec,
     SignalPricePoint,
+    SignalTemporalClass,
     SignalWarmupRequirement,
 )
 
 _SIGNAL_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _SEMANTIC_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
+
+
+def _json_exact_match(actual: object, expected: object) -> bool:
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(actual, dict) and isinstance(expected, dict):
+        return actual.keys() == expected.keys() and all(_json_exact_match(actual[key], expected[key]) for key in actual)
+    if isinstance(actual, list) and isinstance(expected, list):
+        return len(actual) == len(expected) and all(_json_exact_match(actual_item, expected_item) for actual_item, expected_item in zip(actual, expected, strict=True))
+    return actual == expected
 
 
 class SignalUnavailableError(ValueError):
@@ -64,6 +76,7 @@ class SignalPlugin(ABC):
     output_specs: ClassVar[tuple[SignalOutputSpec, ...]]
     compatible_domains: ClassVar[tuple[SignalDomain, ...]]
     annotation_capabilities: ClassVar[tuple[str, ...]] = ()
+    ai_export_temporal_rules: ClassVar[tuple[SignalAiExportTemporalRule, ...]] = ()
 
     @classmethod
     def validate_params(cls, params: Mapping[str, object] | BaseModel) -> BaseModel:
@@ -101,7 +114,20 @@ class SignalPlugin(ABC):
             annotation_capabilities=list(cls.annotation_capabilities),
             ai_description=cls.describe_for_ai(),
             ai_events=list(cls.describe_events_for_ai()),
+            ai_export_temporal_rules=[rule.model_copy(deep=True) for rule in cls.ai_export_temporal_rules],
         )
+
+    @classmethod
+    def resolve_ai_export_temporal_class(
+        cls,
+        params: Mapping[str, object] | BaseModel,
+    ) -> SignalTemporalClass:
+        """Resolve one plugin-owned temporal class from normalized parameters."""
+        normalized_params = cls.validate_params(params).model_dump(mode="json", by_alias=True)
+        matches = [rule for rule in cls.ai_export_temporal_rules if all(key in normalized_params and _json_exact_match(normalized_params[key], value) for key, value in rule.parameter_match.items())]
+        if len(matches) != 1:
+            raise ValueError(f"{cls.signal_code} AI Export temporal resolution requires exactly one matching rule; " f"found {len(matches)} for normalized params {normalized_params}")
+        return matches[0].temporal_class
 
     @classmethod
     def describe_for_ai(cls) -> SignalAiDescription:
@@ -295,6 +321,25 @@ class SignalPlugin(ABC):
             raise TypeError("params_model must be a Pydantic BaseModel subclass")
         if cls.params_model.model_config.get("extra") != "forbid":
             raise ValueError("signal params_model must use ConfigDict(extra='forbid')")
+        if not isinstance(cls.ai_export_temporal_rules, tuple):
+            raise TypeError("ai_export_temporal_rules must be a tuple")
+        if not all(isinstance(rule, SignalAiExportTemporalRule) for rule in cls.ai_export_temporal_rules):
+            raise TypeError("ai_export_temporal_rules must contain SignalAiExportTemporalRule instances")
+        normalized_param_keys = {field.serialization_alias or field.alias or name for name, field in cls.params_model.model_fields.items()}
+        for index, rule in enumerate(cls.ai_export_temporal_rules):
+            unknown_keys = set(rule.parameter_match) - normalized_param_keys
+            if unknown_keys:
+                raise ValueError(f"ai_export_temporal_rules[{index}] references unknown normalized params: " + ", ".join(sorted(unknown_keys)))
+        for left_index, left_rule in enumerate(cls.ai_export_temporal_rules):
+            for right_index, right_rule in enumerate(
+                cls.ai_export_temporal_rules[left_index + 1 :],
+                start=left_index + 1,
+            ):
+                if left_rule == right_rule:
+                    raise ValueError("ai_export_temporal_rules must not contain duplicate rules")
+                shared_keys = set(left_rule.parameter_match) & set(right_rule.parameter_match)
+                if all(_json_exact_match(left_rule.parameter_match[key], right_rule.parameter_match[key]) for key in shared_keys):
+                    raise ValueError("ai_export_temporal_rules contains ambiguous rules " f"at indexes {left_index} and {right_index}")
         comparison_asset_param = cls.input_requirements.comparison_asset_param
         if comparison_asset_param is not None and comparison_asset_param not in cls.params_model.model_fields:
             raise ValueError("comparison_asset_param must reference a declared plugin parameter")

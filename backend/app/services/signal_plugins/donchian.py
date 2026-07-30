@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
@@ -25,6 +26,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalViewTransform,
     SignalWarmupRequirement,
@@ -65,6 +67,7 @@ class DonchianSignalPlugin(SignalPlugin):
     icon = "↔️"
     docs_path = "financial-theory/technical-analysis/indicators/donchian-channels/"
     params_model = DonchianSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM_FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,

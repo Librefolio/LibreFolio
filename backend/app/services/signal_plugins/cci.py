@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -27,6 +28,7 @@ from backend.app.schemas.signals import (
     SignalReferenceLevel,
     SignalRegionLineStyle,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
@@ -126,6 +128,7 @@ class CciSignalPlugin(SignalPlugin):
     icon = "🧭"
     docs_path = "financial-theory/technical-analysis/indicators/cci/"
     params_model = CciSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,

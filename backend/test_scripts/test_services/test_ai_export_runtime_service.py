@@ -18,6 +18,7 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportFxSnapshotRequest,
     AiExportPortfolioSnapshotRequest,
 )
+from backend.app.schemas.signals import SignalTemporalClass
 from backend.app.services.ai_export.analyses.spec import AnalysisRegistry, AnalysisSpec
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
 from backend.app.services.ai_export.components.registry import ComponentRegistry
@@ -28,6 +29,9 @@ from backend.app.services.ai_export.components.types import (
     PeriodBehavior,
 )
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry, DatasetSpec
+from backend.app.services.ai_export.dependencies import (
+    build_indicator_bucket_plan_for_scope,
+)
 from backend.app.services.ai_export.runtime_service import (
     AiExportBrokerAccessDeniedError,
     AiExportEntityNotFoundError,
@@ -240,6 +244,8 @@ async def test_dataset_selection_builds_manifest_sections_and_stable_stats():
     assert response.selection.kind == "dataset"
     assert response.dataset_manifest[0].role == "selected"
     assert response.sections[0].payload == {"value": 7}
+    assert response.technical_sampling is None
+    assert response.event_selection is None
     serialized = json.dumps(
         response.model_dump(mode="json"),
         sort_keys=True,
@@ -248,6 +254,73 @@ async def test_dataset_selection_builds_manifest_sections_and_stable_stats():
     )
     assert response.stats.serialized_characters == len(serialized)
     assert response.stats.estimated_tokens == (len(serialized) + 3) // 4
+
+
+@pytest.mark.asyncio
+async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
+    session = _session_with_accessible_brokers([])
+
+    def _build(context, dependencies):  # noqa: ARG001
+        context.register_price_sampling()
+        indicator_plan = build_indicator_bucket_plan_for_scope(
+            context.scope,
+            SignalTemporalClass.MEDIUM,
+        )
+        for _ in range(2):
+            context.register_indicator_sampling(
+                signal_instance_id="ema_20",
+                signal_code="EMA",
+                temporal_class=SignalTemporalClass.MEDIUM,
+                bucket_plan=indicator_plan,
+            )
+        context.register_event_selection()
+        return _ValuePayload(value=1)
+
+    component = ComponentSpec(
+        component_id="portfolio.technical_prices",
+        version=1,
+        domains=frozenset({Domain.PORTFOLIO}),
+        output_model=_ValuePayload,
+        builder=_build,
+        period_behavior=PeriodBehavior.WINDOWED,
+    )
+    dataset = _dataset(
+        "portfolio.technical",
+        Domain.PORTFOLIO,
+        ("portfolio.technical_prices",),
+    )
+    service = _service(session, (component,), (dataset,))
+    request = _portfolio_dataset_request().model_copy(
+        update={
+            "selection": AiExportDatasetSelection(
+                kind="dataset",
+                id="portfolio.technical",
+                version=1,
+            )
+        }
+    )
+
+    response = await service.build_snapshot(41, request)
+
+    assert response.meta.schema_version == 1
+    assert response.meta.catalog_version == 1
+    assert response.technical_sampling is not None
+    assert response.technical_sampling.price_policy is not None
+    assert response.technical_sampling.price_policy.detail_level == "standard"
+    assert response.technical_sampling.price_policy.k == 14
+    assert len(response.technical_sampling.indicator_policies) == 1
+    indicator = response.technical_sampling.indicator_policies[0]
+    assert indicator.signal_instance_id == "ema_20"
+    assert indicator.temporal_class == SignalTemporalClass.MEDIUM
+    assert indicator.m == 15
+    assert indicator.k == 20
+    assert response.event_selection is not None
+    assert response.event_selection.minimum_latest_events_per_annotation == 20
+    assert response.event_selection.complete_recent_window_days == 30
+    assert response.event_selection.grouped_by == (
+        "entity_id",
+        "annotation_key",
+    )
 
 
 @pytest.mark.asyncio

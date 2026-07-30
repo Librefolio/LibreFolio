@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 
+from backend.app.schemas.signals import SignalTemporalClass
+
 #: Exponent P in the rational decay function.
 EXPONENT = 2
 
@@ -42,6 +44,39 @@ _MAX_BUCKET_DAYS_BY_DETAIL_LEVEL: dict[BucketDetailLevel, int] = {
     BucketDetailLevel.STANDARD: 14,
     BucketDetailLevel.FULL: 7,
 }
+
+_INDICATOR_POLICY_PARAMETERS: dict[
+    BucketDetailLevel,
+    dict[SignalTemporalClass, tuple[int, int, int]],
+] = {
+    BucketDetailLevel.COMPACT: {
+        SignalTemporalClass.VERY_FAST: (2, 30, 30),
+        SignalTemporalClass.FAST: (2, 25, 35),
+        SignalTemporalClass.MEDIUM_FAST: (2, 20, 42),
+        SignalTemporalClass.MEDIUM: (2, 10, 42),
+        SignalTemporalClass.SLOW: (2, 5, 49),
+        SignalTemporalClass.VERY_SLOW: (2, 5, 84),
+    },
+    BucketDetailLevel.STANDARD: {
+        SignalTemporalClass.VERY_FAST: (2, 30, 14),
+        SignalTemporalClass.FAST: (2, 21, 15),
+        SignalTemporalClass.MEDIUM_FAST: (2, 20, 17),
+        SignalTemporalClass.MEDIUM: (2, 15, 20),
+        SignalTemporalClass.SLOW: (2, 10, 22),
+        SignalTemporalClass.VERY_SLOW: (2, 5, 28),
+    },
+    BucketDetailLevel.FULL: {
+        SignalTemporalClass.VERY_FAST: (2, 30, 7),
+        SignalTemporalClass.FAST: (2, 28, 8),
+        SignalTemporalClass.MEDIUM_FAST: (2, 23, 9),
+        SignalTemporalClass.MEDIUM: (2, 16, 10),
+        SignalTemporalClass.SLOW: (2, 10, 11),
+        SignalTemporalClass.VERY_SLOW: (2, 9, 14),
+    },
+}
+
+assert set(_INDICATOR_POLICY_PARAMETERS) == set(BucketDetailLevel)
+assert all(set(parameters) == set(SignalTemporalClass) for parameters in _INDICATOR_POLICY_PARAMETERS.values())
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +107,24 @@ class BucketingPolicy:
         if not isinstance(detail_level, BucketDetailLevel):
             raise TypeError("detail_level must be a BucketDetailLevel")
         return cls(max_bucket_days=_MAX_BUCKET_DAYS_BY_DETAIL_LEVEL[detail_level])
+
+    @classmethod
+    def for_indicator(
+        cls,
+        detail_level: BucketDetailLevel,
+        temporal_class: SignalTemporalClass,
+    ) -> BucketingPolicy:
+        """Resolve the prescribed indicator policy for one detail/class pair."""
+        if not isinstance(detail_level, BucketDetailLevel):
+            raise TypeError("detail_level must be a BucketDetailLevel")
+        if not isinstance(temporal_class, SignalTemporalClass):
+            raise TypeError("temporal_class must be a SignalTemporalClass")
+        exponent, half_life_offset, max_bucket_days = _INDICATOR_POLICY_PARAMETERS[detail_level][temporal_class]
+        return cls(
+            max_bucket_days=max_bucket_days,
+            exponent=exponent,
+            half_life_offset=half_life_offset,
+        )
 
     def raw_width(self, offset_days: int) -> Decimal:
         """Return f(x) as an exact ``Decimal`` (before rounding/flooring to 1)."""

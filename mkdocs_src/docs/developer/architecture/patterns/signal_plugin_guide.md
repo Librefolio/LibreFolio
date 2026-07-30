@@ -32,10 +32,12 @@ flowchart TB
         EXPORT_UI["AI Export frontend"]
         SNAPSHOT_API["POST /api/v1/ai-export/snapshot"]
         SNAPSHOT_SERVICE["AiExportSnapshotService"]
-        ASSEMBLER["Portfolio / Broker / Asset / FX assembler"]
+        COMPOSER["Dataset / analysis Composer"]
+        COMPONENT["Granular technical component"]
         EXPORT_UI -->|"typed snapshot request"| SNAPSHOT_API
         SNAPSHOT_API --> SNAPSHOT_SERVICE
-        SNAPSHOT_SERVICE --> ASSEMBLER
+        SNAPSHOT_SERVICE --> COMPOSER
+        COMPOSER --> COMPONENT
     end
 
     subgraph PLATFORM["Signal platform"]
@@ -52,7 +54,7 @@ flowchart TB
     end
 
     CHART_ADAPTER -->|"neutral chart price/event arrays"| SERVICE
-    ASSEMBLER -->|"neutral snapshot price/event arrays"| SERVICE
+    COMPONENT -->|"neutral component price/event arrays"| SERVICE
     CONTRACTS -->|"shared types"| SERVICE
     SERVICE -->|"resolve plugin"| REGISTRY
     SERVICE -->|"optional semantic events"| ANNOTATIONS
@@ -69,7 +71,7 @@ flowchart TB
 | `signal_service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
 | `signal_annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
-| AI Export snapshot service/assemblers | Resolve an authenticated snapshot profile, load authoritative facts, and call the same `SignalService` for curated technical bundles. |
+| AI Export runtime/components | Compose selected datasets, share request-scoped resources, and call the same `SignalService` for curated technical components. |
 
 !!! important "Plugins do not load data"
 
@@ -78,14 +80,15 @@ flowchart TB
     returns canonical output.
 
 The AI Export browser code never calculates indicators and never sends chart-computed
-technical values. It calls `/ai-export/snapshot`; the backend snapshot assembler owns
-data loading and invokes the shared signal platform.
+technical values. It calls `/ai-export/snapshot`; backend component builders own data
+loading and invoke the shared signal platform. Dataset and analysis composition does
+not change plugin math.
 
 ---
 
 ## 🔄 Request Lifecycle
 
-Chart requests and AI Export snapshots have separate adapters. They converge only at
+Chart requests and AI Export components have separate adapters. They converge only at
 `SignalService`.
 
 ### 📈 Chart Asset/FX Lifecycle
@@ -126,7 +129,7 @@ sequenceDiagram
     A-->>C: One canonical bulk response
 ```
 
-### 🧠 AI Export Snapshot Lifecycle
+### 🧠 AI Export Component Lifecycle
 
 ```mermaid
 sequenceDiagram
@@ -134,29 +137,32 @@ sequenceDiagram
     participant F as AI Export frontend
     participant E as /ai-export/snapshot
     participant X as AiExportSnapshotService
-    participant A as Domain snapshot assembler
+    participant C as Composer
+    participant B as Technical component builder
     participant D as Portfolio / Lots / Asset / FX sources
     participant S as SignalService
     participant R as SignalPluginRegistry
     participant P as SignalPlugin
 
-    F->>E: Typed domain/task/detail request
+    F->>E: Typed dataset/analysis/detail request
     E->>X: Authenticated build_snapshot()
-    X->>X: Resolve exact profile and broker scope
-    X->>A: assemble(prepared, session)
-    A->>D: Load authoritative financial/domain facts
-    opt Profile has a technical bundle
-        A->>S: prepare_plan(curated requests, context)
+    X->>X: Resolve v1 selection and broker scope
+    X->>C: Compose required and optional datasets
+    C->>B: Resolve granular components
+    B->>D: Load memoized authoritative resources
+    opt Selected datasets include technical components
+        B->>S: prepare_plan(curated requests, context)
         S->>R: Resolve and validate plugin definitions
         R-->>S: Plugin classes
-        S-->>A: Plan and required warm-up
-        A->>D: Bulk-load extended neutral inputs
-        A->>S: execute(plan, price_points, event_points)
+        S-->>B: Plan and required warm-up
+        B->>D: Bulk-load extended neutral inputs
+        B->>S: execute(plan, price_points, event_points)
         S->>P: Compute canonical outputs
         P-->>S: SignalComputation
-        S-->>A: Signals, states, events, coverage
+        S-->>B: Signals, states, events, coverage
     end
-    A-->>X: Typed snapshot response
+    B-->>C: Validated component envelope
+    C-->>X: Ordered deduplicated sections
     X-->>E: Versioned discriminated response
     E-->>F: Snapshot facts for local safe rendering
 ```
@@ -225,6 +231,7 @@ Every concrete plugin must declare:
 | `output_specs` | Declared line/bar/band components, descriptions, styles, units, axes, levels, and regions. |
 | `compatible_domains` | `ASSET`, `FX`, or both. |
 | `annotation_capabilities` | Supported generic annotation primitives. |
+| `ai_export_temporal_rules` | Plugin-owned fixed or parameter-matched AI Export temporal classes. |
 | `warmup_requirement()` | Parameter-aware minimum and stabilization history. |
 | `compute()` | Numerical implementation returning `SignalComputation`. |
 
@@ -481,19 +488,73 @@ RSI, for example, declares that its main period affects `%K` and the derived `%D
 
 ---
 
+## ⏱️ AI Export Temporal Contract
+
+An indicator included in AI Export declares semantic speed through
+`ai_export_temporal_rules`. Plugin owns classification; central AI Export policy owns
+Compact/Standard/Full parameters, formula, and bucket construction.
+
+Use one fixed rule when all supported parameter sets represent one time horizon:
+
+```python
+ai_export_temporal_rules = (
+    SignalAiExportTemporalRule(
+        temporal_class=SignalTemporalClass.MEDIUM_FAST,
+    ),
+)
+```
+
+Use exact parameter rules when one plugin represents materially different horizons.
+Current EMA and SMA instances do this:
+
+```python
+ai_export_temporal_rules = (
+    SignalAiExportTemporalRule(
+        temporal_class=SignalTemporalClass.MEDIUM,
+        parameter_match={"period": 20},
+    ),
+    SignalAiExportTemporalRule(
+        temporal_class=SignalTemporalClass.SLOW,
+        parameter_match={"period": 50},
+    ),
+    SignalAiExportTemporalRule(
+        temporal_class=SignalTemporalClass.VERY_SLOW,
+        parameter_match={"period": 200},
+    ),
+)
+```
+
+`resolve_ai_export_temporal_class()` validates parameters, compares normalized JSON
+values exactly, and requires exactly one matching rule. Unknown or ambiguous matches
+raise; no official plugin uses a default or signal-code fallback.
+
+Temporal class changes exported numeric history density only. It does not change
+calculation input, warm-up, output validation, latest values, period summaries, states,
+or annotation detection. Multi-output indicators use one shared grid for every output.
+See [AI Export Technical Sampling](ai_export_sampling.md) for formula, matrix, mappings,
+event selection, and tests.
+
+---
+
 ## ✅ Adding a Plugin
 
 1. Create one Python file under `signal_plugins/`.
 2. Define a strict Pydantic parameter model.
 3. Declare required price fields/events and compatible domains.
 4. Declare every canonical output in `output_specs`.
-5. Implement parameter-aware `warmup_requirement()`.
-6. Implement and normalize `compute()`.
-7. Add all EN/IT/FR/ES UI keys.
-8. Add the English financial-theory page referenced by `docs_path`.
-9. Add focused numerical/parity tests.
-10. Update `EXPECTED_CODES` and related expectations in the full plugin matrix.
-11. Run the catalog, plugin, service, API, frontend, and documentation gates.
+5. If AI Export will curate the plugin, declare fixed or parameter-matched
+   `ai_export_temporal_rules`; never add a signal-code branch to AI Export.
+6. Implement parameter-aware `warmup_requirement()`.
+7. Implement and normalize `compute()`.
+8. Validate semantic input/output and provide AI descriptions and annotations.
+9. Add all EN/IT/FR/ES UI keys.
+10. Add the English financial-theory page referenced by `docs_path`.
+11. Add focused numerical/parity tests, temporal-rule resolution tests, and shared-grid
+    tests for multi-output indicators.
+12. Update `EXPECTED_CODES`, curated AI Export bundle expectations when applicable,
+    and the initial class mapping documentation.
+13. Verify the selected detail/class matrix row and sampling/event manifests.
+14. Run the catalog, plugin, service, API, frontend, and documentation gates.
 
 Useful commands:
 
@@ -519,6 +580,9 @@ Useful commands:
 - Declare every output key exactly once in `output_specs`.
 - Keep plugin construction argument-free and computation deterministic.
 - Do not duplicate technical calculations in the frontend.
+- Keep AI Export temporal classification in the plugin; keep sampling parameters and
+  formula in the central temporal policy.
+- Require exactly one temporal-rule match for every curated instance; no silent fallback.
 - Increment `implementation_version` when numerical behavior changes.
 
 ---
@@ -528,5 +592,7 @@ Useful commands:
 - [Registry Pattern Overview](registry_pattern.md)
 - [Asset Plugin Guide](asset_plugin_guide.md)
 - [FX Plugin Guide](fx_plugin_guide.md)
-- [AI Export Snapshot Architecture](ai_export_snapshot.md)
+- [AI Export Overview](ai_export_snapshot.md)
+- [AI Export Composition & Prompt](ai_export_composition.md)
+- [AI Export Technical Sampling](ai_export_sampling.md)
 - [Technical Analysis](../../../financial-theory/technical-analysis/index.md)
