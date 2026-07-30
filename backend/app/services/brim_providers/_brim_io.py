@@ -369,3 +369,46 @@ def model_bond_maturity(
         principal = ctv
         surplus = Decimal(0)
     return BondMaturityModel(nominal=nominal, principal_cash=principal, surplus_cash=surplus, par_price=par, source=source)
+
+
+# ---------------------------------------------------------------------------
+# Maturity / redemption detection (drives BRIMAssetNotice on extracted assets)
+# ---------------------------------------------------------------------------
+
+MATURITY_NOTICE_KIND = "maturity_suspected"
+"""``BRIMAssetNotice.kind`` used when a maturity/redemption movement is detected.
+
+Kept here (shared) so every Italian-broker plugin emits the *same* category key and the
+frontend can group and label these notices consistently."""
+
+_MATURITY_KEYWORDS = ("scadut", "scaden", "rimbors", "estinzion", "redemption", "matured", "maturity")
+"""Substrings (matched case-insensitively) that flag a redeemed / matured security.
+
+Grounded on the real Italian exports: ``TITOLI SCADUTI`` (-> ``scadut``) and
+``FONDI: RIMBORSO`` (-> ``rimbors``). The English terms are for robustness/future exports."""
+
+
+def looks_like_maturity(text: Optional[str]) -> bool:
+    """Heuristic: does this free-text (a causale / operazione / description) imply a redemption?"""
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(kw in lowered for kw in _MATURITY_KEYWORDS)
+
+
+def detect_maturity_hits(transactions: Sequence[Any]) -> Dict[int, List[int]]:
+    """Scan parsed transactions and group, per asset, the indexes whose description looks
+    like a maturity/redemption.
+
+    Returns ``{asset_id: [tx_index, ...]}`` (only assets with at least one hit). Decoupled
+    from the schema types on purpose (uses ``getattr``) so this IO module keeps no schema
+    imports. Callers turn each entry into a ``BRIMAssetNotice`` with a provider-localized reason.
+    """
+    hits: Dict[int, List[int]] = {}
+    for idx, tx in enumerate(transactions):
+        asset_id = getattr(tx, "asset_id", None)
+        if asset_id is None:
+            continue
+        if looks_like_maturity(getattr(tx, "description", None)):
+            hits.setdefault(asset_id, []).append(idx)
+    return hits

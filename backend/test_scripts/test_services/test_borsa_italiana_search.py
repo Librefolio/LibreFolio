@@ -61,4 +61,6 @@ async def test_borsa_italiana_search_retries_fund_abbreviations(monkeypatch):
     assert all(item["provider_params"]["codice_fondo"] == "2FADB603927" for item in results)
     # the fund page is fetched only once per code (in-search cache), not per language
     assert fund_fetches == ["2FADB603927"]
-    assert any(query.upper() == "EURIZON NEXT 2.0 STRATEGIA OBBLIGAZ P" and language == "en" for query, language in calls)
+    # A single on-site fetch (Italian) is performed; the abbreviated title variant must still be tried.
+    assert all(language == "it" for _query, language in calls)
+    assert any(query.upper() == "EURIZON NEXT 2.0 STRATEGIA OBBLIGAZ P" for query, _language in calls)

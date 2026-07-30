@@ -651,45 +651,34 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """
         self._check_availability()
         try:
-            # Fetch results in both languages in parallel-ish (sync lib, sequential)
-            results_by_lang: dict[str, list] = {}
-            for lingua in self.SUPPORTED_LANGUAGES:
-                results_by_lang[lingua] = []
-                seen_isins: set[str] = set()
-                for query_variant in _search_query_variants(query):
-                    for result in cerca(query_variant, lingua=lingua, sessione=_get_session()):
-                        if result.isin in seen_isins:
-                            continue
-                        seen_isins.add(result.isin)
-                        results_by_lang[lingua].append(result)
+            # A single on-site search is enough: borsa's ``cerca`` returns the same instruments
+            # (isin, name, type) regardless of the ``lingua`` URL option — that option only selects
+            # the localized instrument *page* consulted later (pricing/metadata URL), not the search
+            # result set. So we fetch ONCE and emit two rows per instrument (IT + EN) that differ
+            # solely by the flag emoji and the downstream ``provider_params.language``. This halves
+            # the search network cost versus fetching each language separately.
+            preferred = ("it", "en")
+            emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
+            fetch_language = emit_language_order[0] if emit_language_order else "it"
+
+            seen_isins: set[str] = set()
+            results: list = []
+            for query_variant in _search_query_variants(query):
+                for result in cerca(query_variant, lingua=fetch_language, sessione=_get_session()):
+                    if result.isin in seen_isins:
+                        continue
+                    seen_isins.add(result.isin)
+                    results.append(result)
 
             items = []
             fund_cache: dict[str, DatiFondo | None] = {}  # code → fund data, fetched once per search
 
-            # Group each instrument's language variants together and emit Italian before
-            # English within every group. The cerca-level ``isin`` is the grouping key
-            # (internal code for funds, real ISIN otherwise) and stays stable across
-            # languages, so the two rows of a fund never interleave with a sibling fund.
-            ordered_keys: list[str] = []
-            by_key_lang: dict[str, dict[str, object]] = {}
-            for lingua in self.SUPPORTED_LANGUAGES:
-                for r in results_by_lang[lingua]:
-                    if r.isin not in by_key_lang:
-                        by_key_lang[r.isin] = {}
-                        ordered_keys.append(r.isin)
-                    by_key_lang[r.isin].setdefault(lingua, r)
-
-            # Italian first, then any other supported language (English today).
-            preferred = ("it", "en")
-            emit_language_order = tuple(lg for lg in preferred if lg in self.SUPPORTED_LANGUAGES) + tuple(lg for lg in self.SUPPORTED_LANGUAGES if lg not in preferred)
-
-            for key in ordered_keys:
+            # Emit each instrument's language variants together (Italian before English within every
+            # group), so the two rows of an instrument never interleave with a sibling.
+            for r in results:
+                asset_type = _map_asset_type(r.tipo)
                 for lingua in emit_language_order:
-                    r = by_key_lang[key].get(lingua)
-                    if r is None:
-                        continue
                     flag = self.LANGUAGE_FLAGS[lingua]
-                    asset_type = _map_asset_type(r.tipo)
 
                     if asset_type == AssetType.FUND:
                         # For funds the search API returns the internal code in `isin`,

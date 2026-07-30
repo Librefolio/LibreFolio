@@ -78,6 +78,10 @@
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     /** Monotonic search ID to ignore stale responses */
     let searchId = 0;
+    /** Last initialQuery auto-searched, so the auto-trigger fires once per query (even on 0 results) */
+    let lastAutoSearchedQuery: string | null = null;
+    /** Controller of the in-flight streamed request, aborted when a newer search starts */
+    let activeController: AbortController | null = null;
 
     // =========================================================================
     // Derived
@@ -104,9 +108,14 @@
     });
 
     // If initialQuery was provided, auto-trigger search after providers load.
+    // Guard on the query value (not on results/loading): a delisted asset returns 0
+    // results, and depending on results.length would re-fire this effect forever.
     $effect(() => {
-        if (providersLoaded && initialQuery.trim().length > 0 && results.length === 0 && !loading) {
-            executeSearch(initialQuery);
+        if (providersLoaded && initialQuery.trim().length > 0) {
+            if (untrack(() => lastAutoSearchedQuery) !== initialQuery) {
+                lastAutoSearchedQuery = initialQuery;
+                executeSearch(initialQuery);
+            }
         }
     });
 
@@ -153,6 +162,10 @@
         // Increment search ID and capture it for this request
         const mySearchId = ++searchId;
 
+        // Abort any previous in-flight streamed request so rapid/identical searches don't
+        // pile up (a stale stream would otherwise keep running until the server closes it).
+        activeController?.abort();
+
         loading = true;
         error = null;
         showResults = true;
@@ -177,6 +190,7 @@
             .join('');
 
         const controller = new AbortController();
+        activeController = controller;
         let timedOut = false;
         const timeoutId = setTimeout(() => {
             timedOut = true;
@@ -293,6 +307,7 @@
             }
         } finally {
             clearTimeout(timeoutId);
+            if (activeController === controller) activeController = null;
         }
     }
 
@@ -416,7 +431,7 @@
                     </div>
                 {/if}
                 {#each results as result, i}
-                    <button type="button" class="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0" onclick={() => selectResult(result)}>
+                    <button type="button" class="w-full flex items-start sm:items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0" onclick={() => selectResult(result)}>
                         <!-- Icon placeholder -->
                         <AssetIcon assetType={result.asset_type} iconUrl={null} altText={result.display_name} size="sm" />
 
@@ -425,7 +440,7 @@
                             <div class="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 min-w-0">
                                 <span class="truncate">{result.display_name}</span>
                             </div>
-                            <div class="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                            <div class="flex flex-nowrap items-center gap-1 text-xs text-gray-500 dark:text-gray-400 overflow-x-auto [&>*]:shrink-0">
                                 {#if webRanks[i] > 0}
                                     <span class="font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.search.rankHint')}>
                                         <span class="sm:hidden">DDG#{webRanks[i]}</span>

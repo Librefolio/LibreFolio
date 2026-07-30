@@ -161,6 +161,32 @@ class BRIMFileInfo(BaseModel):
 # =============================================================================
 
 
+class BRIMAssetNotice(BaseModel):
+    """
+    A per-asset advisory notice raised by a plugin while parsing a broker report.
+
+    Plugins attach notices to a ``BRIMExtractedAssetInfo`` when the transactions for that
+    asset suggest something the user should know before creating/mapping it — e.g. a
+    redemption/maturity movement implying the security is delisted and won't be found by the
+    online search. The frontend groups notices by ``kind`` (category label from app i18n) and
+    lists each ``reason`` bullet (authored by the plugin in the report's language). Notices are
+    advisory only: they never change import behaviour (the user decides, e.g. via the active toggle).
+
+    Attributes:
+        kind: Category key driving banner grouping/label (e.g. "maturity_suspected"). Extensible —
+            the frontend falls back to a generic label for unknown kinds.
+        reason: Human-readable, plugin-localized motivation shown as a bullet under the banner.
+        transaction_indexes: Positions (in the parse output's transactions list) of the transactions
+            that triggered this notice. Currently unused by the UI; reserved for a future preview.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(..., description="Notice category key driving banner grouping (e.g. 'maturity_suspected')")
+    reason: str = Field(..., description="Plugin-localized motivation shown as a bullet under the banner")
+    transaction_indexes: List[int] = Field(default_factory=list, description="Indexes of triggering transactions in the parse output (reserved for future preview)")
+
+
 class BRIMExtractedAssetInfo(BaseModel):
     """
     Extracted asset information from a broker report row.
@@ -172,6 +198,7 @@ class BRIMExtractedAssetInfo(BaseModel):
         extracted_symbol: Ticker/symbol extracted from report (e.g., "AAPL", "VWCE")
         extracted_isin: ISIN code extracted from report (e.g., "US0378331005")
         extracted_name: Asset name/description extracted from report
+        notices: Advisory notices for this asset (e.g. suspected maturity/redemption). Empty by default.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -179,6 +206,7 @@ class BRIMExtractedAssetInfo(BaseModel):
     extracted_symbol: Optional[str] = Field(default=None, description="Ticker/symbol from report")
     extracted_isin: Optional[str] = Field(default=None, description="ISIN code from report")
     extracted_name: Optional[str] = Field(default=None, description="Asset name/description from report")
+    notices: List[BRIMAssetNotice] = Field(default_factory=list, description="Advisory notices for this asset (e.g. suspected maturity/redemption); empty by default")
 
 
 class BRIMPluginInfo(BaseModel):
@@ -246,6 +274,7 @@ class BRIMAssetMapping(BaseModel):
     extracted_name: Optional[str] = Field(None, description="Name extracted from file")
     candidates: List[BRIMAssetCandidate] = Field(default_factory=list, description="Possible asset matches from database (empty = not found)")
     selected_asset_id: Optional[int] = Field(None, description="Auto-set if 1 candidate, else None (user must choose)")
+    notices: List[BRIMAssetNotice] = Field(default_factory=list, description="Advisory notices propagated from the extracted asset (grouped/rendered by the frontend)")
 
 
 # =============================================================================

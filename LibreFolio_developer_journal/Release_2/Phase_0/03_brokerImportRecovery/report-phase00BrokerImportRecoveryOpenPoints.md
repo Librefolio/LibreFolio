@@ -92,6 +92,34 @@ wizard, la resa a badge di `identifier_other`, la doc, e i due grandi item BRIM 
    scrivere asset source provider. La vecchia `asset-search` rimossa (era untracked). Il
    contenuto search-stack resta nella dev guide `search_link_finder.md`.
 
+### 3-bis — Giro A/B/C/D (loop, modale riusa, avvisi scadenza)
+
+Piano `plan.md` (sessione) — 4 temi emersi testando l'import. **Fatto e validato** (`front check`
+0/0, `i18n audit` 2210 complete, ruff/black clean, `api sync` OK):
+
+- **D — loop backend (RISOLTO)**. `AssetSearchAutocomplete.svelte`: l'`$effect` di auto-search
+  aveva condizione `results.length === 0 && !loading`, **letta e scritta** da `executeSearch()` →
+  con 0 risultati (bond delisted) ri-partiva all'infinito. Fix = guard `lastAutoSearchedQuery`
+  (parte **una sola volta per query**, anche con 0 risultati) + `AbortController` che annulla il
+  fetch/stream precedente ancora in volo (stop al pile-up).
+- **A — modale "riusa asset omonimo" (solo wizard)**. Dopo cerca+selezione, se il **nome fornito
+  dal provider** coincide con un asset esistente → modale 3 scelte (riusa+aggiungi chiavi /
+  riusa senza aggiungere / no cambio nome). `AssetModal.svelte` emette `onReuseExisting(id,
+  addKeys)`; il **wizard** risolve la fake-id sull'asset esistente e, se `addKeys`, fa il **merge
+  lato client** `identifier_other ∪ _createNames` via `patch_assets_bulk` (il PATCH backend
+  **sostituisce** la lista → si invia l'unione completa). Nessuna modifica backend.
+- **B — avvisi scadenza/rimborso**. Nuovo schema `BRIMAssetNotice{kind, reason,
+  transaction_indexes[]}`; campo `notices: List[...] = []` su `BRIMExtractedAssetInfo` **e**
+  `BRIMAssetMapping` → **tutti i 31 plugin compatibili zero-churn** (default `[]`). Popolamento
+  reale in **Intesa** + **Credit Agricole** via helper condiviso `_brim_io.detect_maturity_hits()`
+  (scan causali `scadut/rimbors/estinzion/redemption/maturity` sulle description tx; per CA
+  intercetta `TITOLI SCADUTI` / `FONDI: RIMBORSO`). Pass-through in `brokers.py:794`. Frontend:
+  `AssetResolution.notices` → prop `importNotices` → **banner ambra** in `AssetModal` raggruppati
+  per `kind` (label categoria da i18n app, bullet `reason` in lingua plugin). **Advisory-only**:
+  non tocca `active` (l'utente usa il toggle nel footer); `transaction_indexes` **non renderizzati**
+  (dato gratuito, riservato a futura preview). i18n EN/IT/FR/ES: `assets.modal.importNotices.*`.
+- **C — nessun bug** (vedi §4.2 aggiornato). Solo nota, nessun codice.
+
 ---
 
 ## 4. Diagnosi cristallizzate (per non riderivarle)
@@ -109,6 +137,12 @@ wizard, la resa a badge di `identifier_other`, la doc, e i due grandi item BRIM 
   è stata rapida). `backend="auto"` di ddgs ruota ~10 motori → molte lookup DNS.
 
 ### 4.2 — "Chiamata cattiva" / variabilità ddgs (onesto)
+- **C — la ricerca NON è sequenziale-errata**: il fallback web/DDG è **già per-provider e
+  immediato**. I provider girano concorrenti (`asset_source.py:4735-4736`) e dentro `_search_one`
+  il fallback parte **subito** dopo un `provider.search()` vuoto (`4725-4727`; non-stream
+  `4593-4600`) — non si attende la fine di tutti e 3. La latenza ~5s = `to_thread` DDG (timeout
+  6s, env `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT`, `web_link_finder.py:28-30,239`) + `resolve_url`
+  per-URL (fino a 20s). **Nessuna modifica** ora; eventuale tuning timeout in futuro.
 - La varianza per-chiamata di `backend="auto"` è reale (a volte torna schede giuste, a volte
   pagine lista MOT generiche) ma **non è possibile identificare quale motore** produce cosa —
   `ddgs` astrae la provenienza per-risultato.

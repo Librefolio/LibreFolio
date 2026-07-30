@@ -66,6 +66,7 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active: boolean;
+        quote_base_quantity?: number | null;
     }
 
     interface AssetState extends AssetInfo {
@@ -292,6 +293,7 @@
             asset_type: a.asset_type,
             provider_code: a.provider_code,
             active: a.active,
+            quote_base_quantity: a.quote_base_quantity,
             lastPrice: a.lastPrice,
             deltaAbs: a.deltaAbs,
             deltaPercent: a.deltaPercent,
@@ -858,7 +860,7 @@
         const successes = bulkDeleteResults.filter((r) => r.success).length;
         const failures = bulkDeleteResults.filter((r) => !r.success).length;
         if (successes > 0) {
-            toasts.success($t('assets.delete.bulkOk', {values: {count: successes}}));
+            toasts.success($t('assets.delete.bulkOk', {values: {n: successes}}));
         }
         if (failures > 0) {
             toasts.warning($t('assets.delete.bulkPartial', {values: {failed: failures}}));
@@ -991,9 +993,15 @@
         for (const item of signalResultsByAsset.get(assetId) ?? []) {
             if (item.source !== 'backend' || !item.result) continue;
             const currentConfig = settings.signals.find((config) => config.id === item.config.id) ?? item.config;
+            const definition = signalDefinitionsByType.get(currentConfig.signalType);
+            if (!definition || definition.source !== 'backend') {
+                console.error(`Missing backend signal definition for '${currentConfig.signalType}'`);
+                continue;
+            }
             const outcome = renderBackendSignalResult(item.result, currentConfig, {
                 baseData: absoluteData,
                 viewMode: vm,
+                definition,
                 translate: (key) => $t(key),
             });
             rendered.push(...outcome.signals);
@@ -1475,7 +1483,7 @@
     danger={true}
     items={deletingAssets.map((a) => a.display_name)}
     itemsLabel={`${deletingAssets.length} assets`}
-    message={$t('assets.delete.bulkConfirmMessage', {values: {count: deletingAssets.length}})}
+    message={$t('assets.delete.bulkConfirmMessage', {values: {n: deletingAssets.length}})}
     onCancel={closeBulkDeleteDialog}
     onConfirm={confirmBulkDeleteAssets}
     open={bulkDeleteDialogOpen}

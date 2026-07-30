@@ -40,6 +40,19 @@ async function goToFirstAssetDetail(page: import('@playwright/test').Page) {
     await page.waitForTimeout(1500);
 }
 
+/**
+ * The grouped (dashboard) banner is foldable and collapsed by default — it shows only the
+ * "N avviso/i" header until opened. Click the header toggle so issue rows / CTAs become visible.
+ */
+async function expandDataQualityBanner(page: import('@playwright/test').Page) {
+    const toggle = page.getByTestId('data-quality-toggle');
+    if (await toggle.isVisible({timeout: 3000}).catch(() => false)) {
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+            await toggle.click();
+        }
+    }
+}
+
 // ============================================================================
 // Dashboard Banner Tests (grouped mode)
 // ============================================================================
@@ -77,7 +90,8 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         if (hasBanner) {
             // Grouped mode: single container
             await expect(banner).toHaveCount(1);
-            // At least one issue row must be visible
+            // Foldable: reveal the rows, then at least one issue row must be visible
+            await expandDataQualityBanner(page);
             const issueRows = page.locator('[data-testid^="data-quality-issue-"]');
             await expect(issueRows.first()).toBeVisible();
         } else {
@@ -91,7 +105,7 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         const hasBanner = await banner.isVisible({timeout: 3000}).catch(() => false);
 
         if (hasBanner) {
-            const headerText = await banner.locator('div.font-medium').first().textContent();
+            const headerText = await banner.locator('.font-medium').first().textContent();
             // Must not say "0 error" or "0 warning"
             expect(headerText ?? '').not.toMatch(/0 error/i);
             expect(headerText ?? '').not.toMatch(/0 warning/i);
@@ -102,6 +116,7 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
 
     test('NAV incomplete issue includes date range when present', async ({page}) => {
         await goToDashboard(page);
+        await expandDataQualityBanner(page);
         const navIssue = page.getByTestId('data-quality-issue-NAV_INCOMPLETE');
         const isVisible = await navIssue.isVisible({timeout: 3000}).catch(() => false);
 
@@ -114,14 +129,16 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         }
     });
 
-    test('missing price issue shows navigate_asset CTA when present', async ({page}) => {
+    test('missing price issue shows a per-asset navigate link when present', async ({page}) => {
         await goToDashboard(page);
+        await expandDataQualityBanner(page);
         const issue = page.getByTestId('data-quality-issue-MISSING_PRICE');
         const isVisible = await issue.isVisible({timeout: 3000}).catch(() => false);
 
         if (isVisible) {
-            const cta = page.getByTestId('data-quality-cta-MISSING_PRICE');
-            await expect(cta).toBeVisible();
+            // navigate_asset issues now render one "go to asset" link per affected asset.
+            const navLinks = page.locator('[data-testid^="data-quality-nav-asset-"]');
+            await expect(navLinks.first()).toBeVisible();
         } else {
             test.info().annotations.push({type: 'info', description: 'No MISSING_PRICE issue — CTA test skipped'});
         }

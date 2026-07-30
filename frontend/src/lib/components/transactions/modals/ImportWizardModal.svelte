@@ -10,7 +10,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
@@ -235,6 +235,7 @@
         resolvedAssetId: number | null;
         txCount: number;
         sourceFiles: string[];
+        notices: Array<{kind: string; reason: string}>;
     }
 
     let mergedTransactions = $state<MergedTx[]>([]);
@@ -300,7 +301,9 @@
     function isBeforeOpening(mt: MergedTx): boolean {
         const info = getBeforeOpeningInfo(mt);
         const txDate = mt.tx.date ? String(mt.tx.date) : '';
-        return info !== null && txDate !== '' && txDate <= info.openedAt;
+        // Strict `<`: a tx dated exactly on the opening day (e.g. patrimonio opening seeds)
+        // is importable; only strictly-earlier movements are flagged before-opening.
+        return info !== null && txDate !== '' && txDate < info.openedAt;
     }
 
     let beforeOpeningIndices = $derived.by(() => new Set(mergedTransactions.filter(isBeforeOpening).map((t) => t.index)));
@@ -310,23 +313,55 @@
         mergedTransactions = mergedTransactions.map((t) => (beforeOpeningIndices.has(t.index) ? {...t, selected: false} : t));
     });
 
+    /** True unless the row's asset is an unresolved fake mapping (no bound real asset yet). */
+    function isRowAssetResolved(t: MergedTx): boolean {
+        if (typeof t.tx.asset_id === 'number' && isFakeAssetId(t.tx.asset_id)) {
+            return assetResolutions.find((r) => r.fakeAssetId === t.tx.asset_id)?.resolvedAssetId != null;
+        }
+        return true;
+    }
+
     // Step 4 deriveds
     let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)).length);
     let step4TotalCount = $derived(mergedTransactions.filter((t) => !beforeOpeningIndices.has(t.index)).length);
     let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
-    let step4HasUnresolvedSelected = $derived(
-        mergedTransactions.some((t) => {
-            if (beforeOpeningIndices.has(t.index)) return false;
-            if (t.selected && typeof t.tx.asset_id === 'number' && isFakeAssetId(t.tx.asset_id)) {
-                const res = assetResolutions.find((r) => r.fakeAssetId === t.tx.asset_id);
-                return res?.resolvedAssetId == null;
-            }
-            return false;
-        }),
-    );
+    let step4HasUnresolvedSelected = $derived(mergedTransactions.some((t) => t.selected && !beforeOpeningIndices.has(t.index) && !isRowAssetResolved(t)));
     let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
     let step4LikelyDupCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'likely').length);
     let step4BeforeOpeningCount = $derived(beforeOpeningIndices.size);
+
+    interface BrokerOpeningIssue {
+        brokerId: number;
+        broker: BrokerInfo | {id: number; name: string};
+        openedAt: string;
+        minTxDate: string;
+        count: number;
+    }
+
+    /** Brokers whose opening date is later than one or more of their (before-opening) transactions. */
+    let brokerOpeningIssues = $derived.by<BrokerOpeningIssue[]>(() => {
+        const byBroker = new Map<number, {openedAt: string; minTxDate: string; count: number}>();
+        for (const t of mergedTransactions) {
+            if (!beforeOpeningIndices.has(t.index)) continue;
+            const info = getBeforeOpeningInfo(t);
+            if (!info) continue;
+            const d = t.tx.date ? String(t.tx.date).slice(0, 10) : '';
+            const cur = byBroker.get(info.brokerId);
+            if (!cur) {
+                byBroker.set(info.brokerId, {openedAt: String(info.openedAt).slice(0, 10), minTxDate: d, count: 1});
+            } else {
+                cur.count += 1;
+                if (d && (cur.minTxDate === '' || d < cur.minTxDate)) cur.minTxDate = d;
+            }
+        }
+        return [...byBroker.entries()].map(([brokerId, v]) => ({
+            brokerId,
+            broker: getBrokerInfo(brokerId) ?? brokers.find((b) => b.id === brokerId) ?? {id: brokerId, name: `#${brokerId}`},
+            openedAt: v.openedAt,
+            minTxDate: v.minTxDate,
+            count: v.count,
+        }));
+    });
 
     /**
      * Return the asset_id of a lone EXACT-confidence candidate, else null.
@@ -380,7 +415,7 @@
                 if (likelySet.has(txIdx)) dupStatus = 'likely';
                 else if (possibleSet.has(txIdx)) dupStatus = 'possible';
                 const openedAt = brokers.find((b) => b.id === result.brokerId)?.opened_at ?? null;
-                const beforeOpening = openedAt != null && String(tx.date ?? '') <= openedAt;
+                const beforeOpening = openedAt != null && String(tx.date ?? '') !== '' && String(tx.date ?? '') < openedAt;
 
                 // Clone so re-mapping the fake asset id never mutates the stored parse result
                 // (mergeAllTransactions may run again after a broker/opening edit).
@@ -405,6 +440,7 @@
                                 resolvedAssetId: selected ?? uniqueExactCandidateId(candidates),
                                 txCount: 0,
                                 sourceFiles: [],
+                                notices: ((mapping.notices ?? []) as Array<{kind?: string; reason?: string}>).map((n) => ({kind: String(n.kind ?? ''), reason: String(n.reason ?? '')})),
                             });
                         }
                     }
@@ -441,6 +477,39 @@
 
     function clearResolution(fakeAssetId: number) {
         assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
+    }
+
+    /** All identified names for a resolution (extracted name + candidate names, deduped). */
+    function createNamesFor(res: AssetResolution | undefined): string[] {
+        return res ? [...new Set([res.extractedName, ...(res.candidates ?? []).map((c) => c.name)].filter((n): n is string => !!n && n.trim() !== ''))] : [];
+    }
+
+    /**
+     * Wizard create flow: the user selected a search result whose provider name matches an
+     * existing asset and chose to reuse it (instead of creating a duplicate). Bind the fake id
+     * to the existing asset and, if requested, merge the import's search keys into its
+     * identifier_other (client-side union — the PATCH replaces the list, so send the full set).
+     */
+    async function reuseExistingForCreate(existingAssetId: number, addKeys: boolean) {
+        const fakeId = createAssetForFakeId;
+        if (fakeId === null) return;
+        const res = assetResolutions.find((r) => r.fakeAssetId === fakeId);
+        const names = createNamesFor(res);
+        resolveAsset(fakeId, existingAssetId);
+        createAssetForFakeId = null;
+        if (addKeys && names.length > 0) {
+            try {
+                const info = getAssetInfo(existingAssetId);
+                const current = info?.identifier_other ?? [];
+                const union = [...new Set([...current, ...names])];
+                await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: existingAssetId, identifier_other: union}]);
+                toasts.success($t('importWizard.reuseExisting.success'));
+                await refreshAllAssets();
+            } catch {
+                toasts.error($t('importWizard.reuseExisting.error'));
+            }
+        }
+        await refreshCandidates(fakeId);
     }
 
     /** Confidence sort order for sorting candidates list. Keys match the API's lowercase enum values. */
@@ -660,7 +729,10 @@
     async function openBrokerOpeningEdit(mt: MergedTx) {
         const brokerId = getBrokerIdForTx(mt);
         if (brokerId === null) return;
+        await openBrokerOpeningEditById(brokerId);
+    }
 
+    async function openBrokerOpeningEditById(brokerId: number) {
         let broker = getBrokerInfo(brokerId) ?? brokers.find((b) => b.id === brokerId) ?? null;
         if (!broker) {
             await refreshAllBrokers();
@@ -696,7 +768,24 @@
      */
     async function recheckOpenings() {
         await refreshEditableBrokers();
-        mergedTransactions = mergedTransactions.map((t) => (!isBeforeOpening(t) && !t.selected && t.duplicateStatus !== 'likely' ? {...t, selected: true} : t));
+        mergedTransactions = mergedTransactions.map((t) => (!isBeforeOpening(t) && isRowAssetResolved(t) && !t.selected && t.duplicateStatus !== 'likely' ? {...t, selected: true} : t));
+    }
+
+    let autoFixingBrokerId = $state<number | null>(null);
+
+    /**
+     * Auto-fix a broker's opening-date gate: set `opened_at` to the broker's
+     * earliest transaction date, then recheck so its rows become importable.
+     */
+    async function autoFixBrokerOpening(issue: BrokerOpeningIssue) {
+        if (!issue.minTxDate || autoFixingBrokerId !== null) return;
+        autoFixingBrokerId = issue.brokerId;
+        try {
+            const result = await trySave(() => zodiosApi.update_broker_api_v1_brokers__broker_id__patch({opened_at: issue.minTxDate}, {params: {broker_id: issue.brokerId}}), {fallback: $t('importWizard.autoFixFailed')});
+            if (result.status === 'success') await recheckOpenings();
+        } finally {
+            autoFixingBrokerId = null;
+        }
     }
 
     /**
@@ -979,7 +1068,11 @@ ${arrow}<span>${label}</span></span>`,
                             testId: `import-wizard-broker-edit-${mt.index}`,
                         };
                     }
-                    return {type: 'html', html: `<span class="inline-flex items-center gap-1.5 truncate">${iconHtml}<span class="truncate">${name}</span></span>`};
+                    return {
+                        type: 'custom',
+                        component: BrokerBadge,
+                        props: {broker: b ?? {id: brokerId, name}, size: 18, showName: true, tooltip: name},
+                    } as const;
                 },
             },
             {
@@ -2455,6 +2548,49 @@ ${arrow}<span>${label}</span></span>`,
                     </div>
                 {/if}
 
+                {#if brokerOpeningIssues.length > 0}
+                    <div class="space-y-2 mb-3" data-testid="import-wizard-broker-opening-issues">
+                        {#each brokerOpeningIssues as issue (issue.brokerId)}
+                            <div class="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-700/60 dark:bg-amber-900/20 sm:flex-row sm:items-center sm:gap-3">
+                                <div class="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
+                                    <AlertTriangle size={16} class="mt-0.5 shrink-0 text-amber-500 sm:mt-0" />
+                                    <div class="min-w-0">
+                                        <BrokerBadge broker={issue.broker} size={18} showName={true} />
+                                        <p class="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
+                                            {$t('importWizard.brokerOpeningMsg', {values: {count: issue.count, openedAt: issue.openedAt, minDate: issue.minTxDate}})}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex shrink-0 items-center gap-2">
+                                    <button
+                                        type="button"
+                                        class="flex items-center gap-1 rounded bg-libre-green px-2 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                                        onclick={() => void autoFixBrokerOpening(issue)}
+                                        disabled={autoFixingBrokerId !== null || !issue.minTxDate}
+                                        data-testid="broker-opening-autofix-{issue.brokerId}"
+                                        title={$t('importWizard.autoFixOpeningTip')}
+                                    >
+                                        {#if autoFixingBrokerId === issue.brokerId}
+                                            <Loader2 size={12} class="animate-spin" />
+                                        {:else}
+                                            <Wand2 size={12} />
+                                        {/if}
+                                        <span>{$t('importWizard.autoFixOpening', {values: {date: issue.minTxDate}})}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50 dark:border-slate-600 dark:hover:bg-slate-700"
+                                        onclick={() => void openBrokerOpeningEditById(issue.brokerId)}
+                                        data-testid="broker-opening-edit-{issue.brokerId}"
+                                    >
+                                        <Pencil size={12} /><span>{$t('importWizard.status.editBrokerDate')}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                {/if}
+
                 <!-- ── TX Table (DataTable) ───────────────────────────── -->
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                     <!-- Toolbar row -->
@@ -2728,7 +2864,7 @@ ${arrow}<span>${label}</span></span>`,
 <!-- Asset creation modal (Step 4 Zone C) -->
 {#if createAssetForFakeId !== null}
     {@const _createRes = assetResolutions.find((r) => r.fakeAssetId === createAssetForFakeId)}
-    {@const _createNames = _createRes ? [...new Set([_createRes.extractedName, ...(_createRes.candidates ?? []).map((c) => c.name)].filter((n): n is string => !!n && n.trim() !== ''))] : []}
+    {@const _createNames = createNamesFor(_createRes)}
     {@const _createDesc = _createRes
         ? [$t('importWizard.createAsset.identifiedNames'), ..._createNames.map((n) => `• ${n}`), _createRes.extractedSymbol ? `Ticker: ${_createRes.extractedSymbol}` : '', _createRes.extractedIsin ? `ISIN: ${_createRes.extractedIsin}` : ''].filter((l) => l !== '').join('\n')
         : ''}
@@ -2740,6 +2876,7 @@ ${arrow}<span>${label}</span></span>`,
                   display_name: _createRes.extractedName ?? '',
                   identifier_ticker: _createRes.extractedSymbol ?? undefined,
                   identifier_isin: _createRes.extractedIsin ?? undefined,
+                  identifier_other: _createNames.length > 0 ? _createNames : undefined,
                   classification_params: _createDesc ? {short_description: _createDesc} : undefined,
               }
             : null}
@@ -2754,6 +2891,8 @@ ${arrow}<span>${label}</span></span>`,
         initialSearchQuery=""
         zIndex={90}
         initialNoProvider={true}
+        importNotices={_createRes ? _createRes.notices : []}
+        onReuseExisting={reuseExistingForCreate}
         oncreated={(assetId) => {
             const fakeId = createAssetForFakeId!;
             const res = assetResolutions.find((r) => r.fakeAssetId === fakeId);
