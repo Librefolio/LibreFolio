@@ -798,6 +798,7 @@ async def parse_file(
                     extracted_name=info.extracted_name,
                     candidates=candidates,
                     selected_asset_id=auto_selected,
+                    notices=info.notices,
                 )
             )
 

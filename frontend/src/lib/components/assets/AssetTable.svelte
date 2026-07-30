@@ -33,6 +33,7 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active: boolean;
+        quote_base_quantity?: number | null;
         lastPrice?: number | null;
         deltaAbs?: number | null;
         deltaPercent?: number | null;
@@ -238,6 +239,19 @@
                 width: 240,
                 minWidth: 160,
                 filterable: false,
+            },
+            {
+                id: 'quoteBaseQuantity',
+                header: () => $t('assets.table.quoteBaseQuantity'),
+                headerTooltip: () => $t('assets.modal.quoteBaseTooltip'),
+                cell: (row) => ({type: 'html', html: `<span class="font-mono tabular-nums">${row.quote_base_quantity ?? 1}</span>`}),
+                type: 'number',
+                getValue: (row) => row.quote_base_quantity ?? 1,
+                width: 100,
+                minWidth: 70,
+                align: 'right',
+                filterable: false,
+                hiddenByDefault: true,
             },
         ]),
     );

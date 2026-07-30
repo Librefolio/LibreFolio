@@ -4451,12 +4451,21 @@ class AssetSearchService:
 
                 items: list[dict] = []
                 seen_items: set[tuple[str, str]] = set()
-                for url in urls:
+
+                async def _resolve_one(u: str):
                     try:
-                        resolved = await _run_provider_in_thread(lambda u=url: provider.resolve_url(u), timeout=20.0)
+                        return await _run_provider_in_thread(lambda: provider.resolve_url(u), timeout=20.0)
                     except Exception as e:
-                        logger.debug(f"link-finder: resolve_url failed for '{url}' on provider '{code}': {e}")
-                        continue
+                        logger.debug(f"link-finder: resolve_url failed for '{u}' on provider '{code}': {e}")
+                        return None
+
+                # Resolve candidate URLs concurrently — this was a sequential ``for url in urls``
+                # loop whose per-URL latencies (each up to the 20s provider timeout) SUMMED, the
+                # dominant cost of a web-fallback search. ``asyncio.to_thread`` runs each provider
+                # call on its own worker thread, so total time ≈ the slowest URL instead of the sum.
+                # ``gather`` preserves argument order, so dedup priority (first URL wins) is unchanged.
+                resolved_list = await asyncio.gather(*[_resolve_one(u) for u in urls])
+                for resolved in resolved_list:
                     if not resolved:
                         continue
                     # resolve_url may return one item or the full canonical set (list),

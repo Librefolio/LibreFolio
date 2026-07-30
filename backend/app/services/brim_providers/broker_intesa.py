@@ -47,7 +47,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAssetNotice, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -256,6 +256,19 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
 
         if not transactions:
             warnings.append("No importable securities movements found (only everyday-banking rows?)")
+
+        # Advisory: flag assets whose movements include a maturity/redemption cue so the
+        # create-asset UI can warn the security may be delisted/unsearchable. Advisory only.
+        for _asset_id, _idxs in io.detect_maturity_hits(transactions).items():
+            _info = extracted_assets.get(_asset_id)
+            if _info is not None:
+                _info.notices.append(
+                    BRIMAssetNotice(
+                        kind=io.MATURITY_NOTICE_KIND,
+                        reason="Rilevata almeno una transazione di scadenza/rimborso.",
+                        transaction_indexes=_idxs,
+                    )
+                )
 
         logger.info("Intesa movements parsed", transaction_count=len(transactions), warning_count=len(warnings), asset_count=len(extracted_assets))
         return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets)

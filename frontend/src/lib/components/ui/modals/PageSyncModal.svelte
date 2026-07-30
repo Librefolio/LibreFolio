@@ -175,7 +175,7 @@
                 </span>
             {/if}
         {:else if pr.status === 'failed'}
-            {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
+            {@const fullErr = pr.errors && pr.errors.length ? pr.errors.join('; ') : (pr.message ?? '')}
             {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
             <!-- #R4-6: Tooltip reveals the full error that truncate clips. -->
             <Tooltip text={fullErr} position="top" maxWidth="500px">
@@ -237,7 +237,7 @@
                 </span>
             {/if}
         {:else if pr.status === 'failed'}
-            {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
+            {@const fullErr = pr.errors && pr.errors.length ? pr.errors.join('; ') : (pr.message ?? '')}
             {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
             <!-- #R4-6: Tooltip reveals the full error that truncate clips. -->
             <Tooltip text={fullErr} position="top" maxWidth="500px">

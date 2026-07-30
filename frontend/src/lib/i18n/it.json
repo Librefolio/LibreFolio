@@ -74,7 +74,8 @@
     "allTypes": "Tutti i tipi",
     "showActive": "Attivi",
     "table": {
-      "lastPrice": "Ultimo Prezzo"
+      "lastPrice": "Ultimo Prezzo",
+      "quoteBaseQuantity": "Unità/prezzo"
     },
     "empty": {
       "noAssets": "Nessun asset",
@@ -2511,9 +2512,9 @@
         "name": "VaR / CVaR storico",
         "description": "Stime storiche delle perdite al livello di confidenza e orizzonte selezionati."
       },
-      "portfolioKpi": {
-        "name": "KPI di rischio del portafoglio",
-        "description": "Volatilità storica, drawdown, Sharpe e Sortino dal TWRR del portafoglio."
+      "historicalKpi": {
+        "name": "Metriche di rischio storiche",
+        "description": "Volatilità storica, drawdown, Sharpe e Sortino dai rendimenti canonici dello scope selezionato."
       },
       "riskContribution": {
         "name": "Contributo al rischio",

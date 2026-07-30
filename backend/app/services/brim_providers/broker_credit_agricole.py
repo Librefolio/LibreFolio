@@ -56,6 +56,7 @@ import structlog
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import (
     FAKE_ASSET_ID_BASE,
+    BRIMAssetNotice,
     BRIMExtractedAssetInfo,
     BRIMFieldTodo,
     BRIMParseOutput,
@@ -426,6 +427,20 @@ class CreditAgricoleItaliaBrokerProvider(BRIMProvider):
             )
         if not transactions:
             warnings.append("No valid transactions found in file")
+
+        # Advisory: flag assets whose transactions include a maturity/redemption (e.g. TITOLI
+        # SCADUTI, FONDI: RIMBORSO) so the create-asset UI can warn that the security may be
+        # delisted and unsearchable. Advisory only — never changes import behaviour.
+        for _asset_id, _idxs in io.detect_maturity_hits(transactions).items():
+            _info = extracted_assets.get(_asset_id)
+            if _info is not None:
+                _info.notices.append(
+                    BRIMAssetNotice(
+                        kind=io.MATURITY_NOTICE_KIND,
+                        reason="Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: RIMBORSO»).",
+                        transaction_indexes=_idxs,
+                    )
+                )
 
         logger.info(
             "Crédit Agricole file parsed",
