@@ -1,15 +1,15 @@
-# Graph Report - corpus  (2026-07-28)
+# Graph Report - corpus  (2026-07-30)
 
 ## Corpus Check
-- Large corpus: 1446 files · ~2,078,236 words. Semantic extraction will be expensive (many Claude tokens). Consider running on a subfolder.
+- cluster-only mode — file stats not available
 
 ## Summary
-- 1435 nodes · 2040 edges · 144 communities (128 shown, 16 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 69 edges (avg confidence: 0.79)
+- 1461 nodes · 2070 edges · 142 communities (126 shown, 16 thin omitted)
+- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 70 edges (avg confidence: 0.79)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a10155ba`
+- Built from commit: `92f5a8a1`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -139,9 +139,7 @@
 - [[_COMMUNITY_Community 122|Community 122]]
 - [[_COMMUNITY_Community 123|Community 123]]
 - [[_COMMUNITY_Community 124|Community 124]]
-- [[_COMMUNITY_Community 125|Community 125]]
 - [[_COMMUNITY_Community 126|Community 126]]
-- [[_COMMUNITY_Community 127|Community 127]]
 - [[_COMMUNITY_Community 128|Community 128]]
 - [[_COMMUNITY_Community 130|Community 130]]
 - [[_COMMUNITY_Community 131|Community 131]]
@@ -171,70 +169,65 @@
 10. `Transaction Feature Connections` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Multi-Funnel Docker Sidecars` --semantically_similar_to--> `Idle-Reaped Spawn Worker Pools`  [INFERRED] [semantically similar]
-  mkdocs-en/docs/admin/tailscale_exposure.en.md → wiki/decisions/risk-quant-engine-process-boundary.md
 - `Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable` --semantically_similar_to--> `Dual View Pattern (Card Grid + DataTable)`  [INFERRED] [semantically similar]
   wiki/concepts/always-pair-adjacent.md → wiki/concepts/dual-view-pattern.md
-- `Risk Metrics` --conceptually_related_to--> `Rolling Risk Plugins`  [INFERRED]
-  mkdocs-en/docs/financial-theory/portfolio-theory/risk-metrics/index.en.md → wiki/sources/phase00-risk-analysis-backend.md
-- `Chart Resolution / Semantic Zoom` --semantically_similar_to--> `Daily-Point Policy`  [INFERRED] [semantically similar]
-  wiki/concepts/chart-resolution-semantic-zoom.md → wiki/concepts/daily-point-policy.md
-- `Previous-day-only Matching` --semantically_similar_to--> `FIFO v4 income eligibility: D-1, broker-scoped, transfer-aware`  [INFERRED] [semantically similar]
-  wiki/concepts/d1-income-eligibility-window.md → wiki/decisions/fifo-v4-income-eligibility-d1.md
+- `Backend-Only Indicator Calculation` --conceptually_related_to--> `Backend-Only Financial Mathematics`  [INFERRED]
+  mkdocs-en/docs/user/assets/detail/signals.en.md → wiki/sources/phase00-risk-analysis-backend.md
+- `Risk Metrics` --conceptually_related_to--> `Backend-Only Calculations`  [INFERRED]
+  mkdocs-en/docs/financial-theory/portfolio-theory/risk-metrics/index.en.md → wiki/decisions/risk-g6-application-contracts.md
+- `Risk Metrics` --references--> `Risk Metrics Mathematical and Semantic Contract`  [INFERRED]
+  mkdocs-en/docs/financial-theory/portfolio-theory/risk-metrics/index.en.md → wiki/decisions/risk-g6-application-contracts.md
+- `Historical Metrics Are Not Future Risk` --conceptually_related_to--> `Historical Replay Audit Trail`  [INFERRED]
+  mkdocs-en/docs/financial-theory/portfolio-theory/risk-metrics/index.en.md → wiki/decisions/risk-g6-application-contracts.md
 
 ## Import Cycles
 - None detected.
 
-## Hyperedges (group relationships)
-- **Comprehensive Risk Metric Suite** — sharpe_ratio_sharpe_ratio, sortino_ratio_sortino_ratio, max_drawdown_max_drawdown, volatility_volatility [EXTRACTED 1.00]
-- **Shared Asset and FX Technical Indicator Suite** — signals_asset_signals_panel, signals_fx_signals_panel, signals_exponential_moving_average, signals_macd, signals_relative_strength_index, volatility_bollinger_bands [EXTRACTED 1.00]
-- **Isolated Quantitative Engine Domains** — risk_quant_engine_process_boundary_persistent_spawn_pools, risk_quant_engine_process_boundary_simulation_pool, risk_quant_engine_process_boundary_optimization_pool, risk_quant_engine_process_boundary_quantlib_1_43, risk_quant_engine_process_boundary_riskfolio_lib_7_0_1 [EXTRACTED 1.00]
-
-## Communities (144 total, 16 thin omitted)
+## Communities (142 total, 16 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.06
-Nodes (85): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Asset Feature Connections, Dependency Graph — Full Project, FX Feature Connections (+77 more)
+Nodes (86): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Asset Feature Connections, Dependency Graph — Full Project, FX Feature Connections (+78 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.07
-Nodes (50): FIFO at Runtime, AI export used ticker/ISIN as primary asset label, Asset Orphan vs Portfolio-Level Cost/Income, D-1 Income Eligibility Window, DataTable net columns hidden despite real costs (visibility snapshot bug), Deterministic Cost-Matching Ladder, Dashboard KPI & Overview, Portfolio Charts (+42 more)
+Cohesion: 0.08
+Nodes (47): FIFO at Runtime, AI export used ticker/ISIN as primary asset label, Complete Public Payload Contract, AI Export Technical Series and Density Contract, Deterministic Drawdown Data Gate, Homogeneous Technical and Financial Series Boundary, Inter-Bucket Return Anchors, Observed-Only Annotation Semantics (+39 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.06
-Nodes (46): Drawdown Chart, Drawdown Series, Loss-Recovery Asymmetry, Max Drawdown, Drawdown Recovery Time, Backend-Only Financial Mathematics, Riskfolio Portfolio Optimization, Historical Metrics Are Not Future Risk (+38 more)
+Cohesion: 0.24
+Nodes (13): Asset Signals AI Export, Asset Comparison Overlay, Asset Signals Panel, Backend-Only Indicator Calculation, Canonical Currency Pair, Exponential Moving Average, FX Signals AI Export, FX Exposure Scope (+5 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.08
-Nodes (36): Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention, TimeSeriesStore pattern (+28 more)
+Nodes (38): Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention, TimeSeriesStore pattern (+30 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.15
-Nodes (35): Centralized TX Payload Layer, Resolve Validation Message Pattern, Validate Scheduler Pattern, Batch-only split/promote — eliminate standalone endpoints, Paired access level = min(role_A, role_B) + 3-layout delete, TransactionBulkModal mode removal — unified mode-less batch editor, CASH_TRANSFER first-class enum + Split/Promote via batch pipeline, ContextMenu default ON on all DataTables (+27 more)
+Cohesion: 0.06
+Nodes (113): Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Import Todo Signals, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Resolve Validation Message Pattern, SafeDecimal — Preventing Scientific Notation in JSON Responses, saveWithRetry — Frontend Modal Save Pattern (+105 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.19
-Nodes (30): 3-Pool Cash Model, Chart Resolution / Semantic Zoom, Holdings / Performance Dashboard Panel, Inline WAC Computation, Portfolio Report Unified Endpoint, Pre-Frame / Frame Separation, TWRR and MWRR Algorithms, BRIM Files Scoped to Broker (Multi-User Support) (+22 more)
+Cohesion: 0.22
+Nodes (26): 3-Pool Cash Model, Chart Resolution / Semantic Zoom, Holdings / Performance Dashboard Panel, Inline WAC Computation, Portfolio Report Unified Endpoint, Pre-Frame / Frame Separation, TWRR and MWRR Algorithms, MWRR boundary fix — XIRR double-counting deposits (+18 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.10
-Nodes (22): BRIM Transaction Import, Broker Account, Broker AI Export, Broker Info, Broker Overview, Broker Positions, Broker Sharing, Holdings and Performance Dual View (+14 more)
+Cohesion: 0.25
+Nodes (9): BRIM Transaction Import, Broker Account, Broker AI Export, Broker Info, Broker Overview, Broker Positions, Broker Sharing, Holdings and Performance Dual View (+1 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.16
 Nodes (22): LibreFolio i18n Audit Report (post-compression pass 2), LibreFolio i18n Audit Report (post-compression), LibreFolio i18n Audit Report (pre-compression), Phase 7: Transactions System — Macro Plan, Phase 9: Dashboard, Unified Portfolio Report API, Milestone 3 — UI Broker v2 (post Portfolio Engine unificato), Broker v2 Widget Reuse (+14 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.18
-Nodes (21): Backend-Only Calculations Rule, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps, Stateless Preview Pattern — Controlled Components for Computed Values, Blur detection: compare formatDecimalForDisplay() strings (not numeric tolerance), cost_basis_override as Currency object (not bare decimal), FxSyncModal reuse: parent owns modal, child calls onOpenFxSync prop, WAC Inline in Validate/Commit — No Standalone WAC Endpoint in Editing Flow, WAC target currency = last acquisition's currency (deterministic) (+13 more)
+Cohesion: 0.05
+Nodes (50): Drawdown Chart, Drawdown Series, Loss-Recovery Asymmetry, Max Drawdown, Drawdown Recovery Time, Risk Analysis Application Plan, Applied Shock Bucket Audit, Shared Foundation and G6-11 Approval Gate (+42 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.18
-Nodes (21): Entity Store Pattern — createEntityStore<T>() factory, Opportunistic Cache Merge — assetStore.merge() as universal ingress, txStore Pattern — Single Source of Truth for Loaded Transactions, DataTable Tooltip via CustomCell — no title= HTML attribute, Balance validation uses end-of-day aggregation — intra-day order irrelevant, FormModal sends entire bulk context to /validate for same-day dependency resolution, PendingOp tagged union replaces DraftRow flat interface, Transactions Client-Side Filtering — W28 decision (+13 more)
+Cohesion: 0.15
+Nodes (13): Auto WAC, WAC Cost Basis, Cost Basis Override, FIFO Lot Analysis, Historical FX Cost Conversion, Inventory-Aware WAC Iteration, WAC and Market Valuation Separation, WAC Pool Depletion Reset (+5 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.23
-Nodes (21): saveWithRetry — Frontend Modal Save Pattern, Single Migration Strategy (001_initial.py), Transaction Feature Connections, FX Sync Redesign: Currency-Based → Pair-Based, Policy D — Destructive symmetric wipe on asset currency change, Price Currency: Hard-Reject Mismatch + 409 on Asset Currency Change, ScheduledInvestment provider redesign — pure deterministic engine, Domain: ASSETS (+13 more)
+Cohesion: 0.11
+Nodes (31): Backend-Only Calculations Rule, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps, Stateless Preview Pattern — Controlled Components for Computed Values, Blur detection: compare formatDecimalForDisplay() strings (not numeric tolerance), cost_basis_override as Currency object (not bare decimal), FxSyncModal reuse: parent owns modal, child calls onOpenFxSync prop, WAC Inline in Validate/Commit — No Standalone WAC Endpoint in Editing Flow, WAC target currency = last acquisition's currency (deterministic) (+23 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.11
@@ -257,8 +250,8 @@ Cohesion: 0.12
 Nodes (16): 🤖 Are there AI features planned?, 📱 Can I use LibreFolio as a mobile app?, ❓ Frequently Asked Questions (FAQ), 💬 General Questions, 🚀 Getting Started, 👤 How do I create an account?, 📦 How do I install LibreFolio?, 🔐 I can't login (+8 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.29
-Nodes (17): Import Todo Signals, SafeDecimal — Preventing Scientific Notation in JSON Responses, WorkspaceIntent Pattern, BRIM Fake Asset ID during Parse, BRIM is a Parser Only (Revision 2), Import Wizard v5 paradigm shift (v4→v5), ImportWizardModal, BRIM Framework (Broker Report Import) (+9 more)
+Cohesion: 0.24
+Nodes (12): Funnel ACL Authorization, MagicDNS, Multi-Funnel Docker Sidecars, Private Tailscale Serve Connection, Secure Self-Hosted Service Exposure, Single Funnel per Host Limit, socat Proxy Forwarder, Tailscale Subnet Router (+4 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.13
@@ -269,24 +262,24 @@ Cohesion: 0.13
 Nodes (14): 📈 Accumulating (e.g., Acc ETFs), 📦 Accumulating vs Distributing Instruments, 📊 Capital Gains & Losses, 🔗 Connection to Growth Models, 💵 Distributing (e.g., Dist ETFs), ⚠️ Jurisdiction-Specific Considerations, 🔄 Loss Carry-Forward, 📋 Matching Methods (+6 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.14
-Nodes (15): Bounded Quantitative Worker Capacity, Risk Quantitative Engine Process Boundary, FastAPI Web Process, Fresh Child per Request Option, In-Process Thread Offload Option, Independent Quantitative Failure Domains, No Silent Quantitative Fallback, NumPy Independent Test Oracles (+7 more)
+Cohesion: 0.20
+Nodes (11): Bounded Quantitative Worker Capacity, Risk Quantitative Engine Process Boundary, FastAPI Web Process, Fresh Child per Request Option, In-Process Thread Offload Option, No Silent Quantitative Fallback, NumPy Independent Test Oracles, Idle-Reaped Spawn Worker Pools (+3 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.15
 Nodes (13): 📐 Annualized Log Return, 📅 Annualized Return, 📈 Compound Annual Growth Rate (CAGR), 🔄 Conversion, 📏 Day Count Conventions, 📐 Logarithmic (Continuous) Return, ⚠️ Pitfalls, 💰 Portfolio Return Methods (+5 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.14
-Nodes (14): Analytical GBM Moments, Canonical Risk Series and Metadata, Covariance Standard Errors, Deterministic Multi-Asset Risk Analytics, Fisher-z Correlation Error, G6 Frontend Integration Plan Only — Not Implemented, Motivated Mathematical Oracles, No Risk Backend DB Migration (+6 more)
+Cohesion: 0.18
+Nodes (11): Backend-Only Financial Mathematics, Canonical Risk Series and Metadata, Deterministic Multi-Asset Risk Analytics, G6 Frontend Integration Plan Only — Not Implemented, No Risk Backend DB Migration, Phase 0 Risk Analysis Backend G0-G5, RiskAnalytic, Rolling Risk Plugins (+3 more)
 
 ### Community 22 - "Community 22"
 Cohesion: 0.14
 Nodes (13): 📊 Capabilities, 🔧 Configuration, "Connection timeout", 🔢 Decimal Format, 💡 Example: Borsa Italiana BTP, 🔎 How to Find the CSS Selector, <img src="../../../../static/cssscraper.png" alt=""> CSS Scraper, "Parse error" (+5 more)
 
 ### Community 23 - "Community 23"
-Cohesion: 0.30
-Nodes (14): Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Dual-Transaction Form — TransactionFormModal paired mode (R6-B.1–B.3), Multi-Broker Atomic Transactions (not broker-scoped), Linked transaction pairs must have identical description and tags, Server-Driven Type Rules — replace hardcoded frontend files, Static export of constant metadata at compile-time (deferred), Transaction Link UUID Semantics (TRANSFER/DEPOSIT/WITHDRAWAL/FX_CONVERSION), Domain: TRANSACTIONS (+6 more)
+Cohesion: 0.33
+Nodes (6): Analytical GBM Moments, Covariance Standard Errors, Fisher-z Correlation Error, Motivated Mathematical Oracles, Power-of-Two QMC Path Count, QMC Convergence Across Powers of Two
 
 ### Community 24 - "Community 24"
 Cohesion: 0.15
@@ -319,10 +312,6 @@ Nodes (12): QuantLib MC/QMC Simulation, Legacy seed Input-Only Shim, Mutually Ex
 ### Community 31 - "Community 31"
 Cohesion: 0.17
 Nodes (11): ⚖️ Asset Allocation, 🌍 Geographic Diversification, 📈 Glide Path & Target-Date Strategy, 🔄 Rebalancing, 📐 Rebalancing Bonus, 📊 Rebalancing Methods, 🔗 Related, 🏗️ Strategic Asset Allocation (SAA) (+3 more)
-
-### Community 32 - "Community 32"
-Cohesion: 0.24
-Nodes (12): Funnel ACL Authorization, MagicDNS, Multi-Funnel Docker Sidecars, Private Tailscale Serve Connection, Secure Self-Hosted Service Exposure, Single Funnel per Host Limit, socat Proxy Forwarder, Tailscale Subnet Router (+4 more)
 
 ### Community 33 - "Community 33"
 Cohesion: 0.18
@@ -501,8 +490,8 @@ Cohesion: 0.25
 Nodes (7): 📊 Capabilities, 🔧 Configuration, 💱 Currency Selection, 💡 Examples, <img src="https://www.justetf.com/android-chrome-144x144.png?v2" alt=""> justETF, ⚠️ Limitations, 📝 Notes
 
 ### Community 77 - "Community 77"
-Cohesion: 0.25
-Nodes (8): Bounded Multiprocessing Request Queue, Crash-Safe Lane Recycling, Forced Worker Termination, multiprocessing.Queue Response Channel, One-Way Response Pipe, Spawn-Worker Response-Queue Semaphore Leak, Leaked Semaphore Resource-Tracker Warning, Single-Response Worker Lane Protocol
+Cohesion: 0.20
+Nodes (10): Independent Quantitative Failure Domains, Targeted Worker-Lane Recycling, Bounded Multiprocessing Request Queue, Crash-Safe Lane Recycling, Forced Worker Termination, multiprocessing.Queue Response Channel, One-Way Response Pipe, Spawn-Worker Response-Queue Semaphore Leak (+2 more)
 
 ### Community 78 - "Community 78"
 Cohesion: 0.25
@@ -553,8 +542,8 @@ Cohesion: 0.29
 Nodes (6): 📅 [Asset Events](asset-events/index.md), 📊 [Asset Types](asset-types/index.md), 🏦 Financial Instruments, 🔗 Related Sections, 💸 [Transaction Types](transaction-types/index.md), 📖 What's Inside
 
 ### Community 90 - "Community 90"
-Cohesion: 0.29
-Nodes (7): Optimization Idle Timeout Default: 600 Seconds, Riskfolio Optimization Pool, Riskfolio-Lib 7.0.1, Optimization Idle Timeout Default: 600 Seconds, CLARABEL Solver, Riskfolio Optimization Capabilities, SCS Solver
+Cohesion: 0.25
+Nodes (8): Riskfolio Portfolio Optimization, Optimization Idle Timeout Default: 600 Seconds, Riskfolio Optimization Pool, Riskfolio-Lib 7.0.1, Optimization Idle Timeout Default: 600 Seconds, CLARABEL Solver, Riskfolio Optimization Capabilities, SCS Solver
 
 ### Community 91 - "Community 91"
 Cohesion: 0.29
@@ -692,33 +681,29 @@ Nodes (3): 🎯 Choosing a Provider, 📊 Provider Comparison, 🔌 Providers
 Cohesion: 0.50
 Nodes (3): 📋 Benchmark Overview, 🔗 Related, 🎯 Synthetic Benchmarks
 
-### Community 125 - "Community 125"
-Cohesion: 0.50
-Nodes (4): F-075 — TanStack Table v9 Migration, F-077 — Mobile DataTable Touch Drag Column Reorder, TanStack Table v8 — Svelte 5 Incompatibility, Phase 06 Bugfix Migration Steps 1-3
-
 ### Community 126 - "Community 126"
 Cohesion: 0.67
 Nodes (3): Interactive Pros/Cons Slider, Remotion Video Promo, Source Code v0.9.0 Batch
 
 ## Knowledge Gaps
-- **647 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+642 more)
+- **656 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+651 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **16 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `F-048 — Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done)` connect `Community 4` to `Community 0`, `Community 8`, `Community 9`, `Community 10`, `Community 16`, `Community 23`?**
+- **Why does `F-048 — Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done)` connect `Community 4` to `Community 0`, `Community 10`?**
   _High betweenness centrality (0.013) - this node is a cross-community bridge._
-- **Why does `F-046 — Transaction Model & Bulk API` connect `Community 23` to `Community 0`, `Community 1`, `Community 4`, `Community 5`, `Community 8`, `Community 9`, `Community 10`, `Community 16`?**
+- **Why does `F-046 — Transaction Model & Bulk API` connect `Community 4` to `Community 0`, `Community 10`, `Community 5`?**
   _High betweenness centrality (0.007) - this node is a cross-community bridge._
-- **Why does `Phase 0 Risk Analysis Backend G0-G5` connect `Community 21` to `Community 2`, `Community 37`, `Community 75`, `Community 77`, `Community 49`, `Community 19`, `Community 29`, `Community 30`?**
-  _High betweenness centrality (0.007) - this node is a cross-community bridge._
+- **Why does `Dependency Graph — Full Project` connect `Community 0` to `Community 4`?**
+  _High betweenness centrality (0.006) - this node is a cross-community bridge._
 - **What connects `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings` to the rest of the system?**
-  _714 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _728 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.06134453781512605 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.060191518467852256 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.07265306122448979 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.06280193236714976 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07955596669750231 - nodes in this community are weakly interconnected._
+- **Should `Community 3` be split into smaller, more focused modules?**
+  _Cohesion score 0.07539118065433854 - nodes in this community are weakly interconnected._

@@ -70,8 +70,11 @@ class TechnicalBucket(BaseModel):
 
 
 class PriceBucket(TechnicalBucket):
-    """A price/rate OHLC bucket (``"close"``/``"rate"`` key) plus its bucket-local simple return."""
+    """Price/rate OHLC plus the return from the previous observed bucket close."""
 
+    minimum_date: date | None = None
+    maximum_date: date | None = None
+    return_start_date: date | None = None
     simple_return: float | None = None
 
 

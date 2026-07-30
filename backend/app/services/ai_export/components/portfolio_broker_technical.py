@@ -51,6 +51,7 @@ from backend.app.services.ai_export.components.technical_shared import (
     build_events_payload,
     build_indicator_table_payloads,
     build_price_buckets,
+    coherent_price_currency,
     latest_point_value,
     load_technical_universe_bundle,
     price_result_to_close_points,
@@ -70,18 +71,18 @@ async def _build_portfolio_technical_prices(context: BuildContext, dependencies:
     universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
 
     assets: list[AssetPriceSeriesPayload] = []
-    for position in universe.positions:
-        result = universe.price_results.by_asset_id.get(position.asset_id)
+    for asset_id in universe.asset_ids:
+        result = universe.price_results.by_asset_id.get(asset_id)
         if result is None:
             continue
         points = price_result_to_close_points(result, start=scope.period_start, end=scope.period_end)
         buckets = build_price_buckets(points, context.bucket_plan, key="close")
         latest_close, latest_date = latest_point_value(points, key="close")
-        currency = result.prices[0].currency if result.prices and result.prices[0].currency else scope.target_currency
-        weight = universe.weights.get(position.asset_id)
+        currency = coherent_price_currency(result)
+        weight = universe.weights.get(asset_id)
         assets.append(
             AssetPriceSeriesPayload(
-                asset_id=position.asset_id,
+                asset_id=asset_id,
                 weight=(float(weight) if weight is not None else None),
                 currency=currency,
                 buckets=buckets,
@@ -93,7 +94,7 @@ async def _build_portfolio_technical_prices(context: BuildContext, dependencies:
 
     return PortfolioTechnicalPricesPayload(
         assets=tuple(assets),
-        eligible_asset_count=len(universe.positions),
+        eligible_asset_count=len(universe.asset_ids),
         considered_asset_count=universe.considered_count,
     )
 
@@ -118,15 +119,15 @@ async def _build_universe_technical_indicators(context: BuildContext, *, univers
     universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **universe_kwargs)
 
     assets: list[AssetIndicatorsPayload] = []
-    for position in universe.positions:
-        result = universe.price_results.by_asset_id.get(position.asset_id)
+    for asset_id in universe.asset_ids:
+        result = universe.price_results.by_asset_id.get(asset_id)
         if result is None:
             continue
         indicators = build_indicator_table_payloads(result.signals, context.bucket_plan)
-        weight = universe.weights.get(position.asset_id)
+        weight = universe.weights.get(asset_id)
         assets.append(
             AssetIndicatorsPayload(
-                asset_id=position.asset_id,
+                asset_id=asset_id,
                 weight=(float(weight) if weight is not None else None),
                 indicators=indicators,
             )
@@ -135,7 +136,7 @@ async def _build_universe_technical_indicators(context: BuildContext, *, univers
 
     return UniverseIndicatorsPayload(
         assets=tuple(assets),
-        eligible_asset_count=len(universe.positions),
+        eligible_asset_count=len(universe.asset_ids),
         considered_asset_count=universe.considered_count,
     )
 
@@ -215,11 +216,16 @@ async def _build_universe_technical_events(context: BuildContext, *, universe_kw
     universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **universe_kwargs)
 
     events = []
-    for position in universe.positions:
-        result = universe.price_results.by_asset_id.get(position.asset_id)
+    for asset_id in universe.asset_ids:
+        result = universe.price_results.by_asset_id.get(asset_id)
         if result is None:
             continue
-        events.extend(signal_results_to_discrete_events(result.signals, asset_id=position.asset_id))
+        events.extend(
+            signal_results_to_discrete_events(
+                result.signals,
+                asset_id=asset_id,
+            )
+        )
 
     return build_events_payload(tuple(events), context.bucket_plan)
 

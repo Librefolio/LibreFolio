@@ -55,7 +55,6 @@ export const AI_EXPORT_ANALYSIS_IDS = [
     'broker.fifo_review',
     'asset.trend_analysis',
     'asset.position_review',
-    'asset.drawdown_recovery',
     'fx.trend_review',
     'fx.conversion_timing',
     'fx.exposure_impact',

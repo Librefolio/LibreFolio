@@ -32,7 +32,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import BackwardFillInfo, Currency
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
     PortfolioReportMetadata,
@@ -59,10 +59,15 @@ from backend.app.schemas.signals import (
 from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_shared
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.resources import (
+    FxRateObservation,
+    FxRateSeriesResource,
+)
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.ai_export.temporal import Bucket, BucketingPolicy, BucketPlan
+from backend.app.services.ai_export.temporal.points import ContinuousMultiOutputPoint
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import SignalPluginRegistry
@@ -490,6 +495,19 @@ class TestExactBundleComposition:
         assert by_id["bollinger_20_2"].params == {"period": 20, "multiplier": 2.0}
         assert by_id["obv"].params == {}
 
+    @pytest.mark.parametrize(
+        "requests",
+        (
+            technical_shared.build_asset_annotation_requests(),
+            technical_shared.build_fx_annotation_requests(),
+        ),
+    )
+    def test_curated_annotations_are_observed_only_and_scale_aware(self, requests):
+        assert requests
+        assert all(request.observed_only for request in requests)
+        assert all(request.epsilon == pytest.approx(1e-12) for request in requests)
+        assert all(request.relative_epsilon == pytest.approx(1e-12) for request in requests)
+
     def test_fx_signal_requests_match_curated_spec_1_to_1(self):
         requests = technical_shared.build_fx_signal_requests()
         assert len(requests) == 12
@@ -678,7 +696,12 @@ class TestMultiOutputOhlc:
 
         non_empty = [bucket for bucket in payload["buckets"] if bucket["observation_count"] > 0]
         assert non_empty
-        for bucket in non_empty:
+        previous_close = None
+        for bucket in payload["buckets"]:
+            if bucket["observation_count"] == 0:
+                assert bucket["simple_return"] is None
+                assert bucket["return_start_date"] is None
+                continue
             assert bucket["calendar_days"] == (date.fromisoformat(bucket["end_date"]) - date.fromisoformat(bucket["start_date"])).days + 1
             assert set(bucket["first"]) == {"close"}
             assert set(bucket["last"]) == {"close"}
@@ -686,6 +709,95 @@ class TestMultiOutputOhlc:
             assert set(bucket["maximum"]) == {"close"}
             assert bucket["minimum"]["close"] <= bucket["first"]["close"] <= bucket["maximum"]["close"]
             assert bucket["minimum"]["close"] <= bucket["last"]["close"] <= bucket["maximum"]["close"]
+            assert bucket["minimum_date"] is not None
+            assert bucket["maximum_date"] is not None
+            if previous_close is None:
+                assert bucket["simple_return"] is None
+                assert bucket["return_start_date"] is None
+            else:
+                assert bucket["simple_return"] == pytest.approx(bucket["last"]["close"] / previous_close - 1)
+                assert bucket["return_start_date"] is not None
+            previous_close = bucket["last"]["close"]
+
+    def test_price_return_skips_empty_buckets_and_uses_previous_observation(self):
+        start = date(2026, 1, 1)
+        plan = BucketPlan(
+            start=start,
+            end=start + timedelta(days=3),
+            policy=BucketingPolicy(max_bucket_days=1),
+            buckets=tuple(
+                Bucket(
+                    index=index,
+                    start_date=start + timedelta(days=index),
+                    end_date=start + timedelta(days=index),
+                )
+                for index in range(4)
+            ),
+        )
+        points = (
+            ContinuousMultiOutputPoint(
+                date=start,
+                values={"close": Decimal("100")},
+            ),
+            ContinuousMultiOutputPoint(
+                date=start + timedelta(days=2),
+                values={"close": Decimal("110")},
+            ),
+            ContinuousMultiOutputPoint(
+                date=start + timedelta(days=3),
+                values={"close": Decimal("121")},
+            ),
+        )
+
+        buckets = technical_shared.build_price_buckets(points, plan)
+
+        assert buckets[0].simple_return is None
+        assert buckets[1].observation_count == 0
+        assert buckets[1].simple_return is None
+        assert buckets[2].return_start_date == start
+        assert buckets[2].simple_return == pytest.approx(0.1)
+        assert buckets[3].return_start_date == start + timedelta(days=2)
+        assert buckets[3].simple_return == pytest.approx(0.1)
+
+    def test_asset_price_points_exclude_calendar_backfill(self):
+        start = date(2026, 1, 2)
+        result = FAPriceQueryResult(
+            asset_id=1,
+            prices=[
+                _fa_price_point(1, start),
+                _fa_price_point(1, start + timedelta(days=1)).model_copy(
+                    update={
+                        "backward_fill_info": BackwardFillInfo(
+                            actual_rate_date=start,
+                            days_back=1,
+                        )
+                    }
+                ),
+                _fa_price_point(1, start + timedelta(days=2)).model_copy(
+                    update={
+                        "backward_fill_info": BackwardFillInfo(
+                            actual_rate_date=start,
+                            days_back=2,
+                        )
+                    }
+                ),
+                _fa_price_point(1, start + timedelta(days=3)),
+            ],
+            events=[],
+            errors=[],
+            signals=[],
+        )
+
+        points = technical_shared.price_result_to_close_points(
+            result,
+            start=start,
+            end=start + timedelta(days=3),
+        )
+
+        assert [point.date for point in points] == [
+            start,
+            start + timedelta(days=3),
+        ]
 
     @pytest.mark.asyncio
     async def test_bollinger_band_buckets_use_lower_middle_upper_keys(self, monkeypatch):
@@ -850,9 +962,18 @@ class TestMultiOutputOhlc:
 
         non_empty = [bucket for bucket in payload["buckets"] if bucket["observation_count"] > 0]
         assert non_empty
-        for bucket in non_empty:
+        previous_close = None
+        for bucket in payload["buckets"]:
+            if bucket["observation_count"] == 0:
+                assert bucket["simple_return"] is None
+                continue
             assert set(bucket["first"]) == {"rate"}
             assert bucket["first"]["rate"] > 0
+            if previous_close is None:
+                assert bucket["simple_return"] is None
+            else:
+                assert bucket["simple_return"] == pytest.approx(bucket["last"]["rate"] / previous_close - 1)
+            previous_close = bucket["last"]["rate"]
 
 
 # =============================================================================
@@ -1063,6 +1184,84 @@ class TestFxNoVolume:
         assert populated
         assert any(bucket["volatility"] is not None for bucket in populated)
 
+    def test_fx_carry_forward_is_excluded_from_returns_and_volatility(self):
+        start = date(2026, 1, 2)
+        series = FxRateSeriesResource.from_observations(
+            (
+                FxRateObservation(
+                    requested_date=start,
+                    actual_date=start,
+                    rate=Decimal("1"),
+                    backward_filled=False,
+                ),
+                FxRateObservation(
+                    requested_date=start + timedelta(days=1),
+                    actual_date=start,
+                    rate=Decimal("1"),
+                    backward_filled=True,
+                ),
+                FxRateObservation(
+                    requested_date=start + timedelta(days=2),
+                    actual_date=start,
+                    rate=Decimal("1"),
+                    backward_filled=True,
+                ),
+                FxRateObservation(
+                    requested_date=start + timedelta(days=3),
+                    actual_date=start + timedelta(days=3),
+                    rate=Decimal("1.1"),
+                    backward_filled=False,
+                ),
+            )
+        )
+        plan = BucketPlan(
+            start=start,
+            end=start + timedelta(days=3),
+            policy=BucketingPolicy(max_bucket_days=1),
+            buckets=tuple(
+                Bucket(
+                    index=index,
+                    start_date=start + timedelta(days=index),
+                    end_date=start + timedelta(days=index),
+                )
+                for index in range(4)
+            ),
+        )
+
+        rate_points = technical_shared.observations_to_rate_points(
+            series,
+            start=start,
+            end=start + timedelta(days=3),
+        )
+        return_points = asset_fx_technical._daily_return_points(
+            series,
+            start=start,
+            end=start + timedelta(days=3),
+        )
+        rate_buckets = technical_shared.build_price_buckets(
+            rate_points,
+            plan,
+            key="rate",
+        )
+        return_buckets = asset_fx_technical._build_return_volatility_buckets(
+            return_points,
+            plan,
+        )
+
+        assert [point.date for point in rate_points] == [
+            start,
+            start + timedelta(days=3),
+        ]
+        assert len(return_points) == 1
+        assert return_points[0].date == start + timedelta(days=3)
+        assert return_points[0].values["return"] == Decimal("0.1")
+        assert rate_buckets[1].observation_count == 0
+        assert rate_buckets[2].observation_count == 0
+        assert rate_buckets[3].return_start_date == start
+        assert rate_buckets[3].simple_return == pytest.approx(0.1)
+        assert sum(bucket.observation_count for bucket in return_buckets) == 1
+        assert all(bucket.volatility is None for bucket in return_buckets)
+
 
 # =============================================================================
 # 9. Full portfolio/broker universe analysis + breadth reconciliation (requirement 5, 9)
@@ -1130,6 +1329,48 @@ class TestPortfolioUniverseAndBreadth:
             assert len(payload["assets"]) == 5
             asset_ids = [asset["asset_id"] for asset in payload["assets"]]
             assert asset_ids == sorted(asset_ids), "assets must be deterministically ordered by asset_id"
+
+    @pytest.mark.asyncio
+    async def test_same_asset_across_brokers_is_loaded_and_counted_once(self, monkeypatch):
+        positions = [
+            _contribution(1, end_value=600, broker_id=1),
+            _contribution(1, end_value=300, broker_id=2),
+            _contribution(2, end_value=100, broker_id=2),
+        ]
+        price_calls = _patch_get_prices_bulk(monkeypatch)
+        scope = _scope()
+        _patch_get_report(monkeypatch, _report(scope, positions))
+        context = _make_context(scope)
+
+        prices = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
+        indicators = _envelope_payload(await context.resolve("portfolio.technical_indicators", required=True))
+        breadth = _envelope_payload(await context.resolve("portfolio.technical_breadth", required=True))
+        events = _envelope_payload(await context.resolve("portfolio.technical_events", required=True))
+
+        assert price_calls == [2]
+        assert prices["considered_asset_count"] == 3
+        assert prices["eligible_asset_count"] == 2
+        assert [asset["asset_id"] for asset in prices["assets"]] == [1, 2]
+        assert [asset["weight"] for asset in prices["assets"]] == pytest.approx([0.9, 0.1])
+        assert [asset["asset_id"] for asset in indicators["assets"]] == [1, 2]
+        assert breadth["considered_asset_count"] == 3
+        assert breadth["eligible_asset_count"] == 2
+        assert breadth["covered_asset_count"] <= 2
+        assert breadth["total_weight"] == pytest.approx(1.0)
+
+        flat_events = [event for bucket in events["buckets"] for event in bucket["events"]]
+        identities = {
+            (
+                event["date"],
+                event["key"],
+                event["signal_code"],
+                event["asset_id"],
+                event["direction"],
+                tuple(sorted(event["values"].items())),
+            )
+            for event in flat_events
+        }
+        assert len(flat_events) == len(identities)
 
     @pytest.mark.asyncio
     async def test_empty_portfolio_yields_valid_empty_technical_payload(self, monkeypatch):

@@ -159,7 +159,7 @@ def _typed_problem(response: httpx.Response) -> AiExportProblem:
 
 
 @pytest.mark.asyncio
-async def test_catalog_returns_18_datasets_and_17_analyses():
+async def test_catalog_returns_18_datasets_and_16_analyses():
     app = _app()
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -172,7 +172,8 @@ async def test_catalog_returns_18_datasets_and_17_analyses():
     assert payload["schema_version"] == 1
     assert payload["catalog_version"] == 1
     assert len(payload["datasets"]) == 18
-    assert len(payload["analyses"]) == 17
+    assert len(payload["analyses"]) == 16
+    assert "asset.drawdown_recovery" not in {entry["id"] for entry in payload["analyses"]}
     serialized = json.dumps(payload).lower()
     assert "prompt" not in serialized
     assert "web_research" not in serialized

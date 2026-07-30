@@ -325,7 +325,7 @@ def test_date_gap_does_not_bridge_crossing():
     assert result.annotations_by_target.get("signal", ()) == ()
 
 
-def test_observed_only_excludes_backfilled_crossing():
+def test_observed_only_bridges_represented_backfill_to_next_real_observation():
     points = price_points(
         [1, 2, 3],
         backfilled_indexes={1},
@@ -360,7 +360,123 @@ def test_observed_only_excludes_backfilled_crossing():
     )
 
     assert len(all_points.annotations_by_target["signal"]) == 1
-    assert observed.annotations_by_target.get("signal", ()) == ()
+    assert len(observed.annotations_by_target["signal"]) == 1
+    assert observed.annotations_by_target["signal"][0].date == (START + timedelta(days=2))
+
+
+def test_observed_only_drops_cross_that_exists_only_on_backfilled_point():
+    request = SignalThresholdCrossingRequest(
+        key="backfill-only",
+        attach_to_instance_id="signal",
+        source=SignalOutputValueSource(
+            instance_id="signal",
+            series_key="line",
+        ),
+        threshold=0,
+        observed_only=True,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([-1, 1, -1], backfilled_indexes={1}),
+        {"signal": [line_series([-1, 1, -1])]},
+        context(end=START + timedelta(days=2)),
+    )
+
+    assert result.annotations_by_target.get("signal", ()) == ()
+
+
+def test_observed_only_bridges_multiple_represented_weekend_days():
+    request = SignalThresholdCrossingRequest(
+        key="weekend",
+        attach_to_instance_id="signal",
+        source=SignalOutputValueSource(
+            instance_id="signal",
+            series_key="line",
+        ),
+        threshold=0,
+        observed_only=True,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([-1, -1, -1, 1], backfilled_indexes={1, 2}),
+        {"signal": [line_series([-1, -1, -1, 1])]},
+        context(end=START + timedelta(days=3)),
+    )
+
+    assert len(result.annotations_by_target["signal"]) == 1
+    assert result.annotations_by_target["signal"][0].date == (START + timedelta(days=3))
+
+
+def test_absolute_epsilon_suppresses_floating_point_zero_crossing():
+    request = SignalThresholdCrossingRequest(
+        key="epsilon-zero",
+        attach_to_instance_id="signal",
+        source=SignalOutputValueSource(
+            instance_id="signal",
+            series_key="line",
+        ),
+        threshold=0,
+        epsilon=1e-12,
+        relative_epsilon=1e-12,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([1, 1]),
+        {"signal": [line_series([-7e-15, 7e-15])]},
+        context(end=START + timedelta(days=1)),
+    )
+
+    assert result.annotations_by_target.get("signal", ()) == ()
+
+
+def test_relative_epsilon_scales_with_large_values():
+    request = SignalThresholdCrossingRequest(
+        key="epsilon-scale",
+        attach_to_instance_id="signal",
+        source=SignalOutputValueSource(
+            instance_id="signal",
+            series_key="line",
+        ),
+        threshold=1_000_000_000,
+        epsilon=1e-12,
+        relative_epsilon=1e-12,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([1, 1]),
+        {
+            "signal": [
+                line_series(
+                    [999_999_999.9995, 1_000_000_000.0005],
+                )
+            ]
+        },
+        context(end=START + timedelta(days=1)),
+    )
+
+    assert result.annotations_by_target.get("signal", ()) == ()
+
+
+def test_cross_above_epsilon_is_preserved():
+    request = SignalThresholdCrossingRequest(
+        key="epsilon-real",
+        attach_to_instance_id="signal",
+        source=SignalOutputValueSource(
+            instance_id="signal",
+            series_key="line",
+        ),
+        threshold=0,
+        epsilon=1e-12,
+        relative_epsilon=1e-12,
+    )
+    result = SignalAnnotationService().compute(
+        [request],
+        price_points([1, 1]),
+        {"signal": [line_series([-1e-6, 1e-6])]},
+        context(end=START + timedelta(days=1)),
+    )
+
+    assert len(result.annotations_by_target["signal"]) == 1
 
 
 def test_min_gap_deduplicates_dense_crossings():

@@ -8,11 +8,11 @@ function requestFixture(): AiExportSnapshotRequestInput {
         domain: 'asset',
         selection: {
             kind: 'analysis',
-            id: 'asset.drawdown_recovery',
+            id: 'asset.trend_analysis',
             version: 1,
-            instruction_template_id: 'asset.drawdown_recovery.instructions',
+            instruction_template_id: 'asset.trend_analysis.instructions',
             instruction_template_version: 1,
-            response_contract_id: 'asset.drawdown_recovery.response',
+            response_contract_id: 'asset.trend_analysis.response',
             response_contract_version: 1,
         },
         detail_level: 'standard',
@@ -31,13 +31,13 @@ describe('AI Export client', () => {
             broker_ids: [1, 3],
             selection: {
                 kind: 'analysis',
-                id: 'asset.drawdown_recovery',
+                id: 'asset.trend_analysis',
             },
         });
     });
 
     it('validates request, response, and catalog handshake', async () => {
-        const selection = selectionFixture('analysis', 'asset.drawdown_recovery');
+        const selection = selectionFixture('analysis', 'asset.trend_analysis');
         const expected = snapshotFixture(selection);
         const requests: AiExportSnapshotRequestInput[] = [];
         const transport = vi.fn(async (request: AiExportSnapshotRequestInput) => {
@@ -47,19 +47,19 @@ describe('AI Export client', () => {
 
         const response = await fetchAiExportSnapshot(requestFixture(), selection, transport);
 
-        expect(response.selection.id).toBe('asset.drawdown_recovery');
+        expect(response.selection.id).toBe('asset.trend_analysis');
         expect(transport).toHaveBeenCalledOnce();
         expect(requests[0]?.target_currency).toBe('EUR');
     });
 
     it('fails closed when local choice and request differ', async () => {
-        const wrongSelection = selectionFixture('analysis', 'asset.trend_analysis');
+        const wrongSelection = selectionFixture('analysis', 'asset.position_review');
 
         await expect(fetchAiExportSnapshot(requestFixture(), wrongSelection, async () => snapshotFixture(wrongSelection))).rejects.toBeInstanceOf(AiExportContractMismatchError);
     });
 
     it('rejects malformed responses before prompt rendering', async () => {
-        const selection = selectionFixture('analysis', 'asset.drawdown_recovery');
+        const selection = selectionFixture('analysis', 'asset.trend_analysis');
 
         await expect(fetchAiExportSnapshot(requestFixture(), selection, async () => ({domain: 'asset'}))).rejects.toBeInstanceOf(AiExportValidationError);
     });

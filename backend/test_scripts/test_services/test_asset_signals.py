@@ -446,6 +446,84 @@ async def test_target_currency_conversion_precedes_signal_compute(
 
 
 @pytest.mark.asyncio
+async def test_partial_target_currency_conversion_never_computes_mixed_signals(
+    asset_signal_data,
+):
+    requested_range = visible_range(asset_signal_data)
+    first_convertible_date = requested_range.start + timedelta(days=10)
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        session.add(
+            FxRate(
+                base="CAD",
+                quote="XTS",
+                date=first_convertible_date,
+                rate=Decimal("2"),
+                source="MANUAL",
+            )
+        )
+        await session.flush()
+        result = (
+            await AssetSourceManager.get_prices_bulk(
+                [
+                    FAPriceQueryItem(
+                        asset_id=asset_signal_data["asset_ids"][2],
+                        date_range=requested_range,
+                        target_currency="XTS",
+                        signals=[
+                            SignalRequest(
+                                instance_id="ema",
+                                signal_code="EMA",
+                                params={"period": 14},
+                            )
+                        ],
+                    )
+                ],
+                session,
+            )
+        )[0]
+
+    assert {point.currency for point in result.prices} == {"CAD", "XTS"}
+    assert any("mixed currencies" in error for error in result.errors)
+    assert result.signals[0].status == SignalStatus.UNAVAILABLE
+    assert result.signals[0].series == []
+
+
+@pytest.mark.asyncio
+async def test_target_currency_equal_to_native_remains_signal_coherent(
+    asset_signal_data,
+):
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        result = (
+            await AssetSourceManager.get_prices_bulk(
+                [
+                    FAPriceQueryItem(
+                        asset_id=asset_signal_data["asset_ids"][0],
+                        date_range=visible_range(asset_signal_data),
+                        target_currency="EUR",
+                        signals=[
+                            SignalRequest(
+                                instance_id="ema",
+                                signal_code="EMA",
+                                params={"period": 14},
+                            )
+                        ],
+                    )
+                ],
+                session,
+            )
+        )[0]
+
+    assert {point.currency for point in result.prices} == {"EUR"}
+    assert result.signals[0].status == SignalStatus.OK
+
+
+@pytest.mark.asyncio
 async def test_missing_target_currency_rate_makes_signals_unavailable(
     asset_signal_data,
 ):

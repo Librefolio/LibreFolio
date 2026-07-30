@@ -2,7 +2,7 @@ import {beforeEach, describe, expect, it} from 'vitest';
 
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 
-import {buildAiExportMemoryStorageKey, clearAiExportMemoryCache, loadAiExportMemory, saveAiExportMemory} from '../aiExportMemory';
+import {AI_EXPORT_MEMORY_VERSION, buildAiExportMemoryStorageKey, clearAiExportMemoryCache, loadAiExportMemory, saveAiExportMemory} from '../aiExportMemory';
 import {compatibilityFixture} from './runtimeFixtures';
 
 class MemoryStorage implements Storage {
@@ -40,7 +40,7 @@ describe('AI Export memory', () => {
     it('stores selection, detail, period, notes, and warning override per entity', () => {
         const options = {
             selectionKind: 'analysis' as const,
-            selectionId: 'asset.drawdown_recovery' as const,
+            selectionId: 'asset.position_review' as const,
             detailLevel: 'full' as const,
             period: {preset: 'custom' as const, customAmount: 9, customUnit: 'weeks' as const},
             responseLanguage: 'Italian' as const,
@@ -75,6 +75,33 @@ describe('AI Export memory', () => {
         });
 
         expect(loaded.options.selectionId).toBe('portfolio.pac_planning');
+        expect(storage.getItem(key)).toBeNull();
+    });
+
+    it('discards stale Drawdown Recovery selections and falls back', () => {
+        const key = buildAiExportMemoryStorageKey('user-1', 'asset:7');
+        storage.setItem(
+            key,
+            JSON.stringify({
+                version: AI_EXPORT_MEMORY_VERSION,
+                selectionKind: 'analysis',
+                selectionId: 'asset.drawdown_recovery',
+                detailLevel: 'full',
+                period: {preset: '3m', customAmount: 3, customUnit: 'months'},
+                notes: 'stale',
+            }),
+        );
+
+        const loaded = loadAiExportMemory({
+            memoryKey: 'asset:7',
+            domain: 'asset',
+            compatibility: compatibilityFixture(),
+            responseLanguage: 'English',
+            defaultSelectionId: 'asset.trend_analysis',
+            storage,
+        });
+
+        expect(loaded.options.selectionId).toBe('asset.trend_analysis');
         expect(storage.getItem(key)).toBeNull();
     });
 });

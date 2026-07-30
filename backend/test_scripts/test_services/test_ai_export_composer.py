@@ -335,7 +335,7 @@ class TestFoundationCatalogComposition:
         foundation_analysis_registry,
     ):
         assert len(foundation_dataset_registry) == 18
-        assert len(foundation_analysis_registry) == 17
+        assert len(foundation_analysis_registry) == 16
 
 
 def test_production_component_registry_contains_only_real_specs():

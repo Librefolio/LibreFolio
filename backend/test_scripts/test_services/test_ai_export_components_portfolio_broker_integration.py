@@ -159,7 +159,14 @@ def _report_metadata(scope: BuildScope) -> PortfolioReportMetadata:
     return PortfolioReportMetadata(target_currency=scope.target_currency, generated_at=scope.snapshot_as_of)
 
 
-def _history_point(day: date, *, nav: object, capital_baseline: object, total_pnl: object) -> PortfolioHistoryPoint:
+def _history_point(
+    day: date,
+    *,
+    nav: object,
+    capital_baseline: object,
+    total_pnl: object,
+    twrr: object | None = None,
+) -> PortfolioHistoryPoint:
     return PortfolioHistoryPoint(
         date=day,
         cash_value=_money(0),
@@ -170,6 +177,7 @@ def _history_point(day: date, *, nav: object, capital_baseline: object, total_pn
         cash_from_contributed_capital=_money(0),
         cash_from_generated_returns=_money(0),
         total_pnl=_money(total_pnl),
+        twrr=(Decimal(str(twrr)) if twrr is not None else None),
     )
 
 
@@ -626,10 +634,10 @@ class TestDatasetAndAnalysisRegistryConstruction:
         registry = build_portfolio_broker_dataset_registry()
         assert len(registry) == EXPECTED_DATASET_COUNT == 18
 
-    def test_analysis_registry_has_17_analyses(self):
+    def test_analysis_registry_has_16_analyses(self):
         dataset_registry = build_portfolio_broker_dataset_registry()
         analysis_registry = build_portfolio_broker_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 17
+        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 16
 
     def test_portfolio_and_broker_datasets_present(self):
         registry = build_portfolio_broker_dataset_registry()
@@ -1251,4 +1259,4 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        assert result.stdout.strip() == "45 18 17"
+        assert result.stdout.strip() == "45 18 16"

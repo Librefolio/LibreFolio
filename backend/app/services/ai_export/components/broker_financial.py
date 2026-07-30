@@ -41,6 +41,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     PerformanceBucketRow,
     PositionRow,
     UnallocatedRow,
+    build_performance_bucket_rows,
     load_lots_results,
     load_portfolio_report,
     lot_is_eligible,
@@ -317,40 +318,13 @@ def _build_performance_buckets(context: BuildContext, scope: BuildScope, history
     bucket_plan = context.bucket_plan
     if bucket_plan is None:
         raise BrokerComponentScopeError("broker.performance requires BuildContext.bucket_plan")
-    currency_code = scope.target_currency
-    rows: list[PerformanceBucketRow] = []
-    for bucket in bucket_plan.buckets:
-        points = sorted((point for point in history if bucket.start_date <= point.date <= bucket.end_date), key=lambda point: point.date)
-        if not points:
-            rows.append(PerformanceBucketRow(index=bucket.index, start_date=bucket.start_date, end_date=bucket.end_date, has_data=False))
-            continue
-        start_point, end_point = points[0], points[-1]
-        start_value = start_point.nav_value.amount
-        end_value = end_point.nav_value.amount
-        net_external_flow = end_point.capital_baseline.amount - start_point.capital_baseline.amount
-        period_pnl = end_point.total_pnl.amount - start_point.total_pnl.amount
-        reconciliation_diff = (end_value - start_value) - (net_external_flow + period_pnl)
-        # A simple bucket return is only reported when the bucket carries no external
-        # flow: with a flow present, end-start no longer isolates a return without
-        # re-deriving TWRR (an engine formula this builder must not duplicate).
-        return_percent = (period_pnl / abs(start_value)) if net_external_flow == 0 and start_value != 0 else None
-        rows.append(
-            PerformanceBucketRow(
-                index=bucket.index,
-                start_date=bucket.start_date,
-                end_date=bucket.end_date,
-                has_data=True,
-                start_value=Currency(code=currency_code, amount=start_value),
-                end_value=Currency(code=currency_code, amount=end_value),
-                min_value=Currency(code=currency_code, amount=min(point.nav_value.amount for point in points)),
-                max_value=Currency(code=currency_code, amount=max(point.nav_value.amount for point in points)),
-                net_external_flow=Currency(code=currency_code, amount=net_external_flow),
-                period_pnl=Currency(code=currency_code, amount=period_pnl),
-                return_percent=return_percent,
-                reconciliation_diff=Currency(code=currency_code, amount=reconciliation_diff),
-            )
+    return list(
+        build_performance_bucket_rows(
+            history,
+            bucket_plan,
+            currency_code=scope.target_currency,
         )
-    return rows
+    )
 
 
 async def _build_broker_performance(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerPerformancePayload:

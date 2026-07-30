@@ -4,6 +4,24 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-07-30] file | AI Export technical series and density contract
+
+Filed the native-market/target-valuation split, unique per-asset Portfolio/Broker
+technical universe, inter-bucket return anchors, observed-only carry-forward and
+epsilon semantics, measured Full 1Y density, deferred N=5 reduction candidate,
+and removal of public drawdown recovery pending deterministic Risk episodes.
+Filed: [[decisions/ai-export-technical-series-and-density-contract]].
+Graph: incremental code refresh plus semantic page merge produced 1,461 nodes /
+2,070 edges / 142 communities and regenerated `graph.html`; the new decision
+node and its cross-links were verified.
+
+## [2026-07-29] file | Risk G6 application contracts
+
+Filed stable/pending-approval G6 decisions for historical-replay proxy audit,
+lazy-panel retention/cache identity, present-bucket + Show all shock UX, and
+optional inert YAML tags. Shared Foundation and G6-11 remain blocked.
+Filed: [[decisions/risk-g6-application-contracts]].
+
 ## [2026-07-28] update | Risk backend audit and worker idle lifecycle
 
 Updated the Risk quantitative decision, Sobol contract, Riskfolio dependency trap,

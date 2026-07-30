@@ -8,18 +8,10 @@ request-scoped raw resource loaders for the eight non-technical
 `asset.performance`, `asset.lot_detail`.
 
 Deliberately kept separate from `backend.app.services.ai_export.components.
-resources` (the shared cross-domain resource module): that module is a
-concurrently-owned integration seam (Portfolio/Broker/technical-shared
-waves also touch it), so this Asset-core wave keeps its own resource keys
-here to avoid merge conflicts, except for `asset.market_snapshot`'s price
-data: `market_snapshot_from_price_result` derives the observed-price
-snapshot from the shared `ASSET_PRICE_RESULTS_RESOURCE`/`PriceResultsResource`
-(`backend.app.services.ai_export.components.resources`, loaded once via
-`backend.app.services.ai_export.components.technical_shared.
-load_asset_price_results`) instead of running its own separate raw-SQL
-`PriceHistory` query - see that function's docstring (parent integration
-gate, requirement 4: one canonical Asset price load shared by
-`asset.market_snapshot` and the technical sibling wave).
+resources` (the shared cross-domain resource module). Technical prices use a
+native-market series, while `asset.market_snapshot` uses a distinct
+target-currency request because the two consumers have different currency
+semantics.
 
 Every loader is a plain callable `(AsyncSession) -> Awaitable[T]` meant to be
 passed to `BuildContext.db_resource`, which memoizes it (success or failure)
@@ -41,10 +33,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment
 from backend.app.schemas.assets import FAClassificationParams
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, OpenDateRangeModel, PortfolioReportQuery, PortfolioReportResponse
-from backend.app.schemas.prices import FAPriceQueryResult
+from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
+from backend.app.services.ai_export.components.resources import PriceResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
+from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -267,6 +261,30 @@ def load_asset_report(scope: BuildScope):
     return _load
 
 
+def load_asset_market_prices(scope: BuildScope):
+    """Build the target-currency price loader for `asset.market_snapshot`."""
+
+    async def _load(session: AsyncSession) -> PriceResultsResource:
+        results = await AssetSourceManager.get_prices_bulk(
+            [
+                FAPriceQueryItem(
+                    asset_id=scope.asset_id,  # type: ignore[arg-type]
+                    date_range=DateRangeModel(
+                        start=scope.period_start,
+                        end=scope.period_end,
+                    ),
+                    include_price=True,
+                    include_events=False,
+                    target_currency=scope.target_currency,
+                )
+            ],
+            session,
+        )
+        return PriceResultsResource.from_results(results)
+
+    return _load
+
+
 def load_asset_lots(scope: BuildScope):
     """Builds the `db_resource` loader for `ASSET_LOTS_RESOURCE` (LOT_SUMMARY only).
 
@@ -295,6 +313,10 @@ def load_asset_lots(scope: BuildScope):
 ASSET_METADATA_RESOURCE = ResourceKey("asset.core.metadata", AssetMetadataResource)
 ASSET_REPORT_RESOURCE = ResourceKey("asset.core.report", PortfolioReportResponse)
 ASSET_LOTS_RESOURCE = ResourceKey("asset.core.lots", LotsAnalysisResponse)
+ASSET_MARKET_PRICES_RESOURCE = ResourceKey(
+    "asset.core.market_prices",
+    PriceResultsResource,
+)
 
 
 def scoped_holdings(report: PortfolioReportResponse, asset_id: int) -> Sequence:
@@ -313,6 +335,7 @@ def scoped_contributions(report: PortfolioReportResponse, asset_id: int) -> Sequ
 
 __all__ = [
     "ASSET_LOTS_RESOURCE",
+    "ASSET_MARKET_PRICES_RESOURCE",
     "ASSET_METADATA_RESOURCE",
     "ASSET_REPORT_RESOURCE",
     "AssetMarketSnapshotResource",
@@ -320,6 +343,7 @@ __all__ = [
     "AssetNotFoundError",
     "AssetPriceObservationData",
     "load_asset_lots",
+    "load_asset_market_prices",
     "load_asset_metadata",
     "load_asset_report",
     "market_snapshot_from_price_result",

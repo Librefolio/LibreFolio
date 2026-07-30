@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Mapping, Optional, Sequence
 
 from backend.app.schemas.signals import (
@@ -61,6 +61,7 @@ class SignalAnnotationService:
         annotations_by_target: dict[str, list[SignalAnnotation]] = {}
         warnings_by_target: dict[str, list[SignalWarning]] = {}
         observed_dates = {point.date for point in price_points if point.backward_fill_info is None or point.backward_fill_info.days_back == 0}
+        represented_dates = {point.date for point in price_points}
 
         for request in requests:
             try:
@@ -71,6 +72,7 @@ class SignalAnnotationService:
                         series_by_instance,
                         context,
                         observed_dates,
+                        represented_dates,
                     )
                 elif isinstance(request, SignalThresholdCrossingRequest):
                     annotations = self._threshold_crossings(
@@ -79,6 +81,7 @@ class SignalAnnotationService:
                         series_by_instance,
                         context,
                         observed_dates,
+                        represented_dates,
                     )
                 else:
                     raise SignalAnnotationSourceUnavailable(f"Unsupported annotation request: {type(request).__name__}")
@@ -115,6 +118,7 @@ class SignalAnnotationService:
         series_by_instance: Mapping[str, Sequence[SignalSeries]],
         context: SignalExecutionContext,
         observed_dates: set[date],
+        represented_dates: set[date],
     ) -> list[SignalAnnotation]:
         left = self._resolve_source(
             request.left,
@@ -136,6 +140,7 @@ class SignalAnnotationService:
             request=request,
             context=context,
             observed_dates=observed_dates,
+            represented_dates=represented_dates,
             values_for_event=lambda left_value, right_value: {
                 "left": left_value,
                 "right": right_value,
@@ -159,6 +164,7 @@ class SignalAnnotationService:
         series_by_instance: Mapping[str, Sequence[SignalSeries]],
         context: SignalExecutionContext,
         observed_dates: set[date],
+        represented_dates: set[date],
     ) -> list[SignalAnnotation]:
         source = self._resolve_source(
             request.source,
@@ -174,6 +180,7 @@ class SignalAnnotationService:
             request=request,
             context=context,
             observed_dates=observed_dates,
+            represented_dates=represented_dates,
             values_for_event=lambda value, threshold: {
                 "value": value,
                 "threshold": threshold,
@@ -197,6 +204,7 @@ class SignalAnnotationService:
         request: SignalLineCrossoverRequest | SignalThresholdCrossingRequest,
         context: SignalExecutionContext,
         observed_dates: set[date],
+        represented_dates: set[date],
         values_for_event,
         metadata: dict[str, object],
     ) -> list[SignalAnnotation]:
@@ -207,17 +215,30 @@ class SignalAnnotationService:
         last_event_date: Optional[date] = None
 
         for item_date in dates:
-            if previous_date is not None and self._has_cadence_gap(
-                previous_date,
-                item_date,
-                context.cadence,
+            if request.observed_only and item_date not in observed_dates:
+                continue
+            if (
+                previous_date is not None
+                and self._has_cadence_gap(
+                    previous_date,
+                    item_date,
+                    context.cadence,
+                )
+                and not self._gap_contains_only_represented_backfill(
+                    previous_date,
+                    item_date,
+                    context.cadence,
+                    represented_dates,
+                    observed_dates,
+                    request.observed_only,
+                )
             ):
                 last_side = None
                 pending_equality = None
             previous_date = item_date
 
             left_value, right_value = value_pair(item_date)
-            if left_value is None or right_value is None or (request.observed_only and item_date not in observed_dates):
+            if left_value is None or right_value is None:
                 last_side = None
                 pending_equality = None
                 continue
@@ -230,7 +251,12 @@ class SignalAnnotationService:
                 continue
             side = self._side(
                 left_float - right_float,
-                request.epsilon,
+                self._effective_epsilon(
+                    left_float,
+                    right_float,
+                    request.epsilon,
+                    request.relative_epsilon,
+                ),
             )
             if side == 0:
                 if last_side is not None and pending_equality is None:
@@ -340,6 +366,18 @@ class SignalAnnotationService:
         return 0
 
     @staticmethod
+    def _effective_epsilon(
+        left: float,
+        right: float,
+        absolute_epsilon: float,
+        relative_epsilon: float,
+    ) -> float:
+        return max(
+            absolute_epsilon,
+            relative_epsilon * max(abs(left), abs(right)),
+        )
+
+    @staticmethod
     def _limit_events(
         events: list[SignalAnnotation],
         limit: Optional[int],
@@ -376,6 +414,24 @@ class SignalAnnotationService:
             return (current - previous).days > 7
         month_distance = (current.year - previous.year) * 12 + current.month - previous.month
         return month_distance > 1
+
+    @staticmethod
+    def _gap_contains_only_represented_backfill(
+        previous: date,
+        current: date,
+        cadence: SignalCadence,
+        represented_dates: set[date],
+        observed_dates: set[date],
+        observed_only: bool,
+    ) -> bool:
+        if not observed_only or cadence != SignalCadence.DAILY or (current - previous).days <= 1:
+            return False
+        current_date = previous + timedelta(days=1)
+        while current_date < current:
+            if current_date not in represented_dates or current_date in observed_dates:
+                return False
+            current_date += timedelta(days=1)
+        return True
 
 
 __all__ = [

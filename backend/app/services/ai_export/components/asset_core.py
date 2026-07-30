@@ -61,10 +61,12 @@ from backend.app.services.ai_export.components.asset_payloads import (
 )
 from backend.app.services.ai_export.components.asset_resources import (
     ASSET_LOTS_RESOURCE,
+    ASSET_MARKET_PRICES_RESOURCE,
     ASSET_METADATA_RESOURCE,
     ASSET_REPORT_RESOURCE,
     AssetMetadataResource,
     load_asset_lots,
+    load_asset_market_prices,
     load_asset_metadata,
     load_asset_report,
     market_snapshot_from_price_result,
@@ -73,7 +75,6 @@ from backend.app.services.ai_export.components.asset_resources import (
 )
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.spec import ComponentSpec
-from backend.app.services.ai_export.components.technical_shared import load_asset_price_results
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 
@@ -157,11 +158,10 @@ async def _build_identity(context: BuildContext, dependencies: Mapping[str, Sect
 async def _build_market_snapshot(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> AssetMarketSnapshotPayload:
     scope = context.scope
     assert scope is not None
-    # Reuses the same `ASSET_PRICE_RESULTS_RESOURCE` the technical sibling wave
-    # loads (`load_asset_price_results`, memoized by `BuildContext.db_resource`)
-    # instead of a separate raw-SQL query - one canonical Asset price load per
-    # request (parent integration gate, requirement 4).
-    price_results = await load_asset_price_results(context)
+    price_results = await context.db_resource(
+        ASSET_MARKET_PRICES_RESOURCE,
+        load_asset_market_prices(scope),
+    )
     snapshot = market_snapshot_from_price_result(price_results.by_asset_id.get(scope.asset_id), scope)
 
     if snapshot.observation is None:

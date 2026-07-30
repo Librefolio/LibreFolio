@@ -60,12 +60,6 @@ class _PositionsPayload(BaseModel):
     positions: tuple[int, ...] = ()
 
 
-class _BucketsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    buckets: tuple[dict[str, int], ...] = ()
-
-
 def _session_with_accessible_brokers(broker_ids: list[int]) -> AsyncMock:
     session = AsyncMock(spec=AsyncSession)
     result = MagicMock()
@@ -208,7 +202,7 @@ def test_catalog_exposes_exact_18_datasets_and_17_analyses_without_prompts():
     serialized = catalog.model_dump_json()
 
     assert len(catalog.datasets) == 18
-    assert len(catalog.analyses) == 17
+    assert len(catalog.analyses) == 16
     assert {entry.id for entry in catalog.datasets} >= {
         "portfolio.overview",
         "broker.overview",
@@ -218,7 +212,7 @@ def test_catalog_exposes_exact_18_datasets_and_17_analyses_without_prompts():
     assert {entry.id for entry in catalog.analyses} >= {
         "portfolio.pac_planning",
         "broker.review",
-        "asset.drawdown_recovery",
+        "asset.position_review",
         "fx.exposure_impact",
     }
     assert "prompt" not in serialized.lower()
@@ -462,14 +456,6 @@ async def test_fx_exposure_analysis_with_empty_rows_is_not_applicable():
             _PositionsPayload,
             _PositionsPayload(),
             "no_position",
-        ),
-        (
-            "asset.drawdown_recovery",
-            "requires_price_history",
-            "asset.ohlc_returns",
-            _BucketsPayload,
-            _BucketsPayload(buckets=({"observation_count": 1},)),
-            "insufficient_price_history",
         ),
     ],
 )
