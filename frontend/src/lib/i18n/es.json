@@ -1174,6 +1174,8 @@
     "categoryOther": "Otro",
     "unrealizedPnlPercentTooltip": "P&L no realizado como porcentaje del coste residual (P&L no realizado / coste residual).",
     "pmcTooltip": "Precio medio de compra por unidad de la posición actualmente abierta.",
+    "oldestOpenLotDate": "Lote abierto más antiguo",
+    "oldestOpenLotDateTooltip": "Fecha de apertura del lote FIFO más antiguo aún abierto para esta posición.",
     "unallocatedIncome": "Ingreso no asignado",
     "unallocatedCosts": "Costes no asignados",
     "otherReconciliationResidual": "Otro / residuo de conciliación"
@@ -1185,6 +1187,8 @@
     "missingPrice": "{count} activo(s) sin precio de mercado — excluidos del NAV",
     "transactionImplied": "{count} activo(s) aún valorizado(s) al costo — sin precio de mercado disponible desde hace más de 2 semanas (a fecha {as_of_date})",
     "currentPriceAssumedAtCost": "Precio actual no disponible — valor abierto estimado al coste, P&L de mercado excluido",
+    "currentPriceAssumedAtCostRange": "Ningún precio de mercado disponible entre {date_from} y {date_to} — valor abierto estimado al coste, P&L de mercado excluido",
+    "affectedLots": "Lotes afectados:",
     "stalePrice": "{count} activo(s) con precios desactualizados",
     "missingFx": "Faltan tasas FX para {count} par(es) — los totales pueden estar incompletos",
     "navIncomplete": "NAV incompleto para {count} día(s) entre {date_from} y {date_to}",

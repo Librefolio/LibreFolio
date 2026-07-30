@@ -507,7 +507,11 @@ class FifoLotEngine:
             elif tx.type == "SELL":
                 events.append(FifoEvent(kind="SELL", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=_unit_price(tx.amount, tx.quantity), raw_transaction_ids=(tx.id,)))
             elif tx.type == "ADJUSTMENT" and tx.quantity > Decimal("0"):
-                events.append(FifoEvent(kind="ADJUSTMENT_IN", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=tx.quantity, unit_price=Decimal("0"), raw_transaction_ids=(tx.id,)))
+                # A positive ADJUSTMENT that carries a per-unit cost_basis_override opens a lot
+                # with a real cost basis (e.g. broker-snapshot imports with a known WAC). Without
+                # the override the adjustment remains a zero-cost quantity correction (unchanged).
+                adjustment_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
+                events.append(FifoEvent(kind="ADJUSTMENT_IN", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=tx.quantity, unit_price=adjustment_unit_price, raw_transaction_ids=(tx.id,)))
             elif tx.type == "ADJUSTMENT" and tx.quantity < Decimal("0"):
                 events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=Decimal("0"), raw_transaction_ids=(tx.id,)))
         self._classified_events_cache = sorted(events, key=self._event_sort_key)
@@ -617,7 +621,7 @@ class FifoLotEngine:
             event_date=event.date,
             transaction_id=event.transaction_id,
             close_reason="BUY",
-            close_unit_price=Decimal("0"),
+            close_unit_price=_require_decimal(event.unit_price),
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
@@ -629,7 +633,7 @@ class FifoLotEngine:
             opened_at=event.date,
             direction="LONG",
             quantity=remainder,
-            unit_price=Decimal("0"),
+            unit_price=_require_decimal(event.unit_price),
             currency=self._tx_by_id[event.transaction_id].currency,
             reference_resolution=resolution,
         )

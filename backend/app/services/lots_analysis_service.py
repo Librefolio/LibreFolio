@@ -347,6 +347,13 @@ class LotsAnalysisService:
             # Estimated-at-cost values the open portion at converted opening cost -> needs fx@opening.
             for lot in lots_by_id.values():
                 fx_resolver.need(lot.currency, lot.opening_date)
+        if self._needs_market_series(normalized_analyses):
+            # The estimated market-price line (below) reads each trade's unit price at its own date;
+            # register the fx@trade-date needs so foreign-currency trades convert to target (no-op EUR).
+            for tx in transactions:
+                fx_resolver.need(tx.currency or asset.currency, tx.date)
+                if tx.cost_basis_override is not None:
+                    fx_resolver.need(tx.cost_basis_currency or asset.currency, tx.date)
         await fx_resolver.load(self.db)
 
         income_by_lot, income_prefix_by_lot, income_events_payload = self._extract_income_outputs(engine_result, income_events_input)
@@ -354,18 +361,38 @@ class LotsAnalysisService:
 
         data_quality = self._build_data_quality_report(engine_result.issues)
         if estimated_mode and self._needs_market_series(normalized_analyses):
+            # estimated_mode == the asset has NO price points at all, so the whole analysis window
+            # [computed_from, actual_to] is the range with no market price. Surface it in the message
+            # so the user knows which period is uncovered (per user feedback on delisted/matured titles).
             data_quality.issues.append(
                 DataQualityIssue(
                     domain=IssueDomain.PORTFOLIO,
                     code=IssueCode.CURRENT_PRICE_ASSUMED_AT_COST,
                     severity=IssueSeverity.WARNING,
-                    message_i18n_key=_message_key_for_issue(IssueCode.CURRENT_PRICE_ASSUMED_AT_COST),
-                    message_params={"asset_id": asset_id},
+                    message_i18n_key="dataQuality.currentPriceAssumedAtCostRange",
+                    message_params={"asset_id": asset_id, "date_from": computed_from.isoformat(), "date_to": actual_to.isoformat()},
                 )
             )
         active_price_dates = history_dates if self._needs_market_series(normalized_analyses) else [actual_to]
         market_prices = self._build_market_price_map(price_lookup, fx_resolver, active_price_dates)
         quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
+        # Estimated market-price line (chart only): where no real quote exists, carry the last-known
+        # trade price forward (BUY cost / SELL proceeds / priced ADJUSTMENT carryover) so a price-less
+        # or partially-gapped asset still shows a "prezzo di mercato" curve that steps at each trade.
+        # This never feeds valuation/return math (market_prices, above, is left untouched).
+        trade_price_points = self._build_trade_price_points(
+            transactions=transactions,
+            split_ratios_by_tx_id=split_ratios_by_tx_id,
+            asset_currency=asset.currency,
+            fx_resolver=fx_resolver,
+            quote_base_quantity=quote_base_quantity,
+        )
+        estimated_market_prices = self._build_estimated_market_price_map(
+            price_lookup=price_lookup,
+            trade_points=trade_price_points,
+            fx_resolver=fx_resolver,
+            dates=active_price_dates,
+        )
         wac_context = self._build_wac_context(
             transactions=transactions,
             split_ratios_by_tx_id=split_ratios_by_tx_id,
@@ -460,7 +487,7 @@ class LotsAnalysisService:
                 self._build_price_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
-                    market_prices=market_prices,
+                    estimated_market_prices=estimated_market_prices,
                     history_dates=history_dates,
                     target_currency=target_currency,
                     closures_by_lot=closures_by_lot,
@@ -788,6 +815,84 @@ class LotsAnalysisService:
                 continue
             market_prices[current_date] = fx_resolver.convert(resolved.price, resolved.currency, current_date)
         return market_prices
+
+    def _build_trade_price_points(
+        self,
+        *,
+        transactions: Sequence[Transaction],
+        split_ratios_by_tx_id: dict[int, Decimal],
+        asset_currency: str,
+        fx_resolver: _FxRateResolver,
+        quote_base_quantity: int,
+    ) -> list[tuple[date_type, Decimal]]:
+        """Last-known-trade price observations, in target currency at the per-quote_base_quantity
+        market scale that ``price_history.close`` uses.
+
+        Mirrors the value a market ticker carries: the unit price of the most recent trade — BUY
+        cost, SELL proceeds, or a priced ADJUSTMENT carryover (in-kind transfer/succession cost) —
+        divided by traded quantity and scaled ``× quote_base_quantity`` (so a qbq=100 bond lands on
+        the ~100 par axis; no-op for qbq=1). Split-linked rows and pure quantity adjustments carry no
+        price and are skipped. Consumed only to *estimate* the market-price line where no real quote
+        exists (last-observation-carried-forward); it never feeds valuation/return math.
+        """
+        scale = Decimal(quote_base_quantity if quote_base_quantity > 0 else 1)
+        points: list[tuple[date_type, Decimal]] = []
+        for tx in sorted(transactions, key=lambda row: (row.date, row.id or 0)):
+            if tx.id in split_ratios_by_tx_id:
+                continue
+            quantity = tx.quantity or Decimal("0")
+            if quantity == Decimal("0"):
+                continue
+            tx_type = str(getattr(tx.type, "value", tx.type))
+            unit_target: Decimal | None = None
+            if tx_type in ("BUY", "SELL"):
+                if tx.amount:
+                    currency = tx.currency or asset_currency
+                    converted = fx_resolver.convert(abs(tx.amount), currency, tx.date)
+                    total = converted if converted is not None else abs(tx.amount)
+                    unit_target = total / abs(quantity)
+            elif tx_type == "ADJUSTMENT" and tx.cost_basis_override not in (None, Decimal("0")):
+                currency = tx.cost_basis_currency or asset_currency
+                converted = fx_resolver.convert(tx.cost_basis_override, currency, tx.date)
+                unit_target = converted if converted is not None else tx.cost_basis_override
+            if unit_target is None:
+                continue
+            points.append((tx.date, unit_target * scale))
+        return points
+
+    def _build_estimated_market_price_map(
+        self,
+        *,
+        price_lookup: _PriceHistoryLookup,
+        trade_points: Sequence[tuple[date_type, Decimal]],
+        fx_resolver: _FxRateResolver,
+        dates: Sequence[date_type],
+    ) -> dict[date_type, tuple[Decimal, bool]]:
+        """Estimated market price per date = the most recent observation among the real price
+        history (carried forward, converted to target) and the last-known trade. A real quote wins
+        ties (same observation date). The bool flag is ``True`` when the value is an estimate (came
+        from a trade, not an actual quote). Dates with no observation at all are omitted.
+        """
+        trade_dates = [point[0] for point in trade_points]
+        out: dict[date_type, tuple[Decimal, bool]] = {}
+        for current_date in dates:
+            resolved = price_lookup.resolve(current_date)
+            real_value: Decimal | None = None
+            real_date: date_type | None = None
+            if resolved is not None:
+                real_value = fx_resolver.convert(resolved.price, resolved.currency, current_date)
+                real_date = resolved.resolved_date
+            trade_value: Decimal | None = None
+            trade_date: date_type | None = None
+            idx = bisect.bisect_right(trade_dates, current_date) - 1
+            if idx >= 0:
+                trade_date = trade_points[idx][0]
+                trade_value = trade_points[idx][1]
+            if real_value is not None and (trade_date is None or (real_date is not None and real_date >= trade_date)):
+                out[current_date] = (real_value, False)
+            elif trade_value is not None:
+                out[current_date] = (trade_value, True)
+        return out
 
     def _build_wac_context(
         self,
@@ -1817,7 +1922,7 @@ class LotsAnalysisService:
         *,
         selected_ids: Sequence[int],
         lots_by_id: dict[int, FifoLot],
-        market_prices: dict[date_type, Decimal | None],
+        estimated_market_prices: dict[date_type, tuple[Decimal, bool]],
         history_dates: Sequence[date_type],
         target_currency: str,
         closures_by_lot: dict[int, list[LotClosure]],
@@ -1829,10 +1934,11 @@ class LotsAnalysisService:
             for current_date in history_dates:
                 if current_date < lot.opening_date or current_date > last_date:
                     continue
-                market_price = market_prices.get(current_date)
-                if market_price is None:
+                entry = estimated_market_prices.get(current_date)
+                if entry is None:
                     continue
-                points.append(LotPriceHistoryPoint(lot_id=lot_id, date=current_date, market_price=market_price, currency=target_currency))
+                market_price, is_estimated = entry
+                points.append(LotPriceHistoryPoint(lot_id=lot_id, date=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
         return points
 
     def _build_data_quality_report(self, issues: Sequence[FifoDataQualityIssue]) -> DataQualityReport:

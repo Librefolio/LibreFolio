@@ -30,6 +30,8 @@ def _tx(
     related_transaction_id: int | None = None,
     target_amount: str | None = None,
     target_currency: str | None = None,
+    cost_basis_override: str | None = None,
+    cost_basis_currency: str | None = None,
 ) -> FifoInputTransaction:
     return FifoInputTransaction(
         id=tx_id,
@@ -43,6 +45,8 @@ def _tx(
         related_transaction_id=related_transaction_id,
         target_amount=_d(target_amount) if target_amount is not None else None,
         target_currency=target_currency,
+        cost_basis_override=_d(cost_basis_override) if cost_basis_override is not None else None,
+        cost_basis_currency=cost_basis_currency,
     )
 
 
@@ -54,8 +58,8 @@ def _sell(tx_id: int, qty: str, price: str, dt: str = "2025-01-01", broker_id: i
     return _tx(tx_id, "SELL", broker_id=broker_id, dt=dt, quantity=f"-{qty}", amount=f"{_d(qty) * _d(price)}", target_amount=target_amount)
 
 
-def _adjustment(tx_id: int, qty: str, dt: str = "2025-01-01", broker_id: int = 1) -> FifoInputTransaction:
-    return _tx(tx_id, "ADJUSTMENT", broker_id=broker_id, dt=dt, quantity=qty)
+def _adjustment(tx_id: int, qty: str, dt: str = "2025-01-01", broker_id: int = 1, cost_basis_override: str | None = None, cost_basis_currency: str | None = None) -> FifoInputTransaction:
+    return _tx(tx_id, "ADJUSTMENT", broker_id=broker_id, dt=dt, quantity=qty, cost_basis_override=cost_basis_override, cost_basis_currency=cost_basis_currency)
 
 
 def _transfer_pair(
@@ -315,6 +319,17 @@ class TestAdjustmentFlows:
         rel_return = None if ref is None or ref == _d("0") else (_d("50") / ref) - _d("1")
         assert rel_return == expected_return
         assert expected_code in _issue_codes(result) if expected_code else result.issues == []
+
+    def test_adjustment_plus_with_cost_basis_override_opens_priced_lot(self):
+        # A broker-snapshot import records the opening position as a positive ADJUSTMENT
+        # carrying the per-unit WAC in cost_basis_override. The opened lot must reflect that
+        # cost basis (not zero) so total_return is computable and the WAC-chart bubble renders.
+        result = _run([_adjustment(1, "5", dt="2025-01-01", cost_basis_override="90", cost_basis_currency="EUR")])
+
+        lot = result.get_lot(1)
+        assert lot.open_quantity == _d("5")
+        assert lot.opening_unit_price == _d("90")
+        assert lot.original_cost == _d("450")
 
     def test_adjustment_minus_consumes_long_at_zero_proceeds(self):
         result = _run(

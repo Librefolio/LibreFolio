@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import bisect
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
@@ -749,6 +749,39 @@ _DEPOSIT_TYPES = {TransactionType.DEPOSIT}
 _WITHDRAWAL_TYPES = {TransactionType.WITHDRAWAL}
 _CASH_FLOW_TYPES = _DEPOSIT_TYPES | _WITHDRAWAL_TYPES
 _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
+# Transaction types that open or consume quantity in a FIFO lot stream (used to derive the
+# oldest still-open lot's opening date per position). ADJUSTMENT/TRANSFER are signed: a
+# positive leg opens a lot, a negative leg consumes oldest-first (per-broker view: a
+# transfer-in opens a lot dated at the receiving broker's transfer date).
+_LOT_AFFECTING_TYPES = {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT, TransactionType.TRANSFER}
+
+
+def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
+    """Opening date of the oldest FIFO lot still open, from one (broker, asset) holding stream.
+
+    Opens (add a lot): positive-quantity BUY / ADJUSTMENT / TRANSFER.
+    Closes (consume oldest-first): negative-quantity SELL / ADJUSTMENT / TRANSFER.
+    Returns None when no lot remains open (fully closed) or the stream is empty. This is the
+    FIFO-exact opening date, which differs from the first-ever position date once partial sells
+    have fully consumed the earliest lots.
+    """
+    open_lots: deque[tuple[date_type, Decimal]] = deque()
+    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
+        qty = tx.quantity or Decimal("0")
+        if qty > 0:
+            open_lots.append((tx.date, qty))
+        elif qty < 0:
+            remaining = -qty
+            while remaining > 0 and open_lots:
+                lot_date, lot_qty = open_lots[0]
+                if lot_qty > remaining:
+                    open_lots[0] = (lot_date, lot_qty - remaining)
+                    remaining = Decimal("0")
+                else:
+                    remaining -= lot_qty
+                    open_lots.popleft()
+    return open_lots[0][0] if open_lots else None
+
 
 # Some instruments (e.g. CROWDFUND real-estate loans redeemed via periodic partial
 # buybacks) accrue a tiny non-zero quantity residual even after the position is
@@ -1073,6 +1106,8 @@ class PortfolioService:
         broker_market_values: dict[int, Decimal] = defaultdict(Decimal)
         broker_total_invested: dict[int, Decimal] = defaultdict(Decimal)
         first_position_dates: dict[tuple[int, int], date_type] = {}
+        # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
+        lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
         _income_accum = Decimal("0")
         _fees_taxes_accum = Decimal("0")
         _fees_accum = Decimal("0")
@@ -1136,6 +1171,8 @@ class PortfolioService:
             # Holding transactions — group by asset
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in broker_txns:
+                if tx.asset_id is not None and tx.type in _LOT_AFFECTING_TYPES:
+                    lot_txns_by_key[(broker_id, tx.asset_id)].append(tx)
                 if tx.type not in _HOLDING_TYPES:
                     continue
                 if tx.asset_id is not None:
@@ -1189,6 +1226,8 @@ class PortfolioService:
                         sell_proceeds = sell_amount
                     cost_sold = sell_qty * wac_at_sell_base
                     _realized_accum += (sell_proceeds - cost_sold) * share
+
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
 
         end_positions = [ps for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD]
         assets_map = await self._get_assets_map({ps.asset_id for ps in end_positions})
@@ -1298,6 +1337,7 @@ class PortfolioService:
                     price_change_1d=price_change_1d,
                     gain_loss_change_1d=gain_loss_change_1d,
                     gain_loss_change_1d_percent=gain_loss_change_1d_percent,
+                    oldest_open_lot_date=oldest_open_lot_dates.get((ps.broker_id, ps.asset_id)),
                     allocation_percent=None,
                 )
             )
@@ -1734,6 +1774,8 @@ class PortfolioService:
 
         # Track all positions with BUY/SELL activity
         position_info: dict[tuple[int, int], dict] = {}
+        # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
+        lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
 
         for access in accesses:
             broker_id = access.broker_id
@@ -1780,6 +1822,8 @@ class PortfolioService:
             # ── Holdings: group by asset for realized + unrealized ──
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in broker_txns:
+                if tx.asset_id is not None and tx.type in _LOT_AFFECTING_TYPES:
+                    lot_txns_by_key[(broker_id, tx.asset_id)].append(tx)
                 if tx.type not in _QTY_TYPES:
                     continue
                 if tx.asset_id is not None:
@@ -1838,6 +1882,8 @@ class PortfolioService:
 
         # ── Unrealized delta: 2-point computation per position ──
         contributions: list[AssetPeriodContribution] = []
+
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
 
         for pos_key, info in position_info.items():
             broker_id, asset_id = pos_key
@@ -1961,6 +2007,7 @@ class PortfolioService:
                     start_value=start_value,
                     end_value=end_value,
                     is_fully_sold=is_fully_sold,
+                    oldest_open_lot_date=oldest_open_lot_dates.get(pos_key),
                 )
             )
 
@@ -1988,6 +2035,7 @@ class PortfolioService:
                         start_value=Decimal("0"),
                         end_value=Decimal("0"),
                         is_fully_sold=True,
+                        oldest_open_lot_date=oldest_open_lot_dates.get((bid, aid)),
                     )
                 )
 

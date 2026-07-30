@@ -293,14 +293,25 @@ async def test_full_history_keeps_prior_price_seed_for_first_chart_day(session, 
         date_to=date(2025, 1, 11),
         target_currency="EUR",
         selected_lot_ids=None,
-        requested_analyses=["LOT_SUMMARY", "PRICE_HISTORY"],
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "PRICE_HISTORY"],
     )
 
     assert result.lots is not None
     assert len(result.lots) == 1
+    # The prior-price seed (95 @ 01-09) still drives *valuation* on the first chart day: the open
+    # value uses the carried market price (10 * 95 = 950). market_prices is untouched by the line.
+    assert result.value_history is not None
+    value_points = _points_by_lot_date(result.value_history)
+    assert value_points[(result.lots[0].lot_id, date(2025, 1, 10))].open_value == Decimal("950")
+    # The estimated market *line*, however, shows the most-recent observation: on the BUY day the
+    # trade (1000 / 10 = 100) is newer than the 01-09 seed -> 100, flagged estimate; on 01-11 the
+    # real quote (105) is the newest observation -> 105, not an estimate.
     assert result.price_history is not None
     price_points = _points_by_lot_date(result.price_history)
-    assert price_points[(result.lots[0].lot_id, date(2025, 1, 10))].market_price == Decimal("95")
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 10))].market_price == Decimal("100")
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 10))].estimated is True
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 11))].market_price == Decimal("105")
+    assert price_points[(result.lots[0].lot_id, date(2025, 1, 11))].estimated is False
 
 
 @pytest.mark.asyncio
@@ -1213,7 +1224,15 @@ async def test_closed_lot_history_continues_flat_without_close_market_price(sess
     assert return_points[(lot.lot_id, date(2025, 1, 12))].total_return == Decimal("0.3")
     assert return_points[(lot.lot_id, date(2025, 1, 13))].relative_return is None
     assert return_points[(lot.lot_id, date(2025, 1, 14))].relative_return is None
-    assert result.price_history == []
+    # No real quote exists during the lot's lifetime (the only price, 01-15, is after the close), so
+    # the market line is estimated from the lot's own trades: BUY unit 100 carried, stepping to the
+    # SELL unit 130 on the close date. The post-close real quote falls outside the closed lot window.
+    price_points = _points_by_lot_date(result.price_history)
+    assert price_points[(lot.lot_id, date(2025, 1, 10))].market_price == Decimal("100")
+    assert price_points[(lot.lot_id, date(2025, 1, 10))].estimated is True
+    assert price_points[(lot.lot_id, date(2025, 1, 12))].market_price == Decimal("130")
+    assert price_points[(lot.lot_id, date(2025, 1, 12))].estimated is True
+    assert (lot.lot_id, date(2025, 1, 15)) not in price_points
 
 
 @pytest.mark.asyncio
@@ -1599,3 +1618,111 @@ async def test_bond_relative_return_scaled_when_opening_has_no_market_price(sess
     return_points = _points_by_lot_date(result.return_history)
     latest_return = return_points[(lot.lot_id, date(2025, 1, 15))]
     assert latest_return.relative_return is not None and latest_return.relative_return == Decimal("-0.02")
+
+
+@pytest.mark.asyncio
+async def test_price_history_estimates_market_line_from_last_known_trade(session, test_user, asset, broker):
+    # Price-less asset (no PriceHistory rows): the chart's market-price line is estimated from the
+    # last-known trade (BUY cost, then SELL proceeds) carried forward, stepping up at the sale.
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 2, 1),
+                quantity=Decimal("-4"),
+                amount=Decimal("520"),
+                currency="EUR",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PRICE_HISTORY"],
+    )
+
+    assert result.price_history is not None and len(result.price_history) > 0
+    points = _points_by_date(result.price_history)
+    # Before the sale: carried BUY unit price (1000 / 10 = 100), flagged as an estimate.
+    assert points[date(2025, 1, 15)].market_price == Decimal("100")
+    assert points[date(2025, 1, 15)].estimated is True
+    # After the sale: steps up to the SELL unit price (520 / 4 = 130), still an estimate.
+    assert points[date(2025, 2, 5)].market_price == Decimal("130")
+    assert points[date(2025, 2, 5)].estimated is True
+
+
+@pytest.mark.asyncio
+async def test_price_history_real_quote_wins_but_trade_fills_later_gap(session, test_user, asset, broker):
+    # A single real quote at opening, no later quotes: the real price is carried forward (not an
+    # estimate) while it is the most recent observation; once a later SELL happens, the trade price
+    # becomes the most recent observation and fills the gap, flagged as an estimate.
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.BUY,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("-1000"),
+                currency="EUR",
+            ),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.SELL,
+                date=date(2025, 2, 1),
+                quantity=Decimal("-4"),
+                amount=Decimal("520"),
+                currency="EUR",
+            ),
+            PriceHistory(
+                asset_id=asset.id,
+                date=date(2025, 1, 10),
+                close=Decimal("100"),
+                currency="EUR",
+                source_plugin_key="TEST",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 2, 5),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["PRICE_HISTORY"],
+    )
+
+    assert result.price_history is not None and len(result.price_history) > 0
+    points = _points_by_date(result.price_history)
+    # Gap after the only real quote, before the sale: carried real price, NOT an estimate.
+    assert points[date(2025, 1, 20)].market_price == Decimal("100")
+    assert points[date(2025, 1, 20)].estimated is False
+    # After the sale: the trade is the most recent observation -> fills with 130, flagged estimate.
+    assert points[date(2025, 2, 3)].market_price == Decimal("130")
+    assert points[date(2025, 2, 3)].estimated is True

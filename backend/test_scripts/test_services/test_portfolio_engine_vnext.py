@@ -572,6 +572,86 @@ class TestThreePool:
         assert last.cash_from_generated_returns == Decimal("150")
 
 
+class TestInKindAdjustmentCapital:
+    """Priced in-kind ADJUSTMENT (opening / transfer / succession) is a capital
+    contribution or distribution, NOT profit.
+
+    Such a transaction injects (qty>0) or removes (qty<0) real book value with no
+    cash counterpart, so its cost must move the capital baseline
+    (``cumulative_external_cash_flow``). Otherwise the book value leaks into total
+    P&L and, at portfolio level, into the "Other / reconciliation residual".
+    """
+
+    def test_priced_adjustment_in_is_capital_not_pnl(self):
+        """ADJUSTMENT-in with cost_basis_override raises the capital baseline by its
+        book value; total P&L then reflects only unrealized (market − cost)."""
+        txs = [_c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
+        prices = {1: [(date(2025, 1, 2), Decimal("120"), "EUR")]}
+        result = _build(txs, price_map=prices)
+        last = result.daily_states[-1]
+        # book (cost) = 10 * 100 = 1000; market = 10 * 120 = 1200; unrealized = 200
+        assert last.nav_value == Decimal("1200")
+        assert last.open_cost_basis == Decimal("1000")
+        assert last.unrealized_gain_loss == Decimal("200")
+        # capital baseline absorbs the in-kind book value → total P&L == unrealized only
+        assert last.cumulative_external_cash_flow == Decimal("1000")
+        assert last.total_pnl == Decimal("200")
+
+    def test_priced_adjustment_at_cost_has_zero_pnl(self):
+        """When market == injected cost, an opening ADJUSTMENT yields zero P&L (pure
+        capital, no reconciliation residual)."""
+        txs = [_c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
+        prices = {1: [(date(2025, 1, 2), Decimal("100"), "EUR")]}
+        result = _build(txs, price_map=prices)
+        last = result.daily_states[-1]
+        assert last.cumulative_external_cash_flow == Decimal("1000")
+        assert last.total_pnl == Decimal("0")
+
+    def test_adjustment_out_is_symmetric_capital_distribution(self):
+        """ADJUSTMENT-out (in-kind removal, no cash) removes book at WAC from the
+        capital baseline — mirror of the contribution — with no phantom realized P&L.
+        A full in→out cycle returns the capital baseline to zero."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("-10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 6))),
+        ]
+        prices = {1: [(date(2025, 1, 2), Decimal("120"), "EUR")]}
+        result = _build(txs, price_map=prices)
+        # Mid-state (after in, before out): capital 1000, unrealized 200
+        mid = next(s for s in result.daily_states if s.date == date(2025, 1, 4))
+        assert mid.cumulative_external_cash_flow == Decimal("1000")
+        assert mid.total_pnl == Decimal("200")
+        # Final (after out): position closed, capital baseline back to 0, no residual
+        last = result.daily_states[-1]
+        assert last.market_value == Decimal("0")
+        assert last.cumulative_external_cash_flow == Decimal("0")
+        assert last.total_pnl == Decimal("0")
+
+    def test_preframe_priced_adjustment_carries_capital_into_frame(self):
+        """An opening ADJUSTMENT before frame_start seeds the capital baseline so a
+        bounded period starts with the right capital (not a phantom P&L)."""
+        txs = [_c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
+        prices = {1: [(date(2025, 1, 2), Decimal("120"), "EUR"), (date(2025, 1, 5), Decimal("120"), "EUR")]}
+        result = _build(txs, price_map=prices, frame_start=date(2025, 1, 5))
+        last = result.daily_states[-1]
+        assert last.cumulative_external_cash_flow == Decimal("1000")
+        assert last.total_pnl == Decimal("200")
+
+    def test_unpriced_quantity_adjustment_is_not_capital(self):
+        """A quantity-only ADJUSTMENT (no cost_basis_override) is NOT a capital event
+        and must not touch the capital baseline (backward-compatible gating)."""
+        txs = [
+            _c(_tx(tx_id=1, tx_type=TransactionType.BUY, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("2"), amount=Decimal("0"), dt=date(2025, 1, 5))),
+        ]
+        prices = {1: [(date(2025, 1, 2), Decimal("100"), "EUR")]}
+        result = _build(txs, price_map=prices)
+        last = result.daily_states[-1]
+        # BUY pays cash (not an external cash flow); the unpriced adjustment adds no
+        # capital → capital baseline stays 0.
+        assert last.cumulative_external_cash_flow == Decimal("0")
+
+
 # =============================================================================
 # 4. POSITION STATE EMISSION
 # =============================================================================

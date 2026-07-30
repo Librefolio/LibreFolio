@@ -190,10 +190,28 @@
     // #3: absolute Y axis — automatic (data-fit) or anchored at 0. Mirrors the LotComparisonChart
     // value toggle and prevents the percentage-mode 0-clamp from leaking into abs on toggle-back.
     let absYFromZero = $state(false);
+    let wrapperEl: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let resizeObserver: ResizeObserver | null = null;
     let darkModeObserver: MutationObserver | null = null;
+    let pulseTimers: ReturnType<typeof setTimeout>[] = [];
+
+    /** Public: briefly pulse (highlight → downplay, cycled ×3) the bubble for the given lot so clicking a
+     * data-quality warning row draws the eye to the matching bubble. Scrolls the chart into view first.
+     * No-op if the lot has no bubble (filtered out, or price-less with a null return). */
+    export function pulseLot(lotId: number): void {
+        wrapperEl?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        if (!chartInstance) return;
+        const dataIndex = buildRenderableLotBubbles().findIndex((entry) => entry.point.lotId === lotId);
+        if (dataIndex < 0) return;
+        for (const timer of pulseTimers) clearTimeout(timer);
+        pulseTimers = [];
+        for (let cycle = 0; cycle < 3; cycle += 1) {
+            pulseTimers.push(setTimeout(() => chartInstance?.dispatchAction({type: 'highlight', seriesId: 'lot-performance-bubbles', dataIndex}), cycle * 440));
+            pulseTimers.push(setTimeout(() => chartInstance?.dispatchAction({type: 'downplay', seriesId: 'lot-performance-bubbles', dataIndex}), cycle * 440 + 220));
+        }
+    }
     let tooltipCleanup: (() => void) | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
@@ -244,10 +262,10 @@
         return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
-    function formatShortDate(value: number | string): string {
+    function formatShortDate(value: number | string, withYear = false): string {
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, {month: 'short', day: 'numeric'});
+        return date.toLocaleDateString($currentLanguage || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
     }
 
     function formatPercent(value: number): string {
@@ -377,6 +395,26 @@
         const max = xAxisRange?.max ?? groupedChartData.maxDate ?? lineSeriesDates[lineSeriesDates.length - 1] ?? null;
         if (!min || !max) return null;
         return min <= max ? {min, max} : {min: max, max: min};
+    }
+
+    /** Extend the x-domain horizontally by the largest bubble radius so lots opened on the first/last
+     * date don't spill past — and get clipped at (series use clip:true) — the plot edges. Mirrors the
+     * vertical bubble padding already applied to the y-axis (computeAutoYAxisBounds). The pixel radius
+     * is converted into a time delta via the current plot width; because ECharts maps the padded
+     * [min,max] linearly across the plot, the span cancels out and each side reserves exactly
+     * maxBubbleRadius px regardless of how wide the date range is. Applied to the axis display bounds
+     * only (not getXAxisBounds, which drives zoom/bucketing). No-op without bubbles or a real span. */
+    function padXBoundsForBubbles(bounds: {min: string; max: string} | null): {min: string; max: string} | null {
+        if (!bounds) return bounds;
+        const maxBubbleRadius = Math.max(0, ...buildRenderableLotBubbles().map((entry) => entry.radius));
+        if (maxBubbleRadius <= 0) return bounds;
+        const minMs = new Date(bounds.min).getTime();
+        const maxMs = new Date(bounds.max).getTime();
+        if (!Number.isFinite(minMs) || !Number.isFinite(maxMs) || maxMs <= minMs) return bounds;
+        const plotWidth = Math.max(1, (chartContainer?.clientWidth ?? 640) - GRID_LEFT_PX - GRID_RIGHT_PX);
+        const edgeFraction = Math.min(0.3, maxBubbleRadius / plotWidth);
+        const padMs = ((maxMs - minMs) * edgeFraction) / Math.max(0.1, 1 - 2 * edgeFraction);
+        return {min: new Date(minMs - padMs).toISOString(), max: new Date(maxMs + padMs).toISOString()};
     }
 
     function getAxisLogicalRange(): LogicalRange | null {
@@ -890,15 +928,21 @@
                 : null;
 
         const marketPriceByDate = new Map<string, number | null>();
+        const estimatedByDate = new Map<string, boolean>();
         for (const point of priceHistory) {
             const value = parseNumber(point.market_price);
+            const isEstimated = point.estimated === true;
             if (!marketPriceByDate.has(point.date)) {
                 marketPriceByDate.set(point.date, value);
+                estimatedByDate.set(point.date, isEstimated);
                 continue;
             }
             if (marketPriceByDate.get(point.date) == null && value != null) {
                 marketPriceByDate.set(point.date, value);
+                estimatedByDate.set(point.date, isEstimated);
             }
+            // A real quote on the same date downgrades the flag: the segment is not an estimate.
+            if (!isEstimated) estimatedByDate.set(point.date, false);
         }
 
         const marketPricePoints = toPercentSeries(
@@ -984,6 +1028,7 @@
             realSeries,
             combinedSeries,
             marketPricePoints,
+            estimatedByDate,
             markerSeries,
             minDate: allDates[0] ?? null,
             maxDate: allDates.at(-1) ?? null,
@@ -1115,9 +1160,13 @@
     interface RenderableLotBubble {
         point: LotBubblePoint;
         baseY: number;
+        /** Y of the connector's fixed vertex — the market price on the opening day ("prezzo di quel
+         *  giorno"), so the segment starts on the price curve, not at the lot's cost basis. */
+        connectorBaseY: number;
         yValue: number;
         metric: number;
         radius: number;
+        offsetX: number;
     }
 
     function lotBubbleFillColor(brokerId: number | null): string {
@@ -1234,21 +1283,57 @@
                     // Closed lots have no open quantity — size them by the original quantity instead so
                     // they stay visible rather than collapsing to the minimum radius.
                     const metric = point.openQuantity > 0 ? point.openQuantity : point.originalQuantity;
-                    return {point, baseY, yValue: baseY * (1 + point.totalReturn), metric};
+                    // Connector's fixed vertex sits on the market price line at the opening day ("prezzo di
+                    // quel giorno") so the segment starts where the lot was created on the price curve, not
+                    // at its (often higher) cost basis. Same-day lots share this anchor → a single fan pivot.
+                    // Falls back to the cost basis when the asset has no market price on that date (e.g. a
+                    // matured / price-less instrument), preserving the old behaviour in that case.
+                    const connectorBaseY = point.priceAtOpening ?? baseY;
+                    return {point, baseY, connectorBaseY, yValue: baseY * (1 + point.totalReturn), metric};
                 }
-                return {point, baseY: 0, yValue: point.totalReturn * 100, metric: point.openingValue};
+                return {point, baseY: 0, connectorBaseY: 0, yValue: point.totalReturn * 100, metric: point.openingValue};
             })
-            .filter((entry): entry is {point: LotBubblePoint; baseY: number; yValue: number; metric: number} => entry != null);
+            .filter((entry): entry is {point: LotBubblePoint; baseY: number; connectorBaseY: number; yValue: number; metric: number} => entry != null);
 
         if (renderable.length === 0) return [];
 
         const metrics = renderable.map((entry) => entry.metric);
         const minMetric = Math.min(...metrics);
         const maxMetric = Math.max(...metrics);
-        return renderable.map((entry) => ({
+        const withRadius: RenderableLotBubble[] = renderable.map((entry) => ({
             ...entry,
             radius: lotBubbleRadius(entry.metric, minMetric, maxMetric),
+            offsetX: 0,
         }));
+
+        // Fan out lots opened on the same day so N same-day lots render as N distinct bubbles
+        // instead of a single overlapping blob. Offset is applied in pixels (symbolOffset) so the
+        // logical [date, value] stays intact — tooltips, axis and connectors keep the true date.
+        const byDate = new Map<string, RenderableLotBubble[]>();
+        for (const entry of withRadius) {
+            const bucket = byDate.get(entry.point.openingDate);
+            if (bucket) bucket.push(entry);
+            else byDate.set(entry.point.openingDate, [entry]);
+        }
+        // ISO 'YYYY-MM-DD' compares chronologically as plain strings → cheap min/max for edge detection.
+        const minDate = withRadius.reduce((min, entry) => (entry.point.openingDate < min ? entry.point.openingDate : min), withRadius[0].point.openingDate);
+        const maxDate = withRadius.reduce((max, entry) => (entry.point.openingDate > max ? entry.point.openingDate : max), withRadius[0].point.openingDate);
+        const hasSpan = minDate !== maxDate;
+        for (const [date, bucket] of byDate) {
+            if (bucket.length < 2) continue;
+            const step = Math.max(...bucket.map((entry) => entry.radius)) * 1.6;
+            const count = bucket.length;
+            // Anchor the fan so groups sitting on an axis edge grow inward instead of spilling past the plot:
+            // the earliest date grows rightwards (offsets 0,1,2…), the latest grows leftwards (…-2,-1,0),
+            // everything in between stays centred. Only when there is an actual date span (a lone same-day
+            // group keeps the symmetric centred layout).
+            const anchor = hasSpan && date === minDate ? 'left' : hasSpan && date === maxDate ? 'right' : 'center';
+            bucket.forEach((entry, index) => {
+                const rel = anchor === 'left' ? index : anchor === 'right' ? index - (count - 1) : index - (count - 1) / 2;
+                entry.offsetX = Math.round(rel * step);
+            });
+        }
+        return withRadius;
     }
 
     /** Per-lot performance bubbles + dashed baseline→bubble connectors (ABS: from the lot's opening unit
@@ -1261,24 +1346,38 @@
 
         const series: echarts.SeriesOption[] = [];
 
-        for (const entry of renderable) {
-            const signColor = lotBubbleSignColor(entry.point.totalReturn ?? 0);
-            series.push({
-                id: `lot-bubble-connector-${entry.point.lotId}`,
-                name: `lot-bubble-connector-${entry.point.lotId}`,
-                type: 'line',
-                data: [
-                    [entry.point.openingDate, entry.baseY],
-                    [entry.point.openingDate, entry.yValue],
-                ],
-                showSymbol: false,
-                silent: true,
-                tooltip: {show: false},
-                lineStyle: {color: signColor, width: 1.25, type: 'dashed', opacity: entry.point.active ? 0.8 : 0.16},
-                emphasis: {disabled: true},
-                z: 4,
-            });
-        }
+        // One connector per bubble. The base stays pinned to the true event x (opening date, no offset)
+        // while the apex follows the bubble's fanned pixel position — the SAME +offsetX px applied to the
+        // bubble's symbolOffset — so with N same-day lots you get N oblique lines spreading from the shared
+        // event to each bubble instead of a single overlapping vertical. A `custom` renderItem is required
+        // because the fan-out is a pixel offset, not a data-space shift: api.coord() re-resolves both
+        // endpoints on every zoom/pan so each line stays glued to its bubble. Sign colour + baseY→yValue
+        // height logic are unchanged. params.dataIndex is the original index, so renderable[…] stays aligned
+        // even when dataZoom filters items out of the window.
+        series.push({
+            id: 'lot-bubble-connectors',
+            name: 'lot-bubble-connectors',
+            type: 'custom',
+            silent: true,
+            clip: true,
+            z: 4,
+            tooltip: {show: false},
+            encode: {x: 0, y: 1},
+            data: renderable.map((entry) => ({value: [entry.point.openingDate, entry.yValue]})),
+            renderItem: (params: any, api: any) => {
+                const entry = renderable[params.dataIndex];
+                if (!entry) return null;
+                const base = api.coord([entry.point.openingDate, entry.connectorBaseY]);
+                const apex = api.coord([entry.point.openingDate, entry.yValue]);
+                if (!base || !apex) return null;
+                return {
+                    type: 'line',
+                    silent: true,
+                    shape: {x1: base[0], y1: base[1], x2: apex[0] + entry.offsetX, y2: apex[1]},
+                    style: {stroke: lotBubbleSignColor(entry.point.totalReturn ?? 0), lineWidth: 1.25, lineDash: [4, 4], opacity: entry.point.active ? 0.8 : 0.16},
+                };
+            },
+        } as echarts.SeriesOption);
 
         series.push({
             id: 'lot-performance-bubbles',
@@ -1293,6 +1392,7 @@
                 lotBubbleId: entry.point.lotId,
                 point: entry.point,
                 symbolSize: entry.radius * 2,
+                symbolOffset: [entry.offsetX, 0],
                 itemStyle: {
                     color: entry.point.fillColor,
                     borderColor: isDark ? '#0f172a' : '#ffffff',
@@ -1322,6 +1422,7 @@
             data: renderable.map((entry) => ({
                 value: [entry.point.openingDate, entry.yValue],
                 symbol: lotStateSymbol(entry.point.state),
+                symbolOffset: [entry.offsetX, 0],
                 itemStyle: {
                     color: lotStateColor(entry.point.state, isDark),
                     borderColor: isDark ? '#0f172a' : '#ffffff',
@@ -1394,16 +1495,23 @@
 
         const marketHasData = groupedChartData.marketPricePoints.some((point) => point[valueKey] != null);
         if (marketHasData) {
+            const marketColor = isDark ? '#4ade80' : '#16a34a';
+            // Where the value is estimated from the last-known trade (no real quote), dash the segment
+            // that *ends* on that point so the estimated stretch reads as such while staying one curve.
+            const marketData = aggregateValuePoints(groupedChartData.marketPricePoints, valueKey).map((item) => {
+                const date = String(item.value[0]);
+                return groupedChartData.estimatedByDate.get(date) === true ? {...item, lineStyle: {type: 'dashed' as const}} : item;
+            });
             series.push({
                 name: labels.marketPrice,
                 type: 'line',
-                data: aggregateValuePoints(groupedChartData.marketPricePoints, valueKey),
+                data: marketData,
                 showSymbol: false,
                 symbol: 'circle',
                 connectNulls: false,
                 smooth: false,
-                lineStyle: {width: 2.5, color: isDark ? '#4ade80' : '#16a34a'},
-                itemStyle: {color: isDark ? '#4ade80' : '#16a34a'},
+                lineStyle: {width: 2.5, color: marketColor},
+                itemStyle: {color: marketColor},
             });
         }
 
@@ -1586,7 +1694,7 @@
             const name = (item as {name?: unknown}).name;
             if (typeof name !== 'string' || name.length === 0) continue;
             if (name.startsWith('__')) continue;
-            if (name.startsWith('lot-bubble-connector-')) continue;
+            if (name.startsWith('lot-bubble-connector')) continue;
             if (name === 'lot-performance-bubble-centers') continue;
             names.push(name);
         }
@@ -1597,7 +1705,11 @@
         const theme = buildTooltipTheme(isDark);
         const gridColors = buildGridColors(isDark);
         const series = attachIncomeMarkers(buildSeries());
-        const xAxisBounds = getXAxisBounds();
+        const rawXBounds = getXAxisBounds();
+        // Derive the multi-year flag from the *raw* bounds so the horizontal bubble padding below can't
+        // nudge an edge across a year boundary and spuriously flip the axis to the year-labelled format.
+        const multiYearAxis = !!rawXBounds && new Date(rawXBounds.min).getFullYear() !== new Date(rawXBounds.max).getFullYear();
+        const xAxisBounds = padXBoundsForBubbles(rawXBounds);
         const autoYBounds = computeAutoYAxisBounds(displayMode === 'absolute' ? 'absolute' : 'percent');
         const yAxisMin = displayMode === 'percentage' ? (autoYBounds ? Math.min(0, autoYBounds.min) : (value: {min: number}) => Math.min(0, value.min)) : absYFromZero ? 0 : ((autoYBounds?.min ?? null) as unknown as number);
         const yAxisMax = displayMode === 'percentage' ? (autoYBounds ? Math.max(0, autoYBounds.max) : (value: {max: number}) => Math.max(0, value.max)) : ((autoYBounds?.max ?? null) as unknown as number);
@@ -1675,7 +1787,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatShortDate(value),
+                    formatter: (value: number) => formatShortDate(value, multiYearAxis),
                 },
             },
             yAxis: {
@@ -1799,6 +1911,8 @@
 
         return () => {
             if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
+            for (const timer of pulseTimers) clearTimeout(timer);
+            pulseTimers = [];
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeObserver?.disconnect();
@@ -1855,7 +1969,7 @@
     });
 </script>
 
-<div class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30" data-testid="lot-wac-price-chart">
+<div bind:this={wrapperEl} class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30" data-testid="lot-wac-price-chart">
     <div class="mb-3 flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{labels.wac} / {labels.marketPrice}</h3>
 

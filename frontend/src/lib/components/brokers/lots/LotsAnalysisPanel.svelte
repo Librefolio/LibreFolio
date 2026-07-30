@@ -43,7 +43,8 @@
     import LotCustodyModal from './LotCustodyModal.svelte';
     import LotComparisonChart from './LotComparisonChart.svelte';
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
-    import DataQualityBanner, {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import LotDataQualityBanner from './LotDataQualityBanner.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -119,6 +120,7 @@
 
     let ganttRef: LotGanttChart | undefined = $state(undefined);
     let tableRef: UnifiedLotsTable | undefined = $state(undefined);
+    let wacRef: LotWacPriceChart | undefined = $state(undefined);
 
     let fetchVersion = 0;
     let selectionFetchVersion = 0;
@@ -143,6 +145,14 @@
         const showOpen = bothSame || lotStateFilter.open;
         const showClosed = bothSame || lotStateFilter.closed;
         return lots.filter((lot) => (lotIsOpenish(lot) ? showOpen : showClosed));
+    });
+
+    /** lot_id → opening_date for the currently visible lots, so the data-quality banner can turn each
+     * issue's message_params.lot_id into a labelled, clickable chip (→ pulses that lot's bubble). */
+    let visibleLotDates = $derived.by((): Map<number, string> => {
+        const map = new Map<number, string>();
+        for (const lot of visibleLots) map.set(lot.lot_id, lot.opening_date);
+        return map;
     });
 
     let selectedLots = $derived.by((): LotSummarySchema[] => {
@@ -379,9 +389,10 @@
         })();
     }
 
-    function handleDataQualityAction(_action: string, _target: string | null, _issue: DataQualityIssue) {
-        // No CTA navigation defined yet for FIFO lots issues (reference-price fallback etc.
-        // are informational-only) — placeholder kept so DataQualityBanner's contract is honored.
+    /** Click on an affected-lot chip in the data-quality banner → pulse that lot's bubble in the price
+     * chart so the user can locate the flagged lot (mirrors the gantt/table pulseLot precedent). */
+    function handleLotWarningClick(lotId: number) {
+        wacRef?.pulseLot(lotId);
     }
 </script>
 
@@ -413,7 +424,7 @@
 
         <div class="p-4 space-y-4">
             {#if dataQualityIssues.length > 0}
-                <DataQualityBanner issues={dataQualityIssues} mode="flat" onaction={handleDataQualityAction} />
+                <LotDataQualityBanner issues={dataQualityIssues} lotDates={visibleLotDates} onLotClick={handleLotWarningClick} />
             {/if}
 
             {#if calculationStatus === 'FAILED'}
@@ -437,6 +448,7 @@
                 </div>
             {:else}
                 <LotWacPriceChart
+                    bind:this={wacRef}
                     lots={visibleLots}
                     {selectedLotIds}
                     {brokerWacHistory}

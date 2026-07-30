@@ -38,6 +38,7 @@
         gain_loss_percent?: string | (string | null)[] | null;
         gain_loss_change_1d?: string | (string | null)[] | null;
         gain_loss_change_1d_percent?: string | (string | null)[] | null;
+        oldest_open_lot_date?: string | (string | null)[] | null;
     }
 
     interface Props {
@@ -65,6 +66,7 @@
         quantity: number | null;
         price: number | null;
         wacPerUnit: number | null;
+        oldestOpenLotDate: string | null;
     }
 
     let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, ..._legacyProps}: Props & Record<string, unknown> = $props();
@@ -162,6 +164,7 @@
                     quantity: safeNum(holding.quantity),
                     price: safeNum(holding.current_price),
                     wacPerUnit: safeNum(holding.wac_per_unit),
+                    oldestOpenLotDate: safeStr(holding.oldest_open_lot_date),
                 };
             })
             .filter((row) => row.quantity == null || row.quantity !== 0)
@@ -341,6 +344,21 @@
                 hiddenByDefault: true,
                 getValue: (row) => row.wacPerUnit ?? 0,
                 cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency)),
+            },
+            {
+                id: 'oldest-open-lot',
+                header: () => $_('dashboard.oldestOpenLotDate') || 'Oldest open lot',
+                headerTooltip: () => $_('dashboard.oldestOpenLotDateTooltip') || 'Opening date of the oldest FIFO lot still open for this position.',
+                type: 'date',
+                align: 'right',
+                width: 150,
+                minWidth: 130,
+                maxWidth: 220,
+                resizable: true,
+                sortable: true,
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
             },
             brokerColumn,
         ];
