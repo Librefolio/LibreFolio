@@ -146,7 +146,6 @@ class PortfolioOptimizationAnalytic(RiskAnalytic):
     supported_scopes = (
         RiskScopeKind.ASSET_SET,
         RiskScopeKind.PORTFOLIO,
-        RiskScopeKind.BROKER,
     )
     supported_modes = (RiskMode.HISTORICAL,)
     params_model = PortfolioOptimizationParams

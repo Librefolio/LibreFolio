@@ -1,7 +1,6 @@
 # Piano Implementativo — Risk Analysis (Fase 0.1)
 
-**Stato**: ⏸️ PAUSA RICHIESTA — G0-G5 backend chiusi e auditati; G6 ripianificato,
-non implementato.
+**Stato**: ▶️ G6 AUTORIZZATO — G0-G5 chiusi; esecuzione backend-first avviata
 
 **Data avvio**: 27 Luglio 2026
 
@@ -23,7 +22,7 @@ P5-P10 multi-asset deterministico + API
     ↓
 P11-P13 simulazione / scala / frontiera
     ↓
-frontend funzionale minimo
+scope/scenario foundation + frontend funzionale
     ↓
 verifica integrata + knowledge layer
 ```
@@ -62,6 +61,23 @@ precedente non necessariamente committato:
 16. UI: wiring, i18n, stati, render e test funzionali; niente polish/gallery.
 17. Nessuna migrazione DB prevista.
 18. Nessun `git commit`, push o history rewrite.
+19. Scope patrimoniale G6: `portfolio + broker_ids`; eliminare `kind=broker`.
+20. Assets Global: `Assets | Correlation | Scenarios | Allocation`.
+21. P13 frontend solo in Allocation; non holdings-aware.
+22. Catalogo scenari statico/typed/startup-loaded, built-in + host YAML.
+23. Historical replay con rendimenti osservati e proxy manuali; hypothetical shock
+    a dimensione singola con `Other=100%` e precedenza Paese > UE > Other.
+24. Replay audit trail typed: contatori, mapping original→proxy, esclusioni e
+    policy effettive; qualità in `DataQualityReport`.
+25. Accordion open/closed non invalida dati; request identity e data generation
+    governano cache/refetch.
+26. Shock bucket UX: presenti nello scope + `Mostra tutti`; `Other` sempre visibile
+    per sector/geography.
+27. YAML `tags` opzionali/inerti per discovery futura; nessuna UI/API avanzata G6.
+28. Replay portfolio/broker: esclusioni come residuo a rendimento zero, senza
+    rinormalizzare i pesi rimanenti.
+29. Una sola vista funzionale per volta; gate visuale umano obbligatorio prima
+    della successiva.
 
 ## 4. Sub-plan
 
@@ -72,7 +88,7 @@ precedente non necessariamente committato:
 | 3 | [`plan-phase01Step3RollingRiskBackend.prompt.md`](./plan-phase01Step3RollingRiskBackend.prompt.md) | P3-P4 backend | ✅ G3 |
 | 4 | [`plan-phase01Step4MultiAssetRiskBackend.prompt.md`](./plan-phase01Step4MultiAssetRiskBackend.prompt.md) | P5 + backend P6-P10 | ✅ G4 |
 | 5 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | P11-P13 | ✅ G5 corretto e verificato |
-| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | UI P4/P6-P13 | 📋 riconciliato sul codice reale; non implementato in questa esecuzione |
+| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) + [`IA`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md) | scope/scenari/UI P4/P6-P13 | ▶️ backend G6 completato e client congelato; foundation frontend successiva |
 
 > **Note implementazione G1/G3 — 27 Luglio 2026**: QuantLib 1.43 è importabile
 > nell'immagine LibreFolio finale; Riskfolio/P13 restano esclusi. I cinque rolling
@@ -112,6 +128,113 @@ precedente non necessariamente committato:
 > conflitto `vectorbt`/Numba con NumPy 2.5.1: production resta su Riskfolio 7.0.1.
 > G6 è stato riconciliato contro il codice reale nel relativo sub-plan, senza
 > iniziarne l'implementazione.
+>
+> **Revisione IA G6 — 29 Luglio 2026**: confermati Asset Detail
+> `Overview | Risk & Scenarios`, Assets Global
+> `Assets | Correlation | Scenarios | Allocation`, Dashboard/Broker come summary +
+> pannelli condivisi lazy e P13 solo in Allocation. Pianificati inoltre scope
+> `portfolio.broker_ids`, catalogo YAML typed startup-loaded, historical replay con
+> proxy manuali e hypothetical shock con `Other=100%`/`european_union`. Nessuna
+> implementazione era ancora autorizzata in quella revisione.
+>
+> **Chiarimenti finali IA — 29 Luglio 2026**: definiti audit trail proxy,
+> lifecycle lazy/cache, UX bucket presenti+`Mostra tutti` e `tags` YAML opzionali.
+> IA approvata esplicitamente. L'utente ha inoltre fissato esclusioni replay come
+> residuo zero-return e gate per singola vista funzionale.
+>
+> **Note implementazione G6-00 — 29 Luglio 2026**: aggiornati IA, contratto,
+> piano applicativo, master, recap, README, devWiki e work item. La nuova catena
+> ha un solo predecessore per item; G6-11 è il primo step tecnico.
+>
+> **Note implementazione G6-11 — 29 Luglio 2026**: unificato lo scope in
+> `portfolio + broker_ids`, con lista canonicalizzata, subset esatto, access
+> control esplicito, metadata/cache identity e `composition_as_of`. Migrato il
+> Broker Detail, confermata la Dashboard già portfolio, eliminato il runtime
+> `kind=broker` e rigenerato il client. Test Risk backend e risk-store verdi.
+>
+> **⚠️ Fuori pista G6-11**: `front check` resta bloccato esclusivamente da
+> quattro errori concorrenti `SignalAreaSeries`, non dal contratto Risk.
+>
+> **Note implementazione G6-12 — 29 Luglio 2026**: aggiunto catalogo scenario
+> statico e typed, built-in + host, validato e caricato allo startup. Pubblicati
+> otto preset, localizzazioni YAML, tag opzionali, diagnostica host e gruppo
+> geografico versionato `european_union`; endpoint Risk e client generato sono
+> sincronizzati. Test schema, service e API verdi.
+>
+> **⚠️ Fuori pista G6-12**: la generazione client ha richiesto di riallineare il
+> post-processor dei discriminatori ai nomi AI Export già presenti nella OpenAPI
+> corrente; nessuna semantica AI Export è stata modificata.
+>
+> **Note implementazione G6-12A — 29 Luglio 2026**: historical replay separa il
+> periodo osservato dal riferimento della composizione, carica prezzi/FX storici
+> dedicati e supporta proxy manuali ed esclusioni typed. I proxy sostituiscono
+> soltanto i rendimenti; gli esclusi portfolio conservano il peso come residuo a
+> rendimento zero. Audit, qualità, metadata e client sono sincronizzati; test
+> matematici, schema, service e API verdi.
+>
+> **⚠️ Fuori pista G6-12A**: corretto il bootstrap Zod delle nuove union
+> discriminate. Il bundle statico `:6040` non può ancora essere rigenerato per
+> errori concorrenti AI Export non correlati; il modulo API sorgente Risk si
+> inizializza correttamente.
+>
+> **Note implementazione G6-12B — 29 Luglio 2026**: hypothetical shock usa una
+> sola dimensione e bucket canonici. Asset class è diretto; settore/geografia
+> applicano esposizioni percentuali, fallback `Other=100%` non degradante e
+> audit typed. La geografia rispetta `country > european_union > Other` senza
+> somma; output e metadata espongono configurazione e regole effettive, inclusi
+> bucket configurati a esposizione zero. Test schema, matematici, service e API
+> verdi.
+>
+> **Note implementazione chiusura backend G6 — 29 Luglio 2026**: suite Risk
+> service completa (93 test), API post-sync (10 test) e Ruff mirato verdi.
+> OpenAPI/client risultano idempotenti e il runtime Risk espone solo
+> `asset | asset_set | portfolio`; il pannello provvisorio usa il nuovo payload
+> hypothetical a bucket. Client Zod, risk-store unit test, `front check`, build
+> statico e smoke login sul server reale `:6040` sono verdi.
+>
+> **⚠️ Fuori pista chiusura G6**: il crash login apparteneva al bundle statico
+> precedente con discriminator Zod incompleti. Dopo la stabilizzazione dei cambi
+> concorrenti AI Export è stato possibile rigenerare il client e ricostruire il
+> bundle senza modificare la semantica AI Export.
+>
+> **Note implementazione G6-13 — 29 Luglio 2026**: foundation frontend non
+> visuale completata. Builder e request identity typed canonicalizzano solo
+> collezioni unordered, il risk store conserva in-flight/risultato/errore e le
+> query condivise scartano risposte stale. Stati replay, hypothetical,
+> simulazione e relativo view switch sono pronti senza comporre nuove pagine.
+> Undici test Vitest e `front check` sono verdi.
+>
+> **Note implementazione G6-20 — 29 Luglio 2026**: Asset Detail adotta
+> `Overview | Risk & Scenarios` preservando integralmente la vista esistente.
+> La nuova vista riusa i rolling Risk SignalPlugin e compone query asset-scoped
+> per downside, confronto reale, hypothetical shock, historical replay e
+> MC/QMC. Editor e response espongono configurazione effettiva, audit bucket,
+> fallback, proxy/esclusioni e policy replay; la simulazione offre
+> `Evoluzione | Distribuzione finale`. Test risk-store, Risk E2E, regressione
+> Asset Detail, type-check, build, i18n e smoke login sono verdi.
+>
+> **Gate H1 — IN ATTESA**: nessuna vista G6 successiva è autorizzata finché
+> l'utente non approva visualmente Asset Detail.
+>
+> **Review H1 — 30 Luglio 2026**: la V1 funzionale è stata riaperta. La toolbar
+> completa deve restare visibile in entrambe le tab; `Abs/%` migra nel componente
+> prezzo condiviso Asset/FX e AI Export prende il suo posto nelle PageToolbar.
+> La tab Risk non dipenderà più dai Signals salvati: `historical_kpi`,
+> VaR/CVaR e i rolling Risk canonici vengono calcolati automaticamente. Confronto
+> e beta attendono un asset reale; scenari e simulazione restano lazy. Il gate H1
+> è ora suddiviso in review shell, observed/downside, confronto e scenari.
+>
+> **Avanzamento H1 — 30 Luglio 2026**: H1-R1–R4 completati.
+> `historical_kpi@2.0.0` sostituisce senza alias il precedente codice
+> portfolio-only, usa close-return canonici per asset e TWRR per portafoglio.
+> Test Risk service/API e rigenerazione idempotente OpenAPI/client sono verdi.
+> `Abs/%` vive ora nel `PriceChartFull` condiviso; AI Export occupa le
+> `PageToolbar` Asset/FX e non gli header Signals. La toolbar Asset resta
+> disponibile in entrambe le tab e il Refresh page-level invalida anche la query
+> Risk. Durante H1-G1 il `TabBar` Asset esterno è stato eliminato: la navigazione
+> `Overview | Risk & Scenarios` usa ora la zona tabs integrata della
+> `PageToolbar`, come Dashboard. H1-G1 è approvato; H1-R5 è il prossimo item
+> lineare.
 
 ## 5. Convenzioni di esecuzione
 
@@ -137,7 +260,7 @@ Per ogni task:
 | G3 — Rolling | ✅ 5 plugin nel catalogo, formule/status/client/render testati |
 | G4 — Deterministico | ✅ RiskAnalytic/API P5-P10 testati, OpenAPI stabile |
 | G5 — Avanzato | ✅ QuantLib MC/QMC + spawn + idle reap + Riskfolio P13; oracle e benchmark verdi |
-| G6 — Frontend | ⏸️ capability esistenti ricertificate; gap placement/P13/smoke pianificati |
+| G6 — Applicazione | ▶️ autorizzato; catena lineare backend → viste con gate umani |
 | GF — Finale | backend/frontend/Docker/docs/graph verdi |
 
 ## 7. Strategia matematica

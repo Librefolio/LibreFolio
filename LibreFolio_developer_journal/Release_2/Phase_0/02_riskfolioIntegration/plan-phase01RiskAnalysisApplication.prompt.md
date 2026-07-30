@@ -15,6 +15,12 @@
 > implementati. P11 usa esclusivamente QuantLib MC/QMC in worker `spawn`; RQMC è
 > rimosso; P12 usa pool persistenti separati; P13 usa Riskfolio-Lib 7.0.1.
 > Le note di esito sotto prevalgono sulle alternative originariamente pianificate.
+>
+> **Aggiornamento IA G6 — 29 Luglio 2026:** placement, scope e scenari sono
+> approvati; audit proxy, lifecycle lazy/cache, bucket UX e tag YAML sono espliciti in
+> [`plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md).
+> L'implementazione è autorizzata con sequenza backend-first e gate visuale dopo
+> ogni vista funzionale.
 
 ## Indice
 - [0. Principi vincolanti](#0-principi-vincolanti)
@@ -67,11 +73,23 @@ Confermate esplicitamente e vincolanti per tutti gli step:
 | D5 | **Utility comune di preparazione serie** nel service layer (estratta/estesa dal preflight di `SignalService`), unico punto per SignalPlugin/RiskAnalytic/correlazione/PCTR/confronto/stress/VaR-CVaR/simulazione/ottimizzazione |
 | D6 | **Estendere `DataQualityReport`** in via prioritaria per ogni campo che descrive la qualità della sorgente; separare da `RiskResultMetadata` (contesto d'esecuzione) |
 | D7 | **`PageSyncModal`** con prezzi **e** FX preselezionati, avvio esplicito utente; banner **non** avvia il sync direttamente |
-| D8 | **Correlazione primaria in Asset Global** (tab `Correlation`); un solo contratto riusato in Dashboard/Broker/Asset Detail; broker = solo SET di asset (no pesi/quantità/lotti/carico) |
-| D9 | **Stress differenziato per scope**, una sola definizione di scenario (Asset Detail % · Asset Global % multi · Dashboard/Broker € ) |
+| D8 | **Assets Global ha quattro tab**: `Assets | Correlation | Scenarios | Allocation`. Correlazione primaria in `Correlation`; un solo contratto riusato in Dashboard/Broker/Asset Detail; broker seed = solo SET di asset |
+| D9 | **Stress differenziato per scope**, una sola definizione di scenario (Asset Detail % · Assets Global/Scenarios % multi · Dashboard/Broker sulla composizione corrente) |
 | D10 | **QuantLib** = motore quantitativo/simulazione principale (dietro adapter); **Riskfolio-Lib** = frontiera/ottimizzazione (ruolo separato). **Entrambe verificate e, se confermate, installate definitivamente in `P0`.** |
 | D11 | Production espone **MC / QMC QuantLib**. RQMC è rimosso; NumPy/SciPy restano algebra/oracle, non adapter alternativo. QMCPy è fuori piano. |
 | D12 | Calcoli QuantLib/Riskfolio **sempre** in processi `spawn` persistenti e separati. P12 decide il numero di worker, non l'isolamento. |
+| D13 | Scope patrimoniale unico: `kind=portfolio` + `broker_ids` opzionale; Broker Detail usa una lista di cardinalità uno; `kind=broker` viene eliminato |
+| D14 | UI P13 solo in `Assets Global → Allocation`; non è holdings-aware e non compare integralmente in Dashboard/Broker |
+| D15 | Catalogo scenari statico, typed, versionato, caricato all'avvio: built-in + directory host; frontend servito da API, mai lettura YAML diretta |
+| D16 | Nomi/descrizioni degli scenari localizzati negli YAML; built-in EN/IT/FR/ES obbligatorie; host con fallback deterministico |
+| D17 | Historical replay usa rendimenti osservati; asset senza storia → proxy manuale o esclusione; nessuna sostituzione automatica |
+| D18 | Hypothetical shock usa una dimensione; missing sector/geography → `Other=100%`; `european_union`, precedenza Paese > UE > Other |
+| D19 | Dashboard/Broker riusano summary + pannelli espandibili lazy; nessuna sub-tab Risk e nessuno stato URL/localStorage iniziale |
+| D20 | Replay auditabile: response/metadata espongono contatori, mapping original→proxy, esclusioni e policy effettive; qualità separata in `DataQualityReport` |
+| D21 | Lazy semantics: accordion close/open non invalida dati; request identity e data-generation governano stale/cache/refetch |
+| D22 | Editor shock: bucket presenti nello scope di default + toggle `Mostra tutti`; `Other` sempre visibile per sector/geography |
+| D23 | YAML `tags` opzionali, slug aperti e senza semantica finanziaria; nessuna ricerca/filtro UI/API avanzato in G6 |
+| D24 | Replay portfolio/broker: il peso di un asset escluso diventa residuo a rendimento zero; nessuna rinormalizzazione |
 
 > **Esito corretto P0/G5 — 28 Luglio 2026**: QuantLib 1.43 e Riskfolio-Lib
 > 7.0.1 sono `ADOPTED` con NumPy 2.5.1; `vectorbt`/`numba` assenti. Host e
@@ -424,58 +442,80 @@ gap backend?
 
 ### P6 — Asset Global: tab `Correlation` (D8)
 - **Obiettivo:** casa primaria della correlazione, vista asset-centrica.
-- **Stato attuale:** `/assets` senza tab; `PageToolbar` supporta `tabs` via `TabBar`
-  (`PageToolbar.svelte:36-38,254-256`); `AssetSelect` è **single-select**; nessun
-  componente heatmap.
-- **Gap:** tab assente; multi-select asset assente; `CorrelationHeatmap.svelte` assente.
-- **File/componenti:** `routes/(app)/assets/+page.svelte` (aggiunta `tabs`),
-  nuovo `CorrelationHeatmap.svelte`, multi-select (estensione `AssetSelect` o nuovo),
-  riuso `PageSyncModal`/`DataQualityBanner`.
+- **Stato riconciliato G6:** route/tab, store e `CorrelationHeatmap.svelte` sono
+  parzialmente presenti; richiedono audit e composizione secondo l'IA finale.
+- **IA:** `Assets | Correlation | Scenarios | Allocation`; un unico asset universe
+  route-level alimenta le tre tab analitiche.
+- **Correlation:** switch manuale `[Heatmap] [Asset centrale]`; default UI iniziale
+  heatmap su desktop con ≤20 asset, asset-centric su mobile o set più grandi.
+  La soglia è euristica visuale, non vincolo finanziario.
+- **File/componenti:** `routes/(app)/assets/+page.svelte`,
+  `CorrelationHeatmap.svelte`, selector asset-set condiviso,
+  `PageSyncModal`/`DataQualityBanner`.
 - **Contratto backend:** endpoint correlazione (contratto unico D8), consuma P5.
-- **Frontend:** tab `[Assets][Correlation]`; selezione rapida asset posseduti; filtro
-  broker → **solo SET** (no pesi); aggiunta/rimozione manuale asset; matrice; warning
-  qualità; apertura `PageSyncModal`.
+- **Frontend:** broker → **solo SET**; add/remove manuale; heatmap/lista; warning,
+  coverage, osservazioni, esclusi; apertura `PageSyncModal`.
 - **Dipendenze:** ECharts (già presente) per heatmap. **Migrazione:** nessuna.
-- **Compatibilità:** Asset Global attuale invariato nella tab «Assets».
+- **Compatibilità:** vista Asset Global attuale invariata nella tab `Assets`.
 - **Test FE:** broker→set asset; add/remove manuale; render heatmap; warning; sync modal;
-  responsive; dark/light; build+check.
+  switch manuale; responsive default; build+check.
 - **Criteri:** heatmap funzionante con SET costruito senza pesi.
-- **Rischi:** heatmap nuovo componente. **Fallback:** lista correlazioni (asset-centrica)
-  se la heatmap slitta.
+- **Vincolo placement:** stress multi-asset vive nella tab `Scenarios`, non in
+  `Correlation`.
 - **Parallelizzabile:** dopo P5. **Bloccante per:** nessuno (feature UI).
 
 ### P7 — Dashboard Risk e Broker Risk
-- **Obiettivo:** tab «Risk» (Dashboard) e «Risk» broker-scoped (etichetta rischio interno).
-- **Stato attuale:** Dashboard/Broker hanno già `PageToolbar` + tabs
-  (`dashboard/+page.svelte:254-269`, `brokers/[id]/+page.svelte:122-146`).
-- **Gap:** tab Risk assente.
-- **File/componenti:** dashboard/broker `+page.svelte` (nuova tab), riuso `KpiCard`,
-  heatmap (P6), barre divergenti (`PerformanceChart`/`buildBarSeries`), banner/modale.
+- **Obiettivo:** stesso componente condiviso in Dashboard e Broker Detail,
+  configurato con scope differenti.
+- **Scope:** Dashboard = `portfolio + broker_ids` toolbar oppure omesso; Broker =
+  `portfolio + broker_ids=[current]`. Migrare e poi eliminare `kind=broker`.
+- **IA:** summary sempre visibile + pannelli espandibili `Rischio osservato`,
+  `Struttura del rischio`, `Confronto`, `Scenari`; nessuna sub-tab.
+- **Lifecycle:** query lazy al primo open; same-key close/reopen riusa
+  in-flight/result/error. Cambio date/scope/currency/params crea una nuova request
+  identity: pannello aperto ricarica, pannello chiuso aspetta la riapertura. Sync e
+  mutazioni invalidano dati senza cambiare lo stato accordion. Retention garantita
+  nel mount; cache cross-mount solo ottimizzazione `riskStore`.
+- **File/componenti:** dashboard/broker `+page.svelte`, componenti Risk condivisi,
+  `KpiCard`, heatmap, barre divergenti, banner/modale.
 - **Contratto backend:** consuma P5 (KPI storici, drawdown/vol su TWRR, correlazione,
   PCTR); `mode:historical` subito.
-- **Frontend:** KPI + heatmap + PCTR + (poi) confronto/stress/VaR/MC; Broker con label
-  «rischio interno al subset».
-- **Dipendenze:** nessuna nuova. **Migrazione:** nessuna.
-- **Test FE:** tab, KPI, heatmap, PCTR, scope broker, responsive/theme.
-- **Criteri:** tab Risk con KPI+correlazione+PCTR.
-- **Rischi:** performance su molti asset. **Fallback:** lazy-load dei widget pesanti.
+- **Frontend:** KPI + drawdown/VaR + PCTR/peso economico/correlation +
+  confronto/scenari. Broker con label «Rischio interno a: {broker}».
+- **Vincolo P13:** nessun pannello Allocation completo in Dashboard/Broker.
+- **Dipendenze:** nessuna nuova. **Migrazione:** contratto scope/API
+  `portfolio.broker_ids`; nessuna migrazione DB.
+- **Test FE:** scope/payload broker, lazy first-open, retention, KPI, heatmap, PCTR,
+  responsive defaults, label subset.
+- **Criteri:** contratto e componenti identici fra Dashboard/Broker, salvo scope/label.
 - **Parallelizzabile:** dopo P5/P6. **Bloccante per:** P8/P9/P10 (host UI).
 
 ### P8 — Stress test per scope (D9)
-- **Obiettivo:** una definizione di scenario, output per scope.
-- **Stato attuale:** nessun engine scenari.
-- **Gap:** definizione scenario + proiezione per scope.
-- **File/componenti:** `services/risk_plugins/stress_test.py` (engine unico), UI in
-  Asset Detail/Global/Dashboard/Broker.
-- **Contratto backend:** *hypothetical shock* prima (deterministico, auditabile);
-  *historical replay* dopo (dipende da `AssetReturnSeries`+pesi+`current_buy_and_hold`);
-  *factor shock* rimandato (richiede factor exposure model assente). Proiezione: Asset
-  Detail % · Asset Global % multi · Dashboard/Broker € (con pesi).
-- **Frontend:** card scenari (riuso), barre divergenti per il multi-asset %.
+- **Obiettivo:** catalogo scenario typed + un engine/proiezione riusato per scope.
+- **Catalogo:** YAML statico/versionato, built-in + host, validato Pydantic e caricato
+  all'avvio; frontend tramite API. Nomi/descrizioni localizzati nel YAML. `tags`
+  opzionali come slug machine-readable aperti/inerti, senza UI/search G6.
+- **Historical replay:** prezzi+FX storici → rendimenti osservati;
+  `current_buy_and_hold` per portfolio/broker; asset senza storia → proxy scelto
+  manualmente o esclusione. Nessun proxy automatico. Response/metadata espongono
+  contatori, mapping original→proxy, esclusioni/motivi e policy effettive; mapping
+  ed esclusioni entrano nella request identity. Il peso escluso resta residuo a
+  rendimento zero e non viene redistribuito.
+- **Hypothetical:** una dimensione (`asset_class`, `sector` o `geography`);
+  sector/geography come distribuzioni; missing metadata → `Other=100%`;
+  `european_union` con precedenza Paese > UE > Other, senza sommare. UI: bucket
+  presenti nello scope di default + `Mostra tutti`; `Other` sempre visibile.
+- **Factor shock:** rimandato; richiede factor exposure model.
+- **Frontend:** `HistoricalReplayEditor` e `HypotheticalShockEditor` noti e typed;
+  YAML non è un form engine. Parametri iniziali modificabili prima del submit.
+- **Placement:** Asset Detail %, Assets Global → `Scenarios` % multi,
+  Dashboard/Broker sulla composizione corrente.
 - **Dipendenze:** NumPy. **Migrazione:** nessuna.
-- **Test:** stesso scenario → output % e € coerenti per scope; assunzioni visibili.
-- **Criteri:** un engine, quattro proiezioni.
-- **Rischi:** curare il dataset scenari. **Fallback:** solo hypothetical in 1ª release.
+- **Test:** loader built-in/host; localizzazione; duplicate ID; optional tags;
+  replay/proxy/audit trail; shock weighted; bucket visibility; Other; EU
+  precedence; parametri effettivi; output coerente per scope.
+- **Criteri:** un catalogo, editor typed, formule backend, audit per asset/bucket.
+- **Non-obiettivi:** CRUD, DB, persistence, hot reload, salvataggio preset.
 - **Parallelizzabile:** dopo P5/P7.
 
 ### P9 — Confronto risk-free / comparison asset (R7)
@@ -612,12 +652,20 @@ gap backend?
 ### P13 — Frontiera e ottimizzazione con Riskfolio-Lib (opzionale, R9)
 - **Stato esecuzione:** ✅ backend completato — 28 Luglio 2026.
 - **Decisione:** `portfolio_optimization` usa Riskfolio-Lib 7.0.1 in worker
-  separato per scope portfolio/broker/asset-set.
+  separato. Il backend G5 supporta portfolio/broker/asset-set; G6 migra lo scope
+  broker a `portfolio + broker_ids`.
 - **Capability:** min-risk, max-Sharpe, risk parity; historical/Ledoit-Wolf/OAS;
   bound globali; CLARABEL/SCS; frontiera e sensitivity opzionali.
 - **Output:** pesi, rendimento/volatilità/Sharpe, contributi di rischio, vincoli,
   solver/status, frontier/sensitivity e metadata. Nessuna raccomandazione.
-- **Frontend:** non sviluppato in questo round.
+- **Semantica:** seleziona un universo di asset e costruisce una composizione
+  ipotetica; non usa quantità/pesi posseduti e non è holdings-aware.
+- **Frontend G6:** unica casa `Assets Global → Allocation`, con asset universe
+  condiviso da Correlation/Scenarios. Main controls: strategy, covariance,
+  min/max weight, run. `Advanced`: risk-free, solver, frontier, sensitivity,
+  vincoli e metadata. Solver effettivo sempre visibile.
+- **Escluso:** pannello P13 completo in Dashboard/Broker e qualunque wording di
+  ribilanciamento/raccomandazione.
 
 ---
 
@@ -680,12 +728,16 @@ chiusi dai probe.
 ## 8. Questioni aperte residue
 
 - tuning operativo del numero worker per installazione self-hosted;
-- UI dedicata P13/frontiera, rinviata a G6/fase successiva;
-- polish visuale e test UI oltre il funzionale minimo;
+- forma visuale finale di chart, frontier scatter, densità e responsive: validazione
+  manuale utente durante G6;
+- dettaglio DTO/file-path built-in del catalogo scenario, da congelare nella shared
+  foundation entro i vincoli IA già approvati;
 - suite backend globale da rilanciare dopo la chiusura del lavoro concorrente sul
   provider Borsa Italiana.
 
 > QMCPy resta fuori dal piano; non è un fallback production.
+>
+> Placement P13 non è più aperto: `Assets Global → Allocation` è l'unica casa G6.
 
 ---
 

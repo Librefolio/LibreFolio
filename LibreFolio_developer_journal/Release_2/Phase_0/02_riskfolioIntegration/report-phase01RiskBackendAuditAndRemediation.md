@@ -4,6 +4,13 @@
 > **Stato:** ✅ remediation implementata e verificata; G6 solo ripianificato
 > **Ambito:** backend G0-G5, compatibilità frontend strettamente necessaria, replan G6
 > **Fuori ambito:** redesign UI, implementazione completa G6, chiusura GF
+>
+> **Superseding note G6 — 29 Luglio 2026**: le sezioni G6 di questo audit sono
+> evidenza storica. Placement, scope e scenari correnti sono definiti da
+> [`plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md)
+> e
+> [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md).
+> Nessuna shared foundation è stata avviata.
 
 ---
 

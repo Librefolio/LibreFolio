@@ -49,3 +49,23 @@ revisit, and a link to the detailed plan if one exists.
   execution inside the `spawn` worker and no silent SciPy production fallback.
 - **Trigger to revisit**: a newer QuantLib binding exposes the required scrambling
   primitives or a separately approved production engine is adopted.
+
+### Dynamic scenario catalog (future — 2026-07-29)
+- **What**: evolve the initial static, typed, startup-loaded built-in/host YAML
+  catalog with file detection without restart, manual/hot reload, personal
+  scenario CRUD, persistence of UI edits, YAML import/export, explicit built-in
+  overrides and administrative diagnostics.
+- **Why deferred**: G6 first needs a small deterministic contract with no database,
+  watcher or generic form engine.
+- **Trigger to revisit**: the static catalog and typed editors are stable in
+  production and users need scenario lifecycle management.
+- **Reference**:
+  `Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`.
+
+### Persistent historical-replay proxies (future — 2026-07-29)
+- **What**: persist asset→proxy associations, optionally propose proxies only with
+  explicit user confirmation, and reuse confirmed mappings in later replays.
+- **Why deferred**: G6 deliberately keeps proxy choice explicit and ephemeral;
+  automatic or silent substitution is forbidden.
+- **Trigger to revisit**: repeated replay use demonstrates stable, auditable proxy
+  mappings and the persistence UX has been designed.

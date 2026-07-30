@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.portfolio import (
+    DataQualityExcludedAsset,
+    DataQualityExclusionReason,
+    DataQualityReport,
+)
 from backend.app.schemas.risk import (
     AssetReturnPoint,
     AssetReturnSeries,
@@ -21,11 +26,18 @@ from backend.app.schemas.risk import (
     RiskMode,
     RiskReturnBasis,
     RiskScopeKind,
+    RiskStressApplicationRule,
     RiskStressMethod,
     RiskValueStatus,
 )
+from backend.app.schemas.risk_scenarios import RiskScenarioDimension
 from backend.app.services.provider_registry import RiskAnalyticRegistry
-from backend.app.services.risk.base import RiskExecutionContext
+from backend.app.services.risk.base import (
+    RiskAssetClassification,
+    RiskExecutionContext,
+    RiskHistoricalReplayContext,
+    RiskUnavailableError,
+)
 from backend.app.services.risk.quant.optimization_engine import (
     clear_optimization_cache,
 )
@@ -40,13 +52,13 @@ from backend.app.services.risk_plugins.correlation import (
     CorrelationAnalytic,
     CorrelationParams,
 )
+from backend.app.services.risk_plugins.historical_kpi import (
+    HistoricalKpiAnalytic,
+    HistoricalKpiParams,
+)
 from backend.app.services.risk_plugins.historical_var import (
     HistoricalVarAnalytic,
     HistoricalVarParams,
-)
-from backend.app.services.risk_plugins.portfolio_kpi import (
-    PortfolioKpiAnalytic,
-    PortfolioKpiParams,
 )
 from backend.app.services.risk_plugins.portfolio_optimization import (
     PortfolioOptimizationAnalytic,
@@ -150,9 +162,17 @@ def make_context(
     mode: RiskMode = RiskMode.HISTORICAL,
     scope_asset_ids: tuple[int, ...] = (1, 2),
     primary_asset_id: int = 1,
+    replay_source_asset_ids: dict[int, int] | None = None,
+    replay_excluded_asset_ids: tuple[int, ...] = (),
+    asset_classifications: dict[int, RiskAssetClassification] | None = None,
+    geography_groups: dict[str, frozenset[str]] | None = None,
 ) -> RiskExecutionContext:
     prepared = make_prepared_set(returns_by_asset)
-    primary = next(item for item in prepared.series if item.returns.asset_id == primary_asset_id)
+    primary = next(
+        (item for item in prepared.series if item.returns.asset_id == primary_asset_id),
+        prepared.series[0],
+    )
+    source_asset_ids = replay_source_asset_ids or {asset_id: asset_id for asset_id in scope_asset_ids if asset_id not in replay_excluded_asset_ids}
     return RiskExecutionContext(
         scope_kind=scope_kind,
         scope_reference=scope_kind.value,
@@ -165,15 +185,24 @@ def make_context(
         primary_baseline_date=prepared.baseline_date,
         primary_return_dates=tuple(point.date for point in primary.returns.points),
         primary_returns=tuple(float(point.value) for point in primary.returns.points),
-        primary_return_basis=RiskReturnBasis.TWRR if mode == RiskMode.HISTORICAL else RiskReturnBasis.PRICE_ONLY,
+        primary_return_basis=(RiskReturnBasis.TWRR if scope_kind == RiskScopeKind.PORTFOLIO and mode == RiskMode.HISTORICAL else RiskReturnBasis.PRICE_ONLY),
         annualization_factor=prepared.annualization_factor,
         calendar_days=prepared.calendar_days,
         coverage=prepared.calendar_coverage,
         data_quality=prepared.data_quality,
+        requested_scope_asset_ids=scope_asset_ids,
         weights={1: 0.5, 2: 0.25},
         asset_values={1: Decimal("100"), 2: Decimal("50")},
         cash_weight=0.25,
         scope_value=Decimal("200"),
+        historical_replay=RiskHistoricalReplayContext(
+            prepared_series=prepared,
+            source_asset_ids=source_asset_ids,
+            excluded_asset_ids=replay_excluded_asset_ids,
+            data_quality=prepared.data_quality,
+        ),
+        asset_classifications=asset_classifications or {asset_id: RiskAssetClassification(asset_class="OTHER") for asset_id in scope_asset_ids},
+        geography_groups=geography_groups or {},
     )
 
 
@@ -182,8 +211,8 @@ def test_registry_discovers_all_deterministic_analytics():
     assert [definition.analytic_code for definition in definitions] == [
         "comparison",
         "correlation",
+        "historical_kpi",
         "historical_var",
-        "portfolio_kpi",
         "portfolio_optimization",
         "risk_contribution",
         "simulation",
@@ -191,10 +220,10 @@ def test_registry_discovers_all_deterministic_analytics():
     ]
 
 
-def test_portfolio_kpi_consumes_primary_twrr_and_observed_annualization():
+def test_historical_kpi_consumes_portfolio_twrr_and_observed_annualization():
     returns = [0.01, -0.005] * 10
-    computation = PortfolioKpiAnalytic().compute(
-        PortfolioKpiParams(),
+    computation = HistoricalKpiAnalytic().compute(
+        HistoricalKpiParams(),
         make_context({1: returns, 2: returns}),
     )
     output = computation.output
@@ -205,6 +234,29 @@ def test_portfolio_kpi_consumes_primary_twrr_and_observed_annualization():
     assert output.sharpe is not None
     assert computation.risk_free is not None
     assert computation.risk_free.annual_rate == 0
+    assert computation.method == "historical_twrr"
+
+
+def test_historical_kpi_consumes_asset_close_returns():
+    returns = [0.02, -0.01] * 10
+    computation = HistoricalKpiAnalytic().compute(
+        HistoricalKpiParams(),
+        make_context(
+            {1: returns},
+            scope_kind=RiskScopeKind.ASSET,
+            scope_asset_ids=(1,),
+        ),
+    )
+
+    assert computation.output.volatility > 0
+    assert computation.output.max_drawdown < 0
+    assert computation.output.sharpe is not None
+    assert computation.output.sortino is not None
+    assert computation.method == "historical_close_returns"
+    assert HistoricalKpiAnalytic.supported_scopes == (
+        RiskScopeKind.ASSET,
+        RiskScopeKind.PORTFOLIO,
+    )
 
 
 def test_correlation_marks_flat_cells_undefined_without_inventing_zero():
@@ -251,11 +303,16 @@ def test_stress_projects_hypothetical_percentages_and_amounts():
     context = make_context(
         {1: [0.01] * 20, 2: [0.0] * 20},
         mode=RiskMode.CURRENT_COMPOSITION,
+        asset_classifications={
+            1: RiskAssetClassification(asset_class="STOCK"),
+            2: RiskAssetClassification(asset_class="BOND"),
+        },
     )
     computation = StressAnalytic().compute(
         StressParams(
             method=RiskStressMethod.HYPOTHETICAL,
-            shocks={"1": -0.2, "2": 0.1},
+            dimension=RiskScenarioDimension.ASSET_CLASS,
+            bucket_shocks={"STOCK": -0.2, "BOND": 0.1},
         ),
         context,
     )
@@ -267,6 +324,131 @@ def test_stress_projects_hypothetical_percentages_and_amounts():
         Decimal("-20.0"),
         Decimal("5.0"),
     ]
+    assert output.dimension == RiskScenarioDimension.ASSET_CLASS
+    assert [item.bucket_id for item in output.configured_buckets] == [
+        "BOND",
+        "STOCK",
+    ]
+    assert output.impacts[0].bucket_audit[0].rule == RiskStressApplicationRule.DIRECT
+
+
+def test_hypothetical_sector_uses_weighted_exposures_and_other_fallback():
+    context = make_context(
+        {1: [0.0] * 20, 2: [0.0] * 20},
+        scope_kind=RiskScopeKind.ASSET_SET,
+        mode=RiskMode.CURRENT_COMPOSITION,
+        asset_classifications={
+            1: RiskAssetClassification(
+                asset_class="ETF",
+                sector_exposures={
+                    "Technology": 0.6,
+                    "Financials": 0.4,
+                },
+            ),
+            2: RiskAssetClassification(asset_class="ETF"),
+        },
+    )
+    computation = StressAnalytic().compute(
+        StressParams(
+            method=RiskStressMethod.HYPOTHETICAL,
+            dimension=RiskScenarioDimension.SECTOR,
+            bucket_shocks={
+                "Technology": -0.2,
+                "Other": -0.1,
+            },
+        ),
+        context,
+    )
+
+    assert [item.shock_return for item in computation.output.impacts] == pytest.approx([-0.16, -0.1])
+    fallback = computation.output.impacts[1]
+    assert fallback.metadata_fallback is True
+    assert fallback.bucket_audit[0].rule == RiskStressApplicationRule.MISSING_METADATA_OTHER
+    assert computation.warnings[0].degrades_result is False
+    other = next(item for item in computation.output.configured_buckets if item.bucket_id == "Other")
+    assert other.applied_asset_count == 2
+    assert other.asset_exposure_total == pytest.approx(1.4)
+    assert computation.output.classification_coverage == pytest.approx(0.5)
+
+
+def test_hypothetical_geography_applies_country_before_eu_before_other():
+    context = make_context(
+        {1: [0.0] * 20},
+        scope_kind=RiskScopeKind.ASSET_SET,
+        scope_asset_ids=(1,),
+        mode=RiskMode.CURRENT_COMPOSITION,
+        asset_classifications={
+            1: RiskAssetClassification(
+                asset_class="ETF",
+                geography_exposures={
+                    "ITA": 0.5,
+                    "DEU": 0.25,
+                    "USA": 0.25,
+                },
+            )
+        },
+        geography_groups={
+            "european_union": frozenset({"DEU", "ITA"}),
+        },
+    )
+    computation = StressAnalytic().compute(
+        StressParams(
+            method=RiskStressMethod.HYPOTHETICAL,
+            dimension=RiskScenarioDimension.GEOGRAPHY,
+            bucket_shocks={
+                "european_union": -0.2,
+                "ITA": -0.3,
+                "Other": 0,
+            },
+        ),
+        context,
+    )
+
+    impact = computation.output.impacts[0]
+    assert impact.shock_return == pytest.approx(-0.2)
+    audit = {item.exposure_bucket_id: item for item in impact.bucket_audit}
+    assert audit["ITA"].candidate_bucket_ids == [
+        "ITA",
+        "european_union",
+        "Other",
+    ]
+    assert audit["ITA"].applied_bucket_id == "ITA"
+    assert audit["ITA"].rule == RiskStressApplicationRule.COUNTRY
+    assert audit["DEU"].applied_bucket_id == "european_union"
+    assert audit["DEU"].rule == RiskStressApplicationRule.GEOGRAPHY_GROUP
+    assert audit["USA"].applied_bucket_id == "Other"
+    assert audit["USA"].rule == RiskStressApplicationRule.OTHER
+
+
+def test_hypothetical_params_canonicalize_buckets_and_reject_legacy_contract():
+    params = StressParams(
+        method=RiskStressMethod.HYPOTHETICAL,
+        dimension=RiskScenarioDimension.GEOGRAPHY,
+        bucket_shocks={
+            "other": 0,
+            "ita": -0.3,
+            "european_union": -0.2,
+        },
+    )
+    assert params.bucket_shocks == {
+        "ITA": -0.3,
+        "Other": 0.0,
+        "european_union": -0.2,
+    }
+
+    with pytest.raises(ValueError, match="Other bucket"):
+        StressParams(
+            method=RiskStressMethod.HYPOTHETICAL,
+            dimension=RiskScenarioDimension.SECTOR,
+            bucket_shocks={"Financials": -0.3},
+        )
+    with pytest.raises(ValueError, match="Extra inputs"):
+        StressParams.model_validate(
+            {
+                "method": "hypothetical",
+                "shocks": {"1": -0.2},
+            }
+        )
 
 
 def test_historical_replay_uses_current_buy_and_hold_policy():
@@ -276,7 +458,7 @@ def test_historical_replay_uses_current_buy_and_hold_policy():
     )
     replay_range = DateRangeModel(
         start=date(2026, 1, 2),
-        end=date(2026, 1, 3),
+        end=date(2026, 1, 21),
     )
     computation = StressAnalytic().compute(
         StressParams(
@@ -289,6 +471,212 @@ def test_historical_replay_uses_current_buy_and_hold_policy():
     assert computation.output.portfolio_return == pytest.approx(0.075)
     assert computation.output.impact_amount == Decimal("15.000")
     assert computation.output.replay_range == replay_range
+    assert computation.historical_replay_audit.proxy_count == 0
+    assert computation.historical_replay_audit.excluded_count == 0
+    assert [impact.return_source_asset_id for impact in computation.output.impacts] == [1, 2]
+
+
+def test_historical_replay_proxy_replaces_only_the_return_series():
+    returns = [0.1, -0.05] + [0.0] * 18
+    replay_range = DateRangeModel(
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 21),
+    )
+    direct = StressAnalytic().compute(
+        StressParams(
+            method=RiskStressMethod.HISTORICAL_REPLAY,
+            replay_range=replay_range,
+        ),
+        make_context(
+            {1: returns},
+            scope_kind=RiskScopeKind.ASSET,
+            mode=RiskMode.CURRENT_COMPOSITION,
+            scope_asset_ids=(1,),
+        ),
+    )
+    proxied = StressAnalytic().compute(
+        StressParams(
+            method=RiskStressMethod.HISTORICAL_REPLAY,
+            replay_range=replay_range,
+            proxy_assets=[{"asset_id": 1, "proxy_asset_id": 3}],
+        ),
+        make_context(
+            {3: returns},
+            scope_kind=RiskScopeKind.ASSET,
+            mode=RiskMode.CURRENT_COMPOSITION,
+            scope_asset_ids=(1,),
+            primary_asset_id=3,
+            replay_source_asset_ids={1: 3},
+        ),
+    )
+
+    assert proxied.output.portfolio_return == pytest.approx(direct.output.portfolio_return)
+    assert proxied.output.impacts[0].asset_id == 1
+    assert proxied.output.impacts[0].return_source_asset_id == 3
+    assert proxied.historical_replay_audit.proxy_assets[0].model_dump() == {
+        "asset_id": 1,
+        "proxy_asset_id": 3,
+    }
+    assert proxied.historical_replay_audit.proxy_series_usage == "returns_only"
+
+
+def test_historical_replay_exclusion_preserves_zero_return_residual_weight():
+    replay_range = DateRangeModel(
+        start=date(2026, 1, 2),
+        end=date(2026, 1, 21),
+    )
+    computation = StressAnalytic().compute(
+        StressParams(
+            method=RiskStressMethod.HISTORICAL_REPLAY,
+            replay_range=replay_range,
+            excluded_assets=[2],
+        ),
+        make_context(
+            {1: [0.1] + [0.0] * 19},
+            mode=RiskMode.CURRENT_COMPOSITION,
+            replay_source_asset_ids={1: 1},
+            replay_excluded_asset_ids=(2,),
+        ),
+    )
+
+    assert computation.output.portfolio_return == pytest.approx(0.05)
+    assert computation.output.impact_amount == Decimal("10.000")
+    assert [impact.asset_id for impact in computation.output.impacts] == [1, 2]
+    assert computation.output.impacts[1].shock_return == 0
+    audit = computation.historical_replay_audit
+    assert audit.excluded_weight_total == pytest.approx(0.25)
+    assert audit.excluded_assets[0].treatment.value == "zero_return_residual"
+
+
+def test_historical_replay_requires_proxy_or_exclusion_for_missing_original():
+    context = make_context(
+        {1: [0.01] * 20},
+        scope_kind=RiskScopeKind.ASSET_SET,
+        mode=RiskMode.CURRENT_COMPOSITION,
+        scope_asset_ids=(1, 2),
+    )
+
+    with pytest.raises(RiskUnavailableError) as exc_info:
+        StressAnalytic().compute(
+            StressParams(
+                method=RiskStressMethod.HISTORICAL_REPLAY,
+                replay_range=context.requested_range,
+            ),
+            context,
+        )
+
+    assert exc_info.value.code.value == "insufficient_history"
+    assert exc_info.value.details == {
+        "asset_id": 2,
+        "return_source_asset_id": 2,
+        "reason": "insufficient_history",
+    }
+
+
+def test_historical_replay_rejects_existing_proxy_without_usable_series():
+    context = make_context(
+        {3: [0.01] * 20},
+        scope_kind=RiskScopeKind.ASSET,
+        mode=RiskMode.CURRENT_COMPOSITION,
+        scope_asset_ids=(1,),
+        primary_asset_id=3,
+        replay_source_asset_ids={1: 3},
+    )
+    empty_prepared = PreparedAssetSeriesSet(
+        requested_range=context.requested_range,
+        target_currency="EUR",
+        series=[
+            PreparedAssetSeries(
+                valuations=AssetValuationSeries(
+                    asset_id=3,
+                    target_currency="EUR",
+                ),
+                returns=AssetReturnSeries(
+                    asset_id=3,
+                    target_currency="EUR",
+                ),
+            )
+        ],
+        data_quality=DataQualityReport(
+            unusable_assets=[
+                DataQualityExcludedAsset(
+                    asset_id=3,
+                    reason=DataQualityExclusionReason.MISSING_FX,
+                )
+            ]
+        ),
+        fx_fingerprint="0" * 64,
+    )
+    context = replace(
+        context,
+        historical_replay=RiskHistoricalReplayContext(
+            prepared_series=empty_prepared,
+            source_asset_ids={1: 3},
+            excluded_asset_ids=(),
+            data_quality=empty_prepared.data_quality,
+        ),
+    )
+
+    with pytest.raises(RiskUnavailableError) as exc_info:
+        StressAnalytic().compute(
+            StressParams(
+                method=RiskStressMethod.HISTORICAL_REPLAY,
+                replay_range=context.requested_range,
+                proxy_assets=[{"asset_id": 1, "proxy_asset_id": 3}],
+            ),
+            context,
+        )
+
+    assert exc_info.value.code.value == "invalid_parameters"
+    assert exc_info.value.details["reason"] == "missing_fx"
+
+
+def test_historical_replay_asset_set_exclusion_is_omitted_not_zero_weighted():
+    context = make_context(
+        {1: [0.1] + [0.0] * 19},
+        scope_kind=RiskScopeKind.ASSET_SET,
+        mode=RiskMode.CURRENT_COMPOSITION,
+        scope_asset_ids=(1, 2),
+        replay_source_asset_ids={1: 1},
+        replay_excluded_asset_ids=(2,),
+    )
+    computation = StressAnalytic().compute(
+        StressParams(
+            method=RiskStressMethod.HISTORICAL_REPLAY,
+            replay_range=context.requested_range,
+            excluded_assets=[2],
+        ),
+        context,
+    )
+
+    assert computation.output.portfolio_return is None
+    assert [impact.asset_id for impact in computation.output.impacts] == [1]
+    assert computation.historical_replay_audit.excluded_assets[0].treatment.value == "omitted_from_replay"
+
+
+def test_historical_replay_params_are_canonical_and_disjoint():
+    params = StressParams(
+        method=RiskStressMethod.HISTORICAL_REPLAY,
+        replay_range=DateRangeModel(
+            start=date(2026, 1, 2),
+            end=date(2026, 1, 21),
+        ),
+        proxy_assets=[
+            {"asset_id": 4, "proxy_asset_id": 8},
+            {"asset_id": 1, "proxy_asset_id": 7},
+        ],
+        excluded_assets=[6, 2],
+    )
+
+    assert [item.asset_id for item in params.proxy_assets] == [1, 4]
+    assert params.excluded_assets == [2, 6]
+    with pytest.raises(ValueError, match="both proxied and excluded"):
+        StressParams(
+            method=RiskStressMethod.HISTORICAL_REPLAY,
+            replay_range=params.replay_range,
+            proxy_assets=[{"asset_id": 1, "proxy_asset_id": 7}],
+            excluded_assets=[1],
+        )
 
 
 def test_comparison_identity_and_historical_var_invariants():
@@ -363,7 +751,7 @@ async def test_simulation_uses_current_composition_and_discloses_assumptions():
 
 
 @pytest.mark.asyncio
-async def test_portfolio_optimization_executes_for_all_supported_scopes():
+async def test_portfolio_optimization_executes_for_supported_scopes():
     clear_optimization_cache()
     returns_by_asset = {
         1: [0.001 + 0.01 * math.sin(index / 4) for index in range(60)],
@@ -373,7 +761,6 @@ async def test_portfolio_optimization_executes_for_all_supported_scopes():
     try:
         for scope_kind in (
             RiskScopeKind.PORTFOLIO,
-            RiskScopeKind.BROKER,
             RiskScopeKind.ASSET_SET,
         ):
             computation = await PortfolioOptimizationAnalytic().execute(

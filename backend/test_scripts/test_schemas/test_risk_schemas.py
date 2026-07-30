@@ -28,6 +28,10 @@ from backend.app.schemas.risk import (
     RiskCompositionPolicy,
     RiskError,
     RiskErrorCode,
+    RiskHistoricalReplayAudit,
+    RiskHistoricalReplayExcludedAsset,
+    RiskHistoricalReplayExclusionTreatment,
+    RiskHistoricalReplayProxyAsset,
     RiskKpiOutput,
     RiskMode,
     RiskQueryRequest,
@@ -36,7 +40,20 @@ from backend.app.schemas.risk import (
     RiskReturnBasis,
     RiskSamplingStrategy,
     RiskScopeKind,
+    RiskStressApplicationRule,
+    RiskStressBucketAudit,
+    RiskStressConfiguredBucketImpact,
+    RiskStressImpact,
+    RiskStressMethod,
+    RiskStressOutput,
     RiskVarCvarOutput,
+)
+from backend.app.schemas.risk_scenarios import (
+    RiskHistoricalReplayScenario,
+    RiskHypotheticalShockScenario,
+    RiskScenarioDimension,
+    RiskScenarioLocalizedText,
+    RiskScenarioMissingHistoryPolicy,
 )
 
 
@@ -176,12 +193,17 @@ def test_risk_result_metadata_enforces_observed_annualization_and_mode():
         annualization_factor=365.0,
         coverage=0.75,
         currency="EUR",
+        scope=RiskScopeKind.PORTFOLIO,
+        scope_reference="portfolio:3,9",
+        broker_ids=[9, 3],
+        composition_as_of=date(2026, 1, 4),
         mode=RiskMode.HISTORICAL,
         return_basis=RiskReturnBasis.TWRR,
         algorithm_version="risk-test@1.0.0",
         computed_at=datetime(2026, 1, 5, tzinfo=UTC),
     )
     assert metadata.frequency.value == "daily"
+    assert metadata.broker_ids == [3, 9]
 
     simulation_metadata = RiskResultMetadata.model_validate(
         {
@@ -229,6 +251,60 @@ def test_risk_result_metadata_enforces_observed_annualization_and_mode():
         )
 
 
+def test_historical_replay_audit_is_strict_and_serializable():
+    audit = RiskHistoricalReplayAudit(
+        proxy_count=1,
+        proxy_assets=[
+            RiskHistoricalReplayProxyAsset(
+                asset_id=7,
+                proxy_asset_id=9,
+            )
+        ],
+        excluded_count=1,
+        excluded_assets=[
+            RiskHistoricalReplayExcludedAsset(
+                asset_id=11,
+                weight=0.2,
+                treatment=RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL,
+            )
+        ],
+        excluded_weight_total=0.2,
+        missing_history_policy=RiskScenarioMissingHistoryPolicy.MANUAL_PROXY_OR_EXCLUDE,
+        composition_policy=RiskCompositionPolicy.CURRENT_BUY_AND_HOLD,
+    )
+
+    assert audit.model_dump(mode="json") == {
+        "proxy_count": 1,
+        "proxy_assets": [{"asset_id": 7, "proxy_asset_id": 9}],
+        "excluded_count": 1,
+        "excluded_assets": [
+            {
+                "asset_id": 11,
+                "reason": "manual_exclusion",
+                "weight": 0.2,
+                "treatment": "zero_return_residual",
+            }
+        ],
+        "excluded_weight_total": 0.2,
+        "missing_history_policy": "manual_proxy_or_exclude",
+        "composition_policy": "current_buy_and_hold",
+        "proxy_series_usage": "returns_only",
+    }
+
+    with pytest.raises(ValidationError, match="proxy_count"):
+        RiskHistoricalReplayAudit.model_validate(
+            {
+                **audit.model_dump(mode="json"),
+                "proxy_count": 0,
+            }
+        )
+    with pytest.raises(ValidationError, match="must differ"):
+        RiskHistoricalReplayProxyAsset(
+            asset_id=7,
+            proxy_asset_id=7,
+        )
+
+
 def test_risk_query_uses_strict_discriminated_scopes_and_mode_policy():
     request = RiskQueryRequest(
         scope=AssetSetRiskScope(kind="asset_set", asset_ids=[7, 9]),
@@ -267,8 +343,33 @@ def test_risk_query_uses_strict_discriminated_scopes_and_mode_policy():
     assert isinstance(validated.scope, AssetRiskScope)
     assert validated.composition_policy == RiskCompositionPolicy.CURRENT_BUY_AND_HOLD
 
+    portfolio_scope = PortfolioRiskScope(
+        kind="portfolio",
+        broker_ids=[9, 3],
+    )
+    assert portfolio_scope.broker_ids == [3, 9]
+
     with pytest.raises(ValidationError, match="asset_ids must be unique"):
         AssetSetRiskScope(kind="asset_set", asset_ids=[7, 7])
+    with pytest.raises(ValidationError, match="broker_ids must be unique"):
+        PortfolioRiskScope(kind="portfolio", broker_ids=[3, 3])
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope(kind="portfolio", broker_ids=[])
+    with pytest.raises(ValidationError):
+        RiskQueryRequest.model_validate(
+            {
+                "scope": {"kind": "broker", "broker_id": 3},
+                "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+                "target_currency": "EUR",
+                "mode": "historical",
+                "analytics": [
+                    {
+                        "instance_id": "legacy",
+                        "analytic_code": "historical_kpi",
+                    }
+                ],
+            }
+        )
     with pytest.raises(ValidationError, match="requires composition_policy"):
         RiskQueryRequest(
             scope=PortfolioRiskScope(kind="portfolio"),
@@ -298,12 +399,12 @@ def test_risk_result_contract_enforces_status_and_var_tail_ordering():
         scope=RiskScopeKind.PORTFOLIO,
         mode=RiskMode.HISTORICAL,
         return_basis=RiskReturnBasis.TWRR,
-        algorithm_version="portfolio_kpi@1.0.0",
+        algorithm_version="historical_kpi@2.0.0",
         computed_at=datetime(2026, 1, 5, tzinfo=UTC),
     )
     result = RiskAnalyticResult(
         instance_id="kpi-main",
-        analytic_code="portfolio_kpi",
+        analytic_code="historical_kpi",
         status=RiskResultStatus.OK,
         output=RiskKpiOutput(
             volatility=0.2,
@@ -322,13 +423,13 @@ def test_risk_result_contract_enforces_status_and_var_tail_ordering():
     with pytest.raises(ValidationError, match="successful results require"):
         RiskAnalyticResult(
             instance_id="bad",
-            analytic_code="portfolio_kpi",
+            analytic_code="historical_kpi",
             status=RiskResultStatus.OK,
         )
     with pytest.raises(ValidationError, match="require error"):
         RiskAnalyticResult(
             instance_id="bad",
-            analytic_code="portfolio_kpi",
+            analytic_code="historical_kpi",
             status=RiskResultStatus.UNAVAILABLE,
         )
 
@@ -350,4 +451,133 @@ def test_risk_result_contract_enforces_status_and_var_tail_ordering():
             observations=4,
             value_at_risk=0.2,
             conditional_value_at_risk=0.1,
+        )
+
+
+def test_risk_scenario_schemas_keep_localization_and_tags_typed():
+    scenario = RiskHistoricalReplayScenario.model_validate(
+        {
+            "schema_version": 1,
+            "id": "host_replay",
+            "kind": "historical_replay",
+            "tags": ["rates", "custom"],
+            "name": {"it": "Replay host"},
+            "description": {"it": "Scenario host"},
+            "defaults": {
+                "start": "2020-01-01",
+                "end": "2020-01-31",
+            },
+        }
+    )
+
+    assert scenario.tags == ["custom", "rates"]
+    assert scenario.name.resolve("fr") == "Replay host"
+    assert RiskScenarioLocalizedText.model_validate({"es": "Solo español"}).resolve("de") == "Solo español"
+
+    with pytest.raises(ValidationError, match="lowercase ASCII"):
+        RiskHistoricalReplayScenario.model_validate(
+            {
+                **scenario.model_dump(mode="json"),
+                "tags": ["Not_Canonical"],
+            }
+        )
+
+
+def test_hypothetical_scenario_requires_other_for_sector_and_geography():
+    payload = {
+        "schema_version": 1,
+        "id": "sector_shock",
+        "kind": "hypothetical_shock",
+        "name": {"en": "Sector shock"},
+        "description": {"en": "Sector shock description"},
+        "allowed_dimensions": ["sector"],
+        "defaults": {
+            "dimension": "sector",
+            "bucket_shocks": {"Financials": -0.3},
+        },
+    }
+
+    with pytest.raises(ValidationError, match="require an Other bucket"):
+        RiskHypotheticalShockScenario.model_validate(payload)
+
+    scenario = RiskHypotheticalShockScenario.model_validate(
+        {
+            **payload,
+            "defaults": {
+                "dimension": "sector",
+                "bucket_shocks": {
+                    "Financials": -0.3,
+                    "Other": 0,
+                },
+            },
+        }
+    )
+    assert scenario.defaults.bucket_shocks["Other"] == 0
+
+
+def test_hypothetical_stress_output_keeps_bucket_audit_strict():
+    output = RiskStressOutput(
+        method=RiskStressMethod.HYPOTHETICAL,
+        dimension=RiskScenarioDimension.SECTOR,
+        classification_coverage=1,
+        impacts=[
+            RiskStressImpact(
+                asset_id=7,
+                shock_return=-0.16,
+                dimension=RiskScenarioDimension.SECTOR,
+                bucket_audit=[
+                    RiskStressBucketAudit(
+                        exposure_bucket_id="Technology",
+                        exposure=0.6,
+                        candidate_bucket_ids=["Technology", "Other"],
+                        applied_bucket_id="Technology",
+                        bucket_shock=-0.2,
+                        shock_contribution=-0.12,
+                        rule=RiskStressApplicationRule.DIRECT,
+                    ),
+                    RiskStressBucketAudit(
+                        exposure_bucket_id="Financials",
+                        exposure=0.4,
+                        candidate_bucket_ids=["Other"],
+                        applied_bucket_id="Other",
+                        bucket_shock=-0.1,
+                        shock_contribution=-0.04,
+                        rule=RiskStressApplicationRule.OTHER,
+                    ),
+                ],
+            )
+        ],
+        configured_buckets=[
+            RiskStressConfiguredBucketImpact(
+                bucket_id="Other",
+                shock=-0.1,
+                applied_asset_count=1,
+                asset_exposure_total=0.4,
+            ),
+            RiskStressConfiguredBucketImpact(
+                bucket_id="Technology",
+                shock=-0.2,
+                applied_asset_count=1,
+                asset_exposure_total=0.6,
+            ),
+        ],
+    )
+    assert output.model_dump(mode="json")["impacts"][0]["bucket_audit"][1]["applied_bucket_id"] == "Other"
+
+    with pytest.raises(ValidationError, match="must sum to 1"):
+        RiskStressImpact(
+            asset_id=7,
+            shock_return=-0.1,
+            dimension=RiskScenarioDimension.SECTOR,
+            bucket_audit=[
+                RiskStressBucketAudit(
+                    exposure_bucket_id="Other",
+                    exposure=0.5,
+                    candidate_bucket_ids=["Other"],
+                    applied_bucket_id="Other",
+                    bucket_shock=-0.2,
+                    shock_contribution=-0.1,
+                    rule=RiskStressApplicationRule.OTHER,
+                )
+            ],
         )

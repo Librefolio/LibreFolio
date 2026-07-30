@@ -52,8 +52,8 @@ Compare the current asset's performance against **another asset**. The compariso
 
 ## 🧠 AI Export
 
-The **AI Export** (:material-brain:) button in the Signals header offers five
-Asset tasks:
+The **AI Export** (:material-brain:) button in the page toolbar offers five Asset
+tasks:
 
 - **Asset Snapshot**
 - **Asset Trend Analysis**

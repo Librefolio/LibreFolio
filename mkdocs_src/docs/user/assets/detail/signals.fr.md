@@ -52,8 +52,8 @@ Comparez la performance de l'actif actuel par rapport à **un autre actif**. Le 
 
 ## 🧠 Export IA
 
-Le bouton **Export IA** (:material-brain:) dans l'en-tête Signaux propose cinq
-tâches Actif :
+Le bouton **Export IA** (:material-brain:) dans la barre d'outils de la page
+propose cinq tâches Actif :
 
 - **Instantané de l'actif**
 - **Analyse de tendance de l'actif**

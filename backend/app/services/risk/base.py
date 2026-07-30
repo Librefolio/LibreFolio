@@ -25,6 +25,7 @@ from backend.app.schemas.risk import (
     RiskErrorCode,
     RiskExcludedAsset,
     RiskFreeReference,
+    RiskHistoricalReplayAudit,
     RiskMode,
     RiskOutputKind,
     RiskReturnBasis,
@@ -49,6 +50,26 @@ class RiskUnavailableError(ValueError):
         super().__init__(message)
         self.code = code
         self.details = details or {}
+
+
+@dataclass(frozen=True, slots=True)
+class RiskHistoricalReplayContext:
+    """Prepared replay-only series and original-to-source identity."""
+
+    prepared_series: PreparedAssetSeriesSet
+    source_asset_ids: Mapping[int, int]
+    excluded_asset_ids: tuple[int, ...]
+    data_quality: DataQualityReport
+
+
+@dataclass(frozen=True, slots=True)
+class RiskAssetClassification:
+    """Canonical classification inputs consumed by hypothetical stress."""
+
+    asset_class: str
+    sector_exposures: Optional[Mapping[str, float]] = None
+    geography_exposures: Optional[Mapping[str, float]] = None
+    metadata_error: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +101,11 @@ class RiskExecutionContext:
     asset_values: Mapping[int, Decimal] = field(default_factory=dict)
     cash_weight: float = 0.0
     scope_value: Optional[Decimal] = None
+    broker_ids: tuple[int, ...] = ()
+    composition_as_of: Optional[date] = None
+    historical_replay: Optional[RiskHistoricalReplayContext] = None
+    asset_classifications: Mapping[int, RiskAssetClassification] = field(default_factory=dict)
+    geography_groups: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
     @property
     def n_observations(self) -> int:
@@ -106,6 +132,7 @@ class RiskComputation:
     path_count: Optional[int] = None
     random_seed: Optional[int] = None
     sobol_start_index: Optional[int] = None
+    historical_replay_audit: Optional[RiskHistoricalReplayAudit] = None
 
 
 class RiskAnalytic(ABC):
@@ -221,7 +248,9 @@ class RiskAnalytic(ABC):
 
 __all__ = [
     "RiskAnalytic",
+    "RiskAssetClassification",
     "RiskComputation",
     "RiskExecutionContext",
+    "RiskHistoricalReplayContext",
     "RiskUnavailableError",
 ]

@@ -13,6 +13,16 @@ lo stato verificato attuale e le decisioni ancora da prendere.
 > lifecycle idle dei worker è documentato in
 > [`report-phase01RiskBackendAuditAndRemediation.md`](./report-phase01RiskBackendAuditAndRemediation.md).
 > Quel report prevale per lo stato tecnico finale.
+>
+> **Superseding note G6 — 29 Luglio 2026**: questo report resta uno snapshot
+> storico G0-G5. Le sue domande aperte su placement/P13 non sono più correnti.
+> Per G6 prevalgono
+> [`plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md)
+> e
+> [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md):
+> P13 solo `Assets → Allocation`, scope `portfolio.broker_ids`, scenario catalog
+> typed, replay con proxy manuali e Dashboard/Broker condivisi. L'esecuzione resta
+> bloccata.
 
 ---
 

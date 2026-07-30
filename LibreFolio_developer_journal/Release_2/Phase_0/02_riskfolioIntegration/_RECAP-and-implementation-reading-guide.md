@@ -1,7 +1,9 @@
-# Recap corretto — Risk Analysis backend (G0-G5)
+# Recap corretto — Risk Analysis backend (G0-G5) + ripresa G6
 
 **Data**: 28 Luglio 2026
-**Stato**: backend G0-G5 completato e auditato; G6 ripianificato, non eseguito.
+**Ultima revisione G6**: 29 Luglio 2026
+**Stato**: backend G0-G5 completato e auditato; IA G6 approvata, esecuzione
+backend-first autorizzata.
 
 ## 1. Esito
 
@@ -22,20 +24,29 @@ La correzione richiesta è completa:
 Le vecchie conclusioni «NumPy più veloce quindi production», «single
 `asyncio.to_thread`» e «P13 respinto» sono superseded.
 
+> **Fonte corrente G6.** Per placement, scope e scenari leggere prima
+> [`plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md):
+> quattro tab Assets Global, P13 solo Allocation, Dashboard/Broker condivisi,
+> `portfolio.broker_ids`, catalogo YAML typed, replay con proxy manuali e shock
+> `Other=100%`/`european_union`. Audit proxy, cache lazy, bucket UX e tag YAML
+> opzionali sono espliciti. Le esclusioni replay usano residuo zero-return.
+
 ## 2. Documenti da leggere
 
 | Ordine | Documento | Ruolo |
 |---:|---|---|
-| 0 | [`report-phase01RiskBackendAuditAndRemediation.md`](./report-phase01RiskBackendAuditAndRemediation.md) | Stato tecnico finale: audit, remediation, prove e replan G6. |
-| 1 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | Handoff storico autosufficiente: richieste, falsa pista e costruzione G0-G5. |
-| 2 | [`contract-phase01RiskMetricsMathematical.md`](./contract-phase01RiskMetricsMathematical.md) | Contratto matematico fondativo. |
-| 3 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | Piano P0-P13 aggiornato con gli esiti. |
-| 4 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | Master G0-G6 e stato corrente. |
-| 5 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | Implementazione corretta P11-P13. |
-| 6 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | Piano G6 riconciliato sul codice reale, non ancora eseguito. |
-| 7 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | Versioni, solver, lock, Docker arm64/amd64. |
-| 8 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | Oracle MC/QMC QuantLib. |
-| 9 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | Cold/warm, RSS, cache, concorrenza, recycle e idle reap. |
+| 0 | [`plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md) | IA G6 corrente e fonte placement/scenari. |
+| 1 | [`plan-phase01Step6RiskFrontendIntegration.prompt.md`](./plan-phase01Step6RiskFrontendIntegration.prompt.md) | Sequenza esecutiva G6 autorizzata e lineare. |
+| 2 | [`plan-phase01RiskAnalysisImplementation.prompt.md`](./plan-phase01RiskAnalysisImplementation.prompt.md) | Master G0-G6 e stato corrente. |
+| 3 | [`contract-phase01RiskMetricsMathematical.md`](./contract-phase01RiskMetricsMathematical.md) | Contratto matematico/semantico, incluso stress. |
+| 4 | [`analysis-phase01RiskModularityAndPlacement.md`](./analysis-phase01RiskModularityAndPlacement.md) | Placement e riuso. |
+| 5 | [`plan-phase01RiskAnalysisApplication.prompt.md`](./plan-phase01RiskAnalysisApplication.prompt.md) | Piano P0-P13 aggiornato. |
+| 6 | [`report-phase01RiskBackendAuditAndRemediation.md`](./report-phase01RiskBackendAuditAndRemediation.md) | Stato tecnico backend finale. |
+| 7 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | Handoff storico e falsa pista. |
+| 8 | [`plan-phase01Step5SimulationScaleOptimization.prompt.md`](./plan-phase01Step5SimulationScaleOptimization.prompt.md) | Implementazione P11-P13. |
+| 9 | [`spike-phase01QuantLibraries.md`](./spike-phase01QuantLibraries.md) | Versioni, solver, lock, Docker arm64/amd64. |
+| 10 | [`spike-phase01SimulationAdapters.md`](./spike-phase01SimulationAdapters.md) | Oracle MC/QMC QuantLib. |
+| 11 | [`benchmark-phase01SimulationScale.md`](./benchmark-phase01SimulationScale.md) | Cold/warm, RSS, cache, concorrenza, recycle e idle reap. |
 
 ## 3. Architettura backend finale
 
@@ -110,8 +121,10 @@ Nuovo analytic: `portfolio_optimization`.
 Scope:
 
 - `portfolio`;
-- `broker`;
 - `asset_set`.
+
+Il backend G5 conserva ancora lo scope `broker`; la foundation G6 lo migra a
+`portfolio + broker_ids=[id]` e poi elimina `kind=broker`.
 
 Strategie:
 
@@ -385,7 +398,7 @@ Suite backend globale:
 | G3 — rolling risk | ✅ |
 | G4 — multi-asset deterministico | ✅ |
 | G5 — simulazione/scala/ottimizzazione | ✅ corretto e auditato |
-| G6 — frontend funzionale | ⏸️ ripianificato, non eseguito |
+| G6 — applicazione | ▶️ IA approvata; correzione backend-first autorizzata |
 | GF — chiusura integrata | 🟡 dipende da G6 e da worktree stabile |
 
 P0-P13 backend:
@@ -403,13 +416,15 @@ Nessun lavoro backend G5 rimasto.
 
 Rispetto al piano originale:
 
-1. riprendere G6 solo su nuova richiesta;
-2. eseguire il nuovo Step 6 riconciliato;
-3. spostare Asset Detail, rimuovere fallback id e aggiungere UI P13 minima;
-4. aggiungere test funzionali mocked e almeno due smoke real-backend;
-5. lasciare fillings/polish/design finale all'utente;
-6. rilanciare la suite globale quando il worktree concorrente è stabile;
-7. chiudere GF e archiviare la catena di piano.
+1. migrare `portfolio.broker_ids`, auth/cache/metadata e rimuovere `kind=broker`;
+2. costruire catalogo scenari typed/startup-loaded e contratti replay/shock;
+3. estrarre shared state/componenti dal pannello monolitico;
+4. implementare Asset Detail e attendere approvazione;
+5. implementare Correlation, Scenarios e Allocation una alla volta, con gate;
+6. migrare Broker Risk, Dashboard Risk e Home card una alla volta, con gate;
+7. aggiungere test funzionali e smoke real-backend;
+8. lasciare fillings/polish/design finale all'utente;
+9. chiudere GF e archiviare la catena di piano.
 
 ## 12. Prompt di ripresa
 
@@ -417,17 +432,23 @@ Rispetto al piano originale:
 Contesto: LibreFolio Risk Analysis. Backend G0-G5 completato e corretto.
 Leggi:
 1. _RECAP-and-implementation-reading-guide.md
-2. plan-phase01RiskAnalysisImplementation.prompt.md
+2. plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md
 3. plan-phase01Step6RiskFrontendIntegration.prompt.md
+4. plan-phase01RiskAnalysisImplementation.prompt.md
 
 Vincoli:
 - non riaprire QuantLib MC/QMC, spawn obbligatorio o Riskfolio 7.0.1;
 - nessun adapter NumPy/SciPy production;
 - RQMC resta rimosso;
 - backend calcola, frontend presenta;
-- niente redesign/polish salvo richiesta;
+- Assets Global = Assets/Correlation/Scenarios/Allocation;
+- P13 UI solo in Allocation;
+- Dashboard/Broker = summary + pannelli condivisi lazy;
+- scope = portfolio + broker_ids;
+- catalogo scenario typed, replay proxy manuali, shock dimensione singola;
+- niente redesign/polish salvo validazione utente;
 - verificare il lavoro frontend già presente prima di aggiungere codice;
 - la suite globale ha un failure AI Export concorrente estraneo al risk backend.
 
-Obiettivo successivo: G6 frontend funzionale, solo quando richiesto.
+Obiettivo successivo: G6-11, migrazione scope portfolio.
 ```

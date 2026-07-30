@@ -52,8 +52,8 @@ Compare el rendimiento del activo actual frente a **otro activo**. El precio del
 
 ## 🧠 Exportación de IA
 
-El botón **Exportación de IA** (:material-brain:) del encabezado Señales ofrece
-cinco tareas de Activo:
+El botón **Exportación de IA** (:material-brain:) de la barra de herramientas de
+la página ofrece cinco tareas de Activo:
 
 - **Instantánea del activo**
 - **Análisis de tendencia del activo**

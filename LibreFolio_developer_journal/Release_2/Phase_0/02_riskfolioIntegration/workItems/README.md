@@ -3,8 +3,8 @@
 Snapshot persistente del tracker operativo interno usato durante
 l'implementazione della Risk Analysis.
 
-**Data snapshot**: 28 Luglio 2026
-**Totale**: 37 work item — 30 `done`, 7 `blocked`
+**Data snapshot**: 29 Luglio 2026
+**Totale**: 53 work item — 32 `done`, 21 `pending`
 
 I testi inglesi di titolo e descrizione sono copiati senza riscrittura dal
 tracker della sessione. Questi file documentano la scomposizione esecutiva; i
@@ -20,7 +20,7 @@ contratti e i piani nella cartella padre restano le fonti autoritative.
 | [G3 — Rolling](./g3-rolling-risk.md) | P3-P4 backend | 1 | ✅ |
 | [G4 — Deterministico](./g4-deterministic-multiasset.md) | P5-P10 backend/API | 13 | ✅ |
 | [G5 — Avanzato](./g5-stochastic-scale-optimization.md) | P11-P13 | 10 | ✅ |
-| [G6 — Frontend](./g6-frontend.md) | UI P4/P6-P13 | 7 | ⏸️ `blocked` |
+| [G6 — Applicazione](./g6-frontend.md) | scope/scenari + UI P4/P6-P13 | 23 | ▶️ autorizzato |
 | [GF — Finale](./gf-final-validation.md) | Validazione, knowledge, handoff | 3 | ✅ |
 
 G1-G6 sono i sei gate di consegna. G0 materializza il piano prima
@@ -29,16 +29,18 @@ dell'esecuzione; GF raccoglie la chiusura trasversale.
 ## Semantica dello stato
 
 - `done`: item chiuso nel tracker.
-- `blocked`: item fermato dallo stop esplicito dell'utente dopo la chiusura
-  backend. Per G6 non significa “nessun codice”: store, componenti, route ed E2E
-  erano già parzialmente materializzati, ma non sono stati riallineati e
-  ricertificati.
-- `depends_on`: dipendenza operativa originaria. Dopo lo stop backend alcuni
-  item finali sono stati chiusi documentalmente senza completare G6; lo snapshot
-  conserva comunque il grafo originale.
+- `pending`: item G6 non ancora iniziato.
+- `depends_on`: in G6 ogni item ha un solo predecessore; i gate umani sono item
+  espliciti che bloccano la vista successiva.
 
 ## Riferimenti
 
 - [Master implementativo](../plan-phase01RiskAnalysisImplementation.prompt.md)
 - [Piano applicativo P0-P13](../plan-phase01RiskAnalysisApplication.prompt.md)
+- [Step 6 corrente](../plan-phase01Step6RiskFrontendIntegration.prompt.md)
+- [Information Architecture G6](../plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md)
 - [Report corrente e handoff](../report-phase01RiskAnalysisCurrentStateAndHandoff.md)
+
+> **Nota G6**: i sette item storici sono stati sostituiti dalla catena lineare
+> approvata. Backend completo prima del frontend; poi sette viste funzionali,
+> ciascuna seguita da review visuale umana.

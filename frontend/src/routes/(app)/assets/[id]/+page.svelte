@@ -41,7 +41,6 @@
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
-    import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {
         backendSignalSchemas,
@@ -124,6 +123,7 @@
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
 
     let loading = $state(true);
+    let riskRefreshVersion = $state(0);
     /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
     let syncing = $state(false);
@@ -223,31 +223,11 @@
     let shortDescription: string | null = $state(null);
     let classificationLoaded = $state(false);
 
-    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenu
+    // AI export (page toolbar) — dropdown open/position handled internally by AiExportMenu
     let assetAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
     let assetAiExportCatalogLoading = $state(true);
     let assetAiExportCatalogFailed = $state(false);
     let assetAiExportLabels = $derived(buildAiExportMenuLabels($t, assetAiExportCompatibility, $t('assetDetail.aiExport'), $t('assetDetail.aiExportBuilding')));
-
-    // Signals header row's OWN width (NOT pageLayoutMode — that tracks the PageToolbar bar,
-    // which needs ~780px+ to avoid stacking its date picker/filters/2x2 actions, so its
-    // 'oneColumn' cutoff (360px) fires on ordinary phone widths where THIS much lighter row
-    // — icon+"Segnali" label, the AI button, a chevron — still has plenty of room). 320px is
-    // the measured worst-case width (longest translation, "Exportar IA") this row needs to fit
-    // comfortably with the AI button's label shown; below that it goes icon-only.
-    let signalsHeaderRef = $state<HTMLDivElement | null>(null);
-    let signalsHeaderWidth = $state(9999); // generous default: show the label until the first real measurement lands
-    let showAiExportLabel = $derived(signalsHeaderWidth >= 320);
-
-    $effect(() => {
-        const el = signalsHeaderRef;
-        if (!el) return;
-        const ro = new ResizeObserver(([entry]) => {
-            signalsHeaderWidth = entry.contentRect.width;
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-    });
 
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);
@@ -1387,6 +1367,7 @@
         }
         overlayDataVersion++;
         await maybeLoadComparison();
+        riskRefreshVersion += 1;
     }
 
     async function reloadMetadata() {
@@ -1754,120 +1735,111 @@
         </div>
     {/if}
 
-    <div class="rounded-xl border border-gray-100 bg-white px-2 shadow-sm dark:border-slate-700 dark:bg-slate-800" data-testid="asset-detail-tabs">
-        <TabBar tabs={assetDetailTabs} {activeTab} onchange={handleAssetDetailTabChange} fillWidth />
-    </div>
+    <!-- ======================================================================= -->
+    <!-- Page controls — shared PageToolbar (same component as dashboard/broker-detail/assets
+         list), including the integrated Overview/Risk tab row. -->
+    <!-- oneRow:       [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 1-row     -->
+    <!-- denseRow:     [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 2-row     -->
+    <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked+justified     -->
+    <!--               [ price-summary    ] [ 4×1     ]  (start-aligned, capped to picker's     -->
+    <!--                                                  width via pickerMaxWidth), actions    -->
+    <!--                                                  stay BESIDE (4×1 column)               -->
+    <!-- oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,  -->
+    <!--               [ price-summary    ]  still a labeled 2×2 grid (only position changed) -->
+    <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
+    <!-- ======================================================================= -->
+    <PageToolbar
+        thresholds={{oneRow: 1215, denseRow: 780, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}}
+        tabs={assetDetailTabs}
+        {activeTab}
+        ontabchange={handleAssetDetailTabChange}
+        testId="asset-detail-controls"
+        filterRowTestId="asset-detail-filter-bar"
+        layoutDebugName="assetDetail"
+        bind:layoutMode={pageLayoutMode}
+    >
+        {#snippet filters()}
+            <!-- Round 14 bugfix: `contents` (not `flex flex-1 ...`) — see assets/+page.svelte's
+                 equivalent wrapper for the full explanation (DateRangePicker self-applies
+                 grow+max-width when align="start"; an extra flex-1 wrapper with no cap grows
+                 past the picker's own capped width, pushing the summary sibling too far right). -->
+            <div class="contents">
+                <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" maxWidthTwoRow={445} layoutMode={pageLayoutMode} debugName="assetDetail" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
+            </div>
+        {/snippet}
+
+        {#snippet summary({layoutMode, filtersStacked})}
+            {#if assetInfo}
+                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} onCreateForex={() => (showFxPairAddModal = true)} />
+            {/if}
+        {/snippet}
+
+        {#snippet actions({showActionLabels})}
+            <AiExportMenu
+                domain="asset"
+                compatibility={assetAiExportCompatibility}
+                memoryKey={`asset:${data.assetId}`}
+                defaultSelectionId="asset.trend_analysis"
+                disabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
+                labels={assetAiExportLabels}
+                showLabel={showActionLabels}
+                onprepare={handleAssetAiExport}
+                oncopied={handleAssetAiExportCopied}
+                onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
+            />
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="asset-detail-edit-btn"
+                disabled={!assetInfo}
+                onclick={() => {
+                    editDataForModal = buildEditData();
+                    editModalOpen = true;
+                }}
+            >
+                <Pencil size={14} />
+                {#if showActionLabels}<span>{$t('common.edit')}</span>{/if}
+            </button>
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
+                           {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
+                data-testid="asset-detail-sync-btn"
+                disabled={syncing || isManualOnly}
+                onclick={handleSync}
+                title={isManualOnly ? $t('assetDetail.syncDisabledManual') : ''}
+            >
+                <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
+                {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
+            </button>
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                data-testid="asset-detail-refresh-btn"
+                disabled={loading}
+                onclick={handleRefresh}
+            >
+                <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
+                {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
+            </button>
+        {/snippet}
+    </PageToolbar>
 
     {#if activeTab === 'overview'}
         <!-- Unified data quality banners -->
         <DataQualityBanner issues={assetDetailIssues} mode="flat" onaction={handleBannerAction} />
+    {/if}
 
-        <!-- ======================================================================= -->
-        <!-- Filter bar — shared PageToolbar (same component as dashboard/broker-detail/assets
-         list), so responsive/wrap fixes made there auto-propagate here too. -->
-        <!-- oneRow:       [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 1-row     -->
-        <!-- denseRow:     [ datepicker  price-summary ─── actions-2×2 ]  1 row, picker 2-row     -->
-        <!-- stackFilters: [ datepicker       ] [ actions ]  filters+summary stacked+justified     -->
-        <!--               [ price-summary    ] [ 4×1     ]  (start-aligned, capped to picker's     -->
-        <!--                                                  width via pickerMaxWidth), actions    -->
-        <!--                                                  stay BESIDE (4×1 column)               -->
-        <!-- oneColumn:    [ datepicker       ]  whole bar now ONE column — actions moved BELOW,  -->
-        <!--               [ price-summary    ]  still a labeled 2×2 grid (only position changed) -->
-        <!--               [ actions ── 2×2   ]  (narrowest tier — Round 12 removed iconOnly)     -->
-        <!-- ======================================================================= -->
-        <PageToolbar thresholds={{oneRow: 1215, denseRow: 780, stackFilters: 400, oneColumn: 360, labelHideActions: 230, labelHideTabs: 370}} filterRowTestId="asset-detail-filter-bar" layoutDebugName="assetDetail" bind:layoutMode={pageLayoutMode}>
-            {#snippet filters()}
-                <!-- Round 14 bugfix: `contents` (not `flex flex-1 ...`) — see assets/+page.svelte's
-                 equivalent wrapper for the full explanation (DateRangePicker self-applies
-                 grow+max-width when align="start"; an extra flex-1 wrapper with no cap grows
-                 past the picker's own capped width, pushing the summary sibling too far right). -->
-                <div class="contents">
-                    <DateRangePicker bind:activePreset bind:end={dateEnd} bind:start={displayDateStart} compact={true} align="start" maxWidthTwoRow={445} layoutMode={pageLayoutMode} debugName="assetDetail" onchange={handleDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
-                </div>
-            {/snippet}
-
-            {#snippet summary({layoutMode, filtersStacked})}
-                {#if assetInfo}
-                    <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} onCreateForex={() => (showFxPairAddModal = true)} />
-                {/if}
-            {/snippet}
-
-            {#snippet actions({showActionLabels})}
-                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                    <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            viewMode = 'absolute';
-                        }}>Abs</button
-                    >
-                    <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                        onclick={() => {
-                            viewMode = 'percentage';
-                        }}>%</button
-                    >
-                </div>
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    data-testid="asset-detail-edit-btn"
-                    disabled={!assetInfo}
-                    onclick={() => {
-                        editDataForModal = buildEditData();
-                        editModalOpen = true;
-                    }}
-                >
-                    <Pencil size={14} />
-                    {#if showActionLabels}<span>{$t('common.edit')}</span>{/if}
-                </button>
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
-                           {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
-                    data-testid="asset-detail-sync-btn"
-                    disabled={syncing || isManualOnly}
-                    onclick={handleSync}
-                    title={isManualOnly ? $t('assetDetail.syncDisabledManual') : ''}
-                >
-                    <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                    {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
-                </button>
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    data-testid="asset-detail-refresh-btn"
-                    disabled={loading}
-                    onclick={handleRefresh}
-                >
-                    <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
-                    {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
-                </button>
-            {/snippet}
-        </PageToolbar>
-
+    {#if activeTab === 'overview'}
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
         <!-- ======================================================================= -->
         <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
             <div class="relative">
                 <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
-                <div bind:this={signalsHeaderRef} class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5">
+                <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
                     <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
                         <TrendingUp class="text-blue-500" size={15} />
                         {$t('common.signals')}
                     </span>
                     <div class="flex-1"></div>
-                    <div class="pointer-events-auto shrink-0">
-                        <AiExportMenu
-                            domain="asset"
-                            compatibility={assetAiExportCompatibility}
-                            memoryKey={`asset:${data.assetId}`}
-                            defaultSelectionId="asset.trend_analysis"
-                            disabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
-                            labels={assetAiExportLabels}
-                            showLabel={showAiExportLabel}
-                            onprepare={handleAssetAiExport}
-                            oncopied={handleAssetAiExportCopied}
-                            onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
-                        />
-                    </div>
                     <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
                         <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
                     </span>
@@ -1905,7 +1877,7 @@
         <!-- ======================================================================= -->
         <!-- Chart with left toolbar -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart">
+        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="asset-detail-chart" data-view-mode={viewMode}>
             {#if loading && lineData.length === 0}
                 <div class="h-96 flex items-center justify-center">
                     <div class="text-center">
@@ -2020,6 +1992,9 @@
                             chartType = t;
                         }}
                         externalViewMode={viewMode}
+                        onViewModeChange={(mode) => {
+                            viewMode = mode;
+                        }}
                         editMode={showDataEditor}
                         staleLabel={$t('chart.tooltip.stale')}
                         fxStaleLabel={$t('chart.tooltip.fxStale')}
@@ -2365,6 +2340,7 @@
                 sectorExposure={sectorDistribution}
                 geographyExposure={geographicDistribution}
                 {rollingRiskSignals}
+                refreshVersion={riskRefreshVersion}
                 onconfigure={openSignalConfiguration}
                 onsynced={handlePageSyncComplete}
             />

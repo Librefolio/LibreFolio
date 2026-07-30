@@ -140,7 +140,7 @@
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
 
-    // View mode (abs/%) — controlled by the page, not by chart toolbar
+    // View mode is parent-owned so chart, signals, tooltips, and measures stay aligned.
     let viewMode: ViewMode = $state('percentage');
 
     // Provider config
@@ -197,7 +197,7 @@
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
 
-    // AI export (Signals panel header button) — dropdown open/position handled internally by AiExportMenu
+    // AI export (page toolbar) — dropdown open/position handled internally by AiExportMenu
     let fxAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
     let fxAiExportCatalogLoading = $state(true);
     let fxAiExportCatalogFailed = $state(false);
@@ -212,13 +212,6 @@
 
     // Page sync modal state
     let showPageSyncModal = $state(false);
-
-    // Signals header row's own width — mirrors the asset detail logic so the AI
-    // export button can collapse to icon-only in narrow layouts without forcing
-    // the whole row to stack.
-    let signalsHeaderRef = $state<HTMLDivElement | null>(null);
-    let signalsHeaderWidth = $state(9999);
-    let showAiExportLabel = $derived(signalsHeaderWidth >= 320);
 
     /** All FX pairs to sync: main pair + overlay FX pair signals */
     let syncAllFxPairs = $derived.by(() => {
@@ -396,16 +389,6 @@
     });
 
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
-
-    $effect(() => {
-        const el = signalsHeaderRef;
-        if (!el) return;
-        const ro = new ResizeObserver(([entry]) => {
-            signalsHeaderWidth = entry.contentRect.width;
-        });
-        ro.observe(el);
-        return () => ro.disconnect();
-    });
 
     // Event markers for the chart (comparison asset events — FX pairs don't have own events)
     let chartEventMarkers: EventMarker[] = $derived.by(() => {
@@ -994,24 +977,18 @@
         {/snippet}
 
         {#snippet actions({showActionLabels})}
-            <!-- Row 1, Col 1: Abs/% segmented toggle -->
-            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
-                <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => {
-                        viewMode = 'absolute';
-                    }}
-                    >Abs
-                </button>
-                <button
-                    class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {viewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => {
-                        viewMode = 'percentage';
-                    }}
-                    >%
-                </button>
-            </div>
-            <!-- Row 1, Col 2: Providers -->
+            <AiExportMenu
+                domain="fx"
+                compatibility={fxAiExportCompatibility}
+                memoryKey={`fx:${data.canonicalSlug}`}
+                defaultSelectionId="fx.trend_review"
+                disabled={fxAiExportCatalogLoading || fxAiExportCatalogFailed}
+                labels={fxAiExportLabels}
+                showLabel={showActionLabels}
+                onprepare={handleFxAiExport}
+                oncopied={handleFxAiExportCopied}
+                onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
+            />
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="fx-detail-provider-btn"
@@ -1020,7 +997,6 @@
                 <Wrench size={14} />
                 {#if showActionLabels}<span>{$t('common.providers')}</span>{/if}
             </button>
-            <!-- Row 2, Col 1: Sync -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
                            {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
@@ -1032,7 +1008,6 @@
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$t('common.sync')}</span>{/if}
             </button>
-            <!-- Row 2, Col 2: Refresh -->
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="fx-detail-refresh-btn"
@@ -1051,26 +1026,12 @@
     <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
         <div class="relative">
             <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="fx-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
-            <div bind:this={signalsHeaderRef} class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5">
+            <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="fx-detail-signals-header">
                 <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
                     <TrendingUp class="text-blue-500" size={15} />
                     {$t('common.signals')}
                 </span>
                 <div class="flex-1"></div>
-                <div class="pointer-events-auto shrink-0">
-                    <AiExportMenu
-                        domain="fx"
-                        compatibility={fxAiExportCompatibility}
-                        memoryKey={`fx:${data.canonicalSlug}`}
-                        defaultSelectionId="fx.trend_review"
-                        disabled={fxAiExportCatalogLoading || fxAiExportCatalogFailed}
-                        labels={fxAiExportLabels}
-                        showLabel={showAiExportLabel}
-                        onprepare={handleFxAiExport}
-                        oncopied={handleFxAiExportCopied}
-                        onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
-                    />
-                </div>
                 <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="fx-detail-signals-chevron">
                     <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
                 </span>
@@ -1101,7 +1062,7 @@
     <!-- ======================================================================= -->
     <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart">
+    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart" data-view-mode={viewMode}>
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
@@ -1210,6 +1171,9 @@
                     hideToolbar={true}
                     disableCandlestick={true}
                     externalViewMode={viewMode}
+                    onViewModeChange={(mode) => {
+                        viewMode = mode;
+                    }}
                     editMode={showDataEditor}
                     onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
                     staleLabel={$t('chart.tooltip.stale')}

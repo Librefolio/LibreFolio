@@ -11,6 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, Posit
 
 from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal
 from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.risk_scenarios import (
+    RiskScenarioDimension,
+    RiskScenarioMissingHistoryPolicy,
+)
 
 
 class RiskDataFrequency(StrEnum):
@@ -45,7 +49,6 @@ class RiskScopeKind(StrEnum):
     ASSET = "asset"
     ASSET_SET = "asset_set"
     PORTFOLIO = "portfolio"
-    BROKER = "broker"
 
 
 class RiskOutputKind(StrEnum):
@@ -103,6 +106,24 @@ class RiskStressMethod(StrEnum):
     HISTORICAL_REPLAY = "historical_replay"
 
 
+class RiskStressApplicationRule(StrEnum):
+    """Rule that selected one effective shock for an exposure bucket."""
+
+    DIRECT = "direct"
+    COUNTRY = "country"
+    GEOGRAPHY_GROUP = "geography_group"
+    OTHER = "other"
+    MISSING_METADATA_OTHER = "missing_metadata_other"
+    UNCONFIGURED_ZERO = "unconfigured_zero"
+
+
+class RiskHistoricalReplayExclusionTreatment(StrEnum):
+    """Effective handling of one manually excluded replay asset."""
+
+    OMITTED_FROM_REPLAY = "omitted_from_replay"
+    ZERO_RETURN_RESIDUAL = "zero_return_residual"
+
+
 class RiskSimulationProcess(StrEnum):
     """Stochastic process exposed by the first simulation implementation."""
 
@@ -158,6 +179,73 @@ class RiskExcludedAsset(BaseModel):
 
     asset_id: int
     reason: str = Field(..., min_length=1)
+
+
+class RiskHistoricalReplayProxyAsset(BaseModel):
+    """Manual original-to-proxy return-series mapping."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: PositiveInt
+    proxy_asset_id: PositiveInt
+
+    @model_validator(mode="after")
+    def validate_distinct_assets(self) -> RiskHistoricalReplayProxyAsset:
+        if self.asset_id == self.proxy_asset_id:
+            raise ValueError("historical replay proxy must differ from the original asset")
+        return self
+
+
+class RiskHistoricalReplayExcludedAsset(BaseModel):
+    """Auditable outcome of one explicit replay exclusion."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: PositiveInt
+    reason: Literal["manual_exclusion"] = "manual_exclusion"
+    weight: Optional[FiniteFloat] = Field(None, ge=0, le=1)
+    treatment: RiskHistoricalReplayExclusionTreatment
+
+
+class RiskHistoricalReplayAudit(BaseModel):
+    """Serializable execution choices for one historical replay."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    proxy_count: int = Field(..., ge=0)
+    proxy_assets: List[RiskHistoricalReplayProxyAsset] = Field(default_factory=list)
+    excluded_count: int = Field(..., ge=0)
+    excluded_assets: List[RiskHistoricalReplayExcludedAsset] = Field(default_factory=list)
+    excluded_weight_total: FiniteFloat = Field(0, ge=0, le=1)
+    missing_history_policy: RiskScenarioMissingHistoryPolicy
+    composition_policy: RiskCompositionPolicy
+    proxy_series_usage: Literal["returns_only"] = "returns_only"
+
+    @model_validator(mode="after")
+    def validate_audit(self) -> RiskHistoricalReplayAudit:
+        if self.proxy_count != len(self.proxy_assets):
+            raise ValueError("proxy_count must match proxy_assets")
+        if self.excluded_count != len(self.excluded_assets):
+            raise ValueError("excluded_count must match excluded_assets")
+        proxy_asset_ids = [item.asset_id for item in self.proxy_assets]
+        if proxy_asset_ids != sorted(proxy_asset_ids) or len(proxy_asset_ids) != len(set(proxy_asset_ids)):
+            raise ValueError("proxy_assets must be unique and ordered by original asset")
+        excluded_asset_ids = [item.asset_id for item in self.excluded_assets]
+        if excluded_asset_ids != sorted(excluded_asset_ids) or len(excluded_asset_ids) != len(set(excluded_asset_ids)):
+            raise ValueError("excluded_assets must be unique and ordered by asset")
+        if set(proxy_asset_ids) & set(excluded_asset_ids):
+            raise ValueError("an asset cannot be both proxied and excluded")
+        if self.composition_policy != RiskCompositionPolicy.CURRENT_BUY_AND_HOLD:
+            raise ValueError("historical replay requires current_buy_and_hold composition")
+        expected_excluded_weight = math.fsum(item.weight or 0.0 for item in self.excluded_assets)
+        if not math.isclose(
+            self.excluded_weight_total,
+            expected_excluded_weight,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError("excluded_weight_total must match excluded asset weights")
+        return self
 
 
 class RiskFreeReference(BaseModel):
@@ -378,6 +466,9 @@ class RiskResultMetadata(BaseModel):
     coverage: FiniteFloat = Field(..., ge=0, le=1)
     currency: str
     scope: Optional[RiskScopeKind] = None
+    scope_reference: Optional[str] = None
+    broker_ids: Optional[List[PositiveInt]] = None
+    composition_as_of: Optional[date] = None
     method: Optional[str] = None
     params: Dict[str, JsonValue] = Field(default_factory=dict)
     mode: Optional[RiskMode] = None
@@ -392,6 +483,7 @@ class RiskResultMetadata(BaseModel):
     path_count: Optional[int] = Field(None, ge=1)
     random_seed: Optional[int] = Field(None, ge=0, le=2**32 - 1)
     sobol_start_index: Optional[int] = Field(None, ge=0, le=2**32 - 1)
+    historical_replay_audit: Optional[RiskHistoricalReplayAudit] = None
 
     @field_validator("currency")
     @classmethod
@@ -404,6 +496,15 @@ class RiskResultMetadata(BaseModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("computed_at must be timezone-aware")
         return value
+
+    @field_validator("broker_ids")
+    @classmethod
+    def normalize_broker_ids(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value is None:
+            return None
+        if len(value) != len(set(value)):
+            raise ValueError("broker_ids must be unique")
+        return sorted(value)
 
     @model_validator(mode="after")
     def validate_context(self) -> RiskResultMetadata:
@@ -420,6 +521,10 @@ class RiskResultMetadata(BaseModel):
             raise ValueError("historical mode cannot declare a composition policy")
         if self.mode == RiskMode.CURRENT_COMPOSITION and self.composition_policy is None:
             raise ValueError("current_composition requires a composition policy")
+        if self.broker_ids is not None and self.scope != RiskScopeKind.PORTFOLIO:
+            raise ValueError("broker_ids metadata requires portfolio scope")
+        if self.composition_as_of is not None and self.scope != RiskScopeKind.PORTFOLIO:
+            raise ValueError("composition_as_of metadata requires portfolio scope")
         if self.sampling_method is None:
             if self.path_count is not None or self.random_seed is not None or self.sobol_start_index is not None:
                 raise ValueError("simulation metadata fields require sampling_method")
@@ -460,11 +565,21 @@ class AssetSetRiskScope(RiskScopeBase):
 
 class PortfolioRiskScope(RiskScopeBase):
     kind: Literal[RiskScopeKind.PORTFOLIO] = Field(json_schema_extra={"enum": ["portfolio"]})
+    broker_ids: Optional[List[PositiveInt]] = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Exact broker subset. None includes all brokers accessible to the user.",
+    )
 
-
-class BrokerRiskScope(RiskScopeBase):
-    kind: Literal[RiskScopeKind.BROKER] = Field(json_schema_extra={"enum": ["broker"]})
-    broker_id: PositiveInt
+    @field_validator("broker_ids")
+    @classmethod
+    def normalize_broker_ids(cls, value: Optional[List[int]]) -> Optional[List[int]]:
+        if value is None:
+            return None
+        if len(value) != len(set(value)):
+            raise ValueError("broker_ids must be unique")
+        return sorted(value)
 
 
 RiskScope = Annotated[
@@ -472,7 +587,6 @@ RiskScope = Annotated[
         AssetRiskScope,
         AssetSetRiskScope,
         PortfolioRiskScope,
-        BrokerRiskScope,
     ],
     Field(discriminator="kind"),
 ]
@@ -596,14 +710,92 @@ class RiskContributionOutput(BaseModel):
     items: List[RiskContributionItem] = Field(default_factory=list)
 
 
+class RiskStressBucketAudit(BaseModel):
+    """Auditable resolution of one asset exposure bucket."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    exposure_bucket_id: str = Field(..., min_length=1, max_length=80)
+    exposure: FiniteFloat = Field(..., ge=0, le=1)
+    candidate_bucket_ids: List[str] = Field(default_factory=list, max_length=100)
+    applied_bucket_id: Optional[str] = Field(None, min_length=1, max_length=80)
+    bucket_shock: FiniteFloat
+    shock_contribution: FiniteFloat
+    rule: RiskStressApplicationRule
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> RiskStressBucketAudit:
+        if len(self.candidate_bucket_ids) != len(set(self.candidate_bucket_ids)):
+            raise ValueError("candidate_bucket_ids must be unique")
+        if self.applied_bucket_id is not None and self.applied_bucket_id not in self.candidate_bucket_ids:
+            raise ValueError("applied_bucket_id must be one of candidate_bucket_ids")
+        if self.rule == RiskStressApplicationRule.UNCONFIGURED_ZERO:
+            if self.applied_bucket_id is not None or self.bucket_shock != 0:
+                raise ValueError("unconfigured-zero audit cannot apply a configured bucket")
+        elif self.applied_bucket_id is None:
+            raise ValueError("configured stress rules require applied_bucket_id")
+        expected = self.exposure * self.bucket_shock
+        if not math.isclose(
+            self.shock_contribution,
+            expected,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError("shock_contribution must equal exposure * bucket_shock")
+        return self
+
+
+class RiskStressConfiguredBucketImpact(BaseModel):
+    """Scope usage of one configured bucket, including explicit zero exposure."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    bucket_id: str = Field(..., min_length=1, max_length=80)
+    shock: FiniteFloat
+    applied_asset_count: int = Field(..., ge=0)
+    asset_exposure_total: FiniteFloat = Field(
+        ...,
+        ge=0,
+        description="Unweighted sum of this bucket's applied exposures across scope assets; may exceed 1 for multi-asset scopes.",
+    )
+    contribution_return: Optional[FiniteFloat] = None
+
+
 class RiskStressImpact(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: PositiveInt
+    return_source_asset_id: Optional[PositiveInt] = None
     weight: Optional[FiniteFloat] = None
     shock_return: FiniteFloat
     contribution_return: Optional[FiniteFloat] = None
     impact_amount: Optional[SafeDecimal] = None
+    dimension: Optional[RiskScenarioDimension] = None
+    metadata_fallback: bool = False
+    bucket_audit: List[RiskStressBucketAudit] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_bucket_audit(self) -> RiskStressImpact:
+        if not self.bucket_audit:
+            if self.dimension is not None or self.metadata_fallback:
+                raise ValueError("hypothetical stress impacts require bucket_audit")
+            return self
+        if self.dimension is None:
+            raise ValueError("bucket_audit requires a stress dimension")
+        exposure_total = math.fsum(item.exposure for item in self.bucket_audit)
+        if not math.isclose(exposure_total, 1.0, rel_tol=0.0, abs_tol=1e-9):
+            raise ValueError("stress bucket exposures must sum to 1")
+        expected_shock = math.fsum(item.shock_contribution for item in self.bucket_audit)
+        if not math.isclose(
+            self.shock_return,
+            expected_shock,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError("shock_return must equal bucket shock contributions")
+        if self.metadata_fallback and self.dimension == RiskScenarioDimension.ASSET_CLASS:
+            raise ValueError("asset-class stress cannot use metadata fallback")
+        return self
 
 
 class RiskStressOutput(BaseModel):
@@ -611,10 +803,31 @@ class RiskStressOutput(BaseModel):
 
     kind: Literal[RiskOutputKind.STRESS] = Field(default=RiskOutputKind.STRESS, json_schema_extra={"enum": ["stress"]})
     method: RiskStressMethod
+    dimension: Optional[RiskScenarioDimension] = None
     portfolio_return: Optional[FiniteFloat] = None
     impact_amount: Optional[SafeDecimal] = None
     replay_range: Optional[DateRangeModel] = None
+    classification_coverage: Optional[FiniteFloat] = Field(None, ge=0, le=1)
     impacts: List[RiskStressImpact] = Field(default_factory=list)
+    configured_buckets: List[RiskStressConfiguredBucketImpact] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_method_contract(self) -> RiskStressOutput:
+        if self.method == RiskStressMethod.HYPOTHETICAL:
+            if self.dimension is None:
+                raise ValueError("hypothetical stress requires a dimension")
+            if self.replay_range is not None:
+                raise ValueError("hypothetical stress cannot expose replay_range")
+            if self.classification_coverage is None:
+                raise ValueError("hypothetical stress requires classification_coverage")
+            if any(item.dimension != self.dimension for item in self.impacts):
+                raise ValueError("hypothetical impacts must use the output dimension")
+            bucket_ids = [item.bucket_id for item in self.configured_buckets]
+            if bucket_ids != sorted(bucket_ids) or len(bucket_ids) != len(set(bucket_ids)):
+                raise ValueError("configured stress buckets must be unique and ordered")
+        elif self.dimension is not None or self.classification_coverage is not None or self.configured_buckets:
+            raise ValueError("historical replay cannot expose hypothetical bucket metadata")
+        return self
 
 
 class RiskComparisonPoint(BaseModel):
@@ -802,6 +1015,7 @@ class RiskWarning(BaseModel):
     code: str = Field(..., min_length=1, max_length=120)
     message: str = Field(..., min_length=1)
     details: Dict[str, JsonValue] = Field(default_factory=dict)
+    degrades_result: bool = True
 
 
 class RiskError(BaseModel):
@@ -854,7 +1068,6 @@ __all__ = [
     "AssetSetRiskScope",
     "AssetValuationPoint",
     "AssetValuationSeries",
-    "BrokerRiskScope",
     "PortfolioRiskScope",
     "PreparedAssetSeries",
     "PreparedAssetSeriesSet",
@@ -874,6 +1087,10 @@ __all__ = [
     "RiskErrorCode",
     "RiskExcludedAsset",
     "RiskFreeReference",
+    "RiskHistoricalReplayAudit",
+    "RiskHistoricalReplayExcludedAsset",
+    "RiskHistoricalReplayExclusionTreatment",
+    "RiskHistoricalReplayProxyAsset",
     "RiskKpiOutput",
     "RiskMatrixCell",
     "RiskMode",
@@ -889,6 +1106,9 @@ __all__ = [
     "RiskScope",
     "RiskScopeBase",
     "RiskScopeKind",
+    "RiskStressApplicationRule",
+    "RiskStressBucketAudit",
+    "RiskStressConfiguredBucketImpact",
     "RiskStressImpact",
     "RiskStressMethod",
     "RiskStressOutput",

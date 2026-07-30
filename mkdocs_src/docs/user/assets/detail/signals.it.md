@@ -52,8 +52,8 @@ Confronta la performance dell'asset corrente con **un altro asset**. Il prezzo d
 
 ## 🧠 Esportazione AI
 
-Il pulsante **Esportazione AI** (:material-brain:) nell'intestazione Segnali
-offre cinque task Asset:
+Il pulsante **Esportazione AI** (:material-brain:) nella barra degli strumenti
+della pagina offre cinque task Asset:
 
 - **Istantanea dell'asset**
 - **Analisi del trend dell'asset**

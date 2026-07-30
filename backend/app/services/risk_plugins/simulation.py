@@ -152,7 +152,6 @@ class SimulationAnalytic(RiskAnalytic):
     supported_scopes = (
         RiskScopeKind.ASSET,
         RiskScopeKind.PORTFOLIO,
-        RiskScopeKind.BROKER,
     )
     supported_modes = (RiskMode.CURRENT_COMPOSITION,)
     params_model = SimulationParams

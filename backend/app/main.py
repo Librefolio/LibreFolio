@@ -45,6 +45,9 @@ from backend.app.services.provider_registry import (
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
+from backend.app.services.risk.scenario_catalog import (
+    initialize_risk_scenario_catalog,
+)
 from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.signal_runtime import validate_signal_runtime
@@ -68,13 +71,37 @@ configure_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
 
 
+def _alembic_head_revision():
+    """Return the head revision id from the migration scripts, or None on error.
+
+    Read in-process (no subprocess) so the hot-reload dev loop can cheaply tell
+    whether an existing DB is already at head and skip the `alembic upgrade`
+    subprocess when there is nothing to apply.
+    """
+    try:
+        from alembic.config import Config  # noqa: PLC0415 — startup-only, keep alembic out of app import scope
+        from alembic.script import ScriptDirectory  # noqa: PLC0415 — startup-only
+
+        alembic_ini = PROJECT_ROOT / "backend" / "alembic.ini"
+        return ScriptDirectory.from_config(Config(str(alembic_ini))).get_current_head()
+    except Exception as e:
+        logger.warning(f"Could not determine Alembic head revision: {e}")
+        return None
+
+
 def ensure_database_exists():
     """
     Ensure database exists and is migrated.
-    If database file doesn't exist OR is empty, run migrations automatically.
+
+    Creates the schema from scratch when the DB file is missing/empty/corrupted,
+    AND applies any pending migrations when an existing DB is behind the latest
+    revision (e.g. a released install upgraded over an existing data volume, or a
+    dev DB opened after a new migration was added). `alembic upgrade head` only
+    runs when there is actually something to do.
 
     This function is used by:
-    - Backend server on startup (via lifespan)
+    - Backend server on startup (via lifespan) — covers both `./dev.py server`
+      and the Docker image, since both launch the app.
     - Test scripts (db_schema_validate, populate_db)
     """
     # Get settings at call time to respect test mode
@@ -92,7 +119,8 @@ def ensure_database_exists():
         else:
             db_path = Path(db_path_str)
 
-        needs_migration = False
+        needs_migration = False  # DB must be created from scratch (missing/empty/no-tables/corrupt)
+        pending_migration = False  # DB exists with a schema but is behind the latest revision
 
         if not db_path.exists():
             logger.warning("Database file not found, running migrations", db_path=str(db_path))
@@ -108,26 +136,53 @@ def ensure_database_exists():
                 cursor = conn.cursor()
                 cursor.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
                 table_count = cursor.fetchone()[0]
-                conn.close()
 
                 if table_count == 0:
                     logger.warning("Database has no tables, running migrations", db_path=str(db_path))
                     needs_migration = True
                 else:
-                    logger.info(f"Database initialized with {table_count} tables", db_path=str(db_path))
+                    # DB already has a schema. Compare its current Alembic revision
+                    # against the head revision in the migration scripts: if they
+                    # differ, migrations were added since this DB was last opened and
+                    # must be applied now. Skipping this is exactly what let a stale
+                    # DB (still at 001 while 002 was pending) reach the app and crash
+                    # on the first query touching a changed column.
+                    try:
+                        cursor.execute("SELECT version_num FROM alembic_version LIMIT 1")
+                        row = cursor.fetchone()
+                        db_rev = row[0] if row else None
+                    except sqlite3.DatabaseError:
+                        db_rev = None  # no alembic_version table
+
+                    head_rev = _alembic_head_revision()
+                    if head_rev is not None and db_rev is not None and db_rev != head_rev:
+                        logger.warning(
+                            "Database schema is behind head, applying pending migrations",
+                            db_path=str(db_path),
+                            db_revision=db_rev,
+                            head_revision=head_rev,
+                        )
+                        pending_migration = True
+                    elif db_rev is None:
+                        logger.warning("Database has tables but no alembic_version row; leaving schema as-is", db_path=str(db_path))
+                    else:
+                        logger.info(f"Database initialized with {table_count} tables (schema up to date)", db_path=str(db_path))
+
+                conn.close()
             except sqlite3.DatabaseError as e:
                 logger.warning(f"Database appears corrupted, running migrations: {e}", db_path=str(db_path))
                 needs_migration = True
 
-        if needs_migration:
-            # Ensure directory exists
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+        if needs_migration or pending_migration:
+            if needs_migration:
+                # Ensure directory exists before creating a brand-new DB file
+                db_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Run Alembic migrations
+            # Run Alembic migrations (idempotent upgrade to head)
             try:
                 alembic_ini = PROJECT_ROOT / "backend" / "alembic.ini"
 
-                logger.info("Running Alembic migrations...")
+                logger.info("Running Alembic migrations (upgrade head)...")
                 result = subprocess.run(
                     ["alembic", "-c", str(alembic_ini), "upgrade", "head"],
                     cwd=PROJECT_ROOT,
@@ -136,13 +191,13 @@ def ensure_database_exists():
                 )
 
                 if result.returncode == 0:
-                    logger.info("Database created and migrated successfully")
+                    logger.info("Database schema is up to date")
                 else:
-                    logger.error("Failed to create database", stderr=result.stderr)
+                    logger.error("Failed to apply database migrations", stderr=result.stderr)
                     sys.exit(1)
 
             except Exception as e:
-                logger.error("Error creating database", error=str(e))
+                logger.error("Error applying database migrations", error=str(e))
                 sys.exit(1)
 
 
@@ -172,6 +227,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 
     # Ensure all data directories exist (prod or test based on mode)
     ensure_data_dirs()
+
+    scenario_catalog = await initialize_risk_scenario_catalog()
+    logger.info(
+        "Risk scenario catalog ready",
+        built_in_count=scenario_catalog.status.built_in_count,
+        host_count=scenario_catalog.status.host_count,
+        warning_count=scenario_catalog.status.warning_count,
+    )
 
     # Seed default avatar images on first startup
     seeded = seed_default_avatars()

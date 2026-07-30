@@ -1,0 +1,26 @@
+schema_version: 1
+id: custom_period
+kind: historical_replay
+tags: [custom]
+name:
+  en: Custom period
+  it: Periodo personalizzato
+  fr: Période personnalisée
+  es: Período personalizado
+description:
+  en: Start from an empty period and choose the historical dates to replay.
+  it: Parti da un periodo vuoto e scegli le date storiche da riprodurre.
+  fr: Partez d'une période vide et choisissez les dates historiques à rejouer.
+  es: Empieza con un período vacío y elige las fechas históricas que se reproducirán.
+defaults:
+  start: null
+  end: null
+  missing_history_policy: manual_proxy_or_exclude
+  composition_policy: current_buy_and_hold
+editable:
+  dates: true
+  missing_history_policy: true
+  proxies: true
+  exclusions: true
+limits:
+  minimum_calendar_days: 1

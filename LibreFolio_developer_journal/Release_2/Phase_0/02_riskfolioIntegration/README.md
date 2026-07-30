@@ -25,6 +25,7 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
 | 10 | [`report-phase01RiskAnalysisCurrentStateAndHandoff.md`](./report-phase01RiskAnalysisCurrentStateAndHandoff.md) | **Report autosufficiente per handoff.** Richieste vs stato reale, falsa pista NumPy/thread, correzione QuantLib/Riskfolio, lavoro completato/rimandato/eliminato, problemi inattesi e decisioni ancora aperte. |
 | 11 | [`report-phase01RiskBackendAuditAndRemediation.md`](./report-phase01RiskBackendAuditAndRemediation.md) | **Audit evidence-first G0-G5 e remediation.** Inventario reale, debiti trovati, decisioni prima del codice, contratto simulation canonico, lifecycle idle dei worker, probe Riskfolio 7.3.0, evidenze finali e piano G6 riconciliato. |
 | 12 | [`workItems/`](./workItems/README.md) | **Snapshot dei 37 work item operativi.** Scomposizione P0-P13 per gate G0-G6/GF, stato, dipendenze e descrizioni originali del tracker interno. |
+| 13 | [`plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md) | **Fonte IA G6 approvata.** Asset Detail `Overview | Risk & Scenarios`; Assets Global `Assets | Correlation | Scenarios | Allocation`; Dashboard/Broker condivisi; `portfolio.broker_ids`; P13 solo Allocation; catalogo YAML typed, replay proxy auditabile, bucket UX, cache semantics, simulation e gate visuali manuali. |
 
 ## TL;DR delle conclusioni (revisionate)
 
@@ -66,8 +67,16 @@ implementativo (documento 6) li traduce in sei sub-plan backend-first.
     reale sul DB popolato.
 11. **G5 corretto e auditato.** P11 usa QuantLib MC/QMC in worker `spawn`; P12 usa
     pool simulation/optimization separati, con idle reap e restart lazy; P13 espone
-    `portfolio_optimization` Riskfolio nei tre scope. RQMC e l'adapter
-    NumPy/SciPy production sono rimossi. G6 è ripianificato ma non eseguito.
+    `portfolio_optimization` Riskfolio nei tre scope backend G5; G6 migra broker a
+    `portfolio.broker_ids`. RQMC e l'adapter NumPy/SciPy production sono rimossi.
+    G6 è autorizzato ed entra nella correzione backend-first.
+12. **IA G6 riconciliata.** Assets Global ha quattro tab e Allocation è l'unica
+    casa P13; Dashboard/Broker usano summary + pannelli condivisi lazy; lo scope
+    converge su `portfolio + broker_ids`. Scenari: catalogo YAML statico/typed,
+    historical replay con proxy manuali e hypothetical shock con
+    `Other=100%`/`european_union`. Chiariti audit proxy, retention/cache lazy,
+    bucket presenti + `Mostra tutti` e `tags` YAML opzionali. Le esclusioni replay
+    diventano residuo zero-return. Esecuzione lineare autorizzata.
 
 > **Nota:** i documenti 0–4 nascono come studio; il master e le evidenze successive
 > registrano ora anche l'implementazione. Nessuna migrazione DB è stata necessaria.

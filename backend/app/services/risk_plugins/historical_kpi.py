@@ -1,4 +1,4 @@
-"""Historical portfolio risk KPIs computed from period TWRR."""
+"""Historical risk KPIs computed from the canonical primary return series."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from backend.app.schemas.risk import (
     RiskKpiOutput,
     RiskMode,
     RiskOutputKind,
+    RiskReturnBasis,
     RiskScopeKind,
     RiskWarning,
 )
@@ -27,7 +28,7 @@ from backend.app.services.risk.metrics import (
 )
 
 
-class PortfolioKpiParams(BaseModel):
+class HistoricalKpiParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     risk_free_annual_rate: float = Field(
@@ -51,15 +52,18 @@ class PortfolioKpiParams(BaseModel):
 
 
 @register_plugin(RiskAnalyticRegistry)
-class PortfolioKpiAnalytic(RiskAnalytic):
-    analytic_code = "portfolio_kpi"
-    algorithm_version = "1.0.0"
-    name_i18n_key = "risk.analytics.portfolioKpi.name"
-    description_i18n_key = "risk.analytics.portfolioKpi.description"
+class HistoricalKpiAnalytic(RiskAnalytic):
+    analytic_code = "historical_kpi"
+    algorithm_version = "2.0.0"
+    name_i18n_key = "risk.analytics.historicalKpi.name"
+    description_i18n_key = "risk.analytics.historicalKpi.description"
     output_kind = RiskOutputKind.KPI
-    supported_scopes = (RiskScopeKind.PORTFOLIO, RiskScopeKind.BROKER)
+    supported_scopes = (
+        RiskScopeKind.ASSET,
+        RiskScopeKind.PORTFOLIO,
+    )
     supported_modes = (RiskMode.HISTORICAL,)
-    params_model = PortfolioKpiParams
+    params_model = HistoricalKpiParams
     min_observations = 20
 
     def compute(self, params, context):
@@ -102,7 +106,7 @@ class PortfolioKpiAnalytic(RiskAnalytic):
                 sharpe=sharpe,
                 sortino=sortino,
             ),
-            method="historical_twrr",
+            method=("historical_twrr" if context.primary_return_basis == RiskReturnBasis.TWRR else "historical_close_returns"),
             warnings=tuple(warnings),
             risk_free=RiskFreeReference(
                 annual_rate=params.risk_free_annual_rate,

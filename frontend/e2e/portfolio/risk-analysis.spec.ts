@@ -4,7 +4,7 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage} from '../assets/assets-helpers';
 
-type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'} | {kind: 'broker'; broker_id: number};
+type RiskScope = {kind: 'asset'; asset_id: number} | {kind: 'asset_set'; asset_ids: number[]} | {kind: 'portfolio'; broker_ids?: number[] | null};
 
 interface RiskAnalyticRequest {
     instance_id: string;
@@ -27,14 +27,113 @@ interface RiskMockOptions {
 
 const CATALOG = {
     items: [
-        definition('portfolio_kpi', 'kpi', ['portfolio', 'broker'], ['historical'], 'portfolioKpi', 20),
-        definition('correlation', 'matrix', ['asset_set', 'portfolio', 'broker'], ['historical', 'current_composition'], 'correlation', 2),
-        definition('risk_contribution', 'contribution', ['portfolio', 'broker'], ['current_composition'], 'riskContribution', 20),
-        definition('stress', 'stress', ['asset', 'asset_set', 'portfolio', 'broker'], ['current_composition'], 'stress', 1),
-        definition('comparison', 'comparison', ['asset', 'portfolio', 'broker'], ['historical', 'current_composition'], 'comparison', 20),
-        definition('historical_var', 'var_cvar', ['asset', 'portfolio', 'broker'], ['historical', 'current_composition'], 'historicalVar', 20),
-        definition('simulation', 'simulation', ['asset', 'portfolio', 'broker'], ['current_composition'], 'simulation', 30),
+        definition('historical_kpi', 'kpi', ['asset', 'portfolio'], ['historical'], 'historicalKpi', 20),
+        definition('correlation', 'matrix', ['asset_set', 'portfolio'], ['historical', 'current_composition'], 'correlation', 2),
+        definition('risk_contribution', 'contribution', ['portfolio'], ['current_composition'], 'riskContribution', 20),
+        definition('stress', 'stress', ['asset', 'asset_set', 'portfolio'], ['current_composition'], 'stress', 1),
+        definition('comparison', 'comparison', ['asset', 'portfolio'], ['historical', 'current_composition'], 'comparison', 20),
+        definition('historical_var', 'var_cvar', ['asset', 'portfolio'], ['historical', 'current_composition'], 'historicalVar', 20),
+        definition('simulation', 'simulation', ['asset', 'portfolio'], ['current_composition'], 'simulation', 30),
     ],
+};
+
+const SCENARIO_CATALOG = {
+    items: [
+        {
+            source: 'built_in',
+            source_file: 'historical/custom_period.yml',
+            scenario: {
+                schema_version: 1,
+                id: 'custom_period',
+                kind: 'historical_replay',
+                tags: ['custom'],
+                name: {
+                    en: 'Custom period',
+                    it: 'Periodo personalizzato',
+                    fr: 'Période personnalisée',
+                    es: 'Período personalizado',
+                },
+                description: {
+                    en: 'Choose the historical dates to replay.',
+                    it: 'Scegli le date storiche da riprodurre.',
+                    fr: 'Choisissez les dates historiques à rejouer.',
+                    es: 'Elige las fechas históricas que se reproducirán.',
+                },
+                defaults: {
+                    start: null,
+                    end: null,
+                    missing_history_policy: 'manual_proxy_or_exclude',
+                    composition_policy: 'current_buy_and_hold',
+                },
+                editable: {
+                    dates: true,
+                    missing_history_policy: true,
+                    proxies: true,
+                    exclusions: true,
+                },
+                limits: {
+                    minimum_calendar_days: 1,
+                    maximum_calendar_days: null,
+                },
+            },
+        },
+        {
+            source: 'built_in',
+            source_file: 'hypothetical/global_risk_off.yml',
+            scenario: {
+                schema_version: 1,
+                id: 'global_risk_off',
+                kind: 'hypothetical_shock',
+                tags: ['global', 'risk_off'],
+                name: {
+                    en: 'Global risk-off',
+                    it: 'Avversione globale al rischio',
+                    fr: 'Aversion mondiale au risque',
+                    es: 'Aversión global al riesgo',
+                },
+                description: {
+                    en: 'Editable asset-class shocks.',
+                    it: 'Shock modificabili per classe di asset.',
+                    fr: "Chocs modifiables par classe d'actifs.",
+                    es: 'Choques editables por clase de activo.',
+                },
+                allowed_dimensions: ['asset_class'],
+                defaults: {
+                    dimension: 'asset_class',
+                    bucket_shocks: {
+                        STOCK: -0.2,
+                        ETF: -0.15,
+                        FUND: -0.15,
+                        BOND: -0.05,
+                        CRYPTO: -0.3,
+                        CROWDFUND: -0.1,
+                        HOLD: -0.05,
+                        INDEX: -0.2,
+                        OTHER: 0,
+                    },
+                },
+                editable: {
+                    dimension: false,
+                    bucket_shocks: true,
+                    manual_overrides: true,
+                },
+                limits: {
+                    minimum_shock: -1,
+                    maximum_shock: 1,
+                    maximum_buckets: 100,
+                },
+            },
+        },
+    ],
+    geography_groups: [],
+    status: {
+        schema_version: 1,
+        loaded_at: '2026-01-31T12:00:00Z',
+        built_in_count: 2,
+        host_count: 0,
+        warning_count: 0,
+    },
+    warnings: [],
 };
 
 function definition(analyticCode: string, outputKind: string, supportedScopes: string[], supportedModes: string[], translationKey: string, minObservations: number) {
@@ -51,9 +150,10 @@ function definition(analyticCode: string, outputKind: string, supportedScopes: s
     };
 }
 
-function metadata(request: RiskRequest, analyticCode: string) {
+function metadata(request: RiskRequest, analytic: RiskAnalyticRequest) {
     const observations = 60;
     const calendarDays = 87;
+    const brokerIds = request.scope.kind === 'portfolio' ? (request.scope.broker_ids ?? null) : null;
     return {
         analyzed_range: {
             start: request.date_range.start,
@@ -66,11 +166,14 @@ function metadata(request: RiskRequest, analyticCode: string) {
         coverage: 0.92,
         currency: request.target_currency,
         scope: request.scope.kind,
-        method: analyticCode,
-        params: {},
+        scope_reference: request.scope.kind === 'portfolio' ? (brokerIds ? `portfolio:${brokerIds.join(',')}` : 'portfolio:all') : request.scope.kind,
+        ...(brokerIds ? {broker_ids: brokerIds} : {}),
+        ...(request.scope.kind === 'portfolio' ? {composition_as_of: request.date_range.end ?? request.date_range.start} : {}),
+        method: analytic.analytic_code,
+        params: analytic.parameters ?? {},
         mode: request.mode,
         ...(request.composition_policy ? {composition_policy: request.composition_policy} : {}),
-        return_basis: analyticCode === 'portfolio_kpi' ? 'twrr' : 'price_only',
+        return_basis: analytic.analytic_code === 'historical_kpi' && request.scope.kind === 'portfolio' ? 'twrr' : 'price_only',
         excluded_assets: [],
         algorithm_version: 'e2e-mock-v1',
         computed_at: '2026-01-31T12:00:00Z',
@@ -107,7 +210,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     const base = {
         instance_id: analytic.instance_id,
         analytic_code: analytic.analytic_code,
-        metadata: metadata(request, analytic.analytic_code),
+        metadata: metadata(request, analytic),
         data_quality: dataQuality(),
         warnings: [],
     };
@@ -125,7 +228,7 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
     }
 
     switch (analytic.analytic_code) {
-        case 'portfolio_kpi':
+        case 'historical_kpi':
             return {
                 ...base,
                 status: 'ok',
@@ -210,23 +313,106 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
             };
         }
         case 'stress': {
-            const shocks = (analytic.parameters?.shocks ?? {}) as Record<string, number>;
-            const impacts = Object.entries(shocks).map(([assetId, shock]) => ({
-                asset_id: Number(assetId),
-                weight: 1 / Math.max(Object.keys(shocks).length, 1),
-                shock_return: shock,
-                contribution_return: shock / Math.max(Object.keys(shocks).length, 1),
-                impact_amount: String(shock * 10000),
-            }));
+            const method = String(analytic.parameters?.method ?? 'hypothetical');
+            const assetId = request.scope.kind === 'asset' ? request.scope.asset_id : matrixAssetIds(request)[0];
+            if (method === 'historical_replay') {
+                const proxyAssets = (analytic.parameters?.proxy_assets ?? []) as Array<{asset_id: number; proxy_asset_id: number}>;
+                const excludedAssetIds = (analytic.parameters?.excluded_assets ?? []) as number[];
+                const proxy = proxyAssets.find((mapping) => mapping.asset_id === assetId);
+                const excluded = excludedAssetIds.includes(assetId);
+                const replayRange = (analytic.parameters?.replay_range ?? request.date_range) as {start: string; end: string};
+                const replayReturn = excluded ? 0 : -0.12;
+                return {
+                    ...base,
+                    status: proxy || excluded ? 'partial' : 'ok',
+                    metadata: {
+                        ...base.metadata,
+                        analyzed_range: replayRange,
+                        historical_replay_audit: {
+                            proxy_count: proxyAssets.length,
+                            proxy_assets: proxyAssets,
+                            excluded_count: excludedAssetIds.length,
+                            excluded_assets: excludedAssetIds.map((excludedAssetId) => ({
+                                asset_id: excludedAssetId,
+                                reason: 'manual_exclusion',
+                                weight: request.scope.kind === 'asset' ? 1 : 0.5,
+                                treatment: request.scope.kind === 'portfolio' ? 'zero_return_residual' : 'omitted_from_replay',
+                            })),
+                            excluded_weight_total: excludedAssetIds.length > 0 ? (request.scope.kind === 'asset' ? 1 : 0.5 * excludedAssetIds.length) : 0,
+                            missing_history_policy: String(analytic.parameters?.missing_history_policy ?? 'manual_proxy_or_exclude'),
+                            composition_policy: 'current_buy_and_hold',
+                            proxy_series_usage: 'returns_only',
+                        },
+                    },
+                    output: {
+                        kind: 'stress',
+                        method: 'historical_replay',
+                        portfolio_return: replayReturn,
+                        impact_amount: String(replayReturn * 10000),
+                        replay_range: replayRange,
+                        impacts: excluded
+                            ? []
+                            : [
+                                  {
+                                      asset_id: assetId,
+                                      ...(proxy ? {return_source_asset_id: proxy.proxy_asset_id} : {}),
+                                      weight: 1,
+                                      shock_return: replayReturn,
+                                      contribution_return: replayReturn,
+                                      impact_amount: String(replayReturn * 10000),
+                                      metadata_fallback: false,
+                                      bucket_audit: [],
+                                  },
+                              ],
+                        configured_buckets: [],
+                    },
+                };
+            }
+
+            const dimension = String(analytic.parameters?.dimension ?? 'asset_class');
+            const bucketShocks = (analytic.parameters?.bucket_shocks ?? {OTHER: 0}) as Record<string, number>;
+            const configuredBucketIds = Object.keys(bucketShocks).sort((left, right) => left.localeCompare(right));
+            const appliedBucketId = configuredBucketIds.find((bucketId) => bucketShocks[bucketId] !== 0) ?? configuredBucketIds[0] ?? 'OTHER';
+            const shock = bucketShocks[appliedBucketId] ?? 0;
             return {
                 ...base,
                 status: 'ok',
                 output: {
                     kind: 'stress',
                     method: 'hypothetical',
-                    portfolio_return: impacts.reduce((sum, impact) => sum + impact.contribution_return, 0),
-                    impact_amount: String(impacts.reduce((sum, impact) => sum + Number(impact.impact_amount), 0)),
-                    impacts,
+                    dimension,
+                    portfolio_return: shock,
+                    impact_amount: String(shock * 10000),
+                    classification_coverage: 1,
+                    impacts: [
+                        {
+                            asset_id: assetId,
+                            weight: 1,
+                            shock_return: shock,
+                            contribution_return: shock,
+                            impact_amount: String(shock * 10000),
+                            dimension,
+                            metadata_fallback: false,
+                            bucket_audit: [
+                                {
+                                    exposure_bucket_id: appliedBucketId,
+                                    exposure: 1,
+                                    candidate_bucket_ids: [appliedBucketId],
+                                    applied_bucket_id: appliedBucketId,
+                                    bucket_shock: shock,
+                                    shock_contribution: shock,
+                                    rule: 'direct',
+                                },
+                            ],
+                        },
+                    ],
+                    configured_buckets: configuredBucketIds.map((bucketId) => ({
+                        bucket_id: bucketId,
+                        shock: bucketShocks[bucketId],
+                        applied_asset_count: bucketId === appliedBucketId ? 1 : 0,
+                        asset_exposure_total: bucketId === appliedBucketId ? 1 : 0,
+                        contribution_return: bucketId === appliedBucketId ? shock : 0,
+                    })),
                 },
             };
         }
@@ -285,6 +471,14 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
         });
     });
 
+    await page.route('**/api/v1/risk/scenario-catalog', async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(SCENARIO_CATALOG),
+        });
+    });
+
     await page.route('**/api/v1/risk/query', async (route) => {
         const request = route.request().postDataJSON() as RiskRequest;
         requests.push(request);
@@ -329,7 +523,7 @@ async function openFirstAssetDetail(page: Page): Promise<number> {
     if (!Number.isInteger(assetId) || assetId <= 0) throw new Error('Seeded asset card must expose a numeric data-testid.');
     await firstCard.click();
     await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 12_000});
-    await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
+    await expect(page.getByTestId('asset-detail-tab-overview')).toBeVisible({timeout: 12_000});
     return assetId;
 }
 
@@ -374,7 +568,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(page.getByTestId('risk-correlation-section-partial')).toBeVisible();
         await expect(page.getByTestId('risk-correlation-section-warnings')).toBeVisible();
         await expect(page.getByTestId('risk-quality-summary')).toBeVisible();
-        await expect(page.getByTestId('data-quality-banner')).toBeVisible();
+        await expect(page.getByTestId('risk-analysis-panel').getByTestId('data-quality-banner')).toBeVisible();
         await expect(page.getByTestId('risk-frontier-capability')).toHaveAttribute('data-available', 'false');
 
         await expect
@@ -435,18 +629,38 @@ test.describe('Risk analysis functional integration', () => {
             .toBeGreaterThan(0);
     });
 
-    test('broker tab sends broker scope and labels internal subset', async ({page}) => {
+    test('broker tab sends a single-broker portfolio subset and labels it', async ({page}) => {
         const requests = await installRiskMocks(page);
         const brokerId = await openFirstBrokerRisk(page);
 
         await expect(page.getByTestId('risk-scope-label')).toBeVisible();
         await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
-        await expect.poll(() => requests.some((request) => request.scope.kind === 'broker' && request.scope.broker_id === brokerId)).toBe(true);
+        await expect.poll(() => requests.some((request) => request.scope.kind === 'portfolio' && request.scope.broker_ids?.length === 1 && request.scope.broker_ids[0] === brokerId)).toBe(true);
     });
 
-    test('asset detail runs comparison, stress and simulation without frontend math', async ({page}) => {
+    test('asset detail preserves Overview and exposes Risk through its dedicated tab', async ({page}) => {
+        await installRiskMocks(page);
+        await openFirstAssetDetail(page);
+
+        await expect(page.getByTestId('asset-detail-signals-toggle')).toBeVisible({timeout: 8_000});
+        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
+
+        await page.getByTestId('asset-detail-tab-risk').click();
+        await expect(page).toHaveURL(/[?&]tab=risk(?:&|$)/);
+        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
+        await expect(page.getByTestId('asset-detail-signals-toggle')).toHaveCount(0);
+
+        await page.getByTestId('asset-risk-configure-signals').click();
+        await expect(page.getByTestId('asset-detail-signals-toggle')).toBeVisible({timeout: 8_000});
+        await expect(page.getByTestId('asset-detail-signals-toggle')).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
+    });
+
+    test('asset Risk runs typed scenarios, exposes replay audit and switches simulation view', async ({page}) => {
         const requests = await installRiskMocks(page);
         const assetId = await openFirstAssetDetail(page);
+        await page.getByTestId('asset-detail-tab-risk').click();
+        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
 
         await page.getByTestId('risk-comparison-asset-select-trigger').click();
         const comparisonOption = page.getByTestId(/^search-select-option-\d+$/).first();
@@ -455,19 +669,74 @@ test.describe('Risk analysis functional integration', () => {
         await page.getByTestId('risk-comparison-run').click();
         await expect(page.getByTestId('risk-comparison-chart')).toBeVisible({timeout: 8_000});
 
+        const stressBucketInputs = page.getByTestId(/^risk-stress-bucket-input-/);
+        await expect(stressBucketInputs).toHaveCount(1, {timeout: 8_000});
+        await page.getByTestId('risk-stress-show-all').check();
+        await expect.poll(() => stressBucketInputs.count()).toBeGreaterThan(1);
+        const stressBucketInput = stressBucketInputs.first();
+        await expect(stressBucketInput).toBeVisible({timeout: 8_000});
+        const stressBucketTestId = await stressBucketInput.getAttribute('data-testid');
+        const stressBucketId = stressBucketTestId?.replace('risk-stress-bucket-input-', '');
+        if (!stressBucketId) throw new Error('Stress bucket input must expose its canonical bucket ID.');
+        await stressBucketInput.fill('-25');
         await page.getByTestId('risk-stress-run').click();
         await expect(page.getByTestId('risk-stress-impacts')).toBeVisible({timeout: 8_000});
+        await expect(page.getByTestId('risk-stress-audit')).toBeVisible();
+        await expect(page.getByTestId(`risk-stress-audit-asset-${assetId}`)).toBeVisible();
 
+        await page.getByTestId('risk-replay-proxy-select-trigger').click();
+        const proxyOption = page.getByTestId(/^search-select-option-\d+$/).first();
+        await expect(proxyOption).toBeVisible({timeout: 5_000});
+        const proxyOptionTestId = await proxyOption.getAttribute('data-testid');
+        const proxyAssetId = Number(proxyOptionTestId?.replace('search-select-option-', ''));
+        if (!Number.isInteger(proxyAssetId) || proxyAssetId <= 0) throw new Error('Replay proxy option must expose a numeric asset ID.');
+        await proxyOption.click();
+        await page.getByTestId('risk-replay-run').click();
+        await expect(page.getByTestId('risk-replay-audit')).toBeVisible({timeout: 8_000});
+        await expect(page.getByTestId(`risk-replay-audit-proxy-${assetId}`)).toBeVisible();
+        await expect(page.getByTestId('risk-replay-audit-missing-history-policy')).toBeVisible();
+        await expect(page.getByTestId('risk-replay-audit-composition-policy')).toBeVisible();
+        await expect(page.getByTestId('risk-replay-audit-proxy-series-usage')).toBeVisible();
+
+        const simulationQuery = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || !request.url().includes('/api/v1/risk/query')) return false;
+                const body = request.postDataJSON() as RiskRequest;
+                return body.analytics.some((analytic) => analytic.analytic_code === 'simulation');
+            },
+            {timeout: 10_000},
+        );
+        await expect(page.getByTestId('risk-simulation-run')).toBeEnabled();
         await page.getByTestId('risk-simulation-run').click();
-        await expect(page.getByTestId('risk-simulation-chart')).toBeVisible({timeout: 8_000});
+        await simulationQuery;
+        await expect(page.getByTestId('risk-simulation-chart')).toBeVisible({timeout: 12_000});
         await expect(page.getByTestId('risk-simulation-assumptions')).toBeVisible();
+        await page.getByTestId('risk-simulation-view-terminal').click();
+        await expect(page.getByTestId('risk-simulation-terminal-distribution')).toBeVisible({timeout: 5_000});
 
         await expect
             .poll(() => {
                 const assetRequests = requests.filter((request) => request.scope.kind === 'asset' && request.scope.asset_id === assetId);
                 return new Set(assetRequests.flatMap((request) => request.analytics.map((analytic) => analytic.analytic_code)));
             })
-            .toEqual(new Set(['comparison', 'historical_var', 'simulation', 'stress']));
+            .toEqual(new Set(['comparison', 'historical_kpi', 'historical_var', 'simulation', 'stress']));
+
+        const hypotheticalRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'hypothetical');
+        expect(hypotheticalRequest?.parameters).toMatchObject({
+            method: 'hypothetical',
+            dimension: 'asset_class',
+            bucket_shocks: {
+                [stressBucketId]: -0.25,
+            },
+        });
+
+        const replayRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'historical_replay');
+        expect(replayRequest?.parameters).toMatchObject({
+            method: 'historical_replay',
+            missing_history_policy: 'manual_proxy_or_exclude',
+            proxy_assets: [{asset_id: assetId, proxy_asset_id: proxyAssetId}],
+            excluded_assets: [],
+        });
 
         const simulationRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'simulation');
         expect(simulationRequest?.parameters).toMatchObject({

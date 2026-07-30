@@ -6,8 +6,9 @@
 > rischio, *con quali convenzioni*, e *quali metadati* ogni risultato deve
 > trasportare. Nessuna formula finanziaria vive nel frontend.
 >
-> Stato: proposta di contratto (nessun codice implementato). Gli esempi di
-> payload/interfaccia sono **illustrativi**.
+> Stato: contratto approvato; G0-G5 sono implementati. Le estensioni scenario
+> aggiunte a §6.10 il 29 Luglio 2026 sono pianificate per G6 e non ancora
+> implementate. Gli esempi di payload/interfaccia sono **illustrativi**.
 
 Riferimenti al codice reale (ispezionato il 2026-07-26):
 - `backend/app/services/portfolio_engine.py` — `PortfolioCalculationEngine`
@@ -562,19 +563,80 @@ Casi limite:
 Le tre famiglie **non** sono un blocco omogeneo: hanno dipendenze diverse e vanno
 schedulate separatamente (review-2 §7).
 
-**6.10.a Hypothetical shock** *(preferita 1ª impl. — deterministica, auditabile)*
-- Shock espliciti applicati a asset / categorie / valute / classi di asset.
-- **Dipendenze:** definizione dello scenario · mapping degli strumenti ·
+**6.10.a Hypothetical shock** *(deterministica, auditabile)*
+- Ogni esecuzione usa **una sola dimensione**:
+  `asset_class` **oppure** `sector` **oppure** `geography`. Intersezioni quali
+  `Equity AND Financials AND Italy` non fanno parte del contratto iniziale.
+- Metadata canonici:
+  - `asset_class` → un solo valore;
+  - `sector` → distribuzione percentuale completata da `Other`;
+  - `geography` → distribuzione percentuale completata da `Other`.
+- Applicazione:
+  ```text
+  asset_class: shock_asset = shock(asset_class)
+  sector:      shock_asset = Σ(exposure_sector × shock_sector)
+  geography:   shock_asset = Σ(exposure_geo × shock_geo_effettivo)
+  ```
+- Se sector/geography non sono disponibili, la policy canonica è
+  `Other = 100%`: nessuna inferenza dal nome, nessuna esclusione automatica,
+  nessun bucket `Unclassified` aggiuntivo e nessuno stato `partial` causato dalla
+  sola applicazione di questa policy. Il risultato resta completato con warning
+  metodologico esplicito.
+- Ogni scenario sector/geography deve definire `Other`.
+- Il gruppo geografico versionato dell'Unione Europea usa ID stabile
+  `european_union`. Precedenza:
+  ```text
+  Paese specifico > european_union > Other
+  ```
+  Shock di Paese e gruppo non si sommano. La membership UE è versionata e
+  verificata da test.
+- **Dipendenze:** definizione scenario · metadata canonici degli strumenti ·
   composizione oggetto dell'analisi.
-- Ogni scenario **espone le proprie assunzioni**. «Tassi +200bps → bond −8%» è un
-  **input dello scenario**, non una legge finanziaria.
+- Ogni risultato espone per asset e bucket: esposizione usata, shock candidato,
+  regola di precedenza/fallback, shock effettivo e assunzioni. «Tassi +200bps →
+  bond −8%» è un **input dello scenario**, non una legge finanziaria.
+- L'editor può mostrare di default solo i bucket con esposizione nello scope e
+  offrire `Mostra tutti`. Questa scelta è solo presentazione: non modifica la
+  configurazione effettiva, le formule o l'audit. `Other` resta sempre visibile
+  per sector/geography.
 
 **6.10.b Historical replay**
-- Applica alla composizione (in politica `current_buy_and_hold`, §3.1) un
-  intervallo storico reale.
+- Usa per ogni asset i rendimenti **realmente osservati** nel periodo selezionato:
+  prezzi storici → FX storico verso la target currency → rendimenti giornalieri.
+  Non usa shock hardcoded per settore, geografia o asset class.
+- Per portfolio e broker applica l'intervallo alla composizione corrente con
+  `composition_policy = current_buy_and_hold` (§3.1). Il risultato dichiara che
+  la composizione corrente è stata applicata al passato: non rappresenta il
+  portafoglio realmente posseduto allora.
+- Se un asset non ha copertura sufficiente, l'utente sceglie esplicitamente:
+  1. un asset proxy;
+  2. oppure l'esclusione.
+- Per portfolio/broker, il peso di un asset escluso resta nella composizione come
+  **residuo a rendimento zero**: non viene rinormalizzato sugli asset rimanenti.
+  La policy preserva NAV/pesi originali e deve essere dichiarata nell'audit.
+- Nessun proxy automatico o sostituzione silenziosa. Il proxy deve essere diverso
+  dall'originale, coprire il periodo, essere convertibile nella target currency e
+  soddisfare la qualità richiesta.
+- Il proxy fornisce **solo la serie dei rendimenti**. Identità, peso e valore
+  corrente restano quelli dell'asset originale. Risposta e UI espongono il mapping
+  `asset originale → serie fornita dal proxy`.
+- Request e cache identity includono mapping proxy ed esclusioni. La risposta
+  espone sempre un audit trail serializzabile con:
+  - numero proxy;
+  - mapping `asset_id → proxy_asset_id`;
+  - numero/lista asset esclusi e motivo/policy;
+  - policy effettiva per asset senza storia;
+  - trattamento del peso escluso (`zero_return_residual`);
+  - `composition_policy` effettiva.
+  Liste vuote e contatori zero sono espliciti. Un proxy invalido genera errore,
+  non esclusione silenziosa.
+- `RiskResultMetadata` contiene summary, mapping, esclusioni e policy di
+  esecuzione; `DataQualityReport` conserva qualità/copertura della serie originale
+  o proxy. La UI mostra summary e dettaglio per-asset: l'audit non può esistere
+  soltanto nei log o nello stato client.
+- Le associazioni proxy non sono persistite nella prima implementazione.
 - **Dipendenze:** `AssetReturnSeries` (§7) · pesi correnti · politica dei pesi ·
-  copertura storica sufficiente · gestione degli asset **non esistenti** nel
-  periodo (esclusi + dichiarati).
+  copertura storica · proxy/esclusioni espliciti · qualità/FX.
 
 **6.10.c Factor shock** *(evoluzione successiva — richiede modello di esposizione)*
 - Shock a fattori: azionario · tassi · spread · FX · inflazione.
@@ -584,6 +646,22 @@ schedulate separatamente (review-2 §7).
 - LibreFolio **non dispone** oggi di un factor exposure model → dichiarato come
   **evoluzione successiva**. Semplici shock per categoria **non** vanno presentati
   come analisi fattoriale rigorosa (sono `hypothetical shock`, non `factor shock`).
+
+**6.10.d Catalogo e configurazione effettiva**
+- Il catalogo YAML statico/versionato fornisce definizione, valori iniziali,
+  limiti e descrizioni localizzate; non cambia le formule sopra e non è un form
+  engine arbitrario.
+- Può includere `tags` opzionali: slug machine-readable, univoci e bounded,
+  con vocabolario aperto. I tag sono metadata di discovery senza semantica
+  finanziaria, non sono copy localizzato e non partecipano alla cache identity del
+  calcolo. G6 non introduce filtri/search API o UI basati sui tag.
+- L'utente può modificare i parametri consentiti prima dell'esecuzione. Request,
+  risultato e metadata riportano la **configurazione effettivamente usata**, non
+  soltanto i default del preset.
+- Proiezione per scope:
+  - `asset` → impatto percentuale sul singolo asset;
+  - `asset_set` → confronto percentuale multi-asset;
+  - `portfolio + broker_ids` → impatto sulla composizione corrente selezionata.
 
 ### 6.11 Confronto: baseline risk-free sintetica vs asset reale (review-2 §8)
 
@@ -738,8 +816,8 @@ warning); correlazioni calcolate **dopo** conversione.
 5. Stress test = **input di scenario**, non leggi universali.
 6. Nessun punteggio sintetico opaco (§16 review): se un indice composito esiste,
    deve essere interamente scomponibile e spiegabile; in alternativa, KPI separati.
-7. Scope su subset/broker = «rischio **interno** al sottoinsieme», non rischio
-   complessivo dell'investitore (§15 review).
+7. Scope `portfolio + broker_ids` = «rischio **interno** al sottoinsieme», non
+   rischio complessivo dell'investitore (§15 review).
 8. Nessuna raccomandazione operativa implicita (niente "portafoglio ottimo").
 9. **Confronti (review-2 §8):** nessun asset reale (ETF, BTP, obbligazione, coppia
    FX) va trattato **automaticamente come risk-free**. Il risk-free è solo la

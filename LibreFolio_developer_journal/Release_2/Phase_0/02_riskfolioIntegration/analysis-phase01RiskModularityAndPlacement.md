@@ -4,6 +4,10 @@
 > resa *modulare* come il sistema dei segnali tecnici, oppure ogni metrica di
 > rischio richiede necessariamente una UI costruita ad-hoc? E, di conseguenza,
 > *dove* nel progetto ha senso collocarla?
+>
+> **Aggiornamento placement G6 — 29 Luglio 2026:** la matrice §5 recepisce l'IA
+> definitiva documentata in
+> [`plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`](./plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md).
 
 ---
 
@@ -54,7 +58,7 @@ rende modulare *il grafico a linee*; si rende modulare **la libreria di widget d
 output** (le "widget primitives"). Ogni nuova metrica dichiara:
 
 1. **quale archetipo di output** produce (S/T/D/C/M/F);
-2. **su quale scope** opera (`asset` singolo, `portfolio`, `broker`, `subset`);
+2. **su quale scope** opera (`asset`, `asset_set`, `portfolio + broker_ids`);
 3. il proprio **`params_schema`** (orizzonte, confidence level, n. simulazioni…).
 
 La UI **auto-seleziona il widget** dall'archetipo, esattamente come oggi
@@ -74,7 +78,8 @@ motivo per cui non è un semplice `SignalPlugin` con `category:"risk"`.
 backend/app/services/risk_plugins/          # (proposto, non ancora esistente)
 ├── base.py            # class RiskAnalytic(ABC)
 │                      #   output_kind: OutputKind   # SCALAR|SERIES|DISTRIBUTION|CONE|MATRIX|SCATTER
-│                      #   scopes: tuple[RiskScope]   # ASSET|PORTFOLIO|BROKER|SUBSET
+│                      #   scopes: tuple[RiskScope]   # ASSET|ASSET_SET|PORTFOLIO
+│                      #   portfolio may carry broker_ids for an exact subset
 │                      #   modes: tuple[RiskMode]     # HISTORICAL|CURRENT_COMPOSITION
 │                      #   params_model: BaseModel
 │                      #   def compute(series, weights, params, ctx) -> RiskResult + RiskResultMetadata
@@ -234,13 +239,18 @@ Ciò che **esiste già** e va riusato invece di reimplementato:
 
 Riferimenti agli screenshot in `mkdocs_src/docs/gallery/desktop/en/light/`.
 
+> **Principio di riuso G6.** La stessa UI in pagine diverse non è duplicazione se
+> usa lo stesso componente, lo stesso backend bulk e scope differenti. La
+> posizione risponde a una domanda utente; lo scope seleziona asset/broker.
+> Evitare endpoint, formule o componenti quasi-identici duplicati.
+
 | Pagina (screenshot) | Scope naturale | Cosa collocare | Archetipi |
 |---------------------|----------------|----------------|-----------|
-| **Asset Detail** — accordion `Signals` + `Measures` (`assets/detail-measures.png`, `assets/detail-signals-macd.png`) | `asset` | Rolling risk (renderer segnali) nel chart esistente; nuova **tab chart "Risk & Scenarios"** con strip KPI (Vol, MaxDD, Sharpe) + Monte Carlo cono + distribuzione rendimenti | T, S, C, D |
-| **Dashboard** — tab Overview/Positions/Transactions (`dashboard/main.png`, `dashboard/positions-performance-map.png`) | `portfolio` | **Nuova tab "Risk"** accanto alle esistenti: heatmap correlazione, contributo al rischio, griglia KPI storici, scenari stress test, (poi) cono Monte Carlo | M, S, C |
+| **Asset Detail** — accordion `Signals` + `Measures` (`assets/detail-measures.png`, `assets/detail-signals-macd.png`) | `asset` | Tab pagina **`Overview | Risk & Scenarios`**. Overview conserva chart/editor/Signals e i cinque rolling-risk come `SignalPlugin`; Risk & Scenarios offre summary, downside, confronto, correlazione asset-centrica e scenari senza duplicare il configuratore Signals. Nessuna Allocation. | T, S, C, D |
+| **Dashboard** — tab Overview/Positions/Transactions (`dashboard/main.png`, `dashboard/positions-performance-map.png`) | `portfolio + broker_ids` | Tab Risk con **summary + pannelli espandibili condivisi**: rischio osservato, struttura, confronto, scenari. Ogni pannello rispetta il filtro broker toolbar. Nessuna sub-tab e nessuna UI P13 completa. | M, S, C |
 | **Dashboard** — KPI cards in alto (`dashboard/allocation-charts.png`) | `portfolio` | 4ª card "Risk" (Volatilità / Max DD / Sharpe) con sparkline + link alla Risk tab | S |
-| **Broker Detail** — tab Info/Positions/Transactions + FIFO (`brokers/detail.png`, `brokers/positions-performance-map.png`) | `broker` (subset) | Stesso pattern "Risk tab" ma scoped agli asset di quel broker → correlazione **interna al broker**; stress in **€ reali** sulla composizione del broker | M, S, C, DB |
-| **Asset Global** — lista/griglia asset con dual-view (`assets/+page`, toolbar `PageToolbar`) | `asset`/`subset` | **Casa primaria della correlazione**: 2ª tab **"Correlation"** accanto ad **"Assets"**. Il filtro broker costruisce solo il **SET** di asset (no quantità/pesi). Stress **percentuale** multi-asset (confronto, non €). | M, DB |
+| **Broker Detail** — tab Info/Positions/Transactions + FIFO (`brokers/detail.png`, `brokers/positions-performance-map.png`) | `portfolio + broker_ids=[id]` | Lo stesso componente Dashboard, con label «Rischio interno a: {broker}». Summary + pannelli espandibili; nessuna Allocation/P13. | M, S, C, DB |
+| **Asset Global** — lista/griglia asset con dual-view (`assets/+page`, toolbar `PageToolbar`) | `asset_set` | Quattro tab: **`Assets | Correlation | Scenarios | Allocation`**. Correlation offre heatmap/vista asset-centrica; Scenarios ospita stress percentuale multi-asset; Allocation è l'unica casa P13 e usa lo stesso asset universe. Il broker costruisce solo il SET. | M, S, C, DB |
 | **Positions holdings/performance map** (treemap) (`dashboard/positions-performance-map.png`) | `portfolio` | La treemap resta per **valore/performance**. Il **contributo al rischio (PCTR)** usa invece un **grafico a barre divergente** (PCTR può essere negativo → non rappresentabile come area treemap, review-2 §5) | DB (barre) |
 | **Confronto (Risk tab + Asset Detail)** — riusa `AssetSearchAutocomplete` + `AssetComparisonSignal` | `portfolio`/`asset` | Pannello "Confronta con": baseline risk-free sintetica (Sharpe) **o** asset reale (active return, TE, IR, beta). Contratti distinti `RiskFreeReference`/`ComparisonBenchmark` (review-2 §8) | S, T |
 
@@ -249,34 +259,41 @@ Riferimenti agli screenshot in `mkdocs_src/docs/gallery/desktop/en/light/`.
 > in cima. Una tab "Risk" eredita **gratis** questi filtri (periodo → finestra di
 > stima; broker → scope; valuta → base). Coerenza totale, zero navigazione nuova.
 
-> ⚠️ **Semantica dello scope subset (review §15).** Il rischio calcolato su un
-> singolo broker o su un sottoinsieme scelto dall'utente è **rischio interno al
-> sottoinsieme**, non il rischio complessivo dell'investitore: due broker possono
-> contenere esposizioni che si compensano, si duplicano o sono correlate, con un
-> rischio aggregato diverso dalla somma. La UI **deve** etichettarlo
-> esplicitamente («Rischio interno a: {broker/subset}») e non presentarlo come
-> rischio totale del patrimonio.
+> ⚠️ **Semantica dello scope subset (review §15).** Il contratto canonico è
+> `kind=portfolio` con `broker_ids` omesso o lista esplicita. Un broker singolo è
+> una lista di cardinalità uno, non un `kind=broker` parallelo. Il rischio del
+> sottoinsieme è **rischio interno al sottoinsieme**, non rischio complessivo
+> dell'investitore. La UI lo etichetta esplicitamente.
 
 > **Nota sul nome della tab (review §12).** «Projections» è troppo assertivo per
 > output simulati. Si adotta **"Risk & Scenarios"** (asset) e **"Risk"**
 > (portfolio), con i contenuti Monte Carlo etichettati «simulato», mai «previsto».
 
 > **Correlazione = un solo contratto riusato (review-4).** La correlazione ha
-> **casa primaria in Asset Global** (2ª tab "Correlation", vista lista asset-centrica)
-> ma lo **stesso contratto backend** alimenta anche Dashboard Risk, Broker e Asset
-> Detail (correlazione dell'asset corrente vs gli altri). Il filtro broker/subset
-> costruisce **solo l'insieme di asset** analizzati: nessuna quantità, lotto o peso
-> entra nel calcolo della correlazione. Frontend: la tab si innesta sul `PageToolbar`
-> esistente (che già supporta `tabs`/`TabBar`); Asset Global oggi non ha tab → è una
-> **piccola estensione**, non una pagina nuova.
+> **casa primaria in Asset Global**. Heatmap e vista asset-centrica sono
+> commutabili; lo stesso contratto alimenta Dashboard, Broker e Asset Detail. Il
+> filtro broker/subset costruisce **solo l'insieme di asset**: quantità e pesi non
+> entrano nella correlazione.
 
 > **Stress test per scope (review-4) — una sola definizione di scenario, output diversi:**
 > - **Asset Detail** → impatto **percentuale** sul singolo asset;
-> - **Asset Global** → **confronto percentuale** multi-asset (nessun peso);
+> - **Asset Global → Scenarios** → **confronto percentuale** multi-asset;
 > - **Dashboard / Broker** → impatto **economico in €** sulla composizione (richiede
 >   pesi/valorizzazione, `mode` dichiarato). La definizione dello scenario
 >   (shock, categorie, assunzioni) è **unica e riusata**; cambia solo la proiezione
 >   in base allo scope. Vedi contratto §6.10 e brainstorm Concept E/E-bis.
+
+> **Allocation/P13.** `Assets Global → Allocation` è l'unica casa della UI P13 in
+> G6. L'ottimizzatore costruisce una composizione ipotetica dell'asset universe e
+> non usa quantità/pesi posseduti: non va quindi riproposto in Dashboard/Broker
+> come se fosse una raccomandazione holdings-aware.
+
+> **Dashboard/Broker condivisi.** Summary sempre visibile; pannelli espandibili per
+> rischio osservato, struttura, confronto e scenari. Query lazy al primo open,
+> risultato mantenuto durante il mount, stato locale senza URL/localStorage.
+> Chiudere/riaprire same-key non rifà la query; date/scope/currency/parametri
+> cambiano la request identity. Accordion state e invalidazione `riskStore` sono
+> contratti distinti.
 
 ---
 
@@ -323,11 +340,17 @@ Riferimenti agli screenshot in `mkdocs_src/docs/gallery/desktop/en/light/`.
   ricerca asset e confronto già esistenti (review-2 §8).
 - **Stress test — tre famiglie con dipendenze distinte** (contratto §6.10), da non
   trattare come un blocco unico:
-  - *hypothetical shock* — preferito per la 1ª impl. (deterministico, auditabile);
-  - *historical replay* — dipende da `AssetReturnSeries` + pesi + politica
-    `current_buy_and_hold` + copertura storica + gestione asset non esistenti;
+  - *hypothetical shock* — una dimensione, deterministico e auditabile;
+  - *historical replay* — rendimenti osservati, `current_buy_and_hold`, copertura,
+    proxy manuali o esclusioni esplicite; mapping/esclusioni/policy entrano
+    nell'audit trail typed e nella request identity;
   - *factor shock* — richiede un **factor exposure model** assente oggi → evoluzione
     successiva; gli shock per categoria **non** sono analisi fattoriale rigorosa.
+  I primi due sono distribuiti da un catalogo typed/startup-loaded e vivono nella
+  tab Assets Global `Scenarios` oltre che nei pannelli shared degli altri scope.
+  Il catalogo può portare `tags` opzionali/inerti per discovery futura. Editor
+  hypothetical: bucket presenti nello scope + toggle `Mostra tutti`; `Other`
+  sempre visibile quando richiesto.
 - **VaR / CVaR** (historical simulation come default) — utile ma richiede
   disciplina interpretativa; convenzione di segno = **magnitudini positive di
   perdita** (`CVaR ≥ VaR ≥ 0`, contratto §6.8); **dopo** drawdown/correlazione/stress.
@@ -341,7 +364,8 @@ Riferimenti agli screenshot in `mkdocs_src/docs/gallery/desktop/en/light/`.
   mal interpretata. Se mantenuta: shrinkage della covarianza, vincoli sui pesi,
   analisi di sensibilità, confronto tra finestre, separazione netta tra analisi e
   raccomandazione. Mai presentare un portafoglio come oggettivamente "ottimo".
-  "Advanced", collassata di default.
+  In G6 vive solo in `Assets Global → Allocation`; solver/frontier/sensitivity e
+  metadata tecnici sono in `Advanced`.
 
 ### ❌ Non mettere in UI (tenere solo backend / esporre via MCP all'AI)
 - Misure di rischio esotiche (EVaR, CDaR, misure basate su kurtosi), modelli
@@ -441,13 +465,13 @@ graph TD
     R0[R0: Contratto matematico + ReturnSeriesSpec + RiskResultMetadata] --> R1[R1: AssetReturnSeries convertita FX - estende price layer]
     R0 --> R2[R2: Drawdown + Rolling Vol - renderer segnali]
     R2 --> R3[R3: KPI storici scalari - Asset Detail + card Dashboard]
-    R1 --> R4[R4: Correlation heatmap - Risk tab]
+    R1 --> R4[R4: Correlation - Assets Global primary]
     R3 --> R4
     R4 --> R5[R5: Risk contribution PCTR - barre divergenti]
-    R5 --> R6[R6: Stress test - hypothetical shock prima, deps distinte]
+    R5 --> R6[R6: Scenarios - hypothetical + historical replay]
     R6 --> R7[R7: Confronto risk-free/asset - RiskFreeReference vs ComparisonBenchmark]
     R7 --> R8[R8: VaR/CVaR + Monte Carlo - simulato, seed, percentili]
-    R8 --> R9[R9: Efficient frontier - opzionale, Riskfolio-Lib]
+    R8 --> R9[R9: Allocation P13 - Riskfolio-Lib]
 
     style R0 fill:#f9f,stroke:#333,stroke-width:2px
     style R1 fill:#fdd,stroke:#333,stroke-width:2px
@@ -487,9 +511,11 @@ mai nei plugin. La modularità sta nei *widget* e nel *renderer* riusato, e nel
 **riuso prima di nuove astrazioni**. Le metriche consumano le **serie
 canoniche** già prodotte da LibreFolio (TWRR neutro rispetto ai flussi, NAV
 convertito FX), evitando duplicazioni col Portfolio Calculation Engine. Il
-posizionamento naturale è: **renderer segnali/tab-chart** per lo scope asset, una
-**"Risk tab"** ereditata dal pattern Dashboard/Broker per lo scope
-portafoglio/broker, sempre con lo scope subset etichettato come parziale.
+posizionamento naturale è: `Overview | Risk & Scenarios` per Asset Detail;
+`Assets | Correlation | Scenarios | Allocation` per Assets Global; una
+**Risk tab** condivisa con summary+pannelli per Dashboard/Broker. Lo scope
+`portfolio + broker_ids` è etichettato come rischio **interno al sottoinsieme**,
+non come risultato `partial`. P13 vive solo in Allocation.
 
 → Fondamenta matematiche: [`contract-phase01RiskMetricsMathematical.md`](./contract-phase01RiskMetricsMathematical.md)
 → Concept visivi con ASCII art: [`brainstorm-phase01RiskUiConcepts.md`](./brainstorm-phase01RiskUiConcepts.md)
