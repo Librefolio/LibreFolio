@@ -51,6 +51,7 @@ justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", 
 xlrd = "*"
 borsa-italiana-scraping = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git", ref = "main"}
 ddgs = "*"
+pyyaml = "==6.0.3"
 
 [dev-packages]
 pytest = "*"

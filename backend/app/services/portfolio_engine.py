@@ -17,6 +17,7 @@ from __future__ import annotations
 import bisect
 import hashlib
 import json
+import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date as date_type
@@ -38,6 +39,7 @@ from backend.app.schemas.portfolio import (
     IssueSeverity,
 )
 from backend.app.services.fx import convert_bulk
+from backend.app.services.price_resolver import AssetPriceSeries, build_asset_price_series
 from backend.app.services.settings_service import get_global_setting
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot
@@ -107,8 +109,23 @@ ClassificationType = Literal[
 ]
 
 
+def _resolver_valuation_enabled() -> bool:
+    """Dev-only feature flag (F2): route price-less valuation through the unified price resolver.
+
+    Default OFF → the engine's historical price-less cascade (``LAST_BUY_PRICE`` /
+    ``LAST_SEED_COST``) is used and every existing golden test is unchanged. When ON, an asset
+    without an asset-system quote on/before a day is valued with the resolver's observed-trade
+    mark (BUY/SELL/priced ADJUSTMENT, same-day average, LOCF carry with staleness) emitted as
+    ``LAST_TRADE_PRICE`` — the same unified source the FIFO price line already consumes. This is
+    transition scaffolding for A/B during development and is removed once F3 flips the default and
+    re-baselines the golden suite (no permanent flag).
+    """
+    return os.environ.get("LIBREFOLIO_RESOLVER_VALUATION", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 class ValuationSource(StrEnum):
     MARKET_PRICE = "MARKET_PRICE"
+    LAST_TRADE_PRICE = "LAST_TRADE_PRICE"
     LAST_BUY_PRICE = "LAST_BUY_PRICE"
     LAST_SEED_COST = "LAST_SEED_COST"
     MISSING = "MISSING"
@@ -587,6 +604,7 @@ class DailyStateBuilder:
         last_seed_prices: dict[tuple[int, int], ValuationHistoryInput] | None = None,
         split_linked_tx_ids: set[int] | None = None,
         split_history: dict[int, SplitHistory] | None = None,
+        mark_series: dict[int, AssetPriceSeries] | None = None,
     ) -> None:
         self.classified_txs = classified_txs
         self.in_transit_intervals = in_transit_intervals
@@ -622,6 +640,10 @@ class DailyStateBuilder:
                     raise ValueError("split ratio must be positive and finite")
                 unique_by_event_id[split.event_id] = split
             self.split_history[asset_id] = tuple(sorted(unique_by_event_id.values(), key=lambda split: (split.date, split.event_id)))
+        # F2 (flag-gated): per-asset unified price-resolver series, used only for price-less
+        # valuation days (no asset-system quote on/before the date). Empty unless the caller
+        # populated it under LIBREFOLIO_RESOLVER_VALUATION → default behaviour is unchanged.
+        self.mark_series: dict[int, AssetPriceSeries] = mark_series or {}
 
     def build(self) -> PortfolioCalculationResult:
         """Build daily states for [frame_start, date_to] + position snapshots + period accumulators.
@@ -1058,7 +1080,7 @@ class DailyStateBuilder:
                     stale.add(asset_id)
                 if valuation.missing_fx_pair:
                     missing_fx.add(valuation.missing_fx_pair)
-                if valuation.source in (ValuationSource.LAST_BUY_PRICE, ValuationSource.LAST_SEED_COST):
+                if valuation.source in (ValuationSource.LAST_TRADE_PRICE, ValuationSource.LAST_BUY_PRICE, ValuationSource.LAST_SEED_COST):
                     implied.add(asset_id)
 
             # 4d. In-transit values
@@ -1261,7 +1283,12 @@ class DailyStateBuilder:
         wac_pool_cost: dict[tuple[int, int], Decimal] | None = None,
         broker_id: int | None = None,
     ) -> ValuationResult:
-        """Select MARKET_PRICE → LAST_BUY_PRICE → LAST_SEED_COST → MISSING."""
+        """Select MARKET_PRICE → [LAST_TRADE_PRICE] → LAST_BUY_PRICE → LAST_SEED_COST → MISSING.
+
+        ``LAST_TRADE_PRICE`` is inserted only when the unified price resolver is enabled (F2 flag)
+        and only on price-less days (no asset-system quote on/before ``dt``); it then supersedes the
+        legacy transaction-implied tiers with the resolver's broker-agnostic observed mark.
+        """
         prices = self.price_map.get(asset_id)
         result = self._price_on_date(prices, dt) if prices else None
 
@@ -1307,6 +1334,23 @@ class DailyStateBuilder:
                 reference_currency=price_ccy,
                 stale=is_stale,
             )
+
+        mark_series = self.mark_series.get(asset_id)
+        if mark_series is not None:
+            mark = mark_series.resolve(dt)
+            if not mark.is_missing:
+                quote_base = self.quote_base_map.get(asset_id)
+                days_back = mark.price_backward_fill.days_back if mark.price_backward_fill else 0
+                return ValuationResult(
+                    market_value=compute_holding_value(qty, mark.unit_price, quote_base),
+                    source=ValuationSource.LAST_TRADE_PRICE,
+                    effective_unit_price=mark.unit_price,
+                    effective_currency=self.target_currency,
+                    reference_date=mark.as_of_date,
+                    reference_unit_price=mark.unit_price,
+                    reference_currency=self.target_currency,
+                    stale=days_back > STALE_PRICE_THRESHOLD_DAYS,
+                )
 
         buy_reference = _select_latest_reference(self.last_buy_prices.get(asset_id, ()), dt)
         if buy_reference is not None:
@@ -1732,15 +1776,33 @@ class DerivedViewsBuilder:
     def build_performance_inputs(
         self,
     ) -> tuple[list, list]:
-        """Extract NAV snapshots and cash flows for ROI calculations.
+        """Extract NAV snapshots and the invested-capital flow series for ROI/TWRR/MWRR.
 
         Returns (nav_snapshots, cash_flows) compatible with roi_utils functions.
+
+        The capital flow is derived from the day-over-day change in
+        ``cumulative_external_cash_flow`` (the *capital baseline*), NOT from the
+        cash-only ``external_cash_flow`` field. The baseline already folds in
+        priced in-kind ADJUSTMENT capital — opening equity / succession / transfer
+        that injects book value with no cash counterpart — via the engine's
+        capital-adjustment routing (see ``_is_capital_adjustment``). Using the
+        cash-only field here would omit that in-kind capital from the invested
+        denominator, inflating ROI to thousands of percent whenever a portfolio is
+        seeded in kind, and would spuriously count a mid-series in-kind injection as
+        TWRR return. Feeding the baseline delta keeps every return metric coherent.
+
         Sign convention: CashFlowInput uses investor perspective (deposit = negative).
-        DailyPortfolioState uses portfolio perspective (deposit = positive).
-        So we negate external_cash_flow when passing to performance functions.
+        The baseline uses portfolio perspective (contribution = positive), so we
+        negate the delta when passing to performance functions.
         """
         nav_snapshots = [NAVSnapshot(date=s.date, nav=s.nav_value) for s in self.daily_states]
-        cash_flows = [CashFlowInput(date=s.date, amount=-s.external_cash_flow) for s in self.daily_states if s.external_cash_flow != 0]
+        cash_flows: list[CashFlowInput] = []
+        prev_baseline = Decimal("0")
+        for s in self.daily_states:
+            delta = s.cumulative_external_cash_flow - prev_baseline
+            prev_baseline = s.cumulative_external_cash_flow
+            if delta != 0:
+                cash_flows.append(CashFlowInput(date=s.date, amount=-delta))
         return nav_snapshots, cash_flows
 
     def build_allocation_current(
@@ -2264,6 +2326,36 @@ class PortfolioCalculationEngine:
             last_seed_prices=last_seed_prices,
         )
 
+        # ── 10b. (F2, flag-gated) Unified price-resolver series per asset ──
+        # Default OFF → mark_series stays None → DailyStateBuilder valuation cascade unchanged and
+        # every golden test is untouched. When LIBREFOLIO_RESOLVER_VALUATION is on, price-less
+        # assets are valued from the same observed-trade mark the FIFO price line already uses.
+        mark_series: dict[int, AssetPriceSeries] | None = None
+        if _resolver_valuation_enabled() and held_asset_ids:
+
+            def _convert_for_resolver(amount: Decimal, currency: str | None, on_date: date_type) -> Decimal | None:
+                if currency is None or currency == target_currency:
+                    return amount
+                rate = fx_rate_map.get((currency, target_currency, on_date))
+                return amount * rate if rate is not None else None
+
+            txs_by_asset: dict[int, list[Transaction]] = defaultdict(list)
+            for tx in all_txs:
+                if tx.asset_id:
+                    txs_by_asset[tx.asset_id].append(tx)
+            mark_series = {}
+            for aid in held_asset_ids:
+                series = build_asset_price_series(
+                    price_rows=price_map.get(aid, []),
+                    transactions=txs_by_asset.get(aid, []),
+                    split_linked_tx_ids=split_linked_tx_ids,
+                    asset_currency=asset_currencies.get(aid, target_currency),
+                    quote_base_quantity=quote_base_map.get(aid) or 1,
+                    convert=_convert_for_resolver,
+                )
+                if series.has_observations:
+                    mark_series[aid] = series
+
         # ── 11. Build daily states ──
         builder = DailyStateBuilder(
             classified_txs=classification.classified,
@@ -2282,6 +2374,7 @@ class PortfolioCalculationEngine:
             last_seed_prices=last_seed_prices,
             split_linked_tx_ids=split_linked_tx_ids,
             split_history=split_history,
+            mark_series=mark_series,
         )
         result = builder.build()
 

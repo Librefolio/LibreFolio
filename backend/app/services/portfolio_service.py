@@ -1126,6 +1126,19 @@ class PortfolioService:
             broker_txns = await self._get_transactions(broker_id, date_to=date_to)
             broker_cash = broker_cash_native.setdefault(broker_id, defaultdict(Decimal))
             for tx in broker_txns:
+                # In-kind ADJUSTMENT capital (opening equity / succession / transfer with
+                # no cash counterpart) injects book value that IS invested capital, not
+                # profit. Mirror the engine's capital-baseline routing at broker level so
+                # per-broker gain stays coherent with the aggregate headline (see
+                # PortfolioCalculationEngine._is_capital_adjustment). Handled before the
+                # cash guard below because these rows carry cost_basis_* but a NULL
+                # tx.currency. SPLIT-linked adjustments (asset_event_id set) redistribute
+                # existing cost and are excluded.
+                if tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity and tx.asset_event_id is None:
+                    inkind_ccy = tx.cost_basis_currency or base_currency
+                    inkind_base, _ik_missing = await self._convert_to_base(tx.cost_basis_override * tx.quantity, inkind_ccy, base_currency, tx.date)
+                    if inkind_base is not None:
+                        broker_total_invested[broker_id] += inkind_base * share
                 if tx.amount is None or tx.currency is None:
                     continue
                 broker_cash[tx.currency] += tx.amount * share
@@ -1444,7 +1457,17 @@ class PortfolioService:
             mwrr_period_days = ((date_to or today) - period_start_date_perf).days
             mwrr_cumulative = annualized_to_cumulative(mwrr_result, mwrr_period_days) if mwrr_result is not None else None
 
-        total_gl = engine_nav - total_invested
+        # Headline invested capital & P&L come from the engine's capital baseline
+        # (cumulative_external_cash_flow), which folds in priced in-kind ADJUSTMENT
+        # capital (opening equity / succession). Deriving total_gl from a cash-only
+        # "invested" would treat that in-kind capital as pure profit, inflating the
+        # headline gain to thousands of percent on in-kind-seeded portfolios. The
+        # engine's total_pnl = NAV - capital_baseline is the authoritative figure.
+        if last_state is not None:
+            total_invested = last_state.cumulative_external_cash_flow
+            total_gl = last_state.total_pnl
+        else:
+            total_gl = engine_nav - total_invested
         total_gl_pct = (total_gl / total_invested) if total_invested > 0 else Decimal("0")
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 

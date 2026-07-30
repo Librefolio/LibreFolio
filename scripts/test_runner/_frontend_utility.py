@@ -7,6 +7,25 @@ from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_s
 from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright
 
 
+def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run core store unit tests (Vitest)."""
+    print(f"\n{Colors.BLUE}Running: Core store Vitest unit tests{Colors.NC}")
+    result = subprocess.run(
+        ["npx", "vitest", "run", "src/lib/stores/core/entityStore.test.ts"],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Core store Vitest unit tests - PASSED")
+        return True
+
+    print_error(f"Core store Vitest unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
 def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run auth E2E tests."""
     print_section("Frontend Auth Tests")
@@ -96,6 +115,7 @@ def populate_registry(registry: dict) -> None:
         help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)",
         description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
+    add_test(cat, "core-unit", front_utility_unit, test_names=False, name="Core Store Unit Tests", desc="entityStore vitest unit", tests="src/lib/stores/core/entityStore.test.ts")
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
