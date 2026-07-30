@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -65,6 +66,7 @@ class LineFixturePlugin(SignalPlugin):
             semantic_id="fixture_rolling_average.value",
             semantic_description="Test rolling average value.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
         ),

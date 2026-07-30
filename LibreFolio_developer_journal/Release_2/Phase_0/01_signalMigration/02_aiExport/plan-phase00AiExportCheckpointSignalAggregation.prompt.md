@@ -1,6 +1,6 @@
 # Checkpoint Phase 0 — AI Export e aggregazione Signal Plugin
 
-**Stato**: ⏸️ PAUSA ESPLICITA — 28 luglio 2026
+**Stato**: ✅ CHIUSO COME CHECKPOINT — 29 luglio 2026
 **Scopo**: congelare lavoro svolto, decisioni, problemi scoperti e ordine di ripresa.
 
 ← Piano precedente:
@@ -8,6 +8,9 @@
 
 ← Requisiti di consenso:
 [GPT-5.6 refinement](./gpt5.6_refinementPlan.md)
+
+→ Follow-up:
+[Signal aggregation e AI Export UI/clipboard cutover](./plan-phase00AiExportSignalAggregationUiCutover.prompt.md)
 
 ## 1. Decisione operativa: semplificare il flusso dati
 
@@ -310,7 +313,9 @@ Test:
 - `backend/test_scripts/test_services/test_ai_export_components_technical.py`
 - `backend/test_scripts/test_services/test_signal_plugin_matrix.py`
 
-## 11. Regola pausa
+## 11. Chiusura checkpoint
 
-Non riprendere implementazione, test frontend, wiki ingest/lint o central registry
-finché l'utente non chiede esplicitamente di continuare.
+Il checkpoint è stato riaperto dall'utente il 29 luglio 2026.
+
+→ Piano esecutivo:
+[Signal aggregation e AI Export UI/clipboard cutover](./plan-phase00AiExportSignalAggregationUiCutover.prompt.md)

@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -177,6 +178,7 @@ class MfiSignalPlugin(SignalPlugin):
             semantic_id="money_flow_index.value",
             semantic_description="Bounded price-and-volume flow index.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_MFI_AXIS,
             supports_reference_levels=True,

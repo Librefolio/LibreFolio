@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 
 import type {RenderedSignal} from '$lib/charts/signals';
-import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
+import {assignOverlaySignalAxes, buildOverlaySignalSeries, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
 import {buildSignalReferencePrimitives} from './lineChartHelpers';
 
 function signal(overrides: Partial<RenderedSignal>): RenderedSignal {
@@ -14,6 +14,7 @@ function signal(overrides: Partial<RenderedSignal>): RenderedSignal {
         lineType: 'solid',
         markerStart: null,
         markerEnd: null,
+        aggregationProfile: 'last_with_range',
         ...overrides,
     };
 }
@@ -76,5 +77,23 @@ describe('canonical overlay axis and reference helpers', () => {
         expect(primitives.markArea).toMatchObject({
             data: [[{name: 'High', yAxis: 70}, {yAxis: 'max'}]],
         });
+    });
+
+    it('renders AREA signals as zero-origin line fills', () => {
+        const [series] = buildOverlaySignalSeries(
+            [
+                signal({
+                    seriesType: 'area',
+                    fillOpacity: 0.2,
+                    data: [{date: '2026-07-23', value: -12}],
+                }),
+            ],
+            ['2026-07-23'],
+            false,
+        );
+
+        expect(series.type).toBe('line');
+        expect(series.areaStyle).toMatchObject({origin: 0});
+        expect(series.areaStyle.color).toContain('0.2');
     });
 });

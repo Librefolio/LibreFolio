@@ -1,355 +1,173 @@
-import type {AiExportCatalogCompatibilityChoice, AiExportCatalogCompatibilityResult} from './catalog/compatibility';
-import type {AiExportBackendCatalogEntry, AiExportDetailLevel, AiExportDomain, AiExportRenderMode, AiExportTask, AiExportTaskDefinition} from './catalog/shared';
+import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
+import {findCompatibleAiExportSelection, selectionsForDomain} from './catalog/compatibility';
+import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
 import type {AiExportPromptStats, AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
 export const AI_EXPORT_TOKEN_WARNING_THRESHOLD = 8_000;
 export const AI_EXPORT_TOKEN_LARGE_THRESHOLD = 16_000;
-export const AI_EXPORT_SNAPSHOT_SELECTION_ID = 'snapshot' as const;
-export const AI_EXPORT_TECHNICAL_WINDOW_PRESETS = ['3m', '6m', '1y', 'custom'] as const;
-export const AI_EXPORT_TECHNICAL_WINDOW_UNITS = ['days', 'weeks', 'months', 'years'] as const;
+export const AI_EXPORT_PERIOD_PRESETS = ['3m', '6m', '1y', 'custom'] as const;
+export const AI_EXPORT_PERIOD_UNITS = ['days', 'weeks', 'months', 'years'] as const;
 
-export type AiExportAnalysisSelection = AiExportTask | typeof AI_EXPORT_SNAPSHOT_SELECTION_ID;
-export type AiExportHiddenAnalysisTasks = readonly AiExportTask[];
-export type AiExportTechnicalWindowPreset = (typeof AI_EXPORT_TECHNICAL_WINDOW_PRESETS)[number];
-export type AiExportTechnicalWindowUnit = (typeof AI_EXPORT_TECHNICAL_WINDOW_UNITS)[number];
+export type AiExportTokenSeverity = 'normal' | 'warning' | 'large';
+export type AiExportPeriodPreset = (typeof AI_EXPORT_PERIOD_PRESETS)[number];
+export type AiExportPeriodUnit = (typeof AI_EXPORT_PERIOD_UNITS)[number];
 
-export interface AiExportTechnicalWindowSelection {
-    readonly preset: AiExportTechnicalWindowPreset;
+export interface AiExportPeriodSelection {
+    readonly preset: AiExportPeriodPreset;
     readonly customAmount: number;
-    readonly customUnit: AiExportTechnicalWindowUnit;
+    readonly customUnit: AiExportPeriodUnit;
 }
 
-export const AI_EXPORT_DEFAULT_TECHNICAL_WINDOW = {
+export const AI_EXPORT_DEFAULT_PERIOD = {
     preset: '3m',
     customAmount: 3,
     customUnit: 'months',
-} as const satisfies AiExportTechnicalWindowSelection;
+} as const satisfies AiExportPeriodSelection;
 
-export const AI_EXPORT_SNAPSHOT_TASK_BY_DOMAIN = {
-    portfolio: 'portfolio_description',
-    asset: 'asset_snapshot',
-    fx: 'fx_trend_review',
-    broker: 'broker_review',
-} as const satisfies Readonly<Record<AiExportDomain, AiExportTask>>;
+export interface AiExportOptionsSelection {
+    readonly selectionKind: AiExportSelectionKind;
+    readonly selectionId: AiExportSelectionId;
+    readonly detailLevel: AiExportDetailLevel;
+    readonly period: AiExportPeriodSelection;
+    readonly responseLanguage: AiExportResponseLanguageDisplayName;
+    readonly userNotes?: string;
+}
 
-export type AiExportTokenSeverity = 'normal' | 'warning' | 'large';
+export interface AiExportResolvedPeriod {
+    readonly start: string;
+    readonly end: string;
+}
 
-/**
- * UI-only classification of an already-rendered prompt. These thresholds never
- * truncate content or alter task, detail level, request payload, or prompt text.
- */
+export interface AiExportStatsContextFingerprintInput {
+    readonly contextKey: string;
+    readonly snapshotAsOf: string;
+    readonly targetCurrency: string;
+}
+
+export interface AiExportOptionsPanelLabels {
+    readonly categoryLabel: string;
+    readonly categoryLabels: Readonly<Record<AiExportSelectionKind, string>>;
+    readonly selectionLabel: string;
+    readonly selectionLabels: Readonly<Record<string, string>>;
+    readonly selectionDescriptions: Readonly<Record<string, string>>;
+    readonly detailLevelLabel: string;
+    readonly detailLevelHelp: Readonly<Record<AiExportDetailLevel, string>>;
+    readonly detailLevelLabels: Readonly<Record<AiExportDetailLevel, string>>;
+    readonly periodLabel: string;
+    readonly periodHelp: string;
+    readonly periodPresetLabels: Readonly<Record<AiExportPeriodPreset, string>>;
+    readonly periodUnitLabels: Readonly<Record<AiExportPeriodUnit, string>>;
+    readonly periodUnitShortLabels: Readonly<Record<AiExportPeriodUnit, string>>;
+    readonly userNotesLabel: string;
+    readonly userNotesPlaceholder: string;
+    readonly payloadStatsLabel: string;
+    readonly backendEstimatedTokensLabel: string;
+    readonly finalEstimatedTokensLabel: string;
+    readonly tokenSeverityLabels: Readonly<Record<AiExportTokenSeverity, string>>;
+    readonly prepareLabel: string;
+    readonly preparingLabel: string;
+    readonly copyAnywayLabel: string;
+    readonly useCompactLabel: string;
+}
+
 export function estimateAiExportTokenSeverity(finalEstimatedTokens: number): AiExportTokenSeverity {
     if (finalEstimatedTokens >= AI_EXPORT_TOKEN_LARGE_THRESHOLD) return 'large';
     if (finalEstimatedTokens >= AI_EXPORT_TOKEN_WARNING_THRESHOLD) return 'warning';
     return 'normal';
 }
 
-export type AiExportCompatibleChoice = AiExportCatalogCompatibilityChoice & {
-    readonly status: 'compatible';
-    readonly reasonCode: null;
-    readonly backendEntry: AiExportBackendCatalogEntry;
-};
-
-export interface AiExportTaskOption {
-    readonly definition: AiExportTaskDefinition;
-    readonly compatibleDetailLevels: readonly AiExportDetailLevel[];
-    readonly disabled: boolean;
-}
-
-export interface AiExportAnalysisOption extends AiExportTaskOption {
-    readonly selection: AiExportAnalysisSelection;
-    readonly syntheticSnapshot: boolean;
-}
-
-export interface AiExportDetailOption {
-    readonly detailLevel: AiExportDetailLevel;
-    readonly choice?: AiExportCompatibleChoice;
-    readonly disabled: boolean;
-}
-
-export interface AiExportOptionsFingerprintInput {
-    readonly task: AiExportTask;
-    readonly detailLevel: AiExportDetailLevel;
-    readonly renderMode: AiExportRenderMode;
-    readonly responseLanguage: AiExportResponseLanguageDisplayName;
-    readonly userNotes?: string;
-    readonly webResearch: boolean;
-    readonly technicalWindow?: AiExportTechnicalWindowSelection;
-}
-
-export interface AiExportOptionsSelection extends AiExportOptionsFingerprintInput {}
-
-export interface AiExportOptionsPanelCallbackMetadata {
-    readonly userNotesDraft: string;
-}
-
-export interface AiExportPanelSelectionInput {
-    readonly domain: AiExportDomain;
-    readonly analysis: AiExportAnalysisSelection;
-    readonly detailLevel: AiExportDetailLevel;
-    readonly responseLanguage: AiExportResponseLanguageDisplayName;
-    readonly userNotes?: string;
-    readonly technicalWindow?: AiExportTechnicalWindowSelection;
-    readonly taskDefinitions: readonly AiExportTaskDefinition[];
-}
-
-export interface AiExportMenuTriggerBehavior {
-    readonly nativeDisabled: boolean;
-    readonly ariaBusy: boolean;
-    readonly canToggle: boolean;
-}
-
-export interface AiExportStatsContextFingerprintInput {
-    readonly contextKey: string;
-    readonly dateStart: string;
-    readonly dateEnd: string;
-    readonly displayCurrency: string;
-    readonly targetCurrency: string;
-}
-
-export interface AiExportReconciledTaskDetailSelection {
-    readonly task: AiExportTask;
-    readonly detailLevel: AiExportDetailLevel;
-}
-
-export interface AiExportOptionsPanelLabels {
-    readonly taskLabel: string;
-    readonly taskLabels: Readonly<Record<string, string>>;
-    readonly taskDescriptions: Readonly<Record<string, string>>;
-    readonly snapshotLabel: string;
-    readonly snapshotDescription: string;
-    readonly detailLevelLabel: string;
-    readonly detailLevelHelp: Readonly<Record<AiExportDetailLevel, string>>;
-    readonly detailLevelLabels: Readonly<Record<AiExportDetailLevel, string>>;
-    readonly technicalWindowLabel: string;
-    readonly technicalWindowHelp: string;
-    readonly technicalWindowPresetLabels: Readonly<Record<AiExportTechnicalWindowPreset, string>>;
-    readonly technicalWindowUnitLabels: Readonly<Record<AiExportTechnicalWindowUnit, string>>;
-    readonly technicalWindowUnitShortLabels: Readonly<Record<AiExportTechnicalWindowUnit, string>>;
-    readonly documentationLabel: string;
-    readonly userNotesLabel: string;
-    readonly userNotesPlaceholder?: string;
-    readonly payloadStatsLabel: string;
-    readonly backendEstimatedTokensLabel: string;
-    readonly finalEstimatedTokensLabel: string;
-    readonly tokenSeverityLabels: Readonly<Record<AiExportTokenSeverity, string>>;
-    readonly exportLabel: string;
-    readonly loadingLabel: string;
-}
-
-export function findAiExportCatalogChoice(compatibility: AiExportCatalogCompatibilityResult, domain: AiExportDomain, task: AiExportTask, detailLevel: AiExportDetailLevel): AiExportCatalogCompatibilityChoice | undefined {
-    return compatibility.choices.find((choice) => choice.domain === domain && choice.taskId === task && choice.backendTask === task && choice.detailLevel === detailLevel);
-}
-
-export function isAiExportCompatibleChoice(choice: AiExportCatalogCompatibilityChoice | undefined): choice is AiExportCompatibleChoice {
-    return choice?.status === 'compatible' && choice.reasonCode === null && choice.backendEntry !== undefined;
-}
-
-export function findCompatibleAiExportChoice(compatibility: AiExportCatalogCompatibilityResult, domain: AiExportDomain, task: AiExportTask, detailLevel: AiExportDetailLevel): AiExportCompatibleChoice | undefined {
-    const choice = findAiExportCatalogChoice(compatibility, domain, task, detailLevel);
-    return isAiExportCompatibleChoice(choice) ? choice : undefined;
-}
-
-export function getAiExportTaskOptions(taskDefinitions: readonly AiExportTaskDefinition[], compatibility: AiExportCatalogCompatibilityResult): readonly AiExportTaskOption[] {
-    return taskDefinitions.map((definition) => {
-        const compatibleDetailLevels = definition.supportedDetailLevels.filter((detailLevel) => findCompatibleAiExportChoice(compatibility, definition.domain, definition.backendTask, detailLevel) !== undefined);
-
-        return {
-            definition,
-            compatibleDetailLevels,
-            disabled: compatibleDetailLevels.length === 0,
-        };
-    });
-}
-
-export function getAiExportSnapshotTask(domain: AiExportDomain): AiExportTask {
-    return AI_EXPORT_SNAPSHOT_TASK_BY_DOMAIN[domain];
-}
-
-export function isAiExportSnapshotSelection(selection: AiExportAnalysisSelection): selection is typeof AI_EXPORT_SNAPSHOT_SELECTION_ID {
-    return selection === AI_EXPORT_SNAPSHOT_SELECTION_ID;
-}
-
-export function isAiExportAnalysisSelection(value: string, taskDefinitions: readonly AiExportTaskDefinition[], hiddenAnalysisTasks: AiExportHiddenAnalysisTasks = []): value is AiExportAnalysisSelection {
-    return value === AI_EXPORT_SNAPSHOT_SELECTION_ID || taskDefinitions.some((definition) => definition.id === value && !hiddenAnalysisTasks.includes(definition.id));
-}
-
-export function getInitialAiExportAnalysisSelection(task: AiExportTask, renderMode: AiExportRenderMode): AiExportAnalysisSelection {
-    return renderMode === 'data_only' ? AI_EXPORT_SNAPSHOT_SELECTION_ID : task;
-}
-
-export function getAiExportTaskForAnalysisSelection(domain: AiExportDomain, analysis: AiExportAnalysisSelection): AiExportTask {
-    return isAiExportSnapshotSelection(analysis) ? getAiExportSnapshotTask(domain) : analysis;
-}
-
-export function getAiExportAnalysisOptions(taskDefinitions: readonly AiExportTaskDefinition[], compatibility: AiExportCatalogCompatibilityResult, domain: AiExportDomain, hiddenAnalysisTasks: AiExportHiddenAnalysisTasks = []): readonly AiExportAnalysisOption[] {
-    const taskOptions = getAiExportTaskOptions(taskDefinitions, compatibility);
-    const snapshotTask = getAiExportSnapshotTask(domain);
-    const snapshotTaskOption = taskOptions.find((option) => option.definition.domain === domain && option.definition.backendTask === snapshotTask);
-    const snapshotOptions: readonly AiExportAnalysisOption[] = snapshotTaskOption
-        ? [
-              {
-                  ...snapshotTaskOption,
-                  selection: AI_EXPORT_SNAPSHOT_SELECTION_ID,
-                  syntheticSnapshot: true,
-              },
-          ]
-        : [];
-
-    return [
-        ...snapshotOptions,
-        ...taskOptions
-            .filter((option) => option.definition.domain === domain && !hiddenAnalysisTasks.includes(option.definition.id))
-            .map(
-                (option): AiExportAnalysisOption => ({
-                    ...option,
-                    selection: option.definition.id,
-                    syntheticSnapshot: false,
-                }),
-            ),
-    ];
-}
-
-export function getAiExportDetailOptions(taskDefinition: AiExportTaskDefinition | undefined, compatibility: AiExportCatalogCompatibilityResult): readonly AiExportDetailOption[] {
-    if (!taskDefinition) return [];
-
-    return taskDefinition.supportedDetailLevels.map((detailLevel) => {
-        const choice = findCompatibleAiExportChoice(compatibility, taskDefinition.domain, taskDefinition.backendTask, detailLevel);
-        return {
-            detailLevel,
-            choice,
-            disabled: choice === undefined,
-        };
-    });
-}
-
-export function reconcileAiExportTaskAndDetail(
-    taskDefinitions: readonly AiExportTaskDefinition[],
-    compatibility: AiExportCatalogCompatibilityResult,
-    currentTask: AiExportTask,
-    currentDetailLevel: AiExportDetailLevel,
-    hiddenAnalysisTasks: AiExportHiddenAnalysisTasks = [],
-): AiExportReconciledTaskDetailSelection {
-    const taskOptions = getAiExportTaskOptions(taskDefinitions, compatibility).filter((option) => !hiddenAnalysisTasks.includes(option.definition.id));
-    const currentTaskOption = taskOptions.find((option) => option.definition.id === currentTask);
-    const taskOption = currentTaskOption && !currentTaskOption.disabled ? currentTaskOption : (taskOptions.find((option) => !option.disabled) ?? currentTaskOption ?? taskOptions[0]);
-
-    if (!taskOption) {
-        return {
-            task: currentTask,
-            detailLevel: currentDetailLevel,
-        };
-    }
-
-    const detailOptions = getAiExportDetailOptions(taskOption.definition, compatibility);
-    const currentDetailOption = detailOptions.find((option) => option.detailLevel === currentDetailLevel);
-    const detailOption = currentDetailOption && !currentDetailOption.disabled ? currentDetailOption : (detailOptions.find((option) => option.detailLevel === taskOption.definition.defaultDetailLevel && !option.disabled) ?? detailOptions.find((option) => !option.disabled));
-
-    return {
-        task: taskOption.definition.id,
-        detailLevel: detailOption?.detailLevel ?? currentDetailLevel,
-    };
-}
-
-export function reconcileAiExportAnalysisAndDetail(
-    taskDefinitions: readonly AiExportTaskDefinition[],
-    compatibility: AiExportCatalogCompatibilityResult,
-    domain: AiExportDomain,
-    currentAnalysis: AiExportAnalysisSelection,
-    currentDetailLevel: AiExportDetailLevel,
-    hiddenAnalysisTasks: AiExportHiddenAnalysisTasks = [],
-): AiExportReconciledTaskDetailSelection & {readonly analysis: AiExportAnalysisSelection} {
-    const analysisOptions = getAiExportAnalysisOptions(taskDefinitions, compatibility, domain, hiddenAnalysisTasks);
-    const currentOption = analysisOptions.find((option) => option.selection === currentAnalysis);
-    const selectedOption =
-        currentOption && !currentOption.disabled
-            ? currentOption
-            : (analysisOptions.find((option) => !option.syntheticSnapshot && !option.disabled) ?? analysisOptions.find((option) => !option.disabled) ?? currentOption ?? analysisOptions.find((option) => !option.syntheticSnapshot) ?? analysisOptions[0]);
-
-    if (!selectedOption) {
-        return {
-            task: getAiExportTaskForAnalysisSelection(domain, currentAnalysis),
-            detailLevel: currentDetailLevel,
-            analysis: currentAnalysis,
-        };
-    }
-
-    const detailOptions = getAiExportDetailOptions(selectedOption.definition, compatibility);
-    const currentDetailOption = detailOptions.find((option) => option.detailLevel === currentDetailLevel);
-    const detailOption =
-        currentDetailOption && !currentDetailOption.disabled
-            ? currentDetailOption
-            : (detailOptions.find((option) => option.detailLevel === selectedOption.definition.defaultDetailLevel && !option.disabled) ?? detailOptions.find((option) => !option.disabled) ?? currentDetailOption ?? detailOptions[0]);
-
-    return {
-        task: selectedOption.definition.id,
-        detailLevel: detailOption?.detailLevel ?? currentDetailLevel,
-        analysis: selectedOption.selection,
-    };
-}
-
-export function isAiExportWebResearchAvailable(taskDefinition: AiExportTaskDefinition | undefined, renderMode: AiExportRenderMode): boolean {
-    return renderMode === 'full_prompt' && taskDefinition?.supportsWebResearch === true;
-}
-
-export function normalizeAiExportWebResearch(taskDefinition: AiExportTaskDefinition | undefined, renderMode: AiExportRenderMode, webResearch: boolean | undefined): boolean {
-    return isAiExportWebResearchAvailable(taskDefinition, renderMode) && webResearch === true;
-}
-
-export function normalizeAiExportUserNotes(renderMode: AiExportRenderMode, userNotes: string | undefined): string | undefined {
-    return renderMode === 'full_prompt' ? userNotes : undefined;
-}
-
-export function normalizeAiExportTechnicalWindow(selection: AiExportTechnicalWindowSelection | undefined): AiExportTechnicalWindowSelection {
-    const preset = selection && AI_EXPORT_TECHNICAL_WINDOW_PRESETS.includes(selection.preset) ? selection.preset : AI_EXPORT_DEFAULT_TECHNICAL_WINDOW.preset;
-    const customUnit = selection && AI_EXPORT_TECHNICAL_WINDOW_UNITS.includes(selection.customUnit) ? selection.customUnit : AI_EXPORT_DEFAULT_TECHNICAL_WINDOW.customUnit;
-    const customAmount = selection && Number.isFinite(selection.customAmount) ? Math.max(1, Math.floor(selection.customAmount)) : AI_EXPORT_DEFAULT_TECHNICAL_WINDOW.customAmount;
+export function normalizeAiExportPeriod(selection: AiExportPeriodSelection | undefined): AiExportPeriodSelection {
+    const preset = selection && AI_EXPORT_PERIOD_PRESETS.includes(selection.preset) ? selection.preset : AI_EXPORT_DEFAULT_PERIOD.preset;
+    const customUnit = selection && AI_EXPORT_PERIOD_UNITS.includes(selection.customUnit) ? selection.customUnit : AI_EXPORT_DEFAULT_PERIOD.customUnit;
+    const customAmount = selection && Number.isFinite(selection.customAmount) ? Math.max(1, Math.floor(selection.customAmount)) : AI_EXPORT_DEFAULT_PERIOD.customAmount;
     return {preset, customAmount, customUnit};
 }
 
-export function getAiExportMenuTriggerBehavior(disabled: boolean, loading: boolean): AiExportMenuTriggerBehavior {
-    return {
-        nativeDisabled: disabled,
-        ariaBusy: loading,
-        canToggle: !disabled && !loading,
-    };
+function parseIsoDate(value: string): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) throw new TypeError('AI Export snapshot date must use YYYY-MM-DD');
+    const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    if (parsed.toISOString().slice(0, 10) !== value) throw new TypeError('AI Export snapshot date is invalid');
+    return parsed;
 }
 
-export function aiExportOptionsFingerprint(options: AiExportOptionsFingerprintInput): string {
-    const technicalWindow = normalizeAiExportTechnicalWindow(options.technicalWindow);
+function subtractMonths(end: Date, months: number): Date {
+    const monthIndex = end.getUTCFullYear() * 12 + end.getUTCMonth() - months;
+    const year = Math.floor(monthIndex / 12);
+    const month = ((monthIndex % 12) + 12) % 12;
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(year, month, Math.min(end.getUTCDate(), lastDay)));
+}
+
+export function resolveAiExportPeriod(snapshotAsOf: string, selection: AiExportPeriodSelection | undefined): AiExportResolvedPeriod {
+    const normalized = normalizeAiExportPeriod(selection);
+    const end = parseIsoDate(snapshotAsOf);
+    let start: Date;
+    if (normalized.preset === '3m') start = subtractMonths(end, 3);
+    else if (normalized.preset === '6m') start = subtractMonths(end, 6);
+    else if (normalized.preset === '1y') start = subtractMonths(end, 12);
+    else if (normalized.customUnit === 'months') start = subtractMonths(end, normalized.customAmount);
+    else if (normalized.customUnit === 'years') start = subtractMonths(end, normalized.customAmount * 12);
+    else {
+        start = new Date(end);
+        start.setUTCDate(start.getUTCDate() - normalized.customAmount * (normalized.customUnit === 'weeks' ? 7 : 1));
+    }
+    return {start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10)};
+}
+
+export function normalizeAiExportUserNotes(kind: AiExportSelectionKind, userNotes: string | undefined): string | undefined {
+    const normalized = userNotes?.trim();
+    return kind === 'analysis' && normalized ? normalized : undefined;
+}
+
+export function aiExportOptionsFingerprint(options: AiExportOptionsSelection): string {
+    const period = normalizeAiExportPeriod(options.period);
     return JSON.stringify([
-        'ai-export-options-v2',
-        options.task,
+        'ai-export-options-v3',
+        options.selectionKind,
+        options.selectionId,
         options.detailLevel,
-        options.renderMode,
+        period.preset,
+        period.preset === 'custom' ? period.customAmount : null,
+        period.preset === 'custom' ? period.customUnit : null,
         options.responseLanguage,
-        normalizeAiExportUserNotes(options.renderMode, options.userNotes) ?? null,
-        options.webResearch,
-        technicalWindow.preset,
-        technicalWindow.preset === 'custom' ? technicalWindow.customAmount : null,
-        technicalWindow.preset === 'custom' ? technicalWindow.customUnit : null,
+        normalizeAiExportUserNotes(options.selectionKind, options.userNotes) ?? null,
     ]);
 }
 
-export function normalizeAiExportPanelOptions(input: AiExportPanelSelectionInput): AiExportOptionsSelection {
-    const snapshot = isAiExportSnapshotSelection(input.analysis);
-    const task = getAiExportTaskForAnalysisSelection(input.domain, input.analysis);
-    const taskDefinition = input.taskDefinitions.find((definition) => definition.domain === input.domain && definition.backendTask === task);
-    const userNotes = !snapshot && taskDefinition?.supportsUserNotes === true && input.userNotes?.trim() ? input.userNotes : undefined;
+export function areAiExportOptionsEqual(left: AiExportOptionsSelection, right: AiExportOptionsSelection): boolean {
+    const leftPeriod = normalizeAiExportPeriod(left.period);
+    const rightPeriod = normalizeAiExportPeriod(right.period);
+    return (
+        left.selectionKind === right.selectionKind &&
+        left.selectionId === right.selectionId &&
+        left.detailLevel === right.detailLevel &&
+        leftPeriod.preset === rightPeriod.preset &&
+        leftPeriod.customAmount === rightPeriod.customAmount &&
+        leftPeriod.customUnit === rightPeriod.customUnit &&
+        left.responseLanguage === right.responseLanguage &&
+        normalizeAiExportUserNotes(left.selectionKind, left.userNotes) === normalizeAiExportUserNotes(right.selectionKind, right.userNotes)
+    );
+}
 
+export function reconcileAiExportOptions(compatibility: AiExportCatalogCompatibilityResult, domain: AiExportDomain, options: AiExportOptionsSelection): AiExportOptionsSelection {
+    const current = findCompatibleAiExportSelection(compatibility, options.selectionKind, options.selectionId);
+    const fallback = selectionsForDomain(compatibility, domain, 'analysis')[0] ?? selectionsForDomain(compatibility, domain, 'dataset')[0];
+    const selection = current?.domain === domain ? current : fallback;
+    if (!selection) return options;
+    const detailLevel = selection.supportedDetailLevels.includes(options.detailLevel) ? options.detailLevel : selection.supportedDetailLevels.includes('standard') ? 'standard' : selection.supportedDetailLevels[0];
     return {
-        task,
-        detailLevel: input.detailLevel,
-        renderMode: snapshot ? 'data_only' : 'full_prompt',
-        responseLanguage: input.responseLanguage,
-        userNotes,
-        webResearch: false,
-        technicalWindow: normalizeAiExportTechnicalWindow(input.technicalWindow),
+        ...options,
+        selectionKind: selection.kind,
+        selectionId: selection.id,
+        detailLevel,
+        userNotes: normalizeAiExportUserNotes(selection.kind, options.userNotes),
+        period: normalizeAiExportPeriod(options.period),
     };
 }
 
 export function aiExportStatsContextFingerprint(context: AiExportStatsContextFingerprintInput): string {
-    return JSON.stringify(['ai-export-stats-context-v1', context.contextKey, context.dateStart, context.dateEnd, context.displayCurrency, context.targetCurrency]);
+    return JSON.stringify(['ai-export-stats-context-v2', context.contextKey, context.snapshotAsOf, context.targetCurrency]);
 }
 
 export function isAiExportStatsRequestCurrent(requestGeneration: number, requestContextFingerprint: string, currentGeneration: number, currentContextFingerprint: string): boolean {

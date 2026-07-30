@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
@@ -83,6 +84,7 @@ class BollingerSignalPlugin(SignalPlugin):
             semantic_id="bollinger_bands.envelope",
             semantic_description="Lower, middle, and upper bands around the moving average.",
             kind=SignalSeriesKind.BAND,
+            aggregation_profile=SignalAggregationProfile.BAND_ENVELOPE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",

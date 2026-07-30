@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -66,6 +67,7 @@ class ObvSignalPlugin(SignalPlugin):
             semantic_id="on_balance_volume.value",
             semantic_description="Cumulative signed volume rebased at the requested range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.VOLUME,
             axis=SignalAxisSpec(
                 key="obv",

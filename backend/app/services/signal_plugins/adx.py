@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -91,6 +92,7 @@ class AdxSignalPlugin(SignalPlugin):
             semantic_id="average_directional_index.strength",
             semantic_description="Smoothed strength of directional price movement.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
             style=SignalOutputStyle(
@@ -106,6 +108,7 @@ class AdxSignalPlugin(SignalPlugin):
             semantic_id="average_directional_index.positive_directional_index",
             semantic_description="Positive directional movement relative to true range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
             style=SignalOutputStyle(
@@ -120,6 +123,7 @@ class AdxSignalPlugin(SignalPlugin):
             semantic_id="average_directional_index.negative_directional_index",
             semantic_description="Negative directional movement relative to true range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
             style=SignalOutputStyle(

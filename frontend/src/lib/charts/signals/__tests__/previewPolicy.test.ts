@@ -49,6 +49,7 @@ function rendered(id: string): RenderedSignal {
         lineType: 'solid',
         markerStart: null,
         markerEnd: null,
+        aggregationProfile: 'last_with_range',
     };
 }
 

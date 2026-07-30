@@ -12,6 +12,7 @@ from backend.app.schemas.signals import (
     SignalAnnotationDirection,
     SignalAnnotationRequest,
     SignalAnnotationSampling,
+    SignalAreaSeries,
     SignalBandSeries,
     SignalBandValueSource,
     SignalBarSeries,
@@ -306,7 +307,7 @@ class SignalAnnotationService:
             )
             if selected is None:
                 raise SignalAnnotationSourceUnavailable(f"Series '{source.series_key}' is missing from '{source.instance_id}'")
-            if not isinstance(selected, (SignalLineSeries, SignalBarSeries)):
+            if not isinstance(selected, (SignalLineSeries, SignalAreaSeries, SignalBarSeries)):
                 raise SignalAnnotationSourceUnavailable(f"Series '{source.series_key}' is not scalar")
             return _ValueTimeline(
                 values={point.date: point.value for point in selected.points},

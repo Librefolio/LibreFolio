@@ -1,4 +1,4 @@
-import {AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION, type AiExportDomain, type AiExportTask, type AiExportTaskForDomain} from '../catalog/shared';
+import type {AiExportAnalysisId} from '../catalog/shared';
 
 export interface AiExportResponseContractSection {
     readonly title: string;
@@ -6,11 +6,9 @@ export interface AiExportResponseContractSection {
 }
 
 export interface AiExportResponseContractTemplate {
-    readonly templateId: string;
-    readonly contractId: string;
-    readonly version: number;
-    readonly domain: AiExportDomain;
-    readonly task: AiExportTask;
+    readonly id: string;
+    readonly version: 1;
+    readonly analysisId: AiExportAnalysisId;
     readonly sections: readonly AiExportResponseContractSection[];
 }
 
@@ -18,199 +16,58 @@ function section(title: string, ...requirements: readonly string[]): AiExportRes
     return {title, requirements};
 }
 
-function defineResponseContract<D extends AiExportDomain>(domain: D, task: AiExportTaskForDomain<D>, sections: readonly AiExportResponseContractSection[], version: number = AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION): AiExportResponseContractTemplate {
-    const contractId = `${domain}.${task}`;
-    return {
-        templateId: `aiExport.responseContracts.${contractId}.v${version}`,
-        contractId,
-        version,
-        domain,
-        task,
-        sections,
-    };
+function contract(analysisId: AiExportAnalysisId, sections: readonly AiExportResponseContractSection[]): AiExportResponseContractTemplate {
+    return {id: `${analysisId}.response`, version: 1, analysisId, sections};
 }
 
-export const AI_EXPORT_RESPONSE_CONTRACTS = {
-    pac_planning: defineResponseContract('portfolio', 'pac_planning', [
-        section('Portfolio Summary', 'State only snapshot facts relevant to the accumulation plan.'),
-        section('Allocation and Concentration', 'Describe material allocation and concentration facts without inventing a target.'),
-        section('Areas That May Deserve Additional Capital', 'Explain evidence, uncertainty, and diversification rationale.'),
-        section('Technical Context as Secondary Evidence', 'Keep technical observations descriptive and subordinate to portfolio context.'),
-        section('Two or Three PAC Scenarios', 'Present distinct monthly allocation options with rationale and trade-offs.'),
-        section('Assumptions and Missing User Information', 'List budget, horizon, preferences, constraints, and other unresolved inputs.'),
-        section('Optional Recent Web Context', 'Include only when web research was enabled; keep sources and claims separate from snapshot facts.'),
-    ]),
-    rebalancing: defineResponseContract('portfolio', 'rebalancing', [
-        section('Current Portfolio Facts', 'Summarize current allocation and concentration from the snapshot.'),
-        section('Target Allocation and Tolerance Inputs', 'State supplied targets and identify missing targets or tolerance ranges.'),
-        section('Measured Allocation Gaps', 'Quantify differences only where current and target values are both available.'),
-        section('Rebalancing Pathways', 'Compare gradual, one-time, and mixed pathways without transaction commands.'),
-        section('Cash-Flow-Only Pathway', 'Describe how future contributions could change allocation over time.'),
-        section('Constraints, Costs, and Tax Caveats', 'Separate measured costs from tax or execution uncertainties.'),
-        section('Assumptions and Missing Information', 'List every material assumption and unresolved user choice.'),
-        section('Optional Web Context', 'Include only when enabled and clearly label it as external context.'),
-    ]),
-    performance_attribution: defineResponseContract('portfolio', 'performance_attribution', [
-        section('Absolute Result', 'State the selected-period result and currency.'),
-        section('Positive Contributors', 'Rank or group positive contribution facts without hiding residual effects.'),
-        section('Negative Contributors', 'Rank or group negative contribution facts without hiding residual effects.'),
-        section('Realized vs Unrealized', 'Keep realized and unrealized components separate.'),
-        section('Income, Costs, and Taxes', 'Show each component separately and explain its effect on the result.'),
-        section('TWRR, MWRR, and ROI Interpretation', 'Interpret only metrics present in the snapshot and distinguish their semantics.'),
-        section('Cash Flow Effect', 'Explain external cash-flow effects separately from investment performance.'),
-    ]),
-    income_review: defineResponseContract('portfolio', 'income_review', [
-        section('Period Income Summary', 'State gross income facts for the selected period.'),
-        section('Income Contributors', 'Identify material positive contributors and their snapshot context.'),
-        section('Income Concentration', 'Describe concentration by available asset, broker, currency, or income dimensions.'),
-        section('Fees, Taxes, and Net Cash-Flow Context', 'Keep gross income, costs, and taxes separate.'),
-        section('Reinvestment or Spending Context', 'Frame implications conditionally on user goals.'),
-        section('Data Gaps and Assumptions', 'List missing yield, tax, timing, or classification information.'),
-        section('Neutral Options to Evaluate', 'Present non-prescriptive considerations supported by the snapshot.'),
-    ]),
-    portfolio_fifo_lot_review: defineResponseContract('portfolio', 'portfolio_fifo_lot_review', [
-        section('FIFO Scope and Eligibility', 'State the active Dashboard broker scope, snapshot date, matching method, recent-closure cutoff, and compact selection rule when applicable.'),
-        section('Open and Partial Lot Table', 'Summarize the exported current lot rows by asset and opening date.'),
-        section('Recently Closed Lot Table', 'Summarize only rows closed within the declared three-month window.'),
-        section('Residual Cost and Current Value', 'Keep remaining cost basis, current value, and valuation source separate.'),
-        section('Realized, Unrealized, and Net Results', 'Keep each result component and unavailable value distinct.'),
-        section('Concentration by Asset and Broker', 'Describe material lot concentration without inventing a preferred allocation.'),
-        section('Income, Fees, and Taxes', 'Keep each component and semantic separate.'),
-        section('Data Limits and Questions', 'State that rows are point-in-time summaries without lot histories, then list coverage and valuation limits.'),
-    ]),
-    technical_breadth: defineResponseContract('portfolio', 'technical_breadth', [
-        section('Coverage', 'State eligible, analyzed, and omitted universe and NAV coverage.'),
-        section('Long-Term Trend Breadth', 'Describe long-term weighted and unweighted breadth with declared semantics.'),
-        section('Short/Medium Trend Breadth', 'Describe shorter-horizon breadth separately from long-term breadth.'),
-        section('Momentum Breadth', 'Describe momentum states without treating them as action signals.'),
-        section('Volatility Observations', 'Summarize volatility breadth and notable dispersion.'),
-        section('Recent Technical Events', 'Group material recent events and retain dates and targets.'),
-        section('Limits of Analyzed Universe', 'Explain coverage, missing indicators, sampling, and selection limits.'),
-    ]),
-    portfolio_description: defineResponseContract('portfolio', 'portfolio_description', [
-        section('Portfolio Snapshot', 'Summarize capital, NAV, market value, cash, and selected-period context.'),
-        section('Allocation and Diversification', 'Describe available allocation dimensions and their semantics.'),
-        section('Concentration Observations', 'Identify material concentrations without inventing a preferred target.'),
-        section('Performance and Cash-Flow Context', 'Separate performance, contributions, income, costs, and taxes.'),
-        section('Technical Context as Secondary Evidence', 'Use technical facts only when they change the interpretation.'),
-        section('Data Quality and Coverage', 'State omissions, stale values, selection rules, and coverage.'),
-        section('Assumptions and Questions', 'Separate assumptions from questions requiring user input.'),
-    ]),
-    asset_snapshot: defineResponseContract('asset', 'asset_snapshot', [
-        section('Asset Identity and Market Snapshot', 'State identity, classification, currencies, and current market facts.'),
-        section('Price and Return Facts', 'Describe selected-period prices, returns, extrema, and valuation source.'),
-        section('Portfolio Holding Context', 'Include position and FIFO facts only when present.'),
-        section('Technical State', 'Keep technical values and states descriptive.'),
-        section('Events and Corporate Context', 'Separate measured events from note or provider context.'),
-        section('Coverage and Data Quality', 'State missing price, signal, event, and sampling coverage.'),
-        section('Optional Web Context', 'Include only when enabled and keep external facts separate.'),
-    ]),
-    asset_trend_analysis: defineResponseContract('asset', 'asset_trend_analysis', [
-        section('Snapshot Facts', 'State current price, selected range, normalized return, and data source facts.'),
-        section('Long-Term Trend', 'Describe long-horizon trend evidence.'),
-        section('Short- and Medium-Term Trend', 'Describe shorter-horizon evidence separately.'),
-        section('Momentum', 'Summarize momentum values, states, and changes.'),
-        section('Volatility and Drawdown', 'Describe volatility, extrema, and drawdown facts.'),
-        section('Recent Technical Events', 'List material dated events without action language.'),
-        section('Optional Web Context', 'Include only when enabled and cite it as external context.'),
-        section('Assumptions and Limits', 'State coverage, sampling, and interpretation limits.'),
-    ]),
-    position_review: defineResponseContract('asset', 'position_review', [
-        section('Position Snapshot', 'State quantity, value, weight, broker scope, and valuation source.'),
-        section('Cost Basis and Valuation', 'Keep cost basis and market valuation concepts separate.'),
-        section('Realized and Unrealized Results', 'Report each component separately.'),
-        section('FIFO Lot Context', 'Describe only the lot detail actually present.'),
-        section('Income, Fees, and Taxes', 'Keep each amount and semantic separate.'),
-        section('Portfolio Role and Concentration', 'Describe concentration without inventing a target role.'),
-        section('Risks, Limits, and Questions', 'State missing prices, estimated values, scope limits, and user questions.'),
-    ]),
-    asset_pac_timing_context: defineResponseContract('asset', 'asset_pac_timing_context', [
-        section('Long-Term Trend', 'Describe long-term trend facts.'),
-        section('Distance from Averages', 'State measured distances and the averages used.'),
-        section('Momentum', 'Describe momentum values and states.'),
-        section('Volatility/Drawdown', 'State volatility and drawdown context.'),
-        section('Recent Technical Events', 'List relevant dated events as observations.'),
-        section('Optional Web Context', 'Include only when enabled and keep it separate from snapshot facts.'),
-        section('Neutral Timing Scenarios', 'Present multiple conditional options, assumptions, and trade-offs.'),
-    ]),
-    drawdown_recovery: defineResponseContract('asset', 'drawdown_recovery', [
-        section('Snapshot Facts', 'State selected range, current price, and valuation source.'),
-        section('Peak-to-Trough Drawdown', 'Identify measured peak, trough, magnitude, and dates.'),
-        section('Current Recovery Progress', 'Quantify recovery only where supported.'),
-        section('Trend and Momentum Context', 'Describe current technical context without prediction.'),
-        section('Volatility and Recent Events', 'Connect dated observations without claiming causality.'),
-        section('Comparable Historical Episodes in Snapshot', 'Use only episodes represented by the supplied data.'),
-        section('Optional Web Context', 'Include only when enabled and label external claims.'),
-        section('Assumptions and Limits', 'State window, sampling, and missing-data limits.'),
-    ]),
-    fx_trend_review: defineResponseContract('fx', 'fx_trend_review', [
-        section('Snapshot Facts', 'State pair direction, current rate, date, provider, and selected range.'),
-        section('Direction and Magnitude', 'Describe selected-period movement in the declared quote-per-base direction.'),
-        section('Trend State', 'Separate long-, medium-, and short-horizon trend evidence.'),
-        section('Momentum and Volatility', 'Describe momentum, extrema, volatility, and drawdown facts.'),
-        section('Recent Technical Events', 'List material dated events without trading language.'),
-        section('Optional Web Context', 'Include only when enabled and keep macro context separate from rate facts.'),
-        section('Assumptions and Limits', 'State provider, sampling, inversion, triangulation, and coverage limits.'),
-    ]),
-    fx_exposure_impact: defineResponseContract('fx', 'fx_exposure_impact', [
-        section('FX Pair Snapshot Facts', 'State direction, rate, selected range, and source facts.'),
-        section('Linked Cash Exposure', 'List authoritative cash-currency links separately.'),
-        section('Linked Position Exposure', 'Separate trading- and valuation-currency links.'),
-        section('Directional Impact Scenarios', 'Describe conditional effects without forecasting.'),
-        section('Concentration and Sensitivity', 'Explain material linked exposure and uncertainty.'),
-        section('Optional Web Context', 'Include only when enabled and label external macro context.'),
-        section('Assumptions and Linkage Limits', 'State that linkage is not look-through exposure and list missing links.'),
-    ]),
-    fx_conversion_timing_context: defineResponseContract('fx', 'fx_conversion_timing_context', [
-        section('Snapshot Facts', 'State pair direction, current rate, selected range, and provider.'),
-        section('Current Rate Context', 'Describe location within observed extrema and sampled history.'),
-        section('Trend and Momentum', 'Separate trend and momentum observations.'),
-        section('Volatility and Drawdown', 'State measured uncertainty and drawdown facts.'),
-        section('Neutral Timing Scenarios', 'Present multiple conditional conversion approaches as options.'),
-        section('Optional Web Context', 'Include only when enabled and keep it separate from snapshot facts.'),
-        section('Assumptions and Limits', 'State horizon, execution, provider, and data-window assumptions.'),
-    ]),
-    broker_review: defineResponseContract('broker', 'broker_review', [
-        section('Broker Snapshot', 'State broker identity, NAV, market value, cash, and selected range.'),
-        section('Holdings and Cash', 'Describe positions and cash without implying whole-portfolio coverage.'),
-        section('Performance and Contributions', 'Separate performance from external capital flows.'),
-        section('Concentration', 'Describe position and available allocation concentration.'),
-        section('Costs, Taxes, and Income', 'Keep all three components separate.'),
-        section('FIFO and Activity Context', 'Summarize FIFO and latest transaction facts only when present.'),
-        section('Coverage and Data Quality', 'State access, selection, coverage, and missing data.'),
-        section('Questions and Neutral Options', 'List unresolved inputs and non-prescriptive considerations.'),
-    ]),
-    broker_cost_efficiency: defineResponseContract('broker', 'broker_cost_efficiency', [
-        section('Broker Cost Snapshot', 'State selected-period fee and tax totals.'),
-        section('Fees and Taxes by Source', 'Separate categories and contributors where available.'),
-        section('Cost Concentration', 'Identify material concentration without hiding small residuals.'),
-        section('Cost Relative to Activity and Assets', 'Use ratios only when supported by snapshot denominators.'),
-        section('Income Offset Context', 'Keep gross income and costs separate while describing their relationship.'),
-        section('Data Gaps and Assumptions', 'List missing fee taxonomy, activity, or comparison context.'),
-        section('Neutral Efficiency Options', 'Present operational considerations without transaction commands.'),
-    ]),
-    broker_concentration_context: defineResponseContract('broker', 'broker_concentration_context', [
-        section('Broker Snapshot', 'State broker-scope NAV, holdings, cash, and selection facts.'),
-        section('Position Concentration', 'Describe largest positions and concentration metrics.'),
-        section('Asset-Type, Sector, Geography, and Currency Concentration', 'Keep each available dimension separate.'),
-        section('Cash Concentration', 'Describe cash composition and currency when present.'),
-        section('Technical Breadth as Secondary Context', 'Use breadth only as descriptive supporting evidence.'),
-        section('Coverage and Selection Limits', 'State included entities, NAV coverage, and omitted dimensions.'),
-        section('Neutral Diversification Questions', 'Frame unresolved diversification choices as questions.'),
-    ]),
-    broker_fifo_lot_review: defineResponseContract('broker', 'broker_fifo_lot_review', [
-        section('FIFO Scope and Eligibility', 'State broker scope, snapshot date, matching method, recent-closure cutoff, and compact selection rule when applicable.'),
-        section('Open and Partial Lot Table', 'Summarize the exported current lot rows by asset and opening date.'),
-        section('Recently Closed Lot Table', 'Summarize only rows closed within the declared three-month window.'),
-        section('Residual Cost and Current Value', 'Keep remaining cost basis, current value, and valuation source separate.'),
-        section('Realized and Unrealized Results', 'Keep result components separate.'),
-        section('Lot Age and Concentration', 'Describe lot age and material concentration.'),
-        section('Income, Fees, and Taxes', 'Keep each component and semantic separate.'),
-        section('Data Limits and Questions', 'State that rows are point-in-time summaries without lot histories, then list coverage, estimated-at-cost, short, and in-transit limits.'),
-    ]),
-} satisfies Readonly<Record<AiExportTask, AiExportResponseContractTemplate>>;
+const facts = section('LibreFolio Facts', 'State the relevant supplied facts, units, currencies, signs, periods, and scope.');
+const evidence = section('Evidence and Interpretation', 'Connect conclusions to supplied data and dated technical buckets without inventing missing evidence.');
+const external = section('External Context', 'When web access was used, cite source and dates and keep external facts separate from LibreFolio facts.');
+const limits = section('Assumptions, Limits, and Questions', 'List data gaps, assumptions, unresolved user inputs, and interpretation limits.');
 
-export function findAiExportResponseContract(domain: AiExportDomain, task: AiExportTask): AiExportResponseContractTemplate | undefined {
-    const template = AI_EXPORT_RESPONSE_CONTRACTS[task];
-    return template.domain === domain ? template : undefined;
+export const AI_EXPORT_RESPONSE_CONTRACTS: Readonly<Record<AiExportAnalysisId, AiExportResponseContractTemplate>> = {
+    'portfolio.pac_planning': contract('portfolio.pac_planning', [facts, section('PAC Scenarios', 'Present two or three conditional recurring-contribution scenarios with rationale and trade-offs.'), evidence, external, limits]),
+    'portfolio.rebalancing': contract('portfolio.rebalancing', [
+        facts,
+        section('Measured Allocation Gaps', 'Quantify only against supplied targets or tolerances.'),
+        section('Rebalancing Pathways', 'Compare cash-flow-only, one-time, and mixed pathways without transaction commands.'),
+        external,
+        limits,
+    ]),
+    'portfolio.performance_attribution': contract('portfolio.performance_attribution', [
+        facts,
+        section('Positive and Negative Contributors', 'Keep the complete supplied universe and residual effects visible.'),
+        section('Result Reconciliation', 'Separate realized, unrealized, income, costs, taxes, flows, and return metrics.'),
+        limits,
+    ]),
+    'portfolio.income_review': contract('portfolio.income_review', [facts, section('Income Contributors and Concentration', 'Describe contributors and available concentration dimensions.'), section('Costs and Net Context', 'Keep gross income, fees, taxes, and net effects distinct.'), limits]),
+    'portfolio.fifo_review': contract('portfolio.fifo_review', [
+        facts,
+        section('Open and Partial Lots', 'Present supplied current lots.'),
+        section('Period Closures', 'Present lots closed inside the exported period.'),
+        section('FIFO Results and Concentration', 'Keep cost, value, result, income, fee, tax, age, and valuation semantics distinct.'),
+        limits,
+    ]),
+    'portfolio.technical_breadth': contract('portfolio.technical_breadth', [facts, section('Breadth by Signal Family', 'Separate weighted/unweighted trend, momentum, volatility, risk, and events.'), evidence, limits]),
+    'portfolio.description': contract('portfolio.description', [facts, section('Composition and Concentration', 'Describe available allocation dimensions and cash.'), section('Performance and Technical Context', 'Keep performance, flows, and technical evidence separate.'), limits]),
+    'broker.review': contract('broker.review', [facts, section('Holdings, Cash, and Concentration', 'Describe only the selected broker scope.'), section('Performance, Costs, Income, and FIFO', 'Keep methodologies and components distinct.'), evidence, limits]),
+    'broker.cost_efficiency': contract('broker.cost_efficiency', [facts, section('Cost Contributors and Ratios', 'Use ratios only with supplied denominators.'), section('Neutral Efficiency Considerations', 'Present conditional considerations, not instructions.'), limits]),
+    'broker.concentration_context': contract('broker.concentration_context', [facts, section('Concentration Dimensions', 'Separate positions, asset type, sector, geography, currency, and cash.'), evidence, limits]),
+    'broker.fifo_review': contract('broker.fifo_review', [facts, section('Open and Partial Lots', 'Present supplied current lots.'), section('Period Closures', 'Present supplied closures.'), section('Lot Results, Age, and Concentration', 'Keep valuation and result components distinct.'), limits]),
+    'asset.trend_analysis': contract('asset.trend_analysis', [facts, section('Trend, Momentum, Volatility, and Drawdown', 'Separate horizons and preserve extrema dates.'), section('Technical Events', 'List material dated transitions without action language.'), external, limits]),
+    'asset.position_review': contract('asset.position_review', [facts, section('Cost, Value, and P&L', 'Keep cost basis, valuation, realized, unrealized, income, fees, and taxes separate.'), section('FIFO and Portfolio Role', 'Use only supplied lot and concentration context.'), limits]),
+    'asset.drawdown_recovery': contract('asset.drawdown_recovery', [facts, section('Peak, Trough, and Recovery', 'State magnitude, levels, and real dates.'), section('Trend and Volatility Context', 'Keep interpretation distinct from measured recovery.'), external, limits]),
+    'fx.trend_review': contract('fx.trend_review', [facts, section('Direction, Trend, Momentum, and Volatility', 'Use quote-per-base semantics and preserve extrema dates.'), section('Technical Events', 'List material dated transitions.'), external, limits]),
+    'fx.conversion_timing': contract('fx.conversion_timing', [facts, section('Rate and Technical Context', 'Describe trend, momentum, volatility, drawdown, and events.'), section('Neutral Timing Scenarios', 'Present multiple conditional approaches without forecasts.'), external, limits]),
+    'fx.exposure_impact': contract('fx.exposure_impact', [
+        facts,
+        section('Direct Exposure Links', 'Separate cash, trading-currency, and valuation-currency rows.'),
+        section('Conditional Directional Impact', 'Describe scenarios without forecasting and without look-through inference.'),
+        external,
+        limits,
+    ]),
+};
+
+export function findAiExportResponseContract(analysisId: AiExportAnalysisId): AiExportResponseContractTemplate {
+    return AI_EXPORT_RESPONSE_CONTRACTS[analysisId];
 }

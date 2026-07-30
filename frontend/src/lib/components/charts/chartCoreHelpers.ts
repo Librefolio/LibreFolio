@@ -247,8 +247,16 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
             yAxisIndex: signal.yAxisIndex ?? 0,
             lineStyle: {color: signal.color, width: signal.lineWidth, type: signal.lineType, opacity: signal.opacity ?? 1},
             itemStyle: {color: signal.color, opacity: signal.opacity ?? 1},
+            ...(sType === 'area'
+                ? {
+                      areaStyle: {
+                          color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                          origin: 0,
+                      },
+                  }
+                : {}),
             emphasis: {focus: 'none'},
-            z: signal.opacity != null && signal.opacity < 1 ? 0 : 1,
+            z: sType === 'area' || (signal.opacity != null && signal.opacity < 1) ? 0 : 1,
             ...buildSignalReferencePrimitives(signal, dark),
         };
 

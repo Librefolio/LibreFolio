@@ -1,8 +1,8 @@
 import {describe, expect, it} from 'vitest';
 
-import {renderBackendSignalResult} from '../backendRenderer';
+import {renderBackendSignalResult as renderBackendSignalResultRaw} from '../backendRenderer';
 import {backendSignalSchemas, type BackendSignalResult} from '../backendTypes';
-import type {SignalConfig} from '../ChartSignal';
+import type {SignalConfig, SignalDefinition} from '../ChartSignal';
 
 const config: SignalConfig = {
     id: 'signal-instance',
@@ -21,6 +21,60 @@ const baseData = [
     {date: '2026-07-22', value: 100},
     {date: '2026-07-23', value: 110},
 ];
+
+const definition: SignalDefinition = {
+    type: 'backend-signal',
+    displayName: 'Backend signal',
+    icon: 'activity',
+    category: 'indicator',
+    paramDescriptors: [],
+    source: 'backend',
+    visualComponents: [
+        ...['macd', 'signal', 'histogram', 'ppo', 'adx', 'plus_di', 'minus_di', 'up', 'down', 'rsi'].map((key) => ({
+            key,
+            labelKey: `signals.${key}`,
+            kind: key === 'histogram' ? ('bar' as const) : ('line' as const),
+            aggregationProfile: 'last_with_range' as const,
+            style: {
+                colorRole: 'primary' as const,
+                lineWidthDelta: 0,
+                opacity: 1,
+                fillOpacity: 0.2,
+            },
+            fullyPartitioned: false,
+        })),
+        {
+            key: 'bands',
+            labelKey: 'signals.bands',
+            kind: 'band',
+            aggregationProfile: 'band_envelope',
+            style: {
+                colorRole: 'primary',
+                lineWidthDelta: 0,
+                opacity: 1,
+                fillOpacity: 0.2,
+            },
+            fullyPartitioned: false,
+        },
+        {
+            key: 'drawdown',
+            labelKey: 'signals.drawdown',
+            kind: 'area',
+            aggregationProfile: 'min_with_range',
+            style: {
+                colorRole: 'negative',
+                lineWidthDelta: 0,
+                opacity: 1,
+                fillOpacity: 0.2,
+            },
+            fullyPartitioned: false,
+        },
+    ],
+};
+
+function renderBackendSignalResult(result: BackendSignalResult, signalConfig: SignalConfig, options: Omit<Parameters<typeof renderBackendSignalResultRaw>[2], 'definition'>) {
+    return renderBackendSignalResultRaw(result, signalConfig, {...options, definition});
+}
 
 function resultWithSeries(signalCode: string, series: unknown[]): BackendSignalResult {
     return backendSignalSchemas.result.parse({
@@ -60,6 +114,17 @@ function barSeries(key: string, axisKey: string = 'momentum') {
     return {
         ...lineSeries(key, axisKey),
         kind: 'bar',
+    };
+}
+
+function areaSeries(key: string, axisKey: string = 'risk') {
+    return {
+        ...lineSeries(key, axisKey, [0, -12]),
+        kind: 'area',
+        style: {
+            color_role: 'negative',
+            fill_opacity: 0.2,
+        },
     };
 }
 
@@ -112,6 +177,7 @@ describe('canonical backend signal renderer', () => {
                 baseData,
                 viewMode: 'percentage',
             });
+
             const rendered = outcome.signals[0];
 
             expect(rendered.seriesType).toBe('band');
@@ -122,6 +188,20 @@ describe('canonical backend signal renderer', () => {
                 upper: [10, 21],
             });
         }
+    });
+
+    it('renders AREA output with plugin-owned MIN aggregation and fill opacity', () => {
+        const rendered = renderBackendSignalResult(resultWithSeries('RISK_DRAWDOWN', [areaSeries('drawdown')]), config, {
+            baseData,
+            viewMode: 'absolute',
+        }).signals[0];
+
+        expect(rendered).toMatchObject({
+            seriesType: 'area',
+            aggregationProfile: 'min_with_range',
+            fillOpacity: 0.2,
+            color: '#dc2626',
+        });
     });
 
     it.each([

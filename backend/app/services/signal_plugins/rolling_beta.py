@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAvailabilityReason,
     SignalAxisRole,
     SignalAxisSpec,
@@ -93,6 +94,7 @@ class RollingBetaPlugin(SignalPlugin):
             semantic_id="rolling_beta.value",
             semantic_description="Sample covariance divided by comparison-asset sample variance.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(
                 key="risk_beta",

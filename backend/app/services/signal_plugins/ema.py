@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -83,6 +84,7 @@ class EmaSignalPlugin(SignalPlugin):
             semantic_id="exponential_moving_average.value",
             semantic_description="Exponentially weighted closing-price average with the configured offset.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",

@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -79,6 +80,7 @@ class RocSignalPlugin(SignalPlugin):
             semantic_id="rate_of_change.value",
             semantic_description="Percentage change from the closing price one lookback period earlier.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=SignalAxisSpec(
                 key="roc",

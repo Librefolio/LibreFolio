@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -79,6 +80,7 @@ class NatrSignalPlugin(SignalPlugin):
             semantic_id="normalized_average_true_range.value",
             semantic_description="Average true range expressed as a percentage of price.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.MAX_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=SignalAxisSpec(
                 key="natr",

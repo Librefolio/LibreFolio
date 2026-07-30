@@ -20,7 +20,13 @@ from backend.app.services.ai_export.analyses.spec import (
     UnknownAnalysisDatasetError,
     UnknownAnalysisError,
 )
-from backend.app.services.ai_export.components.catalog import build_component_registry
+from backend.app.services.ai_export.components.catalog import (
+    ALL_COMPONENTS,
+    ALL_FOUNDATION_COMPONENTS,
+    ALL_REAL_COMPONENTS,
+    FoundationComponentPayload,
+    build_component_registry,
+)
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, Domain, PeriodBehavior
@@ -123,6 +129,36 @@ class TestDatasetCatalog:
     def test_schema_and_selection_versions_are_1(self, dataset_registry: DatasetRegistry):
         for spec in dataset_registry:
             assert spec.version == 1
+
+
+class TestIntegratedComponentCatalog:
+    def test_production_registry_has_all_45_real_components_in_frozen_order(
+        self,
+        component_registry: ComponentRegistry,
+    ):
+        expected_order = tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
+
+        assert len(ALL_FOUNDATION_COMPONENTS) == 45
+        assert len(ALL_REAL_COMPONENTS) == 45
+        assert len(ALL_COMPONENTS) == 45
+        assert component_registry.canonical_order == expected_order
+        assert tuple(spec.component_id for spec in ALL_COMPONENTS) == expected_order
+        assert all(spec.output_model is not FoundationComponentPayload for spec in component_registry)
+
+    def test_integrated_components_preserve_frozen_metadata(
+        self,
+        component_registry: ComponentRegistry,
+    ):
+        placeholders = {spec.component_id: spec for spec in ALL_FOUNDATION_COMPONENTS}
+
+        for real in component_registry:
+            placeholder = placeholders[real.component_id]
+            assert real.version == placeholder.version
+            assert real.domains == placeholder.domains
+            assert real.dependencies == placeholder.dependencies
+            assert real.period_behavior == placeholder.period_behavior
+            assert real.aggregator == placeholder.aggregator
+            assert real.builder is not placeholder.builder
 
 
 class TestAnalysisCatalog:
@@ -240,7 +276,7 @@ class TestRegistryValidationErrors:
                 description_i18n_key="k.description",
                 icon="icon",
                 applicability_code="test.always_applicable",
-            applicable_pages=("dashboard",),
+                applicable_pages=("dashboard",),
                 required_component_ids=("portfolio.summary", "portfolio.positions"),
                 optional_component_ids=(),
                 section_order=("portfolio.summary",),  # missing portfolio.positions
@@ -259,7 +295,7 @@ class TestRegistryValidationErrors:
                 description_i18n_key="k.description",
                 icon="icon",
                 applicability_code="test.always_applicable",
-            applicable_pages=("dashboard",),
+                applicable_pages=("dashboard",),
                 required_component_ids=("portfolio.summary",),
                 optional_component_ids=(),
                 section_order=("portfolio.summary",),
@@ -278,7 +314,7 @@ class TestRegistryValidationErrors:
                 description_i18n_key="A human readable sentence.",
                 icon="icon",
                 applicability_code="test.always_applicable",
-            applicable_pages=("dashboard",),
+                applicable_pages=("dashboard",),
                 required_component_ids=("portfolio.summary",),
                 optional_component_ids=(),
                 section_order=("portfolio.summary",),
@@ -612,7 +648,6 @@ class TestAllDataExpansion:
                 continue
             all_optional_ids.update(spec.optional_component_ids)
         assert all_optional_ids == {"asset.lot_detail"}
-
 
 
 class TestCatalogPresentationFields:

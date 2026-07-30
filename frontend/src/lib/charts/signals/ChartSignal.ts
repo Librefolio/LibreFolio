@@ -69,19 +69,22 @@ export type SignalDefinitionSource = 'local' | 'backend';
 export type SignalIndicatorGroup = 'trend' | 'momentum' | 'volatility' | 'volume' | 'risk';
 export type SignalInputField = 'open' | 'high' | 'low' | 'close' | 'volume';
 export type SignalColorRole = 'primary' | 'secondary' | 'positive' | 'negative' | 'neutral' | 'accent';
+export type SignalAggregationProfile = 'last_with_range' | 'first_with_range' | 'min_with_range' | 'max_with_range' | 'band_envelope' | 'events_verbatim';
 
 export interface SignalVisualStyle {
     colorRole: SignalColorRole;
     lineType?: 'solid' | 'dashed' | 'dotted';
     lineWidthDelta: number;
     opacity: number;
+    fillOpacity: number;
 }
 
 export interface SignalVisualComponent {
     key: string;
     labelKey: string;
     descriptionKey?: string;
-    kind: 'line' | 'bar' | 'band';
+    kind: 'line' | 'area' | 'bar' | 'band';
+    aggregationProfile: SignalAggregationProfile;
     style: SignalVisualStyle;
     fullyPartitioned: boolean;
 }
@@ -215,11 +218,14 @@ export interface RenderedSignal {
     /**
      * Series rendering type:
      * - 'line' (default): standard line series
+     * - 'area': line plus fill from zero (used for Drawdown)
      * - 'bar': vertical bars (used for MACD histogram)
      * - 'band': confidence band — requires bandData with upper/lower arrays
      *           (used for Bollinger Bands)
      */
-    seriesType?: 'line' | 'bar' | 'band';
+    seriesType?: 'line' | 'area' | 'bar' | 'band';
+    /** Plugin-declared temporal representative policy. */
+    aggregationProfile: SignalAggregationProfile;
     /** Signed histograms keep semantic green/red bars until explicitly overridden. */
     barColorMode?: 'signed' | 'single';
     /**
@@ -230,6 +236,11 @@ export interface RenderedSignal {
         upper: number[];
         middle: number[];
         lower: number[];
+        observedDates?: Array<{
+            upper: string;
+            middle: string;
+            lower: string;
+        }>;
     };
     /** Custom icon URL for the signal source (e.g. asset icon_url) — used by MeasurePanel and tooltip */
     iconUrl?: string | null;
@@ -237,6 +248,8 @@ export interface RenderedSignal {
     assetType?: string | null;
     /** Line/fill opacity override (0-1). Used for ghost/watermark series. Default 1. */
     opacity?: number;
+    /** Area fill opacity for seriesType === 'area'. */
+    fillOpacity?: number;
     /** Currency code the signal values are denominated in (e.g. "EUR", "RON") */
     currency?: string;
     /** Flag emoji for the currency (e.g. "🇪🇺") */
@@ -398,6 +411,7 @@ export abstract class ChartSignal {
             markerStart: this.style.markerStart,
             markerEnd: this.style.markerEnd,
             yAxisIndex: yAxis,
+            aggregationProfile: 'last_with_range',
         };
     }
 

@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -189,6 +190,7 @@ class StochRsiSignalPlugin(SignalPlugin):
             semantic_id="stochastic_relative_strength_index.k",
             semantic_description="Fast stochastic position of RSI within its lookback range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_STOCH_RSI_AXIS,
             style=SignalOutputStyle(
@@ -208,6 +210,7 @@ class StochRsiSignalPlugin(SignalPlugin):
             semantic_id="stochastic_relative_strength_index.d",
             semantic_description="Smoothed average of the stochastic RSI K line.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_STOCH_RSI_AXIS,
             style=SignalOutputStyle(

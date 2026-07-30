@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -79,6 +80,7 @@ class AtrSignalPlugin(SignalPlugin):
             semantic_id="average_true_range.value",
             semantic_description="Smoothed true range expressed in price units.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.MAX_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="atr",

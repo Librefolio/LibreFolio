@@ -1,6 +1,6 @@
 # Piano applicativo: Phase 0 — AI Export dataset/analysis refinement
 
-**Stato**: ⏸️ PAUSA — checkpoint 28 luglio 2026
+**Stato**: 🟡 RIPRESO — piano UI/clipboard 29 luglio 2026
 **Data**: 28 luglio 2026
 
 ← Documento di consenso:
@@ -14,6 +14,9 @@
 
 → Checkpoint corrente:
 [AI Export e aggregazione Signal Plugin](./plan-phase00AiExportCheckpointSignalAggregation.prompt.md)
+
+→ Piano esecutivo corrente:
+[Signal aggregation e AI Export UI/clipboard cutover](./plan-phase00AiExportSignalAggregationUiCutover.prompt.md)
 
 ## 1. Obiettivo
 

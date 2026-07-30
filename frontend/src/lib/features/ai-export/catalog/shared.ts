@@ -1,147 +1,96 @@
 import {schemas} from '$lib/api';
 import type {z} from 'zod';
 
-export type AiExportDomain = z.infer<typeof schemas.AiExportDomain>;
-export type AiExportTask = z.infer<typeof schemas.AiExportTask>;
-export type AiExportDetailLevel = z.infer<typeof schemas.AiExportDetailLevel>;
-export type AiExportBackendCatalogEntry = z.infer<typeof schemas.AiExportCatalogEntry>;
-export type AiExportBackendCatalogResponse = z.infer<typeof schemas.AiExportCatalogResponse>;
-
-type AiExportTaskByDomain = {
-    portfolio: z.infer<typeof schemas.AiExportPortfolioTask>;
-    asset: z.infer<typeof schemas.AiExportAssetTask>;
-    fx: z.infer<typeof schemas.AiExportFxTask>;
-    broker: z.infer<typeof schemas.AiExportBrokerTask>;
+export type AiExportDomain = z.output<typeof schemas.AiExportDomain>;
+export type AiExportDetailLevel = z.output<typeof schemas.AiExportDetailLevel>;
+export type AiExportDatasetCatalogEntry = z.output<typeof schemas.AiExportDatasetCatalogEntry>;
+export type AiExportAnalysisCatalogEntry = z.output<typeof schemas.AiExportAnalysisCatalogEntry>;
+export type AiExportBackendCatalogResponse = z.output<typeof schemas.AiExportCatalogResponse>;
+type GeneratedAiExportSnapshotResponse = z.output<typeof schemas.AiExportSnapshotResponse>;
+export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract'> & {
+    analysis_contract?: z.output<typeof schemas.AiExportAnalysisContract> | null;
 };
+export type AiExportSelectionKind = 'dataset' | 'analysis';
+export type AiExportCatalogEntry = AiExportDatasetCatalogEntry | AiExportAnalysisCatalogEntry;
 
-export type AiExportTaskForDomain<D extends AiExportDomain> = AiExportTaskByDomain[D];
-export type AiExportRenderMode = 'data_only' | 'full_prompt';
-
-export const AI_EXPORT_CATALOG_SCHEMA_VERSION = 1;
-export const AI_EXPORT_SNAPSHOT_SCHEMA_VERSION = 1;
-export const AI_EXPORT_PROFILE_VERSION = 1;
-export const AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION = 1;
+export const AI_EXPORT_SCHEMA_VERSION = 1;
+export const AI_EXPORT_CATALOG_VERSION = 1;
+export const AI_EXPORT_SELECTION_VERSION = 1;
 export const AI_EXPORT_DETAIL_LEVELS = ['compact', 'standard', 'full'] as const satisfies readonly AiExportDetailLevel[];
 export const AI_EXPORT_DEFAULT_DETAIL_LEVEL = 'standard' satisfies AiExportDetailLevel;
-export const AI_EXPORT_RENDER_MODES = ['data_only', 'full_prompt'] as const satisfies readonly AiExportRenderMode[];
-export const AI_EXPORT_DOMAIN_ORDER = ['portfolio', 'asset', 'fx', 'broker'] as const satisfies readonly AiExportDomain[];
-export const AI_EXPORT_TASK_ICON_NAMES = ['Activity', 'ArrowLeftRight', 'Briefcase', 'CalendarClock', 'Camera', 'ChartColumn', 'ChartNoAxesCombined', 'Clock', 'Coins', 'FileText', 'Landmark', 'Layers', 'PieChart', 'PiggyBank', 'Receipt', 'Scale', 'TrendingUp'] as const;
-export type AiExportTaskIconName = (typeof AI_EXPORT_TASK_ICON_NAMES)[number];
+export const AI_EXPORT_DOMAIN_ORDER = ['portfolio', 'broker', 'asset', 'fx'] as const satisfies readonly AiExportDomain[];
 
-export interface AiExportExpectedProfile {
-    readonly profileId: string;
-    readonly profileVersion: typeof AI_EXPORT_PROFILE_VERSION;
-}
+export const AI_EXPORT_DATASET_IDS = [
+    'portfolio.overview',
+    'portfolio.performance_flows',
+    'portfolio.technical',
+    'portfolio.fifo',
+    'portfolio.all_data',
+    'broker.overview',
+    'broker.performance_flows',
+    'broker.technical',
+    'broker.fifo',
+    'broker.all_data',
+    'asset.overview',
+    'asset.position_performance',
+    'asset.market_technical',
+    'asset.all_data',
+    'fx.overview',
+    'fx.market_technical',
+    'fx.direct_exposure',
+    'fx.all_data',
+] as const;
 
-export type AiExportExpectedProfiles = Readonly<Record<AiExportDetailLevel, AiExportExpectedProfile>>;
+export const AI_EXPORT_ANALYSIS_IDS = [
+    'portfolio.pac_planning',
+    'portfolio.rebalancing',
+    'portfolio.performance_attribution',
+    'portfolio.income_review',
+    'portfolio.fifo_review',
+    'portfolio.technical_breadth',
+    'portfolio.description',
+    'broker.review',
+    'broker.cost_efficiency',
+    'broker.concentration_context',
+    'broker.fifo_review',
+    'asset.trend_analysis',
+    'asset.position_review',
+    'asset.drawdown_recovery',
+    'fx.trend_review',
+    'fx.conversion_timing',
+    'fx.exposure_impact',
+] as const;
 
-export interface AiExportFrontendResponseContract {
-    readonly id: string;
-    readonly version: number;
-}
+export type AiExportDatasetId = (typeof AI_EXPORT_DATASET_IDS)[number];
+export type AiExportAnalysisId = (typeof AI_EXPORT_ANALYSIS_IDS)[number];
+export type AiExportSelectionId = AiExportDatasetId | AiExportAnalysisId;
 
-export interface AiExportTaskDefinition<D extends AiExportDomain = AiExportDomain> {
-    readonly id: AiExportTaskForDomain<D>;
-    readonly domain: D;
-    readonly backendTask: AiExportTaskForDomain<D>;
-    readonly labelKey: string;
-    readonly descriptionKey: string;
-    readonly icon: AiExportTaskIconName;
-    readonly supportedDetailLevels: typeof AI_EXPORT_DETAIL_LEVELS;
-    readonly defaultDetailLevel: typeof AI_EXPORT_DEFAULT_DETAIL_LEVEL;
-    readonly expectedProfiles: AiExportExpectedProfiles;
-    readonly frontendResponseContract: AiExportFrontendResponseContract;
-    readonly supportsUserNotes: boolean;
-    readonly supportsWebResearch: boolean;
-    readonly renderModes: typeof AI_EXPORT_RENDER_MODES;
-    readonly instructionTemplateId: string;
-    readonly responseContractTemplateId: string;
-}
-
-interface AiExportTaskDefinitionInput<D extends AiExportDomain> {
-    readonly domain: D;
-    readonly backendTask: AiExportTaskForDomain<D>;
-    readonly icon: AiExportTaskIconName;
-    readonly supportsUserNotes: boolean;
-    readonly supportsWebResearch: boolean;
-    readonly frontendResponseContractVersion?: number;
-}
-
-export function defineAiExportTask<const D extends AiExportDomain>(input: AiExportTaskDefinitionInput<D>): AiExportTaskDefinition<D> {
-    const taskPath = `${input.domain}.${input.backendTask}`;
-    const frontendResponseContractVersion = input.frontendResponseContractVersion ?? AI_EXPORT_FRONTEND_RESPONSE_CONTRACT_VERSION;
-
-    return {
-        id: input.backendTask,
-        domain: input.domain,
-        backendTask: input.backendTask,
-        labelKey: `aiExport.catalog.${taskPath}.label`,
-        descriptionKey: `aiExport.catalog.${taskPath}.description`,
-        icon: input.icon,
-        supportedDetailLevels: AI_EXPORT_DETAIL_LEVELS,
-        defaultDetailLevel: AI_EXPORT_DEFAULT_DETAIL_LEVEL,
-        expectedProfiles: {
-            compact: {
-                profileId: `${taskPath}.compact`,
-                profileVersion: AI_EXPORT_PROFILE_VERSION,
-            },
-            standard: {
-                profileId: `${taskPath}.standard`,
-                profileVersion: AI_EXPORT_PROFILE_VERSION,
-            },
-            full: {
-                profileId: `${taskPath}.full`,
-                profileVersion: AI_EXPORT_PROFILE_VERSION,
-            },
-        },
-        frontendResponseContract: {
-            id: taskPath,
-            version: frontendResponseContractVersion,
-        },
-        supportsUserNotes: input.supportsUserNotes,
-        supportsWebResearch: input.supportsWebResearch,
-        renderModes: AI_EXPORT_RENDER_MODES,
-        instructionTemplateId: `aiExport.instructions.${taskPath}.v1`,
-        responseContractTemplateId: `aiExport.responseContracts.${taskPath}.v${frontendResponseContractVersion}`,
-    };
-}
-
-export interface AiExportLocalCatalogChoice {
-    readonly key: string;
-    readonly taskId: AiExportTask;
+export interface AiExportCompatibleSelection {
+    readonly kind: AiExportSelectionKind;
+    readonly id: AiExportSelectionId;
     readonly domain: AiExportDomain;
-    readonly backendTask: AiExportTask;
-    readonly detailLevel: AiExportDetailLevel;
-    readonly profileId: string;
-    readonly profileVersion: typeof AI_EXPORT_PROFILE_VERSION;
-    readonly frontendResponseContractId: string;
-    readonly frontendResponseContractVersion: number;
-    readonly supportsUserNotes: boolean;
-    readonly supportsWebResearch: boolean;
+    readonly version: 1;
+    readonly supportedDetailLevels: readonly AiExportDetailLevel[];
+    readonly entry: AiExportCatalogEntry;
 }
 
-export function aiExportCatalogTupleKey(domain: AiExportDomain, backendTask: AiExportTask, detailLevel: AiExportDetailLevel): string {
-    return `${domain}:${backendTask}:${detailLevel}`;
+export function aiExportSelectionKey(kind: AiExportSelectionKind, id: string): string {
+    return `${kind}:${id}`;
 }
 
-export function expandAiExportTaskDefinitions(taskDefinitions: readonly AiExportTaskDefinition[]): readonly AiExportLocalCatalogChoice[] {
-    return taskDefinitions.flatMap((taskDefinition) =>
-        taskDefinition.supportedDetailLevels.map((detailLevel): AiExportLocalCatalogChoice => {
-            const expectedProfile = taskDefinition.expectedProfiles[detailLevel];
+export function isAiExportDatasetId(value: string): value is AiExportDatasetId {
+    return AI_EXPORT_DATASET_IDS.some((id) => id === value);
+}
 
-            return {
-                key: aiExportCatalogTupleKey(taskDefinition.domain, taskDefinition.backendTask, detailLevel),
-                taskId: taskDefinition.id,
-                domain: taskDefinition.domain,
-                backendTask: taskDefinition.backendTask,
-                detailLevel,
-                profileId: expectedProfile.profileId,
-                profileVersion: expectedProfile.profileVersion,
-                frontendResponseContractId: taskDefinition.frontendResponseContract.id,
-                frontendResponseContractVersion: taskDefinition.frontendResponseContract.version,
-                supportsUserNotes: taskDefinition.supportsUserNotes,
-                supportsWebResearch: taskDefinition.supportsWebResearch,
-            };
-        }),
-    );
+export function isAiExportAnalysisId(value: string): value is AiExportAnalysisId {
+    return AI_EXPORT_ANALYSIS_IDS.some((id) => id === value);
+}
+
+export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSnapshotResponse): AiExportSnapshotResponse {
+    const analysisContract = response.analysis_contract;
+    if (Array.isArray(analysisContract)) throw new TypeError('AI Export analysis_contract must not be an array');
+    return {
+        ...response,
+        analysis_contract: analysisContract,
+    };
 }

@@ -1,6 +1,6 @@
-"""Catalog and authenticated snapshot endpoints for AI Export."""
+"""Catalog and authenticated snapshot endpoints for component-based AI Export."""
 
-import re
+from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import TypeAdapter
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
-from backend.app.schemas.ai_export import (
+from backend.app.schemas.ai_export_runtime import (
     AiExportAssetSnapshotRequest,
     AiExportAssetTargetReference,
     AiExportBrokerAccessDeniedProblem,
@@ -23,35 +23,28 @@ from backend.app.schemas.ai_export import (
     AiExportPortfolioTargetReference,
     AiExportProblem,
     AiExportProblemBase,
-    AiExportProblemCode,
     AiExportProblemResponse,
+    AiExportSelectionNotApplicableProblem,
     AiExportSnapshotRequest,
     AiExportSnapshotResponse,
     AiExportSnapshotSourceFailureProblem,
     AiExportTargetReference,
-    AiExportTaskNotApplicableProblem,
-    AiExportUnsupportedProfileProblem,
+    AiExportUnsupportedSelectionProblem,
+    AiExportVersionMismatchProblem,
 )
-from backend.app.services.ai_export.assemblers import (
-    AiExportEntityNotFoundError,
-    AiExportSourceFailureError,
-    AiExportTaskNotApplicableError,
-)
-from backend.app.services.ai_export.models import UnsupportedAiExportProfileError
-from backend.app.services.ai_export.service import (
+from backend.app.services.ai_export.runtime_service import (
     AiExportBrokerAccessDeniedError,
+    AiExportEntityNotFoundError,
+    AiExportSelectionNotApplicableError,
     AiExportSnapshotService,
     AiExportSnapshotSourceError,
+    AiExportUnsupportedSelectionError,
+    AiExportVersionMismatchError,
 )
 
 router = APIRouter(prefix="/ai-export", tags=["AI Export"])
 
 _PROBLEM_ADAPTER = TypeAdapter(AiExportProblem)
-_INVALID_CODE_CHARACTERS = re.compile(r"[^a-z0-9_.-]+")
-
-
-def _profile_id(request: AiExportSnapshotRequest) -> str:
-    return f"{request.domain.value}.{request.task.value}.{request.detail_level.value}"
 
 
 def _problem_detail(problem: AiExportProblemBase) -> dict[str, object]:
@@ -60,6 +53,10 @@ def _problem_detail(problem: AiExportProblemBase) -> dict[str, object]:
 
 
 def _target_reference(request: AiExportSnapshotRequest) -> AiExportTargetReference:
+    if isinstance(request, AiExportPortfolioSnapshotRequest):
+        return AiExportPortfolioTargetReference(kind="portfolio")
+    if isinstance(request, AiExportBrokerSnapshotRequest):
+        return AiExportBrokerTargetReference(kind="broker", broker_id=request.broker_id)
     if isinstance(request, AiExportAssetSnapshotRequest):
         return AiExportAssetTargetReference(kind="asset", asset_id=request.asset_id)
     if isinstance(request, AiExportFxSnapshotRequest):
@@ -68,24 +65,16 @@ def _target_reference(request: AiExportSnapshotRequest) -> AiExportTargetReferen
             base_currency=request.base_currency,
             quote_currency=request.quote_currency,
         )
-    if isinstance(request, AiExportBrokerSnapshotRequest):
-        return AiExportBrokerTargetReference(kind="broker", broker_id=request.broker_id)
-    if isinstance(request, AiExportPortfolioSnapshotRequest):
-        return AiExportPortfolioTargetReference(kind="portfolio")
-    raise TypeError(f"Unsupported AI Export request type: {type(request).__name__}")
+    raise TypeError(f"unsupported AI Export request type: {type(request).__name__}")
 
 
-def _code_part(value: str, fallback: str) -> str:
-    normalized = _INVALID_CODE_CHARACTERS.sub("_", value.strip().lower()).strip("._-")
-    if not normalized:
-        normalized = fallback
-    if not normalized[0].isalpha():
-        normalized = f"{fallback}_{normalized}"
-    return normalized[:63].rstrip("._-") or fallback
-
-
-def _source_operation_code(error: AiExportSourceFailureError) -> str:
-    return f"{_code_part(error.source_code, 'source')}.{_code_part(error.operation, 'operation')}"
+def _problem_base(request: AiExportSnapshotRequest) -> dict[str, object]:
+    return {
+        "domain": request.domain,
+        "selection_kind": request.selection.kind,
+        "selection_id": request.selection.id,
+        "detail_level": request.detail_level,
+    }
 
 
 def get_ai_export_snapshot_service(
@@ -97,7 +86,7 @@ def get_ai_export_snapshot_service(
 @router.get(
     "/catalog",
     response_model=AiExportCatalogResponse,
-    summary="List supported AI Export profiles",
+    summary="List AI Export datasets and analyses",
 )
 def get_ai_export_catalog() -> AiExportCatalogResponse:
     return AiExportSnapshotService.get_catalog()
@@ -106,13 +95,28 @@ def get_ai_export_catalog() -> AiExportCatalogResponse:
 @router.post(
     "/snapshot",
     response_model=AiExportSnapshotResponse,
-    summary="Build an AI Export snapshot",
+    summary="Build an AI Export dataset or analysis snapshot",
     responses={
-        403: {"model": AiExportProblemResponse, "description": "Requested broker scope is not fully accessible."},
-        404: {"model": AiExportProblemResponse, "description": "Requested snapshot entity was not found."},
-        409: {"model": AiExportProblemResponse, "description": "Requested task is not applicable to the selected target."},
-        422: {"model": AiExportProblemResponse, "description": "Requested profile is not supported."},
-        503: {"model": AiExportProblemResponse, "description": "Required snapshot source is unavailable."},
+        403: {
+            "model": AiExportProblemResponse,
+            "description": "Requested broker scope is not fully accessible.",
+        },
+        404: {
+            "model": AiExportProblemResponse,
+            "description": "Requested entity was not found.",
+        },
+        409: {
+            "model": AiExportProblemResponse,
+            "description": "Catalog, selection, template, or contract version mismatch.",
+        },
+        422: {
+            "model": AiExportProblemResponse,
+            "description": "Selection is unsupported or not applicable.",
+        },
+        503: {
+            "model": AiExportProblemResponse,
+            "description": "A required snapshot component is unavailable.",
+        },
     },
 )
 async def build_ai_export_snapshot(
@@ -124,71 +128,53 @@ async def build_ai_export_snapshot(
         return await service.build_snapshot(current_user.id, body)
     except AiExportBrokerAccessDeniedError as exc:
         problem = AiExportBrokerAccessDeniedProblem(
-            code=AiExportProblemCode.BROKER_ACCESS_DENIED,
+            code="broker_access_denied",
             message="Access denied for one or more requested brokers.",
-            domain=body.domain,
-            task=body.task,
-            detail_level=body.detail_level,
-            profile_id=_profile_id(body),
             denied_broker_ids=list(exc.denied_broker_ids),
+            **_problem_base(body),
         )
         raise HTTPException(status_code=403, detail=_problem_detail(problem)) from exc
-    except UnsupportedAiExportProfileError as exc:
-        problem = AiExportUnsupportedProfileProblem(
-            code=AiExportProblemCode.UNSUPPORTED_PROFILE,
-            message="Requested AI Export profile is not supported.",
-            domain=body.domain,
-            task=body.task,
-            detail_level=body.detail_level,
-            profile_id=_profile_id(body),
-            supported_profiles=list(exc.supported_profile_ids),
-        )
-        raise HTTPException(status_code=422, detail=_problem_detail(problem)) from exc
     except AiExportEntityNotFoundError as exc:
         problem = AiExportEntityNotFoundProblem(
-            code=AiExportProblemCode.ENTITY_NOT_FOUND,
+            code="entity_not_found",
             message="Requested AI Export entity was not found.",
-            domain=body.domain,
-            task=body.task,
-            detail_level=body.detail_level,
-            profile_id=_profile_id(body),
             entity_reference=_target_reference(body),
+            **_problem_base(body),
         )
         raise HTTPException(status_code=404, detail=_problem_detail(problem)) from exc
-    except AiExportTaskNotApplicableError as exc:
-        problem = AiExportTaskNotApplicableProblem(
-            code=AiExportProblemCode.TASK_NOT_APPLICABLE,
-            message="Requested AI Export task is not applicable.",
-            domain=body.domain,
-            task=body.task,
-            detail_level=body.detail_level,
-            profile_id=_profile_id(body),
-            applicability_code=exc.applicability_code,
-            reason_code=exc.reason_code,
+    except AiExportVersionMismatchError as exc:
+        problem = AiExportVersionMismatchProblem(
+            code="version_mismatch",
+            message="AI Export catalog or contract version mismatch.",
+            field=exc.field,
+            expected=exc.expected,
+            actual=exc.actual,
+            **_problem_base(body),
         )
         raise HTTPException(status_code=409, detail=_problem_detail(problem)) from exc
-    except AiExportSourceFailureError as exc:
-        problem = AiExportSnapshotSourceFailureProblem(
-            code=AiExportProblemCode.SNAPSHOT_SOURCE_FAILURE,
-            message="AI Export snapshot source is unavailable.",
-            domain=body.domain,
-            task=body.task,
-            detail_level=body.detail_level,
-            profile_id=_profile_id(body),
-            source_code=_source_operation_code(exc),
-            retryable=exc.retryable,
+    except AiExportUnsupportedSelectionError as exc:
+        problem = AiExportUnsupportedSelectionProblem(
+            code="unsupported_selection",
+            message="Requested AI Export selection is not supported.",
+            **_problem_base(body),
         )
-        raise HTTPException(status_code=503, detail=_problem_detail(problem)) from exc
+        raise HTTPException(status_code=422, detail=_problem_detail(problem)) from exc
+    except AiExportSelectionNotApplicableError as exc:
+        problem = AiExportSelectionNotApplicableProblem(
+            code="selection_not_applicable",
+            message="Requested AI Export selection is not applicable.",
+            applicability_code=exc.applicability_code,
+            reason_code=exc.reason_code,
+            **_problem_base(body),
+        )
+        raise HTTPException(status_code=422, detail=_problem_detail(problem)) from exc
     except AiExportSnapshotSourceError as exc:
         problem = AiExportSnapshotSourceFailureProblem(
-            code=AiExportProblemCode.SNAPSHOT_SOURCE_FAILURE,
-            message="AI Export snapshot source is unavailable.",
-            domain=body.domain,
-            task=body.task,
-            detail_level=body.detail_level,
-            profile_id=_profile_id(body),
-            source_code=exc.source_code,
+            code="snapshot_source_failure",
+            message="A required AI Export component is unavailable.",
+            component_id=exc.component_id,
             retryable=exc.retryable,
+            **_problem_base(body),
         )
         raise HTTPException(status_code=503, detail=_problem_detail(problem)) from exc
 

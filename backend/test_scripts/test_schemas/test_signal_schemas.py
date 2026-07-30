@@ -16,10 +16,12 @@ from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.prices import FAPriceQueryItem
 from backend.app.schemas.risk import RiskResultMetadata, RiskReturnBasis
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAiDescription,
     SignalAiOutputDescription,
     SignalAnnotationRequest,
     SignalAnnotationSampling,
+    SignalAreaSeries,
     SignalAvailability,
     SignalAvailabilityReason,
     SignalAxisRole,
@@ -55,6 +57,7 @@ from backend.app.schemas.signals import (
     SignalRegionLineStyle,
     SignalRequest,
     SignalResult,
+    SignalSeries,
     SignalSeriesKind,
     SignalSourceCapability,
     SignalStatus,
@@ -209,6 +212,7 @@ def make_output_spec() -> SignalOutputSpec:
         semantic_id="exponential_moving_average.value",
         semantic_description="Exponentially weighted closing-price average.",
         kind=SignalSeriesKind.LINE,
+        aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
         unit=SignalUnit.PRICE,
         axis=make_axis(),
         view_transform=SignalViewTransform.BASE_PERCENTAGE,
@@ -417,6 +421,7 @@ class TestOutputContracts:
             semantic_id="average_directional_index.positive_directional_index",
             semantic_description="Positive directional movement relative to true range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(key="adx", role=SignalAxisRole.INDEPENDENT),
             style=SignalOutputStyle(
@@ -430,6 +435,52 @@ class TestOutputContracts:
         assert output.style.color_role == SignalColorRole.POSITIVE
         assert output.style.line_pattern == SignalLinePattern.SOLID
         assert output.description_key == "signals.adx.plusDiDescription"
+
+    def test_area_series_round_trips_through_discriminated_union(self):
+        payload = make_line_series().model_dump(mode="json")
+        payload["kind"] = SignalSeriesKind.AREA.value
+
+        parsed = TypeAdapter(SignalSeries).validate_python(payload)
+
+        assert isinstance(parsed, SignalAreaSeries)
+        assert parsed.model_dump(mode="json")["kind"] == "area"
+
+    @pytest.mark.parametrize("fill_opacity", [-0.01, 1.01])
+    def test_output_style_rejects_invalid_fill_opacity(self, fill_opacity: float):
+        with pytest.raises(ValidationError, match="fill_opacity"):
+            SignalOutputStyle(fill_opacity=fill_opacity)
+
+    def test_output_spec_rejects_incompatible_aggregation_profiles(self):
+        band_payload = make_output_spec().model_dump(mode="python")
+        band_payload["kind"] = SignalSeriesKind.BAND
+        with pytest.raises(ValidationError, match="band outputs require"):
+            SignalOutputSpec.model_validate(band_payload)
+
+        line_payload = make_output_spec().model_dump(mode="python")
+        line_payload["aggregation_profile"] = SignalAggregationProfile.BAND_ENVELOPE
+        with pytest.raises(ValidationError, match="requires a band output"):
+            SignalOutputSpec.model_validate(line_payload)
+
+        event_payload = make_output_spec().model_dump(mode="python")
+        event_payload["aggregation_profile"] = SignalAggregationProfile.EVENTS_VERBATIM
+        with pytest.raises(ValidationError, match="reserved for annotations"):
+            SignalOutputSpec.model_validate(event_payload)
+
+    def test_aggregation_profile_enum_is_json_serializable(self):
+        payload = make_output_spec().model_dump(mode="json")
+        schema = SignalOutputSpec.model_json_schema()
+
+        assert payload["aggregation_profile"] == "last_with_range"
+        aggregation_schema = schema["properties"]["aggregation_profile"]
+        enum_ref = aggregation_schema["$ref"].split("/")[-1]
+        assert schema["$defs"][enum_ref]["enum"] == [
+            "last_with_range",
+            "first_with_range",
+            "min_with_range",
+            "max_with_range",
+            "band_envelope",
+            "events_verbatim",
+        ]
 
     def test_output_semantics_are_required_and_canonical(self):
         payload = make_output_spec().model_dump(mode="python")
@@ -477,6 +528,7 @@ class TestOutputContracts:
                 semantic_id="relative_strength_index.value",
                 semantic_description="Bounded ratio of smoothed gains to total directional movement.",
                 kind=SignalSeriesKind.LINE,
+                aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
                 unit=SignalUnit.INDEX,
                 axis=SignalAxisSpec(key="rsi", role=SignalAxisRole.INDEPENDENT, minimum=0, maximum=100),
                 default_reference_levels=[
@@ -546,7 +598,7 @@ class TestOutputContracts:
 
     def test_unknown_series_kind_is_rejected(self):
         payload = make_line_series().model_dump(mode="json")
-        payload["kind"] = "area"
+        payload["kind"] = "candlestick"
         with pytest.raises(ValidationError, match="union_tag_invalid"):
             SignalComputation.model_validate({"series": [payload]})
 

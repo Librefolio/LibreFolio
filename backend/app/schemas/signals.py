@@ -140,8 +140,20 @@ class SignalCadence(StrEnum):
 
 class SignalSeriesKind(StrEnum):
     LINE = "line"
+    AREA = "area"
     BAR = "bar"
     BAND = "band"
+
+
+class SignalAggregationProfile(StrEnum):
+    """Plugin-owned temporal reduction semantics shared by chart and AI Export."""
+
+    LAST_WITH_RANGE = "last_with_range"
+    FIRST_WITH_RANGE = "first_with_range"
+    MIN_WITH_RANGE = "min_with_range"
+    MAX_WITH_RANGE = "max_with_range"
+    BAND_ENVELOPE = "band_envelope"
+    EVENTS_VERBATIM = "events_verbatim"
 
 
 class SignalBandComponent(StrEnum):
@@ -426,6 +438,12 @@ class SignalOutputStyle(SignalModel):
     line_pattern: Optional[SignalLinePattern] = None
     width_delta: int = Field(0, ge=-3, le=3)
     opacity: FiniteFloat = Field(1.0, gt=0, le=1)
+    fill_opacity: FiniteFloat = Field(
+        0.2,
+        ge=0,
+        le=1,
+        description="Area fill opacity; used only by area outputs.",
+    )
 
 
 class SignalRegionLineStyle(SignalModel):
@@ -469,6 +487,7 @@ class SignalOutputBase(SignalModel):
 
 class SignalOutputSpec(SignalOutputBase):
     kind: SignalSeriesKind
+    aggregation_profile: SignalAggregationProfile = SignalAggregationProfile.LAST_WITH_RANGE
     supports_reference_levels: bool = False
     supports_value_regions: bool = False
     default_reference_levels: List[SignalReferenceLevel] = Field(default_factory=list)
@@ -476,6 +495,12 @@ class SignalOutputSpec(SignalOutputBase):
 
     @model_validator(mode="after")
     def validate_capabilities(self) -> SignalOutputSpec:
+        if self.kind == SignalSeriesKind.BAND and self.aggregation_profile != SignalAggregationProfile.BAND_ENVELOPE:
+            raise ValueError("band outputs require aggregation_profile=band_envelope")
+        if self.kind != SignalSeriesKind.BAND and self.aggregation_profile == SignalAggregationProfile.BAND_ENVELOPE:
+            raise ValueError("aggregation_profile=band_envelope requires a band output")
+        if self.aggregation_profile == SignalAggregationProfile.EVENTS_VERBATIM:
+            raise ValueError("events_verbatim is reserved for annotations, not continuous output series")
         if self.default_reference_levels and not self.supports_reference_levels:
             raise ValueError("default reference levels require supports_reference_levels=true")
         if self.default_value_regions and not self.supports_value_regions:
@@ -535,6 +560,15 @@ class SignalLineSeries(SignalScalarSeriesBase):
         return _inject_discriminator(value, kind="line")
 
 
+class SignalAreaSeries(SignalScalarSeriesBase):
+    kind: Literal["area"] = Field(json_schema_extra={"enum": ["area"]})
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_kind(cls, value: Any) -> Any:
+        return _inject_discriminator(value, kind="area")
+
+
 class SignalBarSeries(SignalScalarSeriesBase):
     kind: Literal["bar"] = Field(json_schema_extra={"enum": ["bar"]})
 
@@ -562,7 +596,7 @@ class SignalBandSeries(SignalSeriesBase):
 
 
 SignalSeries = Annotated[
-    Union[SignalLineSeries, SignalBarSeries, SignalBandSeries],
+    Union[SignalLineSeries, SignalAreaSeries, SignalBarSeries, SignalBandSeries],
     Field(discriminator="kind"),
 ]
 
@@ -1083,6 +1117,8 @@ __all__ = [
     "SignalAnnotationRequest",
     "SignalAnnotationRequestBase",
     "SignalAnnotationSampling",
+    "SignalAggregationProfile",
+    "SignalAreaSeries",
     "SignalAvailability",
     "SignalAvailabilityReason",
     "SignalAxisRole",

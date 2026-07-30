@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -52,6 +53,7 @@ class FailingFixturePlugin(SignalPlugin):
             semantic_id="fixture_failure.value",
             semantic_description="Test output declared by the failing signal.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(key="failure", role=SignalAxisRole.INDEPENDENT),
         ),

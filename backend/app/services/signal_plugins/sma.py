@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -71,6 +72,7 @@ class SmaSignalPlugin(SignalPlugin):
             semantic_id="simple_moving_average.value",
             semantic_description="Arithmetic mean of closing prices in the lookback window.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",

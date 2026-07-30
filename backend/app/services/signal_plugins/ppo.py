@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBarSeries,
@@ -124,6 +125,7 @@ class PpoSignalPlugin(SignalPlugin):
             semantic_id="percentage_price_oscillator.line",
             semantic_description="Percentage difference between fast and slow exponential moving averages.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
             style=SignalOutputStyle(
@@ -141,6 +143,7 @@ class PpoSignalPlugin(SignalPlugin):
             semantic_id="percentage_price_oscillator.signal",
             semantic_description="Smoothed average of the PPO line.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
             style=SignalOutputStyle(
@@ -155,6 +158,7 @@ class PpoSignalPlugin(SignalPlugin):
             semantic_id="percentage_price_oscillator.histogram",
             semantic_description="Difference between the PPO line and its signal line.",
             kind=SignalSeriesKind.BAR,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=_PPO_AXIS,
             style=SignalOutputStyle(color_role=SignalColorRole.NEUTRAL),

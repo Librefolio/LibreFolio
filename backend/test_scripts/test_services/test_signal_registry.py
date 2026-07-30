@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -81,6 +82,7 @@ class DemoSignalPlugin(SignalPlugin):
             semantic_id="demo_signal.value",
             semantic_description="Test signal output value.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
         ),
@@ -160,6 +162,25 @@ def test_register_plugin_decorator_and_catalog_definition():
     assert definition.params_schema["required"] == ["required_mode"]
     assert definition.params_schema["properties"]["length"]["x-i18n-key"] == "signals.params.length"
     assert InlineSignalRegistry.get_plugin(" decorated ") is DecoratedSignal
+
+
+def test_plugin_definition_rejects_implicit_aggregation_profile():
+    class ImplicitAggregationPlugin(DemoSignalPlugin):
+        signal_code = "IMPLICIT_AGGREGATION"
+        output_specs = (
+            SignalOutputSpec(
+                key="implicit",
+                label_key="signals.implicit.output",
+                semantic_id="implicit_aggregation.value",
+                semantic_description="Test output with an omitted aggregation profile.",
+                kind=SignalSeriesKind.LINE,
+                unit=SignalUnit.PRICE,
+                axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
+            ),
+        )
+
+    with pytest.raises(ValueError, match="declare aggregation_profile explicitly"):
+        ImplicitAggregationPlugin.validate_definition()
 
 
 def test_catalog_definition_default_ai_description_derives_from_catalog_metadata():

@@ -9,6 +9,7 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -141,6 +142,7 @@ class CciSignalPlugin(SignalPlugin):
             semantic_id="commodity_channel_index.value",
             semantic_description="Normalized typical-price deviation from the lookback average.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(
                 key="cci",

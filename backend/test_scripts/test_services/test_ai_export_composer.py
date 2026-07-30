@@ -16,7 +16,12 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.services.ai_export.analyses.catalog import build_analysis_registry
 from backend.app.services.ai_export.analyses.spec import AnalysisSpec
-from backend.app.services.ai_export.components.catalog import ComponentNotImplementedError, build_component_registry
+from backend.app.services.ai_export.components.catalog import (
+    ALL_FOUNDATION_COMPONENTS,
+    ComponentNotImplementedError,
+    FoundationComponentPayload,
+    build_component_registry,
+)
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, DetailLevel, Domain, PeriodBehavior
@@ -252,26 +257,29 @@ class TestComposeAnalysis:
 
 
 @pytest.fixture(scope="module")
-def real_component_registry() -> ComponentRegistry:
-    return build_component_registry()
+def foundation_component_registry() -> ComponentRegistry:
+    return ComponentRegistry(ALL_FOUNDATION_COMPONENTS)
 
 
 @pytest.fixture(scope="module")
-def real_dataset_registry(real_component_registry: ComponentRegistry) -> DatasetRegistry:
-    return build_dataset_registry(real_component_registry)
+def foundation_dataset_registry(
+    foundation_component_registry: ComponentRegistry,
+) -> DatasetRegistry:
+    return build_dataset_registry(foundation_component_registry)
 
 
 @pytest.fixture(scope="module")
-def real_analysis_registry(real_dataset_registry: DatasetRegistry):
-    return build_analysis_registry(real_dataset_registry)
+def foundation_analysis_registry(
+    foundation_dataset_registry: DatasetRegistry,
+):
+    return build_analysis_registry(foundation_dataset_registry)
 
 
-class TestRealCatalogComposition:
-    """Item 1 (architecture review round 2): production foundation builders are
-    deliberate fail-closed placeholders (`ComponentNotImplementedError`), so
-    composing any real dataset/analysis must fail closed, never fabricate a
-    fake successful payload. Composer *success* paths are exercised separately
-    above using local test fixtures/specs, not the real catalog.
+class TestFoundationCatalogComposition:
+    """The retained placeholder baseline remains fail-closed for metadata tests.
+
+    Production `build_component_registry()` is now fully real; these checks
+    explicitly construct a registry from `ALL_FOUNDATION_COMPONENTS`.
     """
 
     @staticmethod
@@ -282,30 +290,60 @@ class TestRealCatalogComposition:
         return cause
 
     @pytest.mark.asyncio
-    async def test_compose_all_18_datasets_fail_closed_on_unimplemented_builders(self, real_component_registry: ComponentRegistry, real_dataset_registry: DatasetRegistry):
+    async def test_compose_all_18_datasets_fail_closed_on_unimplemented_builders(
+        self,
+        foundation_component_registry: ComponentRegistry,
+        foundation_dataset_registry: DatasetRegistry,
+    ):
         composer = Composer()
-        for dataset in real_dataset_registry:
+        for dataset in foundation_dataset_registry:
             for detail_level in DetailLevel:
-                context = BuildContext(real_component_registry, request_id=f"{dataset.dataset_id}-{detail_level.value}")
+                context = BuildContext(
+                    foundation_component_registry,
+                    request_id=f"{dataset.dataset_id}-{detail_level.value}",
+                )
                 with pytest.raises(RequiredComponentBuildError) as exc_info:
                     await composer.compose_dataset(dataset, context, detail_level=detail_level)
                 assert isinstance(self._root_cause(exc_info.value), ComponentNotImplementedError), f"{dataset.dataset_id} did not fail closed with ComponentNotImplementedError"
 
     @pytest.mark.asyncio
-    async def test_compose_all_17_analyses_fail_closed_on_unimplemented_builders(self, real_component_registry: ComponentRegistry, real_dataset_registry: DatasetRegistry, real_analysis_registry):
+    async def test_compose_all_17_analyses_fail_closed_on_unimplemented_builders(
+        self,
+        foundation_component_registry: ComponentRegistry,
+        foundation_dataset_registry: DatasetRegistry,
+        foundation_analysis_registry,
+    ):
         composer = Composer()
-        for analysis in real_analysis_registry:
-            context = BuildContext(real_component_registry, request_id=analysis.analysis_id)
+        for analysis in foundation_analysis_registry:
+            context = BuildContext(
+                foundation_component_registry,
+                request_id=analysis.analysis_id,
+            )
             with pytest.raises(RequiredComponentBuildError) as exc_info:
-                await composer.compose_analysis(analysis, real_dataset_registry, context, detail_level=DetailLevel.STANDARD)
+                await composer.compose_analysis(
+                    analysis,
+                    foundation_dataset_registry,
+                    context,
+                    detail_level=DetailLevel.STANDARD,
+                )
             assert isinstance(self._root_cause(exc_info.value), ComponentNotImplementedError), f"{analysis.analysis_id} did not fail closed with ComponentNotImplementedError"
 
     @pytest.mark.asyncio
-    async def test_real_registries_still_construct_and_report_expected_counts(self, real_dataset_registry: DatasetRegistry, real_analysis_registry):
-        # The catalog construction/count guarantees must hold regardless of
-        # production builders being unimplemented placeholders.
-        assert len(real_dataset_registry) == 18
-        assert len(real_analysis_registry) == 17
+    async def test_foundation_registries_still_report_expected_counts(
+        self,
+        foundation_dataset_registry: DatasetRegistry,
+        foundation_analysis_registry,
+    ):
+        assert len(foundation_dataset_registry) == 18
+        assert len(foundation_analysis_registry) == 17
+
+
+def test_production_component_registry_contains_only_real_specs():
+    registry = build_component_registry()
+
+    assert len(registry) == 45
+    assert registry.canonical_order == tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
+    assert all(registry.get(component_id).output_model is not FoundationComponentPayload for component_id in registry.canonical_order)
 
 
 class TestAllDataRequirednessPreservationEndToEnd:

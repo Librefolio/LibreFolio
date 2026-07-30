@@ -10,12 +10,17 @@ explicit empty buckets), and warm-up slicing (pre-start data never emitted).
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
+from backend.app.schemas.signals import SignalAggregationProfile
 from backend.app.services.ai_export.temporal import (
+    BandBucketStatistics,
+    BandObservedPoint,
     Bucket,
     BucketDetailLevel,
     BucketingPolicy,
@@ -24,16 +29,23 @@ from backend.app.services.ai_export.temporal import (
     DiscreteEvent,
     MonetaryFlowEvent,
     ObservedPoint,
+    ScalarBucketStatistics,
+    aggregate_band_statistics,
     aggregate_continuous_multi_output,
     aggregate_monetary_flow,
     aggregate_ohlc,
+    aggregate_scalar_statistics,
+    aggregate_signal_buckets,
     assert_within_requested_period,
     assign_discrete_events,
+    select_band_envelope,
+    select_scalar_representative,
     slice_to_requested_period,
     warmup_window_start,
 )
 
 SNAPSHOT = date(2026, 1, 1)
+AGGREGATION_FIXTURE = json.loads((Path(__file__).parents[1] / "fixtures" / "signals" / "aggregation_profiles.v1.json").read_text())
 
 
 def _start(days_back: int) -> date:
@@ -310,6 +322,175 @@ def _small_plan() -> BucketPlan:
     # 10-day full-detail plan -> every bucket is exactly 1 day wide (x<=7 covers most, and
     # x=8,9 still round to 1 for K=7), giving deterministic 1:1 bucket-to-day mapping for tests.
     return _plan(10, BucketDetailLevel.FULL)
+
+
+def _fixture_plan(payload: dict[str, str]) -> BucketPlan:
+    start = date.fromisoformat(payload["start"])
+    end = date.fromisoformat(payload["end"])
+    return BucketPlan(
+        start=start,
+        end=end,
+        policy=BucketingPolicy(max_bucket_days=(end - start).days + 1),
+        buckets=(Bucket(index=0, start_date=start, end_date=end),),
+    )
+
+
+def _dated_value_payload(value) -> dict[str, str] | None:
+    if value is None:
+        return None
+    return {
+        "value": format(value.value, "f"),
+        "date": value.observed_date.isoformat(),
+    }
+
+
+def _scalar_statistics_payload(statistics: ScalarBucketStatistics) -> dict[str, object]:
+    return {
+        "observation_count": statistics.observation_count,
+        "first": _dated_value_payload(statistics.first),
+        "min": _dated_value_payload(statistics.minimum),
+        "max": _dated_value_payload(statistics.maximum),
+        "last": _dated_value_payload(statistics.last),
+    }
+
+
+def test_shared_fixture_scalar_stats_profiles_empty_single_and_ties():
+    for case in AGGREGATION_FIXTURE["scalar_cases"]:
+        plan = _fixture_plan(case["bucket"])
+        points = tuple(
+            ObservedPoint(
+                date=date.fromisoformat(point["date"]),
+                value=Decimal(point["value"]),
+            )
+            for point in case["points"]
+        )
+        expected = case["expected"]
+        expected_statistics = {key: value for key, value in expected.items() if key != "representatives"}
+
+        direct = aggregate_scalar_statistics(points, plan)
+        assert len(direct) == 1
+        assert _scalar_statistics_payload(direct[0]) == expected_statistics
+
+        for profile_value, expected_representative in expected["representatives"].items():
+            profile = SignalAggregationProfile(profile_value)
+            dispatched = aggregate_signal_buckets(profile, points, plan)
+            assert dispatched == direct
+            assert _dated_value_payload(select_scalar_representative(direct[0], profile)) == expected_representative
+
+
+def test_shared_fixture_band_stats_preserve_independent_dates_and_valid_envelope():
+    case = AGGREGATION_FIXTURE["band_case"]
+    plan = _fixture_plan(case["bucket"])
+    points = tuple(
+        BandObservedPoint(
+            date=date.fromisoformat(point["date"]),
+            lower=Decimal(point["lower"]),
+            middle=Decimal(point["middle"]),
+            upper=Decimal(point["upper"]),
+        )
+        for point in case["points"]
+    )
+
+    direct = aggregate_band_statistics(points, plan)
+    dispatched = aggregate_signal_buckets(
+        SignalAggregationProfile.BAND_ENVELOPE,
+        points,
+        plan,
+    )
+
+    assert dispatched == direct
+    assert len(direct) == 1
+    statistics = direct[0]
+    assert isinstance(statistics, BandBucketStatistics)
+    expected = case["expected"]
+    assert statistics.observation_count == expected["observation_count"]
+    for component in ("lower", "middle", "upper"):
+        assert _scalar_statistics_payload(getattr(statistics, component)) == expected[component]
+
+    envelope = select_band_envelope(statistics)
+    assert {component: _dated_value_payload(getattr(envelope, component)) for component in ("lower", "middle", "upper")} == expected["envelope"]
+    assert envelope.lower.value <= envelope.middle.value <= envelope.upper.value
+
+
+def test_shared_fixture_events_verbatim_preserves_and_deduplicates():
+    case = AGGREGATION_FIXTURE["events_case"]
+    plan = _fixture_plan(case["bucket"])
+    events = tuple(
+        DiscreteEvent(
+            date=date.fromisoformat(event["date"]),
+            dedup_key=event["dedup_key"],
+            payload=event["payload"],
+        )
+        for event in case["events"]
+    )
+
+    result = aggregate_signal_buckets(
+        SignalAggregationProfile.EVENTS_VERBATIM,
+        events,
+        plan,
+    )
+
+    assert len(result) == 1
+    assert [
+        {
+            "date": event.date.isoformat(),
+            "dedup_key": event.dedup_key,
+            "payload": dict(event.payload),
+        }
+        for event in result[0].events
+    ] == case["expected"]
+
+
+def test_signal_profile_dispatcher_rejects_wrong_input_shapes_and_warmup_leakage():
+    plan = _fixture_plan({"start": "2026-01-01", "end": "2026-01-03"})
+    scalar = ObservedPoint(date=plan.start, value=Decimal("1"))
+    band = BandObservedPoint(
+        date=plan.start,
+        lower=Decimal("1"),
+        middle=Decimal("2"),
+        upper=Decimal("3"),
+    )
+
+    with pytest.raises(TypeError, match="BandObservedPoint"):
+        aggregate_signal_buckets(
+            SignalAggregationProfile.BAND_ENVELOPE,
+            (scalar,),
+            plan,
+        )
+    with pytest.raises(TypeError, match="ObservedPoint"):
+        aggregate_signal_buckets(
+            SignalAggregationProfile.LAST_WITH_RANGE,
+            (band,),
+            plan,
+        )
+    with pytest.raises(ValueError, match="not a scalar"):
+        select_scalar_representative(
+            aggregate_scalar_statistics((scalar,), plan)[0],
+            SignalAggregationProfile.EVENTS_VERBATIM,
+        )
+    with pytest.raises(ValueError, match="outside"):
+        aggregate_signal_buckets(
+            SignalAggregationProfile.MIN_WITH_RANGE,
+            (
+                ObservedPoint(
+                    date=plan.start - timedelta(days=1),
+                    value=Decimal("1"),
+                ),
+            ),
+            plan,
+        )
+
+
+def test_band_observation_rejects_missing_or_inverted_components():
+    with pytest.raises(ValueError, match="at least one"):
+        BandObservedPoint(date=date(2026, 1, 1))
+    with pytest.raises(ValueError, match="lower <= middle <= upper"):
+        BandObservedPoint(
+            date=date(2026, 1, 1),
+            lower=Decimal("3"),
+            middle=Decimal("2"),
+            upper=Decimal("4"),
+        )
 
 
 def test_ohlc_first_min_max_last_and_observation_count():

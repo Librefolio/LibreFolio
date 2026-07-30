@@ -344,7 +344,7 @@
         });
 
         // ── Overlay signals ──
-        const downsampledOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, dates)).filter((signal) => signal.data.length > 0);
+        const downsampledOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, data)).filter((signal) => signal.data.length > 0);
         const resolvedOverlaySignals = assignOverlaySignalAxes(downsampledOverlaySignals);
         const {axes: secondaryAxes, extraAxesCount, nextAxisIndex: volumeYAxisIndex} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0);
 

@@ -11,17 +11,29 @@ from __future__ import annotations
 
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
 
+from backend.app.schemas.signals import SignalAggregationProfile
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.points import (
+    BandObservedPoint,
     ContinuousMultiOutputPoint,
     Dated,
     DiscreteEvent,
     MonetaryFlowEvent,
     ObservedPoint,
     sort_by_date,
+)
+
+_SCALAR_AGGREGATION_PROFILES = frozenset(
+    {
+        SignalAggregationProfile.LAST_WITH_RANGE,
+        SignalAggregationProfile.FIRST_WITH_RANGE,
+        SignalAggregationProfile.MIN_WITH_RANGE,
+        SignalAggregationProfile.MAX_WITH_RANGE,
+    }
 )
 
 
@@ -60,6 +72,162 @@ class OhlcBucketAggregate:
     observation_count: int
 
 
+@dataclass(frozen=True, slots=True)
+class DatedValue:
+    """One finite value paired with the real date on which it was observed."""
+
+    value: Decimal
+    observed_date: date
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, Decimal):
+            raise TypeError("value must be a Decimal")
+        if not self.value.is_finite():
+            raise ValueError("value must be finite")
+        if type(self.observed_date) is not date:
+            raise TypeError("observed_date must be a datetime.date instance")
+
+
+@dataclass(frozen=True, slots=True)
+class ScalarBucketStatistics:
+    """Complete dated statistics for one scalar series inside one bucket."""
+
+    bucket: Bucket
+    observation_count: int
+    first: DatedValue | None
+    minimum: DatedValue | None
+    maximum: DatedValue | None
+    last: DatedValue | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.bucket, Bucket):
+            raise TypeError("bucket must be a Bucket")
+        if not isinstance(self.observation_count, int) or isinstance(self.observation_count, bool):
+            raise TypeError("observation_count must be an int")
+        if self.observation_count < 0:
+            raise ValueError("observation_count must be non-negative")
+        statistics = (self.first, self.minimum, self.maximum, self.last)
+        if self.observation_count == 0:
+            if any(statistic is not None for statistic in statistics):
+                raise ValueError("empty scalar statistics must not contain values")
+            return
+        if any(statistic is None for statistic in statistics):
+            raise ValueError("non-empty scalar statistics require first/minimum/maximum/last")
+        for statistic in statistics:
+            if not isinstance(statistic, DatedValue):
+                raise TypeError("scalar statistics must contain DatedValue instances")
+            if not self.bucket.contains(statistic.observed_date):
+                raise ValueError("statistic observed_date must fall inside the bucket")
+        if self.first.observed_date > self.last.observed_date:
+            raise ValueError("first observed_date must not follow last observed_date")
+        if self.minimum.value > self.maximum.value:
+            raise ValueError("minimum value must not exceed maximum value")
+        if not self.minimum.value <= self.first.value <= self.maximum.value:
+            raise ValueError("first value must fall inside minimum/maximum")
+        if not self.minimum.value <= self.last.value <= self.maximum.value:
+            raise ValueError("last value must fall inside minimum/maximum")
+
+
+@dataclass(frozen=True, slots=True)
+class BandBucketStatistics:
+    """Independent dated statistics for lower/middle/upper band components."""
+
+    bucket: Bucket
+    observation_count: int
+    lower: ScalarBucketStatistics
+    middle: ScalarBucketStatistics
+    upper: ScalarBucketStatistics
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.bucket, Bucket):
+            raise TypeError("bucket must be a Bucket")
+        if not isinstance(self.observation_count, int) or isinstance(self.observation_count, bool):
+            raise TypeError("observation_count must be an int")
+        if self.observation_count < 0:
+            raise ValueError("observation_count must be non-negative")
+        for component in (self.lower, self.middle, self.upper):
+            if not isinstance(component, ScalarBucketStatistics):
+                raise TypeError("band components must be ScalarBucketStatistics")
+            if component.bucket != self.bucket:
+                raise ValueError("band component statistics must reference the same bucket")
+            if component.observation_count > self.observation_count:
+                raise ValueError("band component count cannot exceed band observation_count")
+        component_counts = (
+            self.lower.observation_count,
+            self.middle.observation_count,
+            self.upper.observation_count,
+        )
+        if self.observation_count == 0 and any(component_counts):
+            raise ValueError("empty band statistics must have empty components")
+        if self.observation_count > 0 and not any(component_counts):
+            raise ValueError("non-empty band statistics require at least one observed component")
+
+
+@dataclass(frozen=True, slots=True)
+class BandEnvelopeRepresentative:
+    """Synthetic chart envelope selected from independent band statistics."""
+
+    bucket: Bucket
+    lower: DatedValue | None
+    middle: DatedValue | None
+    upper: DatedValue | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.bucket, Bucket):
+            raise TypeError("bucket must be a Bucket")
+        present = [component for component in (self.lower, self.middle, self.upper) if component is not None]
+        if any(not isinstance(component, DatedValue) for component in present):
+            raise TypeError("band envelope components must be DatedValue instances")
+        if any(not self.bucket.contains(component.observed_date) for component in present):
+            raise ValueError("band envelope observed dates must fall inside the bucket")
+        if any(current.value > following.value for current, following in zip(present, present[1:], strict=False)):
+            raise ValueError("band envelope must satisfy lower <= middle <= upper")
+
+
+def _dated_value(point: ObservedPoint) -> DatedValue:
+    return DatedValue(value=point.value, observed_date=point.date)
+
+
+def _scalar_statistics_for_bucket(
+    bucket: Bucket,
+    points: Sequence[ObservedPoint],
+) -> ScalarBucketStatistics:
+    if not points:
+        return ScalarBucketStatistics(
+            bucket=bucket,
+            observation_count=0,
+            first=None,
+            minimum=None,
+            maximum=None,
+            last=None,
+        )
+    minimum_value = min(point.value for point in points)
+    maximum_value = max(point.value for point in points)
+    minimum_point = next(point for point in points if point.value == minimum_value)
+    maximum_point = next(point for point in points if point.value == maximum_value)
+    return ScalarBucketStatistics(
+        bucket=bucket,
+        observation_count=len(points),
+        first=_dated_value(points[0]),
+        minimum=_dated_value(minimum_point),
+        maximum=_dated_value(maximum_point),
+        last=_dated_value(points[-1]),
+    )
+
+
+def aggregate_scalar_statistics(
+    points: Iterable[ObservedPoint],
+    plan: BucketPlan,
+) -> tuple[ScalarBucketStatistics, ...]:
+    """Aggregate scalar observations with real dates and chronological tie-breaking."""
+
+    materialized = tuple(points)
+    if any(not isinstance(point, ObservedPoint) for point in materialized):
+        raise TypeError("points must contain ObservedPoint values")
+    grouped = _assign_by_date(materialized, plan)
+    return tuple(_scalar_statistics_for_bucket(bucket, bucket_points) for bucket, bucket_points in zip(plan.buckets, grouped, strict=True))
+
+
 def aggregate_ohlc(points: Iterable[ObservedPoint], plan: BucketPlan) -> tuple[OhlcBucketAggregate, ...]:
     """Aggregate a scalar numeric series (price/FX/...) into OHLC-like buckets.
 
@@ -68,24 +236,82 @@ def aggregate_ohlc(points: Iterable[ObservedPoint], plan: BucketPlan) -> tuple[O
     is the responsibility of a warm-up/carry-forward helper if needed).
     """
 
-    grouped = _assign_by_date(tuple(points), plan)
-    results: list[OhlcBucketAggregate] = []
+    statistics = aggregate_scalar_statistics(points, plan)
+    return tuple(
+        OhlcBucketAggregate(
+            bucket=item.bucket,
+            first=item.first.value if item.first is not None else None,
+            minimum=item.minimum.value if item.minimum is not None else None,
+            maximum=item.maximum.value if item.maximum is not None else None,
+            last=item.last.value if item.last is not None else None,
+            observation_count=item.observation_count,
+        )
+        for item in statistics
+    )
+
+
+def aggregate_band_statistics(
+    points: Iterable[BandObservedPoint],
+    plan: BucketPlan,
+) -> tuple[BandBucketStatistics, ...]:
+    """Aggregate band components independently so their observed dates remain truthful."""
+
+    materialized = tuple(points)
+    if any(not isinstance(point, BandObservedPoint) for point in materialized):
+        raise TypeError("points must contain BandObservedPoint values")
+    grouped = _assign_by_date(materialized, plan)
+    results: list[BandBucketStatistics] = []
     for bucket, bucket_points in zip(plan.buckets, grouped, strict=True):
-        if not bucket_points:
-            results.append(OhlcBucketAggregate(bucket=bucket, first=None, minimum=None, maximum=None, last=None, observation_count=0))
-            continue
-        values = tuple(point.value for point in bucket_points)
+        components = {component: tuple(ObservedPoint(date=point.date, value=value) for point in bucket_points if (value := getattr(point, component)) is not None) for component in ("lower", "middle", "upper")}
         results.append(
-            OhlcBucketAggregate(
+            BandBucketStatistics(
                 bucket=bucket,
-                first=bucket_points[0].value,
-                minimum=min(values),
-                maximum=max(values),
-                last=bucket_points[-1].value,
                 observation_count=len(bucket_points),
+                lower=_scalar_statistics_for_bucket(bucket, components["lower"]),
+                middle=_scalar_statistics_for_bucket(bucket, components["middle"]),
+                upper=_scalar_statistics_for_bucket(bucket, components["upper"]),
             )
         )
     return tuple(results)
+
+
+def select_scalar_representative(
+    statistics: ScalarBucketStatistics,
+    profile: SignalAggregationProfile,
+) -> DatedValue | None:
+    """Select the chart representative declared by a scalar aggregation profile."""
+
+    if not isinstance(statistics, ScalarBucketStatistics):
+        raise TypeError("statistics must be ScalarBucketStatistics")
+    if not isinstance(profile, SignalAggregationProfile):
+        raise TypeError("profile must be a SignalAggregationProfile")
+    selectors = {
+        SignalAggregationProfile.FIRST_WITH_RANGE: statistics.first,
+        SignalAggregationProfile.MIN_WITH_RANGE: statistics.minimum,
+        SignalAggregationProfile.MAX_WITH_RANGE: statistics.maximum,
+        SignalAggregationProfile.LAST_WITH_RANGE: statistics.last,
+    }
+    if profile not in selectors:
+        raise ValueError(f"{profile.value} is not a scalar aggregation profile")
+    return selectors[profile]
+
+
+def select_band_envelope(
+    statistics: BandBucketStatistics,
+    profile: SignalAggregationProfile = SignalAggregationProfile.BAND_ENVELOPE,
+) -> BandEnvelopeRepresentative:
+    """Select lower=min, middle=last, upper=max for the chart band envelope."""
+
+    if not isinstance(statistics, BandBucketStatistics):
+        raise TypeError("statistics must be BandBucketStatistics")
+    if profile != SignalAggregationProfile.BAND_ENVELOPE:
+        raise ValueError("band envelope selection requires band_envelope profile")
+    return BandEnvelopeRepresentative(
+        bucket=statistics.bucket,
+        lower=statistics.lower.minimum,
+        middle=statistics.middle.last,
+        upper=statistics.upper.maximum,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,3 +411,31 @@ def assign_discrete_events(events: Iterable[DiscreteEvent], plan: BucketPlan) ->
 
     grouped = _assign_by_date(tuple(deduplicated.values()), plan)
     return tuple(DiscreteEventBucketAssignment(bucket=bucket, events=bucket_events, event_count=len(bucket_events)) for bucket, bucket_events in zip(plan.buckets, grouped, strict=True))
+
+
+SignalBucketAggregate = ScalarBucketStatistics | BandBucketStatistics | DiscreteEventBucketAssignment
+
+
+def aggregate_signal_buckets(
+    profile: SignalAggregationProfile,
+    items: Iterable[ObservedPoint | BandObservedPoint | DiscreteEvent],
+    plan: BucketPlan,
+) -> tuple[SignalBucketAggregate, ...]:
+    """Dispatch one plugin-declared enum profile without custom aggregation hooks."""
+
+    if not isinstance(profile, SignalAggregationProfile):
+        raise TypeError("profile must be a SignalAggregationProfile")
+    materialized = tuple(items)
+    if profile in _SCALAR_AGGREGATION_PROFILES:
+        if any(not isinstance(item, ObservedPoint) for item in materialized):
+            raise TypeError("scalar profiles require ObservedPoint values")
+        return aggregate_scalar_statistics(materialized, plan)
+    if profile == SignalAggregationProfile.BAND_ENVELOPE:
+        if any(not isinstance(item, BandObservedPoint) for item in materialized):
+            raise TypeError("band_envelope requires BandObservedPoint values")
+        return aggregate_band_statistics(materialized, plan)
+    if profile == SignalAggregationProfile.EVENTS_VERBATIM:
+        if any(not isinstance(item, DiscreteEvent) for item in materialized):
+            raise TypeError("events_verbatim requires DiscreteEvent values")
+        return assign_discrete_events(materialized, plan)
+    raise ValueError(f"unsupported signal aggregation profile: {profile.value}")

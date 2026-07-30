@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAvailabilityReason,
     SignalAxisRole,
     SignalAxisSpec,
@@ -94,6 +95,7 @@ class RollingSharpePlugin(SignalPlugin):
             semantic_id="rolling_sharpe_ratio.value",
             semantic_description="Annualized mean daily excess return divided by sample volatility.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(
                 key="risk_sharpe",

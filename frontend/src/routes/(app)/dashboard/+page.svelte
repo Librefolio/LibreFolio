@@ -17,14 +17,11 @@
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
-    import AiExportMenuV2 from '$lib/features/ai-export/AiExportMenuV2.svelte';
-    import {copyAiExportV2, type AiExportNonEmptyBrokerIds, type AiExportPortfolioRequestContext} from '$lib/features/ai-export/aiExportClipboardV2';
-    import {aiExportStatsContextFingerprint, isAiExportStatsRequestCurrent, normalizeAiExportUserNotes, type AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
-    import {PORTFOLIO_AI_EXPORT_TASKS} from '$lib/features/ai-export/catalog/portfolioTasks';
-    import {aiExportCatalogLoader, reconcileAiExportCatalog, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
-    import {AI_EXPORT_CATALOG_SCHEMA_VERSION} from '$lib/features/ai-export/catalog/shared';
-    import type {AiExportPromptStats} from '$lib/features/ai-export/templates/promptRenderer';
-    import {buildAiExportMenuV2Labels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
+    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
+    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
+    import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
+    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -59,20 +56,7 @@
     import {zodiosApi} from '$lib/api';
     import {buildTransactionsFiltersUrl} from '../transactions/filterState';
 
-    const DISABLED_AI_EXPORT_COMPATIBILITY = reconcileAiExportCatalog({
-        schema_version: AI_EXPORT_CATALOG_SCHEMA_VERSION,
-        entries: [],
-    });
-    type PortfolioAiExportTask = (typeof PORTFOLIO_AI_EXPORT_TASKS)[number]['id'];
-
-    function toAiExportBrokerIds(brokerIds: readonly number[] | undefined): AiExportNonEmptyBrokerIds | undefined {
-        if (!brokerIds?.length) return undefined;
-
-        const sortedBrokerIds = [...brokerIds].sort((left, right) => left - right);
-        const firstBrokerId = sortedBrokerIds[0];
-        if (firstBrokerId === undefined) return undefined;
-        return [firstBrokerId, ...sortedBrokerIds.slice(1)];
-    }
+    const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
     // =========================================================================
     // State
@@ -193,40 +177,11 @@
     /** Which broker IDs to pass to the API (undefined = all). */
     const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : undefined);
 
-    /** AI export state — dropdown open/position handled internally by AiExportMenuV2. */
+    /** AI export state — dropdown open/position handled internally by AiExportMenu. */
     let aiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
     let aiExportCatalogLoading = $state(true);
     let aiExportCatalogFailed = $state(false);
-    let aiExportLoading = $state(false);
-    let aiExportLastStats = $state<AiExportPromptStats | undefined>(undefined);
-    let aiExportLastStatsFingerprint = $state<string | undefined>(undefined);
-    let aiExportLastStatsContextFingerprint = $state<string | undefined>(undefined);
-    let aiExportObservedContextFingerprint = $state<string | undefined>(undefined);
-    let aiExportContextGeneration = $state(0);
-    let aiExportBrokerIds = $derived(toAiExportBrokerIds(activeBrokerIds));
-    let aiExportContextFingerprint = $derived(
-        aiExportStatsContextFingerprint({
-            contextKey: `portfolio:${aiExportBrokerIds ? aiExportBrokerIds.join(',') : 'all'}`,
-            dateStart: dateRangeCtl.start,
-            dateEnd: dateRangeCtl.end,
-            displayCurrency: targetCurrency,
-            targetCurrency,
-        }),
-    );
-    let aiExportVisibleLastStats = $derived(aiExportLastStatsContextFingerprint === aiExportContextFingerprint ? aiExportLastStats : undefined);
-    let aiExportVisibleLastStatsFingerprint = $derived(aiExportLastStatsContextFingerprint === aiExportContextFingerprint ? aiExportLastStatsFingerprint : undefined);
-    let aiExportLabels = $derived(buildAiExportMenuV2Labels($_, PORTFOLIO_AI_EXPORT_TASKS, $_('dashboard.aiExport'), $_('dashboard.aiExportBuilding')));
-
-    $effect(() => {
-        const contextFingerprint = aiExportContextFingerprint;
-        if (untrack(() => aiExportObservedContextFingerprint) === contextFingerprint) return;
-
-        aiExportObservedContextFingerprint = contextFingerprint;
-        aiExportContextGeneration = untrack(() => aiExportContextGeneration) + 1;
-        aiExportLastStats = undefined;
-        aiExportLastStatsFingerprint = undefined;
-        aiExportLastStatsContextFingerprint = undefined;
-    });
+    let aiExportLabels = $derived(buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'), $_('dashboard.aiExportBuilding')));
 
     /** Whether the filter is "active" (some but not all brokers selected). */
     const brokerFilterActive = $derived(selectedBrokerIds.length > 0 && !allBrokersSelected);
@@ -464,61 +419,30 @@
             aiExportCatalogFailed = false;
         } catch {
             aiExportCatalogFailed = true;
-            toasts.error($_('aiExport.v2.catalogUnavailable'));
+            toasts.error($_('aiExport.catalogUnavailable'));
         } finally {
             aiExportCatalogLoading = false;
         }
     }
 
-    function isPortfolioAiExportTask(task: AiExportOptionsSelection['task']): task is PortfolioAiExportTask {
-        return PORTFOLIO_AI_EXPORT_TASKS.some((definition) => definition.id === task);
+    function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+        return prepareAiExport({
+            context: {
+                domain: 'portfolio',
+                snapshotAsOf: dateRangeCtl.end,
+                targetCurrency,
+                brokerIds: activeBrokerIds,
+            },
+            options,
+            compatibility: aiExportCompatibility,
+            translate: (key) => $_(key),
+        });
     }
 
-    async function handleAiExport(options: AiExportOptionsSelection) {
-        if (aiExportCatalogLoading || aiExportCatalogFailed) return;
-        if (!isPortfolioAiExportTask(options.task)) {
-            toasts.error($_('aiExport.v2.catalogUnavailable'));
-            return;
-        }
-
-        aiExportLoading = true;
-        const requestGeneration = aiExportContextGeneration;
-        const requestContextFingerprint = aiExportContextFingerprint;
-        const context: AiExportPortfolioRequestContext = {
-            domain: 'portfolio',
-            ...(aiExportBrokerIds ? {brokerIds: aiExportBrokerIds} : {}),
-            dateRange: {
-                start: dateRangeCtl.start,
-                end: dateRangeCtl.end,
-            },
-            targetCurrency,
-        };
-        try {
-            const result = await copyAiExportV2({
-                context,
-                task: options.task,
-                detailLevel: options.detailLevel,
-                renderMode: options.renderMode,
-                responseLanguage: options.responseLanguage,
-                userNotes: normalizeAiExportUserNotes(options.renderMode, options.userNotes),
-                webResearch: options.webResearch,
-                technicalWindow: options.technicalWindow,
-                compatibility: aiExportCompatibility,
-            });
-            if (isAiExportStatsRequestCurrent(requestGeneration, requestContextFingerprint, aiExportContextGeneration, aiExportContextFingerprint)) {
-                aiExportLastStats = result.stats;
-                aiExportLastStatsFingerprint = result.optionsFingerprint;
-                aiExportLastStatsContextFingerprint = requestContextFingerprint;
-            }
-
-            const messages = getAiExportSuccessMessages($_, result);
-            toasts.success(messages.copied);
-            toasts.info(messages.privacyNotice);
-        } catch (error) {
-            toasts.error(getAiExportErrorMessage($_, error));
-        } finally {
-            aiExportLoading = false;
-        }
+    function handleAiExportCopied(result: PreparedAiExport) {
+        const messages = getAiExportSuccessMessages($_, result);
+        toasts.success(messages.copied);
+        toasts.info(messages.privacyNotice);
     }
 
     async function positionBrokerFilterDropdown() {
@@ -703,20 +627,17 @@
 
         {#snippet actions({showActionLabels})}
             <!-- AI Export -->
-            <AiExportMenuV2
-                domainTaskDefinitions={PORTFOLIO_AI_EXPORT_TASKS}
+            <AiExportMenu
+                domain="portfolio"
                 compatibility={aiExportCompatibility}
                 memoryKey="portfolio"
-                defaultTask="pac_planning"
-                defaultDetailLevel="standard"
-                defaultRenderMode="full_prompt"
-                lastStats={aiExportVisibleLastStats}
-                lastStatsFingerprint={aiExportVisibleLastStatsFingerprint}
+                defaultSelectionId="portfolio.pac_planning"
                 disabled={aiExportCatalogLoading || aiExportCatalogFailed}
-                loading={aiExportLoading}
                 labels={aiExportLabels}
                 showLabel={showActionLabels}
-                onexport={handleAiExport}
+                onprepare={handleAiExport}
+                oncopied={handleAiExportCopied}
+                onerror={(error) => toasts.error(getAiExportErrorMessage($_, error))}
             />
 
             <button

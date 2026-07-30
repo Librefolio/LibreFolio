@@ -148,6 +148,22 @@ describe('signal problem mapping', () => {
             warmupRequiredPoints: 40,
         });
         expect(getSignalProblemSeverity(problem!)).toBe('warning');
+        expect(
+            getSignalProblemSeverity({
+                ...problem!,
+                requestedPoints: 9_292,
+                warmupUsedPoints: 0,
+                warmupRequiredPoints: 2,
+            }),
+        ).toBe('notice');
+        expect(
+            getSignalProblemSeverity({
+                ...problem!,
+                requestedPoints: 7,
+                warmupUsedPoints: 0,
+                warmupRequiredPoints: 2,
+            }),
+        ).toBe('warning');
     });
 
     it('maps contiguous-segment details for partial coverage', () => {

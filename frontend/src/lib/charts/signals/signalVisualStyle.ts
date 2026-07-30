@@ -17,6 +17,7 @@ export function defaultSignalVisualStyle(): SignalVisualStyle {
         colorRole: 'primary',
         lineWidthDelta: 0,
         opacity: 1,
+        fillOpacity: 0.2,
     };
 }
 

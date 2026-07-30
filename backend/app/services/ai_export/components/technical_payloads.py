@@ -9,13 +9,11 @@ builders (see `technical_shared.py`, `portfolio_broker_technical.py` and
 deterministically ordered by its producing builder (never re-sorted here).
 
 Design notes:
-- Every continuous series (price/rate OHLC, indicator lines, indicator bands,
-  FX returns) is represented uniformly as `TechnicalBucket` (or a thin
-  subclass adding one extra derived field): first/minimum/maximum/last are
-  each a mapping of named numeric outputs (a single ``"value"``-shaped key
-  for a scalar line, ``"lower"``/``"middle"``/``"upper"`` for a band, ...),
-  produced by `temporal.aggregators.aggregate_continuous_multi_output`. This
-  keeps one bucket shape for every "OHLC-style" series in the technical wave.
+- Price/rate/return series retain the generic OHLC-style `TechnicalBucket`.
+- Plugin indicators are row-oriented: one `IndicatorTablePayload` per plugin
+  instance, one `IndicatorBucketRow` per temporal bucket, and one cell per
+  scalar output or band component. Cells preserve real observation dates and
+  use a compact single-observation shape or complete first/min/max/last stats.
 - Discrete events/state-changes are never bucket-aggregated numerically: they
   are assigned to buckets verbatim via `temporal.aggregators.assign_discrete_events`
   (dedup, never averaged/truncated/capped) and exposed as `TechnicalEventBucket`.
@@ -26,9 +24,16 @@ Design notes:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
+from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+
+from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalBandComponent,
+    SignalSeriesKind,
+)
 
 
 class TechnicalBucket(BaseModel):
@@ -43,11 +48,25 @@ class TechnicalBucket(BaseModel):
 
     start_date: date
     end_date: date
+    calendar_days: int = Field(..., ge=1)
     first: dict[str, float] | None = None
     minimum: dict[str, float] | None = None
     maximum: dict[str, float] | None = None
     last: dict[str, float] | None = None
-    observation_count: int
+    observation_count: int = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def validate_bucket(self) -> TechnicalBucket:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must not follow end_date")
+        if self.calendar_days != (self.end_date - self.start_date).days + 1:
+            raise ValueError("calendar_days must match the inclusive bucket range")
+        values = (self.first, self.minimum, self.maximum, self.last)
+        if self.observation_count == 0 and any(value is not None for value in values):
+            raise ValueError("empty technical buckets must not contain values")
+        if self.observation_count > 0 and any(value is None for value in values):
+            raise ValueError("populated technical buckets require first/minimum/maximum/last")
+        return self
 
 
 class PriceBucket(TechnicalBucket):
@@ -97,12 +116,111 @@ class PortfolioTechnicalPricesPayload(BaseModel):
     considered_asset_count: int
 
 
-class IndicatorSeriesPayload(BaseModel):
-    """One plugin-computed indicator output series, OHLC-bucketed, with its own latest state.
+class TechnicalDatedValue(BaseModel):
+    """One finite value paired with its real observation date."""
 
-    ``semantic_id``/``semantic_description``/``category``/``unit`` are copied
-    verbatim from the owning plugin's `describe_for_ai()` (never re-derived or
-    duplicated here) so AI Export never re-implements indicator semantics.
+    model_config = ConfigDict(extra="forbid")
+
+    value: FiniteFloat
+    date: date
+
+
+class TechnicalSingleValueCell(BaseModel):
+    """Compact cell for a bucket containing exactly one finite observation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["single"] = "single"
+    value: FiniteFloat
+    date: date
+
+
+class TechnicalRangeValueCell(BaseModel):
+    """Complete dated statistics for a bucket containing multiple observations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["range"] = "range"
+    observation_count: int = Field(..., ge=2)
+    first: TechnicalDatedValue
+    min: TechnicalDatedValue
+    max: TechnicalDatedValue
+    last: TechnicalDatedValue
+
+    @model_validator(mode="after")
+    def validate_statistics(self) -> TechnicalRangeValueCell:
+        if self.first.date > self.last.date:
+            raise ValueError("first date must not follow last date")
+        if self.min.value > self.max.value:
+            raise ValueError("min value must not exceed max value")
+        if not self.min.value <= self.first.value <= self.max.value:
+            raise ValueError("first value must fall inside min/max")
+        if not self.min.value <= self.last.value <= self.max.value:
+            raise ValueError("last value must fall inside min/max")
+        return self
+
+
+TechnicalIndicatorCell = Annotated[
+    Union[TechnicalSingleValueCell, TechnicalRangeValueCell],
+    Field(discriminator="kind"),
+]
+
+
+class IndicatorOutputColumn(BaseModel):
+    """Plugin-owned metadata for one scalar output or one band component."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    column_key: str
+    output_key: str
+    component: SignalBandComponent | None = None
+    semantic_id: str
+    semantic_description: str
+    unit: str
+    kind: SignalSeriesKind
+    aggregation_profile: SignalAggregationProfile
+    latest: TechnicalDatedValue | None = None
+
+
+class IndicatorBucketRow(BaseModel):
+    """One temporal row shared by every output column of one plugin instance."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start_date: date
+    end_date: date
+    calendar_days: int = Field(..., ge=1)
+    observation_count: int = Field(..., ge=0)
+    cells: dict[str, TechnicalIndicatorCell | None]
+
+    @model_validator(mode="after")
+    def validate_bucket(self) -> IndicatorBucketRow:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must not follow end_date")
+        if self.calendar_days != (self.end_date - self.start_date).days + 1:
+            raise ValueError("calendar_days must match the inclusive bucket range")
+        cell_counts = [1 if isinstance(cell, TechnicalSingleValueCell) else cell.observation_count for cell in self.cells.values() if cell is not None]
+        if cell_counts and max(cell_counts) > self.observation_count:
+            raise ValueError("cell observation count cannot exceed row observation_count")
+        if self.observation_count == 0 and cell_counts:
+            raise ValueError("empty indicator rows must not contain populated cells")
+        for cell in self.cells.values():
+            if isinstance(cell, TechnicalSingleValueCell):
+                dates = (cell.date,)
+            elif isinstance(cell, TechnicalRangeValueCell):
+                dates = (cell.first.date, cell.min.date, cell.max.date, cell.last.date)
+            else:
+                continue
+            if any(day < self.start_date or day > self.end_date for day in dates):
+                raise ValueError("cell dates must fall inside the bucket")
+        return self
+
+
+class IndicatorTablePayload(BaseModel):
+    """One plugin instance with temporally local output columns and bucket rows.
+
+    Plugin and output semantics are copied from `describe_for_ai()` and
+    `SignalOutputSpec`; AI Export never re-derives indicator meaning.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -112,12 +230,22 @@ class IndicatorSeriesPayload(BaseModel):
     semantic_id: str
     semantic_description: str
     category: str
-    output_key: str
-    unit: str
-    kind: str
-    buckets: tuple[TechnicalBucket, ...]
-    latest: dict[str, float] | None = None
-    latest_date: date | None = None
+    columns: tuple[IndicatorOutputColumn, ...] = Field(..., min_length=1)
+    rows: tuple[IndicatorBucketRow, ...] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def validate_table(self) -> IndicatorTablePayload:
+        column_keys = [column.column_key for column in self.columns]
+        if len(column_keys) != len(set(column_keys)):
+            raise ValueError("indicator column keys must be unique")
+        expected_keys = set(column_keys)
+        for row in self.rows:
+            if set(row.cells) != expected_keys:
+                raise ValueError("every indicator row must contain exactly the declared columns")
+        for previous, current in zip(self.rows, self.rows[1:], strict=False):
+            if current.start_date != previous.end_date + timedelta(days=1):
+                raise ValueError("indicator rows must be contiguous and ordered")
+        return self
 
 
 class AssetIndicatorsPayload(BaseModel):
@@ -127,7 +255,7 @@ class AssetIndicatorsPayload(BaseModel):
 
     asset_id: int
     weight: float | None = None
-    indicators: tuple[IndicatorSeriesPayload, ...]
+    indicators: tuple[IndicatorTablePayload, ...]
 
 
 class UniverseIndicatorsPayload(BaseModel):
@@ -145,7 +273,7 @@ class SingleTargetIndicatorsPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    indicators: tuple[IndicatorSeriesPayload, ...]
+    indicators: tuple[IndicatorTablePayload, ...]
 
 
 class TechnicalEventPayload(BaseModel):
@@ -170,8 +298,21 @@ class TechnicalEventBucket(BaseModel):
 
     start_date: date
     end_date: date
+    calendar_days: int = Field(..., ge=1)
     events: tuple[TechnicalEventPayload, ...] = ()
-    event_count: int
+    event_count: int = Field(..., ge=0)
+
+    @model_validator(mode="after")
+    def validate_bucket(self) -> TechnicalEventBucket:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must not follow end_date")
+        if self.calendar_days != (self.end_date - self.start_date).days + 1:
+            raise ValueError("calendar_days must match the inclusive bucket range")
+        if self.event_count != len(self.events):
+            raise ValueError("event_count must match events")
+        if any(event.date < self.start_date or event.date > self.end_date for event in self.events):
+            raise ValueError("event dates must fall inside the bucket")
+        return self
 
 
 class TechnicalEventsPayload(BaseModel):
@@ -247,15 +388,21 @@ __all__ = [
     "BreadthStateBucket",
     "FxRateOhlcPayload",
     "FxReturnsVolatilityPayload",
-    "IndicatorSeriesPayload",
+    "IndicatorBucketRow",
+    "IndicatorOutputColumn",
+    "IndicatorTablePayload",
     "PortfolioTechnicalPricesPayload",
     "PriceBucket",
     "ReturnVolatilityBucket",
     "SingleTargetIndicatorsPayload",
     "TechnicalBucket",
+    "TechnicalDatedValue",
     "TechnicalEventBucket",
     "TechnicalEventPayload",
     "TechnicalEventsPayload",
+    "TechnicalIndicatorCell",
+    "TechnicalRangeValueCell",
+    "TechnicalSingleValueCell",
     "UniverseBreadthPayload",
     "UniverseIndicatorsPayload",
 ]

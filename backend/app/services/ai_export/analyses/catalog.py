@@ -104,14 +104,35 @@ _BROKER_ANALYSES: tuple[AnalysisSpec, ...] = (
 
 _ASSET_ANALYSES: tuple[AnalysisSpec, ...] = (
     _analysis(Domain.ASSET, "trend_analysis", icon="trending-up", required=("asset.overview", "asset.market_technical")),
-    _analysis(Domain.ASSET, "position_review", icon="wallet", required=("asset.overview", "asset.position_performance"), optional=("asset.market_technical",)),
-    _analysis(Domain.ASSET, "drawdown_recovery", icon="trending-down", required=("asset.overview", "asset.market_technical"), optional=("asset.position_performance",)),
+    _analysis(
+        Domain.ASSET,
+        "position_review",
+        icon="wallet",
+        required=("asset.overview", "asset.position_performance"),
+        optional=("asset.market_technical",),
+        applicability_code="requires_position",
+    ),
+    _analysis(
+        Domain.ASSET,
+        "drawdown_recovery",
+        icon="trending-down",
+        required=("asset.overview", "asset.market_technical"),
+        optional=("asset.position_performance",),
+        applicability_code="requires_price_history",
+    ),
 )
 
 _FX_ANALYSES: tuple[AnalysisSpec, ...] = (
     _analysis(Domain.FX, "trend_review", icon="trending-up", required=("fx.overview", "fx.market_technical")),
     _analysis(Domain.FX, "conversion_timing", icon="clock", required=("fx.overview", "fx.market_technical"), optional=("fx.direct_exposure",)),
-    _analysis(Domain.FX, "exposure_impact", icon="scale", required=("fx.overview", "fx.direct_exposure"), optional=("fx.market_technical",)),
+    _analysis(
+        Domain.FX,
+        "exposure_impact",
+        icon="scale",
+        required=("fx.overview", "fx.direct_exposure"),
+        optional=("fx.market_technical",),
+        applicability_code="requires_direct_exposure",
+    ),
 )
 
 ALL_ANALYSES: tuple[AnalysisSpec, ...] = _PORTFOLIO_ANALYSES + _BROKER_ANALYSES + _ASSET_ANALYSES + _FX_ANALYSES
