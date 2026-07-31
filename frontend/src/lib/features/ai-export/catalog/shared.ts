@@ -7,8 +7,21 @@ export type AiExportDatasetCatalogEntry = z.output<typeof schemas.AiExportDatase
 export type AiExportAnalysisCatalogEntry = z.output<typeof schemas.AiExportAnalysisCatalogEntry>;
 export type AiExportBackendCatalogResponse = z.output<typeof schemas.AiExportCatalogResponse>;
 type GeneratedAiExportSnapshotResponse = z.output<typeof schemas.AiExportSnapshotResponse>;
-export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract'> & {
+export interface AiExportTechnicalSamplingManifest {
+    readonly detail_level: AiExportDetailLevel;
+    readonly price_policy?: z.output<typeof schemas.AiExportPriceSamplingPolicy> | null;
+    readonly indicator_policies: readonly z.output<typeof schemas.AiExportIndicatorSamplingPolicy>[];
+}
+export interface AiExportEntityDirectory {
+    readonly assets: readonly z.output<typeof schemas.AiExportAssetDirectoryEntry>[];
+    readonly brokers: readonly z.output<typeof schemas.AiExportBrokerDirectoryEntry>[];
+    readonly fx_pairs: readonly z.output<typeof schemas.AiExportFxPairDirectoryEntry>[];
+}
+export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract' | 'technical_sampling' | 'event_selection' | 'entity_directory'> & {
     analysis_contract?: z.output<typeof schemas.AiExportAnalysisContract> | null;
+    technical_sampling?: AiExportTechnicalSamplingManifest | null;
+    event_selection?: z.output<typeof schemas.AiExportEventSelectionManifest> | null;
+    entity_directory: AiExportEntityDirectory;
 };
 export type AiExportSelectionKind = 'dataset' | 'analysis';
 export type AiExportCatalogEntry = AiExportDatasetCatalogEntry | AiExportAnalysisCatalogEntry;
@@ -88,8 +101,27 @@ export function isAiExportAnalysisId(value: string): value is AiExportAnalysisId
 export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSnapshotResponse): AiExportSnapshotResponse {
     const analysisContract = response.analysis_contract;
     if (Array.isArray(analysisContract)) throw new TypeError('AI Export analysis_contract must not be an array');
+    const technicalSampling = response.technical_sampling;
+    if (Array.isArray(technicalSampling)) throw new TypeError('AI Export technical_sampling must not be an array');
+    const pricePolicy = technicalSampling?.price_policy;
+    if (Array.isArray(pricePolicy)) throw new TypeError('AI Export technical_sampling.price_policy must not be an array');
+    const eventSelection = response.event_selection;
+    if (Array.isArray(eventSelection)) throw new TypeError('AI Export event_selection must not be an array');
     return {
         ...response,
         analysis_contract: analysisContract,
+        technical_sampling: technicalSampling
+            ? {
+                  ...technicalSampling,
+                  price_policy: pricePolicy,
+                  indicator_policies: technicalSampling.indicator_policies ?? [],
+              }
+            : technicalSampling,
+        event_selection: eventSelection,
+        entity_directory: {
+            assets: response.entity_directory?.assets ?? [],
+            brokers: response.entity_directory?.brokers ?? [],
+            fx_pairs: response.entity_directory?.fx_pairs ?? [],
+        },
     };
 }

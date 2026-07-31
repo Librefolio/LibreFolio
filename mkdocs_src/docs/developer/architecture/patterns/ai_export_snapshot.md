@@ -138,6 +138,14 @@ frontend/src/lib/features/ai-export/
 ├── serialization/
 ├── aiExportClient.ts
 └── aiExportClipboard.ts
+
+backend/test_scripts/diagnostics/
+├── ai_export_probe_app.py
+└── ai_export_real_prompt_probe.py
+
+frontend/scripts/
+├── ai-export-render-prompt-probe.ts
+└── run-ai-export-render-prompt-probe.mjs
 ```
 
 ## 🔗 Related Documentation

@@ -91,7 +91,7 @@ class AssetPriceSeriesPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
-    weight: float | None = None
+    portfolio_weight_ratio: float | None = None
     currency: str
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None
@@ -183,6 +183,8 @@ class IndicatorOutputColumn(BaseModel):
     unit: str
     kind: SignalSeriesKind
     aggregation_profile: SignalAggregationProfile
+    minimum: FiniteFloat | None = None
+    maximum: FiniteFloat | None = None
     latest: TechnicalDatedValue | None = None
 
 
@@ -235,6 +237,8 @@ class IndicatorTablePayload(BaseModel):
     semantic_id: str
     semantic_description: str
     category: str
+    portfolio_weight_ratio: float | None = None
+    technical_normalized_weight_ratio: float | None = None
     columns: tuple[IndicatorOutputColumn, ...] = Field(..., min_length=1)
     period_summary: dict[str, TechnicalIndicatorCell | None]
     rows: tuple[IndicatorBucketRow, ...] = Field(..., min_length=1)
@@ -262,7 +266,7 @@ class AssetIndicatorsPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
-    weight: float | None = None
+    portfolio_weight_ratio: float | None = None
     indicators: tuple[IndicatorTablePayload, ...]
 
 
@@ -274,6 +278,10 @@ class UniverseIndicatorsPayload(BaseModel):
     assets: tuple[AssetIndicatorsPayload, ...]
     eligible_asset_count: int
     considered_asset_count: int
+    covered_asset_count: int
+    eligible_portfolio_weight_ratio: float
+    covered_portfolio_weight_ratio: float
+    covered_weight_ratio: float
 
 
 class SingleTargetIndicatorsPayload(BaseModel):
@@ -282,6 +290,23 @@ class SingleTargetIndicatorsPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     indicators: tuple[IndicatorTablePayload, ...]
+
+
+class TechnicalNumericBounds(BaseModel):
+    """Optional plugin-owned numerical bounds for one rendered value."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    minimum: FiniteFloat | None = None
+    maximum: FiniteFloat | None = None
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> TechnicalNumericBounds:
+        if self.minimum is None and self.maximum is None:
+            raise ValueError("technical numeric bounds require minimum and/or maximum")
+        if self.minimum is not None and self.maximum is not None and self.minimum >= self.maximum:
+            raise ValueError("technical numeric bounds minimum must be lower than maximum")
+        return self
 
 
 class TechnicalEventPayload(BaseModel):
@@ -297,6 +322,7 @@ class TechnicalEventPayload(BaseModel):
     semantic_description: str
     direction: str | None = None
     values: dict[str, float]
+    value_bounds: dict[str, TechnicalNumericBounds] = Field(default_factory=dict)
     asset_id: int | None = None
 
 
@@ -401,9 +427,11 @@ class BreadthStateBucket(BaseModel):
     signal_code: str
     output_key: str
     state: str
+    covered_asset_count: int
+    covered_portfolio_weight_ratio: float
     unweighted_count: int
     unweighted_ratio: float
-    weighted_ratio: float
+    technical_normalized_weight_ratio: float
 
 
 class UniverseBreadthPayload(BaseModel):
@@ -414,7 +442,9 @@ class UniverseBreadthPayload(BaseModel):
     eligible_asset_count: int
     considered_asset_count: int
     covered_asset_count: int
-    total_weight: float
+    eligible_portfolio_weight_ratio: float
+    covered_portfolio_weight_ratio: float
+    covered_weight_ratio: float
     states: tuple[BreadthStateBucket, ...]
 
 
@@ -460,6 +490,7 @@ __all__ = [
     "TechnicalEventPayload",
     "TechnicalEventsPayload",
     "TechnicalIndicatorCell",
+    "TechnicalNumericBounds",
     "TechnicalRangeValueCell",
     "TechnicalSingleValueCell",
     "UniverseBreadthPayload",

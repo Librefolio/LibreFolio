@@ -378,6 +378,32 @@ class TestEmptyOverviewIsValid:
         assert envelope.payload["converted_price"] is None
         assert envelope.payload["conversion"] is None
 
+
+class TestPositionUnitPrice:
+    @pytest.mark.asyncio
+    async def test_positions_export_target_currency_price_per_single_unit(self, monkeypatch):
+        scope = _scope()
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(
+            monkeypatch,
+            _report(
+                scope,
+                holdings=(
+                    _holding(
+                        1,
+                        quantity=15000,
+                        current_price=97.74,
+                        current_value=14661,
+                    ),
+                ),
+            ),
+        )
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.positions_by_broker", required=True)
+
+        assert envelope.payload["positions"][0]["unit_price"] == "0.9774"
+
     @pytest.mark.asyncio
     async def test_no_provider_assignment_yields_provenance_without_provider(self, monkeypatch):
         scope = _scope()
@@ -631,7 +657,7 @@ class TestPerformanceCoverage:
 
 
 # =============================================================================
-# Lot detail: period cutoff, no identifiers, no limit
+# Lot detail: period cutoff, local audit refs, no database identifiers, no limit
 # =============================================================================
 
 
@@ -655,12 +681,14 @@ class TestLotDetail:
         open_quantities = sorted(row["open_quantity"] for row in envelope.payload["lots"])
         assert open_quantities == ["0", "10"]  # lot 1 (open) and lot 2 (closed in-period) retained, lot 3 excluded
         assert all(row["closing_date"] is None or row["closing_date"] >= "2026-01-01" for row in envelope.payload["lots"])
+        assert [row["lot_ref"] for row in envelope.payload["lots"]] == ["L1", "L2"]
 
     @pytest.mark.asyncio
     async def test_lot_rows_carry_no_lot_or_transaction_identifiers(self):
         assert "lot_id" not in AssetLotDetailRow.model_fields
         assert "opening_transaction_id" not in AssetLotDetailRow.model_fields
         assert "transaction_id" not in AssetLotDetailRow.model_fields
+        assert "lot_ref" in AssetLotDetailRow.model_fields
         assert "lot_id" not in AssetLotCustodyRow.model_fields
         assert "transaction_id" not in AssetLotCustodyRow.model_fields
 

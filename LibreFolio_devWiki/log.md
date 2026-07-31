@@ -11,6 +11,8 @@ completed beta-v1 in-place temporal-class sampling and per-entity event-selectio
 contract, manifest propagation, 18/18 and 54/54 validation, measured Portfolio
 Full 1Y reduction from 2,676,781 to 1,990,718 characters, and the known
 `fx.rate_ohlc` warm-up blocker. No application, journal, or MkDocs source changed.
+Graph: ran the incremental refresh, semantically replaced the updated decision
+page, regenerated graph outputs, and verified the new Signal Density V2 nodes.
 
 ## [2026-07-30] file | AI Export technical series and density contract
 

@@ -715,7 +715,9 @@ class TestRealMultiBrokerTechnicalUniverse:
         assert breadth["considered_asset_count"] == 3
         assert breadth["eligible_asset_count"] == 2
         assert breadth["covered_asset_count"] <= 2
-        assert breadth["total_weight"] == pytest.approx(1.0)
+        assert breadth["eligible_portfolio_weight_ratio"] == pytest.approx(1.0)
+        assert breadth["covered_portfolio_weight_ratio"] <= 1.0
+        assert breadth["covered_weight_ratio"] == pytest.approx(breadth["covered_portfolio_weight_ratio"])
 
         flat_events = [event for bucket in events["buckets"] for event in bucket["events"]]
         event_identities = {

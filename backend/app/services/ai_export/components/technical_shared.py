@@ -88,6 +88,7 @@ from backend.app.services.ai_export.components.technical_payloads import (
     TechnicalEventSelectionSummary,
     TechnicalEventsPayload,
     TechnicalIndicatorCell,
+    TechnicalNumericBounds,
     TechnicalRangeValueCell,
     TechnicalSingleValueCell,
     UniverseBreadthPayload,
@@ -905,6 +906,8 @@ def build_indicator_table_payloads(
                             unit=output_description.unit.value,
                             kind=series.kind,
                             aggregation_profile=output_spec.aggregation_profile,
+                            minimum=output_spec.axis.minimum,
+                            maximum=output_spec.axis.maximum,
                             latest=_latest_observed_value(component_points),
                         )
                     )
@@ -937,6 +940,8 @@ def build_indicator_table_payloads(
                         unit=output_description.unit.value,
                         kind=series.kind,
                         aggregation_profile=output_spec.aggregation_profile,
+                        minimum=output_spec.axis.minimum,
+                        maximum=output_spec.axis.maximum,
                         latest=_latest_observed_value(points),
                     )
                 )
@@ -986,6 +991,46 @@ def _annotation_semantic_description(signal_code: str, annotation) -> str:
     return f"{base_description} ({annotation.annotation_type}: {annotation.key})"
 
 
+def _source_numeric_bounds(
+    source: object,
+    result_by_instance: Mapping[str, SignalResult],
+) -> TechnicalNumericBounds | None:
+    if not isinstance(source, Mapping) or source.get("kind") not in {"signal", "band"}:
+        return None
+    instance_id = source.get("instance_id")
+    series_key = source.get("series_key")
+    if not isinstance(instance_id, str) or not isinstance(series_key, str):
+        return None
+    result = result_by_instance.get(instance_id)
+    if result is None:
+        return None
+    plugin_class = SignalPluginRegistry.get_plugin(result.signal_code)
+    if plugin_class is None:
+        return None
+    output_spec = next((spec for spec in plugin_class.output_specs if spec.key == series_key), None)
+    if output_spec is None or (output_spec.axis.minimum is None and output_spec.axis.maximum is None):
+        return None
+    return TechnicalNumericBounds(
+        minimum=output_spec.axis.minimum,
+        maximum=output_spec.axis.maximum,
+    )
+
+
+def _annotation_value_bounds(
+    annotation,
+    result_by_instance: Mapping[str, SignalResult],
+) -> dict[str, TechnicalNumericBounds]:
+    metadata = annotation.metadata
+    if annotation.annotation_type == "line_crossover":
+        pairs = (("left", metadata.get("left")), ("right", metadata.get("right")))
+    elif annotation.annotation_type == "threshold_crossing":
+        source = metadata.get("source")
+        pairs = (("value", source), ("threshold", source))
+    else:
+        pairs = ()
+    return {key: bounds for key, source in pairs if (bounds := _source_numeric_bounds(source, result_by_instance)) is not None}
+
+
 def signal_results_to_discrete_events(
     results: Sequence[SignalResult],
     *,
@@ -999,6 +1044,7 @@ def signal_results_to_discrete_events(
     averages/merges/limits (requirement 4).
     """
     events: list[DiscreteEvent] = []
+    result_by_instance = {result.instance_id: result for result in results}
     for result in results:
         if result.status not in (SignalStatus.OK, SignalStatus.PARTIAL):
             continue
@@ -1011,6 +1057,13 @@ def signal_results_to_discrete_events(
                 "semantic_description": _annotation_semantic_description(result.signal_code, annotation),
                 "direction": annotation.direction.value if annotation.direction is not None else None,
                 "values": {key: float(value) for key, value in annotation.values.items()},
+                "value_bounds": {
+                    key: bounds.model_dump(mode="json", exclude_none=True)
+                    for key, bounds in _annotation_value_bounds(
+                        annotation,
+                        result_by_instance,
+                    ).items()
+                },
             }
             if asset_id is not None:
                 payload["asset_id"] = asset_id
@@ -1186,9 +1239,9 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
     never hardcoded) over the *complete* eligible universe (requirement 5).
     For each such (signal_code, output_key), each eligible asset's *latest*
     value is classified via `classify_reference_level_state`;
-    `unweighted_ratio`/`weighted_ratio` are relative to the assets for which
-    that particular indicator actually produced a classifiable value (so the
-    ratios for one indicator's states always reconcile to 1.0), and
+    `unweighted_ratio`/`technical_normalized_weight_ratio` are relative to the
+    assets for which that particular indicator actually produced a classifiable
+    value (so the ratios for one indicator's states always reconcile to 1.0), and
     `covered_asset_count` (top-level) is the number of eligible assets with
     at least one classifiable indicator value. MFI naturally drops out of an
     all-MANUAL/mixed-volume universe via `SignalService`'s own
@@ -1196,7 +1249,7 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
     """
     eligible_asset_count = len(universe.asset_ids)
     considered_asset_count = universe.considered_count
-    total_weight = float(sum(universe.weights.values(), Decimal(0)))
+    eligible_portfolio_weight = float(sum(universe.weights.values(), Decimal(0)))
 
     # (signal_code, output_key) -> {asset_id: (state, weight)}
     classifications: dict[tuple[str, str], dict[int, tuple[str, float]]] = {}
@@ -1250,17 +1303,27 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
                     signal_code=signal_code,
                     output_key=output_key,
                     state=state,
+                    covered_asset_count=covered_count,
+                    covered_portfolio_weight_ratio=covered_weight,
                     unweighted_count=unweighted_count,
                     unweighted_ratio=unweighted_ratio,
-                    weighted_ratio=weighted_ratio,
+                    technical_normalized_weight_ratio=weighted_ratio,
                 )
             )
 
+    covered_portfolio_weight = float(
+        sum(
+            (universe.weights.get(asset_id, Decimal(0)) for asset_id in covered_asset_ids),
+            Decimal(0),
+        )
+    )
     return UniverseBreadthPayload(
         eligible_asset_count=eligible_asset_count,
         considered_asset_count=considered_asset_count,
         covered_asset_count=len(covered_asset_ids),
-        total_weight=total_weight,
+        eligible_portfolio_weight_ratio=eligible_portfolio_weight,
+        covered_portfolio_weight_ratio=covered_portfolio_weight,
+        covered_weight_ratio=(covered_portfolio_weight / eligible_portfolio_weight if eligible_portfolio_weight else 0.0),
         states=tuple(states),
     )
 

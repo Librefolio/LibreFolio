@@ -1130,3 +1130,1151 @@ indicatori che pesano maggiormente dopo la modifica;
 classificazioni che richiedono ulteriore decisione;
 test eseguiti con relativo esito;
 problemi lasciati intenzionalmente aperti.
+
+
+
+------
+
+Sì, concordo: nel prompt finale P, M e K sono dettagli implementativi che non aiutano l’LLM a interpretare i dati. Manteniamo invece temporal_class e bucket_count, che descrivono sinteticamente velocità del segnale e densità effettivamente ricevuta.
+
+# AI Export: alleggerimento manifest e probe replicabile dei prompt finali reali
+
+Leggi integralmente:
+
+- `report-phase00AiExportRuntimeDeepAudit.md`
+- `report-phase00AiExportSizeAndTechnicalDensity.md`
+- `report-phase00AiExportSignalDensityV2.md`
+- `probe-phase00AiExportTechnicalDensity.json`
+- `probe-phase00AiExportSignalDensityV2.json`
+- la Developer Guide aggiornata dell’AI Export;
+- il catalogo runtime di dataset e analisi;
+- il renderer frontend realmente usato per produrre il testo copiabile;
+- il runtime API dell’AI Export.
+
+Questa attività ha tre obiettivi:
+
+1. alleggerire il manifest pubblico rimuovendo i parametri implementativi del bucketing;
+2. creare uno strumento stabile e replicabile che generi tutti i prompt finali reali disponibili;
+3. misurare la dimensione dei prompt effettivamente copiabili, non del solo canonical JSON backend.
+
+Non modificare ancora:
+
+- formula di sampling;
+- matrice interna `P/M/K`;
+- classificazione temporale dei Signal Plugin;
+- floor degli eventi;
+- finestra recente degli eventi;
+- formato delle tabelle indicatori;
+- contenuto dei dataset;
+- required/optional dataset delle analisi;
+- response contract;
+- catalogo pubblico.
+
+Prima dobbiamo ottenere misure complete e realistiche sui prompt finali.
+
+---
+
+# 1. Rimozione di P, M e K dal manifest pubblico
+
+I parametri:
+
+```yaml
+p: 2
+m: 30
+k: 7
+
+
+sono dettagli implementativi della funzione di campionamento.
+
+Sono utili:
+
+nei test;
+nei probe diagnostici;
+nella Developer Guide;
+nella configurazione interna;
+nei report tecnici sul sampling.
+
+Non sono invece utili nel prompt finale consegnato all’LLM e consumano caratteri ripetendosi per ogni policy.
+
+Modifica richiesta
+
+Rimuovi dal manifest pubblico renderizzato nel prompt:
+
+p
+m
+k
+
+
+per:
+
+policy dei prezzi;
+policy degli indicatori;
+qualunque altra policy tecnica renderizzata all’interno del prompt.
+
+Mantieni almeno:
+
+technical_sampling:
+  price_policy:
+    detail_level: full
+    bucket_count: 75
+
+  indicator_policies:
+    - signal_instance_id: ema_200
+      signal_code: EMA
+      temporal_class: very_slow
+      detail_level: full
+      bucket_count: 38
+
+
+Valuta se detail_level debba essere ripetuto su ogni indicatore, dato che è già una proprietà globale della richiesta.
+
+La preferenza è:
+
+technical_sampling:
+  detail_level: full
+
+  price_policy:
+    bucket_count: 75
+
+  indicator_policies:
+    - signal_instance_id: ema_200
+      signal_code: EMA
+      temporal_class: very_slow
+      bucket_count: 38
+
+
+Se tutti gli indicatori condividono il medesimo detail, evita di ripeterlo per ogni istanza.
+
+Informazioni da conservare
+
+Mantieni nel manifest pubblico:
+
+detail_level, una volta sola se possibile;
+signal_instance_id;
+signal_code, se utile a interpretare l’istanza;
+temporal_class;
+bucket_count;
+policy di selezione degli eventi;
+ogni informazione necessaria a distinguere dati completi da dati campionati.
+
+Mantieni nei probe diagnostici:
+
+P;
+M;
+K;
+classe;
+conteggi teorici;
+conteggi runtime;
+confini temporali;
+ampiezza dei bucket.
+
+Quindi:
+
+Prompt pubblico:
+informazioni interpretative concise
+
+Probe e documentazione:
+dettagli matematici e implementativi completi
+
+Test richiesti
+
+Verifica che:
+
+p, m e k non compaiano nel prompt renderizzato;
+temporal_class e bucket_count continuino a comparire;
+il detail sia presente almeno una volta;
+i probe diagnostici continuino a contenere P/M/K;
+i test della formula restino invariati;
+il comportamento del sampling non cambi;
+il manifest continui a essere sufficiente per capire che la storia è campionata;
+schema e renderer restino coerenti.
+
+Misura e riporta il risparmio effettivo del nuovo manifest nei prompt reali.
+
+2. Oggetto corretto della misurazione
+
+Il precedente probe misura soprattutto il canonical JSON del backend.
+
+Per esempio:
+
+portfolio.technical
+Full
+1Y
+
+
+con circa 497.680 token-equivalenti rappresenta:
+
+canonical JSON chars / 4
+
+
+del dataset composto portfolio.technical.
+
+Non rappresenta necessariamente:
+
+una fotografia Export Data finale;
+un prompt Request Analysis finale;
+portfolio.all_data;
+l’insieme di tutti i prompt;
+il testo realmente copiato dall’utente.
+Requisito fondamentale
+
+Nel nuovo report deve essere scritto chiaramente:
+
+La metrica decisionale principale è la dimensione del prompt finale realmente renderizzato e copiabile dall’utente. La dimensione del canonical JSON backend viene conservata soltanto come diagnostica per attribuire il peso ai dataset e ai componenti.
+
+Per ogni prova conserva quindi due misure distinte:
+
+canonical backend response
+rendered final prompt
+
+
+Le decisioni sul prodotto devono essere basate principalmente su:
+
+rendered final prompt chars
+rendered final prompt estimated token-equivalent
+
+3. Database reale
+
+Usa il database production locale del progetto.
+
+Sono disponibili due utenti con dati reali fittizi e portfolio valorizzati:
+
+username: alfy
+password: Abc1234
+
+username: marco
+password: Abc1234
+
+
+Si tratta di un ambiente production locale usato per report realistici, non di credenziali esposte verso un servizio pubblico.
+
+Puoi usare direttamente queste credenziali per autenticarti mediante API.
+
+Vincolo read-only
+
+Il probe non deve modificare i dati applicativi.
+
+Non eseguire:
+
+import;
+refresh dei prezzi;
+bootstrap;
+sincronizzazioni;
+update;
+migrazioni;
+creazione o cancellazione di dati;
+modifica delle preferenze;
+salvataggio dei prompt nel database;
+recompute persistenti.
+
+La generazione dei prompt deve essere read-only.
+
+Se il runtime effettua scritture automatiche, lavora su una copia del database production locale e documentalo.
+
+Non inserire le password:
+
+nei prompt salvati;
+nei report;
+nel JSON delle metriche;
+nei nomi dei file;
+nella documentazione;
+nei log finali.
+4. Script diagnostico permanente
+
+Crea uno script stabile, versionato e rilanciabile con un solo comando.
+
+Percorso suggerito:
+
+backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py
+
+
+Se il renderer ufficiale può essere eseguito correttamente soltanto tramite frontend/Node, puoi creare:
+
+backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py
+frontend/scripts/ai-export-render-prompt-probe.ts
+
+
+Lo script Python deve restare l’orchestratore unico.
+
+Il comando finale deve essere equivalente a:
+
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py
+
+
+Eventuali credenziali e opzioni possono essere:
+
+valori predefiniti per questo ambiente locale;
+variabili d’ambiente;
+argomenti CLI.
+
+Preferisci una configurazione chiara tramite CLI o variabili d’ambiente, ma il comando documentato deve permettere di eseguire l’intero audit senza modificare codice.
+
+Proprietà richieste
+
+Lo script deve essere:
+
+deterministico;
+idempotente;
+auto-adattativo rispetto al catalogo runtime;
+capace di autenticare entrambi gli utenti;
+capace di interrogare l’API reale;
+capace di scoprire dataset e analisi dal catalogo;
+capace di genera­re i prompt tramite il renderer ufficiale;
+capace di salvare i prompt su file;
+capace di rileggerli e misurarli;
+capace di produrre metriche machine-readable;
+capace di produrre un sommario Markdown;
+rilanciabile dopo modifiche future;
+configurabile per eseguire tutto o un sottoinsieme.
+
+Non duplicare manualmente nel probe:
+
+catalogo;
+required dataset;
+optional dataset;
+versioni;
+applicabilità;
+ordine delle sezioni;
+template dei prompt.
+
+Queste informazioni devono provenire dalle source of truth runtime.
+
+5. Uso dell’API reale
+
+Esegui il flusso end-to-end tramite API:
+
+login
+→ catalog discovery
+→ selection discovery
+→ request construction
+→ AI Export API
+→ official prompt renderer
+→ file output
+→ metrics extraction
+
+
+Non chiamare soltanto direttamente i service backend, perché vogliamo verificare ciò che l’utente riceve effettivamente.
+
+È accettabile chiamare internamente il service soltanto per produrre breakdown diagnostici aggiuntivi che l’API non espone. La misura primaria deve però derivare dal percorso API e dal renderer ufficiale.
+
+Registra per ogni richiesta:
+
+metodo;
+route;
+status HTTP;
+durata;
+selection ID;
+selection kind;
+version;
+utente anonimizzato;
+domain;
+scope;
+period;
+detail;
+hash della response;
+hash del prompt renderizzato.
+
+Non salvare:
+
+password;
+cookie;
+bearer token;
+header di autenticazione.
+6. Cartella degli output
+
+Salva tutti gli artefatti del probe sotto una cartella dedicata.
+
+Percorso suggerito:
+
+LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/real_prompt_probe/
+
+
+La cartella deve contenere almeno:
+
+prompts/
+metrics.json
+summary.md
+run_manifest.json
+failures.json
+
+Prompt
+
+Salva ogni prompt finale in un file testuale.
+
+Usa l’estensione corrispondente al formato realmente generato:
+
+.md
+.yaml
+.txt
+
+
+Non salvare il canonical JSON come se fosse un prompt. Se serve conservarlo per diagnosi, usa una sottocartella separata:
+
+canonical/
+
+Nomi dei file
+
+Il nome deve rendere immediatamente identificabile il caso.
+
+Formato consigliato:
+
+{user}__{mode}__{domain}__{selection_id}__{scope}__{period}__{detail}.{ext}
+
+
+Esempi:
+
+alfy__data__portfolio__portfolio.technical__all__1Y__full.md
+alfy__data__portfolio__portfolio.all_data__all__6M__standard.md
+marco__analysis__portfolio__portfolio.rebalancing__all__1Y__compact.md
+marco__analysis__broker__broker.review__broker_3__3M__full.md
+alfy__analysis__asset__asset.trend_analysis__asset_anon_01__1Y__full.md
+alfy__data__fx__fx.market_technical__eur_usd__1Y__standard.md
+
+
+Sanitizza gli ID per renderli validi nei nomi dei file.
+
+Per gli asset e i broker puoi usare:
+
+asset_anon_01
+broker_anon_01
+
+
+ma mantieni una mappa soltanto nel manifest locale del run, senza dati sensibili nel report pubblico.
+
+Sovrascrittura
+
+Ogni esecuzione deve:
+
+creare una cartella identificata da timestamp oppure commit hash;
+non confondere output di run differenti;
+aggiornare facoltativamente un link o una cartella latest;
+consentire il confronto con un run precedente.
+
+Esempio:
+
+real_prompt_probe/
+  2026-07-30T194500Z/
+    prompts/
+    canonical/
+    metrics.json
+    summary.md
+    run_manifest.json
+    failures.json
+
+7. Catalog discovery dinamico
+
+Interroga dinamicamente il catalogo disponibile.
+
+Devi scoprire:
+
+tutti i dataset Export Data;
+tutti gli all_data;
+tutte le analisi Request Analysis;
+domini;
+versioni;
+required datasets;
+optional datasets;
+parametri necessari;
+applicabilità;
+response contract;
+eventuali capability flags.
+
+Non codificare una lista statica di 18 dataset o 16 analisi.
+
+Il probe deve continuare a funzionare quando il catalogo crescerà.
+
+Se viene aggiunta una nuova analisi o un nuovo dataset, il successivo run deve rilevarlo e provarlo automaticamente, se applicabile.
+
+8. Inventario degli utenti
+
+Prima dei prompt, raccogli per ciascun utente:
+
+broker count
+position count
+unique held asset count
+historical asset count
+priced asset count
+technical eligible asset count
+technical covered asset count
+duplicate asset legs across brokers
+currency count
+FX pair count
+earliest price date
+latest price date
+transaction count
+FIFO lot count
+
+
+Questi dati servono a interpretare la dimensione.
+
+Non riportare nel report:
+
+password;
+token;
+valori totali dei portafogli;
+quantità detenute;
+importi delle transazioni;
+note personali.
+9. Fotografie Export Data
+
+Genera tutti i prompt finali disponibili nella modalità:
+
+Export Data
+
+
+Per ogni utente esegui tutte le fotografie applicabili scoperte dal catalogo.
+
+Portfolio
+
+Esegui almeno:
+
+portfolio completo
+ogni dataset selezionabile
+all_data
+
+
+Se la UI consente scope per broker, esegui anche:
+
+ogni broker;
+portfolio complessivo;
+eventuali combinazioni pubblicamente rappresentabili.
+Broker
+
+Esegui ogni dataset Broker applicabile per ogni broker reale.
+
+Asset
+
+È sufficiente scegliere un solo asset per utente, purché abbia:
+
+almeno un anno di prezzi;
+prezzo corrente valido;
+indicatori tecnici calcolabili;
+applicabilità finanziaria sufficiente ai task Asset.
+
+Se più asset soddisfano i requisiti, seleziona deterministicamente:
+
+quello con la storia più lunga;
+in caso di parità, quello con più osservazioni;
+in caso di ulteriore parità, ID crescente.
+
+Registra nel manifest:
+
+selection_reason: longest_history_at_least_1y
+history_start
+history_end
+observation_count
+technical_indicator_count
+
+
+Anonimizza l’asset nel nome file e nel report.
+
+FX
+
+È sufficiente una sola coppia per utente, purché:
+
+sia applicabile al portafoglio;
+abbia almeno un anno di storia;
+abbia rate validi;
+consenta gli indicatori FX.
+
+Se più coppie sono idonee, seleziona deterministicamente quella con:
+
+storia più lunga;
+numero maggiore di osservazioni;
+chiave canonica crescente.
+
+Se il noto coupling FX produce 503, registra il fallimento e continua il resto del probe.
+
+10. Task Request Analysis
+
+Genera tutti i prompt finali disponibili nella modalità:
+
+Request Analysis
+
+
+Per ciascun utente:
+
+scopri tutte le analisi dal catalogo;
+valuta l’applicabilità;
+costruisci tutti i task applicabili;
+usa gli scope reali;
+renderizza il prompt finale;
+salvalo nella cartella;
+misura il file salvato.
+Scope
+Portfolio
+
+Esegui sul portfolio completo.
+
+Se l’analisi supporta scope broker, eseguila anche sui broker reali applicabili.
+
+Broker
+
+Esegui per ogni broker reale applicabile.
+
+Asset
+
+Usa l’unico asset selezionato secondo i criteri precedenti.
+
+FX
+
+Usa l’unica coppia FX selezionata secondo i criteri precedenti.
+
+Non creare combinazioni non supportate dalla UI o dal catalogo.
+
+11. Matrice dei parametri
+
+Per ogni fotografia e task applicabile esegui:
+
+Period:
+- 3M
+- 6M
+- 1Y
+
+Detail:
+- Compact
+- Standard
+- Full
+
+
+Quindi ogni prompt applicabile deve essere provato su nove combinazioni:
+
+3 periodi × 3 detail
+
+Custom
+
+Aggiungi un caso Custom separato se:
+
+il prompt supporta Custom;
+esiste storia precedente a un anno;
+il runtime consente di costruire un intervallo valido.
+
+Usa:
+
+start = prima data effettivamente utilizzabile
+end = snapshot_as_of
+
+
+Non mescolare Custom nelle medie della matrice principale.
+
+Applicabilità temporale
+
+Se un asset o una coppia possiede meno dati del periodo richiesto:
+
+non simulare dati;
+registra il periodo richiesto;
+registra il periodo effettivo;
+indica se il prompt è riuscito;
+non selezionare come asset/FX principale un caso con meno di un anno se esiste un’alternativa idonea.
+12. Misurazione del file reale
+
+Dopo aver salvato ogni prompt:
+
+rileggi il file dal filesystem;
+misura:
+caratteri Unicode;
+byte UTF-8;
+numero righe;
+numero parole, eventualmente diagnostico;
+hash SHA-256;
+verifica che la misura coincida con la stringa prodotta dal renderer;
+usa il contenuto del file per la stima token.
+
+La misura decisionale è quindi:
+
+prompt_file_content
+
+
+non:
+
+response JSON object
+
+13. Token estimation del prompt finale
+
+Per ogni file prompt calcola obbligatoriamente:
+
+chars_div_4_v1
+
+
+e chiamalo:
+
+estimated_token_equivalent_chars_div_4
+
+
+Questa metrica serve per continuità con i probe precedenti.
+
+Se è già disponibile localmente un tokenizer compatibile con il modello target, aggiungi:
+
+tokenizer_name
+tokenizer_version
+token_count
+
+
+Non installare una dipendenza production e non richiedere Internet.
+
+Se non è disponibile un tokenizer adeguato, non inventare token esatti.
+
+Nel report usa formulazioni come:
+
+circa 120.000 token-equivalenti secondo chars/4
+
+
+e non:
+
+il prompt ha esattamente 120.000 token
+
+14. Breakdown del prompt finale
+
+Per ogni prompt misura separatamente, quando presenti:
+
+Analysis Objective
+Shared Verification Instructions
+Response Contract
+Snapshot Metadata and Dataset Manifest
+Snapshot Data
+Additional LibreFolio Data
+Domain Notes
+User Notes
+Response Language
+
+
+All’interno di Snapshot Data, attribuisci il peso a:
+
+dataset
+component
+technical prices
+technical indicators
+technical events
+technical breadth
+financial overview
+holdings/allocation
+performance/flows
+transactions
+FIFO/lots
+costs/taxes
+FX
+other
+
+
+Il breakdown deve riconciliarsi con il numero di caratteri del file:
+
+sum(attributed sections)
++ explicitly measured separators/wrappers
+= file characters
+
+
+Non accettare breakdown che non riconciliano.
+
+15. Distinzione nel report
+
+Il report deve separare esplicitamente:
+
+Component density
+
+Quanto pesano i mattoncini interni.
+
+Dataset density
+
+Quanto pesa il canonical backend response di ogni dataset composto.
+
+Data snapshot prompt density
+
+Quanto pesa il prompt finale di ogni fotografia Export Data.
+
+Analysis task prompt density
+
+Quanto pesa il prompt finale di ogni Request Analysis.
+
+La tabella principale per le decisioni deve usare:
+
+rendered prompt estimated token-equivalent
+
+
+La dimensione del canonical JSON deve comparire come informazione diagnostica secondaria.
+
+16. Metriche per ogni prompt
+
+Per ogni prompt salva in metrics.json almeno:
+
+run_id: ...
+user_alias: alfy
+mode: data | analysis
+domain: portfolio | broker | asset | fx
+selection_id: ...
+selection_kind: dataset | analysis
+selection_version: ...
+scope_id: ...
+period_label: 1Y
+period_start: ...
+period_end: ...
+effective_period_start: ...
+effective_period_end: ...
+detail_level: full
+
+status: ok | failed | skipped
+failure_code: ...
+failure_message_sanitized: ...
+
+required_datasets: [...]
+optional_datasets_declared: [...]
+optional_datasets_included: [...]
+optional_datasets_omitted: [...]
+components_included: [...]
+
+canonical_backend_chars: ...
+canonical_backend_bytes: ...
+canonical_backend_estimated_token_equivalent: ...
+
+prompt_file: ...
+rendered_prompt_chars: ...
+rendered_prompt_bytes: ...
+rendered_prompt_lines: ...
+rendered_prompt_sha256: ...
+rendered_prompt_estimated_token_equivalent: ...
+
+section_breakdown: ...
+dataset_breakdown: ...
+component_breakdown: ...
+
+17. Lettura diagnostica dei prompt
+
+Lo script deve poter rileggere i prompt salvati per:
+
+ricontrollare le dimensioni;
+estrarre le intestazioni;
+verificare la presenza delle sezioni;
+verificare che P/M/K non siano presenti;
+verificare che temporal_class e bucket_count siano presenti quando applicabili;
+verificare che required e optional corrispondano al manifest;
+controllare eventuali duplicazioni grossolane;
+verificare che non siano presenti segreti.
+
+Non serve inserire il contenuto completo dei prompt nel report.
+
+Il report può citare:
+
+struttura;
+intestazioni;
+dimensioni;
+conteggi;
+hash;
+anomalie.
+18. Controllo dei segreti
+
+Aggiungi una scansione automatica dei file generati per cercare almeno:
+
+Abc1234
+Authorization:
+Bearer 
+access_token
+refresh_token
+cookie
+set-cookie
+password
+
+
+Gestisci i falsi positivi derivanti da parole descrittive come password, ma fallisci esplicitamente se compare il valore reale della password o un token.
+
+Il probe deve fallire se un segreto reale compare in:
+
+prompt;
+metrics;
+summary;
+manifest;
+failure log.
+19. Report richiesto
+
+Crea:
+
+LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/
+report-phase00AiExportRealPromptDensity.md
+
+
+Il report deve dichiarare nelle prime righe:
+
+Questo report misura principalmente la dimensione dei prompt finali renderizzati e copiabili dall’utente. Le misure del canonical JSON backend sono riportate soltanto per attribuire il peso a dataset e componenti.
+
+Il report deve contenere:
+
+executive summary;
+oggetto corretto della misura;
+differenza tra componente, dataset, fotografia e task;
+ambiente e database;
+verifica read-only;
+inventario anonimizzato di alfy e marco;
+catalogo scoperto dinamicamente;
+numero totale di fotografie generate;
+numero totale di task generati;
+matrice 3M/6M/1Y × Compact/Standard/Full;
+caso Custom;
+risultati Portfolio;
+risultati Broker;
+risultati Asset;
+risultati FX;
+canonical JSON contro prompt renderizzato;
+breakdown delle sezioni dei prompt;
+breakdown per dataset;
+breakdown per componente;
+impatto della rimozione P/M/K;
+manifest pubblico risultante;
+fotografie più pesanti;
+task più pesanti;
+distribuzione min/mediana/P75/P90/max;
+confronto alfy/marco;
+scalabilità rispetto al numero di asset;
+prompt falliti o saltati;
+omissioni optional;
+anomalie di composizione;
+test e validazioni;
+decisioni ancora da prendere.
+20. Tabelle obbligatorie nel report
+Fotografie Export Data
+User
+Domain
+Dataset
+Scope
+Period
+Detail
+Rendered chars
+Estimated token-equivalent
+Largest section
+Status
+
+Task Request Analysis
+User
+Domain
+Analysis
+Scope
+Period
+Detail
+Rendered chars
+Estimated token-equivalent
+Required datasets
+Optional included
+Technical share
+Status
+
+Distribuzione per tipo
+Output type
+Count
+Minimum
+Median
+P75
+P90
+Maximum
+
+Casi massimi
+Rank
+User
+Mode
+Domain
+Selection
+Scope
+Period
+Detail
+Estimated token-equivalent
+
+Canonical contro rendered
+Selection
+Canonical backend chars
+Rendered prompt chars
+Difference
+Rendered/canonical ratio
+
+Impatto manifest
+Prompt
+Manifest before
+Manifest after removal of P/M/K
+Saved chars
+Saved token-equivalent
+
+21. Sommario automatico del run
+
+Oltre al report principale, lo script deve produrre automaticamente:
+
+summary.md
+
+
+all’interno della cartella del run.
+
+Il sommario deve essere generato direttamente dalle metriche e contenere:
+
+timestamp;
+commit;
+ambiente;
+utenti riusciti;
+catalogo scoperto;
+prompt previsti;
+prompt generati;
+prompt falliti;
+totale caratteri;
+fotografia più pesante;
+task più pesante;
+mediana fotografie;
+mediana task;
+fallimenti FX;
+esito secret scan;
+esito read-only verification.
+
+Il report di Developer Journal può poi analizzare più estesamente lo stesso metrics.json.
+
+22. Modalità dello script
+
+Supporta almeno:
+
+# Audit completo
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py
+
+# Solo un utente
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py \
+  --user alfy
+
+# Solo fotografie
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py \
+  --mode data
+
+# Solo task
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py \
+  --mode analysis
+
+# Solo un dominio
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py \
+  --domain portfolio
+
+# Solo una combinazione
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py \
+  --period 1Y \
+  --detail full
+
+
+Aggiungi:
+
+--output-dir
+--base-url
+--keep-canonical
+--compare-with
+--fail-on-regression
+
+
+se coerenti con l’architettura esistente.
+
+23. Confronto tra run
+
+Predisponi lo script affinché in futuro possa confrontare due esecuzioni:
+
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py \
+  --compare-with path/to/previous/metrics.json
+
+
+Il confronto deve produrre per ogni prompt stabile:
+
+previous chars
+current chars
+absolute delta
+percentage delta
+status change
+dataset change
+component change
+
+
+La chiave stabile di confronto deve essere composta almeno da:
+
+user alias
+mode
+domain
+selection ID
+scope
+period
+detail
+
+
+Il confronto non deve fallire soltanto perché il catalogo contiene un nuovo prompt. Deve segnalarlo come:
+
+added
+removed
+changed
+unchanged
+failed
+recovered
+
+24. Test automatici
+
+Aggiungi test mirati per:
+
+catalog discovery dinamico;
+naming dei file;
+sanitizzazione dei nomi;
+scelta deterministica dell’asset;
+scelta deterministica della coppia FX;
+matrice period/detail;
+salvataggio e rilettura dei prompt;
+conteggio caratteri;
+conteggio byte;
+hash;
+breakdown riconciliato;
+assenza di P/M/K nel prompt;
+presenza di temporal_class;
+presenza di bucket_count;
+secret scan;
+prompt deterministico;
+confronto tra run;
+gestione dei fallimenti HTTP;
+prosecuzione dopo failure FX;
+nessuna scrittura sul DB.
+25. Artefatti finali
+
+Al termine devono esistere:
+
+backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py
+
+
+ed eventuale entrypoint frontend necessario:
+
+frontend/scripts/ai-export-render-prompt-probe.ts
+
+
+Inoltre:
+
+real_prompt_probe/<run_id>/prompts/
+real_prompt_probe/<run_id>/canonical/
+real_prompt_probe/<run_id>/metrics.json
+real_prompt_probe/<run_id>/summary.md
+real_prompt_probe/<run_id>/run_manifest.json
+real_prompt_probe/<run_id>/failures.json
+
+
+e il report:
+
+report-phase00AiExportRealPromptDensity.md
+
+26. Consegna finale
+
+Al termine restituisci:
+
+sintesi delle modifiche;
+file modificati;
+comando unico per rilanciare il probe;
+percorso dello script;
+percorso della cartella del run;
+percorso del report;
+numero di dataset scoperti;
+numero di analisi scoperte;
+numero di fotografie generate;
+numero di task generati;
+numero di prompt falliti;
+fotografia più pesante;
+task più pesante;
+mediana delle fotografie;
+mediana dei task;
+differenza tra canonical JSON e prompt renderizzato;
+risparmio ottenuto rimuovendo P/M/K;
+asset selezionato per utente e criterio, in forma anonimizzata;
+coppia FX selezionata e criterio;
+esito dei probe FX;
+conferma che le metriche principali riguardano i prompt finali;
+esito del controllo read-only;
+esito della secret scan;
+test eseguiti e risultati;
+problemi ancora aperti.
+
+Non applicare ulteriori politiche di compressione prima della revisione di questo report.

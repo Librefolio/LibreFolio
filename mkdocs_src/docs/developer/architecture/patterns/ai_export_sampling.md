@@ -231,26 +231,28 @@ upward/downward counts.
 
 ## 🧾 Manifest Examples
 
-Top-level technical policy audit:
+The public prompt manifest exposes only information that helps interpret the
+sampled data:
 
 ```yaml
 technical_sampling:
+  detail_level: standard
   price_policy:
-    detail_level: standard
-    p: 2
-    m: 30
-    k: 14
     bucket_count: 46
   indicator_policies:
     - signal_instance_id: ema_200
       signal_code: EMA
       temporal_class: very_slow
-      detail_level: standard
-      p: 2
-      m: 5
-      k: 28
       bucket_count: 23
 ```
+
+`detail_level` appears once because every policy in one request shares it.
+`temporal_class` explains the indicator horizon, while `bucket_count` reports
+the density actually exported.
+
+`P`, `M`, and `K` remain normative internal policy parameters. They stay in the
+matrix, formula tests, mathematical probes, and engineering reports above, but
+are intentionally absent from the API response and copied prompt.
 
 Top-level event policy audit:
 

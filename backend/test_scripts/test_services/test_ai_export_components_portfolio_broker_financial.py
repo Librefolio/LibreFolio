@@ -34,6 +34,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     AssetPeriodContribution,
     LotAnalysisType,
+    LotCustodySummarySchema,
     LotsAnalysisMetadata,
     LotsAnalysisResponse,
     LotSummarySchema,
@@ -193,6 +194,7 @@ def _lot(
     open_quantity: object = 10,
     realized_quantity: object = 0,
     original_quantity: object = 10,
+    current_custody: list[LotCustodySummarySchema] | None = None,
 ) -> LotSummarySchema:
     return LotSummarySchema(
         lot_id=lot_id,
@@ -209,6 +211,7 @@ def _lot(
         realized_quantity=Decimal(str(realized_quantity)),
         realized_pnl=Decimal("0"),
         cumulative_proceeds=Decimal("0"),
+        current_custody=current_custody or [],
     )
 
 
@@ -223,7 +226,11 @@ def _lots_response(asset_id: int, lots: list[LotSummarySchema]) -> LotsAnalysisR
 
 
 def _asset_meta(asset_id: int) -> SimpleNamespace:
-    return SimpleNamespace(id=asset_id, display_name=f"Asset {asset_id}", identifier_ticker=f"A{asset_id}")
+    return SimpleNamespace(
+        id=asset_id,
+        display_name=f"Asset {asset_id}",
+        identifier_ticker=f"A{asset_id}",
+    )
 
 
 def _broker_meta(broker_id: int) -> SimpleNamespace:
@@ -273,13 +280,8 @@ def _patch_metadata(monkeypatch: pytest.MonkeyPatch, *, asset_ids: list[int] = (
     async def _fake_assets(session, ids):  # noqa: ARG001
         return {asset_id: _asset_meta(asset_id) for asset_id in asset_ids}
 
-    async def _fake_brokers(session, ids):  # noqa: ARG001
-        return {broker_id: _broker_meta(broker_id) for broker_id in broker_ids}
-
     monkeypatch.setattr(portfolio_financial, "_load_asset_metadata", _fake_assets)
-    monkeypatch.setattr(portfolio_financial, "_load_broker_metadata", _fake_brokers)
     monkeypatch.setattr(broker_financial, "_load_asset_metadata", _fake_assets)
-    monkeypatch.setattr(broker_financial, "_load_broker_metadata", _fake_brokers)
 
 
 def _registry(components) -> ComponentRegistry:
@@ -347,8 +349,74 @@ class TestEntityIdentityAcrossDetailLevels:
 
             assert positions_envelope.payload["position_count"] == 3
             assert len(positions_envelope.payload["positions"]) == 3
+            assert positions_envelope.payload["positions"][0]["unit_price"] == {
+                "code": CURRENCY,
+                "amount": "100",
+            }
             assert performance_envelope.payload["contributor_count"] == 3
             assert len(performance_envelope.payload["contributors"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_position_unit_price_reconciles_quantity_and_current_value(self, monkeypatch):
+        scope = _scope()
+        report = _report(
+            scope,
+            summary=_summary(
+                holdings=[
+                    _holding(
+                        1,
+                        1,
+                        quantity=15000,
+                        current_value=14661,
+                    )
+                ]
+            ),
+        )
+        _patch_report(monkeypatch, report)
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        positions = await context.resolve("portfolio.positions", required=True)
+
+        assert positions.payload["positions"][0]["unit_price"] == {
+            "code": CURRENCY,
+            "amount": "0.9774",
+        }
+
+    def test_hhi_contract_uses_points_without_percent_label(self):
+        positions = [
+            shared_payloads.PositionRow(
+                asset_id=1,
+                asset_name="Asset 1",
+                asset_type="ETF",
+                quantity=Decimal("1"),
+                nav_weight_percent=Decimal("30"),
+            ),
+            shared_payloads.PositionRow(
+                asset_id=2,
+                asset_name="Asset 2",
+                asset_type="ETF",
+                quantity=Decimal("1"),
+                nav_weight_percent=Decimal("70"),
+            ),
+        ]
+
+        largest, herfindahl = broker_financial._concentration_metrics(positions)
+        payload = broker_financial.BrokerAllocationConcentrationPayload(
+            broker_id=1,
+            as_of=date(2026, 1, 10),
+            target_currency=CURRENCY,
+            position_count=2,
+            cash_total=_money(0),
+            largest_position_weight_percent=largest,
+            herfindahl_index_points=herfindahl,
+        ).model_dump(mode="json")
+
+        assert payload["largest_position_weight_percent"] == "70"
+        assert payload["herfindahl_index_points"] == "5800"
+        assert "herfindahl_index_percent" not in payload
 
 
 # =============================================================================
@@ -669,7 +737,54 @@ class TestFifoLots:
 
         envelope = await context.resolve("portfolio.fifo_lots", required=True)
 
-        assert "lot_id" not in envelope.payload["lots"][0]
+        public_lot = envelope.payload["lots"][0]
+        assert "lot_id" not in public_lot
+        assert public_lot["lot_ref"] == "L1"
+        assert "opening_broker_name" not in public_lot
+
+    @pytest.mark.asyncio
+    async def test_distinct_economically_identical_lots_keep_distinct_local_refs_and_custody(self, monkeypatch):
+        scope = _scope(broker_scope=(1,))
+        custody = [
+            LotCustodySummarySchema(
+                broker_id=1,
+                custody_type="BROKER",
+                quantity=Decimal("8"),
+            ),
+            LotCustodySummarySchema(
+                broker_id=None,
+                custody_type="IN_TRANSIT",
+                quantity=Decimal("2"),
+            ),
+        ]
+        lot_a = _lot(1, 311, current_custody=custody)
+        lot_b = _lot(1, 312, current_custody=custody)
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {1: _lots_response(1, [lot_b, lot_a])})
+        _patch_metadata(monkeypatch, asset_ids=[1], broker_ids=[1])
+        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        envelope = await context.resolve("portfolio.fifo_lots", required=True)
+        lots = envelope.payload["lots"]
+
+        assert [lot["lot_ref"] for lot in lots] == ["L1", "L2"]
+        assert lots[0]["current_custody"] == [
+            {"broker_id": 1, "custody_type": "BROKER", "quantity": "8"},
+            {"broker_id": None, "custody_type": "IN_TRANSIT", "quantity": "2"},
+        ]
+        assert {key: value for key, value in lots[0].items() if key != "lot_ref"} == {key: value for key, value in lots[1].items() if key != "lot_ref"}
+
+    def test_duplicate_internal_lot_ids_fail_before_local_ref_assignment(self):
+        duplicate = _lot(1, 321)
+
+        with pytest.raises(ValueError, match="must be unique"):
+            shared_payloads.build_fifo_lot_refs(
+                {
+                    1: [duplicate],
+                    2: [duplicate.model_copy(update={"asset_id": 2})],
+                }
+            )
 
     @pytest.mark.asyncio
     async def test_no_top_n_limit_all_open_lots_retained(self, monkeypatch):
@@ -710,6 +825,7 @@ class TestFifoLots:
         assert first_run.payload["lots"] == second_run.payload["lots"]
         asset_ids_in_order = [lot["asset_id"] for lot in first_run.payload["lots"]]
         assert asset_ids_in_order == sorted(asset_ids_in_order)
+        assert [lot["lot_ref"] for lot in first_run.payload["lots"]] == ["L1", "L2", "L3"]
 
 
 # =============================================================================
@@ -833,6 +949,7 @@ class TestPayloadValidation:
     def test_fifo_lot_row_rejects_lot_id_field(self):
         with pytest.raises(ValidationError):
             FifoLotRow(
+                lot_ref="L1",
                 asset_id=1,
                 asset_name="Asset 1",
                 opening_broker_id=1,

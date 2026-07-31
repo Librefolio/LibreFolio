@@ -48,7 +48,16 @@ export const AI_EXPORT_RESPONSE_CONTRACTS: Readonly<Record<AiExportAnalysisId, A
         section('FIFO Results and Concentration', 'Keep cost, value, result, income, fee, tax, age, and valuation semantics distinct.'),
         limits,
     ]),
-    'portfolio.technical_breadth': contract('portfolio.technical_breadth', [facts, section('Breadth by Signal Family', 'Separate weighted/unweighted trend, momentum, volatility, risk, and events.'), evidence, limits]),
+    'portfolio.technical_breadth': contract('portfolio.technical_breadth', [
+        facts,
+        section(
+            'Breadth by Signal Family',
+            'Separate the supplied weighted and unweighted trend, momentum, volatility, event, and other explicitly available signal families.',
+            'Do not invent or reclassify missing risk metrics. If a family is unavailable, state that and do not infer it from another family.',
+        ),
+        evidence,
+        limits,
+    ]),
     'portfolio.description': contract('portfolio.description', [facts, section('Composition and Concentration', 'Describe available allocation dimensions and cash.'), section('Performance and Technical Context', 'Keep performance, flows, and technical evidence separate.'), limits]),
     'broker.review': contract('broker.review', [facts, section('Holdings, Cash, and Concentration', 'Describe only the selected broker scope.'), section('Performance, Costs, Income, and FIFO', 'Keep methodologies and components distinct.'), evidence, limits]),
     'broker.cost_efficiency': contract('broker.cost_efficiency', [facts, section('Cost Contributors and Ratios', 'Use ratios only with supplied denominators.'), section('Neutral Efficiency Considerations', 'Present conditional considerations, not instructions.'), limits]),

@@ -297,6 +297,49 @@ AiExportTargetReference = Annotated[
 ]
 
 
+class AiExportAssetDirectoryEntry(AiExportModel):
+    asset_id: PositiveInt
+    display_name: str = Field(..., min_length=1)
+    ticker: str | None = None
+    isin: str | None = None
+    cusip: str | None = None
+    sedol: str | None = None
+    figi: str | None = None
+    other_identifiers: tuple[str, ...] = ()
+    currency: CurrencyCode
+    asset_type: str = Field(..., min_length=1)
+    quote_base_quantity: PositiveInt
+
+
+class AiExportBrokerDirectoryEntry(AiExportModel):
+    broker_id: PositiveInt
+    display_name: str = Field(..., min_length=1)
+
+
+class AiExportFxPairDirectoryEntry(AiExportModel):
+    base_currency: CurrencyCode
+    quote_currency: CurrencyCode
+
+
+class AiExportEntityDirectory(AiExportModel):
+    assets: tuple[AiExportAssetDirectoryEntry, ...] = ()
+    brokers: tuple[AiExportBrokerDirectoryEntry, ...] = ()
+    fx_pairs: tuple[AiExportFxPairDirectoryEntry, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_directory(self) -> Self:
+        asset_ids = [entry.asset_id for entry in self.assets]
+        broker_ids = [entry.broker_id for entry in self.brokers]
+        fx_pairs = [(entry.base_currency, entry.quote_currency) for entry in self.fx_pairs]
+        if asset_ids != sorted(set(asset_ids)):
+            raise ValueError("entity directory assets must be unique and sorted by asset_id")
+        if broker_ids != sorted(set(broker_ids)):
+            raise ValueError("entity directory brokers must be unique and sorted by broker_id")
+        if fx_pairs != sorted(set(fx_pairs)):
+            raise ValueError("entity directory FX pairs must be unique and sorted")
+        return self
+
+
 class AiExportSnapshotMeta(AiExportModel):
     schema_version: Literal[1] = 1
     catalog_version: Literal[1] = 1
@@ -353,10 +396,6 @@ class AiExportSnapshotStats(AiExportModel):
 
 
 class AiExportPriceSamplingPolicy(AiExportModel):
-    detail_level: AiExportDetailLevel
-    p: PositiveInt
-    m: PositiveInt
-    k: PositiveInt
     bucket_count: PositiveInt
 
 
@@ -364,14 +403,11 @@ class AiExportIndicatorSamplingPolicy(AiExportModel):
     signal_instance_id: str = Field(..., min_length=1)
     signal_code: str = Field(..., min_length=1)
     temporal_class: SignalTemporalClass
-    detail_level: AiExportDetailLevel
-    p: PositiveInt
-    m: PositiveInt
-    k: PositiveInt
     bucket_count: PositiveInt
 
 
 class AiExportTechnicalSamplingManifest(AiExportModel):
+    detail_level: AiExportDetailLevel
     price_policy: AiExportPriceSamplingPolicy | None = None
     indicator_policies: tuple[AiExportIndicatorSamplingPolicy, ...] = ()
 
@@ -401,6 +437,7 @@ class AiExportSnapshotResponse(AiExportModel):
     selection: AiExportSelection
     detail_level: AiExportDetailLevel
     target: AiExportTargetReference
+    entity_directory: AiExportEntityDirectory = Field(default_factory=AiExportEntityDirectory)
     meta: AiExportSnapshotMeta
     dataset_manifest: tuple[AiExportDatasetManifestEntry, ...] = Field(..., min_length=1)
     analysis_contract: AiExportAnalysisContract | None = None

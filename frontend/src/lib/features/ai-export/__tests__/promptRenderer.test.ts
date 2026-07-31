@@ -1,7 +1,10 @@
 import {describe, expect, it} from 'vitest';
 
-import {AiExportPromptRenderError, renderAiExportPrompt} from '../templates/promptRenderer';
-import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
+import {handleProbeMessage, probeTranslation} from '../../../../../scripts/ai-export-render-prompt-probe';
+import {AiExportPromptRenderError, renderAiExportPrompt, renderAiExportPromptDiagnostics} from '../templates/promptRenderer';
+import {findAiExportResponseContract} from '../templates/responseContracts';
+import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
+import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 describe('AI Export prompt renderer', () => {
     it('renders analysis sections in the exact deterministic order', () => {
@@ -13,7 +16,7 @@ describe('AI Export prompt renderer', () => {
             snapshot: snapshotFixture(selection),
             responseLanguage: 'Italian',
             userNotes: 'Focus on recovery duration.',
-            translate: (key) => key,
+            translate: probeTranslation('it'),
         });
 
         const headings = ['## Analysis Objective', '## Shared Verification Instructions', '## Response Contract', '## Snapshot Metadata and Dataset Manifest', '## Snapshot Data', '## Additional LibreFolio Data', '## Domain Notes', '## User Notes', '## Response Language'];
@@ -27,8 +30,23 @@ describe('AI Export prompt renderer', () => {
         expect(rendered.prompt).toContain('2026/03/04');
         expect(rendered.prompt).toContain('calculation sandbox');
         expect(rendered.prompt).toContain('web access is available');
+        expect(rendered.prompt).toContain('Never use those codes as user-facing names.');
+        expect(rendered.prompt).toContain('A1, B1, L1');
         expect(rendered.prompt).toContain('asset.market_technical');
         expect(rendered.prompt).toContain('Please provide your answer in: Italian.');
+    });
+
+    it('does not require unavailable Risk Assessment metrics in Technical Breadth', () => {
+        const instruction = findAiExportAnalysisInstruction('portfolio.technical_breadth');
+        const contract = findAiExportResponseContract('portfolio.technical_breadth');
+        const text = [...instruction.steps, ...contract.sections.flatMap((section) => section.requirements)].join(' ');
+
+        expect(text).toContain('Do not invent or reclassify missing risk metrics.');
+        expect(text).toContain('do not infer it from another family');
+        expect(text).not.toContain('volatility, risk');
+        expect(text).not.toContain('drawdown');
+        expect(text).not.toContain('VaR');
+        expect(text).not.toContain('CVaR');
     });
 
     it('renders dataset selection as data-only metadata plus snapshot', () => {
@@ -48,17 +66,39 @@ describe('AI Export prompt renderer', () => {
         expect(rendered.prompt).not.toContain('## Response Language');
     });
 
+    it('exposes exact diagnostic blocks without changing the official prompt', () => {
+        const compatibility = compatibilityFixture();
+        const selection = selectionFixture('dataset', 'portfolio.overview');
+        const snapshot = snapshotFixture(selection, 'full');
+        const input = {
+            selection,
+            compatibility,
+            snapshot,
+            responseLanguage: 'English' as const,
+        };
+
+        const rendered = renderAiExportPrompt(input);
+        const diagnostics = renderAiExportPromptDiagnostics(input);
+        const reconstructedPrompt = diagnostics.sections.map((section) => section.content).join(diagnostics.sectionSeparator);
+        const reconstructedSnapshotData = `${diagnostics.snapshotDataWrapper}${diagnostics.snapshotDataComponents.map((component) => component.content).join('')}`;
+
+        expect(diagnostics.rendered).toEqual(rendered);
+        expect(reconstructedPrompt).toBe(rendered.prompt);
+        expect(reconstructedSnapshotData).toContain('technical_components=compact_pipe_tables_v1');
+        expect(reconstructedSnapshotData).toContain('COMPONENT portfolio.summary');
+        expect(reconstructedSnapshotData).toContain('2026/03/04');
+        expect(rendered.prompt).toContain('```text');
+        expect(diagnostics.snapshotMetadataFields.map((field) => field.content).join('')).toContain('detail_level: full');
+    });
+
     it('includes technical and event policy manifests in snapshot metadata', () => {
         const compatibility = compatibilityFixture();
         const selection = selectionFixture('analysis', 'asset.trend_analysis');
         const snapshot = {
             ...snapshotFixture(selection),
             technical_sampling: {
+                detail_level: 'standard' as const,
                 price_policy: {
-                    detail_level: 'standard' as const,
-                    p: 2,
-                    m: 30,
-                    k: 14,
                     bucket_count: 46,
                 },
                 indicator_policies: [
@@ -66,10 +106,6 @@ describe('AI Export prompt renderer', () => {
                         signal_instance_id: 'ema_20',
                         signal_code: 'EMA',
                         temporal_class: 'medium' as const,
-                        detail_level: 'standard' as const,
-                        p: 2,
-                        m: 15,
-                        k: 20,
                         bucket_count: 32,
                     },
                 ],
@@ -89,7 +125,12 @@ describe('AI Export prompt renderer', () => {
         });
 
         expect(rendered.prompt).toContain('technical_sampling:');
-        expect(rendered.prompt).toContain('temporal_class: medium');
+        expect(rendered.prompt).toContain('detail_level: standard');
+        expect(rendered.prompt).toContain('price_bucket_count: 46');
+        expect(rendered.prompt).not.toContain('indicator_policies:');
+        expect(rendered.prompt).not.toContain('temporal_class: medium');
+        expect(rendered.prompt).not.toContain('bucket_count: 32');
+        expect(rendered.prompt).not.toMatch(/^\s*[pmk]:/mu);
         expect(rendered.prompt).toContain('event_selection:');
         expect(rendered.prompt).toContain('minimum_latest_events_per_annotation: 20');
     });
@@ -123,5 +164,152 @@ describe('AI Export prompt renderer', () => {
                 responseLanguage: 'English',
             }),
         ).toThrow(AiExportPromptRenderError);
+    });
+
+    it('builds probe requests through official catalog compatibility and request logic', async () => {
+        const result = await handleProbeMessage({
+            request_id: 'prepare-1',
+            action: 'prepare',
+            catalog: backendCatalogFixture(),
+            selection_kind: 'analysis',
+            selection_id: 'asset.trend_analysis',
+            context: {
+                domain: 'asset',
+                assetId: 7,
+                snapshotAsOf: '2026-03-31',
+                targetCurrency: 'EUR',
+            },
+            detail_level: 'full',
+            period: {
+                preset: '3m',
+                customAmount: 3,
+                customUnit: 'months',
+            },
+            response_language: 'Italian',
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.request).toMatchObject({
+            domain: 'asset',
+            asset_id: 7,
+            detail_level: 'full',
+            period: {
+                start: '2025-12-31',
+                end: '2026-03-31',
+            },
+        });
+    });
+
+    it('renders probe output and reconciles the exact final prompt', async () => {
+        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const snapshot = {
+            ...snapshotFixture(selection),
+            technical_sampling: {
+                detail_level: 'standard' as const,
+                price_policy: {bucket_count: 46},
+                indicator_policies: [
+                    {
+                        signal_instance_id: 'ema_20',
+                        signal_code: 'EMA',
+                        temporal_class: 'medium' as const,
+                        bucket_count: 32,
+                    },
+                ],
+            },
+        };
+        const result = await handleProbeMessage({
+            request_id: 'render-1',
+            action: 'render',
+            catalog: backendCatalogFixture(),
+            selection_kind: selection.kind,
+            selection_id: selection.id,
+            response_language: 'Italian',
+            locale: 'it',
+            snapshot,
+            legacy_technical_sampling: {
+                price_policy: {
+                    detail_level: 'standard',
+                    p: 2,
+                    m: 30,
+                    k: 14,
+                    bucket_count: 46,
+                },
+                indicator_policies: [
+                    {
+                        signal_instance_id: 'ema_20',
+                        signal_code: 'EMA',
+                        temporal_class: 'medium',
+                        detail_level: 'standard',
+                        p: 2,
+                        m: 15,
+                        k: 20,
+                        bucket_count: 32,
+                    },
+                ],
+            },
+        });
+        const direct = renderAiExportPrompt({
+            selection,
+            compatibility: compatibilityFixture(),
+            snapshot,
+            responseLanguage: 'Italian',
+            translate: probeTranslation('it'),
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.prompt).toBe(direct.prompt);
+        expect(result.renderer_equivalence).toMatchObject({
+            ui_function: 'renderAiExportPrompt',
+            exact_string_match: true,
+            utf8_bytes_match: true,
+        });
+        expect(result.prompt).toContain('## Analysis Objective');
+        expect(result.prompt).toContain('Dati di mercato e tecnici asset');
+        expect(result.breakdown).toMatchObject({
+            format_diagnostics: {
+                empty_columns_removed: expect.any(Number),
+            },
+            reconciliation: {
+                unicode_characters_match: true,
+                utf8_bytes_match: true,
+            },
+        });
+        const impact = result.manifest_impact;
+        expect(impact).toMatchObject({
+            method: 'exact_official_yaml_field_substitution_v1',
+        });
+        if (!impact || typeof impact !== 'object' || !('saved_unicode_characters' in impact) || typeof impact.saved_unicode_characters !== 'number') {
+            throw new TypeError('Probe manifest impact lacks saved character measurement');
+        }
+        expect(impact.saved_unicode_characters).toBeGreaterThan(0);
+    });
+
+    it('keeps Export Data probe output byte-identical to the UI renderer', async () => {
+        const selection = selectionFixture('dataset', 'portfolio.overview');
+        const snapshot = snapshotFixture(selection);
+        const direct = renderAiExportPrompt({
+            selection,
+            compatibility: compatibilityFixture(),
+            snapshot,
+            responseLanguage: 'English',
+            translate: probeTranslation('en'),
+        });
+        const result = await handleProbeMessage({
+            request_id: 'render-data-1',
+            action: 'render',
+            catalog: backendCatalogFixture(),
+            selection_kind: selection.kind,
+            selection_id: selection.id,
+            response_language: 'English',
+            locale: 'en',
+            snapshot,
+        });
+
+        expect(result.prompt).toBe(direct.prompt);
+        expect(new TextEncoder().encode(result.prompt as string)).toEqual(new TextEncoder().encode(direct.prompt));
+        expect(result.renderer_equivalence).toMatchObject({
+            exact_string_match: true,
+            utf8_bytes_match: true,
+        });
     });
 });

@@ -324,13 +324,8 @@ def _patch_metadata(monkeypatch: pytest.MonkeyPatch, *, asset_ids: list[int] = (
     async def _fake_assets(session, ids):  # noqa: ARG001
         return {asset_id: _asset_meta(asset_id) for asset_id in asset_ids}
 
-    async def _fake_brokers(session, ids):  # noqa: ARG001
-        return {broker_id: _broker_meta(broker_id) for broker_id in broker_ids}
-
     monkeypatch.setattr(portfolio_financial, "_load_asset_metadata", _fake_assets)
-    monkeypatch.setattr(portfolio_financial, "_load_broker_metadata", _fake_brokers)
     monkeypatch.setattr(broker_financial, "_load_asset_metadata", _fake_assets)
-    monkeypatch.setattr(broker_financial, "_load_broker_metadata", _fake_brokers)
 
 
 def _synthetic_close(asset_id: int, day: date) -> Decimal:
