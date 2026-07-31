@@ -83,6 +83,12 @@ class MWRRPoint:
 _PREC_PCT = Decimal("0.000001")  # 6 decimals for percentages
 _PREC_AMT = Decimal("0.01")  # 2 decimals for monetary values
 
+# Minimum holding window (days) below which a cumulative return is NOT annualized.
+# Annualizing a sub-month return via (1+r)^(365/days) explodes for tiny windows
+# (e.g. +13% over 7 days -> ~63000%), which is mathematically correct but useless
+# for comparison. Below this floor we return None so the UI shows "—" instead.
+_MIN_ANNUALIZATION_DAYS = 30
+
 
 def annualized_to_cumulative(rate: Decimal | None, days: int) -> Decimal | None:
     """Convert annualized MWRR/XIRR to cumulative return for a given period.
@@ -104,6 +110,38 @@ def annualized_to_cumulative(rate: Decimal | None, days: int) -> Decimal | None:
         if not math.isfinite(cumulative):
             return None
         return Decimal(str(cumulative)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+    except (OverflowError, InvalidOperation, ValueError):
+        return None
+
+
+def cumulative_to_annualized(total_return: Decimal | None, days: int, min_days: int = _MIN_ANNUALIZATION_DAYS) -> Decimal | None:
+    """Convert a cumulative return over a holding window to an annualized (CAGR) rate.
+
+    Inverse of :func:`annualized_to_cumulative`.
+    Formula: r_ann = (1 + r_cum)^(365 / days) - 1
+
+    Geometric annualization (compounding), so a +2% over 6 months annualizes to
+    ~+4.04%, making returns comparable across differing holding durations.
+
+    Returns None when the input is unusable rather than raising:
+    - ``total_return`` is None or <= -1 (total loss / impossible),
+    - ``days`` < ``min_days`` (window too short to annualize meaningfully; the
+      default floor avoids the exponential blow-up of sub-month windows),
+    - the computation overflows (e.g. a large return over a very short hold).
+    """
+    if total_return is None:
+        return None
+    if total_return <= Decimal("-1"):
+        return None
+    if days < min_days or days <= 0:
+        return None
+    try:
+        base = float(Decimal("1") + total_return)
+        exponent = 365.0 / days
+        annualized = base**exponent - 1.0
+        if not math.isfinite(annualized):
+            return None
+        return Decimal(str(annualized)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
     except (OverflowError, InvalidOperation, ValueError):
         return None
 

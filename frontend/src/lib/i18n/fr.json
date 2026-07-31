@@ -783,7 +783,9 @@
       "aggregateReturn": "Rendement agrégé",
       "estimatedCurrentValue": "Valeur actuelle estimée",
       "yAxisAuto": "Auto",
-      "yAxisFromZero": "Depuis 0"
+      "yAxisFromZero": "Depuis 0",
+      "annualizedReturn": "Annualisé",
+      "annualizedReturnTooltip": "Rendement total annualisé (TCAC) sur la durée de détention du lot, pour comparer des lots détenus sur des durées différentes."
     },
     "createdInSystem": "Créé dans le Système"
   },
@@ -1179,7 +1181,10 @@
     "oldestOpenLotDateTooltip": "Date d'ouverture du plus ancien lot FIFO encore ouvert pour cette position.",
     "unallocatedIncome": "Revenu non alloué",
     "unallocatedCosts": "Coûts non alloués",
-    "otherReconciliationResidual": "Autre / résidu de réconciliation"
+    "otherReconciliationResidual": "Autre / résidu de réconciliation",
+    "annualizedReturn": "Annualisé",
+    "annualizedReturnTooltip": "P&L % annualisé (TCAC) sur la durée de détention (depuis le plus ancien lot ouvert), pour comparer des positions détenues sur des durées différentes.",
+    "annualizedReturnPeriodTooltip": "Rendement de la période annualisé (TCAC) sur la longueur de la période sélectionnée, pour comparer des périodes de durées différentes."
   },
   "dataQuality": {
     "headerInfoOnly": "Note de qualité des données",

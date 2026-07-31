@@ -74,6 +74,7 @@ from backend.app.utils.financial.roi_utils import (
     calculate_simple_roi_series,
     calculate_twrr,
     calculate_twrr_series,
+    cumulative_to_annualized,
 )
 from backend.app.utils.financial.valuation_utils import compute_holding_value
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist, determine_target_currency
@@ -1325,6 +1326,11 @@ class PortfolioService:
                     )
                 )
 
+            holding_oldest_lot = oldest_open_lot_dates.get((ps.broker_id, ps.asset_id))
+            holding_annualized = None
+            if gain_loss_pct is not None and holding_oldest_lot is not None:
+                holding_annualized = cumulative_to_annualized(gain_loss_pct, (valuation_date - holding_oldest_lot).days)
+
             all_holdings.append(
                 PortfolioHolding(
                     asset_id=ps.asset_id,
@@ -1347,6 +1353,7 @@ class PortfolioService:
                     missing_fx_pair=ps.missing_fx_pair,
                     gain_loss=gain_loss,
                     gain_loss_percent=gain_loss_pct,
+                    annualized_return=holding_annualized,
                     price_change_1d=price_change_1d,
                     gain_loss_change_1d=gain_loss_change_1d,
                     gain_loss_change_1d_percent=gain_loss_change_1d_percent,
@@ -1497,24 +1504,25 @@ class PortfolioService:
             period_other_result_val = period_pnl_val - period_ugl_delta - period_realized_val - period_income_val + period_fees_taxes_val
 
         # ── 6. Data quality report ──
-        # Scope transaction-implied assets to the SELECTED date range (like
-        # build_allocation_history's date_from filter) — NOT engine_result.daily_states'
-        # full lifetime (which always starts at t=0 regardless of the requested window,
-        # per the engine.calculate(date_from=None, ...) call above). Also apply a grace
-        # period after first acquisition: brief pre-listing/placement lag (e.g. BTP
-        # collocamento) is expected and not worth flagging as a data-quality issue.
+        # "Valued at cost" is an *as-of* statement (dataQuality.transactionImplied:
+        # "…as of {as_of_date}"): evaluate ONLY the valuation-date state, so an asset that
+        # has since received a real market quote clears the warning even if it was
+        # transaction-implied for most of its earlier history. The previous behaviour
+        # unioned the flag across every day of the asset's lifetime, permanently flagging
+        # any asset ever valued at cost — e.g. funds that only get quotes from their first
+        # provider sync onward stayed flagged forever despite a fresh current price.
+        # The grace period still suppresses a brand-new acquisition whose first market
+        # price simply has not landed yet (e.g. BTP collocamento lag).
         first_position_date_by_asset: dict[int, date_type] = {}
         for (_b_id, a_id), d in first_position_dates.items():
             if a_id not in first_position_date_by_asset or d < first_position_date_by_asset[a_id]:
                 first_position_date_by_asset[a_id] = d
 
         implied_asset_ids: set[int] = set()
-        for s in engine_result.daily_states:
-            if date_from and s.date < date_from:
-                continue
-            for aid in s.transaction_implied_asset_ids:
+        if last_state is not None:
+            for aid in last_state.transaction_implied_asset_ids:
                 first_dt = first_position_date_by_asset.get(aid)
-                if first_dt is not None and (s.date - first_dt).days <= TRANSACTION_IMPLIED_GRACE_DAYS:
+                if first_dt is not None and (last_state.date - first_dt).days <= TRANSACTION_IMPLIED_GRACE_DAYS:
                     continue
                 implied_asset_ids.add(aid)
 
@@ -2015,6 +2023,13 @@ class PortfolioService:
             period_pnl_pct: Decimal | None = None
             if period_pnl is not None and start_value not in (None, Decimal("0")):
                 period_pnl_pct = (period_pnl / abs(start_value)).quantize(Decimal("0.0001"))
+            # Annualize the period return over the selected period length so
+            # returns are comparable across different period durations. Only
+            # meaningful for a bounded period (date_from set); an open-ended
+            # "all time" view has start_value=0 -> period_pnl_pct None anyway.
+            period_annualized = None
+            if period_pnl_pct is not None and date_from is not None:
+                period_annualized = cumulative_to_annualized(period_pnl_pct, (effective_end - date_from).days)
 
             contributions.append(
                 AssetPeriodContribution(
@@ -2030,6 +2045,7 @@ class PortfolioService:
                     period_fees_taxes=fees if fees else None,
                     period_pnl=period_pnl,
                     period_pnl_percent=period_pnl_pct,
+                    annualized_return=period_annualized,
                     start_value=start_value,
                     end_value=end_value,
                     is_fully_sold=is_fully_sold,
