@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Asset Transfer
+# 🔄 ![](../../../static/icons/transactions/transfer.png){: width="32" style="vertical-align: middle;" } Asset Transfer
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-transfer" alt="Transaction Form — TRANSFER">
@@ -48,6 +48,12 @@ Under the hood, a Transfer is composed of two Adjustment entries. LibreFolio sup
 | **Promote** (link) | Two Adjustments → Transfer |
 
 **Promote constraints**: same asset, different brokers, opposite quantities.
+
+---
+
+## 👵 Succession and Untracked Source Brokers
+
+A true `TRANSFER` needs two brokers in LibreFolio: source and destination. If the source dossier is outside LibreFolio, the incoming leg is better modeled as a positive cashless `ADJUSTMENT` with a per-unit `cost_basis_override`, not as a paired transfer. Crédit Agricole Italia succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) use this pattern: the inherited securities enter as in-kind capital, no cash `DEPOSIT` is created, and the origin causale remains in the description for auditability.
 
 ---
 

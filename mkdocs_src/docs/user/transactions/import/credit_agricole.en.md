@@ -1,4 +1,4 @@
-# <img src="https://www.credit-agricole.it/favicon.ico" alt=""> Crédit Agricole Italia
+# 📥 <img src="https://www.credit-agricole.it/favicon.ico" alt=""> Crédit Agricole Italia
 
 !!! info "Beta"
 
@@ -15,8 +15,7 @@ period you want, and export the movements list.
 
 ## 📝 Notes
 
-- **No ISIN** — the report only carries the security **name**, so assets are matched by
-  name. Confirm the asset in **Step 4** of the wizard if it is not recognised.
+- **No ISIN** — the report only carries the security **name** (`Nome`), so assets are matched by name. Confirm the asset in **Step 4** of the wizard if it is not recognised.
 - **Operations** (*causali*) are mapped as follows:
 
     | Causale | Imported as |
@@ -38,9 +37,11 @@ period you want, and export the movements list.
   you are closing. *Assumption:* today every `TITOLI SCADUTI` row is treated as a par-100 bond
   (anything above par → interest); this will be generalised if a non-bond maturity ever
   appears in a real export.
-- **Amounts are imported verbatim** in the currency reported by Crédit Agricole. No
-  currency conversion is performed and the *Cambio* (exchange rate) column is ignored. The
-  *Data valuta* (value date) is used as the settlement date.
+- **Amounts are imported verbatim** in the currency reported by Crédit Agricole. No currency conversion is performed and the *Cambio* (exchange rate) column is ignored. The code uses *Data operazione* as the transaction date.
+
+## ⚠️ Maturity notices
+
+If a row such as `TITOLI SCADUTI` or `FONDI: RIMBORSO` suggests a security may be matured or redeemed, LibreFolio attaches an asset notice. When you create or map the asset in the wizard, that notice appears as an amber advisory banner; it is informational only and does not change the import.
 
 ## 💶 Cash model
 
@@ -79,10 +80,7 @@ remains traceable.
 
 ## ⛔ Before the broker's opening date
 
-When your broker has an **opening date** set, movements dated **before** that date are
-flagged in the wizard as **"Before opening"** and cannot be imported (their checkbox is
-disabled). If a row is flagged incorrectly, use the inline **Edit broker date** action on
-that row to adjust the broker's opening date — the list re-evaluates immediately.
+When your broker has an **opening date** set, movements dated **strictly before** that date are flagged in the wizard as **"Before opening"** and cannot be imported (their checkbox is disabled). The opening day itself is valid: the shipped check is `txDate < info.openedAt`, not `<=`. If a row is flagged incorrectly, use the inline **Edit broker date** action, then re-check/refresh so the wizard evaluates the updated broker date.
 
 ## 🔗 Developer Reference
 

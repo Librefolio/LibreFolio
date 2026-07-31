@@ -89,7 +89,8 @@ mandatory for every new plugin:
 - **Sign conventions.** Set signs per `TransactionType` (BUY: qty > 0, cash < 0; SELL:
   qty < 0, cash > 0; DIVIDEND/INTEREST: qty = 0, cash > 0; FEE/TAX: qty = 0, cash < 0;
   ADJUSTMENT: qty ≠ 0, no cash), but take the **magnitudes** verbatim from the report.
-- **Fake asset IDs.** Emit negative fake asset IDs (keyed by ISIN/ticker) plus
+- **One source row may emit several transactions.** Keep economic legs explicit: securities-only buys can be `DEPOSIT + BUY`, sells can be `SELL + WITHDRAWAL`, maturities can be `SELL at par + INTEREST`, and snapshots can be `DEPOSIT + ADJUSTMENT` seeds.
+- **Fake asset IDs.** Emit high positive fake asset IDs (keyed by ISIN/ticker) plus
   `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
 
 ---
@@ -200,6 +201,8 @@ Copy the structure of an existing, well-tested plugin rather than starting from 
 | `backend/app/services/brim_providers/broker_generic_csv.py` | Column auto-detection, locale-aware number parsing |
 | `backend/app/services/brim_providers/broker_coinbase.py` | Crypto assets (symbol, no ISIN), staking as `ADJUSTMENT`, separate fee tx |
 | `backend/app/services/brim_providers/broker_revolut.py` | **One plugin, two formats** (invest + crypto) via header detection |
+| `backend/app/services/brim_providers/broker_intesa.py` | CSV/XLSX, two layouts in one plugin; patrimonio snapshot → liquidity `DEPOSIT` when present + per-holding `ADJUSTMENT` seed with per-unit `cost_basis_override` |
+| `backend/app/services/brim_providers/broker_credit_agricole.py` | Securities-only export; automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
 | `backend/app/services/brim_providers/broker_saxo.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
 
 ## 📥 Canonical imports
@@ -217,7 +220,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAssetNotice, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -331,11 +334,11 @@ transaction breaks these rules, so flip source signs as needed:
 
 ## 🆔 Fake asset IDs
 
-Asset-linked transactions reference a *fake* (negative) asset id at parse time; the core
+Asset-linked transactions reference a *fake* high positive asset id at parse time; the core
 maps it to a real asset later. Allocate them yourself, grouping rows of the same asset:
 
 ```python
-next_fake_id = FAKE_ASSET_ID_BASE          # a large negative sentinel
+next_fake_id = FAKE_ASSET_ID_BASE          # 2**31 - 1 high positive sentinel
 asset_to_fake_id: dict[str, int] = {}
 extracted_assets_raw: dict[int, dict] = {}
 
@@ -355,6 +358,32 @@ else:
 
 Return them as `BRIMExtractedAssetInfo` in `BRIMParseOutput.extracted_assets`. Every
 `tx.asset_id` must appear as a key (checked by `test_extracted_assets_consistent_with_transactions`).
+
+## ⚠️ Per-asset import notices
+
+When the parsed transactions suggest an asset-level warning, attach `BRIMAssetNotice` objects to that `BRIMExtractedAssetInfo`:
+
+```python
+extracted_assets[asset_id].notices.append(
+    BRIMAssetNotice(
+        kind="maturity_suspected",
+        reason="Rilevata almeno una transazione di scadenza/rimborso.",
+        transaction_indexes=[tx_index],
+    )
+)
+```
+
+The schema is `{kind, reason, transaction_indexes}` with `transaction_indexes=[]` by default. `BRIMAssetMapping.notices` carries those notices into the frontend; the asset-create modal groups them by `kind` and renders amber advisory banners. Notices are informational only and never change import behaviour. Intesa Sanpaolo and Crédit Agricole Italia use this for maturity/redemption warnings.
+
+## 🚪 Opening-date gate
+
+Do not implement an opening-date filter in the backend plugin. The shipped gate lives in the Svelte import wizard and uses the local status key `before_opening` (not a backend enum). The exact comparison is strict:
+
+```ts
+return info !== null && txDate !== '' && txDate < info.openedAt;
+```
+
+Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
 
 ## 🔀 One plugin, several export formats
 
@@ -495,4 +524,3 @@ Then, reusing `<slug>` everywhere:
 - [Generic CSV Provider](../../backend/brim/generic_csv.md) — User-configurable CSV mapper (reference implementation)
 - [Providers List](../../backend/brim/providers_list.md) — All supported brokers
 - [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
-

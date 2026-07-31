@@ -72,7 +72,7 @@ graph TD
 
     subgraph L3["Layer 3 — resolve_url"]
         R1["provider.resolve_url(url)"]
-        R2["search-item dict<br/>{identifier, type,<br/>currency, provider_params}"]
+        R2["search-item dict or list<br/>{identifier, type,<br/>currency, provider_params}"]
         R1 --> R2
     end
 
@@ -88,14 +88,15 @@ graph TD
 |-------|-------|--------------|---------|
 | **L1 — on-site search** | `provider.search(query)` | Always | The provider's own search (e.g. `borsaitaliana.it` `cerca`, Yahoo, justETF). |
 | **L2 — web link-finder** | `web_link_finder.find_candidate_urls()` | Only when L1 returns **0** items **and** the provider opts in **and** the finder is enabled | Uses an external **metasearch** engine (**ddgs** by default — bing / brave / google / DuckDuckGo / … aggregated) to find candidate **provider-domain** URLs for the query. |
-| **L3 — URL resolver** | `provider.resolve_url(url)` | For each L2 candidate URL | Opens the page, extracts data, and returns the **same dict shape as a search item** — the inverse of `get_asset_url`. |
+| **L3 — URL resolver** | `provider.resolve_url(url)` | For each L2 candidate URL | Opens the page, extracts data, and returns one search-item dict, a list of search-item dicts, or `None` — the inverse of `get_asset_url`. |
 
 !!! warning "Invariant — external search is interactive-only"
 
     Layers 2 and 3 are hit **only during interactive asset search**. Price fetches (frequent,
     automated) must **never** touch `web_link_finder`. Once an asset exists it is priced by its
     stored identifier and `provider_params` (for Borsa Italiana funds, `provider_params.codice_fondo`),
-    never by re-searching. This keeps scheduled syncs deterministic and immune to DDG rate-limiting.
+    never by re-searching. This keeps scheduled syncs deterministic and independent from external
+    metasearch availability.
 
 ---
 
@@ -115,8 +116,9 @@ async def search_stream(query: str, provider_codes=None, hints: Optional[list[st
   returns 0 items **and** `provider.supports_url_resolution` **and** `web_link_finder.is_enabled()`.
   It builds the candidate queries (see [Hints](#hints-the-two-stage-stringone)), calls
   `find_candidate_urls`, then `resolve_url`s each hit (in a worker thread — `resolve_url` may do
-  sync I/O), and returns the non-`None` items. Any failure is caught and yields `[]` — the search
-  always completes and emits `done`.
+  sync I/O). `resolve_url` may return one item or a canonical list; the helper flattens lists,
+  de-duplicates by `(identifier, language)`, and returns the non-`None` items. Any failure is
+  caught and yields `[]` — the search always completes and emits `done`.
 - **`_provider_url_for_item(code, item)`** — DRY helper used during serialization so the
   `provider_url` display link is (re)computed from the item's `provider_params` on every request.
 - Results are flagged as "found via web" for the UI.
@@ -229,13 +231,13 @@ report during import), it passes them as **`hints`**. Hints do two things:
 `_build_link_finder_queries(query, hints)` produces an ordered, de-duplicated candidate list:
 
 1. **Rich string** — every hint plus the base query concatenated
-   (whitespace-collapsed, capped). Example:
+   (whitespace-collapsed, not truncated or reordered). Example:
    `"LU2178929613 EURIZON NEXT 2.0 DIVERSIFICATO 40 P"`.
 2. **Base query** — the bare query as a fallback.
 
 `_augment_with_link_finder` tries them **in order** and returns items from the **first candidate
 that resolves anything**. The rich query narrows the external engine when the bare query is too
-ambiguous (a bare ISIN on a site-restricted DDG search often surfaces every sibling share class);
+ambiguous (a bare ISIN on a site-restricted external search often surfaces every sibling share class);
 if it is over-constrained and finds nothing, the base query still runs. With no hints, the list is
 just `[base]` (legacy behaviour).
 
@@ -296,8 +298,9 @@ result already carries its `provider_params`, so it is priceable immediately.
 
 ## 🐞 Fragility & limits
 
-- **DDG is scraped, keyless, and rate-limited** — treat L2 as a *best-effort convenience*, not a
-  guarantee. Repeated calls from one IP can trigger anomaly pages; the module degrades to `[]`.
+- **External metasearch is keyless by default and best-effort** — treat L2 as a convenience, not a
+  guarantee. The current transport uses the `ddgs` library, not LibreFolio HTML scraping; upstream
+  engine failures, missing dependencies, or timeouts degrade to `[]`.
 - **L2/L3 only trigger on a 0-result L1** — a provider that returns *any* on-site result never
   reaches the external stack (by design).
 - **Site-restricted ranking is fuzzy** — the identifier post-filter, not the engine, is what

@@ -102,7 +102,7 @@ The single source of truth for all financial operations. Each transaction belong
 | `related_transaction_id` | Bidirectional self-FK for paired ops (TRANSFER, FX_CONVERSION, CASH_TRANSFER) |
 | `tags` | Comma-separated user tags |
 | `description` | Free-text |
-| `cost_basis_override` | Frozen per-unit cost for the receiving side of a TRANSFER (see below) |
+| `cost_basis_override` | Frozen per-unit cost for incoming seeded lots: receiving `TRANSFER`s, positive `ADJUSTMENT`s, imported snapshots, inheritances (see below) |
 | `asset_event_id` | FK to AssetEvent — links transaction to a global asset event |
 
 **Design rules:**
@@ -115,34 +115,45 @@ The single source of truth for all financial operations. Each transaction belong
 
 ## 🧊 `cost_basis_override` — Snapshot Architecture
 
-The `cost_basis_override` field implements a **frozen acquisition cost** pattern for asset transfers between brokers.
+The `cost_basis_override` field implements a **frozen acquisition cost** pattern for incoming lots that did not originate from a normal BUY in the same broker: asset transfers, positive ADJUSTMENT seeds, inheritances, and broker-import snapshots.
 
-### Problem
+### ❓ Problem
 
-When assets move from Broker A to Broker B, Broker B needs to know the historical cost basis (PMC — Prezzo Medio di Carico) for FIFO/tax calculations. Without a snapshot, the system would need to query Broker A's full transaction history every time it calculates P&L on Broker B.
+When assets move from Broker A to Broker B, or when a broker-import plugin seeds a historical position from a snapshot/succession report, the receiving broker needs the historical cost basis (PMC — Prezzo Medio di Carico) for FIFO/tax calculations. Without a snapshot, the system would need to query unavailable history every time it calculates P&L.
 
-### Solution
+### ⚙️ Solution
 
 At commit time, the backend **computes the Weighted Average Cost (WAC)** at the source broker and writes it to `cost_basis_override` on the **receiver** transaction (qty > 0).
 
 See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** for the full formula, transaction effects, and examples.
 
-### Rules
+### 📏 Rules
 
 | Side | `cost_basis_override` |
 |------|----------------------|
 | Sender (qty < 0) | Always `NULL` |
 | Receiver (qty > 0) | Auto-calculated if empty; can be manually set |
 
-### Why auto-calc happens at commit
+### 🧮 Why auto-calc happens at commit
 
 - `compute_weighted_avg_cost(session, source_broker_id, asset_id, as_of_date)` runs in `execute_batch` Step 6b (for creates) and in promote Step 5c (for promote-to-TRANSFER)
 - It queries both BUY transactions and previous incoming TRANSFERs with frozen cost
 - If no qualifying transactions exist at the source → returns `None` (lot with zero cost)
 
-### Manual override cases
+### ✍️ Manual override cases
 
 Exit Tax, inheritances, gifts, corporate actions — these require a user-specified value because the fiscal basis differs from the mathematical average. The frontend shows a warning when no override is set on an ADJUSTMENT with positive qty.
+
+### 📥 BRIM import seeds
+
+BRIM plugins may set `cost_basis_override` directly when the source report already contains the fiscal book value:
+
+- Intesa Sanpaolo `patrimonio` snapshots create a cash `DEPOSIT` when non-zero liquidity is present plus one cashless `ADJUSTMENT` per holding. The plugin divides total *Controvalore di carico fiscale €* by quantity and stores the result as a **per-unit** override.
+- Crédit Agricole Italia succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) are cashless transfer-ins from an untracked dossier, so they are positive `ADJUSTMENT`s with per-unit override and no `DEPOSIT`.
+
+### 🚪 `opened_at` and BRIM preview gate
+
+`brokers.opened_at` is also used by the frontend BRIM wizard as an import-preview guard. The shipped check is frontend-only and strict: `txDate < info.openedAt`. Rows strictly before the opening date receive local status `before_opening`, are deselected, and cannot be imported; rows dated exactly on `opened_at` remain valid. Users can click **Edit broker date** and then refresh/re-check the preview.
 
 ---
 
@@ -159,7 +170,7 @@ The dotted line in the ER diagram represents a **logical relationship**, not a r
 
     Currencies are an international standard (ISO 4217) with a fixed, well-known list. Storing them as strings avoids unnecessary joins while keeping validation strict at the application layer.
 
-### Implied FX Rate Derivation
+### 💱 Implied FX Rate Derivation
 
 For `FX_CONVERSION` paired transactions, the effective exchange rate applied by the broker can be derived from the two linked rows:
 
