@@ -45,6 +45,7 @@
         period_fees_taxes?: NumericLike;
         period_pnl?: NumericLike;
         period_pnl_percent?: NumericLike;
+        annualized_return?: NumericLike;
         start_value?: NumericLike;
         end_value?: NumericLike;
         is_fully_sold?: boolean;
@@ -119,6 +120,7 @@
         brokerName: string;
         broker: BrokerLike | null;
         pnl: number | null;
+        annualizedReturn: number | null;
         unrealizedDelta: number | null;
         realizedSales: number | null;
         income: number | null;
@@ -158,6 +160,7 @@
                     brokerName: p.broker_name,
                     broker: brokerMap.get(p.broker_id) ?? null,
                     pnl: safeNum(p.period_pnl),
+                    annualizedReturn: safeNum(p.annualized_return),
                     unrealizedDelta: safeNum(p.period_unrealized_delta),
                     realizedSales: safeNum(p.period_realized_gain_loss),
                     income: safeNum(p.period_income),
@@ -315,6 +318,19 @@
                 align: 'right',
                 getValue: (row) => row.pnl ?? 0,
                 cell: (row) => signedAmountCell(row.pnl),
+            },
+            {
+                id: 'annualized-return',
+                header: () => label('dashboard.annualizedReturn', 'Annualized'),
+                headerTooltip: () => label('dashboard.annualizedReturnPeriodTooltip', 'Period return annualized (CAGR) over the selected period length, for comparison across periods of different durations.'),
+                type: 'number',
+                width: 130,
+                minWidth: 110,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.annualizedReturn ?? 0,
+                cell: (row) => percentChangeCell(row.annualizedReturn),
             },
             {
                 id: 'unrealized-delta',

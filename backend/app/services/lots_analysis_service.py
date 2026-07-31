@@ -56,7 +56,7 @@ from backend.app.services.fifo_lot_engine import (
 from backend.app.services.fx import convert_bulk
 from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.services.settings_service import get_global_setting
-from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
+from backend.app.utils.financial.roi_utils import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series, cumulative_to_annualized
 from backend.app.utils.financial.valuation_utils import compute_holding_value, normalize_quote_base_quantity
 from backend.app.utils.financial.wac_utils import WACInputTX, compute_wac_from_txlist
 
@@ -421,6 +421,7 @@ class LotsAnalysisService:
                 taxes_by_lot=taxes_by_lot,
                 estimated_mode=estimated_mode,
                 quote_base_quantity=quote_base_quantity,
+                analysis_end=actual_to,
             )
 
         gantt_segments = None
@@ -1276,6 +1277,7 @@ class LotsAnalysisService:
         taxes_by_lot: dict[int, Decimal],
         estimated_mode: bool,
         quote_base_quantity: int,
+        analysis_end: date_type,
     ) -> list[LotSummarySchema]:
         latest_market_price = market_prices.get(max(market_prices)) if market_prices else None
         out: list[LotSummarySchema] = []
@@ -1343,6 +1345,13 @@ class LotsAnalysisService:
                 lot_closures = closures_by_lot.get(lot_id, [])
                 if lot_closures:
                     closing_date = max(closure.close_date for closure in lot_closures)
+            # Annualize total_return over the lot's live window so short- and
+            # long-held lots become comparable: end = closing_date for a fully
+            # closed lot, else the analysis end date (open lots run to "now").
+            annualized_return = None
+            if total_return is not None:
+                lot_end = closing_date if closing_date is not None else analysis_end
+                annualized_return = cumulative_to_annualized(total_return, (lot_end - lot.opening_date).days)
             out.append(
                 LotSummarySchema(
                     lot_id=lot.lot_id,
@@ -1373,6 +1382,7 @@ class LotsAnalysisService:
                     total_pnl=total_pnl,
                     cash_yield=cash_yield,
                     total_return=total_return,
+                    annualized_return=annualized_return,
                     value_source=value_source,
                     allocated_fees=allocated_fees,
                     allocated_taxes=allocated_taxes,

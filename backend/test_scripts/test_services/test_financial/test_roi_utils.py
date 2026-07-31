@@ -632,6 +632,89 @@ class TestAnnualizedToCumulative:
         assert float(result) == pytest.approx(-0.20, abs=0.001)
 
 
+class TestCumulativeToAnnualized:
+    """Tests for cumulative_to_annualized helper (inverse of annualized_to_cumulative)."""
+
+    def test_none_returns_none(self):
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        assert cumulative_to_annualized(None, 365) is None
+
+    def test_total_loss_returns_none(self):
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        assert cumulative_to_annualized(Decimal("-1"), 365) is None
+        assert cumulative_to_annualized(Decimal("-1.5"), 365) is None
+
+    def test_zero_or_negative_days_returns_none(self):
+        """Unlike the forward helper, a non-positive window is not annualizable."""
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        assert cumulative_to_annualized(Decimal("0.10"), 0) is None
+        assert cumulative_to_annualized(Decimal("0.10"), -5) is None
+
+    def test_short_window_below_minimum_returns_none(self):
+        """Sub-month windows are not annualized (avoids exponential blow-up); >= floor is."""
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        assert cumulative_to_annualized(Decimal("0.13"), 7) is None
+        assert cumulative_to_annualized(Decimal("0.05"), 29) is None
+        assert cumulative_to_annualized(Decimal("0.05"), 30) is not None
+        assert cumulative_to_annualized(Decimal("0.02"), 45) is not None
+        # explicit override lets a caller opt into shorter windows
+        assert cumulative_to_annualized(Decimal("0.02"), 10, min_days=1) is not None
+
+    def test_one_year_identity(self):
+        """For exactly 365 days, annualized == cumulative."""
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        result = cumulative_to_annualized(Decimal("0.10"), 365)
+        assert result is not None
+        assert float(result) == pytest.approx(0.10, abs=0.001)
+
+    def test_two_years_de_compounding(self):
+        """For 730 days, +21% cumulative annualizes to (1.21)^(1/2)-1 = 0.10."""
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        result = cumulative_to_annualized(Decimal("0.21"), 730)
+        assert result is not None
+        assert float(result) == pytest.approx(0.10, abs=0.001)
+
+    def test_half_year_scales_up(self):
+        """For 182 days, +2% cumulative annualizes to (1.02)^(365/182)-1 ≈ 0.0405."""
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        result = cumulative_to_annualized(Decimal("0.02"), 182)
+        assert result is not None
+        assert float(result) == pytest.approx(0.0405, abs=0.001)
+
+    def test_negative_return(self):
+        """A loss over a short window annualizes to a larger (more negative) loss."""
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        result = cumulative_to_annualized(Decimal("-0.20"), 90)
+        assert result is not None
+        assert float(result) == pytest.approx(-0.5954, abs=0.001)
+
+    def test_overflow_returns_none(self):
+        """An enormous return over a valid window overflows -> None (not a crash)."""
+        from backend.app.utils.financial.roi_utils import cumulative_to_annualized
+
+        assert cumulative_to_annualized(Decimal("1e30"), 30) is None
+
+    def test_round_trips_with_annualized_to_cumulative(self):
+        """cumulative_to_annualized is the inverse of annualized_to_cumulative."""
+        from backend.app.utils.financial.roi_utils import annualized_to_cumulative, cumulative_to_annualized
+
+        for days in (91, 182, 365, 900):
+            cum = Decimal("0.037")
+            ann = cumulative_to_annualized(cum, days)
+            assert ann is not None
+            back = annualized_to_cumulative(ann, days)
+            assert back is not None
+            assert float(back) == pytest.approx(float(cum), abs=1e-4)
+
+
 # ---------------------------------------------------------------------------
 # TestMWRRSummaryFix — verifies no double-counting of deposits
 # ---------------------------------------------------------------------------

@@ -849,14 +849,16 @@ class TestPortfolioServicePrivateHelpers:
 
 
 class TestTransactionImpliedDataQuality:
-    """TRANSACTION_IMPLIED must respect the selected date range and a placement grace period.
+    """TRANSACTION_IMPLIED is an *as-of* health flag: it fires only when a held asset is
+    STILL valued at cost on the valuation date (date_to), respecting a placement grace
+    period for brand-new acquisitions.
 
-    Regression test: previously, the issue was aggregated from the engine's full-lifetime
-    daily_states (always computed from t=0 regardless of the requested date_from, for
-    correct cumulative values) with no date_from filtering and no grace period. This meant
-    a placement-period gap (e.g. BTP collocamento) from months/years ago kept showing up
-    as a warning even after the price feed caught up and even when the user's selected
-    date range no longer covered that period at all.
+    Regression test: previously the flag was aggregated across the engine's full-lifetime
+    daily_states (always computed from t=0 for correct cumulative values). Even after a
+    placement gap (e.g. BTP collocamento) was priced, or a fund received its first provider
+    quotes, the asset kept showing the "valued at cost — no market price" warning forever,
+    contradicting the message's own "as of {as_of_date}" wording. The flag now reflects only
+    the valuation-date state, so a currently-priced asset clears the warning.
     """
 
     @pytest.mark.asyncio
@@ -900,34 +902,35 @@ class TestTransactionImpliedDataQuality:
         assert IssueCode.TRANSACTION_IMPLIED in codes
 
     @pytest.mark.asyncio
-    async def test_old_resolved_gap_excluded_when_date_range_narrowed(self, session, test_user, broker_with_access, test_asset_with_provider):
-        """A placement gap that resolved long ago must not resurface once the
-        selected date range no longer includes it (the exact reported bug)."""
+    async def test_resolved_gap_with_current_price_not_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """A placement gap that has since been priced must NOT be flagged as 'valued at
+        cost' once a market price exists on the valuation date — even when the report range
+        still spans the long historical at-cost period. This is the exact reported bug: a
+        fund priced only from its first provider sync onward stayed flagged forever despite a
+        fresh current price. date_from no longer affects the flag (it is purely as-of)."""
         broker, _ = broker_with_access
         buy_date = date(2024, 1, 1)
-        first_price_date = date(2024, 2, 1)  # ~31 days later, well past the grace period
         report_end = date(2024, 6, 1)
+        # Fresh quote two days before the report date -> current value is MARKET, not cost.
+        fresh_price_date = report_end - timedelta(days=2)
         session.add_all(
             [
                 Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=buy_date, amount=Decimal("10000"), currency="EUR"),
                 Transaction(broker_id=broker.id, asset_id=test_asset_with_provider.id, type=TransactionType.BUY, date=buy_date, quantity=Decimal("100"), amount=Decimal("-9950"), currency="EUR"),
-                # Price feed catches up on first_price_date -> backward-fill covers all later days
-                PriceHistory(asset_id=test_asset_with_provider.id, date=first_price_date, open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"),
+                PriceHistory(asset_id=test_asset_with_provider.id, date=fresh_price_date, open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"),
             ]
         )
         await session.flush()
 
         service = PortfolioService(session)
 
-        # "All" — includes the resolved placement gap -> flagged
+        # Full range spans the historical at-cost period, but the asset is currently priced.
         summary_all = await service.get_summary(user_id=test_user.id, date_to=report_end)
-        codes_all = {i.code for i in summary_all.data_quality.issues}
-        assert IssueCode.TRANSACTION_IMPLIED in codes_all
+        assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_all.data_quality.issues}
 
-        # "3 months"-like narrower window that excludes the gap -> NOT flagged
+        # Narrow range behaves identically (the flag is as-of, not range-dependent).
         summary_narrow = await service.get_summary(user_id=test_user.id, date_from=date(2024, 3, 1), date_to=report_end)
-        codes_narrow = {i.code for i in summary_narrow.data_quality.issues}
-        assert IssueCode.TRANSACTION_IMPLIED not in codes_narrow
+        assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_narrow.data_quality.issues}
 
 
 # =============================================================================

@@ -783,7 +783,9 @@
       "aggregateReturn": "Aggregate return",
       "estimatedCurrentValue": "Estimated current value",
       "yAxisAuto": "Auto",
-      "yAxisFromZero": "From 0"
+      "yAxisFromZero": "From 0",
+      "annualizedReturn": "Annualized",
+      "annualizedReturnTooltip": "Total return annualized (CAGR) over the lot holding window, for comparison across lots held for different durations."
     },
     "createdInSystem": "Created in System"
   },
@@ -1179,7 +1181,10 @@
     "oldestOpenLotDateTooltip": "Opening date of the oldest FIFO lot still open for this position.",
     "unallocatedIncome": "Unallocated income",
     "unallocatedCosts": "Unallocated costs",
-    "otherReconciliationResidual": "Other / reconciliation residual"
+    "otherReconciliationResidual": "Other / reconciliation residual",
+    "annualizedReturn": "Annualized",
+    "annualizedReturnTooltip": "P&L % annualized (CAGR) over the holding window (from the oldest open lot), for comparison across positions held for different durations.",
+    "annualizedReturnPeriodTooltip": "Period return annualized (CAGR) over the selected period length, for comparison across periods of different durations."
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",

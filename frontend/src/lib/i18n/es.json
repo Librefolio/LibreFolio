@@ -783,7 +783,9 @@
       "aggregateReturn": "Rendimiento agregado",
       "estimatedCurrentValue": "Valor actual estimado",
       "yAxisAuto": "Auto",
-      "yAxisFromZero": "Desde 0"
+      "yAxisFromZero": "Desde 0",
+      "annualizedReturn": "Anualizado",
+      "annualizedReturnTooltip": "Rendimiento total anualizado (CAGR) durante el periodo de tenencia del lote, para comparar lotes mantenidos durante distintas duraciones."
     },
     "createdInSystem": "Creado en el Sistema"
   },
@@ -1179,7 +1181,10 @@
     "oldestOpenLotDateTooltip": "Fecha de apertura del lote FIFO más antiguo aún abierto para esta posición.",
     "unallocatedIncome": "Ingreso no asignado",
     "unallocatedCosts": "Costes no asignados",
-    "otherReconciliationResidual": "Otro / residuo de conciliación"
+    "otherReconciliationResidual": "Otro / residuo de conciliación",
+    "annualizedReturn": "Anualizado",
+    "annualizedReturnTooltip": "P&L % anualizado (CAGR) durante el periodo de tenencia (desde el lote abierto más antiguo), para comparar posiciones mantenidas durante distintas duraciones.",
+    "annualizedReturnPeriodTooltip": "Rendimiento del periodo anualizado (CAGR) durante la duración del periodo seleccionado, para comparar periodos de distinta duración."
   },
   "dataQuality": {
     "headerInfoOnly": "Nota de calidad de datos",
