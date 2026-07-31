@@ -1416,7 +1416,7 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert holding.current_price == Decimal("10")
         assert holding.current_value == Decimal("100")
         assert holding.gain_loss == Decimal("0")
-        assert holding.valuation_source == "LAST_SEED_COST"
+        assert holding.valuation_source == "LAST_TRADE_PRICE"
         assert holding.valuation_effective_unit_price == Decimal("10")
         assert holding.valuation_effective_currency == "EUR"
         assert holding.valuation_reference_date == date(2025, 1, 2)

@@ -1746,12 +1746,15 @@ class PortfolioService:
                 )
             )
 
-        # First point always 0% for chart continuity (period starts here)
+        # First point pinned to 0% for the cumulative growth measures (TWRR/MWRR): they are
+        # period-relative returns measured from inception, so they are 0 at the period start by
+        # definition. ROI is NOT pinned — it is an absolute ratio (NAV − net_invested)/net_invested,
+        # so on the very first day it must already reflect any seeded cost-vs-market gap (e.g. an
+        # in-kind succession seeded above/below market shows its day-1 gain/loss instead of a flat 0).
         if history_points:
             history_points[0].twrr = Decimal("0")
             history_points[0].mwrr_annualized = Decimal("0")
             history_points[0].mwrr_cumulative = Decimal("0")
-            history_points[0].roi = Decimal("0")
 
         return history_points
 

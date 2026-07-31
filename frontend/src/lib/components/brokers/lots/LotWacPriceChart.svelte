@@ -1318,16 +1318,18 @@
         // ISO 'YYYY-MM-DD' compares chronologically as plain strings → cheap min/max for edge detection.
         const minDate = withRadius.reduce((min, entry) => (entry.point.openingDate < min ? entry.point.openingDate : min), withRadius[0].point.openingDate);
         const maxDate = withRadius.reduce((max, entry) => (entry.point.openingDate > max ? entry.point.openingDate : max), withRadius[0].point.openingDate);
-        const hasSpan = minDate !== maxDate;
         for (const [date, bucket] of byDate) {
             if (bucket.length < 2) continue;
-            const step = Math.max(...bucket.map((entry) => entry.radius)) * 1.6;
+            // Step ≥ 2× the largest radius so adjacent same-day bubbles never overlap (2.1 leaves a thin gap;
+            // 1.6 used to overlap because 1.6r < 2r).
+            const step = Math.max(...bucket.map((entry) => entry.radius)) * 2.1;
             const count = bucket.length;
-            // Anchor the fan so groups sitting on an axis edge grow inward instead of spilling past the plot:
-            // the earliest date grows rightwards (offsets 0,1,2…), the latest grows leftwards (…-2,-1,0),
-            // everything in between stays centred. Only when there is an actual date span (a lone same-day
-            // group keeps the symmetric centred layout).
-            const anchor = hasSpan && date === minDate ? 'left' : hasSpan && date === maxDate ? 'right' : 'center';
+            // Anchor the fan so groups sitting on an axis edge grow INWARD instead of spilling past — and
+            // getting clipped at (series use clip:true) — the plot edges: the earliest date grows rightwards
+            // (offsets 0,1,2…), the latest grows leftwards (…-2,-1,0), interior dates stay centred. A lone
+            // same-day group (min===max) matches the earliest-date branch → grows rightwards, so its bubbles
+            // never fall left of the first x-value (fixes the reported "bubbles ending before the x-axis" clip).
+            const anchor = date === minDate ? 'left' : date === maxDate ? 'right' : 'center';
             bucket.forEach((entry, index) => {
                 const rel = anchor === 'left' ? index : anchor === 'right' ? index - (count - 1) : index - (count - 1) / 2;
                 entry.offsetX = Math.round(rel * step);

@@ -355,11 +355,11 @@ def _native_amount_for_holding(holding: PortfolioHolding, quote_base_quantity: i
 
     Mirrors exactly how `backend.app.services.portfolio_engine` derived
     `holding.current_value` before converting it to `target_currency`:
-    - MARKET_PRICE valuations scale by `quote_base_quantity` via the same
-      `compute_holding_value` helper the engine itself uses (e.g. a bond
-      quoted per 100 face value): `(quantity / quote_base_quantity) * price`.
-    - LAST_BUY_PRICE/LAST_SEED_COST valuations do not: `effective_unit_price`
-      there is already a true per-unit price (`quantity * price`).
+    - MARKET_PRICE / LAST_TRADE_PRICE valuations sit on the market ×quote_base_quantity
+      axis, so they scale by `quote_base_quantity` via the same `compute_holding_value`
+      helper the engine itself uses (e.g. a bond quoted per 100 face value):
+      `(quantity / quote_base_quantity) * price`.
+    - Any other source falls back to a plain per-unit price (`quantity * price`).
     Returns `None` when `valuation_effective_unit_price` is unknown - callers
     must not fabricate a native amount in that case.
     """
@@ -367,7 +367,7 @@ def _native_amount_for_holding(holding: PortfolioHolding, quote_base_quantity: i
         return None
     price = Decimal(str(holding.valuation_effective_unit_price))
     quantity = Decimal(str(holding.quantity))
-    if holding.valuation_source == "MARKET_PRICE":
+    if holding.valuation_source in ("MARKET_PRICE", "LAST_TRADE_PRICE"):
         return compute_holding_value(quantity, price, quote_base_quantity)
     return quantity * price
 

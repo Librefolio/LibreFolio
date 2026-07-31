@@ -29,12 +29,15 @@ Design contract:
   via the asset-source service, transactions via the transaction service, FX via the fx
   service) happens **once per calculation** in the async caller, which then feeds normalized
   observations here. This mirrors the ``_FxRateResolver`` load-once / query-sync shape.
-* **Currency & scale agnostic.** Observations must already be expressed in a single common
-  currency and scale chosen by the builder. :func:`build_asset_price_series` normalizes to
-  *target currency* at the *market ×quote_base_quantity* scale (the scale
-  ``price_history.close`` uses), so a qbq=100 bond lands on its ~100 par axis and per-unit
-  trade prices are lifted to the same axis. FX staleness (``fx_backward_fill``) is composed
-  at the adoption layer from the fx service, alongside the price staleness this module owns.
+* **Native currency, par scale — conversion belongs to the engine.** Every observation stays
+  in its own *native* currency (the price's / trade's currency); each :class:`ResolvedMark`
+  carries that ``currency`` so the consuming engine can convert to the reporting currency **at
+  the valuation date** (a mark carried forward must translate at the day it is read, not at the
+  observation date — otherwise a foreign holding freezes a stale FX). Scale is normalized to the
+  *market ×quote_base_quantity* axis (the scale ``price_history.close`` uses), so a qbq=100 bond
+  lands on its ~100 par axis and per-unit trade prices are lifted to the same axis. FX staleness
+  (``fx_backward_fill``) is composed at the adoption layer from the fx service, alongside the
+  price staleness this module owns.
 * **Never for realized / cost basis.** The mark is for *open-position valuation* and the
   *price line* only. Realized P&L and cost basis must always come from the actual transaction
   prices, never from this estimate.
@@ -47,7 +50,7 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
 from enum import StrEnum
-from typing import Callable, Optional, Sequence
+from typing import Optional, Sequence
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.common import BackwardFillInfo
@@ -73,13 +76,14 @@ class ObservationKind(StrEnum):
 class PriceObservation:
     """A normalized per-unit price observation for one asset on one day.
 
-    ``unit_price`` is already expressed in the single common currency and scale chosen by
-    the builder (target currency, market ×quote_base_quantity scale). The pure resolver is
-    agnostic to currency/scale: it only carries the number and its origin.
+    ``unit_price`` is expressed in ``currency`` (the observation's *native* currency) on the
+    market ×quote_base_quantity scale. The resolver keeps the native price and its currency; the
+    consuming engine converts to the reporting currency at the valuation date.
     """
 
     date: date_type
     unit_price: Decimal
+    currency: str
     kind: ObservationKind
 
 
@@ -87,7 +91,10 @@ class PriceObservation:
 class ResolvedMark:
     """The resolver's answer for (asset, day): the mark plus its provenance and staleness.
 
-    * ``unit_price`` — per-unit mark in the builder's common currency/scale (0 when MISSING).
+    * ``unit_price`` — per-unit mark in ``currency`` on the market ×quote_base_quantity scale
+      (0 when MISSING).
+    * ``currency`` — the mark's *native* currency (``None`` when MISSING). The consuming engine
+      converts this to the reporting currency at the valuation date.
     * ``source`` — :class:`MarkSource` resolution mode on the requested day.
     * ``as_of_date`` — the underlying observation's date (``None`` when MISSING).
     * ``price_backward_fill`` — ``None`` for an exact same-day observation; a
@@ -98,6 +105,7 @@ class ResolvedMark:
     """
 
     unit_price: Decimal
+    currency: Optional[str]
     source: MarkSource
     as_of_date: Optional[date_type]
     price_backward_fill: Optional[BackwardFillInfo]
@@ -110,6 +118,7 @@ class ResolvedMark:
 
 _MISSING_MARK = ResolvedMark(
     unit_price=Decimal("0"),
+    currency=None,
     source=MarkSource.MISSING,
     as_of_date=None,
     price_backward_fill=None,
@@ -126,31 +135,37 @@ class AssetPriceSeries:
     LOCF, else MISSING). O(log n) per query via ``bisect``.
     """
 
-    __slots__ = ("_dates", "_values", "_is_market")
+    __slots__ = ("_dates", "_values", "_is_market", "_currencies")
 
     def __init__(self, observations: Sequence[PriceObservation]) -> None:
         market_by_day: dict[date_type, Decimal] = {}
+        market_ccy_by_day: dict[date_type, str] = {}
         trades_by_day: dict[date_type, list[Decimal]] = {}
+        trade_ccy_by_day: dict[date_type, str] = {}
         for obs in observations:
             if obs.kind is ObservationKind.MARKET:
                 # Last MARKET observation on a day wins (price_history has one row per day,
                 # but be defensive against duplicates).
                 market_by_day[obs.date] = obs.unit_price
+                market_ccy_by_day[obs.date] = obs.currency
             else:
                 trades_by_day.setdefault(obs.date, []).append(obs.unit_price)
+                # An asset's trades share a currency in practice; the first one on the day labels it.
+                trade_ccy_by_day.setdefault(obs.date, obs.currency)
 
-        collapsed: dict[date_type, tuple[Decimal, bool]] = {}
+        collapsed: dict[date_type, tuple[Decimal, bool, str]] = {}
         for day in market_by_day.keys() | trades_by_day.keys():
             if day in market_by_day:
-                collapsed[day] = (market_by_day[day], True)
+                collapsed[day] = (market_by_day[day], True, market_ccy_by_day[day])
             else:
                 same_day = trades_by_day[day]
                 average = sum(same_day, Decimal("0")) / Decimal(len(same_day))
-                collapsed[day] = (average, False)
+                collapsed[day] = (average, False, trade_ccy_by_day[day])
 
         self._dates: list[date_type] = sorted(collapsed)
         self._values: list[Decimal] = [collapsed[day][0] for day in self._dates]
         self._is_market: list[bool] = [collapsed[day][1] for day in self._dates]
+        self._currencies: list[str] = [collapsed[day][2] for day in self._dates]
 
     @property
     def has_observations(self) -> bool:
@@ -166,13 +181,15 @@ class AssetPriceSeries:
         obs_date = self._dates[idx]
         value = self._values[idx]
         is_market = self._is_market[idx]
+        currency = self._currencies[idx]
         estimated = not is_market
         if obs_date == query_date:
             source = MarkSource.MARKET if is_market else MarkSource.TRADE_AVG
-            return ResolvedMark(unit_price=value, source=source, as_of_date=obs_date, price_backward_fill=None, estimated=estimated)
+            return ResolvedMark(unit_price=value, currency=currency, source=source, as_of_date=obs_date, price_backward_fill=None, estimated=estimated)
         days_back = (query_date - obs_date).days
         return ResolvedMark(
             unit_price=value,
+            currency=currency,
             source=MarkSource.CARRIED,
             as_of_date=obs_date,
             price_backward_fill=BackwardFillInfo(actual_rate_date=obs_date, days_back=days_back),
@@ -185,13 +202,9 @@ class AssetPriceSeries:
             return _MISSING_MARK
         value = self._values[-1]
         is_market = self._is_market[-1]
+        currency = self._currencies[-1]
         source = MarkSource.MARKET if is_market else MarkSource.TRADE_AVG
-        return ResolvedMark(unit_price=value, source=source, as_of_date=self._dates[-1], price_backward_fill=None, estimated=not is_market)
-
-
-# Convert (amount, currency, on_date) -> amount in target currency, or None when the FX rate
-# is unavailable. Callers wire this to the fx service's loaded resolver (sync query side).
-ConvertFn = Callable[[Decimal, Optional[str], date_type], Optional[Decimal]]
+        return ResolvedMark(unit_price=value, currency=currency, source=source, as_of_date=self._dates[-1], price_backward_fill=None, estimated=not is_market)
 
 
 def build_asset_price_series(
@@ -201,19 +214,19 @@ def build_asset_price_series(
     split_linked_tx_ids: set[int],
     asset_currency: str,
     quote_base_quantity: int,
-    convert: ConvertFn,
 ) -> AssetPriceSeries:
     """Normalize asset-system prices + observed transactions into an :class:`AssetPriceSeries`.
 
-    Both sources are lifted to *target currency* at the *market ×quote_base_quantity* scale
-    (the scale ``price_history.close`` already uses):
+    Observations stay in their own *native* currency (each carries it) on the *market
+    ×quote_base_quantity* scale (the scale ``price_history.close`` already uses); the consuming
+    engine converts to the reporting currency at the valuation date. No FX happens here.
 
     * **MARKET** observations come from ``price_rows`` (``(date, close, currency)``); ``close``
-      is per quote_base_quantity, so it is converted but **not** re-scaled.
-    * **TRADE** observations come from BUY/SELL (``|amount| / |quantity|``) and priced
-      ADJUSTMENT carryovers (``cost_basis_override``), which are per-unit and therefore
-      multiplied by ``quote_base_quantity`` to reach the market scale. Split-linked rows and
-      pure quantity adjustments carry no price and are skipped.
+      is per quote_base_quantity, so it is **not** re-scaled.
+    * **TRADE** observations come from BUY/SELL (``|amount| / |quantity|`` in ``tx.currency``)
+      and priced ADJUSTMENT carryovers (``cost_basis_override`` in ``cost_basis_currency``),
+      which are per-unit and therefore multiplied by ``quote_base_quantity`` to reach the market
+      scale. Split-linked rows and pure quantity adjustments carry no price and are skipped.
 
     Mirrors the historical ``_build_market_price_map`` / ``_build_trade_price_points`` math so
     adoption is behaviour-preserving; the added value here is the unified series + staleness.
@@ -224,9 +237,7 @@ def build_asset_price_series(
     for price_date, close, currency in price_rows:
         if close is None:
             continue
-        converted = convert(close, currency, price_date)
-        value = converted if converted is not None else close
-        observations.append(PriceObservation(date=price_date, unit_price=value, kind=ObservationKind.MARKET))
+        observations.append(PriceObservation(date=price_date, unit_price=close, currency=currency or asset_currency, kind=ObservationKind.MARKET))
 
     for tx in transactions:
         if tx.id in split_linked_tx_ids:
@@ -235,19 +246,17 @@ def build_asset_price_series(
         if quantity == Decimal("0"):
             continue
         tx_type = str(getattr(tx.type, "value", tx.type))
-        unit_target: Optional[Decimal] = None
+        unit_native: Optional[Decimal] = None
+        obs_currency = asset_currency
         if tx_type in ("BUY", "SELL"):
             if tx.amount:
-                currency = tx.currency or asset_currency
-                converted = convert(abs(tx.amount), currency, tx.date)
-                total = converted if converted is not None else abs(tx.amount)
-                unit_target = total / abs(quantity)
+                obs_currency = tx.currency or asset_currency
+                unit_native = abs(tx.amount) / abs(quantity)
         elif tx_type == "ADJUSTMENT" and tx.cost_basis_override not in (None, Decimal("0")):
-            currency = tx.cost_basis_currency or asset_currency
-            converted = convert(tx.cost_basis_override, currency, tx.date)
-            unit_target = converted if converted is not None else tx.cost_basis_override
-        if unit_target is None:
+            obs_currency = tx.cost_basis_currency or asset_currency
+            unit_native = tx.cost_basis_override
+        if unit_native is None:
             continue
-        observations.append(PriceObservation(date=tx.date, unit_price=unit_target * scale, kind=ObservationKind.TRADE))
+        observations.append(PriceObservation(date=tx.date, unit_price=unit_native * scale, currency=obs_currency, kind=ObservationKind.TRADE))
 
     return AssetPriceSeries(observations)

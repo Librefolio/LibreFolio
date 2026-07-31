@@ -387,7 +387,7 @@ class TestEmptyOverviewIsValid:
         envelope = await context.resolve("asset.provenance", required=True)
 
         assert envelope.payload["provider"] is None
-        assert len(envelope.payload["valuation_source_semantics"]) == 4
+        assert len(envelope.payload["valuation_source_semantics"]) == 3
 
 
 # =============================================================================

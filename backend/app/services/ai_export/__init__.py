@@ -65,7 +65,6 @@ from backend.app.services.ai_export.normalization import (
     SourceRoundingPolicy,
     bollinger_percent_b,
     bounded_position_pct,
-    build_last_buy_valuation_reference,
     build_normalized_return,
     relative_distance_pct,
 )
@@ -211,7 +210,6 @@ __all__ = [
     "bounded_position_pct",
     "build_coverage",
     "build_export_stats",
-    "build_last_buy_valuation_reference",
     "build_normalized_return",
     "catalog_response",
     "canonical_json",

@@ -17,7 +17,6 @@ from __future__ import annotations
 import bisect
 import hashlib
 import json
-import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date as date_type
@@ -109,40 +108,10 @@ ClassificationType = Literal[
 ]
 
 
-def _resolver_valuation_enabled() -> bool:
-    """Dev-only feature flag (F2): route price-less valuation through the unified price resolver.
-
-    Default OFF → the engine's historical price-less cascade (``LAST_BUY_PRICE`` /
-    ``LAST_SEED_COST``) is used and every existing golden test is unchanged. When ON, an asset
-    without an asset-system quote on/before a day is valued with the resolver's observed-trade
-    mark (BUY/SELL/priced ADJUSTMENT, same-day average, LOCF carry with staleness) emitted as
-    ``LAST_TRADE_PRICE`` — the same unified source the FIFO price line already consumes. This is
-    transition scaffolding for A/B during development and is removed once F3 flips the default and
-    re-baselines the golden suite (no permanent flag).
-    """
-    return os.environ.get("LIBREFOLIO_RESOLVER_VALUATION", "").strip().lower() in ("1", "true", "yes", "on")
-
-
 class ValuationSource(StrEnum):
     MARKET_PRICE = "MARKET_PRICE"
     LAST_TRADE_PRICE = "LAST_TRADE_PRICE"
-    LAST_BUY_PRICE = "LAST_BUY_PRICE"
-    LAST_SEED_COST = "LAST_SEED_COST"
     MISSING = "MISSING"
-
-
-@dataclass(frozen=True, slots=True)
-class ValuationReference:
-    """Immutable historical unit-price reference."""
-
-    date: date_type
-    unit_price: Decimal
-    currency: str
-
-
-ValuationReferenceInput = ValuationReference | tuple[date_type, Decimal, str]
-ValuationHistory = tuple[ValuationReference, ...]
-ValuationHistoryInput = ValuationReferenceInput | list[ValuationReferenceInput] | tuple[ValuationReferenceInput, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,44 +147,6 @@ class ValuationResult:
         """Compatibility alias for callers that previously read the effective price."""
 
         return self.effective_unit_price
-
-
-def _coerce_valuation_reference(value: ValuationReferenceInput) -> ValuationReference:
-    if isinstance(value, ValuationReference):
-        return value
-    if isinstance(value, tuple) and len(value) == 3 and isinstance(value[0], date_type):
-        ref_date, unit_price, currency = value
-        return ValuationReference(date=ref_date, unit_price=unit_price, currency=currency)
-    raise TypeError("valuation history entries must be ValuationReference or (date, unit_price, currency)")
-
-
-def _normalize_valuation_history(value: ValuationHistoryInput, *, allow_zero: bool) -> ValuationHistory:
-    if isinstance(value, ValuationReference) or (isinstance(value, tuple) and len(value) == 3 and isinstance(value[0], date_type)):
-        entries = (value,)
-    else:
-        entries = tuple(value)
-
-    references = tuple(_coerce_valuation_reference(entry) for entry in entries)
-    for reference in references:
-        if not reference.unit_price.is_finite():
-            raise ValueError("valuation reference unit_price must be finite")
-        if reference.unit_price < 0 or (reference.unit_price == 0 and not allow_zero):
-            requirement = "non-negative" if allow_zero else "positive"
-            raise ValueError(f"valuation reference unit_price must be {requirement}")
-        if not reference.currency.strip():
-            raise ValueError("valuation reference currency must be non-empty")
-
-    return tuple(sorted(references, key=lambda reference: reference.date))
-
-
-def _select_latest_reference(history: ValuationHistory, query_date: date_type) -> ValuationReference | None:
-    """Select latest reference dated on or before query_date."""
-
-    if not history:
-        return None
-    dates = [reference.date for reference in history]
-    index = bisect.bisect_right(dates, query_date) - 1
-    return history[index] if index >= 0 else None
 
 
 def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, valuation_date: date_type) -> tuple[Decimal, bool]:
@@ -600,8 +531,6 @@ class DailyStateBuilder:
         date_from: date_type,
         date_to: date_type,
         frame_start: date_type | None = None,
-        last_buy_prices: dict[int, ValuationHistoryInput] | None = None,
-        last_seed_prices: dict[tuple[int, int], ValuationHistoryInput] | None = None,
         split_linked_tx_ids: set[int] | None = None,
         split_history: dict[int, SplitHistory] | None = None,
         mark_series: dict[int, AssetPriceSeries] | None = None,
@@ -626,10 +555,6 @@ class DailyStateBuilder:
         # frame_start: first day to emit DailyPortfolioState. Before this = pre-frame (accounting only).
         # None → same as date_from (no pre-frame, full evaluation from start).
         self.frame_start = frame_start if frame_start is not None else date_from
-        # Full ordered histories. Legacy single (date, price, currency) values remain
-        # accepted for pure test helpers, but orchestration always supplies histories.
-        self.last_buy_prices: dict[int, ValuationHistory] = {asset_id: _normalize_valuation_history(history, allow_zero=False) for asset_id, history in (last_buy_prices or {}).items()}
-        self.last_seed_prices: dict[tuple[int, int], ValuationHistory] = {key: _normalize_valuation_history(history, allow_zero=True) for key, history in (last_seed_prices or {}).items()}
         self.split_history: dict[int, SplitHistory] = {}
         for asset_id, history in (split_history or {}).items():
             unique_by_event_id: dict[int, SplitRecord] = {}
@@ -640,9 +565,10 @@ class DailyStateBuilder:
                     raise ValueError("split ratio must be positive and finite")
                 unique_by_event_id[split.event_id] = split
             self.split_history[asset_id] = tuple(sorted(unique_by_event_id.values(), key=lambda split: (split.date, split.event_id)))
-        # F2 (flag-gated): per-asset unified price-resolver series, used only for price-less
-        # valuation days (no asset-system quote on/before the date). Empty unless the caller
-        # populated it under LIBREFOLIO_RESOLVER_VALUATION → default behaviour is unchanged.
+        # Per-asset unified price-resolver series: the single valuation brain. Each held asset gets
+        # one AssetPriceSeries fed with both asset-system quotes and observed trades (in the asset's
+        # native currency); _market_value_for converts each mark to the reporting currency at the
+        # valuation date. Populated by PortfolioCalculationEngine.calculate().
         self.mark_series: dict[int, AssetPriceSeries] = mark_series or {}
 
     def build(self) -> PortfolioCalculationResult:
@@ -843,10 +769,6 @@ class DailyStateBuilder:
                 elif prev_price is None:
                     dirty_days.add(dt)
                 prev_price = close
-        for history in self.last_buy_prices.values():
-            dirty_days.update(reference.date for reference in history if self.frame_start <= reference.date <= self.date_to)
-        for history in self.last_seed_prices.values():
-            dirty_days.update(reference.date for reference in history if self.frame_start <= reference.date <= self.date_to)
         for history in self.split_history.values():
             dirty_days.update(split.date for split in history if self.frame_start <= split.date <= self.date_to)
         dirty_days.add(self.frame_start)
@@ -1070,7 +992,7 @@ class DailyStateBuilder:
             for (asset_id, _broker_id), qty in cumulative_qty.items():
                 if qty <= 0:
                     continue
-                valuation = self._market_value_for(asset_id, qty, current, wac_pool_qty, wac_pool_cost, _broker_id)
+                valuation = self._market_value_for(asset_id, qty, current)
                 if valuation.market_value is not None:
                     market_value += valuation.market_value
                     self._distribute_allocation(asset_id, valuation.market_value, by_type, by_sector, by_geo)
@@ -1080,7 +1002,7 @@ class DailyStateBuilder:
                     stale.add(asset_id)
                 if valuation.missing_fx_pair:
                     missing_fx.add(valuation.missing_fx_pair)
-                if valuation.source in (ValuationSource.LAST_TRADE_PRICE, ValuationSource.LAST_BUY_PRICE, ValuationSource.LAST_SEED_COST):
+                if valuation.source == ValuationSource.LAST_TRADE_PRICE:
                     implied.add(asset_id)
 
             # 4d. In-transit values
@@ -1226,7 +1148,7 @@ class DailyStateBuilder:
             rate = self.fx_rate_map.get((wac_ccy, self.target_currency, dt))
             cost_basis = ocb_local * rate if rate else ocb_local
 
-        valuation = self._market_value_for(asset_id, qty, dt, wac_pool_qty, wac_pool_cost, broker_id)
+        valuation = self._market_value_for(asset_id, qty, dt)
         unrealized = (valuation.market_value - cost_basis) if valuation.market_value is not None else None
 
         return DailyPositionState(
@@ -1279,114 +1201,75 @@ class DailyStateBuilder:
         asset_id: int,
         qty: Decimal,
         dt: date_type,
-        wac_pool_qty: dict[tuple[int, int], Decimal] | None = None,
-        wac_pool_cost: dict[tuple[int, int], Decimal] | None = None,
-        broker_id: int | None = None,
     ) -> ValuationResult:
-        """Select MARKET_PRICE → [LAST_TRADE_PRICE] → LAST_BUY_PRICE → LAST_SEED_COST → MISSING.
+        """Value one holding via the unified price resolver — the single valuation brain.
 
-        ``LAST_TRADE_PRICE`` is inserted only when the unified price resolver is enabled (F2 flag)
-        and only on price-less days (no asset-system quote on/before ``dt``); it then supersedes the
-        legacy transaction-implied tiers with the resolver's broker-agnostic observed mark.
+        ``mark_series`` holds a per-asset :class:`AssetPriceSeries` fed with *both* asset-system
+        quotes and observed trades in the asset's *native* currency, so a single ``resolve(dt)``
+        answers the whole valuation at once: a real quote (exact or carried forward) →
+        ``MARKET_PRICE``; a trade-derived mark (BUY/SELL/priced ADJUSTMENT, same-day average, LOCF
+        with staleness) → ``LAST_TRADE_PRICE``. The mark is converted to the reporting currency
+        **here**, at the valuation date ``dt`` (never at the observation date), so a carried mark
+        tracks the current FX rather than a frozen one. When the resolver has no observation on/before
+        ``dt`` the holding is ``MISSING`` (no legacy price-map / last-buy / last-seed cascade — those
+        tiers are subsumed by the resolver's trade observations).
         """
-        prices = self.price_map.get(asset_id)
-        result = self._price_on_date(prices, dt) if prices else None
-
-        if result is not None:
-            raw_price, price_ccy, actual_date = result
-            is_stale = (dt - actual_date).days > STALE_PRICE_THRESHOLD_DAYS
-            quote_base = self.quote_base_map.get(asset_id)
-            holding_value = compute_holding_value(qty, raw_price, quote_base)
-
-            if price_ccy == self.target_currency:
-                return ValuationResult(
-                    market_value=holding_value,
-                    source=ValuationSource.MARKET_PRICE,
-                    effective_unit_price=raw_price,
-                    effective_currency=price_ccy,
-                    reference_date=actual_date,
-                    reference_unit_price=raw_price,
-                    reference_currency=price_ccy,
-                    stale=is_stale,
-                )
-
-            rate = self.fx_rate_map.get((price_ccy, self.target_currency, dt))
-            if rate is None:
-                return ValuationResult(
-                    market_value=None,
-                    source=ValuationSource.MARKET_PRICE,
-                    effective_unit_price=raw_price,
-                    effective_currency=price_ccy,
-                    reference_date=actual_date,
-                    reference_unit_price=raw_price,
-                    reference_currency=price_ccy,
-                    stale=is_stale,
-                    missing_fx_pair=f"{price_ccy}/{self.target_currency}",
-                )
-
-            return ValuationResult(
-                market_value=holding_value * rate,
-                source=ValuationSource.MARKET_PRICE,
-                effective_unit_price=raw_price,
-                effective_currency=price_ccy,
-                reference_date=actual_date,
-                reference_unit_price=raw_price,
-                reference_currency=price_ccy,
-                stale=is_stale,
-            )
-
         mark_series = self.mark_series.get(asset_id)
         if mark_series is not None:
             mark = mark_series.resolve(dt)
             if not mark.is_missing:
                 quote_base = self.quote_base_map.get(asset_id)
                 days_back = mark.price_backward_fill.days_back if mark.price_backward_fill else 0
+                native_ref = mark.unit_price  # native currency, pre-split, par-axis scale
+                native_ccy = mark.currency or self.target_currency
+                if mark.estimated:
+                    # Trade-derived mark: restate the observed unit price to current units through any
+                    # intervening splits (real asset-system quotes already sit on the current-unit axis).
+                    split_ratio, split_adjusted = _cumulative_split_ratio(self.split_history.get(asset_id, ()), mark.as_of_date, dt)
+                    native_effective = native_ref / split_ratio
+                    # Trade observations were lifted onto the market ×quote_base_quantity axis at
+                    # ingestion (price_resolver), so ``native_ref`` is on that axis. Restate the
+                    # *reference* unit price back to the source per-unit axis so it reports the price
+                    # as it appeared in the trade record. ``effective_unit_price`` stays on the market
+                    # axis (it is the price actually fed to ``compute_holding_value``). Market quotes
+                    # already report on their native per-unit axis and need no restatement.
+                    scale = Decimal(quote_base if quote_base and quote_base > 0 else 1)
+                    display_ref = native_ref / scale
+                    source = ValuationSource.LAST_TRADE_PRICE
+                else:
+                    native_effective = native_ref
+                    split_adjusted = False
+                    display_ref = native_ref
+                    source = ValuationSource.MARKET_PRICE
+                holding_value = compute_holding_value(qty, native_effective, quote_base)
+                is_stale = days_back > STALE_PRICE_THRESHOLD_DAYS
+                if native_ccy == self.target_currency:
+                    return ValuationResult(
+                        market_value=holding_value,
+                        source=source,
+                        effective_unit_price=native_effective,
+                        effective_currency=native_ccy,
+                        reference_date=mark.as_of_date,
+                        reference_unit_price=display_ref,
+                        reference_currency=native_ccy,
+                        stale=is_stale,
+                        split_adjusted=split_adjusted,
+                    )
+                # Foreign mark: convert to the reporting currency at the *valuation date* dt (never at
+                # the observation date) so a carried mark tracks the current FX, not a frozen one.
+                rate = self.fx_rate_map.get((native_ccy, self.target_currency, dt))
                 return ValuationResult(
-                    market_value=compute_holding_value(qty, mark.unit_price, quote_base),
-                    source=ValuationSource.LAST_TRADE_PRICE,
-                    effective_unit_price=mark.unit_price,
-                    effective_currency=self.target_currency,
+                    market_value=holding_value * rate if rate is not None else None,
+                    source=source,
+                    effective_unit_price=native_effective,
+                    effective_currency=native_ccy,
                     reference_date=mark.as_of_date,
-                    reference_unit_price=mark.unit_price,
-                    reference_currency=self.target_currency,
-                    stale=days_back > STALE_PRICE_THRESHOLD_DAYS,
+                    reference_unit_price=display_ref,
+                    reference_currency=native_ccy,
+                    stale=is_stale,
+                    split_adjusted=split_adjusted,
+                    missing_fx_pair=f"{native_ccy}/{self.target_currency}" if rate is None else None,
                 )
-
-        buy_reference = _select_latest_reference(self.last_buy_prices.get(asset_id, ()), dt)
-        if buy_reference is not None:
-            split_ratio, split_adjusted = _cumulative_split_ratio(self.split_history.get(asset_id, ()), buy_reference.date, dt)
-            effective_price = buy_reference.unit_price / split_ratio
-            return self._reference_valuation(
-                qty=qty,
-                dt=dt,
-                source=ValuationSource.LAST_BUY_PRICE,
-                effective_unit_price=effective_price,
-                effective_currency=buy_reference.currency,
-                reference=buy_reference,
-                split_adjusted=split_adjusted,
-            )
-
-        seed_reference = _select_latest_reference(self.last_seed_prices.get((broker_id, asset_id), ()), dt) if broker_id is not None else None
-        if seed_reference is not None:
-            split_ratio, split_adjusted = _cumulative_split_ratio(self.split_history.get(asset_id, ()), seed_reference.date, dt)
-            effective_price = seed_reference.unit_price / split_ratio
-            effective_currency = seed_reference.currency
-            key = (asset_id, broker_id)
-            if wac_pool_qty is not None and wac_pool_cost is not None:
-                pool_qty = wac_pool_qty.get(key, Decimal("0"))
-                if pool_qty > 0:
-                    effective_price = wac_pool_cost.get(key, Decimal("0")) / pool_qty
-                    effective_currency = self.asset_currencies.get(asset_id, seed_reference.currency)
-
-            return self._reference_valuation(
-                qty=qty,
-                dt=dt,
-                source=ValuationSource.LAST_SEED_COST,
-                effective_unit_price=effective_price,
-                effective_currency=effective_currency,
-                reference=seed_reference,
-                split_adjusted=split_adjusted,
-            )
 
         return ValuationResult(
             market_value=None,
@@ -1396,57 +1279,6 @@ class DailyStateBuilder:
             reference_date=None,
             reference_unit_price=None,
             reference_currency=None,
-        )
-
-    def _reference_valuation(
-        self,
-        *,
-        qty: Decimal,
-        dt: date_type,
-        source: ValuationSource,
-        effective_unit_price: Decimal,
-        effective_currency: str,
-        reference: ValuationReference,
-        split_adjusted: bool,
-    ) -> ValuationResult:
-        """Value transaction-derived per-current-unit price while retaining source metadata."""
-
-        holding_value = effective_unit_price * qty
-        if effective_currency == self.target_currency:
-            return ValuationResult(
-                market_value=holding_value,
-                source=source,
-                effective_unit_price=effective_unit_price,
-                effective_currency=effective_currency,
-                reference_date=reference.date,
-                reference_unit_price=reference.unit_price,
-                reference_currency=reference.currency,
-                split_adjusted=split_adjusted,
-            )
-
-        rate = self.fx_rate_map.get((effective_currency, self.target_currency, dt))
-        if rate is None:
-            return ValuationResult(
-                market_value=None,
-                source=source,
-                effective_unit_price=effective_unit_price,
-                effective_currency=effective_currency,
-                reference_date=reference.date,
-                reference_unit_price=reference.unit_price,
-                reference_currency=reference.currency,
-                split_adjusted=split_adjusted,
-                missing_fx_pair=f"{effective_currency}/{self.target_currency}",
-            )
-
-        return ValuationResult(
-            market_value=holding_value * rate,
-            source=source,
-            effective_unit_price=effective_unit_price,
-            effective_currency=effective_currency,
-            reference_date=reference.date,
-            reference_unit_price=reference.unit_price,
-            reference_currency=reference.currency,
-            split_adjusted=split_adjusted,
         )
 
     def _compute_in_transit(self, dt: date_type, missing_fx: set[str]) -> tuple[Decimal, Decimal, Decimal]:
@@ -1485,8 +1317,7 @@ class DailyStateBuilder:
                             else:
                                 missing_fx.add(f"{interval.cost_basis_currency}/{self.target_currency}")
 
-                        valuation_broker_id = None if has_authoritative_cost else dep.broker_id
-                        valuation = self._market_value_for(interval.asset_id, qty, dt, broker_id=valuation_broker_id)
+                        valuation = self._market_value_for(interval.asset_id, qty, dt)
                         if valuation.market_value is not None:
                             it_asset_mv += valuation.market_value * interval.share
                         elif valuation.source == ValuationSource.MISSING and authoritative_cost_value is not None:
@@ -2128,12 +1959,10 @@ class PortfolioCalculationEngine:
         if target_currency is None:
             target_currency = await get_global_setting(self.db, "base_currency", "EUR")
 
-        # ── 2. Resolve scope + visible brokers ──
-        # V(u) = all visible brokers (for last_buy_price fallback)
+        # ── 2. Resolve scope ──
         all_access_stmt = select(BrokerUserAccess).where(BrokerUserAccess.user_id == user_id)
         all_access_result = await self.db.execute(all_access_stmt)
         all_accesses = list(all_access_result.scalars().all())
-        visible_broker_ids = {a.broker_id for a in all_accesses}
 
         # S = scope (filtered subset for portfolio aggregation)
         if broker_ids:
@@ -2198,33 +2027,6 @@ class PortfolioCalculationEngine:
 
         classification = classifier.classify(external_paired)
 
-        # ── 4b. Precompute ordered last-BUY histories from V(u) transactions ──
-        # First transaction fallback: MARKET_PRICE → LAST_BUY_PRICE(V(u)).
-        # Broker-scoped LAST_SEED_COST is built separately below.
-        # Load BUY txs from non-scope visible brokers (scope BUYs already in all_txs)
-        extra_visible_ids = visible_broker_ids - scope_broker_ids
-        all_buy_txs: list[Transaction] = [tx for tx in all_txs if tx.type == TransactionType.BUY and tx.asset_id and tx.quantity and tx.quantity > 0]
-        if extra_visible_ids:
-            extra_buy_stmt = select(Transaction).where(Transaction.broker_id.in_(extra_visible_ids)).where(Transaction.type == TransactionType.BUY).where(Transaction.quantity > 0).where(Transaction.asset_id.is_not(None)).order_by(Transaction.date)
-            extra_buy_result = await self.db.execute(extra_buy_stmt)
-            all_buy_txs.extend(extra_buy_result.scalars().all())
-
-        last_buy_history_lists: dict[int, list[ValuationReference]] = defaultdict(list)
-        for tx in sorted(all_buy_txs, key=lambda t: (t.date, t.id or 0)):
-            if tx.asset_id and tx.quantity and tx.quantity > 0 and tx.amount is not None and tx.amount != 0:
-                unit_price = abs(tx.amount) / tx.quantity
-                ccy = tx.currency or target_currency
-                last_buy_history_lists[tx.asset_id].append(ValuationReference(date=tx.date, unit_price=unit_price, currency=ccy))
-        last_buy_prices: dict[int, ValuationHistory] = {asset_id: tuple(history) for asset_id, history in last_buy_history_lists.items()}
-
-        # Opening ADJUSTMENT seeds are custody-scoped. Event-linked adjustments are
-        # corporate actions, not valuation references.
-        last_seed_history_lists: dict[tuple[int, int], list[ValuationReference]] = defaultdict(list)
-        for tx in sorted(all_txs, key=lambda t: (t.date, t.id or 0)):
-            if tx.type == TransactionType.ADJUSTMENT and tx.asset_event_id is None and tx.asset_id is not None and tx.quantity is not None and tx.quantity > 0 and tx.cost_basis_override is not None and tx.cost_basis_currency is not None:
-                last_seed_history_lists[(tx.broker_id, tx.asset_id)].append(ValuationReference(date=tx.date, unit_price=tx.cost_basis_override, currency=tx.cost_basis_currency))
-        last_seed_prices: dict[tuple[int, int], ValuationHistory] = {key: tuple(history) for key, history in last_seed_history_lists.items()}
-
         # ── 5. Determine date range ──
         first_tx_date = min(tx.date for tx in all_txs)
         actual_from = date_from or first_tx_date
@@ -2232,11 +2034,10 @@ class PortfolioCalculationEngine:
 
         # ── 5b. Blob cache check (range-aware) ──
         tx_fingerprint = _compute_tx_fingerprint(all_txs)
-        visible_buy_fingerprint = _compute_tx_fingerprint(sorted(all_buy_txs, key=lambda tx: (tx.date, tx.id or 0)))
         held_asset_ids = {tx.asset_id for tx in all_txs if tx.asset_id and tx.quantity and tx.quantity != 0}
         price_fingerprint = await self._compute_price_fingerprint(held_asset_ids, actual_to)
-        # Split events and visible out-of-scope BUYs influence valuation without
-        # necessarily changing scope Transaction.updated_at values.
+        # Split events influence valuation without necessarily changing scope
+        # Transaction.updated_at values.
         split_fingerprint = (
             tuple(sorted(split_linked_tx_ids)),
             tuple(sorted((record.event_id, record.asset_id, record.date.isoformat(), str(record.ratio)) for record in split_records_by_event_id.values())),
@@ -2248,7 +2049,6 @@ class PortfolioCalculationEngine:
             tuple(sorted(scope_broker_ids)),
             target_currency,
             tx_fingerprint,
-            visible_buy_fingerprint,
             price_fingerprint,
             split_fingerprint,
         )
@@ -2322,23 +2122,15 @@ class PortfolioCalculationEngine:
             target_currency,
             actual_from,
             actual_to,
-            last_buy_prices=last_buy_prices,
-            last_seed_prices=last_seed_prices,
         )
 
-        # ── 10b. (F2, flag-gated) Unified price-resolver series per asset ──
-        # Default OFF → mark_series stays None → DailyStateBuilder valuation cascade unchanged and
-        # every golden test is untouched. When LIBREFOLIO_RESOLVER_VALUATION is on, price-less
-        # assets are valued from the same observed-trade mark the FIFO price line already uses.
+        # ── 10b. Unified price-resolver series per held asset — the single valuation brain ──
+        # Each held asset gets one AssetPriceSeries fed with both asset-system quotes and observed
+        # trades, in the asset's *native* currency — DailyStateBuilder converts each mark to the
+        # reporting currency at the valuation date. It values MARKET_PRICE (real quote, exact/carried)
+        # and LAST_TRADE_PRICE (trade-derived) from one source.
         mark_series: dict[int, AssetPriceSeries] | None = None
-        if _resolver_valuation_enabled() and held_asset_ids:
-
-            def _convert_for_resolver(amount: Decimal, currency: str | None, on_date: date_type) -> Decimal | None:
-                if currency is None or currency == target_currency:
-                    return amount
-                rate = fx_rate_map.get((currency, target_currency, on_date))
-                return amount * rate if rate is not None else None
-
+        if held_asset_ids:
             txs_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in all_txs:
                 if tx.asset_id:
@@ -2351,7 +2143,6 @@ class PortfolioCalculationEngine:
                     split_linked_tx_ids=split_linked_tx_ids,
                     asset_currency=asset_currencies.get(aid, target_currency),
                     quote_base_quantity=quote_base_map.get(aid) or 1,
-                    convert=_convert_for_resolver,
                 )
                 if series.has_observations:
                     mark_series[aid] = series
@@ -2370,8 +2161,6 @@ class PortfolioCalculationEngine:
             target_currency=target_currency,
             date_from=actual_from,
             date_to=actual_to,
-            last_buy_prices=last_buy_prices,
-            last_seed_prices=last_seed_prices,
             split_linked_tx_ids=split_linked_tx_ids,
             split_history=split_history,
             mark_series=mark_series,
@@ -2419,8 +2208,6 @@ class PortfolioCalculationEngine:
         target_currency: str,
         date_from: date_type,
         date_to: date_type,
-        last_buy_prices: dict[int, ValuationHistory] | None = None,
-        last_seed_prices: dict[tuple[int, int], ValuationHistory] | None = None,
     ) -> dict[tuple[str, str, date_type], Decimal]:
         """Pre-load all FX rates needed for the calculation in one bulk call.
 
@@ -2428,8 +2215,7 @@ class PortfolioCalculationEngine:
         - Transaction amounts → target_currency (all tx dates)
         - External cash flows → target_currency
         - Price currencies → target_currency (every day in range)
-        - Asset currencies (for inline WAC) → target_currency (every day in range + BUY dates)
-        - Transaction-reference currencies → target_currency (every day in range)
+        - Asset currencies (for inline WAC + resolver marks) → target_currency (every day in range + BUY dates)
         - In-transit currencies → target_currency
         """
         # Collect all (from_ccy, date) pairs needed
@@ -2453,17 +2239,14 @@ class PortfolioCalculationEngine:
                 if ccy != target_currency:
                     price_currencies.add(ccy)
 
-        # From asset currencies (for inline WAC cost_basis evaluation daily)
+        # From asset currencies (for inline WAC cost_basis evaluation daily + resolver marks)
         asset_ccys_non_target: set[str] = set()
         for ccy in asset_currencies.values():
             if ccy != target_currency:
                 asset_ccys_non_target.add(ccy)
 
-        reference_currencies = {reference.currency for history in (last_buy_prices or {}).values() for reference in history}
-        reference_currencies.update(reference.currency for history in (last_seed_prices or {}).values() for reference in history)
-
-        # For price/asset/reference currencies we need rates for every day in range
-        all_non_target_ccys = price_currencies | asset_ccys_non_target | {ccy for ccy in reference_currencies if ccy != target_currency}
+        # For price/asset currencies we need rates for every day in range
+        all_non_target_ccys = price_currencies | asset_ccys_non_target
         if all_non_target_ccys:
             current = date_from
             while current <= date_to:

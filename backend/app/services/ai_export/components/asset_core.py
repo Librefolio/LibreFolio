@@ -84,8 +84,7 @@ from backend.app.services.ai_export.dependencies import BuildContext
 
 _VALUATION_SOURCE_SEMANTICS: tuple[AssetValuationSourceSemantic, ...] = (
     AssetValuationSourceSemantic(code="MARKET_PRICE", description="Valued at the latest observed market price, converted to the report's target currency."),
-    AssetValuationSourceSemantic(code="LAST_BUY_PRICE", description="No market price was available; valued at the last known BUY transaction unit price (fallback)."),
-    AssetValuationSourceSemantic(code="LAST_SEED_COST", description="No market price or transaction price was available; valued at the seeded opening cost (fallback of last resort)."),
+    AssetValuationSourceSemantic(code="LAST_TRADE_PRICE", description="No market price was available; valued at the last observed transaction price (BUY, SELL or priced ADJUSTMENT) carried forward — a real trade, not an observed market return."),
     AssetValuationSourceSemantic(code="MISSING", description="No valuation could be determined by any hierarchy step; the position is excluded from valued totals."),
 )
 

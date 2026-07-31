@@ -23,12 +23,12 @@ def _d(value: str) -> Decimal:
     return Decimal(value)
 
 
-def _market(day: str, price: str) -> PriceObservation:
-    return PriceObservation(date=date.fromisoformat(day), unit_price=_d(price), kind=ObservationKind.MARKET)
+def _market(day: str, price: str, currency: str = "EUR") -> PriceObservation:
+    return PriceObservation(date=date.fromisoformat(day), unit_price=_d(price), currency=currency, kind=ObservationKind.MARKET)
 
 
-def _trade(day: str, price: str) -> PriceObservation:
-    return PriceObservation(date=date.fromisoformat(day), unit_price=_d(price), kind=ObservationKind.TRADE)
+def _trade(day: str, price: str, currency: str = "EUR") -> PriceObservation:
+    return PriceObservation(date=date.fromisoformat(day), unit_price=_d(price), currency=currency, kind=ObservationKind.TRADE)
 
 
 # --------------------------------------------------------------------------- #
@@ -154,23 +154,19 @@ def _tx(tx_id, tx_type, *, day, quantity="0", amount="0", cost_basis_override=No
     )
 
 
-def _identity_convert(amount, currency, on_date):
-    return amount
-
-
 def test_build_market_close_not_rescaled_by_qbq():
-    # price_history.close is already per quote_base_quantity -> convert only, no ×qbq.
+    # price_history.close is already per quote_base_quantity -> no ×qbq; kept native.
     series = build_asset_price_series(
         price_rows=[(date(2025, 1, 10), _d("101.5"), "EUR")],
         transactions=[],
         split_linked_tx_ids=set(),
         asset_currency="EUR",
         quote_base_quantity=100,
-        convert=_identity_convert,
     )
     mark = series.resolve(date(2025, 1, 10))
     assert mark.source is MarkSource.MARKET
     assert mark.unit_price == _d("101.5")
+    assert mark.currency == "EUR"
 
 
 def test_build_trade_unit_price_scaled_by_qbq():
@@ -182,11 +178,11 @@ def test_build_trade_unit_price_scaled_by_qbq():
         split_linked_tx_ids=set(),
         asset_currency="EUR",
         quote_base_quantity=100,
-        convert=_identity_convert,
     )
     mark = series.resolve(date(2025, 1, 10))
     assert mark.source is MarkSource.TRADE_AVG
     assert mark.unit_price == _d("10000")
+    assert mark.currency == "EUR"
 
 
 def test_build_sell_produces_trade_observation():
@@ -197,7 +193,6 @@ def test_build_sell_produces_trade_observation():
         split_linked_tx_ids=set(),
         asset_currency="EUR",
         quote_base_quantity=1,
-        convert=_identity_convert,
     )
     mark = series.resolve(date(2025, 1, 10))
     # 650 / 5 = 130 per unit; qbq=1 -> 130.
@@ -213,7 +208,6 @@ def test_build_priced_adjustment_observation():
         split_linked_tx_ids=set(),
         asset_currency="EUR",
         quote_base_quantity=1,
-        convert=_identity_convert,
     )
     mark = series.resolve(date(2025, 1, 10))
     assert mark.unit_price == _d("5.16")
@@ -229,15 +223,13 @@ def test_build_skips_split_linked_and_zero_qty_and_unpriced_adjustment():
         split_linked_tx_ids={1},
         asset_currency="EUR",
         quote_base_quantity=1,
-        convert=_identity_convert,
     )
     assert not series.has_observations
 
 
-def test_build_convert_none_falls_back_to_unconverted_trade():
-    def _no_fx(amount, currency, on_date):
-        return None
-
+def test_build_keeps_trade_in_its_native_currency():
+    # A foreign-currency trade stays native (no FX here); the mark carries its currency so the
+    # engine can convert at the valuation date.
     buy = _tx(1, "BUY", day="2025-01-10", quantity="10", amount="1000", currency="USD")
     series = build_asset_price_series(
         price_rows=[],
@@ -245,8 +237,7 @@ def test_build_convert_none_falls_back_to_unconverted_trade():
         split_linked_tx_ids=set(),
         asset_currency="EUR",
         quote_base_quantity=1,
-        convert=_no_fx,
     )
     mark = series.resolve(date(2025, 1, 10))
-    # Falls back to the raw unit price (100) when FX is unavailable.
     assert mark.unit_price == _d("100")
+    assert mark.currency == "USD"

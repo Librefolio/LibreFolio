@@ -38,13 +38,6 @@ def _require_positive_decimal(value: Decimal, name: str) -> Decimal:
     return value
 
 
-def _require_non_negative_decimal(value: Decimal, name: str) -> Decimal:
-    value = _require_finite_decimal(value, name)
-    if value < 0:
-        raise ValueError(f"{name} must be non-negative")
-    return value
-
-
 def _require_date(value: Date, name: str) -> Date:
     if type(value) is not Date:
         raise TypeError(f"{name} must be a datetime.date")
@@ -181,19 +174,18 @@ def _build_valuation_reference(
     split_adjusted: bool = False,
 ) -> AiExportValuationReference:
     _require_date(date, "date")
-    validate_price = _require_positive_decimal if source == AiExportValuationReferenceSource.LAST_VISIBLE_BUY_UNIT_PRICE else _require_non_negative_decimal
-    unit_price = validate_price(unit_price, "unit_price")
+    unit_price = _require_positive_decimal(unit_price, "unit_price")
     currency_code = Currency.validate_code(currency)
     effective_price_value: Currency | None = None
     if effective_currency is not None and effective_unit_price is None:
         raise ValueError("effective_currency requires effective_unit_price")
     if effective_unit_price is not None:
-        effective_unit_price = validate_price(effective_unit_price, "effective_unit_price")
+        effective_unit_price = _require_positive_decimal(effective_unit_price, "effective_unit_price")
         effective_currency_code = Currency.validate_code(effective_currency if effective_currency is not None else currency_code)
         effective_price_value = Currency(code=effective_currency_code, amount=effective_unit_price)
     if split_adjusted and effective_price_value is None:
         raise ValueError("split_adjusted requires effective_unit_price")
-    semantics = "valuation_fallback_not_observed_market_return" if source == AiExportValuationReferenceSource.LAST_VISIBLE_BUY_UNIT_PRICE else "estimated_at_cost_not_observed_market_return"
+    semantics = "valuation_fallback_not_observed_market_return"
     return AiExportValuationReference(
         date=date,
         source=source,
@@ -204,7 +196,7 @@ def _build_valuation_reference(
     )
 
 
-def build_last_buy_valuation_reference(
+def build_last_observed_trade_valuation_reference(
     date: Date,
     unit_price: Decimal,
     currency: str,
@@ -213,35 +205,13 @@ def build_last_buy_valuation_reference(
     effective_currency: str | None = None,
     split_adjusted: bool = False,
 ) -> AiExportValuationReference:
-    """Build a last-visible-BUY valuation reference, never a return series."""
+    """Build a last-observed-trade valuation reference (a real BUY/SELL/ADJUSTMENT price carried forward), never a return series."""
 
     return _build_valuation_reference(
         date,
         unit_price,
         currency,
-        AiExportValuationReferenceSource.LAST_VISIBLE_BUY_UNIT_PRICE,
-        effective_unit_price=effective_unit_price,
-        effective_currency=effective_currency,
-        split_adjusted=split_adjusted,
-    )
-
-
-def build_last_seed_valuation_reference(
-    date: Date,
-    unit_price: Decimal,
-    currency: str,
-    *,
-    effective_unit_price: Decimal | None = None,
-    effective_currency: str | None = None,
-    split_adjusted: bool = False,
-) -> AiExportValuationReference:
-    """Build a broker-position seed-cost reference, never a return series."""
-
-    return _build_valuation_reference(
-        date,
-        unit_price,
-        currency,
-        AiExportValuationReferenceSource.LAST_SEED_COST,
+        AiExportValuationReferenceSource.LAST_OBSERVED_TRADE_PRICE,
         effective_unit_price=effective_unit_price,
         effective_currency=effective_currency,
         split_adjusted=split_adjusted,

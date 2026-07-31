@@ -27,6 +27,7 @@ from backend.app.services.portfolio_engine import (
     TransactionType,
     ValuationSource,
 )
+from backend.app.services.price_resolver import build_asset_price_series
 
 
 def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY, dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None, currency="EUR", cbo=None, cbo_ccy=None):
@@ -50,20 +51,50 @@ def _c(tx, share=Decimal("1")):
     return ClassifiedTransaction(tx=tx, classification="normal", share=share)
 
 
+def _build_mark_series(txs, asset_currencies, price_map, quote_base_map, split_linked_tx_ids):
+    """Mirror PortfolioCalculationEngine: one AssetPriceSeries per asset from prices + trades."""
+    txs_by_asset: dict[int, list] = {}
+    for ctxn in txs:
+        tx = ctxn.tx
+        if tx.asset_id is not None:
+            txs_by_asset.setdefault(tx.asset_id, []).append(tx)
+    asset_ids = set(txs_by_asset) | set(price_map or {})
+    mark_series = {}
+    for aid in asset_ids:
+        series = build_asset_price_series(
+            price_rows=(price_map or {}).get(aid, []),
+            transactions=txs_by_asset.get(aid, []),
+            split_linked_tx_ids=split_linked_tx_ids or set(),
+            asset_currency=(asset_currencies or {}).get(aid, "EUR"),
+            quote_base_quantity=(quote_base_map or {}).get(aid) or 1,
+        )
+        if series.has_observations:
+            mark_series[aid] = series
+    return mark_series
+
+
 def _build(
     txs,
     asset_currencies=None,
     price_map=None,
     quote_base_map=None,
     fx_rate_map=None,
-    last_buy_prices=None,
-    last_seed_prices=None,
     split_history=None,
     split_linked_tx_ids=None,
     frame_start=None,
     date_from=date(2025, 1, 1),
     date_to=date(2025, 1, 10),
+    mark_series=None,
 ):
+    resolved_currencies = asset_currencies or {1: "EUR", 2: "EUR"}
+    if mark_series is None:
+        mark_series = _build_mark_series(
+            txs,
+            resolved_currencies,
+            price_map or {},
+            quote_base_map or {},
+            split_linked_tx_ids or set(),
+        )
     return DailyStateBuilder(
         classified_txs=txs,
         in_transit_intervals=[],
@@ -73,15 +104,14 @@ def _build(
         fx_rate_map=fx_rate_map or {},
         asset_classifications={},
         asset_types={1: "ETF", 2: "ETF"},
-        asset_currencies=asset_currencies or {1: "EUR", 2: "EUR"},
+        asset_currencies=resolved_currencies,
         target_currency="EUR",
         date_from=date_from,
         date_to=date_to,
         frame_start=frame_start,
-        last_buy_prices=last_buy_prices or {},
-        last_seed_prices=last_seed_prices or {},
         split_history=split_history or {},
         split_linked_tx_ids=split_linked_tx_ids or set(),
+        mark_series=mark_series,
     ).build()
 
 
@@ -143,46 +173,58 @@ class TestInlineWAC:
 
 
 # =============================================================================
-# 2. LAST_BUY_PRICE FALLBACK
+# 2. UNIFIED RESOLVER VALUATION (MARKET_PRICE / LAST_TRADE_PRICE / MISSING)
 # =============================================================================
 
 
-class TestLastBuyPrice:
-    """Verify MARKET_PRICE → LAST_BUY_PRICE → LAST_SEED_COST → MISSING."""
+class TestResolverValuation:
+    """The unified price resolver is the single valuation brain: a real quote (exact or carried)
+    → MARKET_PRICE; an observed trade mark (BUY/SELL/priced ADJUSTMENT, same-day average, LOCF)
+    → LAST_TRADE_PRICE; nothing on/before the date → MISSING.
+    """
 
     def test_market_price_preferred(self):
-        """Market quote beats both transaction references."""
+        """A real asset-system quote wins over the same asset's trade observations."""
         txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
         prices = {1: [(date(2025, 1, 3), Decimal("120"), "EUR")]}
-        lbp = {1: (date(2025, 1, 2), Decimal("100"), "EUR")}
-        seed = {(1, 1): (date(2025, 1, 1), Decimal("90"), "EUR")}
-        result = _build(txs, price_map=prices, last_buy_prices=lbp, last_seed_prices=seed)
+        result = _build(txs, price_map=prices)
         ps = result.position_states_end
         assert ps[0].valuation_source == "MARKET_PRICE"
-        assert ps[0].market_value == Decimal("1200")  # 10 * 120
+        assert ps[0].market_value == Decimal("1200")  # 10 * 120 (quote carried to end)
         assert ps[0].valuation_reference_date == date(2025, 1, 3)
         assert ps[0].valuation_reference_unit_price == Decimal("120")
         assert ps[0].valuation_reference_currency == "EUR"
 
-    def test_last_buy_price_when_no_market(self):
-        """Visible-asset BUY beats broker-position seed and uses actual units."""
+    def test_trade_price_when_no_market(self):
+        """No asset-system quote → the last observed trade marks the position (LAST_TRADE_PRICE)."""
         txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
-        lbp = {1: (date(2025, 1, 2), Decimal("100"), "EUR")}
-        seed = {(1, 1): (date(2025, 1, 1), Decimal("90"), "EUR")}
-        result = _build(
-            txs,
-            quote_base_map={1: 100},
-            last_buy_prices=lbp,
-            last_seed_prices=seed,
-        )
+        result = _build(txs, quote_base_map={1: 100})
         ps = result.position_states_end
-        assert ps[0].valuation_source == "LAST_BUY_PRICE"
-        assert ps[0].market_value == Decimal("1000")  # 10 * 100
+        assert ps[0].valuation_source == "LAST_TRADE_PRICE"
+        assert ps[0].market_value == Decimal("1000")  # 10 * (1000/10)
         assert ps[0].valuation_reference_date == date(2025, 1, 2)
         assert ps[0].valuation_reference_unit_price == Decimal("100")
         assert ps[0].valuation_reference_currency == "EUR"
 
-    def test_historical_buy_history_selects_latest_reference_not_after_valuation_date(self):
+    def test_sell_observation_marks_position(self):
+        """A SELL is a real observation the resolver ingests (the old last-buy tier ignored it)."""
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-4"), amount=Decimal("480"), dt=date(2025, 1, 5))),
+        ]
+        result = _build(txs)
+        ps = result.position_states_end
+        assert ps[0].valuation_source == "LAST_TRADE_PRICE"
+        # residual 6 units marked at the last trade (SELL 480/4 = 120) → 6 * 120 = 720
+        assert ps[0].market_value == Decimal("720")
+        assert ps[0].valuation_reference_date == date(2025, 1, 5)
+
+    def test_historical_trade_selects_latest_reference_not_after_valuation_date(self):
+        txs = [
+            _c(_tx(tx_id=1, quantity=Decimal("1"), amount=Decimal("-100"), dt=date(2025, 1, 2))),
+            _c(_tx(tx_id=2, quantity=Decimal("1"), amount=Decimal("-120"), dt=date(2025, 1, 10))),
+        ]
+        mark_series = _build_mark_series(txs, {1: "EUR"}, {}, {}, set())
         builder = DailyStateBuilder(
             classified_txs=[],
             in_transit_intervals=[],
@@ -196,12 +238,7 @@ class TestLastBuyPrice:
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 15),
-            last_buy_prices={
-                1: [
-                    (date(2025, 1, 2), Decimal("100"), "EUR"),
-                    (date(2025, 1, 10), Decimal("120"), "EUR"),
-                ]
-            },
+            mark_series=mark_series,
         )
 
         before_second_buy = builder._market_value_for(1, Decimal("2"), date(2025, 1, 5))
@@ -214,7 +251,9 @@ class TestLastBuyPrice:
         assert after_second_buy.effective_unit_price == Decimal("120")
         assert after_second_buy.market_value == Decimal("240")
 
-    def test_market_price_is_quote_base_aware_and_outranks_fallback(self):
+    def test_market_price_is_quote_base_aware_and_outranks_trade(self):
+        txs = [_c(_tx(tx_id=1, quantity=Decimal("1000"), amount=Decimal("-100000"), dt=date(2025, 1, 2)))]
+        mark_series = _build_mark_series(txs, {1: "EUR"}, {1: [(date(2025, 1, 5), Decimal("98"), "EUR")]}, {1: 100}, set())
         builder = DailyStateBuilder(
             classified_txs=[],
             in_transit_intervals=[],
@@ -228,7 +267,7 @@ class TestLastBuyPrice:
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 5),
-            last_buy_prices={1: (date(2025, 1, 2), Decimal("100"), "EUR")},
+            mark_series=mark_series,
         )
 
         valuation = builder._market_value_for(1, Decimal("1000"), date(2025, 1, 5))
@@ -239,9 +278,10 @@ class TestLastBuyPrice:
         assert valuation.reference_unit_price == Decimal("98")
         assert valuation.effective_currency == valuation.reference_currency == "EUR"
 
-    def test_missing_when_no_price_no_buy(self):
-        """No PriceHistory, no last_buy_price → MISSING."""
-        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
+    def test_missing_when_no_price_no_trade(self):
+        """A position held via an unpriced quantity-only ADJUSTMENT (no quote, no priced trade)
+        cannot be marked → MISSING. WAC is never used for valuation."""
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("0"), tx_type=TransactionType.ADJUSTMENT, dt=date(2025, 1, 2)))]
         result = _build(txs)
         ps = result.position_states_end
         assert ps[0].valuation_source == "MISSING"
@@ -251,33 +291,29 @@ class TestLastBuyPrice:
         assert ps[0].valuation_reference_currency is None
         assert ps[0].missing_fx_pair is None
 
-    def test_no_wac_as_price(self):
-        """WAC is NEVER used for valuation (only for cost_basis)."""
-        # Even with WAC available, if no market price and no last_buy → MISSING
-        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2)))]
-        result = _build(txs)  # no price_map, no last_buy_prices
+    def test_wac_is_not_used_as_price(self):
+        """WAC is NEVER the valuation source: with only an unpriced adjustment the position is
+        MISSING even though a WAC exists (from a separate priced leg would still not apply)."""
+        txs = [_c(_tx(quantity=Decimal("10"), amount=Decimal("0"), tx_type=TransactionType.ADJUSTMENT, dt=date(2025, 1, 2)))]
+        result = _build(txs)
         ps = result.position_states_end
-        # WAC exists (100) but is NOT used for market_value
-        assert ps[0].wac == Decimal("100")
         assert ps[0].market_value is None
         assert ps[0].valuation_source == "MISSING"
 
 
-class TestSeedCostFallback:
-    """Snapshot ADJUSTMENT seeds (per-unit ``cost_basis_override``) provide a last-resort
-    valuation: MARKET_PRICE → LAST_BUY_PRICE → LAST_SEED_COST → MISSING. A holding with no
-    market price and no BUY stays in the NAV, valued at its cost basis (unrealized P&L 0).
-    """
+class TestPricedAdjustmentValuation:
+    """A priced opening ADJUSTMENT (per-unit ``cost_basis_override``) is a TRADE observation the
+    resolver ingests, so a holding with no market quote is marked LAST_TRADE_PRICE at its seeded
+    unit price (unrealized P&L 0 when valued at cost)."""
 
-    def test_seed_cost_used_when_no_market_no_buy(self):
+    def test_priced_adjustment_used_when_no_market(self):
         txs = [_c(_tx(tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
-        seed = {(1, 1): (date(2025, 1, 2), Decimal("100"), "EUR")}
-        result = _build(txs, quote_base_map={1: 100}, last_seed_prices=seed)
+        result = _build(txs, quote_base_map={1: 100})
         ps = result.position_states_end
         assert ps[0].market_value == Decimal("1000")  # 10 * 100
         assert ps[0].cost_basis == Decimal("1000")
         assert ps[0].unrealized_pnl == Decimal("0")  # valued at cost
-        assert ps[0].valuation_source == "LAST_SEED_COST"
+        assert ps[0].valuation_source == "LAST_TRADE_PRICE"
         assert ps[0].valuation_reference_date == date(2025, 1, 2)
         assert ps[0].valuation_reference_unit_price == Decimal("100")
         assert ps[0].valuation_reference_currency == "EUR"
@@ -286,112 +322,43 @@ class TestSeedCostFallback:
         assert result.daily_states[-1].unrealized_gain_loss == Decimal("0")
         assert result.daily_states[-1].nav_value == Decimal("1000")
 
-    def test_historical_seed_history_selects_latest_reference_for_same_broker(self):
-        builder = DailyStateBuilder(
-            classified_txs=[],
-            in_transit_intervals=[],
-            external_cash_flows=[],
-            price_map={},
-            quote_base_map={},
-            fx_rate_map={},
-            asset_classifications={},
-            asset_types={1: "ETF"},
-            asset_currencies={1: "EUR"},
-            target_currency="EUR",
-            date_from=date(2025, 1, 1),
-            date_to=date(2025, 1, 15),
-            last_seed_prices={
-                (1, 1): [
-                    (date(2025, 1, 2), Decimal("80"), "EUR"),
-                    (date(2025, 1, 10), Decimal("90"), "EUR"),
-                ]
-            },
-        )
-
-        first = builder._market_value_for(1, Decimal("2"), date(2025, 1, 5), broker_id=1)
-        second = builder._market_value_for(1, Decimal("2"), date(2025, 1, 12), broker_id=1)
-
-        assert first.reference_date == date(2025, 1, 2)
-        assert first.reference_unit_price == Decimal("80")
-        assert first.market_value == Decimal("160")
-        assert second.reference_date == date(2025, 1, 10)
-        assert second.reference_unit_price == Decimal("90")
-        assert second.market_value == Decimal("180")
-
-    def test_market_price_preferred_over_seed(self):
+    def test_market_price_preferred_over_priced_adjustment(self):
         txs = [_c(_tx(tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
         prices = {1: [(date(2025, 1, 3), Decimal("130"), "EUR")]}
-        seed = {(1, 1): (date(2025, 1, 2), Decimal("100"), "EUR")}
-        result = _build(txs, price_map=prices, last_seed_prices=seed)
+        result = _build(txs, price_map=prices)
         ps = result.position_states_end
         assert ps[0].valuation_source == "MARKET_PRICE"
         assert ps[0].market_value == Decimal("1300")  # 10 * 130 (not the seed cost)
 
-    def test_seed_cost_isolated_by_broker_for_same_asset(self):
+    def test_priced_adjustment_isolated_position_by_broker(self):
         txs = [
-            _c(
-                _tx(
-                    tx_id=1,
-                    broker_id=1,
-                    tx_type=TransactionType.ADJUSTMENT,
-                    quantity=Decimal("10"),
-                    cbo=Decimal("100"),
-                    cbo_ccy="EUR",
-                )
-            ),
-            _c(
-                _tx(
-                    tx_id=2,
-                    broker_id=2,
-                    tx_type=TransactionType.ADJUSTMENT,
-                    quantity=Decimal("5"),
-                    cbo=None,
-                    cbo_ccy=None,
-                )
-            ),
+            _c(_tx(tx_id=1, broker_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="EUR")),
+            _c(_tx(tx_id=2, broker_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("5"), cbo=None, cbo_ccy=None)),
         ]
-        result = _build(
-            txs,
-            last_seed_prices={(1, 1): (date(2025, 1, 2), Decimal("100"), "EUR")},
-        )
+        result = _build(txs)
         by_broker = {position.broker_id: position for position in result.position_states_end}
 
-        assert by_broker[1].valuation_source == "LAST_SEED_COST"
+        # The priced adjustment marks the asset (shared resolver series); broker 2's unpriced leg
+        # holds units of the same asset and is marked at the same last observed trade.
+        assert by_broker[1].valuation_source == "LAST_TRADE_PRICE"
         assert by_broker[1].market_value == Decimal("1000")
-        assert by_broker[2].valuation_source == "MISSING"
-        assert by_broker[2].market_value is None
+        assert by_broker[2].valuation_source == "LAST_TRADE_PRICE"
+        assert by_broker[2].market_value == Decimal("500")
 
-    def test_seed_fx_missing_preserves_reference_source_and_metadata(self):
+    def test_trade_fx_missing_preserves_source_and_metadata(self):
         txs = [
-            _c(
-                _tx(
-                    tx_id=1,
-                    tx_type=TransactionType.ADJUSTMENT,
-                    quantity=Decimal("10"),
-                    cbo=Decimal("100"),
-                    cbo_ccy="USD",
-                )
-            ),
-            _c(
-                _tx(
-                    tx_id=2,
-                    tx_type=TransactionType.ADJUSTMENT,
-                    quantity=Decimal("10"),
-                    amount=Decimal("0"),
-                    dt=date(2025, 1, 5),
-                )
-            ),
+            _c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("100"), cbo_ccy="USD")),
+            _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), dt=date(2025, 1, 5))),
         ]
         result = _build(
             txs,
             asset_currencies={1: "USD"},
-            last_seed_prices={(1, 1): (date(2025, 1, 2), Decimal("100"), "USD")},
             split_linked_tx_ids={2},
             split_history={1: (SplitRecord(event_id=10, asset_id=1, date=date(2025, 1, 5), ratio=Decimal("2")),)},
         )
         position = result.position_states_end[0]
 
-        assert position.valuation_source == "LAST_SEED_COST"
+        assert position.valuation_source == "LAST_TRADE_PRICE"
         assert position.market_value is None
         assert position.valuation_reference_date == date(2025, 1, 2)
         assert position.valuation_reference_unit_price == Decimal("100")
@@ -402,27 +369,18 @@ class TestSeedCostFallback:
         assert position.missing_fx_pair == "USD/EUR"
         assert result.daily_states[-1].missing_fx_pairs == {"USD/EUR"}
 
-    def test_zero_cost_seed_is_valid_and_stays_at_zero(self):
+    def test_zero_cost_priced_adjustment_stays_at_zero(self):
         txs = [_c(_tx(tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), cbo=Decimal("0"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
-        result = _build(txs, last_seed_prices={(1, 1): (date(2025, 1, 2), Decimal("0"), "EUR")})
+        result = _build(txs)
         position = result.position_states_end[0]
 
-        assert position.valuation_source == ValuationSource.LAST_SEED_COST
-        assert position.valuation_effective_unit_price == Decimal("0")
-        assert position.valuation_reference_unit_price == Decimal("0")
-        assert position.market_value == Decimal("0")
+        # A zero-cost override carries no price → the position is MISSING (no priced observation).
+        assert position.valuation_source == "MISSING"
+        assert position.market_value is None
         assert position.cost_basis == Decimal("0")
-        assert position.unrealized_pnl == Decimal("0")
-
-    def test_zero_last_buy_reference_is_rejected(self):
-        with pytest.raises(ValueError, match="positive"):
-            _build(
-                [_c(_tx(quantity=Decimal("1"), amount=Decimal("-1")))],
-                last_buy_prices={1: (date(2025, 1, 2), Decimal("0"), "EUR")},
-            )
 
 
-class TestSplitAdjustedFallbacks:
+class TestSplitAdjustedResolver:
     @pytest.mark.parametrize(
         ("ratio", "split_quantity", "expected_quantity", "expected_price"),
         [
@@ -430,21 +388,20 @@ class TestSplitAdjustedFallbacks:
             (Decimal("0.5"), Decimal("-5"), Decimal("5"), Decimal("200")),
         ],
     )
-    def test_buy_reference_is_rebased_to_current_units(self, ratio, split_quantity, expected_quantity, expected_price):
+    def test_trade_mark_is_rebased_to_current_units(self, ratio, split_quantity, expected_quantity, expected_price):
         txs = [
             _c(_tx(tx_id=1, tx_type=TransactionType.BUY, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=split_quantity, amount=Decimal("0"), dt=date(2025, 1, 5))),
         ]
         result = _build(
             txs,
-            last_buy_prices={1: (date(2025, 1, 2), Decimal("100"), "EUR")},
             split_linked_tx_ids={2},
             split_history={1: (SplitRecord(event_id=10, asset_id=1, date=date(2025, 1, 5), ratio=ratio),)},
         )
         position = result.position_states_end[0]
 
         assert position.quantity == expected_quantity
-        assert position.valuation_source == ValuationSource.LAST_BUY_PRICE
+        assert position.valuation_source == ValuationSource.LAST_TRADE_PRICE
         assert position.valuation_effective_unit_price == expected_price
         assert position.valuation_reference_date == date(2025, 1, 2)
         assert position.valuation_reference_unit_price == Decimal("100")
@@ -459,21 +416,20 @@ class TestSplitAdjustedFallbacks:
             (Decimal("0.5"), Decimal("-5"), Decimal("5"), Decimal("200")),
         ],
     )
-    def test_seed_reference_uses_split_adjusted_current_cost(self, ratio, split_quantity, expected_quantity, expected_price):
+    def test_priced_adjustment_mark_uses_split_adjusted_units(self, ratio, split_quantity, expected_quantity, expected_price):
         txs = [
             _c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, tx_type=TransactionType.ADJUSTMENT, quantity=split_quantity, amount=Decimal("0"), dt=date(2025, 1, 5))),
         ]
         result = _build(
             txs,
-            last_seed_prices={(1, 1): (date(2025, 1, 2), Decimal("100"), "EUR")},
             split_linked_tx_ids={2},
             split_history={1: (SplitRecord(event_id=10, asset_id=1, date=date(2025, 1, 5), ratio=ratio),)},
         )
         position = result.position_states_end[0]
 
         assert position.quantity == expected_quantity
-        assert position.valuation_source == ValuationSource.LAST_SEED_COST
+        assert position.valuation_source == ValuationSource.LAST_TRADE_PRICE
         assert position.valuation_effective_unit_price == expected_price
         assert position.valuation_reference_unit_price == Decimal("100")
         assert position.valuation_split_adjusted is True

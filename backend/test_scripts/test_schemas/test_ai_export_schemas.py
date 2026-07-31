@@ -996,7 +996,7 @@ def test_position_rejects_inconsistent_valuation_metadata(updates: dict[str, obj
         AiExportPosition.model_validate(payload)
 
 
-@pytest.mark.parametrize("source", ["last_visible_buy_unit_price", "last_seed_cost"])
+@pytest.mark.parametrize("source", ["last_observed_trade_price"])
 def test_reference_valuation_source_survives_missing_target_fx(source: str):
     position = AiExportPosition.model_validate(
         {
@@ -1011,51 +1011,34 @@ def test_reference_valuation_source_survives_missing_target_fx(source: str):
     assert position.market_value is None
 
 
-@pytest.mark.parametrize(
-    ("source", "semantics"),
-    [
-        ("last_visible_buy_unit_price", "valuation_fallback_not_observed_market_return"),
-        ("last_seed_cost", "estimated_at_cost_not_observed_market_return"),
-    ],
-)
-def test_valuation_reference_source_controls_semantics(source: str, semantics: str):
+def test_valuation_reference_source_controls_semantics():
     reference = AiExportValuationReference.model_validate(
         {
             "date": date(2026, 7, 10),
-            "source": source,
+            "source": "last_observed_trade_price",
             "unit_price": money("25.40", "USD"),
         }
     )
 
-    assert reference.semantics == semantics
+    assert reference.semantics == "valuation_fallback_not_observed_market_return"
 
-    wrong_semantics = "estimated_at_cost_not_observed_market_return" if semantics == "valuation_fallback_not_observed_market_return" else "valuation_fallback_not_observed_market_return"
-    with pytest.raises(ValidationError, match="requires semantics"):
+    with pytest.raises(ValidationError):
         AiExportValuationReference.model_validate(
             {
                 "date": date(2026, 7, 10),
-                "source": source,
+                "source": "last_observed_trade_price",
                 "unit_price": money("25.40", "USD"),
-                "semantics": wrong_semantics,
+                "semantics": "estimated_at_cost_not_observed_market_return",
             }
         )
 
 
-def test_valuation_reference_zero_and_split_adjustment_contract():
-    zero_seed = AiExportValuationReference.model_validate(
-        {
-            "date": date(2026, 7, 10),
-            "source": "last_seed_cost",
-            "unit_price": money("0", "EUR"),
-        }
-    )
-    assert zero_seed.unit_price.amount == Decimal("0")
-
+def test_valuation_reference_positive_price_and_split_adjustment_contract():
     with pytest.raises(ValidationError, match="strictly positive"):
         AiExportValuationReference.model_validate(
             {
                 "date": date(2026, 7, 10),
-                "source": "last_visible_buy_unit_price",
+                "source": "last_observed_trade_price",
                 "unit_price": money("0", "EUR"),
             }
         )
@@ -1064,7 +1047,7 @@ def test_valuation_reference_zero_and_split_adjustment_contract():
         AiExportValuationReference.model_validate(
             {
                 "date": date(2026, 7, 10),
-                "source": "last_seed_cost",
+                "source": "last_observed_trade_price",
                 "unit_price": money("100", "EUR"),
                 "split_adjusted": True,
             }
@@ -1073,7 +1056,7 @@ def test_valuation_reference_zero_and_split_adjustment_contract():
     adjusted = AiExportValuationReference.model_validate(
         {
             "date": date(2026, 7, 10),
-            "source": "last_seed_cost",
+            "source": "last_observed_trade_price",
             "unit_price": money("100", "USD"),
             "effective_unit_price": money("50", "EUR"),
             "split_adjusted": True,
@@ -1160,7 +1143,7 @@ def test_normalized_return_rejects_invalid_contracts(case: str):
         AiExportNormalizedReturn.model_validate(payload)
 
 
-@pytest.mark.parametrize("source", ["last_visible_buy_unit_price", "last_seed_cost"])
+@pytest.mark.parametrize("source", ["last_observed_trade_price"])
 def test_asset_facts_never_mix_fallback_reference_with_normalized_return(source: str):
     payload = asset_response_payload()["facts"]
     assert isinstance(payload, dict)
@@ -1183,7 +1166,7 @@ def test_asset_facts_never_mix_fallback_reference_with_normalized_return(source:
     assert facts.valuation_reference is not None
 
 
-@pytest.mark.parametrize("source", ["last_visible_buy_unit_price", "last_seed_cost"])
+@pytest.mark.parametrize("source", ["last_observed_trade_price"])
 def test_asset_facts_reject_market_facts_with_fallback_reference(source: str):
     payload = asset_response_payload()["facts"]
     assert isinstance(payload, dict)
@@ -1204,10 +1187,9 @@ def test_asset_facts_reject_market_facts_with_fallback_reference(source: str):
 @pytest.mark.parametrize(
     ("reference_source", "position_source"),
     [
-        ("last_visible_buy_unit_price", "market_price"),
-        ("last_visible_buy_unit_price", "last_seed_cost"),
-        ("last_seed_cost", "missing"),
-        ("last_seed_cost", "last_visible_buy_unit_price"),
+        ("last_observed_trade_price", "market_price"),
+        ("last_observed_trade_price", "missing"),
+        ("last_observed_trade_price", "mixed"),
     ],
 )
 def test_asset_facts_reject_position_source_contradictions(reference_source: str, position_source: str):

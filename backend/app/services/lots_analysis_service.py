@@ -335,6 +335,7 @@ class LotsAnalysisService:
             split_ratios_by_tx_id=split_ratios_by_tx_id,
             actual_to=actual_to,
             computed_from=computed_from,
+            asset_currency=asset.currency,
         )
         self._collect_performance_fx_needs(
             fx_resolver=fx_resolver,
@@ -348,13 +349,6 @@ class LotsAnalysisService:
             # Estimated-at-cost values the open portion at converted opening cost -> needs fx@opening.
             for lot in lots_by_id.values():
                 fx_resolver.need(lot.currency, lot.opening_date)
-        if self._needs_market_series(normalized_analyses):
-            # The estimated market-price line (below) reads each trade's unit price at its own date;
-            # register the fx@trade-date needs so foreign-currency trades convert to target (no-op EUR).
-            for tx in transactions:
-                fx_resolver.need(tx.currency or asset.currency, tx.date)
-                if tx.cost_basis_override is not None:
-                    fx_resolver.need(tx.cost_basis_currency or asset.currency, tx.date)
         await fx_resolver.load(self.db)
 
         income_by_lot, income_prefix_by_lot, income_events_payload = self._extract_income_outputs(engine_result, income_events_input)
@@ -375,28 +369,35 @@ class LotsAnalysisService:
                 )
             )
         active_price_dates = history_dates if self._needs_market_series(normalized_analyses) else [actual_to]
-        market_prices = self._build_market_price_map(price_lookup, fx_resolver, active_price_dates)
         quote_base_quantity = normalize_quote_base_quantity(asset.quote_base_quantity)
-        # Estimated market-price line (chart only): where no real quote exists, carry the last-known
-        # observation forward — asset-system price OR same-day trade average (BUY cost / SELL proceeds /
-        # priced ADJUSTMENT carryover) — via the unified price resolver, so a price-less or partially
-        # gapped asset still shows a "prezzo di mercato" curve that steps at each trade. FX is frozen at
-        # the observation date (convert-at-observation) so real quotes and trades are treated coherently.
-        # This never feeds valuation/return math (market_prices, above, is left untouched).
+        # The unified price resolver is the SINGLE valuation brain for this asset: fed the
+        # asset-system price rows AND every observed trade (BUY/SELL + priced ADJUSTMENT carryover)
+        # in native currency, it resolves each day to a real quote (exact or carried/LOCF) or, when
+        # none exists, to the same-day / last-observed trade mark. Both the open-lot valuation
+        # (``market_prices`` -> NAV / value / return / performance) and the chart price line
+        # (``estimated_market_prices``) read from it, so lots-analysis shares one valuation model
+        # with the portfolio engine — no legacy market-only map. Each native mark is converted to
+        # the target currency at *its own valuation date* (per-day FX, never frozen at the
+        # observation date); ``None`` marks a day the resolver has no observation for (genuine
+        # MISSING), where downstream falls back to opening cost.
         price_series = build_asset_price_series(
             price_rows=[(row.date, row.close, row.currency) for row in prices],
             transactions=transactions,
             split_linked_tx_ids=set(split_ratios_by_tx_id),
             asset_currency=asset.currency,
             quote_base_quantity=quote_base_quantity,
-            convert=fx_resolver.convert,
         )
+        market_prices: dict[date_type, Decimal | None] = {}
         estimated_market_prices: dict[date_type, tuple[Decimal, bool]] = {}
         for current_date in active_price_dates:
             mark = price_series.resolve(current_date)
             if mark.is_missing:
+                market_prices[current_date] = None
                 continue
-            estimated_market_prices[current_date] = (mark.unit_price, mark.estimated)
+            converted = fx_resolver.convert(mark.unit_price, mark.currency, current_date)
+            value = converted if converted is not None else mark.unit_price
+            market_prices[current_date] = value
+            estimated_market_prices[current_date] = (value, mark.estimated)
         wac_context = self._build_wac_context(
             transactions=transactions,
             split_ratios_by_tx_id=split_ratios_by_tx_id,
@@ -721,6 +722,7 @@ class LotsAnalysisService:
         split_ratios_by_tx_id: dict[int, Decimal],
         actual_to: date_type,
         computed_from: date_type,
+        asset_currency: str,
     ) -> None:
         tx_by_id = {tx.id: tx for tx in transactions if tx.id is not None}
         if LotAnalysisType.BROKER_WAC_HISTORY in analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in analyses:
@@ -760,7 +762,21 @@ class LotsAnalysisService:
 
         if self._needs_market_series(analyses):
             current = computed_from
+            # The unified resolver marks each day from asset-system prices AND observed trades
+            # (BUY/SELL + priced ADJUSTMENT), each in its native currency; both the valuation and
+            # chart lines convert those marks to target at the *valuation* date. Register the fx
+            # needs for every price- and trade-currency across the whole window so a foreign mark
+            # carried forward still translates on the day it is read (mirrors build_asset_price_series).
             currencies = {price.currency for price in prices}
+            for tx in transactions:
+                if tx.id in split_ratios_by_tx_id:
+                    continue
+                tx_type = str(getattr(tx.type, "value", tx.type))
+                if tx_type in ("BUY", "SELL") and tx.amount:
+                    currencies.add(tx.currency or asset_currency)
+                elif tx_type == "ADJUSTMENT" and tx.cost_basis_override not in (None, Decimal("0")):
+                    currencies.add(tx.cost_basis_currency or asset_currency)
+            currencies.discard(None)
             while current <= actual_to:
                 for currency in currencies:
                     fx_resolver.need(currency, current)
@@ -804,21 +820,6 @@ class LotsAnalysisService:
             lot = lots_by_id.get(closure.lot_id)
             if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":
                 fx_resolver.need(lot.currency or asset_currency, closure.close_date)
-
-    def _build_market_price_map(
-        self,
-        price_lookup: _PriceHistoryLookup,
-        fx_resolver: _FxRateResolver,
-        dates: Sequence[date_type],
-    ) -> dict[date_type, Decimal | None]:
-        market_prices: dict[date_type, Decimal | None] = {}
-        for current_date in dates:
-            resolved = price_lookup.resolve(current_date)
-            if resolved is None:
-                market_prices[current_date] = None
-                continue
-            market_prices[current_date] = fx_resolver.convert(resolved.price, resolved.currency, current_date)
-        return market_prices
 
     def _build_wac_context(
         self,

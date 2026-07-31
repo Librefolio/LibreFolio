@@ -181,7 +181,21 @@ async def _build_broker_positions(context: BuildContext, dependencies: Mapping[s
     scope = _require_broker_scope(context)
     report = await load_portfolio_report(context, scope, BROKER_REPORT_RESOURCE)
     summary = report.summary
-    rows = [] if summary is None else [map_position_row(holding, currency_code=scope.target_currency) for holding in summary.holdings]
+    holdings = [] if summary is None else list(summary.holdings)
+    assets = await _load_broker_asset_metadata(context, sorted({holding.asset_id for holding in holdings}))
+    rows = [
+        map_position_row(
+            holding,
+            currency_code=scope.target_currency,
+            asset_ticker=getattr(assets.get(holding.asset_id), "identifier_ticker", None),
+            asset_isin=getattr(assets.get(holding.asset_id), "identifier_isin", None),
+            asset_cusip=getattr(assets.get(holding.asset_id), "identifier_cusip", None),
+            asset_sedol=getattr(assets.get(holding.asset_id), "identifier_sedol", None),
+            asset_figi=getattr(assets.get(holding.asset_id), "identifier_figi", None),
+            asset_other=getattr(assets.get(holding.asset_id), "identifier_other", None),
+        )
+        for holding in holdings
+    ]
     rows = sort_positions(rows)
     return BrokerPositionsPayload(broker_id=scope.broker_id, as_of=scope.snapshot_as_of, target_currency=scope.target_currency, position_count=len(rows), positions=rows)
 
@@ -279,7 +293,7 @@ def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, S
         period_end=scope.period_end,
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request, scoped to this broker",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
-        valuation_semantics="wac_per_unit/original_cost/open_cost_basis are Weighted Average Cost; current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_BUY_PRICE > LAST_SEED_COST).",
+        valuation_semantics="wac_per_unit/original_cost/open_cost_basis are Weighted Average Cost; current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > MISSING).",
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
             ProvenanceNote(subject="period", text=f"Period is inclusive [{scope.period_start.isoformat()}, {scope.period_end.isoformat()}]; snapshot_as_of == period_end."),
