@@ -1285,6 +1285,9 @@ class TestPluginOwnedDescriptions:
                 assert column["semantic_id"] == output_description.semantic_id
                 assert column["semantic_description"] == output_description.semantic_description
                 assert column["unit"] == output_description.unit.value
+                output_spec = next(output for output in plugin_class.output_specs if output.key == column["output_key"])
+                assert column["minimum"] == output_spec.axis.minimum
+                assert column["maximum"] == output_spec.axis.maximum
 
 
 # =============================================================================
@@ -1589,12 +1592,27 @@ class TestPortfolioUniverseAndBreadth:
         assert prices["considered_asset_count"] == 3
         assert prices["eligible_asset_count"] == 2
         assert [asset["asset_id"] for asset in prices["assets"]] == [1, 2]
-        assert [asset["weight"] for asset in prices["assets"]] == pytest.approx([0.9, 0.1])
+        assert [asset["portfolio_weight_ratio"] for asset in prices["assets"]] == pytest.approx([0.9, 0.1])
         assert [asset["asset_id"] for asset in indicators["assets"]] == [1, 2]
+        assert sum(asset["portfolio_weight_ratio"] for asset in indicators["assets"]) == pytest.approx(1.0)
+        covered_indicator_assets = [asset for asset in indicators["assets"] if asset["indicators"]]
+        assert indicators["covered_asset_count"] == len(covered_indicator_assets)
+        normalized_by_instance: dict[str, list[float]] = {}
+        for asset in indicators["assets"]:
+            for indicator in asset["indicators"]:
+                assert indicator["portfolio_weight_ratio"] == pytest.approx(asset["portfolio_weight_ratio"])
+                normalized_by_instance.setdefault(indicator["instance_id"], []).append(indicator["technical_normalized_weight_ratio"])
+        assert normalized_by_instance
+        assert all(sum(weights) == pytest.approx(1.0) for weights in normalized_by_instance.values())
+        assert indicators["eligible_portfolio_weight_ratio"] == pytest.approx(1.0)
+        assert indicators["covered_portfolio_weight_ratio"] == pytest.approx(sum(asset["portfolio_weight_ratio"] for asset in covered_indicator_assets))
+        assert indicators["covered_weight_ratio"] == pytest.approx(indicators["covered_portfolio_weight_ratio"] / indicators["eligible_portfolio_weight_ratio"])
         assert breadth["considered_asset_count"] == 3
         assert breadth["eligible_asset_count"] == 2
         assert breadth["covered_asset_count"] <= 2
-        assert breadth["total_weight"] == pytest.approx(1.0)
+        assert breadth["eligible_portfolio_weight_ratio"] == pytest.approx(1.0)
+        assert breadth["covered_portfolio_weight_ratio"] <= breadth["eligible_portfolio_weight_ratio"]
+        assert breadth["covered_weight_ratio"] == pytest.approx(breadth["covered_portfolio_weight_ratio"] / breadth["eligible_portfolio_weight_ratio"])
 
         flat_events = [event for bucket in events["buckets"] for event in bucket["events"]]
         identities = {
@@ -1636,6 +1654,9 @@ class TestPortfolioUniverseAndBreadth:
         assert indicators_payload["assets"] == []
         assert breadth_payload["eligible_asset_count"] == 0
         assert breadth_payload["covered_asset_count"] == 0
+        assert breadth_payload["eligible_portfolio_weight_ratio"] == 0
+        assert breadth_payload["covered_portfolio_weight_ratio"] == 0
+        assert breadth_payload["covered_weight_ratio"] == 0
         assert breadth_payload["states"] == []
         assert events_payload["detected_event_count"] == 0
         assert events_payload["exported_event_count"] == 0
@@ -1674,9 +1695,12 @@ class TestPortfolioUniverseAndBreadth:
             by_indicator.setdefault((state["signal_code"], state["output_key"]), []).append(state)
         for _key, states in by_indicator.items():
             unweighted_total = sum(s["unweighted_ratio"] for s in states)
-            weighted_total = sum(s["weighted_ratio"] for s in states)
+            weighted_total = sum(s["technical_normalized_weight_ratio"] for s in states)
             assert unweighted_total == pytest.approx(1.0)
             assert weighted_total == pytest.approx(1.0)
+            assert all(s["covered_asset_count"] > 0 for s in states)
+            assert len({s["covered_asset_count"] for s in states}) == 1
+            assert len({s["covered_portfolio_weight_ratio"] for s in states}) == 1
 
     @pytest.mark.asyncio
     async def test_weighted_breadth_differs_from_unweighted_with_unequal_weights(self, monkeypatch):
@@ -1725,7 +1749,7 @@ class TestPortfolioUniverseAndBreadth:
         distinct_states = {s["state"] for s in rsi_states}
         if len(distinct_states) > 1:
             # Divergent states -> weighted (90/10) must differ from unweighted (50/50).
-            assert any(s["weighted_ratio"] != pytest.approx(s["unweighted_ratio"]) for s in rsi_states)
+            assert any(s["technical_normalized_weight_ratio"] != pytest.approx(s["unweighted_ratio"]) for s in rsi_states)
 
     @pytest.mark.asyncio
     async def test_degenerate_single_level_breadth_is_informative_not_neutral(self, monkeypatch):
@@ -1784,12 +1808,12 @@ class TestPortfolioUniverseAndBreadth:
         assert "zero" not in distinct_state_keys
 
         unweighted_total = sum(s["unweighted_ratio"] for s in roc_states)
-        weighted_total = sum(s["weighted_ratio"] for s in roc_states)
+        weighted_total = sum(s["technical_normalized_weight_ratio"] for s in roc_states)
         assert unweighted_total == pytest.approx(1.0)
         assert weighted_total == pytest.approx(1.0)
         # Unequal NAV weights (90/10) with divergent states -> weighted must
         # diverge from unweighted (50/50).
-        assert any(s["weighted_ratio"] != pytest.approx(s["unweighted_ratio"]) for s in roc_states)
+        assert any(s["technical_normalized_weight_ratio"] != pytest.approx(s["unweighted_ratio"]) for s in roc_states)
 
     @pytest.mark.asyncio
     async def test_broker_domain_scopes_to_broker_report_resource(self, monkeypatch):

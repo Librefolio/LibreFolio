@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.db.models import Asset, Broker, BrokerUserAccess
 from backend.app.schemas.ai_export_runtime import (
     AiExportAnalysisSelection,
     AiExportAssetSnapshotRequest,
@@ -64,11 +66,26 @@ class _PositionsPayload(BaseModel):
     positions: tuple[int, ...] = ()
 
 
+class _EntityPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    broker_id: int
+
+
 def _session_with_accessible_brokers(broker_ids: list[int]) -> AsyncMock:
     session = AsyncMock(spec=AsyncSession)
-    result = MagicMock()
-    result.scalars.return_value.all.return_value = broker_ids
-    session.execute.return_value = result
+
+    async def _execute(statement):
+        entity = statement.column_descriptions[0].get("entity")
+        result = MagicMock()
+        if entity is not None and entity.__name__ == "BrokerUserAccess":
+            result.scalars.return_value.all.return_value = broker_ids
+        else:
+            result.scalars.return_value = ()
+        return result
+
+    session.execute.side_effect = _execute
     return session
 
 
@@ -259,6 +276,7 @@ async def test_dataset_selection_builds_manifest_sections_and_stable_stats():
 @pytest.mark.asyncio
 async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
     session = _session_with_accessible_brokers([])
+    sampling_diagnostics = {}
 
     def _build(context, dependencies):  # noqa: ARG001
         context.register_price_sampling()
@@ -274,6 +292,8 @@ async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
                 bucket_plan=indicator_plan,
             )
         context.register_event_selection()
+        sampling_diagnostics["price"] = context.price_sampling
+        sampling_diagnostics["indicator"] = context.indicator_sampling[0]
         return _ValuePayload(value=1)
 
     component = ComponentSpec(
@@ -305,15 +325,24 @@ async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
     assert response.meta.schema_version == 1
     assert response.meta.catalog_version == 1
     assert response.technical_sampling is not None
+    assert response.technical_sampling.detail_level == "standard"
     assert response.technical_sampling.price_policy is not None
-    assert response.technical_sampling.price_policy.detail_level == "standard"
-    assert response.technical_sampling.price_policy.k == 14
+    assert response.technical_sampling.price_policy.bucket_count == sampling_diagnostics["price"].bucket_count
     assert len(response.technical_sampling.indicator_policies) == 1
     indicator = response.technical_sampling.indicator_policies[0]
     assert indicator.signal_instance_id == "ema_20"
     assert indicator.temporal_class == SignalTemporalClass.MEDIUM
-    assert indicator.m == 15
-    assert indicator.k == 20
+    assert indicator.bucket_count == sampling_diagnostics["indicator"].bucket_count
+    assert sampling_diagnostics["price"].exponent == 2
+    assert sampling_diagnostics["price"].half_life_offset == 30
+    assert sampling_diagnostics["price"].max_bucket_days == 14
+    assert sampling_diagnostics["indicator"].exponent == 2
+    assert sampling_diagnostics["indicator"].half_life_offset == 15
+    assert sampling_diagnostics["indicator"].max_bucket_days == 20
+    serialized_sampling = response.technical_sampling.model_dump_json()
+    assert '"p":' not in serialized_sampling
+    assert '"m":' not in serialized_sampling
+    assert '"k":' not in serialized_sampling
     assert response.event_selection is not None
     assert response.event_selection.minimum_latest_events_per_annotation == 20
     assert response.event_selection.complete_recent_window_days == 30
@@ -321,6 +350,62 @@ async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
         "entity_id",
         "annotation_key",
     )
+
+
+@pytest.mark.asyncio
+async def test_snapshot_builds_minimal_entity_directory_from_component_references():
+    session = AsyncMock(spec=AsyncSession)
+
+    async def _execute(statement):
+        entity = statement.column_descriptions[0].get("entity")
+        result = MagicMock()
+        if entity is BrokerUserAccess:
+            result.scalars.return_value.all.return_value = [3]
+        elif entity is Asset:
+            result.scalars.return_value = (
+                SimpleNamespace(
+                    id=7,
+                    display_name="Named Asset",
+                    identifier_ticker="NAMED",
+                    identifier_isin="IT0000000007",
+                    identifier_cusip=None,
+                    identifier_sedol=None,
+                    identifier_figi=None,
+                    identifier_other=["provider:7"],
+                    currency="EUR",
+                    asset_type=SimpleNamespace(value="ETF"),
+                    quote_base_quantity=100,
+                ),
+            )
+        elif entity is Broker:
+            result.scalars.return_value = (SimpleNamespace(id=3, name="Named Broker"),)
+        else:
+            raise AssertionError(f"unexpected entity query: {entity}")
+        return result
+
+    session.execute.side_effect = _execute
+    component = _component(
+        "portfolio.summary",
+        Domain.PORTFOLIO,
+        _EntityPayload,
+        _EntityPayload(asset_id=7, broker_id=3),
+    )
+    dataset = _dataset(
+        "portfolio.overview",
+        Domain.PORTFOLIO,
+        ("portfolio.summary",),
+    )
+    service = _service(session, (component,), (dataset,))
+
+    response = await service.build_snapshot(
+        41,
+        _portfolio_dataset_request().model_copy(update={"broker_ids": [3]}),
+    )
+
+    assert response.entity_directory.assets[0].display_name == "Named Asset"
+    assert response.entity_directory.assets[0].isin == "IT0000000007"
+    assert response.entity_directory.assets[0].quote_base_quantity == 100
+    assert response.entity_directory.brokers[0].display_name == "Named Broker"
 
 
 @pytest.mark.asyncio

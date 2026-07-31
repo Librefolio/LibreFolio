@@ -158,6 +158,69 @@ selection summaries. Clipboard rendering places the dataset, technical-sampling,
 and event-selection manifests in the metadata block; component payloads remain in
 Snapshot Data.
 
+The public technical manifest contains one request-level `detail_level`, the
+price `bucket_count`, and per-indicator identity, `temporal_class`, and
+`bucket_count`. Sampling parameters `P`, `M`, and `K` are internal mathematical
+diagnostics and are never copied into the prompt.
+
+## 🧪 Real Prompt Density Probe
+
+The permanent probe exercises the same path as the UI:
+
+```text
+login
+→ runtime catalog
+→ official frontend request builder
+→ POST /api/v1/ai-export/snapshot
+→ official prompt renderer
+→ saved prompt file
+→ filesystem measurements
+```
+
+Run the representative audit from the repository root:
+
+```bash
+LIBREFOLIO_AI_EXPORT_PROBE_PASSWORD='<local probe password>' \
+pipenv run python backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py \
+  --profile representative \
+  --manifest-shape slim \
+  --normalize-copy-credentials
+```
+
+The password is read only from the process environment and is never written to
+the output. Credential normalization, when explicitly requested, modifies only
+the disposable runtime copy.
+
+The default representative profile uses one data-rich user, the full Dashboard
+scope, one deterministic Broker, one deterministic Asset, and one deterministic
+FX pair. Every catalog selection is measured at `1Y/Standard`; only the four
+technical datasets receive period/detail sensitivity cases, and only `all_data`
+receives an additional `1Y/Full` case. This provides decision-grade metrics
+without generating the exhaustive Cartesian product.
+
+The probe creates an immutable source snapshot from the local production
+database, launches a lifespan-disabled API on an independent copy, and verifies
+that the source snapshot's primary SQLite file remains unchanged. A concurrently
+running production server may still change the original database independently;
+that drift is recorded separately.
+
+Each timestamped run contains:
+
+```text
+real_prompt_probe/<run_id>/
+├── prompts/
+├── canonical/
+├── metrics.json
+├── summary.md
+├── run_manifest.json
+└── failures.json
+```
+
+`metrics.json` keeps canonical JSON measurements as diagnostics, but the primary
+decision metric is always the content reread from the final rendered prompt file.
+Canonical payload files are not retained by default; use `--keep-canonical` only
+when debugging a specific case.
+
 ## 🚨 Failure and Partial-Success Semantics
 
 | Situation | Result |

@@ -8,13 +8,17 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from backend.app.schemas.ai_export_runtime import (
+    AiExportAssetDirectoryEntry,
+    AiExportBrokerDirectoryEntry,
     AiExportCatalogResponse,
     AiExportDatasetCatalogEntry,
     AiExportDatasetManifestEntry,
     AiExportDatasetSelection,
     AiExportDetailLevel,
     AiExportDomain,
+    AiExportEntityDirectory,
     AiExportEventSelectionManifest,
+    AiExportFxPairDirectoryEntry,
     AiExportIndicatorSamplingPolicy,
     AiExportManifestRole,
     AiExportPeriodSemantics,
@@ -208,41 +212,96 @@ def test_snapshot_response_accepts_json_sections_and_enforces_stats():
 
 def test_sampling_manifests_are_strict_deduplicated_v1_contracts():
     price = AiExportPriceSamplingPolicy(
-        detail_level="full",
-        p=2,
-        m=30,
-        k=7,
         bucket_count=75,
     )
     indicator = AiExportIndicatorSamplingPolicy(
         signal_instance_id="ema_20",
         signal_code="EMA",
         temporal_class=SignalTemporalClass.MEDIUM,
-        detail_level="full",
-        p=2,
-        m=16,
-        k=10,
         bucket_count=51,
     )
     manifest = AiExportTechnicalSamplingManifest(
+        detail_level="full",
         price_policy=price,
         indicator_policies=(indicator,),
     )
     event_policy = AiExportEventSelectionManifest()
 
-    assert manifest.price_policy.k == 7
+    assert manifest.detail_level == "full"
+    assert manifest.price_policy.bucket_count == 75
     assert manifest.indicator_policies[0].temporal_class == "medium"
+    assert manifest.model_dump(mode="json") == {
+        "detail_level": "full",
+        "price_policy": {"bucket_count": 75},
+        "indicator_policies": [
+            {
+                "signal_instance_id": "ema_20",
+                "signal_code": "EMA",
+                "temporal_class": "medium",
+                "bucket_count": 51,
+            }
+        ],
+    }
     assert event_policy.grouped_by == ("entity_id", "annotation_key")
 
     with pytest.raises(ValidationError, match="unique signal_instance_id"):
         AiExportTechnicalSamplingManifest(
+            detail_level="full",
             indicator_policies=(indicator, indicator),
         )
     with pytest.raises(ValidationError, match="price or indicator policy"):
-        AiExportTechnicalSamplingManifest()
+        AiExportTechnicalSamplingManifest(detail_level="full")
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        AiExportPriceSamplingPolicy.model_validate(
+            {
+                "bucket_count": 75,
+                "p": 2,
+                "m": 30,
+                "k": 7,
+            }
+        )
     with pytest.raises(ValidationError):
         AiExportEventSelectionManifest(
             minimum_latest_events_per_annotation=19,
+        )
+
+
+def test_entity_directory_is_sorted_unique_and_carries_minimal_identity():
+    directory = AiExportEntityDirectory(
+        assets=(
+            AiExportAssetDirectoryEntry(
+                asset_id=7,
+                display_name="Named Asset",
+                ticker="NAMED",
+                isin="IT0000000007",
+                other_identifiers=("provider:7",),
+                currency="EUR",
+                asset_type="ETF",
+                quote_base_quantity=100,
+            ),
+        ),
+        brokers=(
+            AiExportBrokerDirectoryEntry(
+                broker_id=3,
+                display_name="Named Broker",
+            ),
+        ),
+        fx_pairs=(
+            AiExportFxPairDirectoryEntry(
+                base_currency="EUR",
+                quote_currency="USD",
+            ),
+        ),
+    )
+
+    assert directory.assets[0].quote_base_quantity == 100
+    assert directory.assets[0].other_identifiers == ("provider:7",)
+    assert directory.brokers[0].display_name == "Named Broker"
+    assert directory.fx_pairs[0].base_currency == "EUR"
+
+    with pytest.raises(ValidationError, match="unique and sorted"):
+        AiExportEntityDirectory(
+            assets=(directory.assets[0], directory.assets[0]),
         )
 
 

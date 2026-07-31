@@ -15,6 +15,7 @@ AI_EXPORT_UNIT_TEST_PATHS = (
     "src/lib/features/ai-export/__tests__/backendCatalogCompatibility.test.ts",
     "src/lib/features/ai-export/__tests__/catalogCompatibility.test.ts",
     "src/lib/features/ai-export/__tests__/promptRenderer.test.ts",
+    "src/lib/features/ai-export/__tests__/snapshotDataRenderer.test.ts",
     "src/lib/features/ai-export/__tests__/safeSerialization.test.ts",
     "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
     "src/lib/components/charts/chartCoreHelpers.test.ts",

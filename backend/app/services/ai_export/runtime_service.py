@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -10,13 +12,15 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import BrokerUserAccess
+from backend.app.db.models import Asset, Broker, BrokerUserAccess
 from backend.app.schemas.ai_export_runtime import (
     AiExportAnalysisCatalogEntry,
     AiExportAnalysisContract,
     AiExportAnalysisSelection,
+    AiExportAssetDirectoryEntry,
     AiExportAssetSnapshotRequest,
     AiExportAssetTargetReference,
+    AiExportBrokerDirectoryEntry,
     AiExportBrokerSnapshotRequest,
     AiExportBrokerTargetReference,
     AiExportCatalogResponse,
@@ -25,7 +29,9 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportDatasetSelection,
     AiExportDetailLevel,
     AiExportDomain,
+    AiExportEntityDirectory,
     AiExportEventSelectionManifest,
+    AiExportFxPairDirectoryEntry,
     AiExportFxPairTargetReference,
     AiExportFxSnapshotRequest,
     AiExportIndicatorSamplingPolicy,
@@ -153,6 +159,49 @@ def _target_reference(request: AiExportSnapshotRequest) -> AiExportTargetReferen
             quote_currency=request.quote_currency,
         )
     raise TypeError(f"unsupported AI Export request type: {type(request).__name__}")
+
+
+_ASSET_ENTITY_ID = re.compile(r"^asset:(\d+)$")
+
+
+def _collect_entity_ids(
+    value: object,
+    *,
+    asset_ids: set[int],
+    broker_ids: set[int],
+) -> None:
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if key == "entity_id" and isinstance(nested, str):
+                match = _ASSET_ENTITY_ID.fullmatch(nested)
+                if match:
+                    asset_ids.add(int(match.group(1)))
+            elif key.endswith("asset_id") and isinstance(nested, int) and not isinstance(nested, bool):
+                asset_ids.add(nested)
+            elif key.endswith("broker_id") and isinstance(nested, int) and not isinstance(nested, bool):
+                broker_ids.add(nested)
+            _collect_entity_ids(
+                nested,
+                asset_ids=asset_ids,
+                broker_ids=broker_ids,
+            )
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        for nested in value:
+            _collect_entity_ids(
+                nested,
+                asset_ids=asset_ids,
+                broker_ids=broker_ids,
+            )
+
+
+def _other_identifiers(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,) if value else ()
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return tuple(str(item) for item in value if item is not None and str(item))
+    return (str(value),)
 
 
 def _root_cause(error: BaseException) -> BaseException:
@@ -382,6 +431,80 @@ class AiExportSnapshotService:
                     "insufficient_price_history",
                 )
 
+    async def _entity_directory(
+        self,
+        request: AiExportSnapshotRequest,
+        sections: tuple[AiExportSectionEnvelope, ...],
+    ) -> AiExportEntityDirectory:
+        asset_ids: set[int] = set()
+        broker_ids: set[int] = set()
+        for section in sections:
+            _collect_entity_ids(
+                section.payload,
+                asset_ids=asset_ids,
+                broker_ids=broker_ids,
+            )
+        if isinstance(request, AiExportAssetSnapshotRequest):
+            asset_ids.add(request.asset_id)
+            broker_ids.update(request.broker_ids)
+        elif isinstance(request, AiExportBrokerSnapshotRequest):
+            broker_ids.add(request.broker_id)
+        elif isinstance(request, AiExportPortfolioSnapshotRequest):
+            broker_ids.update(request.broker_ids)
+        elif isinstance(request, AiExportFxSnapshotRequest):
+            broker_ids.update(request.broker_ids)
+
+        assets: tuple[AiExportAssetDirectoryEntry, ...] = ()
+        if asset_ids:
+            rows = (await self.db.execute(select(Asset).where(Asset.id.in_(sorted(asset_ids))))).scalars()
+            by_id = {asset.id: asset for asset in rows if asset.id is not None}
+            assets = tuple(
+                AiExportAssetDirectoryEntry(
+                    asset_id=asset_id,
+                    display_name=by_id[asset_id].display_name,
+                    ticker=by_id[asset_id].identifier_ticker,
+                    isin=by_id[asset_id].identifier_isin,
+                    cusip=by_id[asset_id].identifier_cusip,
+                    sedol=by_id[asset_id].identifier_sedol,
+                    figi=by_id[asset_id].identifier_figi,
+                    other_identifiers=_other_identifiers(by_id[asset_id].identifier_other),
+                    currency=by_id[asset_id].currency,
+                    asset_type=by_id[asset_id].asset_type.value,
+                    quote_base_quantity=by_id[asset_id].quote_base_quantity or 1,
+                )
+                for asset_id in sorted(asset_ids)
+                if asset_id in by_id
+            )
+
+        brokers: tuple[AiExportBrokerDirectoryEntry, ...] = ()
+        if broker_ids:
+            rows = (await self.db.execute(select(Broker).where(Broker.id.in_(sorted(broker_ids))))).scalars()
+            by_id = {broker.id: broker for broker in rows if broker.id is not None}
+            brokers = tuple(
+                AiExportBrokerDirectoryEntry(
+                    broker_id=broker_id,
+                    display_name=by_id[broker_id].name,
+                )
+                for broker_id in sorted(broker_ids)
+                if broker_id in by_id
+            )
+
+        fx_pairs = (
+            (
+                AiExportFxPairDirectoryEntry(
+                    base_currency=request.base_currency,
+                    quote_currency=request.quote_currency,
+                ),
+            )
+            if isinstance(request, AiExportFxSnapshotRequest)
+            else ()
+        )
+        return AiExportEntityDirectory(
+            assets=assets,
+            brokers=brokers,
+            fx_pairs=fx_pairs,
+        )
+
     @staticmethod
     def _response_with_stable_stats(
         *,
@@ -389,6 +512,7 @@ class AiExportSnapshotService:
         selection,
         detail_level: AiExportDetailLevel,
         target: AiExportTargetReference,
+        entity_directory: AiExportEntityDirectory,
         meta: AiExportSnapshotMeta,
         dataset_manifest: tuple[AiExportDatasetManifestEntry, ...],
         analysis_contract: AiExportAnalysisContract | None,
@@ -409,6 +533,7 @@ class AiExportSnapshotService:
                 selection=selection,
                 detail_level=detail_level,
                 target=target,
+                entity_directory=entity_directory,
                 meta=meta,
                 dataset_manifest=dataset_manifest,
                 analysis_contract=analysis_contract,
@@ -446,10 +571,6 @@ class AiExportSnapshotService:
                 signal_instance_id=diagnostic.signal_instance_id,
                 signal_code=diagnostic.signal_code,
                 temporal_class=diagnostic.temporal_class,
-                detail_level=AiExportDetailLevel(diagnostic.detail_level.value),
-                p=diagnostic.exponent,
-                m=diagnostic.half_life_offset,
-                k=diagnostic.max_bucket_days,
                 bucket_count=diagnostic.bucket_count,
             )
             for diagnostic in context.indicator_sampling
@@ -457,13 +578,12 @@ class AiExportSnapshotService:
         price = context.price_sampling
         if price is None and not indicator_policies:
             return None
+        if context.scope is None:
+            raise RuntimeError("technical sampling diagnostics require a request scope")
         return AiExportTechnicalSamplingManifest(
+            detail_level=AiExportDetailLevel(context.scope.detail_level.value),
             price_policy=(
                 AiExportPriceSamplingPolicy(
-                    detail_level=AiExportDetailLevel(price.detail_level.value),
-                    p=price.exponent,
-                    m=price.half_life_offset,
-                    k=price.max_bucket_days,
                     bucket_count=price.bucket_count,
                 )
                 if price is not None
@@ -551,6 +671,7 @@ class AiExportSnapshotService:
         sections = tuple(AiExportSectionEnvelope.model_validate(envelope.model_dump(mode="json")) for envelope in envelopes)
         if prepared.analysis is not None:
             self._check_analysis_applicability(prepared.analysis, sections)
+        entity_directory = await self._entity_directory(request, sections)
 
         generated_at = datetime.now(UTC)
         meta = AiExportSnapshotMeta(
@@ -567,6 +688,7 @@ class AiExportSnapshotService:
             selection=request.selection,
             detail_level=request.detail_level,
             target=_target_reference(request),
+            entity_directory=entity_directory,
             meta=meta,
             dataset_manifest=dataset_manifest,
             analysis_contract=analysis_contract,

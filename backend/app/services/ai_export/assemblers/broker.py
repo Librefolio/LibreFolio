@@ -1050,10 +1050,7 @@ class AiExportBrokerAssembler:
                     "missing_fifo_lot_rows_source",
                     context={"broker_id": broker_id},
                 )
-            extra_broker_ids = sorted(
-                {int(lot.opening_broker_id) for lots in fifo_lots_by_asset.values() for lot in lots}
-                - set(brokers)
-            )
+            extra_broker_ids = sorted({int(lot.opening_broker_id) for lots in fifo_lots_by_asset.values() for lot in lots} - set(brokers))
             if extra_broker_ids:
                 try:
                     raw_extra_brokers = await self._broker_metadata_loader(session, extra_broker_ids)

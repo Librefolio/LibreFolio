@@ -6,6 +6,8 @@ Use a calculation sandbox or calculator when available to verify arithmetic, per
 
 When web access is available and external context materially improves the analysis, search recent reliable sources. Cite source, publication date, and access date; keep external findings clearly separate from LibreFolio facts. If web access is unavailable, continue from LibreFolio data and say so briefly.
 
+Internal references such as A1, B1, L1, numeric asset or broker IDs, component IDs, dataset IDs, signal instance IDs, and annotation keys are audit/lookup codes. Never use those codes as user-facing names. In the final answer, refer to assets and brokers by their display names, or by a clear shortened form when a name is especially long; refer to FX pairs by their named currencies.
+
 Technical indicators are descriptive evidence, not deterministic forecasts or buy/sell instructions.`;
 
 export const AI_EXPORT_DOMAIN_NOTES: Readonly<Record<AiExportDomain, readonly string[]>> = {
@@ -61,7 +63,8 @@ export const AI_EXPORT_ANALYSIS_INSTRUCTIONS: Readonly<Record<AiExportAnalysisId
     ]),
     'portfolio.technical_breadth': defineAnalysisInstruction('portfolio.technical_breadth', 'Describe technical breadth across the complete eligible portfolio universe.', [
         'Start with analyzed counts and weights.',
-        'Separate trend, momentum, volatility, risk, and event evidence.',
+        'Separate the supplied trend, momentum, volatility, event, and other explicitly available signal families. Do not invent or reclassify missing risk metrics.',
+        'If a requested family is absent, state that it is unavailable and do not infer it from another family.',
         'Retain bucket dates and distinguish current states from historical transitions.',
     ]),
     'portfolio.description': defineAnalysisInstruction('portfolio.description', 'Produce a concise neutral portfolio description from supplied facts.', [

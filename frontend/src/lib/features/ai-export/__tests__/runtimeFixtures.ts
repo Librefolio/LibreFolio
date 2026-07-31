@@ -85,6 +85,40 @@ export function snapshotFixture(selection: AiExportCompatibleSelection, detailLe
                       },
             detail_level: detailLevel,
             target: selection.domain === 'portfolio' ? {kind: 'portfolio'} : selection.domain === 'broker' ? {kind: 'broker', broker_id: 1} : selection.domain === 'asset' ? {kind: 'asset', asset_id: 7} : {kind: 'fx_pair', base_currency: 'USD', quote_currency: 'EUR'},
+            entity_directory:
+                selection.domain === 'asset'
+                    ? {
+                          assets: [
+                              {
+                                  asset_id: 7,
+                                  display_name: 'Fixture Asset',
+                                  ticker: 'FIX',
+                                  isin: null,
+                                  cusip: null,
+                                  sedol: null,
+                                  figi: null,
+                                  other_identifiers: [],
+                                  currency: 'EUR',
+                                  asset_type: 'ETF',
+                                  quote_base_quantity: 1,
+                              },
+                          ],
+                          brokers: [],
+                          fx_pairs: [],
+                      }
+                    : selection.domain === 'broker'
+                      ? {
+                            assets: [],
+                            brokers: [{broker_id: 1, display_name: 'Fixture Broker'}],
+                            fx_pairs: [],
+                        }
+                      : selection.domain === 'fx'
+                        ? {
+                              assets: [],
+                              brokers: [],
+                              fx_pairs: [{base_currency: 'USD', quote_currency: 'EUR'}],
+                          }
+                        : {assets: [], brokers: [], fx_pairs: []},
             meta: {
                 schema_version: 1,
                 catalog_version: 1,

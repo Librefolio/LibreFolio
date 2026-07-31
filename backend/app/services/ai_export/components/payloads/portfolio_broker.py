@@ -80,11 +80,13 @@ __all__ = [
     "ContributionRow",
     "EffectRow",
     "FifoAssetSummaryRow",
+    "FifoCustodyRow",
     "FifoLotRow",
     "PerformanceBucketRow",
     "PositionRow",
     "UnallocatedRow",
     "discover_transacted_asset_ids",
+    "build_fifo_lot_refs",
     "build_performance_bucket_rows",
     "has_nonzero_open_lot",
     "load_lots_results",
@@ -136,7 +138,7 @@ class PositionRow(BaseModel):
     broker_name: str | None = None
     quantity: SafeDecimal
     wac_per_unit: Currency | None = None
-    current_price: Currency | None = None
+    unit_price: Currency | None = None
     current_value: Currency | None = None
     valuation_source: str | None = None
     gain_loss: Currency | None = None
@@ -325,16 +327,26 @@ class FifoAssetSummaryRow(BaseModel):
     residual_cost_basis: Currency
 
 
-class FifoLotRow(BaseModel):
-    """One FIFO lot row: every open/partial lot plus closed lots within scope, no `lot_id`."""
+class FifoCustodyRow(BaseModel):
+    """Current broker or in-transit custody slice for a public FIFO lot."""
 
     model_config = ConfigDict(extra="forbid")
 
+    broker_id: int | None = None
+    custody_type: str
+    quantity: SafeDecimal
+
+
+class FifoLotRow(BaseModel):
+    """One FIFO lot row with a prompt-local audit reference, never a database ID."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lot_ref: str = Field(..., pattern=r"^L[1-9]\d*$")
     asset_id: int
     asset_name: str
     asset_ticker: str | None = None
     opening_broker_id: int
-    opening_broker_name: str | None = None
     direction: str
     status: str
     opening_date: Date
@@ -357,6 +369,7 @@ class FifoLotRow(BaseModel):
     value_source: str | None = None
     net_metrics_status: str
     states: list[str] = Field(default_factory=list)
+    current_custody: list[FifoCustodyRow] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -364,7 +377,12 @@ class FifoLotRow(BaseModel):
 # =============================================================================
 
 
-def map_position_row(holding: PortfolioHolding, *, currency_code: str) -> PositionRow:
+def map_position_row(
+    holding: PortfolioHolding,
+    *,
+    currency_code: str,
+) -> PositionRow:
+    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 else None
     return PositionRow(
         asset_id=holding.asset_id,
         asset_name=holding.asset_name,
@@ -374,7 +392,7 @@ def map_position_row(holding: PortfolioHolding, *, currency_code: str) -> Positi
         broker_name=holding.broker_name,
         quantity=holding.quantity,
         wac_per_unit=_currency(currency_code, holding.wac_per_unit),
-        current_price=_currency(currency_code, holding.current_price),
+        unit_price=_currency(currency_code, unit_price),
         current_value=_currency(currency_code, holding.current_value),
         valuation_source=holding.valuation_source,
         gain_loss=_currency(currency_code, holding.gain_loss),
@@ -447,22 +465,22 @@ def sort_effects(rows: Sequence[EffectRow]) -> list[EffectRow]:
 def map_fifo_lot_row(
     lot: LotSummarySchema,
     *,
+    lot_ref: str,
     asset_id: int,
     currency_code: str,
     asset_name: str,
     asset_ticker: str | None,
-    opening_broker_name: str | None,
 ) -> FifoLotRow:
-    """Maps one authoritative `LotSummarySchema` row to `FifoLotRow` - no `lot_id`/`opening_transaction_id`."""
+    """Maps one authoritative lot to a public row without database identifiers."""
     status = lot_status(lot)
     residual_cost_basis = lot_residual_cost_basis(lot)
     closing_date = lot.closing_date if status.value == "closed" else None
     return FifoLotRow(
+        lot_ref=lot_ref,
         asset_id=asset_id,
         asset_name=asset_name,
         asset_ticker=asset_ticker,
         opening_broker_id=lot.opening_broker_id,
-        opening_broker_name=opening_broker_name,
         direction=str(lot.direction),
         status=status.value.upper(),
         opening_date=lot.opening_date,
@@ -485,15 +503,48 @@ def map_fifo_lot_row(
         value_source=lot.value_source,
         net_metrics_status=lot.net_metrics_status,
         states=list(lot.states),
+        current_custody=[
+            FifoCustodyRow(
+                broker_id=custody.broker_id,
+                custody_type=str(custody.custody_type),
+                quantity=custody.quantity,
+            )
+            for custody in sorted(
+                lot.current_custody,
+                key=lambda custody: (
+                    str(custody.custody_type),
+                    custody.broker_id if custody.broker_id is not None else -1,
+                    custody.quantity,
+                ),
+            )
+        ],
     )
 
 
-def sort_fifo_lots(rows: Sequence[tuple[int, FifoLotRow]]) -> list[FifoLotRow]:
-    """Sorts `(lot_id, row)` pairs deterministically by `(asset_id, opening_date, lot_id)`, then drops `lot_id`.
+def build_fifo_lot_refs(
+    lots_by_asset: Mapping[int, Sequence[LotSummarySchema]],
+) -> dict[int, str]:
+    """Assign deterministic prompt-local L# references in public lot order."""
+    ordered = sorted(
+        ((asset_id, lot.opening_date, lot.lot_id) for asset_id, lots in lots_by_asset.items() for lot in lots),
+        key=lambda item: item,
+    )
+    lot_ids = [lot_id for _asset_id, _opening_date, lot_id in ordered]
+    if len(lot_ids) != len(set(lot_ids)):
+        raise ValueError("FIFO lot IDs must be unique before public lot_ref assignment")
+    return {
+        lot_id: f"L{index}"
+        for index, (_asset_id, _opening_date, lot_id) in enumerate(
+            ordered,
+            start=1,
+        )
+    }
 
-    `lot_id` is used purely as the final deterministic tie-breaker (mirroring the
-    engine's own internal identifier ordering) and is never present on the
-    returned `FifoLotRow` instances.
+
+def sort_fifo_lots(rows: Sequence[tuple[int, FifoLotRow]]) -> list[FifoLotRow]:
+    """Sort `(lot_id, row)` pairs by `(asset_id, opening_date, lot_id)`.
+
+    `lot_id` remains an internal tie-breaker only; returned rows expose `lot_ref`.
     """
     ordered = sorted(rows, key=lambda pair: (pair[1].asset_id, pair[1].opening_date, pair[0]))
     return [row for _lot_id, row in ordered]

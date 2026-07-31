@@ -261,7 +261,7 @@ async def _build_positions_by_broker(context: BuildContext, dependencies: Mappin
             quantity=h.quantity,
             valuation_source=h.valuation_source,
             wac_per_unit=h.wac_per_unit,
-            current_price=h.current_price,
+            unit_price=(h.current_value / h.quantity if h.current_value is not None and h.quantity != 0 else None),
             current_value=h.current_value,
             unrealized_gain_loss=h.gain_loss,
             unrealized_gain_loss_percent=h.gain_loss_percent,
@@ -420,7 +420,7 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
     assert scope is not None
     lots_response = await context.db_resource(ASSET_LOTS_RESOURCE, load_asset_lots(scope))
 
-    rows: list[AssetLotDetailRow] = []
+    eligible_lots = []
     omitted_degraded_lot_count = 0
     for lot in lots_response.lots or ():
         # Eligibility follows the shared FIFO status semantics
@@ -443,9 +443,24 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         elif lot.closing_date < scope.period_start:
             continue
 
+        eligible_lots.append(lot)
+
+    rows: list[AssetLotDetailRow] = []
+    for index, lot in enumerate(
+        sorted(
+            eligible_lots,
+            key=lambda item: (
+                item.opening_date,
+                item.opening_broker_id,
+                item.lot_id,
+            ),
+        ),
+        start=1,
+    ):
         custody = tuple(AssetLotCustodyRow(broker_id=slice_.broker_id, custody_type=slice_.custody_type, quantity=slice_.quantity) for slice_ in lot.current_custody)
         rows.append(
             AssetLotDetailRow(
+                lot_ref=f"L{index}",
                 opening_broker_id=lot.opening_broker_id,
                 opening_date=lot.opening_date,
                 opening_unit_price=lot.opening_unit_price,
@@ -455,7 +470,6 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
                 current_custody=custody,
             )
         )
-    rows.sort(key=lambda r: (r.opening_date, r.opening_broker_id))
 
     return AssetLotDetailPayload(
         asset_id=scope.asset_id,  # type: ignore[arg-type]

@@ -242,7 +242,7 @@ class AssetBrokerPosition(AssetComponentModel):
     quantity: SafeDecimal
     valuation_source: AssetPositionValuationSource | None = None
     wac_per_unit: SafeDecimal | None = None
-    current_price: SafeDecimal | None = None
+    unit_price: SafeDecimal | None = None
     current_value: SafeDecimal | None = None
     unrealized_gain_loss: SafeDecimal | None = None
     unrealized_gain_loss_percent: SafeDecimal | None = None
@@ -401,8 +401,9 @@ class AssetLotCustodyRow(AssetComponentModel):
 
 
 class AssetLotDetailRow(AssetComponentModel):
-    """One lot (open, partial, or recently-closed) for this asset. No lot/transaction identifiers."""
+    """One lot with a prompt-local audit reference, never a database identifier."""
 
+    lot_ref: str
     opening_broker_id: int
     opening_date: Date
     opening_unit_price: SafeDecimal

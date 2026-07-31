@@ -30,7 +30,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.db.models import Asset, Broker
+from backend.app.db.models import Asset
 from backend.app.schemas.common import Currency, SafeDecimal
 from backend.app.schemas.portfolio import PortfolioHistoryPoint
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
@@ -41,6 +41,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     PerformanceBucketRow,
     PositionRow,
     UnallocatedRow,
+    build_fifo_lot_refs,
     build_performance_bucket_rows,
     load_lots_results,
     load_portfolio_report,
@@ -59,16 +60,12 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata as _load_asset_metadata,
 )
-from backend.app.services.ai_export.components.payloads.portfolio_broker import (
-    load_broker_metadata as _load_broker_metadata,
-)
 from backend.app.services.ai_export.components.resources import BROKER_LOTS_RESULTS_RESOURCE, BROKER_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
 
 _BROKER_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("broker.fifo_asset_metadata", Mapping)
-_BROKER_FIFO_BROKER_METADATA_RESOURCE: ResourceKey[Mapping[int, Broker]] = ResourceKey("broker.fifo_broker_metadata", Mapping)
 
 
 class BrokerComponentScopeError(RuntimeError):
@@ -91,13 +88,6 @@ async def _load_broker_asset_metadata(context: BuildContext, asset_ids: Sequence
         return await _load_asset_metadata(session, asset_ids)
 
     return await context.db_resource(_BROKER_FIFO_ASSET_METADATA_RESOURCE, _loader)
-
-
-async def _load_broker_broker_metadata(context: BuildContext, broker_ids: Sequence[int]) -> Mapping[int, Broker]:
-    async def _loader(session):
-        return await _load_broker_metadata(session, broker_ids)
-
-    return await context.db_resource(_BROKER_FIFO_BROKER_METADATA_RESOURCE, _loader)
 
 
 # =============================================================================
@@ -181,21 +171,7 @@ async def _build_broker_positions(context: BuildContext, dependencies: Mapping[s
     scope = _require_broker_scope(context)
     report = await load_portfolio_report(context, scope, BROKER_REPORT_RESOURCE)
     summary = report.summary
-    holdings = [] if summary is None else list(summary.holdings)
-    assets = await _load_broker_asset_metadata(context, sorted({holding.asset_id for holding in holdings}))
-    rows = [
-        map_position_row(
-            holding,
-            currency_code=scope.target_currency,
-            asset_ticker=getattr(assets.get(holding.asset_id), "identifier_ticker", None),
-            asset_isin=getattr(assets.get(holding.asset_id), "identifier_isin", None),
-            asset_cusip=getattr(assets.get(holding.asset_id), "identifier_cusip", None),
-            asset_sedol=getattr(assets.get(holding.asset_id), "identifier_sedol", None),
-            asset_figi=getattr(assets.get(holding.asset_id), "identifier_figi", None),
-            asset_other=getattr(assets.get(holding.asset_id), "identifier_other", None),
-        )
-        for holding in holdings
-    ]
+    rows = [] if summary is None else [map_position_row(holding, currency_code=scope.target_currency) for holding in summary.holdings]
     rows = sort_positions(rows)
     return BrokerPositionsPayload(broker_id=scope.broker_id, as_of=scope.snapshot_as_of, target_currency=scope.target_currency, position_count=len(rows), positions=rows)
 
@@ -216,7 +192,7 @@ class BrokerAllocationConcentrationPayload(BaseModel):
     cash_total: Currency
     cash_balances: list[Currency] = Field(default_factory=list)
     largest_position_weight_percent: SafeDecimal | None = None
-    herfindahl_index_percent: SafeDecimal | None = Field(
+    herfindahl_index_points: SafeDecimal | None = Field(
         None,
         description="Sum of squared nav_weight_percent across ALL positions (no top-N truncation); higher = more concentrated. 10000 == fully concentrated in one position.",
     )
@@ -253,7 +229,7 @@ async def _build_broker_allocation_concentration(context: BuildContext, dependen
         cash_total=summary.cash_total,
         cash_balances=list(summary.cash_balances),
         largest_position_weight_percent=largest,
-        herfindahl_index_percent=herfindahl,
+        herfindahl_index_points=herfindahl,
     )
 
 
@@ -507,13 +483,11 @@ async def _build_broker_fifo_lots(context: BuildContext, dependencies: Mapping[s
     # so every lot returned here opened at this broker by construction - no
     # additional broker filtering is required.
     eligible_by_asset: dict[int, list] = {}
-    broker_ids_needed: set[int] = set()
     for asset_id in asset_ids:
         response = lots_resource.by_asset_id[asset_id]
         lots = [lot for lot in (response.lots or []) if lot_is_eligible(lot, cutoff=cutoff)]
         eligible_by_asset[asset_id] = lots
-        broker_ids_needed.update(lot.opening_broker_id for lot in lots)
-    brokers_meta = await _load_broker_broker_metadata(context, sorted(broker_ids_needed))
+    lot_refs = build_fifo_lot_refs(eligible_by_asset)
 
     candidate_pairs: list[tuple[int, FifoLotRow]] = []
     for asset_id in asset_ids:
@@ -521,14 +495,13 @@ async def _build_broker_fifo_lots(context: BuildContext, dependencies: Mapping[s
         asset_name = str(getattr(asset, "display_name", None) or f"Asset {asset_id}")
         asset_ticker = getattr(asset, "identifier_ticker", None)
         for lot in eligible_by_asset[asset_id]:
-            broker = brokers_meta.get(lot.opening_broker_id)
             row = map_fifo_lot_row(
                 lot,
+                lot_ref=lot_refs[lot.lot_id],
                 asset_id=asset_id,
                 currency_code=currency_code,
                 asset_name=asset_name,
                 asset_ticker=asset_ticker,
-                opening_broker_name=getattr(broker, "name", None),
             )
             candidate_pairs.append((lot.lot_id, row))
     rows = sort_fifo_lots(candidate_pairs)

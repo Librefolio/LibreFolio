@@ -446,6 +446,55 @@ def _baseline_indicator_map(
     }
 
 
+def _diagnostic_technical_sampling(response: Mapping[str, Any]) -> dict[str, Any] | None:
+    public_manifest = response.get("technical_sampling")
+    if not isinstance(public_manifest, Mapping):
+        return None
+    detail = BucketDetailLevel(str(public_manifest["detail_level"]))
+    public_price = public_manifest.get("price_policy")
+    price_policy = None
+    if isinstance(public_price, Mapping):
+        resolved = BucketingPolicy.for_detail_level(detail)
+        price_policy = {
+            "detail_level": detail.value,
+            "p": resolved.exponent,
+            "m": resolved.half_life_offset,
+            "k": resolved.max_bucket_days,
+            "bucket_count": public_price.get("bucket_count"),
+        }
+    indicator_policies = []
+    for item in public_manifest.get("indicator_policies", []):
+        if not isinstance(item, Mapping):
+            continue
+        temporal_class = SignalTemporalClass(str(item["temporal_class"]))
+        resolved = BucketingPolicy.for_indicator(detail, temporal_class)
+        indicator_policies.append(
+            {
+                "signal_instance_id": item.get("signal_instance_id"),
+                "signal_code": item.get("signal_code"),
+                "temporal_class": temporal_class.value,
+                "detail_level": detail.value,
+                "p": resolved.exponent,
+                "m": resolved.half_life_offset,
+                "k": resolved.max_bucket_days,
+                "bucket_count": item.get("bucket_count"),
+            }
+        )
+    return {
+        "detail_level": detail.value,
+        "price_policy": price_policy,
+        "indicator_policies": indicator_policies,
+    }
+
+
+def _contains_sampling_implementation_key(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return any(key in {"p", "m", "k"} or _contains_sampling_implementation_key(nested) for key, nested in value.items())
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return any(_contains_sampling_implementation_key(item) for item in value)
+    return False
+
+
 def _indicator_measurements(
     response: dict[str, Any],
     *,
@@ -453,7 +502,7 @@ def _indicator_measurements(
     baseline_probe: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
     component_chars = {item["component_id"]: item["chars"] for item in baseline_helpers._component_measurements(response, total_chars)["components"]}
-    manifest = response.get("technical_sampling") or {}
+    manifest = _diagnostic_technical_sampling(response) or {}
     policy_by_instance = {item["signal_instance_id"]: item for item in manifest.get("indicator_policies", []) if isinstance(item, dict)}
     baseline_by_key = _baseline_indicator_map(baseline_probe)
     items = []
@@ -790,7 +839,8 @@ def _baseline_comparison(probe: Mapping[str, Any], baseline_probe: Mapping[str, 
             "residual_non_indicator_event_sections_and_top_level_chars": (total_reduction - combined),
         },
         "new_v2_summary_manifest_measurements": {
-            "technical_sampling_manifest_chars": baseline_helpers._serialized_chars(probe.get("technical_sampling")),
+            "technical_sampling_manifest_chars": baseline_helpers._serialized_chars(probe.get("public_technical_sampling")),
+            "diagnostic_sampling_policy_chars": baseline_helpers._serialized_chars(probe.get("technical_sampling")),
             "event_selection_manifest_chars": baseline_helpers._serialized_chars(probe.get("event_selection")),
             "indicator_period_summaries_chars": sum(item["period_summary_chars"] for item in probe["indicators"]["items"]),
             "event_selection_summaries_chars": probe["events"]["selection_summaries_serialized_chars"],
@@ -876,8 +926,9 @@ async def _run_probe(
     requested_per_asset = len(FX_CURATED_SIGNALS) if request.selection.id == FX_SELECTION else len(ASSET_CURATED_SIGNALS)
     requested_total = requested_per_asset * (1 if request.selection.id == FX_SELECTION else len(asset_ids))
     exported_indicators = len(indicators["items"])
-    technical_sampling = response.get("technical_sampling")
-    price_bucket_count = (technical_sampling or {}).get("price_policy", {}).get("bucket_count") if isinstance((technical_sampling or {}).get("price_policy"), dict) else None
+    public_technical_sampling = response.get("technical_sampling")
+    technical_sampling = _diagnostic_technical_sampling(response)
+    price_bucket_count = (public_technical_sampling or {}).get("price_policy", {}).get("bucket_count") if isinstance((public_technical_sampling or {}).get("price_policy"), dict) else None
     effective_period = response.get("meta", {}).get("exported_period", {})
     probe = {
         "probe_id": probe_id,
@@ -919,6 +970,7 @@ async def _run_probe(
             "runtime_reported_tokens": response.get("stats", {}).get("estimated_tokens"),
         },
         "technical_sampling": technical_sampling,
+        "public_technical_sampling": public_technical_sampling,
         "event_selection": response.get("event_selection"),
         "sections": sections,
         "indicators": indicators,
@@ -928,7 +980,9 @@ async def _run_probe(
             "runtime_tokens_match_canonical": response.get("stats", {}).get("estimated_tokens") == estimate_tokens_chars_div_4(total_chars),
             "event_capture_complete": events["validation"]["capture_complete"],
             "event_summaries_reconcile": events["validation"]["selection_summaries_reconcile"],
-            "manifest_present": technical_sampling is not None and response.get("event_selection") is not None,
+            "manifest_present": public_technical_sampling is not None and response.get("event_selection") is not None,
+            "public_manifest_omits_p_m_k": not _contains_sampling_implementation_key(public_technical_sampling),
+            "diagnostic_manifest_retains_p_m_k": _contains_sampling_implementation_key(technical_sampling),
         },
     }
     probe["validation"]["valid"] = all(probe["validation"].values())

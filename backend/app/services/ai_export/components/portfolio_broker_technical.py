@@ -30,6 +30,7 @@ see the plan's Phase 0 AI Export refinement, "shared technical wave" section.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal
 
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.spec import ComponentSpec
@@ -84,7 +85,7 @@ async def _build_portfolio_technical_prices(context: BuildContext, dependencies:
         assets.append(
             AssetPriceSeriesPayload(
                 asset_id=asset_id,
-                weight=(float(weight) if weight is not None else None),
+                portfolio_weight_ratio=(float(weight) if weight is not None else None),
                 currency=currency,
                 buckets=buckets,
                 latest_close=latest_close,
@@ -119,26 +120,54 @@ PORTFOLIO_TECHNICAL_PRICES_SPEC = ComponentSpec(
 async def _build_universe_technical_indicators(context: BuildContext, *, universe_kwargs: Mapping[str, object]) -> UniverseIndicatorsPayload:
     universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **universe_kwargs)
 
-    assets: list[AssetIndicatorsPayload] = []
+    prepared_assets = []
     for asset_id in universe.asset_ids:
         result = universe.price_results.by_asset_id.get(asset_id)
         if result is None:
             continue
         indicators = build_indicator_table_payloads(result.signals, context)
         weight = universe.weights.get(asset_id)
-        assets.append(
-            AssetIndicatorsPayload(
-                asset_id=asset_id,
-                weight=(float(weight) if weight is not None else None),
-                indicators=indicators,
+        prepared_assets.append(
+            (
+                asset_id,
+                float(weight) if weight is not None else None,
+                indicators,
             )
         )
+    covered_portfolio_weight = sum(weight for _asset_id, weight, indicators in prepared_assets if indicators and weight is not None)
+    covered_weight_by_instance: dict[str, float] = {}
+    for _asset_id, weight, indicators in prepared_assets:
+        if weight is None:
+            continue
+        for indicator in indicators:
+            covered_weight_by_instance[indicator.instance_id] = covered_weight_by_instance.get(indicator.instance_id, 0.0) + weight
+    assets = [
+        AssetIndicatorsPayload(
+            asset_id=asset_id,
+            portfolio_weight_ratio=weight,
+            indicators=tuple(
+                indicator.model_copy(
+                    update={
+                        "portfolio_weight_ratio": weight,
+                        "technical_normalized_weight_ratio": (weight / covered_weight_by_instance[indicator.instance_id] if weight is not None and covered_weight_by_instance.get(indicator.instance_id) else None),
+                    }
+                )
+                for indicator in indicators
+            ),
+        )
+        for asset_id, weight, indicators in prepared_assets
+    ]
     assets.sort(key=lambda payload: payload.asset_id)
+    eligible_portfolio_weight = float(sum(universe.weights.values(), Decimal(0)))
 
     return UniverseIndicatorsPayload(
         assets=tuple(assets),
         eligible_asset_count=len(universe.asset_ids),
         considered_asset_count=universe.considered_count,
+        covered_asset_count=sum(1 for asset in assets if asset.indicators),
+        eligible_portfolio_weight_ratio=eligible_portfolio_weight,
+        covered_portfolio_weight_ratio=covered_portfolio_weight,
+        covered_weight_ratio=(covered_portfolio_weight / eligible_portfolio_weight if eligible_portfolio_weight else 0.0),
     )
 
 

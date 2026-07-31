@@ -1487,7 +1487,6 @@ def _lot(
     )
 
 
-
 def _lots_response(
     lots: list[Any],
     *,
