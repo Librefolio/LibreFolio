@@ -1578,6 +1578,42 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert row.end_value == Decimal("0")
 
     @pytest.mark.asyncio
+    async def test_positions_contribution_closed_position_has_annualized_return(self, session, test_user, broker_with_access, test_asset):
+        """A fully-closed position (no still-open lot) must still expose an annualized
+        return in the performance/contribution table. The generic path cannot annualize
+        it — there is no open lot to date the window start and no end cost basis to
+        normalize against — so it falls back to the realized net return over the
+        position's real flight time [oldest lot opened -> last lot closed], normalized on
+        the capital actually deployed. Modelled on the real "MARINA DI SCARLINO"
+        (Recrowd/CROWDFUND) case: ~2005 deployed, +257.32 interest, -66.92 tax, sold flat
+        -> ~+9.5% total over ~1000 days -> ~+3.4%/yr net."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2022, 11, 1), amount=Decimal("2100"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2022, 11, 5), quantity=Decimal("1"), amount=Decimal("-2005"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.INTEREST, date=date(2023, 11, 5), amount=Decimal("257.32"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.TAX, date=date(2023, 11, 6), amount=Decimal("-66.92"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.SELL, date=date(2025, 8, 1), quantity=Decimal("-1"), amount=Decimal("2005"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(
+            user_id=test_user.id,
+            date_to=date(2025, 8, 1),
+        )
+
+        assert len(contribution.positions) == 1
+        row = contribution.positions[0]
+        assert row.is_fully_sold is True
+        assert row.period_pnl == Decimal("190.40")  # realized 0 + interest 257.32 - tax 66.92
+        # Closed-position annualized: ~9.5% total over ~1000 days -> ~+3.4%/yr net.
+        assert row.annualized_return is not None
+        assert Decimal("0.02") < row.annualized_return < Decimal("0.05")
+
+    @pytest.mark.asyncio
     async def test_positions_contribution_includes_income_only_asset_rows(self, session, test_user, broker_with_access, test_asset):
         """Asset-linked income/fee rows without BUY/SELL still become contribution rows."""
         broker, _ = broker_with_access
