@@ -1,13 +1,13 @@
 # 🇮🇹 Borsa Italiana Provider (`borsa_italiana`)
 
-The Borsa Italiana provider fetches financial data from [borsaitaliana.it](https://www.borsaitaliana.it/) using the [`borsa-italiana-scraping`](https://github.com/Librefolio/borsaItaliana-scraping) library. It supports stocks, bonds (including BTP), and ETFs listed on Borsa Italiana markets (MTA, MOT, ETFPlus).
+The Borsa Italiana provider fetches financial data from [borsaitaliana.it](https://www.borsaitaliana.it/) using the [`borsa-italiana-scraping`](https://github.com/Librefolio/borsaItaliana-scraping) library. It supports stocks, bonds (including BTP), ETFs listed on Borsa Italiana markets (MTA, MOT, ETFPlus), and funds/SICAVs exposed on Borsa fund-detail pages.
 
 ---
 
 ## ⚙️ How it Works
 
-1. **Identifier**: An ISIN code (e.g., `IT0003128367` for ENEL S.p.A.).
-2. **Identifier Types**: `ISIN` for listed instruments. Mutual funds are priced by a Borsa **internal code** carried in `provider_params.codice_fondo` (see [Mutual funds](#mutual-funds-nav-by-internal-code) below); the asset identifier is still the real ISIN when the fund page exposes one.
+1. **Identifier**: An ISIN code (e.g., `IT0003128367` for ENEL S.p.A.) for listed instruments.
+2. **Identifier Types**: `ISIN` for listed instruments. Mutual funds are priced by a Borsa **internal code** carried in `provider_params.codice_fondo` (see [Mutual funds](#mutual-funds-nav-by-internal-code) below); the asset identifier is still the real ISIN when the fund page exposes one, otherwise an `OTHER` identifier is used.
 3. **`provider_params`**:
     - `language` — optional (`"en"` or `"it"`, default `"en"`). Controls the language of asset names, metadata descriptions, and the provider URL.
     - `codice_fondo` — optional Borsa internal fund code (e.g. `2FADB602822`). When present, current/historical value use the **fund NAV path** instead of the market API.
@@ -20,10 +20,7 @@ All data is returned in **EUR** — Borsa Italiana is an Italian exchange.
 
 - **Funds** (when `provider_params.codice_fondo` is set): returns the fund NAV **only if the published NAV is dated today**. A fund NAV is published once per day with a lag, so exposing a stale NAV as the "current" value would misstate the portfolio. When the NAV date ≠ today, the provider raises `NO_DATA` and the core falls back to the **last recorded buy price** as the unit-value estimate.
 - **Listed instruments**: uses `ottieni_prezzo_corrente(isin)` from the scraping library.
-- **Strategy** (fastest first):
-    1. Fetches the latest point from the historical API (1M period).
-    2. Falls back to scraping the instrument page (`ottieni_scheda`).
-- Returns `PrezzoCorrente` with price, date, currency, and source (`"api"` or `"scraping"`).
+- Returns `FACurrentValue` with price, date, currency, and source (`"Borsa Italiana"`).
 
 ### 📈 Historical Data (`get_history_value`)
 
@@ -48,7 +45,7 @@ The provider captures the internal code into `provider_params.codice_fondo` at a
 - Uses `cerca(query)` — the internal JSON search engine of borsaitaliana.it.
 - Searches across all instrument types: stocks, bonds, ETFs, ETC/ETN, and funds.
 - Fund names are indexed with Borsa abbreviations (for example `Obbligaz.` instead of `Obbligazionaria`), so the provider retries common full-word variants with abbreviated terms.
-- **Funds**: `cerca` returns the Borsa **internal code** in the `isin` field (not a real ISIN). The provider fetches each fund page **once per code** (in-search cache) via `ottieni_dati_fondo` to recover the real ISIN, sets it as the `identifier` (`ISIN`), and carries the internal code in `provider_params.codice_fondo`. If the page can't be fetched, it falls back to the code as an `OTHER` identifier — still priceable by NAV.
+- **Funds**: `cerca` returns the Borsa **internal code** in the `isin` field (not a real ISIN). The provider fetches each fund page **once per code** (in-search cache) via `ottieni_dati_fondo` to recover the real ISIN, sets it as the `identifier` (`ISIN`), and carries the internal code in `provider_params.codice_fondo`. If the page can't be fetched or no ISIN is present, it falls back to the code as an `OTHER` identifier — still priceable by NAV.
 - **Dual-language results**: emits two entries per instrument (🇮🇹 Italiano + 🇬🇧 English) with flag emojis in `display_name`. Each result carries `provider_params: {language: "en"|"it"}` so the user's selection is propagated on assignment.
 - **Result ordering**: results are **grouped by the cerca-level identifier** (the internal code for funds, the real ISIN otherwise), preserving first-seen order, and within each group **Italian is emitted before English**. This keeps sibling funds — whose internal codes may differ by a single letter — from interleaving across languages. Grouping also de-duplicates per `(identifier, language)`.
 - **Last-resort external fallback**: when `cerca` returns nothing, the search orchestration calls the LibreFolio [`web_link_finder`](search_link_finder.md) stack to turn the query into a candidate Borsa page URL, then `resolve_url`s it. The caller can pass **`hints`** (report-extracted ISIN + names) which drive a two-stage "stringone" query and an **identifier post-filter** that narrows the resolved siblings to the exact ISIN when it is known — all handled centrally, see [Asset Search & Link-Finder](search_link_finder.md). Best-effort, interactive-only, never on price fetches.
@@ -65,18 +62,22 @@ The provider captures the internal code into `provider_params.codice_fondo` at a
     - **Geographic Area**: inferred from issuer name (e.g., "Republic of Italy" → `ITA`).
     - **Sector**: inferred from `settore` (stocks) or `tipologia` (bonds) fields.
 - Bond-specific fields available in the raw data: `cedola_annua`, `scadenza`, `emittente`, `rendimento_lordo`, `struttura_bond`, `frequenza_cedola`.
-- **Funds** (when `provider_params.codice_fondo` is set): funds are not on the XMIL scheda, so metadata is built from the **fund detail page** by internal code instead. The `short_description` is assembled from the fund **name**, the real **ISIN**, and the non-`N.D.` entries scraped from the page's **Caratteristiche**, **Società di Gestione** and **Costi** sections (e.g. `… | ISIN: LU2178929613 | Classe: P | Grado di Rischio: 3 | Categoria Assogestioni: Bilanciati | Costi — Gestione: 1.3 …`). The internal code is persisted as `identifier_other`. The section fields are read defensively, so metadata degrades to just *name + ISIN* if the installed scraping library predates the enriched `DatiFondo`.
+- **Funds** (when `provider_params.codice_fondo` is set): funds are not on the XMIL scheda, so metadata is built from the **fund detail page** by internal code instead. The `short_description` is assembled from the fund **name**, the real **ISIN**, and the non-`N.D.` entries scraped from the page's **Caratteristiche**, **Società di Gestione** and **Costi** sections (e.g. `… | ISIN: LU2178929613 | Classe: P | Grado di Rischio: 3 | Categoria Assogestioni: Bilanciati | Costi — Gestione: 1.3 …`). The internal code is persisted in `identifier_other` as a JSON-list entry (`["2FADB…"]`). The section fields are read defensively, so metadata degrades to just *name + ISIN* if the installed scraping library predates the enriched `DatiFondo`.
 
 ### 🔗 `get_asset_url`
 
-Returns `https://www.borsaitaliana.it/borsa/search/scheda.html?code={ISIN}&lang={language}` — the `lang` parameter follows the user's `provider_params.language` selection (default `en`).
+For listed instruments, returns `https://www.borsaitaliana.it/borsa/search/scheda.html?code={ISIN}&lang={language}`. For funds with `provider_params.codice_fondo`, returns `/borsa/fondi/dettaglio/{codice_fondo}.html?lang={language}` so the link targets the NAV page keyed by the internal fund code. The `lang` parameter follows the user's `provider_params.language` selection (default `en`).
 
 ### 🔁 `resolve_url` (inverse of `get_asset_url`)
 
 The provider opts into the generic **URL → search-item** capability:
 
 - `resolvable_url_domains = ["borsaitaliana.it"]` → `supports_url_resolution` is `True`.
-- `resolve_url(url)` recognises fund detail pages (`/borsa/fondi/dettaglio/{code}.html`, `?code=`), fetches the page, and returns the **full canonical set a normal search would emit** for that fund: the **IT + EN pair** (Italian first, with flag in `display_name`), each `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`. It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa fund page (off-domain, no extractable code) returns `None`. Best-effort: fetch/parse errors return `None`, never raise.
+- `resolve_url(url)` recognises two public page families:
+    - **Fund detail pages** (`/borsa/fondi/dettaglio/{code}.html`) — fetches the page and returns the **full canonical set a normal search would emit** for that fund: the **IT + EN pair** (Italian first, with flag in `display_name`), each `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`.
+    - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same IT + EN canonical set, priced by ISIN.
+
+It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa page (off-domain, no extractable fund code or ISIN path) returns `None`. Best-effort: fetch/parse errors return `None`, never raise.
 
 This lets an externally discovered page URL (e.g. found via `web_link_finder`, or pasted by the user in a future UI) be turned into a ready-to-create asset with the correct pricing params.
 
@@ -150,7 +151,7 @@ Transitive: `httpx`, `beautifulsoup4`, `lxml`.
 | `LU2178929613` | `{codice_fondo: "2FADB602822"}` | Eurizon Next 2.0 Alloc. Divers. 40 P (fund, NAV by code) |
 
 Search test query: `"ENEL"` (listed) / `"EURIZON NEXT 2.0 DIVERSIFICATO 40 P"` (fund by report name).
-`resolve_url` test: `https://www.borsaitaliana.it/borsa/fondi/dettaglio/2FADB602822.html` → fund search-item with ISIN `LU2178929613` + `codice_fondo`.
+`resolve_url` test: `https://www.borsaitaliana.it/borsa/fondi/dettaglio/2FADB602822.html` → IT + EN fund search-items with ISIN `LU2178929613` + `codice_fondo`.
 
 ---
 

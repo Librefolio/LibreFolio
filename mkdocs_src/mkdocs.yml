@@ -805,6 +805,7 @@ nav:
               - Overview: financial-theory/technical-analysis/performance-metrics/index.md
               - ⚙️ Portfolio Engine:
                   - Overview: financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md
+                  - Price Resolution: financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md
                   - NAV / Net Worth: financial-theory/technical-analysis/performance-metrics/portfolio-engine/nav.md
                   - Book Value: financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md
                   - Period P&L: financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md
@@ -813,6 +814,7 @@ nav:
                   - ROI: financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md
                   - TWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md
                   - MWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md
+                  - Net Annualized Return: financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md
               - 🔬 FIFO Engine:
                   - Overview: financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md
                   - FIFO Lot Analysis: financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md
