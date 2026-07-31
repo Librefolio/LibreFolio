@@ -343,7 +343,9 @@ class PortfolioHolding(BaseModel):
     missing_fx_pair: Optional[str] = Field(None, description="Required source/target FX pair when valuation conversion is unavailable")
     gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L at report end date: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
-    annualized_return: Optional[SafeDecimal] = Field(None, description="CAGR of gain_loss_percent over the holding window (oldest_open_lot_date -> report end): (1+gain_loss_percent)^(365/days)-1. Fraction. None if not computable (no open lot / <=0 days).")
+    annualized_return: Optional[SafeDecimal] = Field(
+        None, description="Net annualized return (CAGR) of the still-open position over first-transaction -> report-end window: (1 + (unrealized + income - fees)/cost_basis)^(365/days)-1. Value-at-cost when market price missing (income-only). Fraction. None if <30 days / no cost basis."
+    )
     price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")
     gain_loss_change_1d: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L vs previous day using current quantity and base-currency prices")
     gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="Daily unrealized P&L change as percentage of the previous day's absolute position market value; None if prior value is ~0")
@@ -369,7 +371,9 @@ class AssetPeriodContribution(BaseModel):
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
     period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
     period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")
-    annualized_return: Optional[SafeDecimal] = Field(None, description="CAGR of period_pnl_percent over the selected period length (date_from -> date_to): (1+period_pnl_percent)^(365/days)-1. Fraction. None if not computable (open-ended period / start_value=0).")
+    annualized_return: Optional[SafeDecimal] = Field(
+        None, description="Net annualized return (CAGR) over the position's holding window inside the period (oldest lot opening in period -> period end), base = |start_value| or end cost basis when opened mid-period: (1+period_pnl_pct)^(365/days)-1. Fraction. None if <30 days / no base."
+    )
     start_value: Optional[SafeDecimal] = Field(None, description="Position value at period start (0 if there was no opening position)")
     end_value: Optional[SafeDecimal] = Field(None, description="Position value at period end (0 if the position was closed by period end)")
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
@@ -609,7 +613,7 @@ class LotSummarySchema(BaseModel):
     total_pnl: Optional[SafeDecimal] = Field(None, description="market_pnl + realized_pnl + asset_income, in target_currency.")
     cash_yield: Optional[SafeDecimal] = Field(None, description="asset_income / opening_value, when opening_value > 0.")
     total_return: Optional[SafeDecimal] = Field(None, description="total_pnl / opening_value (opening_value = original_cost), when > 0.")
-    annualized_return: Optional[SafeDecimal] = Field(None, description="CAGR of total_return over the lot holding window (opening_date -> closing_date if closed, else analysis end): (1+total_return)^(365/days)-1. Fraction. None if not computable.")
+    annualized_return: Optional[SafeDecimal] = Field(None, description="Net annualized return (CAGR) of net_total_return over the lot holding window (opening_date -> closing_date if closed, else analysis end): (1+net_total_return)^(365/days)-1. Fraction. None if net metrics unavailable / <30 days.")
     value_source: Optional[LotValueSource] = Field(None, description="MARKET_PRICE when a real current price exists, else ESTIMATED_AT_COST (open value assumed at cost, market_pnl=0).")
     allocated_fees: SafeDecimal = Field(default=0, description="Cumulative FEE allocated to this lot, target_currency (positive magnitude).")
     allocated_taxes: SafeDecimal = Field(default=0, description="Cumulative TAX allocated to this lot, target_currency (positive magnitude).")

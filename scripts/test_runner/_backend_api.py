@@ -106,6 +106,14 @@ def api_signal_request_validation(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Signal request validation API tests", verbose=verbose)
 
 
+def api_signal_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Run signal preview API tests (synthetic-data indicator compute)."""
+    print_section("Signal Preview API Tests")
+    print_info("Testing authenticated backend indicator compute on caller-supplied synthetic points")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_signal_preview_api.py", test_names)
+    return run_command(cmd, "Signal preview API tests", verbose=verbose)
+
+
 def api_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     """Run AI Export API tests."""
     print_section("AI Export API Tests")
@@ -591,6 +599,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
     add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
     add_test(api, "signal-request-validation", api_signal_request_validation, name="Signal Request Validation", desc="Asset/FX signal request validation contracts")
+    add_test(api, "signal-preview", api_signal_preview, name="Signal Preview", desc="Backend indicator compute on synthetic points (global chart preview)")
     add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")

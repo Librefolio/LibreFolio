@@ -785,7 +785,7 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "From 0",
       "annualizedReturn": "Annualized",
-      "annualizedReturnTooltip": "Total return annualized (CAGR) over the lot holding window, for comparison across lots held for different durations."
+      "annualizedReturnTooltip": "Net annualized return (CAGR) of this single lot over its holding window, net of income and fees, for comparison across lots held for different durations."
     },
     "createdInSystem": "Created in System"
   },
@@ -1183,8 +1183,8 @@
     "unallocatedCosts": "Unallocated costs",
     "otherReconciliationResidual": "Other / reconciliation residual",
     "annualizedReturn": "Annualized",
-    "annualizedReturnTooltip": "P&L % annualized (CAGR) over the holding window (from the oldest open lot), for comparison across positions held for different durations.",
-    "annualizedReturnPeriodTooltip": "Period return annualized (CAGR) over the selected period length, for comparison across periods of different durations."
+    "annualizedReturnTooltip": "Net annualized return (CAGR) of all still-open lots of this position, from the first transaction to today — including income minus fees; valued at cost when no market price. For comparison across positions held for different durations.",
+    "annualizedReturnPeriodTooltip": "Net annualized return (CAGR) over the position's holding window within the selected period, for comparison across periods of different durations."
   },
   "dataQuality": {
     "headerInfoOnly": "Data quality note",

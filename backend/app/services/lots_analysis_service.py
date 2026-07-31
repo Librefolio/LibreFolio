@@ -1345,13 +1345,15 @@ class LotsAnalysisService:
                 lot_closures = closures_by_lot.get(lot_id, [])
                 if lot_closures:
                     closing_date = max(closure.close_date for closure in lot_closures)
-            # Annualize total_return over the lot's live window so short- and
-            # long-held lots become comparable: end = closing_date for a fully
-            # closed lot, else the analysis end date (open lots run to "now").
+            # Annualize the NET total return (income - fees - taxes) over the lot's
+            # live window so short- and long-held lots become comparable: end =
+            # closing_date for a fully closed lot, else the analysis end date (open
+            # lots run to "now"). Uses net_total_return (not gross) per the product
+            # rule that the annualized figure must be net of income and costs.
             annualized_return = None
-            if total_return is not None:
+            if net_total_return is not None:
                 lot_end = closing_date if closing_date is not None else analysis_end
-                annualized_return = cumulative_to_annualized(total_return, (lot_end - lot.opening_date).days)
+                annualized_return = cumulative_to_annualized(net_total_return, (lot_end - lot.opening_date).days)
             out.append(
                 LotSummarySchema(
                     lot_id=lot.lot_id,

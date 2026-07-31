@@ -616,6 +616,36 @@
         return rendered;
     }
 
+    /**
+     * Global (filter-bar) mode: compute backend overlay signals live on the
+     * modal's synthetic preview curve, so indicators like SMA render in the
+     * preview without a real pair. Backend indicators can't run in the browser.
+     */
+    async function resolveGlobalBackendPreview(configs: SignalConfig[], points: LineDataPoint[], viewMode: 'absolute' | 'percentage'): Promise<RenderedSignal[]> {
+        const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
+        if (plan.requests.length === 0 || points.length === 0) return [];
+        const response = await zodiosApi.compute_signal_preview_api_v1_signals_preview_post({
+            domain: 'fx',
+            points: points.map((point) => ({date: point.date, value: point.value})),
+            signals: plan.requests,
+        });
+        const mapped = mapSignalInstanceResults(configs, plan, response.signals ?? []);
+        const rendered: RenderedSignal[] = [];
+        for (const item of mapped) {
+            if (item.source !== 'backend' || !item.result) continue;
+            const definition = signalDefinitionsByType.get(item.config.signalType);
+            if (!definition || definition.source !== 'backend') continue;
+            const outcome = renderBackendSignalResult(item.result, item.config, {
+                baseData: points,
+                viewMode,
+                definition,
+                translate: (key) => $_(key),
+            });
+            rendered.push(...outcome.signals);
+        }
+        return rendered;
+    }
+
     function resolveSettingsBackendPreview(viewMode: 'absolute' | 'percentage'): RenderedSignal[] {
         if (!settingsTargetSlug) return [];
         const pair = pairs.find((item) => item.config.slug === settingsTargetSlug);
@@ -1137,6 +1167,7 @@
     {signalBackendError}
     onretrySignalBackend={retryBackendSignals}
     backendPreviewSignalResolver={settingsTargetSlug ? resolveSettingsBackendPreview : undefined}
+    backendPreviewLiveResolver={resolveGlobalBackendPreview}
     open={settingsModalOpen}
     mode={settingsTargetSlug ? 'pair' : 'global'}
     onclose={() => {

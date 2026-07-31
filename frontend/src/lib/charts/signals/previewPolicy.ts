@@ -13,6 +13,10 @@ interface ResolveSignalPreviewOptions {
     mode: 'global' | 'pair';
     backendSignals: RenderedSignal[];
     renderLocal: (config: SignalConfig) => RenderedSignal[];
+    /** Global mode only: backend signals are computed live on the synthetic preview data. */
+    globalLivePreview?: boolean;
+    /** Global-live only: the live backend compute failed. */
+    backendError?: boolean;
 }
 
 function belongsToInstance(signal: RenderedSignal, instanceId: string): boolean {
@@ -25,13 +29,17 @@ export function resolveSignalPreview(options: ResolveSignalPreviewOptions): Sign
     let hasBackendConfig = false;
     let hasBackendPreview = false;
 
+    // Backend signals resolve against a rendered list both in pair mode (last
+    // applied) and in global-live mode (computed on the synthetic curve).
+    const matchBackend = options.mode === 'pair' || options.globalLivePreview === true;
+
     for (const config of options.configs) {
         const definition = definitionsByType.get(config.signalType);
         if (!definition) continue;
 
         if (definition.source === 'backend') {
             hasBackendConfig = true;
-            if (options.mode === 'pair') {
+            if (matchBackend) {
                 const matchingSignals = options.backendSignals.filter((signal) => belongsToInstance(signal, config.id));
                 if (matchingSignals.length > 0) {
                     hasBackendPreview = true;
@@ -51,8 +59,19 @@ export function resolveSignalPreview(options: ResolveSignalPreviewOptions): Sign
         };
     }
 
+    let backendState: BackendPreviewState;
+    if (options.mode === 'pair') {
+        backendState = hasBackendPreview ? 'apply-required' : 'unavailable';
+    } else if (options.globalLivePreview === true) {
+        // Live preview on synthetic data: render whatever came back; only warn
+        // when the backend compute genuinely failed (transient loading = no banner).
+        backendState = options.backendError === true ? 'unavailable' : 'none';
+    } else {
+        backendState = 'real-target-required';
+    }
+
     return {
         signals,
-        backendState: options.mode === 'global' ? 'real-target-required' : hasBackendPreview ? 'apply-required' : 'unavailable',
+        backendState,
     };
 }
