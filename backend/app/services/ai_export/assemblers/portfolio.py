@@ -277,8 +277,7 @@ def _valuation_source(holding: Any) -> AiExportValuationSource:
         return AiExportValuationSource.MISSING
     mapped = {
         "MARKET_PRICE": AiExportValuationSource.MARKET_PRICE,
-        "LAST_BUY_PRICE": AiExportValuationSource.LAST_VISIBLE_BUY_UNIT_PRICE,
-        "LAST_SEED_COST": AiExportValuationSource.LAST_SEED_COST,
+        "LAST_TRADE_PRICE": AiExportValuationSource.LAST_OBSERVED_TRADE_PRICE,
         "MISSING": AiExportValuationSource.MISSING,
     }.get(raw)
     if mapped is None:

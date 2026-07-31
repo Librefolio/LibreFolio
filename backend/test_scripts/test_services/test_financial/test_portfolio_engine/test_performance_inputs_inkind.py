@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
 from backend.app.services.portfolio_engine import ClassifiedTransaction, DailyStateBuilder, DerivedViewsBuilder
+from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.utils.financial.roi_utils import calculate_simple_roi_series
 
 
@@ -41,17 +42,41 @@ def _ctxn(tx: MagicMock) -> ClassifiedTransaction:
     return ClassifiedTransaction(tx=tx, classification="normal", share=Decimal("1"), paired_tx=None)
 
 
+def _mark_series_from(txs, price_map, asset_currencies, split_linked_tx_ids=None):
+    """Mirror PortfolioCalculationEngine: build a per-asset resolver series from prices + trades."""
+    txs_by_asset: dict[int, list] = {}
+    for ctxn in txs:
+        tx = ctxn.tx
+        if tx.asset_id is not None:
+            txs_by_asset.setdefault(tx.asset_id, []).append(tx)
+    mark_series = {}
+    for aid in set(txs_by_asset) | set(price_map or {}):
+        series = build_asset_price_series(
+            price_rows=(price_map or {}).get(aid, []),
+            transactions=txs_by_asset.get(aid, []),
+            split_linked_tx_ids=split_linked_tx_ids or set(),
+            asset_currency=(asset_currencies or {}).get(aid, "EUR"),
+            quote_base_quantity=1,
+        )
+        if series.has_observations:
+            mark_series[aid] = series
+    return mark_series
+
+
 def _build_states(txs, ecfs, date_from, date_to):
+    price_map = {100: [(date(2025, 1, 1), Decimal("100"), "EUR")]}
+    asset_currencies = {100: "EUR"}
     builder = DailyStateBuilder(
         classified_txs=txs,
         in_transit_intervals=[],
         external_cash_flows=ecfs,
-        price_map={100: [(date(2025, 1, 1), Decimal("100"), "EUR")]},
+        price_map=price_map,
         quote_base_map={},
         fx_rate_map={},
         asset_classifications={},
         asset_types={},
-        asset_currencies={100: "EUR"},
+        asset_currencies=asset_currencies,
+        mark_series=_mark_series_from(txs, price_map, asset_currencies),
         target_currency="EUR",
         date_from=date_from,
         date_to=date_to,
@@ -98,16 +123,20 @@ class TestPerformanceInputsInKind:
         split_adj = _tx(id=3, type="ADJUSTMENT", dt="2025-01-01", quantity="100", asset_id=100, cost_basis_override="50", cost_basis_currency="EUR")
         split_adj.asset_event_id = 999  # marks it split-linked
 
+        classified = [_ctxn(dep), _ctxn(buy), _ctxn(split_adj)]
+        price_map = {100: [(date(2025, 1, 1), Decimal("50"), "EUR")]}
+        asset_currencies = {100: "EUR"}
         builder = DailyStateBuilder(
-            classified_txs=[_ctxn(dep), _ctxn(buy), _ctxn(split_adj)],
+            classified_txs=classified,
             in_transit_intervals=[],
             external_cash_flows=[(date(2025, 1, 1), Decimal("10000"), "EUR")],
-            price_map={100: [(date(2025, 1, 1), Decimal("50"), "EUR")]},
+            price_map=price_map,
             quote_base_map={},
             fx_rate_map={},
             asset_classifications={},
             asset_types={},
-            asset_currencies={100: "EUR"},
+            asset_currencies=asset_currencies,
+            mark_series=_mark_series_from(classified, price_map, asset_currencies, split_linked_tx_ids={3}),
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 1),

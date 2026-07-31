@@ -22,8 +22,7 @@ from backend.app.services.ai_export.normalization import (
     ObservedSourcePoint,
     bollinger_percent_b,
     bounded_position_pct,
-    build_last_buy_valuation_reference,
-    build_last_seed_valuation_reference,
+    build_last_observed_trade_valuation_reference,
     build_normalized_return,
     relative_distance_pct,
 )
@@ -246,59 +245,34 @@ def test_observed_source_point_is_immutable_positive_finite_and_numeric_point_co
         _build((NumericPoint(date=date(2026, 7, 1), value=Decimal("0")),), "2026-07-01", "2026-07-01")
 
 
-def test_last_buy_valuation_reference_has_fixed_semantics_and_no_artificial_series():
-    reference = build_last_buy_valuation_reference(date(2026, 7, 10), Decimal("102.375"), " chf ")
+def test_last_observed_trade_valuation_reference_has_fallback_semantics_and_no_artificial_series():
+    reference = build_last_observed_trade_valuation_reference(date(2026, 7, 15), Decimal("5.347"), " eur ")
 
-    assert reference.source == AiExportValuationReferenceSource.LAST_VISIBLE_BUY_UNIT_PRICE
-    assert reference.unit_price.code == "CHF"
-    assert reference.unit_price.amount == Decimal("102.375")
+    assert reference.source == AiExportValuationReferenceSource.LAST_OBSERVED_TRADE_PRICE
+    assert reference.unit_price.code == "EUR"
+    assert reference.unit_price.amount == Decimal("5.347")
+    # A carried real-trade mark is a valuation fallback, not an observed market return.
     assert reference.semantics == "valuation_fallback_not_observed_market_return"
     assert reference.model_dump(mode="json") == {
-        "date": "2026-07-10",
-        "source": "last_visible_buy_unit_price",
-        "unit_price": {"code": "CHF", "amount": "102.375"},
+        "date": "2026-07-15",
+        "source": "last_observed_trade_price",
+        "unit_price": {"code": "EUR", "amount": "5.347"},
         "effective_unit_price": None,
         "split_adjusted": False,
         "semantics": "valuation_fallback_not_observed_market_return",
     }
     with pytest.raises(ValueError, match="Invalid currency"):
-        build_last_buy_valuation_reference(date(2026, 7, 10), Decimal("102.375"), "ZZZ")
-
-
-def test_last_seed_valuation_reference_has_cost_semantics_and_no_artificial_series():
-    reference = build_last_seed_valuation_reference(date(2026, 6, 30), Decimal("98.125"), " usd ")
-
-    assert reference.source == AiExportValuationReferenceSource.LAST_SEED_COST
-    assert reference.unit_price.code == "USD"
-    assert reference.unit_price.amount == Decimal("98.125")
-    assert reference.semantics == "estimated_at_cost_not_observed_market_return"
-    assert reference.model_dump(mode="json") == {
-        "date": "2026-06-30",
-        "source": "last_seed_cost",
-        "unit_price": {"code": "USD", "amount": "98.125"},
-        "effective_unit_price": None,
-        "split_adjusted": False,
-        "semantics": "estimated_at_cost_not_observed_market_return",
-    }
-    with pytest.raises(ValueError, match="Invalid currency"):
-        build_last_seed_valuation_reference(date(2026, 6, 30), Decimal("98.125"), "ZZZ")
+        build_last_observed_trade_valuation_reference(date(2026, 7, 15), Decimal("5.347"), "ZZZ")
 
 
 @pytest.mark.parametrize("unit_price", (Decimal("0"), Decimal("-1"), Decimal("NaN"), Decimal("Infinity")))
-def test_last_buy_valuation_reference_rejects_non_positive_or_non_finite_price(unit_price):
+def test_last_observed_trade_valuation_reference_rejects_non_positive_or_non_finite_price(unit_price):
     with pytest.raises(ValueError):
-        build_last_buy_valuation_reference(date(2026, 7, 10), unit_price, "EUR")
+        build_last_observed_trade_valuation_reference(date(2026, 7, 15), unit_price, "EUR")
 
 
-@pytest.mark.parametrize("unit_price", (Decimal("-1"), Decimal("NaN"), Decimal("Infinity")))
-def test_last_seed_valuation_reference_rejects_negative_or_non_finite_price(unit_price):
-    with pytest.raises(ValueError):
-        build_last_seed_valuation_reference(date(2026, 7, 10), unit_price, "EUR")
-
-
-def test_zero_seed_and_split_adjusted_effective_price_are_explicit():
-    zero = build_last_seed_valuation_reference(date(2026, 6, 30), Decimal("0"), "EUR")
-    adjusted = build_last_seed_valuation_reference(
+def test_split_adjusted_effective_price_is_explicit():
+    adjusted = build_last_observed_trade_valuation_reference(
         date(2026, 6, 30),
         Decimal("100"),
         "USD",
@@ -307,7 +281,6 @@ def test_zero_seed_and_split_adjusted_effective_price_are_explicit():
         split_adjusted=True,
     )
 
-    assert zero.unit_price.amount == Decimal("0")
     assert adjusted.unit_price == Currency(code="USD", amount=Decimal("100"))
     assert adjusted.effective_unit_price == Currency(code="EUR", amount=Decimal("50"))
     assert adjusted.split_adjusted is True
@@ -315,7 +288,7 @@ def test_zero_seed_and_split_adjusted_effective_price_are_explicit():
 
 def test_split_adjusted_reference_requires_effective_price():
     with pytest.raises(ValueError, match="effective_unit_price"):
-        build_last_buy_valuation_reference(date(2026, 7, 10), Decimal("100"), "EUR", split_adjusted=True)
+        build_last_observed_trade_valuation_reference(date(2026, 7, 10), Decimal("100"), "EUR", split_adjusted=True)
 
 
 def test_relative_and_bounded_metric_formulas_are_decimal_and_not_clamped():

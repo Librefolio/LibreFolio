@@ -16,6 +16,7 @@
     "syncPrices": "Sincronizza prezzi",
     "recalculate": "Ricalcola",
     "syncDisabledManual": "Sincronizzazione disabilitata — nessun provider configurato",
+    "syncDisabledInactive": "Sincronizzazione non disponibile — l'asset è inattivo",
     "fxPairMissing": "Coppia FX {base}/{quote} non configurata — conversione non disponibile",
     "fxPairCreatedSynced": "Coppia FX creata e sincronizzata",
     "pageSyncDescription": "Sincronizza prezzi degli asset e tassi di cambio per questa pagina.",

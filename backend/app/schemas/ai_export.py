@@ -185,16 +185,22 @@ class AiExportNormalizedReturnBaseSource(StrEnum):
 
 
 class AiExportValuationReferenceSource(StrEnum):
-    LAST_VISIBLE_BUY_UNIT_PRICE = "last_visible_buy_unit_price"
-    LAST_SEED_COST = "last_seed_cost"
+    LAST_OBSERVED_TRADE_PRICE = "last_observed_trade_price"
 
 
 class AiExportValuationSource(StrEnum):
     MARKET_PRICE = "market_price"
-    LAST_VISIBLE_BUY_UNIT_PRICE = "last_visible_buy_unit_price"
-    LAST_SEED_COST = "last_seed_cost"
+    LAST_OBSERVED_TRADE_PRICE = "last_observed_trade_price"
     MIXED = "mixed"
     MISSING = "missing"
+
+
+# Reference-source semantics: last-observed-trade is a "valuation fallback that is
+# NOT an observed market return" (a real transaction price carried forward as the
+# mark). Strict-positive prices are required for the trade-derived reference.
+_VALUATION_REFERENCE_SEMANTICS: dict[AiExportValuationReferenceSource, str] = {
+    AiExportValuationReferenceSource.LAST_OBSERVED_TRADE_PRICE: "valuation_fallback_not_observed_market_return",
+}
 
 
 class AiExportTokenEstimationMethod(StrEnum):
@@ -952,37 +958,32 @@ class AiExportValuationReference(AiExportModel):
     unit_price: Currency
     effective_unit_price: Currency | None = None
     split_adjusted: bool = False
-    semantics: Literal[
-        "valuation_fallback_not_observed_market_return",
-        "estimated_at_cost_not_observed_market_return",
-    ] = "valuation_fallback_not_observed_market_return"
+    semantics: Literal["valuation_fallback_not_observed_market_return",] = "valuation_fallback_not_observed_market_return"
 
     @model_validator(mode="before")
     @classmethod
     def default_semantics_for_source(cls, data: Any) -> Any:
         if not isinstance(data, dict) or "semantics" in data:
             return data
-        source = data.get("source")
-        if source == AiExportValuationReferenceSource.LAST_VISIBLE_BUY_UNIT_PRICE:
-            semantics = "valuation_fallback_not_observed_market_return"
-        elif source == AiExportValuationReferenceSource.LAST_SEED_COST:
-            semantics = "estimated_at_cost_not_observed_market_return"
-        else:
+        raw_source = data.get("source")
+        try:
+            source = AiExportValuationReferenceSource(raw_source)
+        except ValueError:
+            return data
+        semantics = _VALUATION_REFERENCE_SEMANTICS.get(source)
+        if semantics is None:
             return data
         return {**data, "semantics": semantics}
 
     @model_validator(mode="after")
     def validate_source_semantics(self) -> Self:
-        expected = "valuation_fallback_not_observed_market_return" if self.source == AiExportValuationReferenceSource.LAST_VISIBLE_BUY_UNIT_PRICE else "estimated_at_cost_not_observed_market_return"
+        expected = _VALUATION_REFERENCE_SEMANTICS[self.source]
         if self.semantics != expected:
             raise ValueError(f"{self.source.value} requires semantics={expected}")
         reference_amount = self.unit_price.amount
         effective_amount = self.effective_unit_price.amount if self.effective_unit_price is not None else None
-        if self.source == AiExportValuationReferenceSource.LAST_VISIBLE_BUY_UNIT_PRICE:
-            if reference_amount <= 0 or (effective_amount is not None and effective_amount <= 0):
-                raise ValueError("last_visible_buy_unit_price requires strictly positive unit prices")
-        elif reference_amount < 0 or (effective_amount is not None and effective_amount < 0):
-            raise ValueError("last_seed_cost requires non-negative unit prices")
+        if reference_amount <= 0 or (effective_amount is not None and effective_amount <= 0):
+            raise ValueError(f"{self.source.value} requires strictly positive unit prices")
         if self.split_adjusted and self.effective_unit_price is None:
             raise ValueError("split_adjusted valuation reference requires effective_unit_price")
         return self

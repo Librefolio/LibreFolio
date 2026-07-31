@@ -330,7 +330,7 @@ class PortfolioHolding(BaseModel):
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
     current_price: Optional[SafeDecimal] = Field(None, description="Effective current-unit price converted to report currency. None if FX rate missing")
     current_value: Optional[SafeDecimal] = Field(None, description="Snapshot position value at report end date")
-    valuation_source: Optional[Literal["MARKET_PRICE", "LAST_BUY_PRICE", "LAST_SEED_COST", "MISSING"]] = Field(
+    valuation_source: Optional[Literal["MARKET_PRICE", "LAST_TRADE_PRICE", "MISSING"]] = Field(
         None,
         description="Source selected by the valuation hierarchy",
     )

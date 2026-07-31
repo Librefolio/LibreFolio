@@ -230,8 +230,7 @@ class AssetPositionValuationSource(StrEnum):
     """Mirrors `backend.app.schemas.portfolio.PortfolioHolding.valuation_source`."""
 
     MARKET_PRICE = "MARKET_PRICE"
-    LAST_BUY_PRICE = "LAST_BUY_PRICE"
-    LAST_SEED_COST = "LAST_SEED_COST"
+    LAST_TRADE_PRICE = "LAST_TRADE_PRICE"
     MISSING = "MISSING"
 
 

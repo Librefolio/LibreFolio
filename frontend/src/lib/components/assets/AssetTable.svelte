@@ -287,8 +287,11 @@
                         syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== rid));
                     }
                 },
-                disabled: (row) => !row.provider_code,
+                disabled: (row) => !row.provider_code || row.active === false,
                 iconClass: (row) => (syncingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
+                labelClass: (row) => (!row.provider_code || row.active === false ? 'line-through' : ''),
+                testid: 'asset-table-sync-action',
+                title: (row) => (!row.provider_code ? $t('assetDetail.syncDisabledManual') : row.active === false ? $t('assetDetail.syncDisabledInactive') : ''),
             },
             {
                 id: 'refresh',

@@ -661,7 +661,7 @@ async def test_asset_multi_broker_aggregation_marks_mixed_source():
             _holding(
                 broker_id=3,
                 quantity="1",
-                source="LAST_BUY_PRICE",
+                source="LAST_TRADE_PRICE",
                 current_value="120",
                 gain_loss="20",
             ),
@@ -730,11 +730,10 @@ async def test_asset_mixed_contribution_coverage_omits_all_period_aggregates(
     ("source", "expected_source", "reference_price"),
     [
         (
-            "LAST_BUY_PRICE",
-            "last_visible_buy_unit_price",
+            "LAST_TRADE_PRICE",
+            "last_observed_trade_price",
             "50",
         ),
-        ("LAST_SEED_COST", "last_seed_cost", "0"),
     ],
 )
 async def test_uniform_fallback_reference_preserves_original_effective_and_split(
@@ -751,7 +750,7 @@ async def test_uniform_fallback_reference_preserves_original_effective_and_split
             reference_date=date(2026, 1, 5),
             reference_price=reference_price,
             reference_currency="USD",
-            effective_price="25" if source == "LAST_BUY_PRICE" else "0",
+            effective_price="25",
             effective_currency="USD",
             split_adjusted=True,
         )

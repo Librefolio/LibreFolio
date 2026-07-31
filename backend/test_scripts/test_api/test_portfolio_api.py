@@ -214,23 +214,24 @@ class TestPortfolioSummaryEndpoint:
         # Cash ledger: 1000 - 400 + 25 - 10 + 150 = 765
         assert data["cash_total"]["amount"].startswith("765")
         assert data["total_invested"]["amount"].startswith("1000")
-        # Holdings: no market price but LAST_BUY_PRICE fallback provides value
-        # last_buy_price = 400/4 = 100 EUR/share, net qty = 3 → current_value = 300
+        # Holdings: no market quote → the unified resolver marks at the most recent *observed trade*.
+        # The last trade is the SELL @ 150 (2025-01-19); net qty = 3 → current_value = 450.
+        # (The legacy LAST_BUY tier ignored SELLs and would have used the BUY @ 100 → 300.)
         holding = data["holdings"][0]
         assert holding["current_value"] is not None
-        assert holding["current_value"].startswith("300")
-        assert holding["valuation_source"] == "LAST_BUY_PRICE"
-        assert holding["valuation_effective_unit_price"].startswith("100")
+        assert holding["current_value"].startswith("450")
+        assert holding["valuation_source"] == "LAST_TRADE_PRICE"
+        assert holding["valuation_effective_unit_price"].startswith("150")
         assert holding["valuation_effective_currency"] == "EUR"
-        assert holding["valuation_reference_date"] == "2025-01-16"
-        assert holding["valuation_reference_unit_price"].startswith("100")
+        assert holding["valuation_reference_date"] == "2025-01-19"
+        assert holding["valuation_reference_unit_price"].startswith("150")
         assert holding["valuation_reference_currency"] == "EUR"
         assert holding["valuation_split_adjusted"] is False
         assert holding["missing_fx_pair"] is None
         # Asset without market price does NOT appear in missing_price_assets
-        # (LAST_BUY_PRICE gives it a value — appears in data_quality as warning instead)
+        # (the observed-trade mark gives it a value — appears in data_quality as warning instead)
         assert len(data["missing_price_assets"]) == 0
-        print_success("Signed cash ledger and LAST_BUY_PRICE reporting OK")
+        print_success("Signed cash ledger and LAST_TRADE_PRICE reporting OK")
 
     async def test_summary_uses_quote_base_quantity(self, test_server):
         """Summary valuation honors quote_base_quantity for raw market quotes."""

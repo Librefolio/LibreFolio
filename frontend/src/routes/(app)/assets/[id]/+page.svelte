@@ -38,6 +38,7 @@
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import AssetRiskScenariosView from '$lib/components/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
@@ -274,6 +275,9 @@
         return isParametricProvider(providerAssignment?.provider_code);
     });
     let isManualOnly = $derived(!providerAssignment);
+    let isInactive = $derived(assetInfo?.active === false);
+    let syncDisabledReason = $derived(isManualOnly ? $t('assetDetail.syncDisabledManual') : isInactive ? $t('assetDetail.syncDisabledInactive') : '');
+    let syncBlocked = $derived(isManualOnly || isInactive);
     /** True when OHLCV price data is available (enables candlestick chart) */
     let hasOhlcv = $derived(lineData.some((p) => p.open != null));
     // Reset to line chart when OHLCV becomes unavailable (e.g. date range with no data)
@@ -1799,17 +1803,29 @@
                 <Pencil size={14} />
                 {#if showActionLabels}<span>{$t('common.edit')}</span>{/if}
             </button>
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
-                           {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
-                data-testid="asset-detail-sync-btn"
-                disabled={syncing || isManualOnly}
-                onclick={handleSync}
-                title={isManualOnly ? $t('assetDetail.syncDisabledManual') : ''}
-            >
-                <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
-            </button>
+            {#if syncBlocked}
+                <Tooltip text={syncDisabledReason} position="top" maxWidth="320px" interactiveChild>
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
+                        data-testid="asset-detail-sync-btn"
+                        disabled={syncing || syncBlocked}
+                        onclick={handleSync}
+                    >
+                        <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
+                        {#if showActionLabels}<span class="line-through">{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
+                    </button>
+                </Tooltip>
+            {:else}
+                <button
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    data-testid="asset-detail-sync-btn"
+                    disabled={syncing || syncBlocked}
+                    onclick={handleSync}
+                >
+                    <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
+                    {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
+                </button>
+            {/if}
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
                 data-testid="asset-detail-refresh-btn"

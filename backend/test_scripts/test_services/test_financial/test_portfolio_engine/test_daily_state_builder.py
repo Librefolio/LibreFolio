@@ -17,6 +17,7 @@ from backend.app.services.portfolio_engine import (
     InTransitInterval,
     ValuationSource,
 )
+from backend.app.services.price_resolver import build_asset_price_series
 
 # =============================================================================
 # HELPERS
@@ -61,8 +62,33 @@ def _ctxn(
     return ClassifiedTransaction(tx=tx, classification=classification, share=Decimal(share), paired_tx=paired)
 
 
+def _mark_series_from(classified_txs, price_map, asset_currencies, quote_base_map, split_linked_tx_ids):
+    """Mirror PortfolioCalculationEngine: one AssetPriceSeries per asset from prices + trades."""
+    txs_by_asset: dict[int, list] = {}
+    for ctxn in classified_txs:
+        tx = ctxn.tx
+        if tx.asset_id is not None:
+            txs_by_asset.setdefault(tx.asset_id, []).append(tx)
+    mark_series = {}
+    for aid in set(txs_by_asset) | set(price_map or {}):
+        series = build_asset_price_series(
+            price_rows=(price_map or {}).get(aid, []),
+            transactions=txs_by_asset.get(aid, []),
+            split_linked_tx_ids=split_linked_tx_ids or set(),
+            asset_currency=(asset_currencies or {}).get(aid, "EUR"),
+            quote_base_quantity=(quote_base_map or {}).get(aid) or 1,
+        )
+        if series.has_observations:
+            mark_series[aid] = series
+    return mark_series
+
+
 def _builder(**overrides) -> DailyStateBuilder:
-    """Create a DailyStateBuilder with sensible defaults, overriding any kwarg."""
+    """Create a DailyStateBuilder with sensible defaults, overriding any kwarg.
+
+    Mirrors PortfolioCalculationEngine by building the per-asset resolver ``mark_series`` from the
+    given ``price_map`` + trades unless the test supplies its own ``mark_series``.
+    """
     defaults = {
         "classified_txs": [],
         "in_transit_intervals": [],
@@ -78,6 +104,14 @@ def _builder(**overrides) -> DailyStateBuilder:
         "date_to": date(2025, 1, 3),
     }
     defaults.update(overrides)
+    if "mark_series" not in defaults:
+        defaults["mark_series"] = _mark_series_from(
+            defaults["classified_txs"],
+            defaults["price_map"],
+            defaults["asset_currencies"],
+            defaults["quote_base_map"],
+            defaults.get("split_linked_tx_ids"),
+        )
     return DailyStateBuilder(**defaults)
 
 
@@ -361,13 +395,14 @@ class TestMissingPrices:
     """Assets without prices are flagged, not included in market_value."""
 
     def test_missing_price(self):
-        """No price → missing_price_asset_ids contains asset_id, market_value=0."""
+        """No priced observation (unpriced quantity-only ADJUSTMENT) → missing_price_asset_ids
+        contains asset_id, market_value=0."""
         txs = [
-            _ctxn(_tx(id=1, dt="2025-01-01", type="BUY", amount="-100", quantity="5", asset_id=200)),
+            _ctxn(_tx(id=1, dt="2025-01-01", type="ADJUSTMENT", amount="0", quantity="5", asset_id=200)),
         ]
         builder = _builder(
             classified_txs=txs,
-            price_map={},  # no prices
+            price_map={},  # no prices, and the adjustment carries no price → MISSING
             asset_types={200: "ETF"},
             asset_classifications={200: None},
             date_from=date(2025, 1, 1),
@@ -384,9 +419,9 @@ class TestStalePriceDetection:
     """Prices older than threshold days are flagged as stale."""
 
     def test_stale_price(self):
-        """Price from 10 days ago (> 7 day threshold) → stale."""
+        """A carried asset-system quote from 10 days ago (> 7 day threshold) → stale."""
         txs = [
-            _ctxn(_tx(id=1, dt="2025-01-01", type="BUY", amount="-100", quantity="5", asset_id=100)),
+            _ctxn(_tx(id=1, dt="2024-12-22", type="BUY", amount="-100", quantity="5", asset_id=100)),
         ]
         builder = _builder(
             classified_txs=txs,
@@ -544,10 +579,21 @@ class TestPrivateValuationHelpers:
         assert valuation.stale is False
         assert valuation.missing_fx_pair is None
 
-    def test_market_value_for_last_buy_price_uses_fx_rate(self):
+    def test_market_value_for_trade_mark_uses_fx_rate(self):
+        # A foreign BUY (USD) with no asset-system quote → the resolver marks it LAST_TRADE_PRICE
+        # and the engine converts at the valuation date's FX rate.
+        buy = _tx(id=1, dt="2025-01-01", type="BUY", amount="60", currency="USD", quantity="2", asset_id=100)
+        series = build_asset_price_series(
+            price_rows=[],
+            transactions=[buy],
+            split_linked_tx_ids=set(),
+            asset_currency="USD",
+            quote_base_quantity=1,
+        )
         builder = _builder(
             fx_rate_map={("USD", "EUR", date(2025, 1, 2)): Decimal("0.8")},
-            last_buy_prices={100: (date(2025, 1, 1), Decimal("30"), "USD")},
+            asset_currencies={100: "USD"},
+            mark_series={100: series},
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 2),
         )
@@ -559,7 +605,7 @@ class TestPrivateValuationHelpers:
         )
 
         assert valuation.market_value == Decimal("48")  # 2 * 30 USD * 0.8 EUR/USD
-        assert valuation.source == ValuationSource.LAST_BUY_PRICE
+        assert valuation.source == ValuationSource.LAST_TRADE_PRICE
         assert valuation.reference_date == date(2025, 1, 1)
         assert valuation.unit_price == Decimal("30")
         assert valuation.effective_unit_price == Decimal("30")
@@ -680,7 +726,6 @@ class TestPrivateInTransitHelper:
                     cost_basis_currency="EUR",
                 )
             ],
-            last_seed_prices={(10, 100): (date(2025, 1, 1), Decimal("999"), "EUR")},
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 4),
         )

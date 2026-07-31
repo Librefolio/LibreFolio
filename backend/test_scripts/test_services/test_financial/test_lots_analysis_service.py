@@ -298,11 +298,13 @@ async def test_full_history_keeps_prior_price_seed_for_first_chart_day(session, 
 
     assert result.lots is not None
     assert len(result.lots) == 1
-    # The prior-price seed (95 @ 01-09) still drives *valuation* on the first chart day: the open
-    # value uses the carried market price (10 * 95 = 950). market_prices is untouched by the line.
+    # Single valuation brain: the unified resolver now drives *valuation* exactly like the chart
+    # line. On the BUY day there is no real quote, so the same-day trade (1000 / 10 = 100) wins over
+    # the carried 01-09 seed (95) -> open value = 10 * 100 = 1000 (was 950 under the legacy
+    # market-only map; lots-analysis and the portfolio engine now agree).
     assert result.value_history is not None
     value_points = _points_by_lot_date(result.value_history)
-    assert value_points[(result.lots[0].lot_id, date(2025, 1, 10))].open_value == Decimal("950")
+    assert value_points[(result.lots[0].lot_id, date(2025, 1, 10))].open_value == Decimal("1000")
     # The estimated market *line*, however, shows the most-recent observation: on the BUY day the
     # trade (1000 / 10 = 100) is newer than the 01-09 seed -> 100, flagged estimate; on 01-11 the
     # real quote (105) is the newest observation -> 105, not an estimate.
@@ -935,12 +937,15 @@ async def test_performance_history_missing_price_yields_none_without_exception(s
 
     assert result.performance_history is not None
     points = _points_by_date(result.performance_history)
-    assert points[date(2025, 1, 10)].roi is None
+    # The resolver marks the BUY day from its own trade (1000 / 10 = 100), so performance starts on
+    # 01-10 with NAV == invested -> roi 0 (was None under the legacy market-only map, which had no
+    # mark until the first real quote). The 01-12 quote (120) lifts NAV to 1200 -> roi 0.2.
+    assert points[date(2025, 1, 10)].roi == Decimal("0")
     assert points[date(2025, 1, 10)].twrr is None
-    assert points[date(2025, 1, 11)].roi is None
-    assert points[date(2025, 1, 11)].twrr is None
+    assert points[date(2025, 1, 11)].roi == Decimal("0")
+    assert points[date(2025, 1, 11)].twrr == Decimal("0")
     assert points[date(2025, 1, 12)].roi == Decimal("0.2")
-    assert points[date(2025, 1, 12)].twrr is None
+    assert points[date(2025, 1, 12)].twrr == Decimal("0.2")
 
 
 @pytest.mark.asyncio
@@ -1148,7 +1153,9 @@ async def test_dividend_in_foreign_currency_converted_to_target(session, test_us
 
 @pytest.mark.asyncio
 async def test_estimated_at_cost_when_no_price_history(session, test_user, asset, broker):
-    """No price history -> open value estimated at cost, market_pnl 0, income still accrues, DQ issue raised."""
+    """No asset-system price -> the resolver values the open portion at the last observed *trade*
+    mark (the BUY at 15/unit), so value_source is MARKET_PRICE (observation-based) with market_pnl 0
+    while price == cost; income still accrues and the no-quote DQ issue is still raised."""
     session.add_all(
         [
             Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("1000"), amount=Decimal("-15000"), currency="EUR"),
@@ -1171,7 +1178,7 @@ async def test_estimated_at_cost_when_no_price_history(session, test_user, asset
 
     assert result.lots is not None and len(result.lots) == 1
     lot = result.lots[0]
-    assert lot.value_source == "ESTIMATED_AT_COST"
+    assert lot.value_source == "MARKET_PRICE"
     assert lot.open_value == Decimal("15000")
     assert lot.market_pnl == Decimal("0")
     assert lot.asset_income == Decimal("1250")
@@ -1222,8 +1229,12 @@ async def test_closed_lot_history_continues_flat_without_close_market_price(sess
     assert value_points[(lot.lot_id, date(2025, 1, 12))].proceeds == Decimal("1300")
     assert value_points[(lot.lot_id, date(2025, 1, 12))].pnl == Decimal("300")
     assert return_points[(lot.lot_id, date(2025, 1, 12))].total_return == Decimal("0.3")
-    assert return_points[(lot.lot_id, date(2025, 1, 13))].relative_return is None
-    assert return_points[(lot.lot_id, date(2025, 1, 14))].relative_return is None
+    # Between the close (01-12) and the post-close quote (01-15), the resolver carries the last trade
+    # mark (SELL unit 130) forward, so the lot's price line has an observation and relative_return is
+    # the mark vs the opening reference (130 / 100 - 1 = 0.3) rather than None. This mirrors the
+    # chart price line and the portfolio engine (single valuation brain), not the legacy market-only gap.
+    assert return_points[(lot.lot_id, date(2025, 1, 13))].relative_return == Decimal("0.3")
+    assert return_points[(lot.lot_id, date(2025, 1, 14))].relative_return == Decimal("0.3")
     # No real quote exists during the lot's lifetime (the only price, 01-15, is after the close), so
     # the market line is estimated from the lot's own trades: BUY unit 100 carried, stepping to the
     # SELL unit 130 on the close date. The post-close real quote falls outside the closed lot window.

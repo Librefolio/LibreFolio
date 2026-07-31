@@ -55,8 +55,7 @@ from backend.app.services.ai_export.assemblers.shared import (
 )
 from backend.app.services.ai_export.normalization import (
     ObservedSourcePoint,
-    build_last_buy_valuation_reference,
-    build_last_seed_valuation_reference,
+    build_last_observed_trade_valuation_reference,
     build_normalized_return,
     relative_distance_pct,
 )
@@ -165,8 +164,7 @@ def _valuation_source(holdings: Sequence[Any], market_value: Decimal | None) -> 
     source = raw_sources[0] if raw_sources else None
     mapped = {
         "MARKET_PRICE": AiExportValuationSource.MARKET_PRICE,
-        "LAST_BUY_PRICE": AiExportValuationSource.LAST_VISIBLE_BUY_UNIT_PRICE,
-        "LAST_SEED_COST": AiExportValuationSource.LAST_SEED_COST,
+        "LAST_TRADE_PRICE": AiExportValuationSource.LAST_OBSERVED_TRADE_PRICE,
         "MISSING": AiExportValuationSource.MISSING,
     }.get(source, AiExportValuationSource.MISSING)
     if mapped == AiExportValuationSource.MARKET_PRICE and market_value is None:
@@ -394,7 +392,7 @@ def _uniform_valuation_reference(
     if len(sources) != 1:
         return None
     source = next(iter(sources))
-    if source not in {"LAST_BUY_PRICE", "LAST_SEED_COST"}:
+    if source != "LAST_TRADE_PRICE":
         return None
 
     reference_keys = {
@@ -420,8 +418,7 @@ def _uniform_valuation_reference(
     ) = next(iter(reference_keys))
     if reference_date is None or reference_price is None or reference_currency is None:
         return None
-    builder = build_last_buy_valuation_reference if source == "LAST_BUY_PRICE" else build_last_seed_valuation_reference
-    return builder(
+    return build_last_observed_trade_valuation_reference(
         reference_date,
         Decimal(str(reference_price)),
         reference_currency,

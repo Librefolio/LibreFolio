@@ -331,7 +331,7 @@ export type FooterCells<T> = Record<string, FooterCellContent> | ((rows: T[], se
  *
  * @typeParam T - The row data type
  */
-export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled'> {
+export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
     /** Unique action identifier */
     id: string;
 
@@ -352,6 +352,15 @@ export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'di
 
     /** Dynamic CSS class for the icon (e.g. 'animate-spin' when loading) */
     iconClass?: (row: T) => string;
+
+    /** Optional tooltip/title text, static or row-derived */
+    title?: string | ((row: T) => string);
+
+    /** Optional data-testid, static or row-derived */
+    testid?: string | ((row: T) => string);
+
+    /** Optional CSS class for the label, static or row-derived */
+    labelClass?: string | ((row: T) => string);
 
     /** Require confirmation modal before action */
     requireConfirm?: boolean;
