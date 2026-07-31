@@ -785,7 +785,7 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Da 0",
       "annualizedReturn": "Annualizzato",
-      "annualizedReturnTooltip": "Rendimento totale annualizzato (CAGR) sulla durata di detenzione del lotto, per confrontare lotti tenuti per periodi diversi."
+      "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) del singolo lotto sulla sua durata di detenzione, al netto di proventi e spese, per confrontare lotti tenuti per periodi diversi."
     },
     "createdInSystem": "Creato nel Sistema"
   },
@@ -1183,8 +1183,8 @@
     "unallocatedCosts": "Costi non allocati",
     "otherReconciliationResidual": "Altro / residuo di riconciliazione",
     "annualizedReturn": "Annualizzato",
-    "annualizedReturnTooltip": "P&L % annualizzato (CAGR) sulla durata di detenzione (dal lotto aperto più vecchio), per confrontare posizioni tenute per periodi diversi.",
-    "annualizedReturnPeriodTooltip": "Rendimento di periodo annualizzato (CAGR) sulla lunghezza del periodo selezionato, per confrontare periodi di durata diversa."
+    "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) di tutti i lotti ancora aperti della posizione, dalla prima transazione a oggi — inclusi proventi meno spese; valorizzato al costo se manca il prezzo. Per confrontare posizioni tenute per periodi diversi.",
+    "annualizedReturnPeriodTooltip": "Rendimento netto annualizzato (CAGR) sulla finestra di detenzione della posizione nel periodo selezionato, per confrontare periodi di durata diversa."
   },
   "dataQuality": {
     "headerInfoOnly": "Note sulla qualità dei dati",

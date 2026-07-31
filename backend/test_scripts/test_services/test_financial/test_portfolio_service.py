@@ -1625,6 +1625,73 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert contribution.gross_gains == Decimal("26")
         assert contribution.gross_losses == Decimal("0")
 
+    @pytest.mark.asyncio
+    async def test_positions_contribution_in_kind_adjustment_is_held_not_fully_sold(self, session, test_user, broker_with_access, test_asset):
+        """An in-kind ADJUSTMENT-seeded position held through the period must be treated as
+        held (end value + unrealized delta + net annualized return), not collapsed to
+        fully-sold. Regression: qty was summed over BUY/SELL only, so ADJUSTMENT/TRANSFER
+        (e.g. succession in-kind transfers) reported qty 0 at period end -> empty column."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                # In-kind seed: +100 units at a per-unit cost of 10 (amount 0 = no cash leg).
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2024, 1, 1),
+                    quantity=Decimal("100"),
+                    amount=Decimal("0"),
+                    cost_basis_override=Decimal("10"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.INTEREST,
+                    date=date(2024, 6, 1),
+                    amount=Decimal("50"),
+                    currency="EUR",
+                ),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=date(2025, 1, 10),
+                    open=Decimal("11"),
+                    high=Decimal("11"),
+                    low=Decimal("11"),
+                    close=Decimal("11"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(
+            user_id=test_user.id,
+            date_from=date(2023, 12, 1),
+            date_to=date(2025, 1, 15),
+        )
+
+        assert len(contribution.positions) == 1
+        row = contribution.positions[0]
+        assert row.asset_id == test_asset.id
+        # Held, not fully-sold: qty at end = +100 from the ADJUSTMENT.
+        assert row.is_fully_sold is False
+        assert row.end_value == Decimal("1100")  # 100 units * price 11
+        assert row.start_value == Decimal("0")  # seeded after date_from
+        assert row.period_unrealized_delta == Decimal("100")  # mv 1100 - cost 1000
+        assert row.period_income == Decimal("50")
+        assert row.period_pnl == Decimal("150")  # 100 unrealized + 50 income
+        # start_value == 0 -> period_pnl_percent stays None (unchanged semantics),
+        # but the net annualized return uses the end cost basis as fallback base.
+        assert row.period_pnl_percent is None
+        assert row.annualized_return is not None
+        assert row.annualized_return > Decimal("0")  # net positive return, >30-day window
+        assert row.oldest_open_lot_date == date(2024, 1, 1)
+
 
 class TestPortfolioServiceGetReport:
     @pytest.mark.asyncio

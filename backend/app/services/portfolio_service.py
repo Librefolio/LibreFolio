@@ -1114,6 +1114,10 @@ class PortfolioService:
         _fees_accum = Decimal("0")
         _taxes_accum = Decimal("0")
         _realized_accum = Decimal("0")
+        # Per-position all-time (<= date_to) income and fee/tax totals in base currency,
+        # used for the net holding return that feeds the annualized column.
+        income_by_pos: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+        fees_taxes_by_pos: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         _INCOME_TYPES = {TransactionType.DIVIDEND, TransactionType.INTEREST}
         _FEE_TAX_TYPES = {TransactionType.FEE, TransactionType.TAX}
 
@@ -1182,6 +1186,14 @@ class PortfolioService:
                     else:
                         _taxes_accum += abs(amount_base_signed) * share
 
+                # Per-position accumulation is NOT period-gated: the net holding return
+                # spans the full life of the position (first transaction -> valuation).
+                if tx.asset_id is not None:
+                    if tx.type in _INCOME_TYPES:
+                        income_by_pos[(broker_id, tx.asset_id)] += abs(amount_base_signed) * share
+                    elif tx.type in _FEE_TAX_TYPES:
+                        fees_taxes_by_pos[(broker_id, tx.asset_id)] += abs(amount_base_signed) * share
+
             # Holding transactions — group by asset
             txns_by_asset: dict[int, list[Transaction]] = defaultdict(list)
             for tx in broker_txns:
@@ -1242,6 +1254,10 @@ class PortfolioService:
                     _realized_accum += (sell_proceeds - cost_sold) * share
 
         oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
+        # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
+        # in-kind/succession/snapshot-seeded positions get a real window start — unlike
+        # first_position_dates which only tracks BUY/SELL). Anchors the net annualized window.
+        first_lot_txn_dates: dict[tuple[int, int], date_type] = {key: min(t.date for t in txns) for key, txns in lot_txns_by_key.items() if txns}
 
         end_positions = [ps for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD]
         assets_map = await self._get_assets_map({ps.asset_id for ps in end_positions})
@@ -1326,10 +1342,20 @@ class PortfolioService:
                     )
                 )
 
-            holding_oldest_lot = oldest_open_lot_dates.get((ps.broker_id, ps.asset_id))
+            # Net annualized return of the still-open position over its full life
+            # (first lot-affecting transaction -> valuation date). Net = unrealized
+            # (valued at cost, i.e. 0 market P&L, when the price is missing) + income
+            # (coupons/dividends) - fees/taxes, normalized by cost basis. This makes a
+            # no-price position with coupons (e.g. an unquoted BTP) show an income-only
+            # return instead of "—", and includes income/costs per the product rule.
+            holding_first_tx = first_lot_txn_dates.get((ps.broker_id, ps.asset_id))
             holding_annualized = None
-            if gain_loss_pct is not None and holding_oldest_lot is not None:
-                holding_annualized = cumulative_to_annualized(gain_loss_pct, (valuation_date - holding_oldest_lot).days)
+            if ps.cost_basis and ps.cost_basis != 0 and holding_first_tx is not None:
+                market_component = gain_loss if gain_loss is not None else Decimal("0")
+                pos_income = income_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
+                pos_fees = fees_taxes_by_pos.get((ps.broker_id, ps.asset_id), Decimal("0"))
+                net_holding_return = (market_component + pos_income - pos_fees) / ps.cost_basis
+                holding_annualized = cumulative_to_annualized(net_holding_return, (valuation_date - holding_first_tx).days)
 
             all_holdings.append(
                 PortfolioHolding(
@@ -1797,7 +1823,12 @@ class PortfolioService:
 
         _INCOME_TYPES = {TransactionType.DIVIDEND, TransactionType.INTEREST}
         _FEE_TAX_TYPES = {TransactionType.FEE, TransactionType.TAX}
-        _QTY_TYPES = {TransactionType.BUY, TransactionType.SELL}
+        # Quantity-affecting transactions: BUY/SELL plus in-kind ADJUSTMENT and TRANSFER,
+        # mirroring _LOT_AFFECTING_TYPES / the engine's position model. Restricting this to
+        # {BUY, SELL} made ADJUSTMENT/TRANSFER-seeded positions (e.g. in-kind succession
+        # transfers) collapse to qty 0 at period end -> reported as fully-sold with no value
+        # or annualized return, diverging from the holdings view where they are held.
+        _QTY_TYPES = _LOT_AFFECTING_TYPES
 
         # Per-position accumulators
         per_realized: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
@@ -1806,7 +1837,7 @@ class PortfolioService:
         unalloc_income: dict[int, Decimal] = defaultdict(Decimal)
         unalloc_fees: dict[int, Decimal] = defaultdict(Decimal)
 
-        # Track all positions with BUY/SELL activity
+        # Track all positions with lot-affecting activity (BUY/SELL/ADJUSTMENT/TRANSFER)
         position_info: dict[tuple[int, int], dict] = {}
         # Holding-transaction streams per (broker, asset) for FIFO oldest-open-lot derivation.
         lot_txns_by_key: dict[tuple[int, int], list[Transaction]] = defaultdict(list)
@@ -1940,6 +1971,7 @@ class PortfolioService:
             # Unrealized P&L at start and end
             ug_start: Decimal | None = None
             ug_end: Decimal | None = None
+            cb_end: Decimal | None = None
             start_value: Decimal | None = Decimal("0") if date_from is None or qty_at_start <= _QUANTITY_DUST_THRESHOLD else None
             end_value: Decimal | None = Decimal("0") if qty_at_end <= _QUANTITY_DUST_THRESHOLD else None
 
@@ -1980,22 +2012,25 @@ class PortfolioService:
                 )
                 price_e_data = await self._get_price_at_date(asset_id, effective_end)
 
-                if wac_e_result.wac is not None and price_e_data is not None:
-                    raw_price_e, price_ccy_e, price_date_e = price_e_data
-                    price_e_base = raw_price_e
-                    if price_ccy_e != base_currency:
-                        price_e_base, _ = await self._convert_to_base(raw_price_e, price_ccy_e, base_currency, price_date_e)
+                if wac_e_result.wac is not None:
                     wac_e = wac_e_result.wac.amount
                     wac_e_ccy = wac_e_result.wac.code
                     wac_e_base = wac_e
                     if wac_e_ccy != base_currency:
                         wac_e_base, _ = await self._convert_to_base(wac_e, wac_e_ccy, base_currency, effective_end)
-
-                    if price_e_base is not None and wac_e_base is not None:
-                        mv_end = compute_holding_value(qty_at_end, price_e_base, asset.quote_base_quantity)
+                    # Cost basis at end is price-independent (needs only WAC), so a
+                    # position held with no market price still gets a normalization base.
+                    if wac_e_base is not None:
                         cb_end = wac_e_base * qty_at_end
-                        ug_end = mv_end - cb_end
-                        end_value = mv_end
+                    if price_e_data is not None and wac_e_base is not None:
+                        raw_price_e, price_ccy_e, price_date_e = price_e_data
+                        price_e_base = raw_price_e
+                        if price_ccy_e != base_currency:
+                            price_e_base, _ = await self._convert_to_base(raw_price_e, price_ccy_e, base_currency, price_date_e)
+                        if price_e_base is not None:
+                            mv_end = compute_holding_value(qty_at_end, price_e_base, asset.quote_base_quantity)
+                            ug_end = mv_end - cb_end
+                            end_value = mv_end
 
             unrealized_delta = None
             if ug_end is not None or ug_start is not None:
@@ -2023,13 +2058,24 @@ class PortfolioService:
             period_pnl_pct: Decimal | None = None
             if period_pnl is not None and start_value not in (None, Decimal("0")):
                 period_pnl_pct = (period_pnl / abs(start_value)).quantize(Decimal("0.0001"))
-            # Annualize the period return over the selected period length so
-            # returns are comparable across different period durations. Only
-            # meaningful for a bounded period (date_from set); an open-ended
-            # "all time" view has start_value=0 -> period_pnl_pct None anyway.
+            # Annualize over the position's actual holding window inside the period:
+            # from the oldest lot opening that falls in the period (clamped to date_from)
+            # to the period end. The normalization base falls back to the end cost basis
+            # when the position was opened mid-period (start_value 0/None), so the column
+            # no longer collapses to empty for positions opened after the period start.
+            # This base is used ONLY for the annualized figure; the displayed
+            # period_pnl_percent keeps its start_value semantics untouched.
+            ann_base: Decimal | None = abs(start_value) if start_value not in (None, Decimal("0")) else (cb_end if cb_end not in (None, Decimal("0")) else None)
+            ann_pct = period_pnl_pct
+            if ann_pct is None and period_pnl is not None and ann_base is not None:
+                ann_pct = (period_pnl / ann_base).quantize(Decimal("0.0001"))
+            window_start = date_from
+            olp = oldest_open_lot_dates.get(pos_key)
+            if olp is not None and (window_start is None or olp > window_start):
+                window_start = olp
             period_annualized = None
-            if period_pnl_pct is not None and date_from is not None:
-                period_annualized = cumulative_to_annualized(period_pnl_pct, (effective_end - date_from).days)
+            if ann_pct is not None and window_start is not None:
+                period_annualized = cumulative_to_annualized(ann_pct, (effective_end - window_start).days)
 
             contributions.append(
                 AssetPeriodContribution(

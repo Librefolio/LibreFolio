@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
     import {Settings, X} from 'lucide-svelte';
+    import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -45,6 +46,12 @@
         backendPreviewSignals?: RenderedSignal[];
         /** Resolve latest backend preview for the modal's active view mode. */
         backendPreviewSignalResolver?: (viewMode: 'absolute' | 'percentage') => RenderedSignal[];
+        /**
+         * Global mode only: compute backend signals live on the synthetic preview
+         * curve (backend indicators can't run in the browser). Returns rendered
+         * overlay signals for the given live-edited configs.
+         */
+        backendPreviewLiveResolver?: (configs: SignalConfig[], points: LineDataPoint[], viewMode: 'absolute' | 'percentage') => Promise<RenderedSignal[]>;
         /** Explicit backend signal loading error. */
         signalBackendError?: string | null;
         /** Retry backend catalog/result loading. */
@@ -70,6 +77,7 @@
         signalDefinitions,
         backendPreviewSignals = [],
         backendPreviewSignalResolver,
+        backendPreviewLiveResolver,
         signalBackendError = null,
         onretrySignalBackend,
         pairData,
@@ -206,6 +214,57 @@
 
     let activeSignalDefinitions = $derived(signalDefinitions ?? getRegisteredSignalTypes());
 
+    // =========================================================================
+    // Global-mode live backend preview (compute indicators on the synthetic curve)
+    // =========================================================================
+
+    let backendLivePreviewSignals = $state<RenderedSignal[]>([]);
+    let backendLivePreviewError = $state(false);
+    let livePreviewToken = 0;
+
+    let globalLivePreviewActive = $derived(mode === 'global' && !!backendPreviewLiveResolver);
+
+    // Fingerprint of the backend-source configs only, so aesthetics / local-signal
+    // edits don't trigger a backend recompute.
+    let backendConfigFingerprint = $derived.by(() => {
+        const defs = new Map(activeSignalDefinitions.map((definition) => [definition.type, definition]));
+        const backend = signals.filter((config) => defs.get(config.signalType)?.source === 'backend');
+        return JSON.stringify(backend.map((config) => ({id: config.id, type: config.signalType, params: config.params})));
+    });
+
+    $effect(() => {
+        // Reactive deps: recompute when the modal opens, the backend configs
+        // change, the preview data changes, or the view mode toggles.
+        const fingerprint = backendConfigFingerprint;
+        const points = previewDataAbs;
+        const viewMode = previewViewMode;
+        const active = open && globalLivePreviewActive;
+
+        if (!active || fingerprint === '[]' || points.length === 0) {
+            backendLivePreviewSignals = [];
+            backendLivePreviewError = false;
+            return;
+        }
+
+        const resolver = backendPreviewLiveResolver!;
+        const configsSnapshot = untrack(() => signals.map((config) => ({...config, params: {...config.params}})));
+        const token = ++livePreviewToken;
+        const timer = setTimeout(() => {
+            resolver(configsSnapshot, points, viewMode)
+                .then((result) => {
+                    if (token !== livePreviewToken) return;
+                    backendLivePreviewSignals = result;
+                    backendLivePreviewError = false;
+                })
+                .catch(() => {
+                    if (token !== livePreviewToken) return;
+                    backendLivePreviewSignals = [];
+                    backendLivePreviewError = true;
+                });
+        }, 250);
+        return () => clearTimeout(timer);
+    });
+
     function renderLocalPreview(cfg: SignalConfig): RenderedSignal[] {
         const instance = signalFromConfig(cfg);
         if (!instance) return [];
@@ -229,8 +288,10 @@
             configs: signals,
             definitions: activeSignalDefinitions,
             mode,
-            backendSignals: backendPreviewSignalResolver?.(previewViewMode) ?? backendPreviewSignals,
+            backendSignals: globalLivePreviewActive ? backendLivePreviewSignals : (backendPreviewSignalResolver?.(previewViewMode) ?? backendPreviewSignals),
             renderLocal: renderLocalPreview,
+            globalLivePreview: globalLivePreviewActive,
+            backendError: globalLivePreviewActive ? backendLivePreviewError : false,
         });
     });
     let previewSignals = $derived(previewResolution.signals);

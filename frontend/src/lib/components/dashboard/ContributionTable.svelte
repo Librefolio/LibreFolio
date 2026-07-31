@@ -474,7 +474,8 @@
         enableSelection={false}
         selectionMode="none"
         enableActions={true}
-        enablePagination={false}
+        enablePagination={true}
+        defaultPageSize={25}
         enableColumnVisibility={true}
         enableColumnFilters={true}
         enableSorting={true}
