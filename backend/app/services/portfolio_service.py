@@ -795,6 +795,34 @@ def _oldest_open_lot_date(txns: list[Transaction]) -> Optional[date_type]:
 _QUANTITY_DUST_THRESHOLD = Decimal("0.00001")
 
 
+def _closed_position_window(txns: list[Transaction]) -> tuple[Optional[date_type], Optional[date_type]]:
+    """Realized flight time of a fully-closed holding stream: (oldest_open, last_close).
+
+    - oldest_open: date the first lot was ever opened (first positive-quantity
+      BUY / ADJUSTMENT / TRANSFER).
+    - last_close: date the running quantity last dropped to (dust-)zero, i.e. when
+      the final open lot was consumed. CROWDFUND-style dust residuals (see
+      ``_QUANTITY_DUST_THRESHOLD``) count as closed.
+
+    Returns ``(open_date, None)`` if the stream never fully closes and
+    ``(None, None)`` if it never opens. Needed because a fully-closed position has
+    no still-open lot, so ``_oldest_open_lot_date`` is ``None`` and there is no end
+    cost basis — leaving the generic annualized path without a window or a base.
+    """
+    open_date: Optional[date_type] = None
+    last_close: Optional[date_type] = None
+    running = Decimal("0")
+    for tx in sorted(txns, key=lambda t: (t.date, t.id or 0)):
+        qty = tx.quantity or Decimal("0")
+        prev = running
+        running += qty
+        if qty > 0 and open_date is None:
+            open_date = tx.date
+        if qty < 0 and prev > _QUANTITY_DUST_THRESHOLD and running <= _QUANTITY_DUST_THRESHOLD:
+            last_close = tx.date
+    return open_date, last_close
+
+
 class PortfolioService:
     """Orchestrator for portfolio-level calculations.
 
@@ -1832,6 +1860,7 @@ class PortfolioService:
 
         # Per-position accumulators
         per_realized: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+        per_cost_sold: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         per_income: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         per_fees_taxes: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         unalloc_income: dict[int, Decimal] = defaultdict(Decimal)
@@ -1944,6 +1973,7 @@ class PortfolioService:
                         sell_proceeds = sell_amount
                     cost_sold = sell_qty * wac_at_sell_base
                     per_realized[pos_key] += (sell_proceeds - cost_sold) * share
+                    per_cost_sold[pos_key] += cost_sold * share
 
         # ── Unrealized delta: 2-point computation per position ──
         contributions: list[AssetPeriodContribution] = []
@@ -2076,6 +2106,25 @@ class PortfolioService:
             period_annualized = None
             if ann_pct is not None and window_start is not None:
                 period_annualized = cumulative_to_annualized(ann_pct, (effective_end - window_start).days)
+
+            # Fully-closed position: its FIFO stream has no still-open lot, so
+            # oldest_open_lot_date is None (no window start) and there is no end
+            # cost basis (no normalization base) — the generic path above collapses
+            # to "—". Annualize the realized net return over the position's real
+            # flight time: oldest lot opened (clamped to the period start) -> the
+            # date the last lot closed. Base = capital actually deployed (cost of
+            # the sold lots). This also fixes the window end for closed positions,
+            # which the generic path would otherwise run to the period end.
+            if is_fully_sold and period_pnl is not None:
+                deployed_cost = per_cost_sold.get(pos_key)
+                if deployed_cost and deployed_cost != 0:
+                    open_date, close_date = _closed_position_window(lot_txns_by_key.get(pos_key, []))
+                    if open_date is not None and close_date is not None:
+                        closed_start = open_date if date_from is None or open_date > date_from else date_from
+                        closed_return = (period_pnl / deployed_cost).quantize(Decimal("0.0001"))
+                        closed_annualized = cumulative_to_annualized(closed_return, (close_date - closed_start).days)
+                        if closed_annualized is not None:
+                            period_annualized = closed_annualized
 
             contributions.append(
                 AssetPeriodContribution(
