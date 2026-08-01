@@ -38,6 +38,7 @@
     import {riskDataQuality, riskMetadata, riskOutput, singleValue, type RiskDataQualityReport} from '$lib/risk/riskTypes';
     import {sectorI18nKey} from '$lib/utils/assetTypes';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
+    import RiskBetaBanner from './RiskBetaBanner.svelte';
     import RiskResultFrame from './RiskResultFrame.svelte';
 
     interface Props {
@@ -54,10 +55,11 @@
         geographyExposure?: Record<string, number> | null;
         refreshVersion?: number;
         showHeaderActions?: boolean;
+        showBetaBanner?: boolean;
         onsynced?: () => void | Promise<void>;
     }
 
-    let {scope, dateStart, dateEnd, targetCurrency, assetIds = [], title = '', subtitle = '', internalSubset = false, assetClass = null, sectorExposure = null, geographyExposure = null, refreshVersion = 0, showHeaderActions = true, onsynced}: Props = $props();
+    let {scope, dateStart, dateEnd, targetCurrency, assetIds = [], title = '', subtitle = '', internalSubset = false, assetClass = null, sectorExposure = null, geographyExposure = null, refreshVersion = 0, showHeaderActions = true, showBetaBanner = true, onsynced}: Props = $props();
 
     let catalog = $state<RiskCatalogResponse | null>(null);
     let scenarioCatalog = $state<RiskScenarioCatalogResponse | null>(null);
@@ -764,6 +766,10 @@
 </script>
 
 <div class="space-y-4" data-testid="risk-analysis-panel">
+    {#if showBetaBanner}
+        <RiskBetaBanner />
+    {/if}
+
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title || $t('risk.title')}</h2>

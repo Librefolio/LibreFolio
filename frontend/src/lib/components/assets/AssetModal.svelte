@@ -1197,9 +1197,7 @@
         // next scheduled sync); we intentionally do NOT await this.
         if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
             const end = new Date().toISOString().slice(0, 10);
-            void zodiosApi
-                .sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any])
-                .catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
         }
     }
 
@@ -1952,7 +1950,12 @@
             <button type="button" data-testid="reuse-existing-add" class="w-full px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => reuseExisting(true)}>
                 {$t('assets.modal.reuseExisting.useAndAdd')}
             </button>
-            <button type="button" data-testid="reuse-existing-use" class="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors" onclick={() => reuseExisting(false)}>
+            <button
+                type="button"
+                data-testid="reuse-existing-use"
+                class="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                onclick={() => reuseExisting(false)}
+            >
                 {$t('assets.modal.reuseExisting.useOnly')}
             </button>
             <button type="button" data-testid="reuse-existing-cancel" class="w-full px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>

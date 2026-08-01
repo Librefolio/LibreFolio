@@ -501,16 +501,18 @@
       "pendingEditor": "editor pendiente",
       "title": "Resolutor de duplicados del lote",
       "subtitle": "{n} grupo(s) de duplicados encontrados entre archivos.",
-      "priorityHint": "Los archivos superiores ganan por defecto.",
       "filePriority": "Prioridad de archivos",
-      "moveUp": "Subir",
-      "moveDown": "Bajar",
       "memberCount": "{n} filas",
-      "tierSure": "Duplicado seguro",
-      "tierProbable": "Duplicado probable",
       "groupHelp": "Selecciona cada fila que quieras conservar. Los grupos sin cambios siguen la prioridad de archivos.",
       "resetDefault": "Restablecer valores",
-      "defaultKeeper": "conservada por defecto"
+      "defaultKeeper": "conservada por defecto",
+      "priorityPanelHint": "Establece una prioridad de selección para resolver duplicados: los archivos más arriba aportan la copia conservada por defecto.",
+      "recalcDefaults": "Recalcular por prioridad",
+      "keepColumn": "Conservar",
+      "duplicateBadge": "duplicado",
+      "similarityTotal": "Solapamiento total",
+      "similarityPartial": "Parcial",
+      "similarityTooltip": "Total: cada fila tiene coincidencia entre archivos. Parcial: al menos una fila no tiene gemelo exacto — revísalo antes de importar."
     }
   },
   "brokers": {

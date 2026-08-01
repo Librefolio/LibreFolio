@@ -407,7 +407,6 @@ class TestMWRRSeries:
 
     def test_cold_start_mode(self):
         """use_warm_start=False should never propagate prev_guess."""
-        from datetime import timedelta
 
         navs = [
             NAVSnapshot(date(2025, 1, 1), Decimal("26000")),

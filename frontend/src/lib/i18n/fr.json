@@ -501,16 +501,18 @@
       "pendingEditor": "éditeur en attente",
       "title": "Résolution des doublons du lot",
       "subtitle": "{n} groupe(s) de doublons trouvés entre fichiers.",
-      "priorityHint": "Les fichiers plus hauts gagnent par défaut.",
       "filePriority": "Priorité des fichiers",
-      "moveUp": "Monter",
-      "moveDown": "Descendre",
       "memberCount": "{n} lignes",
-      "tierSure": "Doublon certain",
-      "tierProbable": "Doublon probable",
       "groupHelp": "Sélectionnez chaque ligne à conserver. Les groupes non modifiés suivent la priorité des fichiers.",
       "resetDefault": "Réinitialiser",
-      "defaultKeeper": "conservée par défaut"
+      "defaultKeeper": "conservée par défaut",
+      "priorityPanelHint": "Définissez une priorité de sélection pour la résolution des doublons : les fichiers plus haut fournissent la copie conservée par défaut.",
+      "recalcDefaults": "Recalculer par priorité",
+      "keepColumn": "Garder",
+      "duplicateBadge": "doublon",
+      "similarityTotal": "Chevauchement total",
+      "similarityPartial": "Partiel",
+      "similarityTooltip": "Total : chaque ligne a une correspondance entre les fichiers. Partiel : au moins une ligne n'a pas de jumeau exact — vérifiez avant d'importer."
     }
   },
   "brokers": {

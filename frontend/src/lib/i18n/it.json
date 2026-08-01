@@ -501,16 +501,18 @@
       "pendingEditor": "editor in sospeso",
       "title": "Risolutore duplicati del lotto",
       "subtitle": "{n} gruppo/i di duplicati trovati tra i file.",
-      "priorityHint": "I file più in alto vincono i default.",
       "filePriority": "Priorità file",
-      "moveUp": "Sposta su",
-      "moveDown": "Sposta giù",
       "memberCount": "{n} righe",
-      "tierSure": "Duplicato sicuro",
-      "tierProbable": "Duplicato probabile",
       "groupHelp": "Seleziona ogni riga da mantenere. I gruppi non modificati seguono la priorità dei file.",
       "resetDefault": "Ripristina default",
-      "defaultKeeper": "mantenuta di default"
+      "defaultKeeper": "mantenuta di default",
+      "priorityPanelHint": "Imposta una priorità di selezione per la risoluzione dei duplicati: i file più in alto forniscono la copia mantenuta di default.",
+      "recalcDefaults": "Ricalcola per priorità",
+      "keepColumn": "Tieni",
+      "duplicateBadge": "duplicato",
+      "similarityTotal": "Sovrapposizione totale",
+      "similarityPartial": "Parziale",
+      "similarityTooltip": "Totale: ogni riga ha una corrispondenza tra i file. Parziale: almeno una riga non ha un gemello esatto — rivedi prima di importare."
     }
   },
   "brokers": {

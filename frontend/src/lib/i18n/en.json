@@ -501,16 +501,18 @@
       "pendingEditor": "pending editor",
       "title": "Batch duplicate resolver",
       "subtitle": "{n} duplicate group(s) found across files.",
-      "priorityHint": "Higher files win defaults.",
       "filePriority": "File priority",
-      "moveUp": "Move up",
-      "moveDown": "Move down",
       "memberCount": "{n} rows",
-      "tierSure": "Sure duplicate",
-      "tierProbable": "Probable duplicate",
       "groupHelp": "Select every row to keep. Untouched groups follow file priority.",
       "resetDefault": "Reset defaults",
-      "defaultKeeper": "default keeper"
+      "defaultKeeper": "default keeper",
+      "priorityPanelHint": "Set a selection priority for duplicate resolution: files higher in the list provide the default kept copy.",
+      "recalcDefaults": "Recalculate by priority",
+      "keepColumn": "Keep",
+      "duplicateBadge": "duplicate",
+      "similarityTotal": "Total overlap",
+      "similarityPartial": "Partial",
+      "similarityTooltip": "Total: every row is matched across files. Partial: at least one row has no exact twin — review before importing."
     }
   },
   "brokers": {

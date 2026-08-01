@@ -11,6 +11,7 @@
     import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
+    import RiskBetaBanner from './RiskBetaBanner.svelte';
 
     interface AssetOption {
         id: number;
@@ -118,6 +119,8 @@
 </script>
 
 <div class="space-y-4" data-testid="asset-global-risk-panel">
+    <RiskBetaBanner />
+
     <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-asset-set-controls">
         <div class="flex flex-wrap items-end gap-3">
             <label class="text-xs text-gray-500 dark:text-gray-400">
@@ -161,7 +164,7 @@
     </section>
 
     {#if selectedAssetIds.length > 0}
-        <RiskAnalysisPanel scope={{kind: 'asset_set', asset_ids: selectedAssetIds}} {dateStart} {dateEnd} {targetCurrency} assetIds={selectedAssetIds} title={$t('risk.analytics.correlation.name')} {onsynced} />
+        <RiskAnalysisPanel scope={{kind: 'asset_set', asset_ids: selectedAssetIds}} {dateStart} {dateEnd} {targetCurrency} assetIds={selectedAssetIds} title={$t('risk.analytics.correlation.name')} showBetaBanner={false} {onsynced} />
     {:else}
         <div class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-8 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-empty">
             {$t('risk.states.noAssets')}
