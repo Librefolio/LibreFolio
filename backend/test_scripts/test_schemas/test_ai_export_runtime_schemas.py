@@ -1,4 +1,4 @@
-"""Contracts for the component-based public AI Export v1 API."""
+"""Contracts for the component-based public AI Export V2 API."""
 
 from __future__ import annotations
 
@@ -19,8 +19,10 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportEntityDirectory,
     AiExportEventSelectionManifest,
     AiExportFxPairDirectoryEntry,
+    AiExportHistoryCoverage,
     AiExportIndicatorSamplingPolicy,
     AiExportManifestRole,
+    AiExportPeriod,
     AiExportPeriodSemantics,
     AiExportPriceSamplingPolicy,
     AiExportProblem,
@@ -28,6 +30,7 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportSnapshotMeta,
     AiExportSnapshotRequest,
     AiExportSnapshotResponse,
+    AiExportSnapshotSourceFailureProblem,
     AiExportSnapshotStats,
     AiExportTechnicalSamplingManifest,
 )
@@ -41,7 +44,7 @@ def _dataset_selection(domain: str = "portfolio") -> dict[str, object]:
     return {
         "kind": "dataset",
         "id": f"{domain}.overview",
-        "version": 1,
+        "version": 2,
     }
 
 
@@ -49,11 +52,11 @@ def _analysis_selection(domain: str = "asset") -> dict[str, object]:
     return {
         "kind": "analysis",
         "id": f"{domain}.trend_analysis",
-        "version": 1,
+        "version": 2,
         "instruction_template_id": f"{domain}.trend_analysis.instructions",
-        "instruction_template_version": 1,
+        "instruction_template_version": 2,
         "response_contract_id": f"{domain}.trend_analysis.response",
-        "response_contract_version": 1,
+        "response_contract_version": 2,
     }
 
 
@@ -64,7 +67,7 @@ def _request_payload(domain: str) -> dict[str, object]:
         "detail_level": "standard",
         "period": {"start": START.isoformat(), "end": END.isoformat()},
         "target_currency": "EUR",
-        "expected_catalog_version": 1,
+        "expected_catalog_version": 2,
     }
     if domain == "broker":
         payload["broker_id"] = 3
@@ -137,7 +140,7 @@ def test_catalog_separates_datasets_and_analyses_without_prompt_text():
     dataset = AiExportDatasetCatalogEntry(
         kind="dataset",
         id="portfolio.overview",
-        version=1,
+        version=2,
         domain=AiExportDomain.PORTFOLIO,
         display_i18n_key="aiExport.dataset.portfolio.overview.display",
         description_i18n_key="aiExport.dataset.portfolio.overview.description",
@@ -155,8 +158,8 @@ def test_catalog_separates_datasets_and_analyses_without_prompt_text():
     )
     serialized = catalog.model_dump_json()
 
-    assert catalog.schema_version == 1
-    assert catalog.catalog_version == 1
+    assert catalog.schema_version == 2
+    assert catalog.catalog_version == 2
     assert "prompt" not in serialized.lower()
     assert "web_research" not in serialized.lower()
 
@@ -165,7 +168,7 @@ def test_snapshot_response_accepts_json_sections_and_enforces_stats():
     selection = AiExportDatasetSelection(
         kind="dataset",
         id="portfolio.overview",
-        version=1,
+        version=2,
     )
     section = AiExportSectionEnvelope(
         component_id="portfolio.summary",
@@ -190,7 +193,7 @@ def test_snapshot_response_accepts_json_sections_and_enforces_stats():
         dataset_manifest=(
             AiExportDatasetManifestEntry(
                 dataset_id="portfolio.overview",
-                dataset_version=1,
+                dataset_version=2,
                 role=AiExportManifestRole.SELECTED,
             ),
         ),
@@ -199,6 +202,7 @@ def test_snapshot_response_accepts_json_sections_and_enforces_stats():
             dataset_count=1,
             section_count=1,
             serialized_characters=100,
+            serialized_bytes=100,
             estimated_tokens=25,
         ),
     )
@@ -313,3 +317,78 @@ def test_analysis_selection_requires_complete_contract_identity():
 
     with pytest.raises(ValidationError, match="response_contract_version"):
         TypeAdapter(AiExportSnapshotRequest).validate_python(payload)
+
+
+def test_fx_history_coverage_validates_calendar_ratio_and_reason_code():
+    """V2: AiExportHistoryCoverage carries observed/backfilled counts,
+    calendar-day ratio, and an optional reason_code for partial history."""
+    complete = AiExportHistoryCoverage(
+        requested_period=AiExportPeriod(start=date(2026, 1, 1), end=date(2026, 3, 31)),
+        available_period=AiExportPeriod(start=date(2026, 1, 1), end=date(2026, 3, 31)),
+        requested_calendar_days=90,
+        covered_calendar_days=90,
+        coverage_ratio=1.0,
+        complete=True,
+        reason_code=None,
+        observed_count=80,
+        backward_filled_count=10,
+        earliest_source_date=date(2025, 6, 1),
+    )
+    assert complete.complete is True
+    assert complete.reason_code is None
+    assert complete.coverage_ratio == pytest.approx(1.0)
+
+    partial = AiExportHistoryCoverage(
+        requested_period=AiExportPeriod(start=date(2025, 10, 1), end=date(2026, 3, 31)),
+        available_period=AiExportPeriod(start=date(2026, 1, 1), end=date(2026, 3, 31)),
+        requested_calendar_days=182,
+        covered_calendar_days=90,
+        coverage_ratio=90 / 182,
+        complete=False,
+        reason_code="insufficient_source_history",
+        observed_count=80,
+        backward_filled_count=10,
+        earliest_source_date=date(2026, 1, 1),
+    )
+    assert partial.complete is False
+    assert partial.reason_code == "insufficient_source_history"
+    assert partial.coverage_ratio == pytest.approx(90 / 182)
+
+
+def test_fx_history_coverage_rejects_mismatched_complete_and_reason_code():
+    with pytest.raises(ValidationError, match="reason_code must be absent only for complete coverage"):
+        AiExportHistoryCoverage(
+            requested_period=AiExportPeriod(start=date(2026, 1, 1), end=date(2026, 3, 31)),
+            available_period=AiExportPeriod(start=date(2026, 1, 1), end=date(2026, 3, 31)),
+            requested_calendar_days=90,
+            covered_calendar_days=90,
+            coverage_ratio=1.0,
+            complete=True,
+            reason_code="insufficient_source_history",  # must be None when complete=True
+            observed_count=80,
+            backward_filled_count=10,
+            earliest_source_date=date(2025, 6, 1),
+        )
+
+
+def test_snapshot_source_failure_problem_carries_optional_reason_code():
+    """V2: AiExportSnapshotSourceFailureProblem includes an optional reason_code
+    that surfaces machine-readable FX or component failure details."""
+    base_kwargs = {
+        "code": "snapshot_source_failure",
+        "message": "A required AI Export component is unavailable.",
+        "domain": "fx",
+        "selection_kind": "dataset",
+        "selection_id": "fx.overview",
+        "detail_level": "standard",
+        "component_id": "fx.technical_coverage",
+        "retryable": False,
+    }
+
+    without_reason = AiExportSnapshotSourceFailureProblem(**base_kwargs, reason_code=None)
+    assert without_reason.reason_code is None
+
+    with_reason = AiExportSnapshotSourceFailureProblem(**base_kwargs, reason_code="fx_no_usable_rate")
+    assert with_reason.reason_code == "fx_no_usable_rate"
+    serialized = with_reason.model_dump(mode="json")
+    assert serialized["reason_code"] == "fx_no_usable_rate"

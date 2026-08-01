@@ -50,6 +50,8 @@ from backend.app.services.ai_export.components.asset_payloads import (
     AssetLotDetailRow,
     AssetMarketSnapshotPayload,
     AssetPerformancePayload,
+    AssetPortfolioRoleBasis,
+    AssetPortfolioRoleUnavailable,
     AssetPositionsByBrokerPayload,
     AssetPositionScopeBroker,
     AssetPositionScopePayload,
@@ -65,6 +67,7 @@ from backend.app.services.ai_export.components.asset_resources import (
     ASSET_METADATA_RESOURCE,
     ASSET_REPORT_RESOURCE,
     AssetMetadataResource,
+    all_open_holdings,
     load_asset_lots,
     load_asset_market_prices,
     load_asset_metadata,
@@ -206,6 +209,7 @@ async def _build_position_scope(context: BuildContext, dependencies: Mapping[str
 
     brokers = tuple(AssetPositionScopeBroker(broker_id=h.broker_id, broker_name=h.broker_name or f"broker#{h.broker_id}", quantity=h.quantity) for h in holdings)
     total_quantity = sum((b.quantity for b in brokers), start=Decimal("0"))
+    portfolio_role = _build_portfolio_role(scope, report, holdings)
     return AssetPositionScopePayload(
         asset_id=scope.asset_id,  # type: ignore[arg-type]
         as_of_date=scope.snapshot_as_of,
@@ -213,6 +217,85 @@ async def _build_position_scope(context: BuildContext, dependencies: Mapping[str
         brokers=brokers,
         total_quantity=total_quantity,
         broker_count=len(brokers),
+        portfolio_role=portfolio_role,
+    )
+
+
+def _build_portfolio_role(scope, report, asset_holdings) -> AssetPortfolioRoleBasis:
+    """Deterministic, non-interpretive portfolio-weight basis for `asset.position_scope`.
+
+    Aggregates this asset's legs once into a net market value and a gross
+    absolute value, and divides the latter by the whole scoped portfolio's
+    gross absolute open-position value (sum of ``abs(current_value)`` across
+    every accessible leg). Every value is `None`-with-reason rather than a
+    silent `0` when a contributing leg lacks a valuation, and the ratio is
+    `None`-with-reason when the denominator is zero (empty/fully-unvalued
+    portfolio) - never a divide-by-zero or a fabricated concentration figure.
+    Emits no subjective role label (core/satellite is the reader's job).
+    """
+    broker_scope_mode = "SCOPED_BROKERS" if scope.broker_scope else "WHOLE_ACCESSIBLE_PORTFOLIO"
+    unavailable: list[AssetPortfolioRoleUnavailable] = []
+
+    # This asset's aggregate value across brokers (each leg counted once).
+    asset_leg_count = len(asset_holdings)
+    asset_broker_ids = {h.broker_id for h in asset_holdings}
+    asset_missing = [h.broker_id for h in asset_holdings if h.current_value is None]
+    if asset_missing:
+        asset_market_value = None
+        asset_gross_absolute_value = None
+        unavailable.append(
+            AssetPortfolioRoleUnavailable(
+                field="asset_market_value",
+                reason=f"{len(asset_missing)} of {asset_leg_count} asset leg(s) have no current_value; a partial sum would understate the position.",
+            )
+        )
+    else:
+        asset_market_value = sum((h.current_value for h in asset_holdings), start=Decimal("0"))
+        asset_gross_absolute_value = sum((abs(h.current_value) for h in asset_holdings), start=Decimal("0"))
+
+    # Whole scoped portfolio gross absolute open-position value.
+    portfolio_legs = all_open_holdings(report)
+    portfolio_missing = [h for h in portfolio_legs if h.current_value is None]
+    if portfolio_missing:
+        portfolio_gross_absolute_value = None
+        unavailable.append(
+            AssetPortfolioRoleUnavailable(
+                field="portfolio_gross_absolute_value",
+                reason=f"{len(portfolio_missing)} of {len(portfolio_legs)} scoped portfolio open-position leg(s) have no current_value; the gross absolute denominator is incomplete.",
+            )
+        )
+    else:
+        portfolio_gross_absolute_value = sum((abs(h.current_value) for h in portfolio_legs), start=Decimal("0"))
+
+    # Ratio: only when both numerator and a strictly positive denominator exist.
+    portfolio_weight_ratio: Decimal | None = None
+    if asset_gross_absolute_value is None or portfolio_gross_absolute_value is None:
+        unavailable.append(
+            AssetPortfolioRoleUnavailable(
+                field="portfolio_weight_ratio",
+                reason="Ratio requires both the asset gross absolute value and the portfolio gross absolute denominator; at least one is unavailable.",
+            )
+        )
+    elif portfolio_gross_absolute_value == 0:
+        unavailable.append(
+            AssetPortfolioRoleUnavailable(
+                field="portfolio_weight_ratio",
+                reason="Scoped portfolio gross absolute open-position value is zero (no valued open positions); weight is undefined.",
+            )
+        )
+    else:
+        portfolio_weight_ratio = asset_gross_absolute_value / portfolio_gross_absolute_value
+
+    return AssetPortfolioRoleBasis(
+        target_currency=scope.target_currency,
+        broker_scope_mode=broker_scope_mode,
+        asset_market_value=asset_market_value,
+        asset_gross_absolute_value=asset_gross_absolute_value,
+        portfolio_gross_absolute_value=portfolio_gross_absolute_value,
+        portfolio_weight_ratio=portfolio_weight_ratio,
+        position_leg_count=asset_leg_count,
+        broker_count=len(asset_broker_ids),
+        unavailable=tuple(unavailable),
     )
 
 

@@ -3,8 +3,8 @@ import {findCompatibleAiExportSelection, selectionsForDomain} from './catalog/co
 import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
 import type {AiExportPromptStats, AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
-export const AI_EXPORT_TOKEN_WARNING_THRESHOLD = 8_000;
-export const AI_EXPORT_TOKEN_LARGE_THRESHOLD = 16_000;
+export const AI_EXPORT_TOKEN_WARNING_THRESHOLD = 20_000;
+export const AI_EXPORT_TOKEN_LARGE_THRESHOLD = 60_000;
 export const AI_EXPORT_PERIOD_PRESETS = ['3m', '6m', '1y', 'custom'] as const;
 export const AI_EXPORT_PERIOD_UNITS = ['days', 'weeks', 'months', 'years'] as const;
 
@@ -63,6 +63,7 @@ export interface AiExportOptionsPanelLabels {
     readonly payloadStatsLabel: string;
     readonly backendEstimatedTokensLabel: string;
     readonly finalEstimatedTokensLabel: string;
+    readonly tokenUnitLabel: string;
     readonly tokenSeverityLabels: Readonly<Record<AiExportTokenSeverity, string>>;
     readonly prepareLabel: string;
     readonly preparingLabel: string;
@@ -70,9 +71,39 @@ export interface AiExportOptionsPanelLabels {
     readonly useCompactLabel: string;
 }
 
+const AI_EXPORT_TOKEN_UNITS = ['', 'k', 'M', 'G', 'T'] as const;
+const AI_EXPORT_BYTE_UNITS = ['Byte', 'KB', 'MB', 'GB', 'TB'] as const;
+
+function formatAiExportScaledValue(value: number, locale: string, base: number, units: readonly string[]): {readonly value: string; readonly unit: string} {
+    const safeValue = Number.isFinite(value) ? Math.max(0, value) : 0;
+    let scaled = safeValue;
+    let unitIndex = 0;
+    while (scaled >= base && unitIndex < units.length - 1) {
+        scaled /= base;
+        unitIndex += 1;
+    }
+    return {
+        value: new Intl.NumberFormat(locale, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(scaled),
+        unit: units[unitIndex],
+    };
+}
+
+export function formatAiExportTokenCount(value: number, locale: string, tokenUnit: string): string {
+    const formatted = formatAiExportScaledValue(value, locale, 1_000, AI_EXPORT_TOKEN_UNITS);
+    return `${formatted.value}${formatted.unit ? ` ${formatted.unit}` : ''} ${tokenUnit}`;
+}
+
+export function formatAiExportByteSize(value: number, locale: string): string {
+    const formatted = formatAiExportScaledValue(value, locale, 1_024, AI_EXPORT_BYTE_UNITS);
+    return `${formatted.value} ${formatted.unit}`;
+}
+
 export function estimateAiExportTokenSeverity(finalEstimatedTokens: number): AiExportTokenSeverity {
     if (finalEstimatedTokens >= AI_EXPORT_TOKEN_LARGE_THRESHOLD) return 'large';
-    if (finalEstimatedTokens >= AI_EXPORT_TOKEN_WARNING_THRESHOLD) return 'warning';
+    if (finalEstimatedTokens > AI_EXPORT_TOKEN_WARNING_THRESHOLD) return 'warning';
     return 'normal';
 }
 

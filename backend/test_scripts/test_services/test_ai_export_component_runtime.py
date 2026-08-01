@@ -28,17 +28,17 @@ from backend.app.services.ai_export.components.envelope import (
     SectionEnvelope,
     build_envelope,
 )
-from backend.app.services.ai_export.components.resources import (
-    FxRateObservation,
-    FxRateSeriesResource,
-    LotsResultsResource,
-    PriceResultsResource,
-)
 from backend.app.services.ai_export.components.registry import (
     ComponentDependencyCycleError,
     ComponentRegistry,
     DuplicateComponentIdError,
     UnknownComponentError,
+)
+from backend.app.services.ai_export.components.resources import (
+    FxRateObservation,
+    FxRateSeriesResource,
+    LotsResultsResource,
+    PriceResultsResource,
 )
 from backend.app.services.ai_export.components.spec import ComponentSpec, ComponentSpecError
 from backend.app.services.ai_export.components.types import (

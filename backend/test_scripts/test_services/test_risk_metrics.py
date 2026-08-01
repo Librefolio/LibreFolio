@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from datetime import date, timedelta
 
 import pytest
 
@@ -12,6 +13,7 @@ from backend.app.services.risk.metrics import (
     correlation_matrix,
     covariance_matrix,
     current_buy_and_hold_returns,
+    drawdown_episodes,
     historical_var_cvar,
     hypothetical_stress_return,
     pairwise_correlation,
@@ -19,6 +21,12 @@ from backend.app.services.risk.metrics import (
     risk_contributions_from_covariance,
     summarize_drawdown,
 )
+
+_BASELINE = date(2026, 1, 1)
+
+
+def _regular_dates(count: int) -> list[date]:
+    return [_BASELINE + timedelta(days=index + 1) for index in range(count)]
 
 
 def test_period_returns_and_drawdown_are_derived_from_exact_wealth():
@@ -148,3 +156,142 @@ def test_historical_var_cvar_uses_positive_observed_loss_magnitudes():
     assert two_day.horizon_returns == pytest.approx((-0.1, -0.2))
     assert two_day.value_at_risk == pytest.approx(0.1)
     assert two_day.conditional_value_at_risk == pytest.approx(0.15)
+
+
+def test_drawdown_episodes_report_no_drawdown_for_monotonic_growth():
+    report = drawdown_episodes(
+        [0.01, 0.02, 0.015, 0.03],
+        dates=_regular_dates(4),
+        baseline_date=_BASELINE,
+    )
+    assert report.maximum_drawdown_recovery_status == "no_drawdown"
+    assert report.maximum_drawdown == 0.0
+    assert report.maximum_drawdown_peak_date is None
+    assert report.maximum_drawdown_trough_date is None
+    assert report.maximum_drawdown_recovery_date is None
+    assert report.maximum_drawdown_recovered_ratio is None
+    assert report.maximum_drawdown_duration_days == 0
+    assert report.current_drawdown == 0.0
+    assert report.current_drawdown_duration_days == 0
+    assert report.remaining_to_peak_ratio == 0.0
+    assert report.current_peak_date == _regular_dates(4)[-1]
+    assert report.available_start == _regular_dates(4)[0]
+    assert report.available_end == _regular_dates(4)[-1]
+    assert report.n_observations == 4
+
+
+def test_drawdown_episodes_report_open_episode_uses_available_end():
+    dates = _regular_dates(5)
+    report = drawdown_episodes(
+        [0.1, 0.1, -0.1, -0.1, -0.1],
+        dates=dates,
+        baseline_date=_BASELINE,
+    )
+    assert report.maximum_drawdown_recovery_status == "open"
+    assert report.maximum_drawdown == pytest.approx(1.21 * 0.9**3 / 1.21 - 1.0)
+    assert report.maximum_drawdown_peak_date == dates[1]
+    assert report.maximum_drawdown_trough_date == dates[4]
+    assert report.maximum_drawdown_recovery_date is None
+    assert report.maximum_drawdown_recovered_ratio == 0.0
+    assert report.maximum_drawdown_duration_days == (dates[4] - dates[1]).days
+    assert report.current_drawdown == report.maximum_drawdown
+    assert report.current_drawdown_duration_days == (dates[4] - dates[1]).days
+    assert report.remaining_to_peak_ratio > 0.0
+
+
+def test_drawdown_episodes_report_recovered_episode_reports_recovery_date():
+    dates = _regular_dates(4)
+    report = drawdown_episodes(
+        [0.1, -0.2, -0.1, 0.6],
+        dates=dates,
+        baseline_date=_BASELINE,
+    )
+    assert report.maximum_drawdown_recovery_status == "recovered"
+    assert report.maximum_drawdown_peak_date == dates[0]
+    assert report.maximum_drawdown_trough_date == dates[2]
+    assert report.maximum_drawdown_recovery_date == dates[3]
+    assert report.maximum_drawdown_recovered_ratio == 1.0
+    assert report.maximum_drawdown_duration_days == (dates[3] - dates[0]).days
+    assert report.current_drawdown == 0.0
+    assert report.remaining_to_peak_ratio == 0.0
+
+
+def test_drawdown_episodes_report_selects_deepest_of_multiple_episodes():
+    dates = _regular_dates(7)
+    report = drawdown_episodes(
+        [0.05, -0.05, 0.10, 0.20, -0.30, -0.05, 0.05],
+        dates=dates,
+        baseline_date=_BASELINE,
+    )
+    # The second decline (from the higher peak) is deeper than the first.
+    assert report.maximum_drawdown_peak_date == dates[3]
+    assert report.maximum_drawdown_trough_date == dates[5]
+    assert report.maximum_drawdown_recovery_status == "open"
+
+
+def test_drawdown_episodes_report_breaks_equal_depth_ties_chronologically():
+    dates = _regular_dates(6)
+    # Two disjoint episodes with identical -50% depth (exact floats); earliest peak wins.
+    report = drawdown_episodes(
+        [-0.5, 1.0, -0.5, 1.0, 0.0, 0.0],
+        dates=dates,
+        baseline_date=_BASELINE,
+    )
+    assert report.maximum_drawdown == pytest.approx(-0.5)
+    assert report.maximum_drawdown_peak_date == _BASELINE
+    assert report.maximum_drawdown_trough_date == dates[0]
+
+
+def test_drawdown_episodes_report_supports_irregular_dates():
+    dates = [
+        _BASELINE + timedelta(days=3),
+        _BASELINE + timedelta(days=10),
+        _BASELINE + timedelta(days=40),
+    ]
+    report = drawdown_episodes(
+        [0.1, -0.2, -0.05],
+        dates=dates,
+        baseline_date=_BASELINE,
+    )
+    assert report.maximum_drawdown_recovery_status == "open"
+    assert report.maximum_drawdown_peak_date == dates[0]
+    assert report.maximum_drawdown_trough_date == dates[2]
+    assert report.maximum_drawdown_duration_days == (dates[2] - dates[0]).days
+    assert report.current_drawdown_duration_days == (dates[2] - dates[0]).days
+
+
+def test_drawdown_episodes_report_current_and_maximum_can_differ():
+    dates = _regular_dates(6)
+    report = drawdown_episodes(
+        [0.1, -0.3, 0.6, 0.0, -0.05, -0.02],
+        dates=dates,
+        baseline_date=_BASELINE,
+    )
+    # Maximum episode recovered early; a distinct shallow episode is still open.
+    assert report.maximum_drawdown_recovery_status == "recovered"
+    assert report.maximum_drawdown < report.current_drawdown < 0.0
+    assert report.current_peak_date == dates[3]
+
+
+def test_drawdown_episodes_rejects_misaligned_dates():
+    with pytest.raises(ValueError, match="align"):
+        drawdown_episodes([0.1, -0.1], dates=_regular_dates(3), baseline_date=_BASELINE)
+
+
+def test_drawdown_episodes_rejects_non_increasing_dates():
+    with pytest.raises(ValueError, match="strictly increasing"):
+        drawdown_episodes(
+            [0.1, -0.1],
+            dates=[_BASELINE + timedelta(days=2), _BASELINE + timedelta(days=1)],
+            baseline_date=_BASELINE,
+        )
+
+
+def test_drawdown_episodes_rejects_baseline_not_before_first_date():
+    with pytest.raises(ValueError, match="strictly increasing"):
+        drawdown_episodes([0.1], dates=[_BASELINE], baseline_date=_BASELINE)
+
+
+def test_drawdown_episodes_requires_at_least_one_return():
+    with pytest.raises(ValueError, match="at least one return"):
+        drawdown_episodes([], dates=[], baseline_date=_BASELINE)

@@ -71,7 +71,7 @@ def _payload(domain: str) -> dict[str, object]:
         "detail_level": "standard",
         "period": {"start": START.isoformat(), "end": END.isoformat()},
         "target_currency": "EUR",
-        "expected_catalog_version": 1,
+        "expected_catalog_version": 2,
     }
     if domain == "broker":
         payload["broker_id"] = 1
@@ -140,6 +140,7 @@ def _response(domain: str) -> AiExportSnapshotResponse:
                 "dataset_count": 1,
                 "section_count": 1,
                 "serialized_characters": 100,
+                "serialized_bytes": 100,
                 "estimated_tokens": 25,
                 "token_estimation_method": "chars_div_4_v1",
             },
@@ -159,7 +160,7 @@ def _typed_problem(response: httpx.Response) -> AiExportProblem:
 
 
 @pytest.mark.asyncio
-async def test_catalog_returns_18_datasets_and_16_analyses():
+async def test_catalog_returns_32_datasets_and_16_analyses():
     app = _app()
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -169,11 +170,14 @@ async def test_catalog_returns_18_datasets_and_16_analyses():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["schema_version"] == 1
-    assert payload["catalog_version"] == 1
-    assert len(payload["datasets"]) == 18
+    assert payload["schema_version"] == 2
+    assert payload["catalog_version"] == 2
+    assert len(payload["datasets"]) == 32
     assert len(payload["analyses"]) == 16
     assert "asset.drawdown_recovery" not in {entry["id"] for entry in payload["analyses"]}
+    assert {"portfolio.drawdown_context", "broker.drawdown_context", "asset.drawdown_context"} <= {entry["id"] for entry in payload["datasets"]}
+    assert "fx.drawdown_context" not in {entry["id"] for entry in payload["datasets"]}
+    assert {"portfolio.income_evidence", "broker.concentration_evidence", "broker.cost_efficiency_evidence", "fx.conversion_timing_context"} <= {entry["id"] for entry in payload["datasets"]}
     serialized = json.dumps(payload).lower()
     assert "prompt" not in serialized
     assert "web_research" not in serialized
@@ -257,6 +261,15 @@ async def test_authenticated_four_domains_return_new_snapshot_contract(domain: s
             503,
             "snapshot_source_failure",
         ),
+        (
+            AiExportSnapshotSourceError(
+                "fx.rate_ohlc",
+                retryable=False,
+                reason_code="fx_no_usable_rate",
+            ),
+            503,
+            "snapshot_source_failure",
+        ),
     ],
 )
 async def test_typed_problem_mapping(error, status_code: int, code: str):
@@ -274,6 +287,8 @@ async def test_typed_problem_mapping(error, status_code: int, code: str):
     problem = _typed_problem(response)
     assert problem.code == code
     assert problem.selection_id == "portfolio.overview"
+    if isinstance(error, AiExportSnapshotSourceError) and error.reason_code:
+        assert problem.reason_code == error.reason_code
 
 
 @pytest.mark.asyncio

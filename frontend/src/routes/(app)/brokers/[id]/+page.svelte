@@ -84,7 +84,7 @@
     let aiExportCompatibility: AiExportCatalogCompatibilityResult = DISABLED_AI_EXPORT_COMPATIBILITY;
     let aiExportCatalogLoading = true;
     let aiExportCatalogFailed = false;
-    let aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'), $_('dashboard.aiExportBuilding'));
+    let aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
 
     // Transactions tab — full paginated history (not just "recent 10").
     let txMainRows: TXReadItem[] = [];
@@ -180,7 +180,7 @@
         if (hadLoadedData && !reportLoading) void loadOverview(true);
     }
 
-    $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'), $_('dashboard.aiExportBuilding'));
+    $: aiExportLabels = buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'));
 
     $: brokerTabs = [
         {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'broker-tab-panoramica'},

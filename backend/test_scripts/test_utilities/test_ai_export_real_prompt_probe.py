@@ -13,6 +13,7 @@ from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     AssetCandidate,
     FxCandidate,
     ProbeError,
+    TargetProbeCase,
     audit_public_tables,
     audit_snapshot_semantics,
     build_dimension_summary,
@@ -25,9 +26,12 @@ from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     hash_sqlite_family,
     is_technical_dataset,
     legacy_sampling_manifest,
+    measure_broker_scope_diagnostics,
     measure_canonical_breakdown,
+    measure_targeted_adequacy_diagnostics,
     measure_technical_diagnostics,
     metric_change_reasons,
+    parse_target_case,
     prepare_runtime_credentials,
     prompt_size_category,
     rank_asset_candidates,
@@ -37,7 +41,9 @@ from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     sanitize_filename_part,
     save_and_reread_prompt,
     scan_text_for_secrets,
+    select_target_scope,
     should_continue_after_failure,
+    signal_metric_summary,
     sqlite_backup,
     sqlite_primary_unchanged,
     tuning_v2_cases,
@@ -113,6 +119,128 @@ def test_filename_sanitation_and_deterministic_prompt_name():
     filename = build_prompt_filename("Alfy", "Data", "Portfolio", "portfolio.all data", "Broker #1", "1Y", "Full")
     assert filename == "alfy__data__portfolio__portfolio.all_data__broker_1__1y__full.md"
     assert "/" not in filename
+
+
+def test_target_case_parser_and_scope_selection_are_exact():
+    target = parse_target_case("alfy|broker.cost_efficiency|1Y|standard|broker=Directa")
+    assert target == TargetProbeCase(
+        user_alias="alfy",
+        selection_id="broker.cost_efficiency",
+        period_label="1Y",
+        detail_level="standard",
+        scope_selector="broker=Directa",
+    )
+    scope = select_target_scope(
+        [
+            {"domain": "broker", "scope_alias": "broker_anon_01", "selector_name": "directa"},
+            {"domain": "broker", "scope_alias": "broker_anon_02", "selector_name": "Recrowd"},
+        ],
+        target,
+        domain="broker",
+    )
+    assert scope["scope_alias"] == "broker_anon_01"
+
+
+def test_target_case_parser_rejects_invalid_or_ambiguous_inputs():
+    with pytest.raises(ProbeError, match="target-case"):
+        parse_target_case("alfy|broker.cost_efficiency|1Y")
+    target = TargetProbeCase("alfy", "broker.cost_efficiency", "1Y", "standard", "broker=Directa")
+    with pytest.raises(ProbeError, match="resolved to 2 scopes"):
+        select_target_scope(
+            [
+                {"domain": "broker", "scope_alias": "broker_anon_01", "selector_name": "Directa"},
+                {"domain": "broker", "scope_alias": "broker_anon_02", "selector_name": "directa"},
+            ],
+            target,
+            domain="broker",
+        )
+
+
+def test_target_case_representative_scope_supports_asset_and_fx_domains():
+    scopes = [
+        {"domain": "portfolio", "scope_alias": "all"},
+        {"domain": "broker", "scope_alias": "broker_anon_01", "inventory": {"position_count": 3}},
+        {"domain": "asset", "scope_alias": "asset_anon_01"},
+        {"domain": "fx", "scope_alias": "fx_pair_anon_01"},
+    ]
+
+    asset = select_target_scope(
+        scopes,
+        TargetProbeCase("marco", "asset.trend_analysis", "1Y", "standard", "representative"),
+        domain="asset",
+    )
+    fx = select_target_scope(
+        scopes,
+        TargetProbeCase("marco", "fx.trend_review", "1Y", "standard", "representative"),
+        domain="fx",
+    )
+
+    assert asset["scope_alias"] == "asset_anon_01"
+    assert fx["scope_alias"] == "fx_pair_anon_01"
+
+
+def test_targeted_pac_diagnostics_count_questions_and_drawdown_rows():
+    prompt = """
+Capital and cadence — REQUIRED WHEN MISSING: immediate capital; periodic amount.
+Goals and horizon — REQUIRED WHEN MISSING: horizon; objective.
+Risk preferences — OPTIONAL WHEN MATERIAL: high-risk cap; exclusions.
+Operational constraints — REQUIRED WHEN MISSING AND MATERIAL: sales allowed; usable brokers.
+COMPONENT portfolio.drawdown_summary
+SUMMARY
+|field|value|
+|status|ok|
+|current_drawdown_percent|-3%|
+COMPONENT portfolio.asset_drawdown_snapshot
+TABLE rows
+|row|asset_ref|current_drawdown_percent|
+|1|A1|-2%|
+|2|A2|-4%|
+"""
+    diagnostics = measure_targeted_adequacy_diagnostics("portfolio.pac_planning", prompt)
+    assert diagnostics["question_category_count"] == 4
+    assert diagnostics["required_question_count"] == 6
+    assert diagnostics["optional_question_count"] == 2
+    assert diagnostics["portfolio_drawdown_rows"] == 2
+    assert diagnostics["asset_drawdown_rows"] == 2
+
+
+def test_broker_scope_diagnostics_distinguish_scope_positions_and_period_contributors():
+    diagnostics = measure_broker_scope_diagnostics(
+        {
+            "entity_directory": {
+                "brokers": [
+                    {"broker_id": 5, "display_name": "First"},
+                    {"broker_id": 7, "display_name": "Second"},
+                ]
+            },
+            "sections": [
+                {
+                    "component_id": "portfolio.summary",
+                    "payload": {"position_broker_count": 1},
+                },
+                {
+                    "component_id": "portfolio.provenance",
+                    "payload": {
+                        "scoped_broker_count": 2,
+                        "broker_scope": [5, 7],
+                    },
+                },
+                {
+                    "component_id": "portfolio.performance",
+                    "payload": {"period_contributor_broker_count": 2},
+                },
+            ],
+        }
+    )
+
+    assert diagnostics == {
+        "broker_scope_refs": ["B1", "B2"],
+        "scoped_broker_count": 2,
+        "position_broker_count": 1,
+        "period_contributor_broker_count": 2,
+        "entity_directory_broker_count": 2,
+        "scope_directory_consistent": True,
+    }
 
 
 def test_deterministic_asset_ranking_uses_history_observations_then_id():
@@ -240,6 +368,12 @@ def test_tuning_v2_excludes_only_all_data_and_builds_approved_matrices():
             },
             {
                 "kind": "dataset",
+                "id": "portfolio.technical_summary",
+                "domain": "portfolio",
+                "period_semantics": "windowed",
+            },
+            {
+                "kind": "dataset",
                 "id": "portfolio.all_data",
                 "domain": "portfolio",
                 "period_semantics": "aggregated",
@@ -284,6 +418,7 @@ def test_tuning_v2_excludes_only_all_data_and_builds_approved_matrices():
                 "portfolio.overview",
                 "portfolio.performance_flows",
             ],
+            "excluded_semantic_projections": ["portfolio.technical_summary"],
         }
     ]
     assert len(data_cases) == 9
@@ -489,6 +624,7 @@ def test_manifest_validation_rejects_pmk_and_requires_interpretive_technical_fie
                 "implementation_parameter_lines": 0,
                 "has_technical_sampling": True,
                 "has_detail_level": True,
+                "has_indicator_instances": True,
                 "has_instance_bucket_count": True,
                 "has_instance_temporal_class": False,
             },
@@ -501,12 +637,25 @@ def test_manifest_validation_rejects_pmk_and_requires_interpretive_technical_fie
                 "implementation_parameter_lines": 0,
                 "has_technical_sampling": True,
                 "has_detail_level": True,
+                "has_indicator_instances": True,
                 "has_instance_bucket_count": False,
                 "has_instance_temporal_class": True,
             },
             [{"category": "technical_indicators"}],
             "slim",
         )
+    validate_manifest_checks(
+        {
+            "implementation_parameter_lines": 0,
+            "has_technical_sampling": True,
+            "has_detail_level": True,
+            "has_indicator_instances": False,
+            "has_instance_bucket_count": False,
+            "has_instance_temporal_class": False,
+        },
+        [{"category": "technical_indicators"}, {"category": "technical_coverage"}],
+        "slim",
+    )
     validate_manifest_checks({"has_technical_sampling": True, "implementation_parameter_lines": 3}, [{"category": "technical_indicators"}], "legacy")
     with pytest.raises(ProbeError, match="Legacy manifest expectation"):
         validate_manifest_checks({"has_technical_sampling": True, "implementation_parameter_lines": 0}, [{"category": "technical_indicators"}], "legacy")
@@ -550,12 +699,91 @@ def test_run_comparison_reports_all_statuses_and_regression_rule():
     assert rows["portfolio.changed"]["regression"] is True
     assert rows["portfolio.changed"]["previous_category"] == "light"
     assert rows["portfolio.changed"]["current_category"] == "light"
-    assert rows["portfolio.changed"]["reason_for_change"] == ["other"]
+    assert rows["portfolio.changed"]["reason_for_change"] == ["semantic_composition_changed"]
     assert rows["portfolio.added"]["status"] == "added"
     assert rows["portfolio.added"]["regression"] is False
     assert rows["portfolio.removed"]["status"] == "removed"
     assert rows["portfolio.recovered"]["status"] == "recovered"
     assert rows["portfolio.failed"]["status"] == "failed"
+
+    targeted_rows = {
+        row["stable_key"].split("|")[3]: row
+        for row in compare_metric_runs(
+            current,
+            previous,
+            include_removed=False,
+        )
+    }
+    assert "portfolio.removed" not in targeted_rows
+    assert set(targeted_rows) == {
+        "portfolio.unchanged",
+        "portfolio.changed",
+        "portfolio.added",
+        "portfolio.recovered",
+        "portfolio.failed",
+    }
+
+
+def test_run_comparison_reports_signal_history_event_and_coverage_deltas():
+    previous_metric = _metric("portfolio.rebalancing", chars=100)
+    previous_metric["signal_breakdown"] = [
+        {
+            "signal_code": "EMA",
+            "instance_count": 3,
+            "history_row_count": 300,
+            "history_chars": 3000,
+            "event_count": 0,
+            "event_chars": 0,
+            "definition_chars": 100,
+            "summary_chars": 200,
+        }
+    ]
+    previous_metric["technical_diagnostics"] = {"eligible_asset_count": 17, "covered_asset_count": 12}
+    current_metric = _metric("portfolio.rebalancing", chars=80)
+    current_metric["signal_breakdown"] = []
+    current_metric["technical_diagnostics"] = {"eligible_asset_count": 17, "covered_asset_count": 12}
+
+    summary = signal_metric_summary(previous_metric)
+    comparison = compare_metric_runs({"entries": [current_metric]}, {"entries": [previous_metric]})[0]
+
+    assert summary["signal_codes"] == ["EMA"]
+    assert summary["history_row_count"] == 300
+    assert comparison["signal_instance_delta"] == -3
+    assert comparison["history_row_delta"] == -300
+    assert comparison["event_delta"] == 0
+    assert comparison["eligible_entity_delta"] == 0
+    assert comparison["covered_entity_delta"] == 0
+    assert "signal_composition_changed" in comparison["reason_for_change"]
+    assert "history_depth_changed" in comparison["reason_for_change"]
+
+
+def test_run_comparison_backward_normalizes_legacy_considered_leg_count():
+    # An OLD metrics file still labels period legs as `considered_asset_count`.
+    # Comparing a NEW run (period_position_leg_count) against it must treat an
+    # equal leg count as unchanged instead of spuriously flagging a coverage
+    # change, so stable cross-run comparisons are preserved.
+    previous_metric = _metric("portfolio.rebalancing", chars=100)
+    previous_metric["technical_diagnostics"] = {"considered_asset_count": 20, "eligible_asset_count": 17, "covered_asset_count": 12}
+    current_metric = _metric("portfolio.rebalancing", chars=100)
+    current_metric["technical_diagnostics"] = {
+        "period_position_leg_count": 20,
+        "period_contributor_asset_count": 18,
+        "eligible_asset_count": 17,
+        "covered_asset_count": 12,
+    }
+
+    unchanged_reasons = metric_change_reasons(current_metric, previous_metric)
+    assert "technical_coverage_changed" not in unchanged_reasons
+
+    changed_metric = _metric("portfolio.rebalancing", chars=100)
+    changed_metric["technical_diagnostics"] = {
+        "period_position_leg_count": 21,
+        "period_contributor_asset_count": 18,
+        "eligible_asset_count": 17,
+        "covered_asset_count": 12,
+    }
+    changed_reasons = metric_change_reasons(changed_metric, previous_metric)
+    assert "technical_coverage_changed" in changed_reasons
 
 
 def test_http_failure_classification_and_fx_continuation():
@@ -566,7 +794,7 @@ def test_http_failure_classification_and_fx_continuation():
     )
     fx_failure = classify_http_failure(
         503,
-        {"detail": {"code": "snapshot_source_failure", "message": "FX unavailable", "retryable": True}},
+        {"detail": {"code": "snapshot_source_failure", "message": "FX unavailable", "retryable": True, "reason_code": "fx_no_usable_rate"}},
         "fx",
     )
 
@@ -574,6 +802,7 @@ def test_http_failure_classification_and_fx_continuation():
     assert skipped["nonfatal"] is True
     assert fx_failure["status"] == "failed"
     assert fx_failure["retryable"] is True
+    assert fx_failure["source_reason_code"] == "fx_no_usable_rate"
     assert fx_failure["nonfatal"] is True
     assert should_continue_after_failure("fx", 503) is True
     assert should_continue_after_failure("portfolio", 500) is True
@@ -586,9 +815,9 @@ def test_ui_representable_asset_and_fx_scopes_do_not_add_hidden_broker_filters()
         "brokers": [{"id": 3}, {"id": 7}],
         "broker_histories": {3: ("2024-01-01", "2026-01-01"), 7: ("2025-01-01", "2026-01-01")},
         "scope_inventories": {
-            "all": {"broker_count": 2},
-            3: {"broker_count": 1},
-            7: {"broker_count": 1},
+            "all": {"scoped_broker_count": 2},
+            3: {"scoped_broker_count": 1},
+            7: {"scoped_broker_count": 1},
         },
         "portfolio_custom_start": "2024-01-01",
         "inventory": {"earliest_price": "2010-01-01"},
@@ -636,7 +865,8 @@ def test_technical_diagnostics_count_runtime_payload_without_values():
             {
                 "component_id": "portfolio.technical_breadth",
                 "payload": {
-                    "considered_asset_count": 3,
+                    "period_position_leg_count": 4,
+                    "period_contributor_asset_count": 3,
                     "eligible_asset_count": 2,
                     "covered_asset_count": 2,
                     "eligible_portfolio_weight_ratio": 1.0,
@@ -653,13 +883,147 @@ def test_technical_diagnostics_count_runtime_payload_without_values():
         "indicator_instance_count": 3,
         "detected_event_count": 12,
         "exported_event_count": 8,
-        "considered_asset_count": 3,
+        "detailed_event_rows": 0,
+        "period_position_leg_count": 4,
+        "period_contributor_asset_count": 3,
+        "selected_entity_count": None,
         "eligible_asset_count": 2,
         "covered_asset_count": 2,
         "eligible_portfolio_weight_ratio": 1.0,
         "covered_portfolio_weight_ratio": 0.75,
         "covered_weight_ratio": 0.75,
+        "context_history_rows": 0,
+        "context_event_count": 0,
+        "context_event_rows": 0,
+        "latest_event_rows": 0,
+        "latest_event_category_count": 0,
+        "event_digest_group_count": 0,
+        "event_digest_underlying_event_count": 0,
+        "signal_ok_count": 0,
+        "signal_partial_count": 0,
+        "signal_unavailable_count": 0,
+        "signal_failed_count": 0,
+        "history_coverage": None,
     }
+
+
+def test_technical_diagnostics_include_context_signal_and_fx_history_coverage():
+    history_coverage = {
+        "requested_period": {"start": "2025-01-01", "end": "2025-12-31"},
+        "available_period": {"start": "2025-10-01", "end": "2025-12-31"},
+        "requested_calendar_days": 365,
+        "covered_calendar_days": 92,
+        "coverage_ratio": 92 / 365,
+        "complete": False,
+        "reason_code": "insufficient_source_history",
+        "observed_count": 65,
+        "backward_filled_count": 27,
+        "earliest_source_date": "2025-10-01",
+    }
+    snapshot = {
+        "meta": {"history_coverage": history_coverage},
+        "sections": [
+            {
+                "component_id": "fx.technical_coverage",
+                "payload": {
+                    "selected_entity_count": 1,
+                    "eligible_entity_count": 1,
+                    "covered_entity_count": 1,
+                    "signals": [
+                        {"ok_count": 5, "partial_count": 2, "unavailable_count": 4, "failed_count": 1},
+                    ],
+                },
+            },
+            {
+                "component_id": "fx.market_summary",
+                "payload": {"history": [{}, {}, {}, {}], "events": [{}, {}]},
+            },
+        ],
+    }
+
+    diagnostics = measure_technical_diagnostics(snapshot)
+
+    assert diagnostics is not None
+    assert diagnostics["history_coverage"] == history_coverage
+    assert diagnostics["selected_entity_count"] == 1
+    assert diagnostics["period_position_leg_count"] is None
+    assert diagnostics["eligible_asset_count"] == 1
+    assert diagnostics["covered_asset_count"] == 1
+    assert diagnostics["signal_ok_count"] == 5
+    assert diagnostics["signal_partial_count"] == 2
+    assert diagnostics["signal_unavailable_count"] == 4
+    assert diagnostics["signal_failed_count"] == 1
+    assert diagnostics["context_history_rows"] == 4
+    assert diagnostics["context_event_count"] == 2
+    assert diagnostics["context_event_rows"] == 2
+    assert diagnostics["latest_event_rows"] == 0
+    assert diagnostics["latest_event_category_count"] == 0
+
+
+def test_technical_diagnostics_split_detailed_context_latest_and_digest_event_rows():
+    snapshot = {
+        "sections": [
+            {
+                "component_id": "portfolio.technical_events",
+                "component_version": 2,
+                "payload": {
+                    "detected_event_count": 40,
+                    "exported_event_count": 6,
+                    "buckets": [
+                        {"event_count": 4, "events": [{}, {}, {}, {}]},
+                        {"event_count": 2, "events": [{}, {}]},
+                    ],
+                },
+            },
+            {
+                "component_id": "portfolio.asset_market_context",
+                "component_version": 1,
+                "payload": {
+                    "entities": [{"entity_id": "asset:1"}],
+                    "latest_events": [
+                        {"entity_id": "asset:1", "signal_code": "EMA", "signal_category": "trend"},
+                        {"entity_id": "asset:1", "signal_code": "RSI", "signal_category": "momentum"},
+                        {"entity_id": "asset:2", "signal_code": "EMA", "signal_category": "trend"},
+                    ],
+                },
+            },
+            {
+                "component_id": "portfolio.context_events",
+                "component_version": 1,
+                "payload": {"detected_event_count": 20, "exported_event_count": 5, "events": [{}] * 5},
+            },
+            {
+                "component_id": "portfolio.event_digest",
+                "component_version": 1,
+                "payload": {
+                    "detected_event_count": 40,
+                    "included_event_count": 9,
+                    "rows": [
+                        {"signal_code": "EMA", "signal_category": "trend", "key": "ema_50_ema_200", "event_count": 4},
+                        {"signal_code": "RSI", "signal_category": "momentum", "key": "rsi_14_oversold_30", "event_count": 5},
+                    ],
+                },
+            },
+        ]
+    }
+
+    diagnostics = measure_technical_diagnostics(snapshot)
+
+    assert diagnostics is not None
+    # Full technical rendered event rows are counted separately from the exported total.
+    assert diagnostics["detailed_event_rows"] == 6
+    assert diagnostics["exported_event_count"] == 6
+    # Market-context detailed events plus dedicated context_events rows (never latest_events).
+    assert diagnostics["context_event_rows"] == 5
+    assert diagnostics["context_event_count"] == 5
+    # Latest-per-category rows and the distinct set of categories present in the prompt.
+    assert diagnostics["latest_event_rows"] == 3
+    assert diagnostics["latest_event_category_count"] == 2
+    # Digest group count and underlying reconcile to the digest's own included_event_count.
+    assert diagnostics["event_digest_group_count"] == 2
+    assert diagnostics["event_digest_underlying_event_count"] == 9
+    included = snapshot["sections"][3]["payload"]["included_event_count"]
+    assert diagnostics["event_digest_underlying_event_count"] == included
 
 
 def test_prompt_size_categories_use_approved_thresholds():
@@ -686,6 +1050,22 @@ def test_public_table_audit_detects_empty_parent_and_percentage_violations():
     assert audit["percent_violation_count"] == 1
 
 
+def test_public_table_audit_detects_double_scaled_summary_percentages():
+    audit = audit_public_tables(
+        "\n".join(
+            [
+                "|field|value|",
+                "|broker_largest_position_weight_percent|1502%|",
+                "|portfolio_largest_position_weight_percent|11.74%|",
+                "|largest_position_weight_delta_percent|3.28%|",
+            ]
+        )
+    )
+
+    assert audit["percent_violation_count"] == 1
+    assert audit["percent_violations"] == ["broker_largest_position_weight_percent=1502%"]
+
+
 def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
     snapshot = {
         "sections": [
@@ -709,7 +1089,8 @@ def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
                 "component_id": "portfolio.technical_indicators",
                 "payload": {
                     "eligible_asset_count": 2,
-                    "considered_asset_count": 2,
+                    "period_position_leg_count": 2,
+                    "period_contributor_asset_count": 2,
                     "covered_asset_count": 2,
                     "eligible_portfolio_weight_ratio": 1.0,
                     "covered_portfolio_weight_ratio": 1.0,
@@ -742,7 +1123,8 @@ def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
                 "component_id": "portfolio.technical_breadth",
                 "payload": {
                     "eligible_asset_count": 2,
-                    "considered_asset_count": 2,
+                    "period_position_leg_count": 2,
+                    "period_contributor_asset_count": 2,
                     "covered_asset_count": 2,
                     "eligible_portfolio_weight_ratio": 1.0,
                     "covered_portfolio_weight_ratio": 1.0,
@@ -811,6 +1193,9 @@ def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
             "|portfolio_weight_percent|technical_normalized_weight_percent|",
             "|75%|75%|",
             "|25%|25%|",
+            "TABLE broker_scope",
+            "|row|value|",
+            "|1|B1|",
         ]
     )
     render_result = {
@@ -818,6 +1203,9 @@ def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
             "format_diagnostics": {
                 "floating_point_noise_normalized": 2,
                 "empty_columns_removed": 3,
+                "empty_temporal_rows_detected": 5,
+                "empty_temporal_rows_omitted": 5,
+                "temporal_rows_rendered": 7,
             }
         }
     }
@@ -831,6 +1219,12 @@ def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
     assert audit["fifo"]["local_refs"] == 2
     assert audit["fifo"]["economic_duplicate_groups"] == 1
     assert audit["fifo"]["in_transit_rows"] == 2
+    assert audit["format_diagnostics"]["empty_temporal_rows_detected"] == 5
+    assert audit["format_diagnostics"]["empty_temporal_rows_omitted"] == 5
+    assert audit["format_diagnostics"]["temporal_rows_rendered"] == 7
+
+    raw_scope_audit = audit_snapshot_semantics(snapshot, prompt.replace("|1|B1|", "|1|5|"), render_result)
+    assert "forbidden public prompt pattern raw_scope_numeric_value: 1" in raw_scope_audit["violations"]
 
 
 def test_dimension_summary_classifies_and_selects_representatives():
@@ -871,6 +1265,7 @@ def test_change_reasons_are_derived_from_public_format_diagnostics():
                     "floating_point_noise_normalized": 1,
                     "normalized_ratio_percent_values": 2,
                     "empty_columns_removed": 3,
+                    "empty_temporal_rows_omitted": 4,
                 },
                 "fifo": {"local_refs": 4},
                 "weights": {"checks": 5},
@@ -883,6 +1278,7 @@ def test_change_reasons_are_derived_from_public_format_diagnostics():
         "numeric_formatting",
         "percentage_correction",
         "empty_column_removal",
+        "empty_temporal_row_removal",
         "fifo_lot_reference",
         "breadth_weight_clarification",
         "hhi_semantic_correction",

@@ -65,8 +65,7 @@
     "openFxPair": "Ouvrir le détail de la paire FX",
     "editorTipDesktop": "Double-cliquez sur le graphique pour aller à cette date",
     "editorTipMobile": "Appui long sur le graphique pour aller à cette date",
-    "aiExport": "Export IA",
-    "aiExportBuilding": "Préparation de l'export…"
+    "aiExport": "Export IA"
   },
   "assets": {
     "create": "Nouvel actif",
@@ -1176,7 +1175,6 @@
     "losses": "Pertes",
     "seeAllPositions": "Voir tout →",
     "aiExport": "Export IA",
-    "aiExportBuilding": "Préparation de l'export…",
     "costsTooltip": "Commissions et taxes enregistrées dans la période sélectionnée.",
     "periodPnlTooltip": "Gain ou perte total attribuable uniquement à la période sélectionnée (variation non réalisée + réalisé + revenu − frais). Peut différer du gain total de la position.",
     "unrealizedPnlPercent": "P&L %",
@@ -1427,8 +1425,7 @@
     "syncDisabledManual": "Sync désactivé — aucun fournisseur configuré. Ajoutez un fournisseur ou insérez les taux manuellement.",
     "editorTipDesktop": "Double-cliquez sur le graphique pour aller à cette date",
     "editorTipMobile": "Appui long sur le graphique pour aller à cette date",
-    "aiExport": "Export IA",
-    "aiExportBuilding": "Préparation de l'export…"
+    "aiExport": "Export IA"
   },
   "help": {
     "helpAndSupport": "Aide et Support",
@@ -2361,7 +2358,7 @@
     "preparing": "Préparation de l’export…",
     "copyAnyway": "Copier quand même",
     "useCompact": "Utiliser Compact",
-    "copied": "Export IA copié dans le presse-papiers (détail : {detail}).",
+    "copied": "Export IA copié dans le presse-papiers ({tokens} · {bytes} ; détail : {detail}).",
     "privacyNotice": "Niveau de détail : {detail}. Cet export peut contenir des données financières sensibles ; vérifiez-le avant de le partager.",
     "catalogUnavailable": "L’export IA est indisponible. Actualisez puis réessayez.",
     "contractMismatch": "L’export IA n’est pas synchronisé avec le serveur. Actualisez puis réessayez.",
@@ -2620,7 +2617,8 @@
         "positionContext": "Utilisez-le lorsque la position réelle, le coût, la valeur, le P&L, le périmètre du courtier ou le rôle FIFO de l'actif comptent.",
         "directExposure": "Utilisez-le lorsque l'exposition directe de trésorerie ou de position à la paire FX est pertinente."
       }
-    }
+    },
+    "tokenUnit": "jetons"
   },
   "risk": {
     "analytics": {
@@ -2853,6 +2851,10 @@
       "proxySeriesUsages": {
         "returns_only": "Rendements historiques uniquement"
       }
+    },
+    "betaBanner": {
+      "title": "L'analyse des risques est en version bêta.",
+      "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable."
     }
   }
 }

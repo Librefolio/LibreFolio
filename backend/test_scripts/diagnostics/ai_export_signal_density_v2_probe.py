@@ -946,7 +946,7 @@ async def _run_probe(
             "resolved_broker_scope": list(prepared.broker_scope),
             "asset_count": len(asset_ids),
             "asset_ids": sorted(asset_ids),
-            "broker_count": len(prepared.broker_scope),
+            "scoped_broker_count": len(prepared.broker_scope),
             **positions,
         },
         "counts": {

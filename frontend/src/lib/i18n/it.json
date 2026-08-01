@@ -65,8 +65,7 @@
     "openFxPair": "Apri dettaglio coppia FX",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "aiExport": "Export AI",
-    "aiExportBuilding": "Preparazione export…"
+    "aiExport": "Export AI"
   },
   "assets": {
     "create": "Nuovo asset",
@@ -1176,7 +1175,6 @@
     "losses": "Perdite",
     "seeAllPositions": "Vedi tutte →",
     "aiExport": "Export AI",
-    "aiExportBuilding": "Preparazione export…",
     "costsTooltip": "Commissioni e tasse registrate nel periodo selezionato.",
     "periodPnlTooltip": "Guadagno o perdita totale attribuibile solo al periodo selezionato (variazione non realizzata + realizzato + reddito − costi). Può differire dal guadagno totale della posizione.",
     "unrealizedPnlPercent": "P&L %",
@@ -1427,8 +1425,7 @@
     "syncDisabledManual": "Sync disabilitato — nessun provider configurato. Aggiungere un provider o inserire i tassi manualmente.",
     "editorTipDesktop": "Doppio clic sul grafico per saltare a quella data",
     "editorTipMobile": "Pressione prolungata sul grafico per saltare a quella data",
-    "aiExport": "Export AI",
-    "aiExportBuilding": "Preparazione export…"
+    "aiExport": "Export AI"
   },
   "help": {
     "helpAndSupport": "Aiuto e Supporto",
@@ -2361,7 +2358,7 @@
     "preparing": "Preparazione esportazione…",
     "copyAnyway": "Copia comunque",
     "useCompact": "Usa Compatto",
-    "copied": "AI Export copiato negli appunti (dettaglio: {detail}).",
+    "copied": "AI Export copiato negli appunti ({tokens} · {bytes}; dettaglio: {detail}).",
     "privacyNotice": "Livello di dettaglio: {detail}. L’esportazione può contenere dati finanziari sensibili: rivedila prima di condividerla.",
     "catalogUnavailable": "AI Export non è disponibile. Aggiorna e riprova.",
     "contractMismatch": "AI Export non è sincronizzato col server. Aggiorna e riprova.",
@@ -2620,7 +2617,8 @@
         "positionContext": "Usalo quando contano posizione reale, costo, valore, P&L, scope Broker o ruolo FIFO dell'Asset.",
         "directExposure": "Usalo quando è rilevante l'esposizione diretta di cassa o posizione alla coppia FX."
       }
-    }
+    },
+    "tokenUnit": "token"
   },
   "risk": {
     "analytics": {
@@ -2853,6 +2851,10 @@
       "proxySeriesUsages": {
         "returns_only": "Solo rendimenti storici"
       }
+    },
+    "betaBanner": {
+      "title": "L'Analisi del rischio è in beta.",
+      "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile."
     }
   }
 }

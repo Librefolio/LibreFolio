@@ -174,6 +174,7 @@ async def build_ai_export_snapshot(
             message="A required AI Export component is unavailable.",
             component_id=exc.component_id,
             retryable=exc.retryable,
+            reason_code=exc.reason_code,
             **_problem_base(body),
         )
         raise HTTPException(status_code=503, detail=_problem_detail(problem)) from exc

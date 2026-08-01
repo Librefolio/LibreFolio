@@ -169,6 +169,59 @@ class AssetPositionScopeBroker(AssetComponentModel):
     quantity: SafeDecimal
 
 
+class AssetPortfolioRoleUnavailable(AssetComponentModel):
+    """One factual reason a `portfolio_role` numerator/denominator/ratio is `None`.
+
+    Deterministic, machine-stable `field` code plus a human-readable
+    `reason`. Present only when the corresponding value could not be
+    computed from valued open-position legs - never a stand-in for a
+    silent `0` (requirement 2: missing valuation yields an explicit
+    unavailable field/reason, not a zero).
+    """
+
+    field: str
+    reason: str
+
+
+class AssetPortfolioRoleBasis(AssetComponentModel):
+    """Deterministic, purely quantitative portfolio-weight/role basis for this asset.
+
+    Data-backs the `asset.position_review` contract's "FIFO and Portfolio
+    Role" section WITHOUT interpreting core/satellite: it exposes only the
+    factual denominators/counts an interpreting model needs, never a
+    subjective role label.
+
+    Valuation basis (both numerator and denominator): current mark-to-market
+    open-position value at `as_of_date`, expressed in `target_currency` (the
+    same single currency as every other value in this payload - see the
+    module docstring). The portfolio denominator is *gross absolute*: the sum
+    of `abs(current_value)` across every accessible open-position leg, so a
+    short/negative leg contributes its magnitude (never a partial or negative
+    cancellation) - this is what makes `portfolio_weight_ratio` a stable
+    concentration weight even with short positions.
+
+    `broker_scope_mode` records whether the denominator spans the whole
+    accessible portfolio (`WHOLE_ACCESSIBLE_PORTFOLIO`, no `BuildScope.
+    broker_scope`) or only the requested broker subset (`SCOPED_BROKERS`).
+
+    Every value is `None`-with-reason (see `unavailable`) rather than a
+    silent `0` whenever a contributing leg lacks a valuation, so a partial
+    price/FX gap can never masquerade as a real concentration figure.
+    """
+
+    target_currency: str
+    valuation_basis: Literal["current_market_value"] = "current_market_value"
+    denominator_basis: Literal["gross_absolute_open_position_value"] = "gross_absolute_open_position_value"
+    broker_scope_mode: Literal["WHOLE_ACCESSIBLE_PORTFOLIO", "SCOPED_BROKERS"]
+    asset_market_value: SafeDecimal | None = None
+    asset_gross_absolute_value: SafeDecimal | None = None
+    portfolio_gross_absolute_value: SafeDecimal | None = None
+    portfolio_weight_ratio: SafeDecimal | None = None
+    position_leg_count: int = 0
+    broker_count: int = 0
+    unavailable: tuple[AssetPortfolioRoleUnavailable, ...] = ()
+
+
 class AssetPositionScopePayload(AssetComponentModel):
     """`asset.position_scope` payload: which brokers hold this asset, plus aggregate context.
 
@@ -176,6 +229,11 @@ class AssetPositionScopePayload(AssetComponentModel):
     full never truncate this list) in deterministic `broker_id` order. An
     asset with no current holdings in scope is a valid, empty result
     (`brokers=()`, `broker_count=0`), never a build failure.
+
+    `portfolio_role` adds a deterministic, non-interpretive portfolio-weight
+    basis (this asset's aggregate value vs the scoped portfolio's gross
+    absolute open-position value) for the `asset.position_review` contract -
+    see `AssetPortfolioRoleBasis`.
     """
 
     asset_id: int
@@ -184,6 +242,7 @@ class AssetPositionScopePayload(AssetComponentModel):
     brokers: tuple[AssetPositionScopeBroker, ...] = ()
     total_quantity: SafeDecimal = Decimal("0")
     broker_count: int = 0
+    portfolio_role: AssetPortfolioRoleBasis | None = None
 
 
 # =============================================================================

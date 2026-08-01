@@ -7,6 +7,7 @@ import {
     AI_EXPORT_CATALOG_VERSION,
     AI_EXPORT_DATASET_IDS,
     AI_EXPORT_SCHEMA_VERSION,
+    AI_EXPORT_SELECTION_VERSION,
     aiExportSelectionKey,
     isAiExportAnalysisId,
     isAiExportDatasetId,
@@ -53,14 +54,14 @@ function analysisContractsMatch(entry: AiExportAnalysisCatalogEntry): boolean {
 }
 
 function compatibleSelection(entry: AiExportCatalogEntry): AiExportCompatibleSelection | undefined {
-    if (entry.version !== 1) return undefined;
+    if (entry.version !== AI_EXPORT_SELECTION_VERSION) return undefined;
     if (entry.kind === 'dataset') {
         if (!isAiExportDatasetId(entry.id)) return undefined;
         return {
             kind: 'dataset',
             id: entry.id,
             domain: entry.domain,
-            version: 1,
+            version: AI_EXPORT_SELECTION_VERSION,
             supportedDetailLevels: entry.supported_detail_levels,
             entry,
         };
@@ -70,7 +71,7 @@ function compatibleSelection(entry: AiExportCatalogEntry): AiExportCompatibleSel
         kind: 'analysis',
         id: entry.id,
         domain: entry.domain,
-        version: 1,
+        version: AI_EXPORT_SELECTION_VERSION,
         supportedDetailLevels: entry.supported_detail_levels,
         entry,
     };
@@ -99,7 +100,7 @@ export function reconcileAiExportCatalog(catalog: AiExportBackendCatalogResponse
     for (const entry of [...catalog.datasets, ...catalog.analyses]) {
         const compatible = compatibleSelection(entry);
         if (compatible) selections.push(compatible);
-        else if (entry.version !== 1) reasons.push('selection_version_mismatch');
+        else if (entry.version !== AI_EXPORT_SELECTION_VERSION) reasons.push('selection_version_mismatch');
         else if (entry.kind === 'analysis') {
             const instruction = isAiExportAnalysisId(entry.id) ? findAiExportAnalysisInstruction(entry.id) : undefined;
             if (instruction?.id !== entry.instruction_template_id || instruction?.version !== entry.instruction_template_version) reasons.push('instruction_contract_mismatch');

@@ -154,10 +154,12 @@ def _price_results(*, observed_close: object | None = None, observed_currency: s
     return PriceResultsResource.from_results([FAPriceQueryResult(asset_id=ASSET_ID, prices=[point])])
 
 
-def _holding(broker_id: int, *, quantity: object = 10, wac_per_unit: object | None = 40, current_price: object | None = 50, current_value: object | None = 500, gain_loss: object | None = 100, gain_loss_percent: object | None = 25, valuation_source: str | None = "MARKET_PRICE") -> PortfolioHolding:
+def _holding(
+    broker_id: int, *, asset_id: int = ASSET_ID, quantity: object = 10, wac_per_unit: object | None = 40, current_price: object | None = 50, current_value: object | None = 500, gain_loss: object | None = 100, gain_loss_percent: object | None = 25, valuation_source: str | None = "MARKET_PRICE"
+) -> PortfolioHolding:
     return PortfolioHolding(
-        asset_id=ASSET_ID,
-        asset_name="Test Asset",
+        asset_id=asset_id,
+        asset_name="Test Asset" if asset_id == ASSET_ID else f"Other Asset {asset_id}",
         asset_type="STOCK",
         broker_id=broker_id,
         broker_name=f"Broker {broker_id}",
@@ -863,3 +865,269 @@ class TestDeterministicOutput:
         envelope_b = await context_b.resolve("asset.position_scope", required=True)
 
         assert envelope_a.payload == envelope_b.payload
+
+
+# =============================================================================
+# Portfolio-role basis (asset.position_scope) — deterministic weight/role data
+# =============================================================================
+
+
+def _role(envelope) -> dict:
+    """Extracts the serialized `portfolio_role` object from a position_scope envelope."""
+    role = envelope.payload["portfolio_role"]
+    assert role is not None
+    return role
+
+
+class TestPortfolioRoleBasis:
+    @pytest.mark.asyncio
+    async def test_single_broker_whole_portfolio_asset_is_full_weight(self, monkeypatch):
+        scope = _scope()
+        # Only this asset is held -> it IS the whole portfolio (ratio == 1).
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=(_holding(1, current_value=500),)))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        assert role["broker_scope_mode"] == "WHOLE_ACCESSIBLE_PORTFOLIO"
+        assert role["target_currency"] == CURRENCY
+        assert role["valuation_basis"] == "current_market_value"
+        assert role["denominator_basis"] == "gross_absolute_open_position_value"
+        assert role["asset_market_value"] == "500"
+        assert role["asset_gross_absolute_value"] == "500"
+        assert role["portfolio_gross_absolute_value"] == "500"
+        assert role["portfolio_weight_ratio"] == "1"
+        assert role["position_leg_count"] == 1
+        assert role["broker_count"] == 1
+        assert role["unavailable"] == []
+
+    @pytest.mark.asyncio
+    async def test_multi_broker_duplicate_asset_legs_aggregated_once(self, monkeypatch):
+        scope = _scope()
+        # Same asset across three brokers + one unrelated asset leg in the portfolio.
+        holdings = (
+            _holding(1, current_value=200),
+            _holding(2, current_value=300),
+            _holding(3, current_value=500),
+            _holding(1, asset_id=99, current_value=1000),
+        )
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        # Asset legs aggregated once: 200 + 300 + 500.
+        assert role["asset_market_value"] == "1000"
+        assert role["asset_gross_absolute_value"] == "1000"
+        assert role["position_leg_count"] == 3
+        assert role["broker_count"] == 3
+        # Denominator spans the whole scoped portfolio incl. the unrelated asset.
+        assert role["portfolio_gross_absolute_value"] == "2000"
+        assert role["portfolio_weight_ratio"] == "0.5"
+
+    @pytest.mark.asyncio
+    async def test_scoped_vs_whole_portfolio_denominator(self, monkeypatch):
+        # Whole portfolio: asset (500) + other (1500) -> ratio 0.25.
+        whole_holdings = (_holding(1, current_value=500), _holding(2, asset_id=99, current_value=1500))
+        scope_whole = _scope()
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope_whole, holdings=whole_holdings))
+        context_whole = _make_context(scope_whole, _make_async_session())
+        role_whole = _role(await context_whole.resolve("asset.position_scope", required=True))
+
+        assert role_whole["broker_scope_mode"] == "WHOLE_ACCESSIBLE_PORTFOLIO"
+        assert role_whole["portfolio_gross_absolute_value"] == "2000"
+        assert role_whole["portfolio_weight_ratio"] == "0.25"
+
+        # Broker-scoped: PortfolioService returns only broker 1's leg (the asset).
+        scope_scoped = _scope(broker_scope=(1,))
+        _patch_report(monkeypatch, _report(scope_scoped, holdings=(_holding(1, current_value=500),)))
+        context_scoped = _make_context(scope_scoped, _make_async_session())
+        role_scoped = _role(await context_scoped.resolve("asset.position_scope", required=True))
+
+        assert role_scoped["broker_scope_mode"] == "SCOPED_BROKERS"
+        assert role_scoped["portfolio_gross_absolute_value"] == "500"
+        assert role_scoped["portfolio_weight_ratio"] == "1"
+
+    @pytest.mark.asyncio
+    async def test_short_negative_values_use_gross_absolute_semantics(self, monkeypatch):
+        scope = _scope()
+        # A short/negative leg for another asset must contribute its magnitude,
+        # never cancel the asset's long value in the denominator.
+        holdings = (
+            _holding(1, quantity=10, current_value=600),
+            _holding(2, asset_id=99, quantity=-4, current_value=-400),
+        )
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        assert role["asset_market_value"] == "600"
+        assert role["asset_gross_absolute_value"] == "600"
+        # Gross absolute denominator = |600| + |-400| = 1000 (not net 200).
+        assert role["portfolio_gross_absolute_value"] == "1000"
+        assert role["portfolio_weight_ratio"] == "0.6"
+
+    @pytest.mark.asyncio
+    async def test_asset_own_short_leg_nets_value_but_gross_is_magnitude(self, monkeypatch):
+        scope = _scope()
+        # This asset itself has a long and a short leg across brokers.
+        holdings = (
+            _holding(1, quantity=10, current_value=500),
+            _holding(2, quantity=-3, current_value=-150),
+        )
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        assert role["asset_market_value"] == "350"  # net 500 + (-150)
+        assert role["asset_gross_absolute_value"] == "650"  # |500| + |-150|
+        assert role["portfolio_gross_absolute_value"] == "650"
+        assert role["position_leg_count"] == 2
+        assert role["broker_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_empty_portfolio_ratio_unavailable_not_zero(self, monkeypatch):
+        scope = _scope()
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        assert role["asset_market_value"] == "0"
+        assert role["portfolio_gross_absolute_value"] == "0"
+        assert role["portfolio_weight_ratio"] is None
+        assert role["position_leg_count"] == 0
+        assert role["broker_count"] == 0
+        reasons = {u["field"]: u["reason"] for u in role["unavailable"]}
+        assert "portfolio_weight_ratio" in reasons
+        assert "zero" in reasons["portfolio_weight_ratio"].lower()
+
+    @pytest.mark.asyncio
+    async def test_missing_asset_valuation_yields_unavailable_reason_not_zero(self, monkeypatch):
+        scope = _scope()
+        # One of the asset's legs has no current_value.
+        holdings = (
+            _holding(1, current_value=500),
+            _holding(2, current_value=None),
+        )
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        assert role["asset_market_value"] is None
+        assert role["asset_gross_absolute_value"] is None
+        assert role["portfolio_weight_ratio"] is None
+        # Leg count still reflects both brokers hold the asset.
+        assert role["position_leg_count"] == 2
+        reasons = {u["field"]: u["reason"] for u in role["unavailable"]}
+        assert "asset_market_value" in reasons
+        assert "portfolio_weight_ratio" in reasons
+
+    @pytest.mark.asyncio
+    async def test_missing_portfolio_leg_valuation_breaks_denominator_only(self, monkeypatch):
+        scope = _scope()
+        # This asset is fully valued, but an unrelated portfolio leg is not.
+        holdings = (
+            _holding(1, current_value=500),
+            _holding(3, asset_id=99, current_value=None),
+        )
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        assert role["asset_market_value"] == "500"
+        assert role["asset_gross_absolute_value"] == "500"
+        assert role["portfolio_gross_absolute_value"] is None
+        assert role["portfolio_weight_ratio"] is None
+        reasons = {u["field"]: u["reason"] for u in role["unavailable"]}
+        assert "portfolio_gross_absolute_value" in reasons
+        assert "portfolio_weight_ratio" in reasons
+
+    @pytest.mark.asyncio
+    async def test_ratio_reconciles_with_numerator_and_denominator(self, monkeypatch):
+        scope = _scope()
+        holdings = (
+            _holding(1, current_value=333),
+            _holding(2, asset_id=99, current_value=667),
+        )
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        numerator = Decimal(role["asset_gross_absolute_value"])
+        denominator = Decimal(role["portfolio_gross_absolute_value"])
+        ratio = Decimal(role["portfolio_weight_ratio"])
+        # Backend precomputes the ratio; it reconciles with the exposed basis.
+        assert numerator == Decimal("333")
+        assert denominator == Decimal("1000")
+        assert ratio == numerator / denominator
+
+    @pytest.mark.asyncio
+    async def test_ratio_is_precomputed_backend_value_no_frontend_calc(self, monkeypatch):
+        scope = _scope()
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(
+            monkeypatch,
+            _report(scope, holdings=(_holding(1, current_value=250), _holding(2, asset_id=99, current_value=750))),
+        )
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        # Every value a renderer needs is already present as data (string
+        # Decimal / int), so the frontend never has to compute the weight.
+        assert isinstance(role["portfolio_weight_ratio"], str)
+        assert role["portfolio_weight_ratio"] == "0.25"
+        assert isinstance(role["position_leg_count"], int)
+        assert isinstance(role["broker_count"], int)
+
+    @pytest.mark.asyncio
+    async def test_denominator_delegates_user_and_broker_access_to_portfolio_service(self, monkeypatch):
+        # The portfolio denominator is only ever what PortfolioService returns
+        # for this user_id + broker scope, so access control is never bypassed.
+        scope = _scope(user_id=7, broker_scope=(1, 2))
+        _patch_metadata(monkeypatch, _metadata())
+        captured: dict = {}
+
+        async def _fake_get_report(self, user_id, query):  # noqa: ARG001
+            captured["user_id"] = user_id
+            captured["broker_ids"] = query.broker_ids
+            return _report(scope, holdings=(_holding(1, current_value=500),))
+
+        monkeypatch.setattr(PortfolioService, "get_report", _fake_get_report)
+        context = _make_context(scope, _make_async_session())
+
+        role = _role(await context.resolve("asset.position_scope", required=True))
+
+        assert captured["user_id"] == 7
+        assert captured["broker_ids"] == [1, 2]
+        assert role["broker_scope_mode"] == "SCOPED_BROKERS"
+        assert role["portfolio_gross_absolute_value"] == "500"
+
+    @pytest.mark.asyncio
+    async def test_role_deterministic_across_independent_builds(self, monkeypatch):
+        scope = _scope()
+        holdings = (_holding(2, current_value=300), _holding(1, current_value=200), _holding(3, asset_id=99, current_value=500))
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=holdings))
+
+        context_a = _make_context(scope, _make_async_session())
+        context_b = _make_context(scope, _make_async_session())
+        role_a = _role(await context_a.resolve("asset.position_scope", required=True))
+        role_b = _role(await context_b.resolve("asset.position_scope", required=True))
+
+        assert role_a == role_b

@@ -26,6 +26,8 @@ from backend.app.schemas.risk import (
     RiskAnalyticRequest,
     RiskAnalyticResult,
     RiskCompositionPolicy,
+    RiskDrawdownOutput,
+    RiskDrawdownRecoveryStatus,
     RiskError,
     RiskErrorCode,
     RiskHistoricalReplayAudit,
@@ -34,6 +36,7 @@ from backend.app.schemas.risk import (
     RiskHistoricalReplayProxyAsset,
     RiskKpiOutput,
     RiskMode,
+    RiskOutputKind,
     RiskQueryRequest,
     RiskResultMetadata,
     RiskResultStatus,
@@ -581,3 +584,88 @@ def test_hypothetical_stress_output_keeps_bucket_audit_strict():
                 )
             ],
         )
+
+
+def _drawdown_output(**overrides):
+    base = {
+        "current_drawdown": -0.02,
+        "current_peak_date": date(2026, 1, 5),
+        "current_drawdown_duration_days": 3,
+        "maximum_drawdown": -0.25,
+        "maximum_drawdown_peak_date": date(2026, 1, 2),
+        "maximum_drawdown_trough_date": date(2026, 1, 4),
+        "maximum_drawdown_recovery_status": RiskDrawdownRecoveryStatus.RECOVERED,
+        "maximum_drawdown_recovery_date": date(2026, 1, 6),
+        "maximum_drawdown_duration_days": 4,
+        "maximum_drawdown_recovered_ratio": 1.0,
+        "remaining_to_peak_ratio": 0.02,
+        "available_start": date(2026, 1, 2),
+        "available_end": date(2026, 1, 8),
+        "n_observations": 6,
+        "coverage": 1.0,
+        "calculation_basis": "price_only_close",
+        "return_basis": RiskReturnBasis.PRICE_ONLY,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_risk_drawdown_output_serializes_and_round_trips_via_result():
+    output = RiskDrawdownOutput(**_drawdown_output())
+    payload = output.model_dump(mode="json")
+    assert payload["kind"] == "drawdown"
+    assert payload["maximum_drawdown_recovery_status"] == "recovered"
+
+    result = RiskAnalyticResult(
+        instance_id="dd",
+        analytic_code="drawdown_summary",
+        status=RiskResultStatus.OK,
+        output=payload,
+        metadata=RiskResultMetadata(
+            analyzed_range=DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 8)),
+            n_observations=6,
+            calendar_days=6,
+            annualization_factor=6 * 365 / 6,
+            coverage=1.0,
+            currency="EUR",
+            scope=RiskScopeKind.ASSET,
+            scope_reference="asset:1",
+            return_basis=RiskReturnBasis.PRICE_ONLY,
+            algorithm_version="1.0.0",
+            computed_at=datetime.now(UTC),
+        ),
+        data_quality=DataQualityReport(),
+    )
+    assert isinstance(result.output, RiskDrawdownOutput)
+    assert result.output.kind == RiskOutputKind.DRAWDOWN
+
+
+def test_risk_drawdown_output_no_drawdown_forbids_episode_dates():
+    with pytest.raises(ValidationError, match="no_drawdown must not expose episode dates"):
+        RiskDrawdownOutput(
+            **_drawdown_output(
+                current_drawdown=0.0,
+                current_drawdown_duration_days=0,
+                maximum_drawdown=0.0,
+                maximum_drawdown_recovery_status=RiskDrawdownRecoveryStatus.NO_DRAWDOWN,
+                maximum_drawdown_recovery_date=None,
+                maximum_drawdown_duration_days=0,
+                maximum_drawdown_recovered_ratio=None,
+                remaining_to_peak_ratio=0.0,
+            )
+        )
+
+
+def test_risk_drawdown_output_open_episode_forbids_recovery_date():
+    with pytest.raises(ValidationError, match="open episodes must not expose a recovery date"):
+        RiskDrawdownOutput(
+            **_drawdown_output(
+                maximum_drawdown_recovery_status=RiskDrawdownRecoveryStatus.OPEN,
+                maximum_drawdown_recovered_ratio=0.4,
+            )
+        )
+
+
+def test_risk_drawdown_output_recovered_requires_recovery_date():
+    with pytest.raises(ValidationError, match="recovered episodes require a recovery date"):
+        RiskDrawdownOutput(**_drawdown_output(maximum_drawdown_recovery_date=None))

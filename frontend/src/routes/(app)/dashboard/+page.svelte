@@ -182,7 +182,7 @@
     let aiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
     let aiExportCatalogLoading = $state(true);
     let aiExportCatalogFailed = $state(false);
-    let aiExportLabels = $derived(buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport'), $_('dashboard.aiExportBuilding')));
+    let aiExportLabels = $derived(buildAiExportMenuLabels($_, aiExportCompatibility, $_('dashboard.aiExport')));
 
     /** Whether the filter is "active" (some but not all brokers selected). */
     const brokerFilterActive = $derived(selectedBrokerIds.length > 0 && !allBrokersSelected);

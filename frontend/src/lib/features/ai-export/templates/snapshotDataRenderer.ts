@@ -28,7 +28,9 @@ export interface SnapshotFormatDiagnostics {
     readonly empty_columns_removed: number;
     readonly empty_parent_columns_removed: number;
     readonly semantic_duplicate_columns_detected: number;
+    readonly empty_temporal_rows_detected: number;
     readonly empty_temporal_rows_omitted: number;
+    readonly temporal_rows_rendered: number;
 }
 
 export interface SnapshotSignalMetric {
@@ -74,7 +76,9 @@ interface MutableSnapshotFormatDiagnostics {
     empty_columns_removed: number;
     empty_parent_columns_removed: number;
     semantic_duplicate_columns_detected: number;
+    empty_temporal_rows_detected: number;
     empty_temporal_rows_omitted: number;
+    temporal_rows_rendered: number;
 }
 
 export interface PromptNumberSemantics {
@@ -96,7 +100,9 @@ function createFormatDiagnostics(): MutableSnapshotFormatDiagnostics {
         empty_columns_removed: 0,
         empty_parent_columns_removed: 0,
         semantic_duplicate_columns_detected: 0,
+        empty_temporal_rows_detected: 0,
         empty_temporal_rows_omitted: 0,
+        temporal_rows_rendered: 0,
     };
 }
 
@@ -432,7 +438,7 @@ function collectDirectories(sections: readonly JsonRecord[], target: unknown, pr
     const brokerRefById = new Map(sortedBrokers.map((broker, index) => [broker.brokerId, `B${index + 1}`]));
     const providedFxPairs = isRecord(providedDirectory) ? records(providedDirectory.fx_pairs) : undefined;
     const fxPair = providedFxPairs?.[0] ?? (isRecord(target) && target.kind === 'fx_pair' ? target : undefined);
-    const fxRef = fxPair ? 'FX1' : undefined;
+    const fxRef = fxPair ? 'F1' : undefined;
     const blocks = ['ENTITY DIRECTORY', 'Use refs only to join tables. In user-facing prose use display_name, a clear shortened name, broker name, or FX pair label.'];
     if (sortedAssets.length) {
         const optionalColumns = [
@@ -545,9 +551,11 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
         if (!buckets) return undefined;
         for (const bucket of buckets) {
             if (Number(bucket.observation_count) === 0) {
+                diagnostics.empty_temporal_rows_detected += 1;
                 diagnostics.empty_temporal_rows_omitted += 1;
                 continue;
             }
+            diagnostics.temporal_rows_rendered += 1;
             bucketRows.push([
                 entity,
                 bucket.start_date,
@@ -567,8 +575,10 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
         }
     }
     const globalRows = [
-        ['considered_asset_count', payload.considered_asset_count],
+        ['period_position_leg_count', payload.period_position_leg_count],
+        ['period_contributor_asset_count', payload.period_contributor_asset_count],
         ['eligible_asset_count', payload.eligible_asset_count],
+        ['covered_asset_count', payload.covered_asset_count],
         ['base_currency', payload.base_currency],
         ['quote_currency', payload.quote_currency],
     ].filter((row) => row[1] !== undefined);
@@ -707,7 +717,8 @@ function renderIndicators(componentId: string, payload: JsonRecord, target: unkn
 
     const instanceCount = [...bySignal.values()].reduce((total, signal) => total + signal.instances.size, 0);
     const globalRows = [
-        ['considered_asset_count', payload.considered_asset_count],
+        ['period_position_leg_count', payload.period_position_leg_count],
+        ['period_contributor_asset_count', payload.period_contributor_asset_count],
         ['eligible_asset_count', payload.eligible_asset_count],
         ['covered_asset_count', payload.covered_asset_count],
         ['eligible_portfolio_weight_percent', normalizedRatioPercent(payload.eligible_portfolio_weight_ratio, diagnostics)],
@@ -803,9 +814,11 @@ function renderIndicators(componentId: string, payload: JsonRecord, target: unkn
                 }
                 for (const row of rows) {
                     if (Number(row.observation_count) === 0) {
+                        diagnostics.empty_temporal_rows_detected += 1;
                         diagnostics.empty_temporal_rows_omitted += 1;
                         continue;
                     }
+                    diagnostics.temporal_rows_rendered += 1;
                     const cells = isRecord(row.cells) ? row.cells : undefined;
                     if (!cells) return undefined;
                     historyRows.push([entity.entity, row.start_date, row.end_date, row.calendar_days, row.observation_count, ...columnKeys.map((columnKey) => indicatorCell(cells[columnKey], outputNumberSemantics(columnByKey.get(columnKey) ?? {}), diagnostics))]);
@@ -950,10 +963,11 @@ function renderBreadth(payload: JsonRecord, diagnostics: MutableSnapshotFormatDi
     return [
         'SUMMARY',
         pipeTable(
-            ['considered_asset_count', 'eligible_asset_count', 'covered_asset_count', 'eligible_portfolio_weight_percent', 'covered_portfolio_weight_percent', 'covered_weight_ratio_percent'],
+            ['period_position_leg_count', 'period_contributor_asset_count', 'eligible_asset_count', 'covered_asset_count', 'eligible_portfolio_weight_percent', 'covered_portfolio_weight_percent', 'covered_weight_ratio_percent'],
             [
                 [
-                    payload.considered_asset_count,
+                    payload.period_position_leg_count,
+                    payload.period_contributor_asset_count,
                     payload.eligible_asset_count,
                     payload.covered_asset_count,
                     normalizedRatioPercent(payload.eligible_portfolio_weight_ratio, diagnostics),
@@ -984,9 +998,63 @@ function renderBreadth(payload: JsonRecord, diagnostics: MutableSnapshotFormatDi
 }
 
 const DIRECTORY_IDENTITY_FIELDS = new Set(['asset_name', 'asset_ticker', 'asset_isin', 'asset_cusip', 'asset_sedol', 'asset_figi', 'asset_other', 'asset_type', 'broker_name', 'opening_broker_name']);
-const ALREADY_SCALED_PERCENT_FIELDS = new Set(['allocation_percent', 'nav_weight_percent', 'largest_position_weight_percent', 'percent']);
-const NORMALIZED_RATIO_FIELDS = new Set(['weight']);
+const ALREADY_SCALED_PERCENT_FIELDS = new Set([
+    'allocation_percent',
+    'nav_weight_percent',
+    'largest_position_weight_percent',
+    'broker_largest_position_weight_percent',
+    'portfolio_largest_position_weight_percent',
+    'largest_position_weight_delta_percent',
+    'broker_share_of_portfolio_market_value_percent',
+    'natr_14_percent',
+    'ppo_12_26_9_percent',
+    'roc_20_percent',
+    'percent',
+]);
+const NORMALIZED_RATIO_FIELDS = new Set([
+    'weight',
+    'portfolio_weight_ratio',
+    'technical_normalized_weight_ratio',
+    'eligible_portfolio_weight_ratio',
+    'covered_portfolio_weight_ratio',
+    'covered_weight_ratio',
+    'coverage_ratio',
+    'return_1m_ratio',
+    'return_3m_ratio',
+    'return_period_ratio',
+    'daily_return_volatility_ratio',
+    'current_drawdown_ratio',
+    'maximum_drawdown_ratio',
+    'maximum_drawdown_recovered_ratio',
+    'remaining_to_peak_ratio',
+    'range_position_ratio',
+    'distance_to_min_ratio',
+    'distance_to_max_ratio',
+    'value_ratio',
+]);
+const SIGNED_NORMALIZED_RATIO_FIELDS = new Set(['current_drawdown_ratio', 'maximum_drawdown_ratio']);
+const UNBOUNDED_NORMALIZED_RATIO_FIELDS = new Set(['remaining_to_peak_ratio', 'distance_to_min_ratio', 'distance_to_max_ratio']);
 const MONETARY_RESIDUAL_FIELDS = new Set(['period_other_result', 'reconciliation_diff', 'residual']);
+const PUBLIC_RATIO_FIELD_NAMES: Readonly<Record<string, string>> = {
+    portfolio_weight_ratio: 'portfolio_weight_percent',
+    technical_normalized_weight_ratio: 'technical_normalized_weight_percent',
+    eligible_portfolio_weight_ratio: 'eligible_portfolio_weight_percent',
+    covered_portfolio_weight_ratio: 'covered_portfolio_weight_percent',
+    covered_weight_ratio: 'covered_weight_ratio_percent',
+    coverage_ratio: 'coverage_percent',
+    return_1m_ratio: 'return_1m_percent',
+    return_3m_ratio: 'return_3m_percent',
+    return_period_ratio: 'return_period_percent',
+    daily_return_volatility_ratio: 'daily_return_volatility_percent',
+    current_drawdown_ratio: 'current_drawdown_percent',
+    maximum_drawdown_ratio: 'maximum_drawdown_percent',
+    maximum_drawdown_recovered_ratio: 'maximum_drawdown_recovered_percent',
+    remaining_to_peak_ratio: 'remaining_to_peak_percent',
+    range_position_ratio: 'range_position_percent',
+    distance_to_min_ratio: 'distance_to_min_percent',
+    distance_to_max_ratio: 'distance_to_max_percent',
+    value_ratio: 'value_percent',
+};
 
 function finalPathKey(path: string): string {
     return path.slice(path.lastIndexOf('.') + 1);
@@ -1009,7 +1077,7 @@ function normalizedRatioPercent(value: unknown, diagnostics: MutableSnapshotForm
     if (value === null) return 'null';
     if (typeof value !== 'number' && (typeof value !== 'string' || !/^-?\d+(?:\.\d+)?$/.test(value))) return scalar(value);
     diagnostics.normalized_ratio_percent_values += 1;
-    return `${formatPromptNumberWithDiagnostics(decimalTimesOneHundred(value), {}, diagnostics)}%`;
+    return `${formatPromptNumberWithDiagnostics(decimalTimesOneHundred(value), {minimum: 0, maximum: 100}, diagnostics)}%`;
 }
 
 function percentageValue(path: string, value: unknown, diagnostics: MutableSnapshotFormatDiagnostics): string | undefined {
@@ -1022,14 +1090,18 @@ function percentageValue(path: string, value: unknown, diagnostics: MutableSnaps
     if (alreadyScaled) diagnostics.already_scaled_percent_values += 1;
     else diagnostics.normalized_ratio_percent_values += 1;
     const percent = alreadyScaled ? value : decimalTimesOneHundred(value);
-    return `${formatPromptNumberWithDiagnostics(percent, {}, diagnostics)}%`;
+    const bounds = !normalizedRatio ? {} : SIGNED_NORMALIZED_RATIO_FIELDS.has(key) ? {minimum: -100, maximum: 0} : UNBOUNDED_NORMALIZED_RATIO_FIELDS.has(key) ? {} : {minimum: 0, maximum: 100};
+    return `${formatPromptNumberWithDiagnostics(percent, bounds, diagnostics)}%`;
 }
 
 function genericFieldName(path: string): string {
     const key = finalPathKey(path);
     if (key === 'asset_id' || key.endsWith('_asset_id')) return `${path.slice(0, -2)}ref`;
     if (key === 'broker_id' || key.endsWith('_broker_id')) return `${path.slice(0, -2)}ref`;
+    if (key === 'asset_ids') return `${path.slice(0, -3)}refs`;
+    if (key === 'broker_ids' || key === 'broker_scope') return `${path.slice(0, -key.length)}broker_refs`;
     if (path === 'entity_id' || path.endsWith('.entity_id')) return `${path.slice(0, -2)}ref`;
+    if (PUBLIC_RATIO_FIELD_NAMES[key]) return `${path.slice(0, -key.length)}${PUBLIC_RATIO_FIELD_NAMES[key]}`;
     if (key === 'weight') return `${path.slice(0, -key.length)}weight_percent`;
     return path;
 }
@@ -1043,6 +1115,8 @@ function genericLeaf(path: string, value: unknown, directory: EntityDirectory, d
     const key = finalPathKey(path);
     if (key === 'asset_id' || key.endsWith('_asset_id')) return assetRef(value, directory);
     if (key === 'broker_id' || key.endsWith('_broker_id')) return brokerRef(value, directory);
+    if (key === 'asset_ids') return assetRef(value, directory);
+    if (key === 'broker_ids' || key === 'broker_scope') return brokerRef(value, directory);
     if (path === 'entity_id' || path.endsWith('.entity_id')) return eventEntityRef(value, undefined, directory);
     const percentage = percentageValue(path, value, diagnostics);
     if (percentage !== undefined) return percentage;
@@ -1094,6 +1168,30 @@ interface GenericArrayTable {
     readonly values: readonly unknown[];
 }
 
+const NOMINAL_TEMPORAL_ROW_FIELDS = new Set(['start_date', 'end_date', 'calendar_days', 'index', 'bucket_id', 'has_data', 'observation_count']);
+
+function isTemporalRow(value: JsonRecord): boolean {
+    return Object.hasOwn(value, 'start_date') && Object.hasOwn(value, 'end_date');
+}
+
+function hasMeaningfulTemporalValue(key: string, value: unknown): boolean {
+    if (NOMINAL_TEMPORAL_ROW_FIELDS.has(key)) return false;
+    if (value === undefined || value === null || value === '' || value === 'null') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (isRecord(value)) {
+        if (Object.hasOwn(value, 'amount') && Object.keys(value).every((nestedKey) => nestedKey === 'amount' || nestedKey === 'code')) {
+            return !isEmptyPublicValue(value.amount);
+        }
+        return Object.entries(value).some(([nestedKey, nestedValue]) => hasMeaningfulTemporalValue(nestedKey, nestedValue));
+    }
+    return true;
+}
+
+function isCompletelyEmptyTemporalRow(value: JsonRecord): boolean {
+    if (!isTemporalRow(value) || value.has_data === true) return false;
+    return !Object.entries(value).some(([key, nested]) => hasMeaningfulTemporalValue(key, nested));
+}
+
 function isEmptyPublicCell(value: string | undefined): boolean {
     return value === undefined || value === '' || value === 'null';
 }
@@ -1107,8 +1205,7 @@ function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, d
             if (DIRECTORY_IDENTITY_FIELDS.has(key)) continue;
             const path = prefix ? `${prefix}.${key}` : key;
             if (Array.isArray(nested)) {
-                if (nested.length === 0) summaryRows.push([genericFieldName(path), '[]']);
-                else arrays.push({path, values: nested});
+                if (nested.length > 0) arrays.push({path, values: nested});
             } else if (isRecord(nested)) visit(nested, path);
             else {
                 const semantics = key === 'amount' && currencyCode && isMonetaryResidualPath(prefix) ? {monetaryResidualCurrency: currencyCode} : {};
@@ -1133,7 +1230,20 @@ function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, d
             );
             continue;
         }
-        const flattenedRows = rowRecords.map((row) => flattenGenericRow(row, directory, diagnostics));
+        const publicRowRecords: JsonRecord[] = [];
+        for (const row of rowRecords) {
+            if (isTemporalRow(row)) {
+                if (isCompletelyEmptyTemporalRow(row)) {
+                    diagnostics.empty_temporal_rows_detected += 1;
+                    diagnostics.empty_temporal_rows_omitted += 1;
+                    continue;
+                }
+                diagnostics.temporal_rows_rendered += 1;
+            }
+            publicRowRecords.push(row);
+        }
+        if (publicRowRecords.length === 0) continue;
+        const flattenedRows = publicRowRecords.map((row) => flattenGenericRow(row, directory, diagnostics));
         const discoveredColumns: string[] = [];
         const seen = new Set<string>();
         for (const row of flattenedRows) {
@@ -1168,6 +1278,10 @@ function technicalPayload(
     signalMetrics: SnapshotSignalMetric[],
     diagnostics: MutableSnapshotFormatDiagnostics,
 ): {readonly format: string; readonly content: string} | undefined {
+    if (componentId.includes('technical_coverage')) {
+        const publicPayload = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== null));
+        return {format: 'technical_coverage_tables_v1', content: renderGenericPayload(publicPayload, directory, diagnostics)};
+    }
     if (componentId.endsWith('.indicators') || componentId.includes('technical_indicators')) {
         const content = renderIndicators(componentId, payload, target, directory, samplingByInstance, signalMetrics, diagnostics);
         return content ? {format: 'signal_tables_v1', content} : undefined;

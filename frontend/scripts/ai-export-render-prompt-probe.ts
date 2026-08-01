@@ -236,6 +236,9 @@ function measureBlock(block: AiExportPromptDiagnosticTextBlock): MeasuredBlock {
 }
 
 function componentCategory(componentId: string): string {
+    if (componentId.includes('technical_coverage')) return 'technical_coverage';
+    if (componentId.includes('asset_market_context') || componentId.includes('position_market_context') || componentId.endsWith('.market_summary')) return 'technical_context';
+    if (componentId.includes('context_events') || componentId.includes('event_digest')) return 'technical_events';
     if (componentId.includes('technical_prices') || componentId.includes('ohlc_returns') || componentId.includes('rate_ohlc')) return 'technical_prices';
     if (componentId.includes('technical_indicators') || componentId.endsWith('.indicators') || componentId.includes('returns_volatility')) return 'technical_indicators';
     if (componentId.includes('technical_events') || componentId.includes('states_events')) return 'technical_events';
@@ -438,6 +441,7 @@ function render(message: ProbeMessage): Record<string, unknown> {
             implementation_parameter_lines: technicalSampling.match(/^\s*[pmk]:/gmu)?.length ?? 0,
             has_detail_level: /^\s*detail_level:/mu.test(technicalSampling),
             has_price_bucket_count: /^\s*price_bucket_count:/mu.test(technicalSampling),
+            has_indicator_instances: diagnostics.snapshotSignalMetrics.some((metric) => metric.kind === 'indicator' && metric.instance_count > 0),
             has_instance_temporal_class: diagnostics.rendered.prompt.includes('|instance_id|temporal_class|bucket_count'),
             has_instance_bucket_count: diagnostics.rendered.prompt.includes('|instance_id|temporal_class|bucket_count'),
         },

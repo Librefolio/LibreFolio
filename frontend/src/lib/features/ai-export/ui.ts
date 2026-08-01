@@ -1,6 +1,7 @@
 import type {AiExportMenuLabels} from './AiExportMenu.svelte';
 import {AiExportContractMismatchError, AiExportNetworkError, AiExportProblemError, AiExportValidationError, type AiExportProblemDetail} from './aiExportClient';
 import {AiExportChoiceUnavailableError, AiExportClipboardUnavailableError, type PreparedAiExport} from './aiExportClipboard';
+import {formatAiExportByteSize, formatAiExportTokenCount} from './aiExportOptions';
 import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
 import type {AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
@@ -20,7 +21,7 @@ export function aiExportResponseLanguageFromLocale(locale: string | null | undef
     return 'English';
 }
 
-export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiExportCatalogCompatibilityResult, triggerLabel: string, loadingLabel: string): AiExportMenuLabels {
+export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiExportCatalogCompatibilityResult, triggerLabel: string): AiExportMenuLabels {
     const selectionLabels: Record<string, string> = {};
     const selectionDescriptions: Record<string, string> = {};
     for (const selection of compatibility.selections) {
@@ -29,7 +30,6 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
     }
     return {
         triggerLabel,
-        loadingLabel,
         panelLabel: t('aiExport.panelLabel'),
         options: {
             categoryLabel: t('aiExport.category'),
@@ -76,6 +76,7 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
             payloadStatsLabel: t('aiExport.payloadStats'),
             backendEstimatedTokensLabel: t('aiExport.backendEstimatedTokens'),
             finalEstimatedTokensLabel: t('aiExport.finalEstimatedTokens'),
+            tokenUnitLabel: t('aiExport.tokenUnit'),
             tokenSeverityLabels: {
                 normal: t('aiExport.tokenSeverity.normal'),
                 warning: t('aiExport.tokenSeverity.warning'),
@@ -89,10 +90,18 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
     };
 }
 
-export function getAiExportSuccessMessages(t: AiExportTranslate, result: Pick<PreparedAiExport, 'options'>): AiExportSuccessMessages {
+export function getAiExportSuccessMessages(t: AiExportTranslate, result: Pick<PreparedAiExport, 'options' | 'stats'>): AiExportSuccessMessages {
     const detail = t(`aiExport.details.${result.options.detailLevel}`);
+    const locale = {
+        English: 'en',
+        Italian: 'it',
+        French: 'fr',
+        Spanish: 'es',
+    }[result.options.responseLanguage];
+    const tokens = formatAiExportTokenCount(result.stats.finalPrompt.estimatedTokens, locale, t('aiExport.tokenUnit'));
+    const bytes = formatAiExportByteSize(result.stats.finalPrompt.byteCountUtf8, locale);
     return {
-        copied: t('aiExport.copied', {values: {detail}}),
+        copied: t('aiExport.copied', {values: {detail, tokens, bytes}}),
         privacyNotice: t('aiExport.privacyNotice', {values: {detail}}),
     };
 }

@@ -4,15 +4,15 @@ import {findCompatibleAiExportSelection, reconcileAiExportCatalog, selectionsFor
 import {backendCatalogFixture} from './runtimeFixtures';
 
 describe('AI Export catalog compatibility', () => {
-    it('accepts the exact 18 dataset / 17 analysis v1 catalog', () => {
+    it('accepts the exact 32 dataset / 16 analysis V2 catalog', () => {
         const compatibility = reconcileAiExportCatalog(backendCatalogFixture());
 
         expect(compatibility.status).toBe('compatible');
-        expect(compatibility.selections).toHaveLength(34);
-        expect(selectionsForDomain(compatibility, 'portfolio', 'dataset')).toHaveLength(5);
+        expect(compatibility.selections).toHaveLength(48);
+        expect(selectionsForDomain(compatibility, 'portfolio', 'dataset')).toHaveLength(10);
         expect(selectionsForDomain(compatibility, 'broker', 'analysis')).toHaveLength(4);
-        expect(selectionsForDomain(compatibility, 'asset')).toHaveLength(6);
-        expect(selectionsForDomain(compatibility, 'fx')).toHaveLength(7);
+        expect(selectionsForDomain(compatibility, 'asset')).toHaveLength(8);
+        expect(selectionsForDomain(compatibility, 'fx')).toHaveLength(9);
         expect(findCompatibleAiExportSelection(compatibility, 'analysis', 'asset.trend_analysis')).toBeDefined();
     });
 
@@ -22,7 +22,7 @@ describe('AI Export catalog compatibility', () => {
         expect(reconcileAiExportCatalog(missingDataset).reasonCodes).toContain('dataset_catalog_mismatch');
 
         const contractDrift = backendCatalogFixture();
-        contractDrift.analyses[0].response_contract_version = 2;
+        contractDrift.analyses[0].response_contract_version = 1;
         const compatibility = reconcileAiExportCatalog(contractDrift);
         expect(compatibility.status).toBe('disabled');
         expect(compatibility.reasonCodes).toContain('response_contract_mismatch');
@@ -31,8 +31,8 @@ describe('AI Export catalog compatibility', () => {
 
     it('fails closed on schema and catalog version drift', () => {
         const catalog = backendCatalogFixture();
-        catalog.schema_version = 2;
-        catalog.catalog_version = 2;
+        catalog.schema_version = 1;
+        catalog.catalog_version = 1;
 
         expect(reconcileAiExportCatalog(catalog).reasonCodes).toEqual(expect.arrayContaining(['schema_version_mismatch', 'catalog_version_mismatch']));
     });

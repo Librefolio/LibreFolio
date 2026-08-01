@@ -23,6 +23,7 @@ is genuinely exercised, not stubbed away.
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import date, timedelta
 from decimal import Decimal
@@ -57,7 +58,7 @@ from backend.app.schemas.signals import (
     SignalTemporalClass,
     SignalThresholdCrossingRequest,
 )
-from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_shared
+from backend.app.services.ai_export.components import asset_fx_technical, portfolio_broker_technical, technical_context, technical_shared
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import (
@@ -65,6 +66,12 @@ from backend.app.services.ai_export.components.resources import (
     FxRateSeriesResource,
 )
 from backend.app.services.ai_export.components.spec import ComponentSpec
+from backend.app.services.ai_export.components.technical_context import (
+    ASSET_TECHNICAL_CONTEXT_COMPONENTS,
+    BROKER_TECHNICAL_CONTEXT_COMPONENTS,
+    FX_TECHNICAL_CONTEXT_COMPONENTS,
+    PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS,
+)
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
@@ -1260,6 +1267,119 @@ class TestEventSelection:
 
 
 # =============================================================================
+# 4b. Latest-per-category event selection (category taxonomy, requirements 1-3)
+# =============================================================================
+
+
+class TestLatestCategoryEvents:
+    """Unit coverage for ``technical_context._latest_category_events``.
+
+    White-box: the selector filters by annotation ``key`` (allowlist) and derives
+    the category exclusively from the plugin registry via the ``signal_code``, so
+    these tests pair real plugin codes (EMA/ADX/KAMA -> trend, RSI/MACD -> momentum,
+    NATR/ATR -> volatility) with an explicit key allowlist.
+    """
+
+    _ALLOWED = frozenset({"k_a", "k_b", "k_c"})
+
+    @staticmethod
+    def _event(entity_id: str, key: str, signal_code: str, day: date, *, direction: str = "up", value: float = 1.0) -> DiscreteEvent:
+        return DiscreteEvent(
+            date=day,
+            dedup_key=(entity_id, signal_code, key, day.isoformat()),
+            payload={
+                "entity_id": entity_id,
+                "key": key,
+                "annotation_type": "line_crossover",
+                "signal_code": signal_code,
+                "semantic_description": f"{signal_code} {key}.",
+                "direction": direction,
+                "values": {"difference": value},
+            },
+        )
+
+    def test_empty_input_yields_no_latest_rows(self):
+        assert technical_context._latest_category_events((), allowed_keys=self._ALLOWED) == ()
+
+    def test_single_category_returns_one_latest_row(self):
+        day = date(2026, 7, 1)
+        events = (
+            self._event("asset:1", "k_a", "EMA", day - timedelta(days=5)),
+            self._event("asset:1", "k_b", "EMA", day),
+        )
+        rows = technical_context._latest_category_events(events, allowed_keys=self._ALLOWED)
+        assert len(rows) == 1
+        assert rows[0].signal_category == "trend"
+        assert rows[0].date == day
+        assert rows[0].key == "k_b"
+
+    def test_multiple_categories_each_get_their_own_latest(self):
+        day = date(2026, 7, 1)
+        events = (
+            self._event("asset:1", "k_a", "EMA", day - timedelta(days=1)),
+            self._event("asset:1", "k_b", "RSI", day - timedelta(days=2)),
+            self._event("asset:1", "k_c", "NATR", day - timedelta(days=3)),
+        )
+        rows = technical_context._latest_category_events(events, allowed_keys=self._ALLOWED)
+        assert len(rows) == 3
+        # Deterministic ordering by (entity_id, signal_category).
+        assert [row.signal_category for row in rows] == ["momentum", "trend", "volatility"]
+
+    def test_multiple_events_same_category_select_the_single_latest(self):
+        day = date(2026, 7, 1)
+        events = (
+            self._event("asset:1", "k_a", "EMA", day - timedelta(days=10)),
+            self._event("asset:1", "k_b", "ADX", day),
+            self._event("asset:1", "k_a", "KAMA", day - timedelta(days=3)),
+        )
+        rows = technical_context._latest_category_events(events, allowed_keys=self._ALLOWED)
+        assert len(rows) == 1
+        assert rows[0].signal_category == "trend"
+        assert rows[0].date == day
+        assert rows[0].signal_code == "ADX"
+
+    def test_tie_break_is_deterministic_by_date_then_key_then_signal(self):
+        day = date(2026, 7, 1)
+        events = (
+            self._event("asset:1", "k_a", "EMA", day),
+            self._event("asset:1", "k_b", "ADX", day),
+            self._event("asset:1", "k_b", "EMA", day),
+        )
+        rows = technical_context._latest_category_events(events, allowed_keys=self._ALLOWED)
+        assert len(rows) == 1
+        # Same date, same category -> max (date, key, signal_code): k_b beats k_a, then EMA beats ADX.
+        assert rows[0].key == "k_b"
+        assert rows[0].signal_code == "EMA"
+
+    def test_absent_categories_are_omitted_never_null(self):
+        day = date(2026, 7, 1)
+        events = (self._event("asset:1", "k_a", "EMA", day),)
+        rows = technical_context._latest_category_events(events, allowed_keys=self._ALLOWED)
+        assert {row.signal_category for row in rows} == {"trend"}
+        assert all(row is not None for row in rows)
+
+    def test_events_with_keys_outside_allowlist_are_excluded(self):
+        day = date(2026, 7, 1)
+        events = (self._event("asset:1", "not_allowed", "EMA", day),)
+        assert technical_context._latest_category_events(events, allowed_keys=self._ALLOWED) == ()
+
+    def test_selection_is_independent_per_entity(self):
+        day = date(2026, 7, 1)
+        events = (
+            self._event("asset:1", "k_a", "EMA", day),
+            self._event("asset:2", "k_a", "EMA", day - timedelta(days=5)),
+        )
+        rows = technical_context._latest_category_events(events, allowed_keys=self._ALLOWED)
+        assert {(row.entity_id, row.signal_category) for row in rows} == {("asset:1", "trend"), ("asset:2", "trend")}
+
+    def test_unknown_plugin_signal_code_fails_loudly(self):
+        day = date(2026, 7, 1)
+        events = (self._event("asset:1", "k_a", "NOT_A_REAL_PLUGIN", day),)
+        with pytest.raises(ValueError):
+            technical_context._latest_category_events(events, allowed_keys=self._ALLOWED)
+
+
+# =============================================================================
 # 5. Plugin-owned descriptions (requirement 1)
 # =============================================================================
 
@@ -1566,7 +1686,8 @@ class TestPortfolioUniverseAndBreadth:
             payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
 
             assert payload["eligible_asset_count"] == 5
-            assert payload["considered_asset_count"] == 5
+            assert payload["period_position_leg_count"] == 5
+            assert payload["period_contributor_asset_count"] == 5
             assert len(payload["assets"]) == 5
             asset_ids = [asset["asset_id"] for asset in payload["assets"]]
             assert asset_ids == sorted(asset_ids), "assets must be deterministically ordered by asset_id"
@@ -1589,8 +1710,13 @@ class TestPortfolioUniverseAndBreadth:
         events = _envelope_payload(await context.resolve("portfolio.technical_events", required=True))
 
         assert price_calls == [2]
-        assert prices["considered_asset_count"] == 3
+        assert prices["period_position_leg_count"] == 3
+        assert prices["period_contributor_asset_count"] == 2
         assert prices["eligible_asset_count"] == 2
+        # Same asset at two brokers: legs (3) exceed both the unique contributor
+        # count (2) and the eligible universe (2); the shared asset is deduped.
+        assert prices["period_position_leg_count"] > prices["period_contributor_asset_count"]
+        assert prices["period_contributor_asset_count"] == prices["eligible_asset_count"]
         assert [asset["asset_id"] for asset in prices["assets"]] == [1, 2]
         assert [asset["portfolio_weight_ratio"] for asset in prices["assets"]] == pytest.approx([0.9, 0.1])
         assert [asset["asset_id"] for asset in indicators["assets"]] == [1, 2]
@@ -1607,7 +1733,8 @@ class TestPortfolioUniverseAndBreadth:
         assert indicators["eligible_portfolio_weight_ratio"] == pytest.approx(1.0)
         assert indicators["covered_portfolio_weight_ratio"] == pytest.approx(sum(asset["portfolio_weight_ratio"] for asset in covered_indicator_assets))
         assert indicators["covered_weight_ratio"] == pytest.approx(indicators["covered_portfolio_weight_ratio"] / indicators["eligible_portfolio_weight_ratio"])
-        assert breadth["considered_asset_count"] == 3
+        assert breadth["period_position_leg_count"] == 3
+        assert breadth["period_contributor_asset_count"] == 2
         assert breadth["eligible_asset_count"] == 2
         assert breadth["covered_asset_count"] <= 2
         assert breadth["eligible_portfolio_weight_ratio"] == pytest.approx(1.0)
@@ -1672,7 +1799,11 @@ class TestPortfolioUniverseAndBreadth:
         payload = _envelope_payload(await context.resolve("portfolio.technical_prices", required=True))
 
         assert payload["eligible_asset_count"] == 1
-        assert payload["considered_asset_count"] == 2
+        # Fully-sold-in-period asset 2 still counts as a period leg and a period
+        # contributor, but is excluded from the currently-held eligible universe.
+        assert payload["period_position_leg_count"] == 2
+        assert payload["period_contributor_asset_count"] == 2
+        assert payload["covered_asset_count"] == 1
         assert [asset["asset_id"] for asset in payload["assets"]] == [1]
 
     @pytest.mark.asyncio
@@ -1909,3 +2040,271 @@ class TestDeterministicOutput:
             payloads.append(_envelope_payload(await context.resolve("portfolio.technical_indicators", required=True)))
 
         assert payloads[0] == payloads[1]
+
+
+# =============================================================================
+# 12. Technical context components (V2): coverage aggregates, market context rows,
+#     restricted events, history limits, build memoization (requirements 3 & 6)
+# =============================================================================
+
+
+def _context_registry() -> ComponentRegistry:
+    """Registry with full technical wave + V2 context components for TestTechnicalContextComponents."""
+    return ComponentRegistry(
+        (
+            *portfolio_broker_technical.PORTFOLIO_BROKER_TECHNICAL_COMPONENTS,
+            *asset_fx_technical.ASSET_FX_TECHNICAL_COMPONENTS,
+            *PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS,
+            *BROKER_TECHNICAL_CONTEXT_COMPONENTS,
+            *ASSET_TECHNICAL_CONTEXT_COMPONENTS,
+            *FX_TECHNICAL_CONTEXT_COMPONENTS,
+            ASSET_IDENTITY_STUB,
+            FX_PAIR_IDENTITY_STUB,
+        )
+    )
+
+
+def _context_make_context(scope: BuildScope, session: AsyncSession | None = None) -> BuildContext:
+    """Like _make_context but with context components included in the registry."""
+    bucket_plan = build_bucket_plan_for_scope(scope)
+    return BuildContext(_context_registry(), request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=(session if session is not None else _make_async_session()))
+
+
+class TestTechnicalContextComponents:
+    """Focused tests for the V2 technical_context component builders.
+
+    Uses the same lightweight monkeypatching pattern as the other test
+    classes in this file: synthetic deterministic prices via _patch_get_prices_bulk,
+    synthetic portfolio report via _patch_get_report.
+    """
+
+    @pytest.mark.asyncio
+    async def test_portfolio_coverage_aggregates_span_all_requested_signals(self, monkeypatch):
+        """TechnicalUniverseCoveragePayload.signals has one entry per signal instance."""
+        positions = [_contribution(1), _contribution(2)]
+        scope = _scope()
+        report = _report(scope, positions)
+        _patch_get_prices_bulk(monkeypatch)
+        _patch_get_report(monkeypatch, report)
+        context = _context_make_context(scope)
+
+        envelope = await context.resolve("portfolio.technical_coverage", required=True)
+        assert envelope is not None
+        payload = _envelope_payload(envelope)
+        assert len(payload["signals"]) > 0
+        instance_ids = [sig["instance_id"] for sig in payload["signals"]]
+        assert len(instance_ids) == len(set(instance_ids))
+        assert payload["covered_asset_count"] <= payload["eligible_asset_count"] <= payload["period_contributor_asset_count"] <= payload["period_position_leg_count"]
+
+    @pytest.mark.asyncio
+    async def test_asset_market_context_row_has_ema_and_rsi_fields(self, monkeypatch):
+        """TechnicalMarketContextRow for an asset has ema_20, ema_50, rsi_14 populated."""
+        scope = _asset_scope(asset_id=1)
+        _patch_get_prices_bulk(monkeypatch)
+        context = _context_make_context(scope)
+
+        envelope = await context.resolve("asset.position_market_context", required=True)
+        assert envelope is not None
+        payload = _envelope_payload(envelope)
+        entities = payload["entities"]
+        assert len(entities) == 1
+        row = entities[0]
+        assert "asset:1" in row["entity_id"] or str(scope.asset_id) in row["entity_id"]
+        assert row["ema_20"] is not None or row["rsi_14"] is not None
+
+    @pytest.mark.asyncio
+    async def test_asset_context_events_restricted_to_7_allowed_keys(self, monkeypatch):
+        """asset.position_market_context events only contain keys from _ASSET_CONTEXT_EVENT_KEYS."""
+        allowed_keys = technical_context._ASSET_CONTEXT_EVENT_KEYS
+        assert len(allowed_keys) == 7
+
+        scope = _asset_scope(asset_id=1)
+        _patch_get_prices_bulk(monkeypatch)
+        context = _context_make_context(scope)
+
+        envelope = await context.resolve("asset.position_market_context", required=True)
+        payload = _envelope_payload(envelope)
+        for event in payload.get("events", []):
+            assert event["key"] in allowed_keys, f"unexpected event key: {event['key']!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("detail_level", "expected_max_history"),
+        [
+            (DetailLevel.COMPACT, 3),
+            (DetailLevel.STANDARD, 6),
+            (DetailLevel.FULL, 12),
+        ],
+    )
+    async def test_asset_position_context_history_limits_by_detail_level(self, monkeypatch, detail_level, expected_max_history):
+        """COMPACT=3, STANDARD=6, FULL=12 history rows for asset position context."""
+        scope = _asset_scope(asset_id=1, detail_level=detail_level)
+        _patch_get_prices_bulk(monkeypatch)
+        context = _context_make_context(scope)
+
+        envelope = await context.resolve("asset.position_market_context", required=True)
+        payload = _envelope_payload(envelope)
+        history = payload.get("history", [])
+        assert len(history) <= expected_max_history
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("detail_level", "expected_max_history"),
+        [
+            (DetailLevel.COMPACT, 0),
+            (DetailLevel.STANDARD, 4),
+            (DetailLevel.FULL, 8),
+        ],
+    )
+    async def test_fx_market_summary_history_limits_by_detail_level(self, monkeypatch, detail_level, expected_max_history):
+        """COMPACT=0, STANDARD=4, FULL=8 rows for FX market summary."""
+        scope = _fx_scope(detail_level=detail_level)
+        _patch_convert_bulk(monkeypatch)
+        context = _context_make_context(scope)
+
+        envelope = await context.resolve("fx.market_summary", required=True)
+        payload = _envelope_payload(envelope)
+        history = payload.get("history", [])
+        assert len(history) <= expected_max_history
+
+    @pytest.mark.asyncio
+    async def test_coverage_and_market_context_share_one_price_load(self, monkeypatch):
+        """portfolio.technical_coverage and portfolio.asset_market_context reuse the same memoized price resource."""
+        positions = [_contribution(1), _contribution(2)]
+        scope = _scope()
+        report = _report(scope, positions)
+        price_calls = _patch_get_prices_bulk(monkeypatch)
+        _patch_get_report(monkeypatch, report)
+        context = _context_make_context(scope)
+
+        await context.resolve("portfolio.technical_coverage", required=True)
+        await context.resolve("portfolio.asset_market_context", required=True)
+
+        assert len(price_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_asset_coverage_payload_is_json_serializable(self, monkeypatch):
+        """TechnicalSingleEntityCoveragePayload round-trips through JSON cleanly."""
+        scope = _asset_scope(asset_id=1)
+        _patch_get_prices_bulk(monkeypatch)
+        context = _context_make_context(scope)
+
+        envelope = await context.resolve("asset.technical_coverage", required=True)
+        payload = _envelope_payload(envelope)
+        serialized = json.dumps(payload)
+        assert json.loads(serialized) == payload
+
+    @pytest.mark.asyncio
+    async def test_fx_technical_coverage_payload_is_json_serializable(self, monkeypatch):
+        """FX TechnicalSingleEntityCoveragePayload round-trips through JSON cleanly."""
+        scope = _fx_scope()
+        _patch_convert_bulk(monkeypatch)
+        context = _context_make_context(scope)
+
+        envelope = await context.resolve("fx.technical_coverage", required=True)
+        payload = _envelope_payload(envelope)
+        serialized = json.dumps(payload)
+        assert json.loads(serialized) == payload
+
+    @pytest.mark.asyncio
+    async def test_market_context_rows_drop_flat_latest_event_fields(self, monkeypatch):
+        """The four flat latest_event_* fields are gone from every market context row."""
+        scope = _asset_scope(asset_id=1)
+        _patch_get_prices_bulk(monkeypatch)
+        context = _context_make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.position_market_context", required=True))
+        row = payload["entities"][0]
+        for legacy in ("latest_event_date", "latest_event_key", "latest_event_signal", "latest_event_direction"):
+            assert legacy not in row
+
+    @pytest.mark.asyncio
+    async def test_asset_position_latest_events_are_top_level_category_rows(self, monkeypatch):
+        """asset.position_market_context exposes latest_events (max one per (entity, category))
+        with plugin-owned categories, while the detailed events list keeps its own 12 limit."""
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope(asset_id=1, period_start=date(2025, 1, 1), period_end=date(2026, 6, 30), detail_level=DetailLevel.FULL)
+        context = _context_make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.position_market_context", required=True))
+
+        latest = payload["latest_events"]
+        assert latest, "expected at least one latest-per-category event for a rich synthetic history"
+        groups = [(event["entity_id"], event["signal_category"]) for event in latest]
+        assert len(groups) == len(set(groups)), "at most one latest event per (entity, category)"
+        for event in latest:
+            plugin = SignalPluginRegistry.get_plugin(event["signal_code"])
+            assert plugin is not None
+            assert event["signal_category"] == plugin.category.value
+            assert event["key"] in technical_context._ASSET_CONTEXT_EVENT_KEYS
+            assert set(event) >= {"entity_id", "signal_category", "signal_code", "key", "date", "direction", "semantic_description", "values"}
+        # Separate detailed events limit is preserved.
+        assert len(payload["events"]) <= 12
+
+    @pytest.mark.asyncio
+    async def test_portfolio_market_context_latest_events_span_all_eligible_events(self, monkeypatch):
+        """Portfolio latest category rows are selected across all eligible context events,
+        not from a max-one-per-entity truncation, and rows carry no legacy latest_event_* fields."""
+        positions = [_contribution(1), _contribution(2)]
+        scope = _scope(period_start=date(2025, 1, 1), period_end=date(2026, 6, 30), detail_level=DetailLevel.FULL)
+        report = _report(scope, positions)
+        _patch_get_prices_bulk(monkeypatch)
+        _patch_get_report(monkeypatch, report)
+        context = _context_make_context(scope)
+
+        payload = _envelope_payload(await context.resolve("portfolio.asset_market_context", required=True))
+        latest = payload["latest_events"]
+        groups = [(event["entity_id"], event["signal_category"]) for event in latest]
+        assert len(groups) == len(set(groups))
+        for event in latest:
+            assert event["signal_category"] == SignalPluginRegistry.get_plugin(event["signal_code"]).category.value
+        for row in payload["entities"]:
+            assert "latest_event_date" not in row
+
+    @pytest.mark.asyncio
+    async def test_fx_market_summary_latest_events_are_category_rows(self, monkeypatch):
+        """FX market summary emits latest-per-category rows while keeping its 8 detailed events limit."""
+        _patch_convert_bulk(monkeypatch)
+        scope = _fx_scope(period_start=date(2025, 1, 1), period_end=date(2026, 6, 30), detail_level=DetailLevel.FULL)
+        context = _context_make_context(scope)
+        payload = _envelope_payload(await context.resolve("fx.market_summary", required=True))
+
+        latest = payload["latest_events"]
+        groups = [(event["entity_id"], event["signal_category"]) for event in latest]
+        assert len(groups) == len(set(groups))
+        for event in latest:
+            assert event["signal_category"] == SignalPluginRegistry.get_plugin(event["signal_code"]).category.value
+            assert event["key"] in technical_context._FX_CONTEXT_EVENT_KEYS
+        assert len(payload["events"]) <= 8
+
+    @pytest.mark.asyncio
+    async def test_event_digest_rows_carry_plugin_owned_category(self, monkeypatch):
+        """portfolio.event_digest rows carry a plugin-owned signal_category and reconcile underlying counts."""
+        positions = [_contribution(1), _contribution(2)]
+        scope = _scope(period_start=date(2025, 1, 1), period_end=date(2026, 6, 30), detail_level=DetailLevel.FULL)
+        report = _report(scope, positions)
+        _patch_get_prices_bulk(monkeypatch)
+        _patch_get_report(monkeypatch, report)
+        context = _context_make_context(scope)
+
+        payload = _envelope_payload(await context.resolve("portfolio.event_digest", required=True))
+        rows = payload["rows"]
+        for row in rows:
+            plugin = SignalPluginRegistry.get_plugin(row["signal_code"])
+            assert plugin is not None
+            assert row["signal_category"] == plugin.category.value
+        # Underlying event count reconciles the digest's own included_event_count.
+        assert sum(row["event_count"] for row in rows) == payload["included_event_count"]
+
+    @pytest.mark.asyncio
+    async def test_full_technical_events_component_shape_is_unchanged(self, monkeypatch):
+        """The full technical events (states_events) payload keeps its detected/exported/bucket shape
+        and never gains latest_events or per-event signal_category from the category taxonomy work."""
+        _patch_get_prices_bulk(monkeypatch)
+        scope = _asset_scope(period_start=date(2025, 1, 1), period_end=date(2026, 6, 30), detail_level=DetailLevel.FULL)
+        context = _make_context(scope)
+        payload = _envelope_payload(await context.resolve("asset.states_events", required=True))
+
+        assert "latest_events" not in payload
+        assert set(payload) >= {"detected_event_count", "exported_event_count", "buckets"}
+        for bucket in payload["buckets"]:
+            for event in bucket["events"]:
+                assert "signal_category" not in event

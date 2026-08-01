@@ -202,7 +202,7 @@
     let fxAiExportCatalogLoading = $state(true);
     let fxAiExportCatalogFailed = $state(false);
     let fxAiExportTargetCurrency = $derived($globalSettings.default_currency || data.canonicalQuote);
-    let fxAiExportLabels = $derived(buildAiExportMenuLabels($t, fxAiExportCompatibility, $t('fxDetail.aiExport'), $t('fxDetail.aiExportBuilding')));
+    let fxAiExportLabels = $derived(buildAiExportMenuLabels($t, fxAiExportCompatibility, $t('fxDetail.aiExport')));
 
     // Panel states before edit mode (to restore when exiting)
     let savedPanelStates: {aesthetics: boolean; measures: boolean; signals: boolean} | null = $state(null);

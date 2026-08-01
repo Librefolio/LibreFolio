@@ -113,6 +113,7 @@ async def test_risk_catalog_requires_auth_and_lists_plugins():
         assert [item["analytic_code"] for item in response.json()["items"]] == [
             "comparison",
             "correlation",
+            "drawdown_summary",
             "historical_kpi",
             "historical_var",
             "portfolio_optimization",

@@ -108,3 +108,4 @@ LibreFolio_devWiki/corpus/.graphify_*
 # Stray debug artifacts (e.g. saved error pages from failed chart/screenshot runs)
 chart-error-page.html
 /LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/real_prompt_probe/
+/LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/targeted_partial_fx_probe/

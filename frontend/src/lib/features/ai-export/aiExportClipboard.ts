@@ -1,7 +1,7 @@
 import type {AiExportSnapshotRequestInput, AiExportSnapshotTransport} from './aiExportClient';
 import {fetchAiExportSnapshot} from './aiExportClient';
 import {findCompatibleAiExportSelection, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
-import type {AiExportCompatibleSelection, AiExportDomain, AiExportSnapshotResponse} from './catalog/shared';
+import {AI_EXPORT_CATALOG_VERSION, type AiExportCompatibleSelection, type AiExportDomain, type AiExportSnapshotResponse} from './catalog/shared';
 import {aiExportOptionsFingerprint, normalizeAiExportUserNotes, resolveAiExportPeriod, type AiExportOptionsSelection} from './aiExportOptions';
 import {renderAiExportPrompt, type AiExportPromptStats, type RenderedAiExportPrompt} from './templates/promptRenderer';
 
@@ -107,7 +107,7 @@ export function buildAiExportSnapshotRequest(context: AiExportRequestContext, op
         detail_level: options.detailLevel,
         period: resolveAiExportPeriod(context.snapshotAsOf, options.period),
         target_currency: context.targetCurrency,
-        expected_catalog_version: 1,
+        expected_catalog_version: AI_EXPORT_CATALOG_VERSION,
     } as const;
     if (context.domain === 'portfolio') return {domain: 'portfolio', ...common, broker_ids: brokerIds(context.brokerIds)};
     if (context.domain === 'broker') return {domain: 'broker', ...common, broker_id: context.brokerId};

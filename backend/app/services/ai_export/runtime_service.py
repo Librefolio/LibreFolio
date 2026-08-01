@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess
 from backend.app.schemas.ai_export_runtime import (
+    AiExportAdditionalExportNecessity,
+    AiExportAdditionalExportPeriod,
+    AiExportAdditionalExportSuggestion,
     AiExportAnalysisCatalogEntry,
     AiExportAnalysisContract,
     AiExportAnalysisSelection,
@@ -34,8 +37,10 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportFxPairDirectoryEntry,
     AiExportFxPairTargetReference,
     AiExportFxSnapshotRequest,
+    AiExportHistoryCoverage,
     AiExportIndicatorSamplingPolicy,
     AiExportManifestRole,
+    AiExportPeriod,
     AiExportPeriodSemantics,
     AiExportPortfolioSnapshotRequest,
     AiExportPortfolioTargetReference,
@@ -57,6 +62,7 @@ from backend.app.services.ai_export.analyses.spec import (
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.technical_shared import load_fx_rate_series
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.composer import (
     AnalysisVersionMismatchError,
@@ -73,17 +79,28 @@ from backend.app.services.ai_export.datasets.spec import (
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     RequiredComponentBuildError,
+    ResourceLoadError,
     build_bucket_plan_for_scope,
 )
 
-SCHEMA_VERSION = 1
-CATALOG_VERSION = 1
+SCHEMA_VERSION = 2
+CATALOG_VERSION = 2
 
 _DETAIL_ORDER = {
     DetailLevel.COMPACT: 0,
     DetailLevel.STANDARD: 1,
     DetailLevel.FULL: 2,
 }
+
+_FX_HISTORY_COVERAGE_DATASET_IDS = frozenset(
+    {
+        "fx.overview",
+        "fx.market_technical",
+        "fx.market_context",
+        "fx.conversion_timing_context",
+        "fx.all_data",
+    }
+)
 
 
 class AiExportRuntimeError(RuntimeError):
@@ -122,9 +139,10 @@ class AiExportEntityNotFoundError(AiExportRuntimeError):
 
 
 class AiExportSnapshotSourceError(AiExportRuntimeError):
-    def __init__(self, component_id: str, *, retryable: bool) -> None:
+    def __init__(self, component_id: str, *, retryable: bool, reason_code: str | None = None) -> None:
         self.component_id = component_id
         self.retryable = retryable
+        self.reason_code = reason_code
         super().__init__(f"required AI Export component failed: {component_id}")
 
 
@@ -206,9 +224,43 @@ def _other_identifiers(value: object) -> tuple[str, ...]:
 
 def _root_cause(error: BaseException) -> BaseException:
     current = error
-    while isinstance(current, RequiredComponentBuildError):
+    while isinstance(current, (RequiredComponentBuildError, ResourceLoadError)):
         current = current.cause
     return current
+
+
+async def _fx_history_coverage(context: BuildContext) -> AiExportHistoryCoverage:
+    scope = context.scope
+    if scope is None or scope.domain is not Domain.FX:
+        raise ValueError("FX history coverage requires an FX BuildScope")
+    rate_series = await load_fx_rate_series(context)
+    visible = tuple(item for item in rate_series.observations if scope.period_start <= item.requested_date <= scope.period_end)
+    if not visible:
+        raise ValueError("successful FX snapshot requires at least one visible rate observation")
+    available_start = visible[0].requested_date
+    requested_days = (scope.period_end - scope.period_start).days + 1
+    covered_days = (scope.period_end - available_start).days + 1
+    observed_count = sum(not item.backward_filled and item.actual_date == item.requested_date for item in visible)
+    earliest_source_date = min(item.actual_date for item in rate_series.observations)
+    complete = available_start == scope.period_start
+    return AiExportHistoryCoverage(
+        requested_period=AiExportPeriod(start=scope.period_start, end=scope.period_end),
+        available_period=AiExportPeriod(start=available_start, end=scope.period_end),
+        requested_calendar_days=requested_days,
+        covered_calendar_days=covered_days,
+        coverage_ratio=covered_days / requested_days,
+        complete=complete,
+        reason_code=None if complete else "insufficient_source_history",
+        observed_count=observed_count,
+        backward_filled_count=len(visible) - observed_count,
+        earliest_source_date=earliest_source_date,
+    )
+
+
+def _requires_fx_history_coverage(dataset_manifest: tuple[AiExportDatasetManifestEntry, ...]) -> bool:
+    """Return whether the selected composition consumes base/quote rate history."""
+
+    return any(entry.dataset_id in _FX_HISTORY_COVERAGE_DATASET_IDS for entry in dataset_manifest)
 
 
 class AiExportSnapshotService:
@@ -290,6 +342,16 @@ class AiExportSnapshotService:
                     response_contract_id=analysis.response_contract_id,
                     response_contract_version=analysis.response_contract_version,
                     supports_user_notes=analysis.supports_notes,
+                    additional_export_suggestions=tuple(
+                        AiExportAdditionalExportSuggestion(
+                            dataset_id=suggestion.dataset_id,
+                            reason_i18n_key=suggestion.reason_i18n_key,
+                            recommended_period=AiExportAdditionalExportPeriod(suggestion.recommended_period.value),
+                            recommended_detail=_api_detail(suggestion.recommended_detail),
+                            necessity=AiExportAdditionalExportNecessity(suggestion.necessity.value),
+                        )
+                        for suggestion in analysis.additional_export_suggestions
+                    ),
                 )
             )
         return AiExportCatalogResponse(
@@ -435,6 +497,8 @@ class AiExportSnapshotService:
         self,
         request: AiExportSnapshotRequest,
         sections: tuple[AiExportSectionEnvelope, ...],
+        *,
+        broker_scope: tuple[int, ...],
     ) -> AiExportEntityDirectory:
         asset_ids: set[int] = set()
         broker_ids: set[int] = set()
@@ -446,13 +510,9 @@ class AiExportSnapshotService:
             )
         if isinstance(request, AiExportAssetSnapshotRequest):
             asset_ids.add(request.asset_id)
-            broker_ids.update(request.broker_ids)
         elif isinstance(request, AiExportBrokerSnapshotRequest):
             broker_ids.add(request.broker_id)
-        elif isinstance(request, AiExportPortfolioSnapshotRequest):
-            broker_ids.update(request.broker_ids)
-        elif isinstance(request, AiExportFxSnapshotRequest):
-            broker_ids.update(request.broker_ids)
+        broker_ids.update(broker_scope)
 
         assets: tuple[AiExportAssetDirectoryEntry, ...] = ()
         if asset_ids:
@@ -524,6 +584,7 @@ class AiExportSnapshotService:
             dataset_count=len(dataset_manifest),
             section_count=len(sections),
             serialized_characters=0,
+            serialized_bytes=0,
             estimated_tokens=0,
         )
         response = None
@@ -542,18 +603,19 @@ class AiExportSnapshotService:
                 sections=sections,
                 stats=stats,
             )
-            serialized_characters = len(
-                json.dumps(
-                    response.model_dump(mode="json"),
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    ensure_ascii=False,
-                )
+            serialized = json.dumps(
+                response.model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
             )
+            serialized_characters = len(serialized)
+            serialized_bytes = len(serialized.encode("utf-8"))
             updated = AiExportSnapshotStats(
                 dataset_count=len(dataset_manifest),
                 section_count=len(sections),
                 serialized_characters=serialized_characters,
+                serialized_bytes=serialized_bytes,
                 estimated_tokens=(serialized_characters + 3) // 4,
             )
             if updated == stats:
@@ -661,19 +723,26 @@ class AiExportSnapshotService:
                 "unsupported_detail_level",
             ) from exc
         except RequiredComponentBuildError as exc:
-            if isinstance(_root_cause(exc), AssetNotFoundError):
-                raise AiExportEntityNotFoundError(str(_root_cause(exc))) from exc
+            root_cause = _root_cause(exc)
+            if isinstance(root_cause, AssetNotFoundError):
+                raise AiExportEntityNotFoundError(str(root_cause)) from exc
             raise AiExportSnapshotSourceError(
                 exc.component_id,
                 retryable=False,
+                reason_code=getattr(root_cause, "reason_code", None),
             ) from exc
 
         sections = tuple(AiExportSectionEnvelope.model_validate(envelope.model_dump(mode="json")) for envelope in envelopes)
         if prepared.analysis is not None:
             self._check_analysis_applicability(prepared.analysis, sections)
-        entity_directory = await self._entity_directory(request, sections)
+        entity_directory = await self._entity_directory(
+            request,
+            sections,
+            broker_scope=prepared.broker_scope,
+        )
 
         generated_at = datetime.now(UTC)
+        history_coverage = await _fx_history_coverage(context) if isinstance(request, AiExportFxSnapshotRequest) and _requires_fx_history_coverage(dataset_manifest) else None
         meta = AiExportSnapshotMeta(
             request_id=prepared.scope.request_id,
             generated_at=generated_at,
@@ -682,6 +751,7 @@ class AiExportSnapshotService:
             calculation_range=None,
             earliest_calculation_date=None,
             target_currency=request.target_currency,
+            history_coverage=history_coverage,
         )
         return self._response_with_stable_stats(
             domain=AiExportDomain(request.domain),

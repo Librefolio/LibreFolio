@@ -11,7 +11,7 @@ applyTo: 'frontend/src/lib/features/ai-export/**'
   metric semantics.
 - Frontend must never recompute, infer, repair, or silently substitute those
   facts. No EMA/RSI/MACD/Bollinger engines or financial fallback logic.
-- Frontend owns only task presentation, the synthetic Snapshot choice, local
+- Frontend owns catalog-backed dataset/analysis presentation, local
   instruction/response templates, locale, optional notes, safe serialization, UI
   state, telemetry display, and clipboard delivery.
 - Hard cutover only: no legacy builder fallback, dual runtime, or feature flag.
@@ -21,7 +21,7 @@ applyTo: 'frontend/src/lib/features/ai-export/**'
 - Use generated Zodios schemas plus discriminated domain request/response types.
 - Request contexts must stay domain-specific and fully typed. Never use `any`,
   unsafe casts, or unvalidated arbitrary objects.
-- Load `/api/v1/ai-export/catalog` and reconcile it against local task/profile/
+- Load `/api/v1/ai-export/catalog` and reconcile it against local dataset/analysis/
   response-contract expectations before enabling a choice.
 - Fail closed on catalog fetch failure, unknown/missing/duplicate entries,
   presentation text from backend, schema/profile/version/support-flag drift, or
@@ -29,15 +29,17 @@ applyTo: 'frontend/src/lib/features/ai-export/**'
 - Validate snapshot schema, domain, task, detail, profile, contract, range,
   currency, and target identity before rendering.
 
-## Snapshot and Analysis UI Mapping
+## Export Data and Request Analysis
 
-- The panel's first choice is the UI-only `snapshot` selection with a Camera
-  icon. It does not add a backend catalog entry.
-- Map Snapshot to existing backend tasks: Portfolio → `portfolio_description`,
-  Asset → `asset_snapshot`, FX → `fx_trend_review`, Broker → `broker_review`.
-- Snapshot always exports `data_only` and hides response language and user notes.
+- The panel exposes two backend-catalog selection kinds: `dataset` (**Export Data**)
+  and `analysis` (**Request Analysis**). There is no UI-only synthetic Snapshot
+  entry and no task-alias mapping.
+- Dataset choices use the runtime dataset IDs returned for the current domain.
+  Analysis choices use the runtime Analysis IDs and exact instruction/response
+  contract identities.
+- Export Data always renders `data_only` and hides response language and user notes.
   Preserve those draft values so switching back to an analysis restores them.
-- Every real task always exports `full_prompt`; never expose a render-mode
+- Request Analysis always renders `full_prompt`; never expose a render-mode
   control.
 - Keep backend/catalog web-research compatibility metadata, but do not expose a
   panel control. Panel exports always pass `webResearch: false`.
@@ -72,12 +74,12 @@ applyTo: 'frontend/src/lib/features/ai-export/**'
   fallback to legacy export builders, serializers, or financial logic.
 - If no clipboard transport succeeds, surface the typed clipboard error.
 
-## Adding a Task
+## Adding a Dataset or Analysis
 
-A task is incomplete until all layers land together:
+A selection is incomplete until all layers land together:
 
-1. backend enum/profile/assembler/schema/error contract and tests;
-2. frontend catalog definition and expected profile matrix;
+1. backend component/dataset/Analysis catalog, schema/error contract, and tests;
+2. frontend catalog compatibility and typed request/response handling;
 3. local instruction template;
 4. local response contract;
 5. EN/IT/FR/ES i18n labels/descriptions/errors;

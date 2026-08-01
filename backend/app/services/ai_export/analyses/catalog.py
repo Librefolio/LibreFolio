@@ -1,4 +1,4 @@
-"""Frozen 16-analysis catalog for the AI Export Phase 0 refinement (workstream D).
+"""Public 16-analysis catalog for AI Export Semantic Composition V2.
 
 Analysis IDs and required/optional dataset mapping are frozen per the refinement
 plan (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 5):
@@ -8,18 +8,18 @@ plan (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 5):
 | portfolio.pac_planning | overview, performance_flows | - |
 | portfolio.rebalancing | overview | performance_flows, technical |
 | portfolio.performance_attribution | overview, performance_flows | - |
-| portfolio.income_review | overview, performance_flows | - |
+| portfolio.income_review | overview, performance_flows, income_evidence | - |
 | portfolio.fifo_review | overview, fifo | - |
-| portfolio.technical_breadth | overview, technical | - |
+| portfolio.technical_breadth | overview, technical_summary | - |
 | portfolio.description | overview | performance_flows, technical |
-| broker.review | overview, performance_flows | technical, fifo |
-| broker.cost_efficiency | overview, performance_flows | - |
-| broker.concentration_context | overview | technical |
+| broker.review | overview, performance_flows | technical, fifo, concentration_evidence |
+| broker.cost_efficiency | overview, performance_flows, cost_efficiency_evidence | - |
+| broker.concentration_context | overview, concentration_evidence | technical |
 | broker.fifo_review | overview, fifo | - |
 | asset.trend_analysis | overview, market_technical | - |
 | asset.position_review | overview, position_performance | market_technical |
 | fx.trend_review | overview, market_technical | - |
-| fx.conversion_timing | overview, market_technical | direct_exposure |
+| fx.conversion_timing | overview, market_technical, conversion_timing_context | direct_exposure |
 | fx.exposure_impact | overview, direct_exposure | market_technical |
 
 Full dataset IDs are used internally (e.g. `portfolio.performance_flows`, not the
@@ -41,8 +41,8 @@ catalog.
 
 from __future__ import annotations
 
-from backend.app.services.ai_export.analyses.spec import AnalysisRegistry, AnalysisSpec
-from backend.app.services.ai_export.components.types import Domain
+from backend.app.services.ai_export.analyses.spec import AdditionalExportPeriod, AdditionalExportSuggestion, AnalysisRegistry, AnalysisSpec
+from backend.app.services.ai_export.components.types import DetailLevel, Domain
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry
 
@@ -64,11 +64,12 @@ def _analysis(
     required: tuple[str, ...],
     optional: tuple[str, ...] = (),
     applicability_code: str = "always_applicable",
+    suggestions: tuple[AdditionalExportSuggestion, ...] = (),
 ) -> AnalysisSpec:
     analysis_id = f"{domain.value}.{suffix}"
     return AnalysisSpec(
         analysis_id=analysis_id,
-        version=1,
+        version=2,
         domain=domain,
         display_i18n_key=f"aiExport.analysis.{analysis_id}.display",
         description_i18n_key=f"aiExport.analysis.{analysis_id}.description",
@@ -78,51 +79,162 @@ def _analysis(
         required_dataset_ids=required,
         optional_dataset_ids=optional,
         instruction_template_id=f"{analysis_id}.instructions",
-        instruction_template_version=1,
+        instruction_template_version=2,
         response_contract_id=f"{analysis_id}.response",
-        response_contract_version=1,
+        response_contract_version=2,
+        additional_export_suggestions=suggestions,
+    )
+
+
+def _suggest(dataset_id: str, reason: str, period: AdditionalExportPeriod, detail: DetailLevel) -> AdditionalExportSuggestion:
+    return AdditionalExportSuggestion(
+        dataset_id=dataset_id,
+        reason_i18n_key=f"aiExport.additionalData.reason.{reason}",
+        recommended_period=period,
+        recommended_detail=detail,
     )
 
 
 _PORTFOLIO_ANALYSES: tuple[AnalysisSpec, ...] = (
-    _analysis(Domain.PORTFOLIO, "pac_planning", icon="calendar-clock", required=("portfolio.overview", "portfolio.performance_flows")),
-    _analysis(Domain.PORTFOLIO, "rebalancing", icon="scale", required=("portfolio.overview",), optional=("portfolio.performance_flows", "portfolio.technical")),
-    _analysis(Domain.PORTFOLIO, "performance_attribution", icon="pie-chart", required=("portfolio.overview", "portfolio.performance_flows")),
-    _analysis(Domain.PORTFOLIO, "income_review", icon="banknote", required=("portfolio.overview", "portfolio.performance_flows")),
-    _analysis(Domain.PORTFOLIO, "fifo_review", icon="list-ordered", required=("portfolio.overview", "portfolio.fifo")),
-    _analysis(Domain.PORTFOLIO, "technical_breadth", icon="activity", required=("portfolio.overview", "portfolio.technical")),
-    _analysis(Domain.PORTFOLIO, "description", icon="file-text", required=("portfolio.overview",), optional=("portfolio.performance_flows", "portfolio.technical")),
+    _analysis(
+        Domain.PORTFOLIO,
+        "pac_planning",
+        icon="calendar-clock",
+        required=("portfolio.overview", "portfolio.performance_flows"),
+        optional=("portfolio.asset_snapshot", "portfolio.drawdown_context"),
+        suggestions=(_suggest("portfolio.technical", "deeperTechnical", AdditionalExportPeriod.THREE_MONTHS, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.PORTFOLIO,
+        "rebalancing",
+        icon="scale",
+        required=("portfolio.overview",),
+        optional=("portfolio.performance_flows", "portfolio.asset_comparison", "portfolio.drawdown_context"),
+        suggestions=(
+            _suggest("portfolio.technical", "deeperTechnical", AdditionalExportPeriod.ONE_YEAR, DetailLevel.COMPACT),
+            _suggest("portfolio.fifo", "fifoDetail", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),
+        ),
+    ),
+    _analysis(
+        Domain.PORTFOLIO,
+        "performance_attribution",
+        icon="pie-chart",
+        required=("portfolio.overview", "portfolio.performance_flows"),
+        suggestions=(_suggest("portfolio.fifo", "fifoDetail", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.PORTFOLIO,
+        "income_review",
+        icon="banknote",
+        required=("portfolio.overview", "portfolio.performance_flows", "portfolio.income_evidence"),
+        suggestions=(_suggest("portfolio.fifo", "fifoDetail", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.PORTFOLIO,
+        "fifo_review",
+        icon="list-ordered",
+        required=("portfolio.overview", "portfolio.fifo"),
+        suggestions=(_suggest("portfolio.performance_flows", "performanceContext", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.PORTFOLIO,
+        "technical_breadth",
+        icon="activity",
+        required=("portfolio.overview", "portfolio.technical_summary"),
+        suggestions=(
+            _suggest("portfolio.performance_flows", "performanceContext", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),
+            _suggest("portfolio.technical", "deeperTechnical", AdditionalExportPeriod.ONE_YEAR, DetailLevel.FULL),
+        ),
+    ),
+    _analysis(
+        Domain.PORTFOLIO,
+        "description",
+        icon="file-text",
+        required=("portfolio.overview",),
+        optional=("portfolio.performance_flows", "portfolio.technical_summary"),
+        suggestions=(
+            _suggest("portfolio.technical", "deeperTechnical", AdditionalExportPeriod.THREE_MONTHS, DetailLevel.STANDARD),
+            _suggest("portfolio.fifo", "fifoDetail", AdditionalExportPeriod.ONE_YEAR, DetailLevel.COMPACT),
+        ),
+    ),
 )
 
 _BROKER_ANALYSES: tuple[AnalysisSpec, ...] = (
-    _analysis(Domain.BROKER, "review", icon="landmark", required=("broker.overview", "broker.performance_flows"), optional=("broker.technical", "broker.fifo")),
-    _analysis(Domain.BROKER, "cost_efficiency", icon="receipt", required=("broker.overview", "broker.performance_flows")),
-    _analysis(Domain.BROKER, "concentration_context", icon="target", required=("broker.overview",), optional=("broker.technical",)),
-    _analysis(Domain.BROKER, "fifo_review", icon="list-ordered", required=("broker.overview", "broker.fifo")),
+    _analysis(
+        Domain.BROKER,
+        "review",
+        icon="landmark",
+        required=("broker.overview", "broker.performance_flows"),
+        optional=("broker.asset_comparison", "broker.fifo", "broker.drawdown_context", "broker.concentration_evidence"),
+        suggestions=(_suggest("broker.technical", "deeperTechnical", AdditionalExportPeriod.THREE_MONTHS, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.BROKER,
+        "cost_efficiency",
+        icon="receipt",
+        required=("broker.overview", "broker.performance_flows", "broker.cost_efficiency_evidence"),
+        suggestions=(_suggest("broker.fifo", "fifoDetail", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.BROKER,
+        "concentration_context",
+        icon="target",
+        required=("broker.overview", "broker.concentration_evidence"),
+        optional=("broker.technical_summary",),
+        suggestions=(_suggest("broker.asset_comparison", "deeperTechnical", AdditionalExportPeriod.THREE_MONTHS, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.BROKER,
+        "fifo_review",
+        icon="list-ordered",
+        required=("broker.overview", "broker.fifo"),
+        suggestions=(_suggest("broker.performance_flows", "performanceContext", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
+    ),
 )
 
 _ASSET_ANALYSES: tuple[AnalysisSpec, ...] = (
-    _analysis(Domain.ASSET, "trend_analysis", icon="trending-up", required=("asset.overview", "asset.market_technical")),
+    _analysis(
+        Domain.ASSET,
+        "trend_analysis",
+        icon="trending-up",
+        required=("asset.overview", "asset.market_technical"),
+        suggestions=(_suggest("asset.position_performance", "positionContext", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
+    ),
     _analysis(
         Domain.ASSET,
         "position_review",
         icon="wallet",
         required=("asset.overview", "asset.position_performance"),
-        optional=("asset.market_technical",),
+        optional=("asset.position_context", "asset.drawdown_context"),
         applicability_code="requires_position",
+        suggestions=(_suggest("asset.market_technical", "deeperTechnical", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
     ),
 )
 
 _FX_ANALYSES: tuple[AnalysisSpec, ...] = (
-    _analysis(Domain.FX, "trend_review", icon="trending-up", required=("fx.overview", "fx.market_technical")),
-    _analysis(Domain.FX, "conversion_timing", icon="clock", required=("fx.overview", "fx.market_technical"), optional=("fx.direct_exposure",)),
+    _analysis(
+        Domain.FX,
+        "trend_review",
+        icon="trending-up",
+        required=("fx.overview", "fx.market_technical"),
+        suggestions=(_suggest("fx.direct_exposure", "directExposure", AdditionalExportPeriod.THREE_MONTHS, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.FX,
+        "conversion_timing",
+        icon="clock",
+        required=("fx.overview", "fx.market_technical", "fx.conversion_timing_context"),
+        optional=("fx.direct_exposure",),
+        suggestions=(_suggest("fx.direct_exposure", "directExposure", AdditionalExportPeriod.THREE_MONTHS, DetailLevel.STANDARD),),
+    ),
     _analysis(
         Domain.FX,
         "exposure_impact",
         icon="scale",
         required=("fx.overview", "fx.direct_exposure"),
-        optional=("fx.market_technical",),
+        optional=("fx.market_context",),
         applicability_code="requires_direct_exposure",
+        suggestions=(_suggest("fx.market_technical", "deeperTechnical", AdditionalExportPeriod.ONE_YEAR, DetailLevel.COMPACT),),
     ),
 )
 

@@ -165,7 +165,6 @@ ASSET_STATES_EVENTS_SPEC = ComponentSpec(
     domains=frozenset({Domain.ASSET}),
     output_model=TechnicalEventsPayload,
     builder=_build_asset_states_events,
-    dependencies=("asset.indicators",),
     period_behavior=PeriodBehavior.WINDOWED,
 )
 
@@ -314,7 +313,6 @@ FX_STATES_EVENTS_SPEC = ComponentSpec(
     domains=frozenset({Domain.FX}),
     output_model=TechnicalEventsPayload,
     builder=_build_fx_states_events,
-    dependencies=("fx.indicators",),
     period_behavior=PeriodBehavior.WINDOWED,
 )
 

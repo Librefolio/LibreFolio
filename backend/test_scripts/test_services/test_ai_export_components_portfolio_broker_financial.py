@@ -357,6 +357,57 @@ class TestEntityIdentityAcrossDetailLevels:
             assert len(performance_envelope.payload["contributors"]) == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("broker_scope", "holding_brokers", "contributor_brokers", "expected_position", "expected_period_contributor"),
+        (
+            ((1,), (1,), (1,), 1, 1),
+            ((1, 2), (1, 2), (1, 2), 2, 2),
+            ((1, 2), (1,), (1,), 1, 1),
+            ((1, 2), (1,), (1, 2), 1, 2),
+        ),
+    )
+    async def test_broker_universe_counts_are_explicit(
+        self,
+        monkeypatch,
+        broker_scope,
+        holding_brokers,
+        contributor_brokers,
+        expected_position,
+        expected_period_contributor,
+    ):
+        scope = _scope(broker_scope=broker_scope)
+        holdings = [_holding(index, broker_id) for index, broker_id in enumerate(holding_brokers, start=1)]
+        contributions = PositionsContribution(positions=[_contribution_row(index, broker_id) for index, broker_id in enumerate(contributor_brokers, start=1)])
+        report = _report(
+            scope,
+            summary=_summary(holdings=holdings),
+            history=[
+                _history_point(
+                    date(2026, 1, 1),
+                    nav=1000,
+                    capital_baseline=1000,
+                    total_pnl=0,
+                )
+            ],
+            contribution=contributions,
+        )
+        _patch_report(monkeypatch, report)
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        summary = await context.resolve("portfolio.summary", required=True)
+        provenance = await context.resolve("portfolio.provenance", required=True)
+        performance = await context.resolve("portfolio.performance", required=True)
+
+        assert "broker_count" not in summary.payload
+        assert summary.payload["position_broker_count"] == expected_position
+        assert provenance.payload["scoped_broker_count"] == len(broker_scope)
+        assert provenance.payload["broker_scope"] == list(broker_scope)
+        assert performance.payload["period_contributor_broker_count"] == expected_period_contributor
+
+    @pytest.mark.asyncio
     async def test_position_unit_price_reconciles_quantity_and_current_value(self, monkeypatch):
         scope = _scope()
         report = _report(
@@ -936,7 +987,7 @@ class TestPayloadValidation:
                 period_start=date(2026, 1, 1),
                 target_currency=CURRENCY,
                 position_count=0,
-                broker_count=0,
+                position_broker_count=0,
                 net_worth=_money(0),
                 total_invested=_money(0),
                 total_gain_loss=_money(0),

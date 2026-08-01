@@ -8,7 +8,7 @@ accessible broker. LibreFolio never sends it to an AI service.
 Open a Broker detail page and select **AI Export** in the top toolbar. Your draft
 is remembered separately for this user and broker.
 
-## 🎯 Broker Tasks
+## 🎯 Broker Analyses
 
 | Task | Focus |
 |---|---|
@@ -20,7 +20,7 @@ is remembered separately for this user and broker.
 ## 🗂️ Scope and Data
 
 The export is limited to the selected broker and current date range and target
-currency. Depending on the task, it can include cash balances, positions,
+currency. Depending on the selection, it can include cash balances, positions,
 transactions, performance, costs, allocation, concentration, income, and FIFO
 lot summaries. Server-side access checks prevent exporting a broker the
 current user cannot read.
@@ -33,30 +33,53 @@ current user cannot read.
     cost, value, results, income, fees, and taxes. It does not export custody,
     event, value, return, or price timelines.
 
-## 📸 Snapshot and Analyses
+## 📤 Export Data and Request Analysis
 
-- **Data Snapshot** copies factual structured broker data only.
-- An **analysis task** adds task-specific instructions and a response contract.
+- **Export Data** copies one factual Broker dataset only.
+- **Request Analysis** adds task-specific instructions, a response contract, and
+  the datasets declared for the Analysis.
   The requested response language follows the current LibreFolio interface
   language.
-- Optional notes are included only when supported by the selected task.
+- Optional notes are included only when supported by the selected Analysis.
+
+Available exports include Broker Overview, Performance & Flows, Technical Summary,
+Asset Comparison, Drawdown Context, Concentration Evidence, Cost Efficiency
+Evidence, complete Technical Data, FIFO Lots, and All Broker Data.
+
+## 🧾 Broker Cost Efficiency
+
+Cost Efficiency keeps these values separate:
+
+- recorded fees;
+- taxes;
+- total recorded costs;
+- trading activity and deterministic denominators;
+- valid cost ratios.
+
+`recorded` with amount 0 means the source contains a real zero. `unavailable`
+means the source does not support the value and does not mean zero.
+`not applicable` means the inputs exist but the denominator makes the ratio
+meaningless. Ratios appear only with valid inputs and include their formula,
+numerator, denominator, unit, period, and coverage.
+
+Trading, FX, or other cost subcategories remain unavailable when the Broker data
+does not classify them separately.
 
 ## 📏 Detail and Sampling
 
 | Detail | Exact sampling |
 |---|---|
-| **Compact** | Latest values and aggregates only; no time series. FIFO review selects up to 7 largest open/partial lots by residual cost plus 3 most recently closed lots, then fills unused quota up to 10. |
-| **Standard** | All applicable entities; up to **7 recent daily points** plus **8 preceding weekly points**. |
-| **Full** | All applicable entities; **7 recent daily points** plus weekly points across the **full technical window**. |
+| **Compact** | Same data universe with the sparsest supported temporal buckets (up to 30 days). |
+| **Standard** | Same data universe with temporal buckets up to 14 days. |
+| **Full** | Same data universe with temporal buckets up to 7 days. |
 
-A task/profile may omit sections whose data is unavailable or not applicable.
-The separate **Technical window** selector uses **3M** by default and can be set
-to **6M**, **1Y**, or a custom duration. It always ends on the snapshot date and
-does not change the Broker page's selected financial range.
+A dataset or Analysis can omit unavailable or non-applicable optional sections.
+The **AI period** ends on the snapshot date. Partial history and coverage remain
+explicit.
 
 ## 🔒 Applicability, Errors, and Privacy
 
-Tasks can be unavailable when required facts do not exist—for example, FIFO Lot
+Analyses can be unavailable when required facts do not exist—for example, FIFO Lot
 Review without eligible open or recently closed lots. Choices also fail closed on catalog or contract
 mismatch. Typed errors report access, applicability, source, or contract
 problems.

@@ -1,8 +1,10 @@
-"""Focused tests for the frozen 18-dataset / 17-analysis AI Export catalog (workstream D).
+"""Focused tests for the frozen 25-dataset / 16-analysis AI Export Semantic Composition V2 catalog.
 
 Covers exact dataset/analysis IDs and counts, the frozen analysis-to-dataset
-mapping, registry uniqueness/reference/domain validation, and the declarative
-`*.all_data` expansion/dedup/canonical-order behaviour.
+mapping (V2 remapped analyses, new public derived datasets), registry
+uniqueness/reference/domain validation, and the declarative `*.all_data`
+expansion/dedup/canonical-order behaviour (context/summary datasets excluded
+from *.all_data source unions per V2 architecture).
 """
 
 from __future__ import annotations
@@ -41,45 +43,60 @@ from backend.app.services.ai_export.datasets.spec import (
     UnknownDatasetError,
     build_all_data_dataset,
 )
+from backend.app.services.ai_export.runtime_service import AiExportSnapshotService
 
 EXPECTED_DATASET_IDS = (
     "portfolio.overview",
     "portfolio.performance_flows",
+    "portfolio.technical_summary",
+    "portfolio.asset_snapshot",
+    "portfolio.asset_comparison",
+    "portfolio.drawdown_context",
+    "portfolio.income_evidence",
     "portfolio.technical",
     "portfolio.fifo",
     "portfolio.all_data",
     "broker.overview",
     "broker.performance_flows",
+    "broker.technical_summary",
+    "broker.asset_comparison",
+    "broker.drawdown_context",
+    "broker.concentration_evidence",
+    "broker.cost_efficiency_evidence",
     "broker.technical",
     "broker.fifo",
     "broker.all_data",
     "asset.overview",
     "asset.position_performance",
+    "asset.position_context",
+    "asset.drawdown_context",
     "asset.market_technical",
     "asset.all_data",
     "fx.overview",
+    "fx.market_context",
+    "fx.conversion_timing_context",
     "fx.market_technical",
     "fx.direct_exposure",
     "fx.all_data",
 )
 
 EXPECTED_ANALYSIS_MAPPING = {
-    "portfolio.pac_planning": (("portfolio.overview", "portfolio.performance_flows"), ()),
-    "portfolio.rebalancing": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.technical")),
+    "portfolio.pac_planning": (("portfolio.overview", "portfolio.performance_flows"), ("portfolio.asset_snapshot", "portfolio.drawdown_context")),
+    "portfolio.rebalancing": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.asset_comparison", "portfolio.drawdown_context")),
     "portfolio.performance_attribution": (("portfolio.overview", "portfolio.performance_flows"), ()),
-    "portfolio.income_review": (("portfolio.overview", "portfolio.performance_flows"), ()),
+    "portfolio.income_review": (("portfolio.overview", "portfolio.performance_flows", "portfolio.income_evidence"), ()),
     "portfolio.fifo_review": (("portfolio.overview", "portfolio.fifo"), ()),
-    "portfolio.technical_breadth": (("portfolio.overview", "portfolio.technical"), ()),
-    "portfolio.description": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.technical")),
-    "broker.review": (("broker.overview", "broker.performance_flows"), ("broker.technical", "broker.fifo")),
-    "broker.cost_efficiency": (("broker.overview", "broker.performance_flows"), ()),
-    "broker.concentration_context": (("broker.overview",), ("broker.technical",)),
+    "portfolio.technical_breadth": (("portfolio.overview", "portfolio.technical_summary"), ()),
+    "portfolio.description": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.technical_summary")),
+    "broker.review": (("broker.overview", "broker.performance_flows"), ("broker.asset_comparison", "broker.fifo", "broker.drawdown_context", "broker.concentration_evidence")),
+    "broker.cost_efficiency": (("broker.overview", "broker.performance_flows", "broker.cost_efficiency_evidence"), ()),
+    "broker.concentration_context": (("broker.overview", "broker.concentration_evidence"), ("broker.technical_summary",)),
     "broker.fifo_review": (("broker.overview", "broker.fifo"), ()),
     "asset.trend_analysis": (("asset.overview", "asset.market_technical"), ()),
-    "asset.position_review": (("asset.overview", "asset.position_performance"), ("asset.market_technical",)),
+    "asset.position_review": (("asset.overview", "asset.position_performance"), ("asset.position_context", "asset.drawdown_context")),
     "fx.trend_review": (("fx.overview", "fx.market_technical"), ()),
-    "fx.conversion_timing": (("fx.overview", "fx.market_technical"), ("fx.direct_exposure",)),
-    "fx.exposure_impact": (("fx.overview", "fx.direct_exposure"), ("fx.market_technical",)),
+    "fx.conversion_timing": (("fx.overview", "fx.market_technical", "fx.conversion_timing_context"), ("fx.direct_exposure",)),
+    "fx.exposure_impact": (("fx.overview", "fx.direct_exposure"), ("fx.market_context",)),
 }
 
 
@@ -106,11 +123,11 @@ def analysis_registry(dataset_registry: DatasetRegistry) -> AnalysisRegistry:
 
 
 class TestDatasetCatalog:
-    def test_expected_dataset_count_is_18(self):
-        assert EXPECTED_DATASET_COUNT == 18
+    def test_expected_dataset_count_is_32(self):
+        assert EXPECTED_DATASET_COUNT == 32
 
-    def test_dataset_registry_has_exactly_18_entries(self, dataset_registry: DatasetRegistry):
-        assert len(dataset_registry) == 18
+    def test_dataset_registry_has_exactly_32_entries(self, dataset_registry: DatasetRegistry):
+        assert len(dataset_registry) == 32
 
     def test_dataset_ids_match_frozen_catalog_exactly(self, dataset_registry: DatasetRegistry):
         actual_ids = {spec.dataset_id for spec in dataset_registry}
@@ -125,21 +142,21 @@ class TestDatasetCatalog:
         for domain in Domain:
             assert f"{domain.value}.all_data" in dataset_registry
 
-    def test_schema_and_selection_versions_are_1(self, dataset_registry: DatasetRegistry):
+    def test_schema_and_selection_versions_are_2(self, dataset_registry: DatasetRegistry):
         for spec in dataset_registry:
-            assert spec.version == 1
+            assert spec.version == 2
 
 
 class TestIntegratedComponentCatalog:
-    def test_production_registry_has_all_45_real_components_in_frozen_order(
+    def test_production_registry_has_all_56_real_components_in_frozen_order(
         self,
         component_registry: ComponentRegistry,
     ):
         expected_order = tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
 
-        assert len(ALL_FOUNDATION_COMPONENTS) == 45
-        assert len(ALL_REAL_COMPONENTS) == 45
-        assert len(ALL_COMPONENTS) == 45
+        assert len(ALL_FOUNDATION_COMPONENTS) == 65
+        assert len(ALL_REAL_COMPONENTS) == 65
+        assert len(ALL_COMPONENTS) == 65
         assert component_registry.canonical_order == expected_order
         assert tuple(spec.component_id for spec in ALL_COMPONENTS) == expected_order
         assert all(spec.output_model is not FoundationComponentPayload for spec in component_registry)
@@ -178,11 +195,11 @@ class TestAnalysisCatalog:
             assert spec.required_dataset_ids == expected_required, analysis_id
             assert spec.optional_dataset_ids == expected_optional, analysis_id
 
-    def test_all_versions_are_1(self, analysis_registry: AnalysisRegistry):
+    def test_all_versions_are_2(self, analysis_registry: AnalysisRegistry):
         for spec in analysis_registry:
-            assert spec.version == 1
-            assert spec.instruction_template_version == 1
-            assert spec.response_contract_version == 1
+            assert spec.version == 2
+            assert spec.instruction_template_version == 2
+            assert spec.response_contract_version == 2
 
     def test_no_required_optional_overlap_in_any_analysis(self, analysis_registry: AnalysisRegistry):
         for spec in analysis_registry:
@@ -190,7 +207,91 @@ class TestAnalysisCatalog:
 
     def test_dataset_order_is_deterministic_required_then_optional(self, analysis_registry: AnalysisRegistry):
         spec = analysis_registry.get("broker.review")
-        assert spec.dataset_order == ("broker.overview", "broker.performance_flows", "broker.technical", "broker.fifo")
+        assert spec.dataset_order == ("broker.overview", "broker.performance_flows", "broker.asset_comparison", "broker.fifo", "broker.drawdown_context", "broker.concentration_evidence")
+
+    def test_v2_analyses_with_suggestions_have_valid_same_domain_dataset_ids(self, analysis_registry: AnalysisRegistry, dataset_registry: DatasetRegistry):
+        """V2: analyses that carry additional_export_suggestions must reference
+        existing dataset IDs from the same domain and use unique IDs per analysis."""
+        for spec in analysis_registry:
+            suggestions = spec.additional_export_suggestions
+            if not suggestions:
+                continue
+            seen_ids: set[str] = set()
+            for suggestion in suggestions:
+                assert suggestion.dataset_id in dataset_registry, f"{spec.analysis_id} suggestion {suggestion.dataset_id!r} not in dataset registry"
+                suggested = dataset_registry.get(suggestion.dataset_id)
+                assert suggested.domain == spec.domain, f"{spec.analysis_id} suggestion {suggestion.dataset_id!r} domain mismatch"
+                assert suggestion.dataset_id not in seen_ids, f"{spec.analysis_id} duplicate suggestion dataset_id {suggestion.dataset_id!r}"
+                seen_ids.add(suggestion.dataset_id)
+                assert "." in suggestion.reason_i18n_key, f"{spec.analysis_id} reason_i18n_key {suggestion.reason_i18n_key!r} must be a dotted key"
+
+    def test_v2_analyses_catalog_serializes_suggestions_at_version_2(self, analysis_registry: AnalysisRegistry):
+        """Serialized catalog entries carry version=2 and include suggestion fields."""
+        catalog = AiExportSnapshotService.get_catalog()
+        for entry in catalog.analyses:
+            assert entry.version == 2
+            assert entry.instruction_template_version == 2
+            assert entry.response_contract_version == 2
+        # At least one analysis should carry additional_export_suggestions
+        assert any(entry.additional_export_suggestions for entry in catalog.analyses), "V2 catalog must have at least one analysis with additional_export_suggestions"
+
+    def test_v2_new_optional_datasets_exist_in_registry(self, dataset_registry: DatasetRegistry):
+        """V2 derived public datasets must each appear in the registry."""
+        new_public_derived = {
+            "portfolio.technical_summary",
+            "portfolio.asset_snapshot",
+            "portfolio.asset_comparison",
+            "broker.technical_summary",
+            "broker.asset_comparison",
+            "asset.position_context",
+            "fx.market_context",
+            "portfolio.income_evidence",
+            "broker.concentration_evidence",
+            "broker.cost_efficiency_evidence",
+            "fx.conversion_timing_context",
+        }
+        for dataset_id in new_public_derived:
+            assert dataset_id in dataset_registry, f"{dataset_id!r} missing from V2 registry"
+
+    def test_v2_new_public_datasets_excluded_from_all_data_source_unions(self, dataset_registry: DatasetRegistry):
+        """The 11 new derived datasets must NOT appear as source inputs to *.all_data.
+        Their components may still appear in all_data if shared with a core dataset,
+        but the derived datasets themselves are never sources."""
+        _CONTEXT_SUMMARY_DATASET_IDS = frozenset(
+            {
+                "portfolio.technical_summary",
+                "portfolio.asset_snapshot",
+                "portfolio.asset_comparison",
+                "broker.technical_summary",
+                "broker.asset_comparison",
+                "asset.position_context",
+                "fx.market_context",
+                "portfolio.income_evidence",
+                "broker.concentration_evidence",
+                "broker.cost_efficiency_evidence",
+                "fx.conversion_timing_context",
+            }
+        )
+        # Verify that none of the new derived datasets' EXCLUSIVE components
+        # appear only via those derived datasets in any all_data union.
+        # (i.e. all_data component sets do not grow by including derived datasets)
+        _ALL_DATA_SOURCES: dict[str, frozenset[str]] = {
+            "portfolio": frozenset({"portfolio.overview", "portfolio.performance_flows", "portfolio.technical", "portfolio.fifo"}),
+            "broker": frozenset({"broker.overview", "broker.performance_flows", "broker.technical", "broker.fifo"}),
+            "asset": frozenset({"asset.overview", "asset.position_performance", "asset.market_technical"}),
+            "fx": frozenset({"fx.overview", "fx.market_technical", "fx.direct_exposure"}),
+        }
+        for domain_str, source_ids in _ALL_DATA_SOURCES.items():
+            all_data = dataset_registry.get(f"{domain_str}.all_data")
+            all_data_components = set(all_data.required_component_ids) | set(all_data.optional_component_ids)
+            # Components from source datasets
+            source_components: set[str] = set()
+            for sid in source_ids:
+                s = dataset_registry.get(sid)
+                source_components.update(s.required_component_ids)
+                source_components.update(s.optional_component_ids)
+            # all_data must equal the source union (no extra components from derived datasets)
+            assert all_data_components == source_components, f"{domain_str}.all_data component mismatch: all_data has {all_data_components - source_components} " f"extra vs source union"
 
 
 class TestRegistryValidationErrors:
@@ -324,7 +425,7 @@ class TestRegistryValidationErrors:
 
     def test_real_catalog_i18n_keys_are_dotted_keys_not_literal_text(self, dataset_registry: DatasetRegistry):
         # Binding clarification: the catalog must expose i18n keys only, never literal
-        # human-readable text, for every one of the 18 frozen datasets.
+        # human-readable text, for every one of the 32 frozen datasets.
         for dataset in dataset_registry:
             assert " " not in dataset.display_i18n_key, dataset.dataset_id
             assert " " not in dataset.description_i18n_key, dataset.dataset_id
@@ -612,18 +713,58 @@ class TestAllDataExpansion:
             )
 
     def test_real_catalog_all_data_matches_union_of_siblings(self, component_registry: ComponentRegistry, dataset_registry: DatasetRegistry):
+        # V2: *.all_data is the union of the *core* sibling datasets only, NOT
+        # every sibling. The context/summary/snapshot derived datasets
+        # (portfolio.technical_summary, portfolio.asset_snapshot,
+        # portfolio.asset_comparison, broker.technical_summary,
+        # broker.asset_comparison, asset.position_context, fx.market_context)
+        # are selectable public datasets but deliberately excluded from the
+        # *.all_data source unions. This test validates that all_data is the
+        # exact union of its declared source_specs, which are the 4/4/3/3 core
+        # datasets per domain.
+        _ALL_DATA_SOURCES: dict[str, frozenset[str]] = {
+            "portfolio": frozenset(
+                {
+                    "portfolio.overview",
+                    "portfolio.performance_flows",
+                    "portfolio.technical",
+                    "portfolio.fifo",
+                }
+            ),
+            "broker": frozenset(
+                {
+                    "broker.overview",
+                    "broker.performance_flows",
+                    "broker.technical",
+                    "broker.fifo",
+                }
+            ),
+            "asset": frozenset(
+                {
+                    "asset.overview",
+                    "asset.position_performance",
+                    "asset.market_technical",
+                }
+            ),
+            "fx": frozenset(
+                {
+                    "fx.overview",
+                    "fx.market_technical",
+                    "fx.direct_exposure",
+                }
+            ),
+        }
         for domain in Domain:
             all_data = dataset_registry.get(f"{domain.value}.all_data")
-            siblings = [spec for spec in dataset_registry.for_domain(domain) if spec.dataset_id != all_data.dataset_id]
+            source_ids = _ALL_DATA_SOURCES[domain.value]
+            source_specs = [dataset_registry.get(sid) for sid in source_ids]
             expected_required: set[str] = set()
             expected_optional_all: set[str] = set()
-            for sibling in siblings:
-                expected_required.update(sibling.required_component_ids)
-                expected_optional_all.update(sibling.optional_component_ids)
+            for spec in source_specs:
+                expected_required.update(spec.required_component_ids)
+                expected_optional_all.update(spec.optional_component_ids)
             expected_optional_only = expected_optional_all - expected_required
-            # requiredness is preserved (not promoted): a component required by any
-            # sibling stays required; a component that is only ever optional across
-            # every sibling stays optional in the all_data union.
+            # requiredness is preserved: required by any source → required in all_data
             assert set(all_data.required_component_ids) == expected_required
             assert set(all_data.optional_component_ids) == expected_optional_only
             assert len(all_data.required_component_ids) == len(set(all_data.required_component_ids))
@@ -637,16 +778,19 @@ class TestAllDataExpansion:
             section_order_positions = [component_registry.canonical_order.index(cid) for cid in all_data.section_order]
             assert section_order_positions == sorted(section_order_positions)
 
-    def test_real_catalog_asset_lot_detail_is_the_sole_optional_component(self, dataset_registry: DatasetRegistry):
+    def test_real_catalog_optional_components_are_lot_detail_and_concentration_comparison(self, dataset_registry: DatasetRegistry):
         # Architecture review: after flipping provenance/reconciliation/technical
         # breadth/states_events/exposure_provenance to required, asset.lot_detail is
-        # the only deliberately-optional component left in the entire catalog.
+        # the only deliberately-optional component in the core catalog. The AI
+        # adequacy remediation adds one more deliberately-optional evidence
+        # component: broker.concentration_comparison (the peer/portfolio comparison
+        # on top of the required broker.concentration_context).
         all_optional_ids: set[str] = set()
         for spec in dataset_registry:
             if spec.dataset_id.endswith(".all_data"):
                 continue
             all_optional_ids.update(spec.optional_component_ids)
-        assert all_optional_ids == {"asset.lot_detail"}
+        assert all_optional_ids == {"asset.lot_detail", "broker.concentration_comparison"}
 
 
 class TestCatalogPresentationFields:

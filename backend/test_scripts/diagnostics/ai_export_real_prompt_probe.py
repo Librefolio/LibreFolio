@@ -48,6 +48,24 @@ DEFAULT_USERS = ("alfy", "marco")
 DEFAULT_REPRESENTATIVE_USER = "marco"
 DEFAULT_PERIODS = ("3M", "6M", "1Y")
 DEFAULT_DETAILS = ("compact", "standard", "full")
+SEMANTIC_V2_NEW_DATASETS = frozenset(
+    {
+        "portfolio.technical_summary",
+        "portfolio.asset_snapshot",
+        "portfolio.asset_comparison",
+        "portfolio.drawdown_context",
+        "portfolio.income_evidence",
+        "broker.technical_summary",
+        "broker.asset_comparison",
+        "broker.drawdown_context",
+        "broker.concentration_evidence",
+        "broker.cost_efficiency_evidence",
+        "asset.position_context",
+        "asset.drawdown_context",
+        "fx.market_context",
+        "fx.conversion_timing_context",
+    }
+)
 LANGUAGE_BY_LOCALE = {"en": "English", "it": "Italian", "fr": "French", "es": "Spanish"}
 SECRET_PATTERNS = (
     ("authorization_header", re.compile(r'(?im)(?:^|[,{]\s*)["\']?authorization["\']?\s*:\s*["\']?(?:bearer\s+)?[A-Za-z0-9*._~+/=-]{6,}')),
@@ -83,6 +101,17 @@ class FxCandidate:
     @property
     def canonical_key(self) -> str:
         return f"{self.base.upper()}_{self.quote.upper()}"
+
+
+@dataclass(frozen=True)
+class TargetProbeCase:
+    """One exact user/selection/period/detail/scope case for a targeted run."""
+
+    user_alias: str
+    selection_id: str
+    period_label: str
+    detail_level: str
+    scope_selector: str
 
 
 class ProbeError(RuntimeError):
@@ -158,6 +187,156 @@ def measure_text(value: str) -> dict[str, int | str | float]:
         "words": 0 if not stripped else len(re.findall(r"\S+", stripped, flags=re.UNICODE)),
         "sha256": sha256_text(value),
         "estimated_token_equivalent_chars_div_4": chars / 4,
+    }
+
+
+def parse_target_case(value: str) -> TargetProbeCase:
+    """Parse ``user|selection_id|period|detail|scope`` without exposing it in artifacts."""
+    parts = tuple(part.strip() for part in value.split("|"))
+    if len(parts) != 5 or any(not part for part in parts):
+        raise ProbeError("--target-case must use user|selection_id|period|detail|scope")
+    user_alias, selection_id, period_label, detail_level, scope_selector = parts
+    if user_alias not in DEFAULT_USERS:
+        raise ProbeError(f"Unsupported target-case user alias: {user_alias}")
+    if not re.fullmatch(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", selection_id):
+        raise ProbeError(f"Invalid target-case selection ID: {selection_id}")
+    if period_label not in DEFAULT_PERIODS:
+        raise ProbeError(f"Unsupported target-case period: {period_label}")
+    if detail_level not in DEFAULT_DETAILS:
+        raise ProbeError(f"Unsupported target-case detail: {detail_level}")
+    if scope_selector not in {"all", "representative"} and not scope_selector.lower().startswith("broker="):
+        raise ProbeError("Target-case scope must be 'all', 'representative', or 'broker=<display name>'")
+    return TargetProbeCase(
+        user_alias=user_alias,
+        selection_id=selection_id,
+        period_label=period_label,
+        detail_level=detail_level,
+        scope_selector=scope_selector,
+    )
+
+
+def select_target_scope(scopes: Sequence[Mapping[str, object]], target: TargetProbeCase, *, domain: str) -> dict[str, object]:
+    """Resolve one exact anonymized runtime scope from a targeted case."""
+    if target.scope_selector == "all":
+        matches = [scope for scope in scopes if scope.get("domain") == domain and scope.get("scope_alias") == "all"]
+    elif target.scope_selector == "representative":
+        matches = [scope for scope in representative_scopes(scopes) if scope.get("domain") == domain]
+    else:
+        requested_name = target.scope_selector.split("=", maxsplit=1)[1].strip().casefold()
+        matches = [scope for scope in scopes if scope.get("domain") == domain and str(scope.get("selector_name") or "").casefold() == requested_name]
+    if len(matches) != 1:
+        raise ProbeError(f"Target scope {target.scope_selector!r} for {target.selection_id} resolved to {len(matches)} scopes")
+    return dict(matches[0])
+
+
+def _component_prompt_block(prompt: str, component_id: str) -> str:
+    marker = f"COMPONENT {component_id}\n"
+    start = prompt.find(marker)
+    if start < 0:
+        return ""
+    end = prompt.find("\nCOMPONENT ", start + len(marker))
+    if end < 0:
+        end = prompt.find("\n```", start + len(marker))
+    return prompt[start : (len(prompt) if end < 0 else end)]
+
+
+def _public_table_data_row_count(block: str) -> int:
+    count = 0
+    for line in block.splitlines():
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if not cells or cells[0] in {"field", "row"} or all(set(cell) <= {"-", ":"} for cell in cells):
+            continue
+        count += 1
+    return count
+
+
+def _checklist_item_count(prompt: str, marker: str) -> int:
+    count = 0
+    for line in prompt.splitlines():
+        if marker not in line:
+            continue
+        items = line.split(marker, maxsplit=1)[1].strip().rstrip(".")
+        count += len([item for item in items.split(";") if item.strip()])
+    return count
+
+
+def measure_targeted_adequacy_diagnostics(selection_id: str, prompt: str) -> dict[str, object]:
+    """Small prompt-content diagnostics used only by targeted adequacy runs."""
+    if selection_id == "portfolio.pac_planning":
+        categories = [category for category in ("Capital and cadence", "Goals and horizon", "Risk preferences", "Operational constraints") if category in prompt]
+        portfolio_block = _component_prompt_block(prompt, "portfolio.drawdown_summary")
+        asset_block = _component_prompt_block(prompt, "portfolio.asset_drawdown_snapshot")
+        required_questions = _checklist_item_count(prompt, "REQUIRED WHEN MISSING:")
+        required_material_questions = _checklist_item_count(prompt, "REQUIRED WHEN MISSING AND MATERIAL:")
+        return {
+            "question_categories": categories,
+            "question_category_count": len(categories),
+            "required_question_count": required_questions + required_material_questions,
+            "required_material_question_count": required_material_questions,
+            "optional_question_count": _checklist_item_count(prompt, "OPTIONAL WHEN MATERIAL:"),
+            "portfolio_drawdown_rows": _public_table_data_row_count(portfolio_block),
+            "asset_drawdown_rows": _public_table_data_row_count(asset_block),
+            "drawdown_rows": _public_table_data_row_count(portfolio_block) + _public_table_data_row_count(asset_block),
+        }
+    if selection_id in {"broker.cost_efficiency", "broker.cost_efficiency_evidence"}:
+        block = _component_prompt_block(prompt, "broker.cost_efficiency")
+        ratio_statuses: dict[str, str] = {}
+        for line in block.splitlines():
+            match = re.fullmatch(r"\|((?:fees|total_costs)_to_[^|]+)\.status\|([^|]+)\|", line)
+            if match:
+                ratio_statuses[match.group(1)] = match.group(2)
+        return {
+            "cost_ratio_statuses": ratio_statuses,
+            "available_ratio_count": sum(status == "recorded" for status in ratio_statuses.values()),
+            "unavailable_ratio_count": sum(status == "unavailable" for status in ratio_statuses.values()),
+            "not_applicable_ratio_count": sum(status == "not_applicable" for status in ratio_statuses.values()),
+        }
+    return {}
+
+
+def measure_broker_scope_diagnostics(snapshot: Mapping[str, object]) -> dict[str, object] | None:
+    """Expose public Broker universes without persisting raw database IDs."""
+    sections = snapshot.get("sections")
+    directory = snapshot.get("entity_directory")
+    if not isinstance(sections, list) or not isinstance(directory, Mapping):
+        return None
+    by_component = {str(section.get("component_id")): section.get("payload") for section in sections if isinstance(section, Mapping) and isinstance(section.get("payload"), Mapping)}
+    summary = by_component.get("portfolio.summary")
+    provenance = by_component.get("portfolio.provenance")
+    performance = by_component.get("portfolio.performance")
+    if not any(isinstance(value, Mapping) for value in (summary, provenance, performance)):
+        return None
+
+    broker_entries = directory.get("brokers")
+    broker_entries = broker_entries if isinstance(broker_entries, list) else []
+    broker_ref_by_id = {
+        str(entry["broker_id"]): f"B{index}"
+        for index, entry in enumerate(
+            (entry for entry in broker_entries if isinstance(entry, Mapping) and entry.get("broker_id") is not None),
+            start=1,
+        )
+    }
+    raw_scope = provenance.get("broker_scope") if isinstance(provenance, Mapping) else []
+    raw_scope = raw_scope if isinstance(raw_scope, list) else []
+    scope_refs = [broker_ref_by_id.get(str(broker_id), "unmapped") for broker_id in raw_scope]
+    scoped_count = int(provenance.get("scoped_broker_count") or 0) if isinstance(provenance, Mapping) else len(raw_scope)
+    position_count = None
+    if isinstance(summary, Mapping):
+        raw_position_count = summary.get("position_broker_count", summary.get("broker_count"))
+        if raw_position_count is not None:
+            position_count = int(raw_position_count)
+    contributor_count = None
+    if isinstance(performance, Mapping) and performance.get("period_contributor_broker_count") is not None:
+        contributor_count = int(performance["period_contributor_broker_count"])
+    return {
+        "broker_scope_refs": scope_refs,
+        "scoped_broker_count": scoped_count,
+        "position_broker_count": position_count,
+        "period_contributor_broker_count": contributor_count,
+        "entity_directory_broker_count": len(broker_ref_by_id),
+        "scope_directory_consistent": len(scope_refs) == scoped_count and "unmapped" not in scope_refs,
     }
 
 
@@ -270,14 +449,34 @@ def measure_technical_diagnostics(snapshot: Mapping[str, object]) -> dict[str, o
         "indicator_instance_count": 0,
         "detected_event_count": 0,
         "exported_event_count": 0,
-        "considered_asset_count": None,
+        "detailed_event_rows": 0,
+        "period_position_leg_count": None,
+        "period_contributor_asset_count": None,
+        "selected_entity_count": None,
         "eligible_asset_count": None,
         "covered_asset_count": None,
         "eligible_portfolio_weight_ratio": None,
         "covered_portfolio_weight_ratio": None,
         "covered_weight_ratio": None,
+        "context_history_rows": 0,
+        "context_event_count": 0,
+        "context_event_rows": 0,
+        "latest_event_rows": 0,
+        "latest_event_category_count": 0,
+        "event_digest_group_count": 0,
+        "event_digest_underlying_event_count": 0,
+        "signal_ok_count": 0,
+        "signal_partial_count": 0,
+        "signal_unavailable_count": 0,
+        "signal_failed_count": 0,
+        "history_coverage": None,
     }
+    latest_event_categories: set[str] = set()
     technical = False
+    meta = snapshot.get("meta")
+    if isinstance(meta, Mapping) and isinstance(meta.get("history_coverage"), Mapping):
+        diagnostics["history_coverage"] = dict(meta["history_coverage"])
+        technical = True
     for section in sections:
         if not isinstance(section, dict):
             continue
@@ -305,10 +504,14 @@ def measure_technical_diagnostics(snapshot: Mapping[str, object]) -> dict[str, o
             technical = True
             diagnostics["detected_event_count"] = int(payload.get("detected_event_count") or 0)
             diagnostics["exported_event_count"] = int(payload.get("exported_event_count") or 0)
+            buckets = payload.get("buckets")
+            if isinstance(buckets, list):
+                diagnostics["detailed_event_rows"] = int(diagnostics["detailed_event_rows"]) + sum(len(bucket.get("events", [])) for bucket in buckets if isinstance(bucket, Mapping) and isinstance(bucket.get("events"), list))
         if "technical_breadth" in component_id:
             technical = True
             for field in (
-                "considered_asset_count",
+                "period_position_leg_count",
+                "period_contributor_asset_count",
                 "eligible_asset_count",
                 "covered_asset_count",
                 "eligible_portfolio_weight_ratio",
@@ -316,6 +519,59 @@ def measure_technical_diagnostics(snapshot: Mapping[str, object]) -> dict[str, o
                 "covered_weight_ratio",
             ):
                 diagnostics[field] = payload.get(field)
+        if "technical_coverage" in component_id:
+            technical = True
+            if "period_position_leg_count" in payload:
+                # Portfolio/Broker multi-asset universe coverage.
+                diagnostics["period_position_leg_count"] = payload.get("period_position_leg_count")
+                diagnostics["period_contributor_asset_count"] = payload.get("period_contributor_asset_count")
+                diagnostics["eligible_asset_count"] = payload.get("eligible_asset_count")
+                diagnostics["covered_asset_count"] = payload.get("covered_asset_count")
+            else:
+                # Asset/FX single-entity coverage: explicit single-entity tallies.
+                diagnostics["selected_entity_count"] = payload.get("selected_entity_count")
+                diagnostics["eligible_asset_count"] = payload.get("eligible_entity_count")
+                diagnostics["covered_asset_count"] = payload.get("covered_entity_count")
+            for field in (
+                "eligible_portfolio_weight_ratio",
+                "covered_portfolio_weight_ratio",
+                "covered_weight_ratio",
+            ):
+                if payload.get(field) is not None:
+                    diagnostics[field] = payload.get(field)
+            signals = payload.get("signals")
+            if isinstance(signals, list):
+                diagnostics["signal_ok_count"] = sum(int(item.get("ok_count") or 0) for item in signals if isinstance(item, Mapping))
+                diagnostics["signal_partial_count"] = sum(int(item.get("partial_count") or 0) for item in signals if isinstance(item, Mapping))
+                diagnostics["signal_unavailable_count"] = sum(int(item.get("unavailable_count") or 0) for item in signals if isinstance(item, Mapping))
+                diagnostics["signal_failed_count"] = sum(int(item.get("failed_count") or 0) for item in signals if isinstance(item, Mapping))
+        if component_id.endswith(".asset_market_context") or component_id.endswith(".position_market_context") or component_id.endswith(".market_summary"):
+            technical = True
+            history = payload.get("history")
+            events = payload.get("events")
+            latest_events = payload.get("latest_events")
+            diagnostics["context_history_rows"] = int(diagnostics["context_history_rows"]) + (len(history) if isinstance(history, list) else 0)
+            event_rows = len(events) if isinstance(events, list) else 0
+            diagnostics["context_event_count"] = int(diagnostics["context_event_count"]) + event_rows
+            diagnostics["context_event_rows"] = int(diagnostics["context_event_rows"]) + event_rows
+            if isinstance(latest_events, list):
+                diagnostics["latest_event_rows"] = int(diagnostics["latest_event_rows"]) + len(latest_events)
+                for latest in latest_events:
+                    if isinstance(latest, Mapping) and latest.get("signal_category") is not None:
+                        latest_event_categories.add(str(latest.get("signal_category")))
+        if component_id.endswith(".context_events"):
+            technical = True
+            exported = int(payload.get("exported_event_count") or 0)
+            diagnostics["context_event_count"] = int(diagnostics["context_event_count"]) + exported
+            diagnostics["context_event_rows"] = int(diagnostics["context_event_rows"]) + exported
+        if component_id.endswith(".event_digest"):
+            technical = True
+            rows = payload.get("rows")
+            if isinstance(rows, list):
+                valid_rows = [row for row in rows if isinstance(row, Mapping)]
+                diagnostics["event_digest_group_count"] = int(diagnostics["event_digest_group_count"]) + len(valid_rows)
+                diagnostics["event_digest_underlying_event_count"] = int(diagnostics["event_digest_underlying_event_count"]) + sum(int(row.get("event_count") or 0) for row in valid_rows)
+    diagnostics["latest_event_category_count"] = len(latest_event_categories)
     return diagnostics if technical else None
 
 
@@ -392,6 +648,11 @@ def audit_public_tables(prompt: str) -> dict[str, object]:
     parent_columns: list[str] = []
     duplicate_headers: list[str] = []
     percent_violations: list[str] = []
+    bounded_summary_percent_fields = {
+        "broker_largest_position_weight_percent",
+        "portfolio_largest_position_weight_percent",
+        "largest_position_weight_delta_percent",
+    }
     width_violations = 0
     percent_cells_checked = 0
     for headers, rows in tables:
@@ -402,6 +663,27 @@ def audit_public_tables(prompt: str) -> dict[str, object]:
                 width_violations += 1
         if not rows or any(len(row) != len(headers) for row in rows):
             continue
+        if headers == ["field", "value"]:
+            for field_name, value in rows:
+                if not field_name.endswith("_percent") or value in {"", "null"}:
+                    continue
+                if value.endswith("_percent"):
+                    # Defensive: a malformed fixture may concatenate the next
+                    # table's header without a separator; do not treat a header
+                    # name as a SUMMARY value.
+                    continue
+                percent_cells_checked += 1
+                if not value.endswith("%"):
+                    percent_violations.append(f"{field_name}={value}")
+                    continue
+                if field_name in bounded_summary_percent_fields:
+                    try:
+                        numeric = Decimal(value[:-1])
+                    except InvalidOperation:
+                        percent_violations.append(f"{field_name}={value}")
+                    else:
+                        if numeric < -100 or numeric > 100:
+                            percent_violations.append(f"{field_name}={value}")
         for column_index, header in enumerate(headers):
             values = [row[column_index] for row in rows]
             if all(value in {"", "null"} for value in values):
@@ -595,12 +877,33 @@ def audit_snapshot_semantics(
     forbidden_prompt_patterns = {
         "schema_metadata": r"\b(?:schema_id|schema_version|component_version)\b",
         "database_entity_ref": r"\b(?:asset|broker):\d+\b",
+        "raw_entity_id_field": r"\b(?:asset_id|broker_id)\b",
+        "raw_entity_id_array": r'"(?:asset_ids|broker_ids|broker_scope)"\s*:',
+        "legacy_fx_ref": r"\bFX[1-9]\d*\b",
         "database_lot_id": r"\b(?:lot_id|opening_transaction_id)\b",
         "unmapped_entity_ref": r"\b(?:asset_unmapped|broker_unmapped):",
-        "raw_ratio_weight_name": r"\b(?:portfolio_weight_ratio|technical_normalized_weight_ratio|covered_weight_ratio)\b",
+        "raw_ratio_weight_name": r"\b(?:portfolio_weight_ratio|technical_normalized_weight_ratio|eligible_portfolio_weight_ratio|covered_portfolio_weight_ratio|covered_weight_ratio|coverage_ratio|return_1m_ratio|return_3m_ratio|return_period_ratio|daily_return_volatility_ratio)\b",
         "deprecated_hhi_percent": r"\bherfindahl_index_percent\b",
     }
     prompt_pattern_counts = {name: len(re.findall(pattern, prompt)) for name, pattern in forbidden_prompt_patterns.items()}
+    raw_scope_values = 0
+    lines = prompt.splitlines()
+    expected_scope_prefix = {
+        "TABLE broker_scope": "B",
+        "TABLE broker_ids": "B",
+        "TABLE asset_ids": "A",
+    }
+    for index, line in enumerate(lines):
+        expected_prefix = expected_scope_prefix.get(line)
+        if expected_prefix is None:
+            continue
+        for row in lines[index + 2 :]:
+            if not row.startswith("|"):
+                break
+            cells = row.strip("|").split("|")
+            if len(cells) >= 2 and not re.fullmatch(rf"{expected_prefix}[1-9]\d*|null", cells[1]):
+                raw_scope_values += 1
+    prompt_pattern_counts["raw_scope_numeric_value"] = raw_scope_values
     for name, count in prompt_pattern_counts.items():
         if count:
             violations.append(f"forbidden public prompt pattern {name}: {count}")
@@ -818,16 +1121,18 @@ def representative_cases(
 
 def tuning_v2_exclusions(catalog: Mapping[str, object]) -> list[dict[str, object]]:
     datasets = [item for item in catalog.get("datasets", []) if isinstance(item, dict)]
+    catalog_dataset_ids = {str(item.get("id", "")) for item in datasets}
     by_domain: defaultdict[str, list[str]] = defaultdict(list)
     for dataset in datasets:
         dataset_id = str(dataset.get("id", ""))
-        if not dataset_id.endswith(".all_data"):
+        if not dataset_id.endswith(".all_data") and dataset_id not in SEMANTIC_V2_NEW_DATASETS:
             by_domain[str(dataset.get("domain", ""))].append(dataset_id)
     return [
         {
             "dataset_id": str(dataset["id"]),
             "reason": "pure deduplicated composition already covered by domain base datasets",
             "composed_from": sorted(by_domain[str(dataset.get("domain", ""))]),
+            "excluded_semantic_projections": sorted(dataset_id for dataset_id in SEMANTIC_V2_NEW_DATASETS if dataset_id in catalog_dataset_ids and dataset_id.startswith(f"{dataset.get('domain')}.")),
         }
         for dataset in datasets
         if str(dataset.get("id", "")).endswith(".all_data")
@@ -961,9 +1266,10 @@ def validate_manifest_checks(manifest_checks: Mapping[str, object], component_br
         raise ProbeError("Rendered technical sampling manifest lacks detail_level")
     if technical_categories & {"technical_prices"} and manifest_checks.get("has_price_bucket_count") is not True:
         raise ProbeError("Rendered technical sampling manifest lacks price_bucket_count")
-    if technical_categories & {"technical_indicators"} and manifest_checks.get("has_instance_bucket_count") is not True:
+    has_indicator_instances = manifest_checks.get("has_indicator_instances") is True
+    if technical_categories & {"technical_indicators"} and has_indicator_instances and manifest_checks.get("has_instance_bucket_count") is not True:
         raise ProbeError("Rendered technical instance tables lack bucket_count")
-    if technical_categories & {"technical_indicators"} and manifest_checks.get("has_instance_temporal_class") is not True:
+    if technical_categories & {"technical_indicators"} and has_indicator_instances and manifest_checks.get("has_instance_temporal_class") is not True:
         raise ProbeError("Rendered technical instance tables lack temporal_class")
 
 
@@ -999,6 +1305,69 @@ def _id_set(metric: Mapping[str, object], field: str) -> set[str]:
     return set()
 
 
+def signal_metric_summary(metric: Mapping[str, object] | None) -> dict[str, object]:
+    rows = metric.get("signal_breakdown") if isinstance(metric, Mapping) else None
+    rows = rows if isinstance(rows, list) else []
+    valid = [row for row in rows if isinstance(row, Mapping)]
+    return {
+        "signal_codes": sorted({str(row.get("signal_code")) for row in valid if row.get("signal_code")}),
+        "instance_count": sum(int(row.get("instance_count") or 0) for row in valid),
+        "history_row_count": sum(int(row.get("history_row_count") or 0) for row in valid),
+        "history_chars": sum(int(row.get("history_chars") or 0) for row in valid),
+        "event_count": sum(int(row.get("event_count") or 0) for row in valid),
+        "event_chars": sum(int(row.get("event_chars") or 0) for row in valid),
+        "definition_chars": sum(int(row.get("definition_chars") or 0) for row in valid),
+        "summary_chars": sum(int(row.get("summary_chars") or 0) for row in valid),
+    }
+
+
+# When comparing against an OLD metrics file, its technical_diagnostics still
+# use the pre-rename ambiguous `considered_asset_count`, which was the raw
+# pre-eligibility period LEG count (`len(positions_contribution.positions)`).
+# Map only the equivalent new name back onto it so leg comparisons stay stable.
+# `period_contributor_asset_count` is a genuinely NEW metric with no legacy
+# equivalent, so it deliberately has no fallback (see metric_change_reasons,
+# which skips fields the old run never recorded rather than flagging a change).
+_TECHNICAL_DIAGNOSTIC_BACKWARD_FALLBACKS: Mapping[str, tuple[str, ...]] = {
+    "period_position_leg_count": ("considered_asset_count",),
+}
+
+
+def _technical_diagnostic_value(diagnostics: Mapping[str, object] | None, field: str) -> object | None:
+    if not isinstance(diagnostics, Mapping):
+        return None
+    value = diagnostics.get(field)
+    if value is not None:
+        return value
+    if field in diagnostics:
+        return value
+    for legacy_field in _TECHNICAL_DIAGNOSTIC_BACKWARD_FALLBACKS.get(field, ()):
+        if legacy_field in diagnostics:
+            return diagnostics.get(legacy_field)
+    return None
+
+
+def _technical_diagnostic_int(metric: Mapping[str, object] | None, field: str) -> int | None:
+    diagnostics = metric.get("technical_diagnostics") if isinstance(metric, Mapping) else None
+    value = _technical_diagnostic_value(diagnostics, field)
+    return int(value) if isinstance(value, (int, float)) else None
+
+
+def _coverage_field_changed(current: Mapping[str, object], previous: Mapping[str, object], field: str) -> bool:
+    """True only when both runs resolve a value for ``field`` and they differ.
+
+    Skips comparison when either side is unresolvable (e.g. a NEW metric the OLD
+    comparator run never recorded, and which has no backward fallback), so that
+    adding a metric never spuriously flags a coverage change - preserving stable
+    cross-run comparisons.
+    """
+    current_value = _technical_diagnostic_value(current, field)
+    previous_value = _technical_diagnostic_value(previous, field)
+    if current_value is None or previous_value is None:
+        return False
+    return current_value != previous_value
+
+
 def _metric_entries(payload: object) -> list[dict[str, object]]:
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
@@ -1030,6 +1399,8 @@ def metric_change_reasons(
         reasons.append("percentage_correction")
     if int(formatting.get("empty_columns_removed") or 0) > 0 or int(formatting.get("empty_parent_columns_removed") or 0) > 0:
         reasons.append("empty_column_removal")
+    if int(formatting.get("empty_temporal_rows_omitted") or 0) > 0:
+        reasons.append("empty_temporal_row_removal")
     if int(fifo.get("local_refs") or 0) > 0:
         reasons.append("fifo_lot_reference")
     if int(weights.get("checks") or 0) > 0:
@@ -1040,7 +1411,8 @@ def metric_change_reasons(
         current_technical = metric.get("technical_diagnostics")
         previous_technical = previous.get("technical_diagnostics")
         coverage_fields = (
-            "considered_asset_count",
+            "period_position_leg_count",
+            "period_contributor_asset_count",
             "eligible_asset_count",
             "covered_asset_count",
             "indicator_asset_count",
@@ -1052,11 +1424,21 @@ def metric_change_reasons(
                 previous_technical,
                 Mapping,
             )
-            and any(current_technical.get(field) != previous_technical.get(field) for field in coverage_fields)
+            and any(_coverage_field_changed(current_technical, previous_technical, field) for field in coverage_fields)
         ):
             reasons.append("technical_coverage_changed")
         if metric.get("scope_inventory") != previous.get("scope_inventory"):
             reasons.append("scope_inventory_changed")
+        current_signals = signal_metric_summary(metric)
+        previous_signals = signal_metric_summary(previous)
+        if current_signals["signal_codes"] != previous_signals["signal_codes"] or current_signals["instance_count"] != previous_signals["instance_count"]:
+            reasons.append("signal_composition_changed")
+        if current_signals["history_row_count"] != previous_signals["history_row_count"]:
+            reasons.append("history_depth_changed")
+        if current_signals["event_count"] != previous_signals["event_count"]:
+            reasons.append("event_policy_changed")
+        if _id_set(metric, "datasets_included") != _id_set(previous, "datasets_included") or _id_set(metric, "components_included") != _id_set(previous, "components_included"):
+            reasons.append("semantic_composition_changed")
     return reasons or ["other"]
 
 
@@ -1075,11 +1457,17 @@ def metric_size_category(metric: Mapping[str, object] | None) -> str | None:
     return None
 
 
-def compare_metric_runs(current_payload: object, previous_payload: object) -> list[dict[str, object]]:
+def compare_metric_runs(
+    current_payload: object,
+    previous_payload: object,
+    *,
+    include_removed: bool = True,
+) -> list[dict[str, object]]:
     current = {stable_metric_key(item): item for item in _metric_entries(current_payload)}
     previous = {stable_metric_key(item): item for item in _metric_entries(previous_payload)}
     comparison: list[dict[str, object]] = []
-    for key in sorted(current.keys() | previous.keys()):
+    comparison_keys = current.keys() | previous.keys() if include_removed else current.keys()
+    for key in sorted(comparison_keys):
         now = current.get(key)
         before = previous.get(key)
         if before is None:
@@ -1099,6 +1487,8 @@ def compare_metric_runs(current_payload: object, previous_payload: object) -> li
         before_chars = int(before.get("rendered_prompt_chars") or 0) if before else None
         now_chars = int(now.get("rendered_prompt_chars") or 0) if now else None
         delta = now_chars - before_chars if now_chars is not None and before_chars is not None else None
+        previous_signals = signal_metric_summary(before)
+        current_signals = signal_metric_summary(now)
         comparison.append(
             {
                 "stable_key": "|".join(key),
@@ -1114,6 +1504,18 @@ def compare_metric_runs(current_payload: object, previous_payload: object) -> li
                 "reason_for_change": (metric_change_reasons(now, before) if status in {"added", "changed", "recovered"} else []),
                 "previous_technical_diagnostics": (before.get("technical_diagnostics") if before else None),
                 "current_technical_diagnostics": (now.get("technical_diagnostics") if now else None),
+                "previous_signal_summary": previous_signals,
+                "current_signal_summary": current_signals,
+                "signal_instance_delta": int(current_signals["instance_count"]) - int(previous_signals["instance_count"]),
+                "history_row_delta": int(current_signals["history_row_count"]) - int(previous_signals["history_row_count"]),
+                "event_delta": int(current_signals["event_count"]) - int(previous_signals["event_count"]),
+                "definition_chars_delta": int(current_signals["definition_chars"]) - int(previous_signals["definition_chars"]),
+                "eligible_entity_delta": (
+                    _technical_diagnostic_int(now, "eligible_asset_count") - _technical_diagnostic_int(before, "eligible_asset_count") if _technical_diagnostic_int(now, "eligible_asset_count") is not None and _technical_diagnostic_int(before, "eligible_asset_count") is not None else None
+                ),
+                "covered_entity_delta": (
+                    _technical_diagnostic_int(now, "covered_asset_count") - _technical_diagnostic_int(before, "covered_asset_count") if _technical_diagnostic_int(now, "covered_asset_count") is not None and _technical_diagnostic_int(before, "covered_asset_count") is not None else None
+                ),
                 "datasets_added": sorted(_id_set(now or {}, "datasets_included") - _id_set(before or {}, "datasets_included")),
                 "datasets_removed": sorted(_id_set(before or {}, "datasets_included") - _id_set(now or {}, "datasets_included")),
                 "components_added": sorted(_id_set(now or {}, "components_included") - _id_set(before or {}, "components_included")),
@@ -1140,6 +1542,7 @@ def classify_http_failure(status_code: int, payload: object, domain: str) -> dic
     return {
         "status": "skipped" if skipped else "failed",
         "failure_code": code,
+        "source_reason_code": detail.get("reason_code"),
         "failure_message_sanitized": str(detail.get("message") or f"HTTP {status_code}"),
         "retryable": bool(detail.get("retryable", False)),
         "nonfatal": domain == "fx" or skipped,
@@ -1349,7 +1752,7 @@ def _readonly_connection(database_path: Path) -> sqlite3.Connection:
 def _accessible_brokers(connection: sqlite3.Connection, user_id: int) -> list[dict[str, object]]:
     rows = connection.execute(
         """
-        SELECT b.id, bua.role
+        SELECT b.id, b.name, bua.role
         FROM broker_user_access AS bua
         JOIN brokers AS b ON b.id = bua.broker_id
         WHERE bua.user_id = ?
@@ -1357,7 +1760,14 @@ def _accessible_brokers(connection: sqlite3.Connection, user_id: int) -> list[di
         """,
         (user_id,),
     ).fetchall()
-    return [{"id": int(row["id"]), "role": str(row["role"])} for row in rows]
+    return [
+        {
+            "id": int(row["id"]),
+            "name": str(row["name"]),
+            "role": str(row["role"]),
+        }
+        for row in rows
+    ]
 
 
 def _asset_candidates(connection: sqlite3.Connection, broker_ids: Sequence[int]) -> list[AssetCandidate]:
@@ -1507,7 +1917,7 @@ def _scope_history(connection: sqlite3.Connection, broker_ids: Sequence[int]) ->
 def _scope_inventory(connection: sqlite3.Connection, broker_ids: Sequence[int]) -> dict[str, int]:
     if not broker_ids:
         return {
-            "broker_count": 0,
+            "scoped_broker_count": 0,
             "position_count": 0,
             "unique_held_asset_count": 0,
             "duplicate_asset_legs": 0,
@@ -1528,14 +1938,14 @@ def _scope_inventory(connection: sqlite3.Connection, broker_ids: Sequence[int]) 
         asset_id = int(row["asset_id"])
         per_asset[asset_id] = per_asset.get(asset_id, 0) + 1
     return {
-        "broker_count": len(broker_ids),
+        "scoped_broker_count": len(broker_ids),
         "position_count": len(rows),
         "unique_held_asset_count": len(per_asset),
         "duplicate_asset_legs": sum(max(0, count - 1) for count in per_asset.values()),
     }
 
 
-def collect_user_inventory(database_path: Path, username: str) -> dict[str, object]:
+def collect_user_inventory(database_path: Path, username: str, *, minimum_fx_history_days: int = 365) -> dict[str, object]:
     """Collect anonymizable counts plus deterministic scope candidates from copied DB."""
     with closing(_readonly_connection(database_path)) as connection:
         user = connection.execute(
@@ -1561,7 +1971,7 @@ def collect_user_inventory(database_path: Path, username: str) -> dict[str, obje
         ranked_assets = rank_asset_candidates(asset_candidates)
         currencies = _portfolio_currencies(connection, broker_ids, target_currency)
         fx_candidates = _fx_candidates(connection, currencies)
-        ranked_fx = rank_fx_candidates(fx_candidates)
+        ranked_fx = rank_fx_candidates(fx_candidates, minimum_history_days=minimum_fx_history_days)
         all_start, all_end = _scope_history(connection, broker_ids)
         earliest_price = min((candidate.history_start for candidate in asset_candidates), default=None)
         latest_price = max((candidate.history_end for candidate in asset_candidates), default=None)
@@ -1605,13 +2015,17 @@ def collect_user_inventory(database_path: Path, username: str) -> dict[str, obje
             **{broker_id: _scope_inventory(connection, [broker_id]) for broker_id in broker_ids},
         }
     inventory = {
-        "broker_count": len(broker_ids),
+        "accessible_broker_count": len(broker_ids),
         "position_legs": len(position_rows),
         "unique_held_assets": len(held_asset_ids),
         "historical_assets": len(historical_ids),
         "priced_assets": len(priced_ids),
         "technical_eligible_assets": len(technical_ids),
         "technical_covered_assets": None,
+        "runtime_period_position_leg_count": None,
+        "runtime_period_contributor_asset_count": None,
+        "runtime_period_eligible_asset_count": None,
+        "runtime_period_covered_asset_count": None,
         "duplicate_asset_legs": sum(max(0, count - 1) for count in per_asset_leg_count.values()),
         "currency_count": len(currencies),
         "fx_pair_count": len(fx_candidates),
@@ -1641,7 +2055,8 @@ def build_user_scopes(user_data: Mapping[str, object]) -> list[dict[str, object]
     brokers = user_data["brokers"]
     if not isinstance(brokers, list):
         raise ProbeError("User broker inventory is invalid")
-    broker_ids = [int(item["id"]) for item in brokers if isinstance(item, dict)]
+    broker_items = [item for item in brokers if isinstance(item, dict)]
+    broker_ids = [int(item["id"]) for item in broker_items]
     snapshot_as_of = str(user_data["snapshot_as_of"])
     target_currency = str(user_data["target_currency"])
     scopes: list[dict[str, object]] = []
@@ -1661,7 +2076,9 @@ def build_user_scopes(user_data: Mapping[str, object]) -> list[dict[str, object]
         )
     histories = user_data.get("broker_histories")
     histories = histories if isinstance(histories, dict) else {}
-    for index, broker_id in enumerate(broker_ids, start=1):
+    for index, broker in enumerate(broker_items, start=1):
+        broker_id = int(broker["id"])
+        broker_name = str(broker.get("name") or "")
         alias = f"broker_anon_{index:02d}"
         history = histories.get(broker_id) or histories.get(str(broker_id)) or (None, None)
         scopes.extend(
@@ -1669,6 +2086,7 @@ def build_user_scopes(user_data: Mapping[str, object]) -> list[dict[str, object]
                 {
                     "domain": "portfolio",
                     "scope_alias": alias,
+                    "selector_name": broker_name,
                     "context": {"domain": "portfolio", "snapshotAsOf": snapshot_as_of, "targetCurrency": target_currency, "brokerIds": [broker_id]},
                     "custom_start": history[0],
                     "inventory": scope_inventories.get(broker_id, {}),
@@ -1677,6 +2095,7 @@ def build_user_scopes(user_data: Mapping[str, object]) -> list[dict[str, object]
                 {
                     "domain": "broker",
                     "scope_alias": alias,
+                    "selector_name": broker_name,
                     "context": {"domain": "broker", "snapshotAsOf": snapshot_as_of, "targetCurrency": target_currency, "brokerId": broker_id},
                     "custom_start": history[0],
                     "inventory": scope_inventories.get(broker_id, {}),
@@ -1698,7 +2117,7 @@ def build_user_scopes(user_data: Mapping[str, object]) -> list[dict[str, object]
                 },
                 "custom_start": asset.history_start,
                 "inventory": {
-                    "broker_count": len(asset.broker_ids),
+                    "position_broker_count": len(asset.broker_ids),
                     "position_count": len(asset.broker_ids),
                     "unique_held_asset_count": 1,
                     "duplicate_asset_legs": max(0, len(asset.broker_ids) - 1),
@@ -1769,6 +2188,7 @@ def _base_metric(
         "domain": selection["domain"],
         "selection_id": selection["id"],
         "selection_kind": kind,
+        "comparison_cohort": "new_semantic_dataset" if kind == "dataset" and str(selection["id"]) in SEMANTIC_V2_NEW_DATASETS else "stable_baseline",
         "selection_version": selection.get("version"),
         "instruction_template_id": selection.get("instruction_template_id"),
         "instruction_template_version": selection.get("instruction_template_version"),
@@ -1785,6 +2205,7 @@ def _base_metric(
         "detail_level": case["detail_level"],
         "status": "failed",
         "failure_code": None,
+        "source_reason_code": None,
         "failure_message_sanitized": None,
         "required_datasets": list(selection.get("required_dataset_ids", [])) if kind == "analysis" else [selection["id"]],
         "optional_datasets_declared": list(selection.get("optional_dataset_ids", [])) if kind == "analysis" else [],
@@ -1826,6 +2247,7 @@ def _base_metric(
         "component_breakdown": None,
         "signal_breakdown": None,
         "technical_diagnostics": None,
+        "broker_diagnostics": None,
         "format_diagnostics": None,
         "public_output_checks": None,
         "http": {"method": "POST", "route": f"{API_PREFIX}/ai-export/snapshot", "status": None, "duration_ms": None},
@@ -2043,6 +2465,7 @@ def _run_case(
         public_output_checks = audit_snapshot_semantics(snapshot, prompt, rendered)
         if public_output_checks["violations"]:
             raise ProbeError("Public output checks failed: " + "; ".join(str(item) for item in public_output_checks["violations"]))
+        format_diagnostics = public_output_checks["format_diagnostics"]
         metric.update(
             {
                 "status": "ok",
@@ -2077,7 +2500,11 @@ def _run_case(
                 "component_breakdown": breakdown.get("snapshot_data_components"),
                 "signal_breakdown": breakdown.get("signal_metrics"),
                 "technical_diagnostics": measure_technical_diagnostics(snapshot),
-                "format_diagnostics": public_output_checks["format_diagnostics"],
+                "broker_diagnostics": measure_broker_scope_diagnostics(snapshot),
+                "format_diagnostics": format_diagnostics,
+                "empty_temporal_rows_before": int(format_diagnostics.get("empty_temporal_rows_detected") or 0),
+                "empty_temporal_rows_omitted": int(format_diagnostics.get("empty_temporal_rows_omitted") or 0),
+                "remaining_temporal_rows": int(format_diagnostics.get("temporal_rows_rendered") or 0),
                 "public_output_checks": public_output_checks,
                 "breakdown_wrappers": {
                     "separators": breakdown.get("separators"),
@@ -2088,6 +2515,7 @@ def _run_case(
                 "renderer_equivalence": rendered.get("renderer_equivalence"),
                 "manifest_checks": manifest_checks,
                 "manifest_impact": rendered.get("manifest_impact"),
+                "targeted_adequacy_diagnostics": measure_targeted_adequacy_diagnostics(str(selection["id"]), prompt),
             }
         )
         return metric, None
@@ -2288,6 +2716,7 @@ def build_dimension_summary(entries: Sequence[Mapping[str, object]]) -> dict[str
         "by_domain": _group_distributions(successful, "domain"),
         "by_detail": _group_distributions(successful, "detail_level"),
         "by_period": _group_distributions(successful, "period_label"),
+        "by_comparison_cohort": _group_distributions(successful, "comparison_cohort"),
         "representatives": representatives,
         "analyses": analyses,
         "datasets": datasets,
@@ -2383,6 +2812,7 @@ def _summary_markdown(metrics_payload: Mapping[str, object], manifest: Mapping[s
     analysis_entries = [entry for entry in successful if entry.get("mode") == "analysis"]
     failed = [entry for entry in entries if entry.get("status") == "failed"]
     skipped = [entry for entry in entries if entry.get("status") == "skipped"]
+    new_semantic_dataset_entries = [entry for entry in successful if entry.get("comparison_cohort") == "new_semantic_dataset"]
     heaviest_data = max(data_entries, key=lambda item: int(item.get("rendered_prompt_chars") or 0), default=None)
     heaviest_analysis = max(analysis_entries, key=lambda item: int(item.get("rendered_prompt_chars") or 0), default=None)
 
@@ -2417,6 +2847,7 @@ def _summary_markdown(metrics_payload: Mapping[str, object], manifest: Mapping[s
         f"- Generated prompts: {len(successful)}",
         f"- Generated data prompts: {len(data_entries)}",
         f"- Generated analysis prompts: {len(analysis_entries)}",
+        f"- New semantic-dataset prompts: {len(new_semantic_dataset_entries)}",
         f"- Failed prompts: {len(failed)}",
         f"- Skipped prompts: {len(skipped)}",
         f"- Total rendered characters: {sum(int(entry.get('rendered_prompt_chars') or 0) for entry in successful)}",
@@ -2471,6 +2902,13 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--period", choices=(*DEFAULT_PERIODS, "Custom"))
     parser.add_argument("--detail", choices=DEFAULT_DETAILS)
     parser.add_argument(
+        "--target-case",
+        action="append",
+        default=[],
+        metavar="USER|SELECTION|PERIOD|DETAIL|SCOPE",
+        help="Run one exact targeted case; repeatable. Scope is 'all', 'representative', or 'broker=<display name>'.",
+    )
+    parser.add_argument(
         "--profile",
         choices=("tuning-v2", "representative", "exhaustive"),
         default="tuning-v2",
@@ -2483,6 +2921,12 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--compare-with", type=Path)
     parser.add_argument("--fail-on-regression", action="store_true")
     parser.add_argument("--source-db", type=Path, default=DEFAULT_SOURCE_DB)
+    parser.add_argument(
+        "--minimum-fx-history-days",
+        type=int,
+        default=365,
+        help="Minimum source-history span used only to select the representative FX pair",
+    )
     parser.add_argument("--port", type=int, default=6043)
     parser.add_argument(
         "--normalize-copy-credentials",
@@ -2493,8 +2937,14 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def run_probe(args: argparse.Namespace) -> int:
+    target_cases = tuple(parse_target_case(value) for value in args.target_case)
+    if len(target_cases) != len(set(target_cases)):
+        raise ProbeError("Duplicate --target-case entries are not allowed")
+    if target_cases and any(value is not None for value in (args.mode, args.domain, args.period, args.detail)):
+        raise ProbeError("--target-case cannot be combined with --mode/--domain/--period/--detail")
     default_users = (DEFAULT_REPRESENTATIVE_USER,) if args.profile in {"tuning-v2", "representative"} else DEFAULT_USERS
-    users = tuple(dict.fromkeys(args.user or default_users))
+    users = tuple(dict.fromkeys(case.user_alias for case in target_cases)) if target_cases else tuple(dict.fromkeys(args.user or default_users))
+    artifact_aliases = {user: f"user_anon_{index:02d}" for index, user in enumerate(users, start=1)} if target_cases else {user: user for user in users}
     passwords = _passwords_for_users(users)
     actual_secrets = tuple(passwords.values())
     source_db = args.source_db.expanduser().resolve()
@@ -2547,11 +2997,12 @@ def run_probe(args: argparse.Namespace) -> int:
 
     try:
         for user in users:
-            inventories[user] = collect_user_inventory(runtime_db, user)
+            inventories[user] = collect_user_inventory(runtime_db, user, minimum_fx_history_days=args.minimum_fx_history_days)
         with api_context() as base_url, FrontendBridge() as bridge:
             for user_alias in users:
                 user_data = inventories[user_alias]
                 with httpx.Client(base_url=base_url, timeout=600, follow_redirects=False) as client:
+                    artifact_user_alias = artifact_aliases[user_alias]
                     login_response, _login_payload, login_duration = _request_json(
                         client,
                         "POST",
@@ -2560,7 +3011,7 @@ def run_probe(args: argparse.Namespace) -> int:
                     )
                     http_events.append(
                         {
-                            "user_alias": user_alias,
+                            "user_alias": artifact_user_alias,
                             "method": "POST",
                             "route": f"{API_PREFIX}/auth/login",
                             "status": login_response.status_code,
@@ -2570,18 +3021,18 @@ def run_probe(args: argparse.Namespace) -> int:
                     if login_response.status_code != 200:
                         failures.append(
                             {
-                                "user_alias": user_alias,
+                                "user_alias": artifact_user_alias,
                                 "status": "failed",
                                 "failure_code": f"login_http_{login_response.status_code}",
                                 "failure_message_sanitized": "Login failed",
                             }
                         )
                         continue
-                    successful_users.append(user_alias)
+                    successful_users.append(artifact_user_alias)
                     catalog_response, catalog_payload, catalog_duration = _request_json(client, "GET", f"{API_PREFIX}/ai-export/catalog")
                     http_events.append(
                         {
-                            "user_alias": user_alias,
+                            "user_alias": artifact_user_alias,
                             "method": "GET",
                             "route": f"{API_PREFIX}/ai-export/catalog",
                             "status": catalog_response.status_code,
@@ -2591,7 +3042,7 @@ def run_probe(args: argparse.Namespace) -> int:
                     if catalog_response.status_code != 200 or not isinstance(catalog_payload, dict):
                         failures.append(
                             {
-                                "user_alias": user_alias,
+                                "user_alias": artifact_user_alias,
                                 "status": "failed",
                                 "failure_code": f"catalog_http_{catalog_response.status_code}",
                                 "failure_message_sanitized": "Catalog discovery failed",
@@ -2599,7 +3050,14 @@ def run_probe(args: argparse.Namespace) -> int:
                         )
                         continue
                     selections = discover_catalog(catalog_payload, mode=args.mode, domain=args.domain)
-                    if args.profile == "tuning-v2":
+                    user_target_cases = tuple(case for case in target_cases if case.user_alias == user_alias)
+                    if user_target_cases:
+                        target_selection_ids = {case.selection_id for case in user_target_cases}
+                        selections = [selection for selection in selections if str(selection["id"]) in target_selection_ids]
+                        missing_selection_ids = target_selection_ids - {str(selection["id"]) for selection in selections}
+                        if missing_selection_ids:
+                            raise ProbeError(f"Target selections absent from runtime catalog: {sorted(missing_selection_ids)}")
+                    if args.profile == "tuning-v2" and not target_cases:
                         excluded_datasets = tuning_v2_exclusions(catalog_payload)
                         excluded_ids = {str(item["dataset_id"]) for item in excluded_datasets}
                         selections = [selection for selection in selections if not (selection["kind"] == "dataset" and str(selection["id"]) in excluded_ids)]
@@ -2607,7 +3065,7 @@ def run_probe(args: argparse.Namespace) -> int:
                     if catalog_record and catalog_record.get("sha256") != catalog_hash:
                         failures.append(
                             {
-                                "user_alias": user_alias,
+                                "user_alias": artifact_user_alias,
                                 "status": "failed",
                                 "failure_code": "catalog_changed_between_users",
                                 "failure_message_sanitized": "Runtime catalog changed during probe",
@@ -2624,10 +3082,10 @@ def run_probe(args: argparse.Namespace) -> int:
                         "sha256": catalog_hash,
                     }
                     scopes = build_user_scopes(user_data)
-                    if args.profile in {"tuning-v2", "representative"}:
+                    if args.profile in {"tuning-v2", "representative"} and not target_cases:
                         scopes = representative_scopes(scopes)
                     scopes = [scope for scope in scopes if args.domain is None or scope["domain"] == args.domain]
-                    actual_id_map[user_alias] = {
+                    actual_id_map[artifact_user_alias] = {
                         "user_id": user_data["user_id"],
                         "brokers": {scope["scope_alias"]: scope["actual"] for scope in scopes if scope["domain"] in ("broker", "portfolio") and scope["scope_alias"] != "all"},
                         "asset": next((scope["actual"] for scope in scopes if scope["domain"] == "asset"), None),
@@ -2636,11 +3094,44 @@ def run_probe(args: argparse.Namespace) -> int:
                     periods = (args.period,) if args.period else None
                     details = (args.detail,) if args.detail else None
                     for selection in selections:
+                        if user_target_cases:
+                            selection_targets = tuple(case for case in user_target_cases if case.selection_id == str(selection["id"]))
+                            for target in selection_targets:
+                                scope = select_target_scope(scopes, target, domain=str(selection["domain"]))
+                                case = build_period_detail_matrix(
+                                    periods=(target.period_label,),
+                                    details=(target.detail_level,),
+                                )[0]
+                                group = sanitize_filename_part(target.selection_id)
+                                target_prompts_dir = prompts_dir / group
+                                target_prompts_dir.mkdir(parents=True, exist_ok=True)
+                                metric, failure = _run_case(
+                                    run_id=run_id,
+                                    user_alias=artifact_user_alias,
+                                    catalog=catalog_payload,
+                                    selection=selection,
+                                    scope=scope,
+                                    case=case,
+                                    client=client,
+                                    bridge=bridge,
+                                    prompts_dir=target_prompts_dir,
+                                    canonical_dir=canonical_dir,
+                                    artifact_root=run_dir,
+                                    keep_canonical=args.keep_canonical,
+                                    locale=str(user_data["locale"]),
+                                    response_language=str(user_data["response_language"]),
+                                    actual_secrets=actual_secrets,
+                                    manifest_shape=args.manifest_shape,
+                                )
+                                entries.append(metric)
+                                if failure is not None:
+                                    failures.append(failure)
+                            continue
                         matching_scopes = [scope for scope in scopes if scope["domain"] == selection["domain"]]
                         if not matching_scopes:
                             skipped_metrics = _missing_scope_metrics(
                                 run_id,
-                                user_alias,
+                                artifact_user_alias,
                                 selection,
                                 period_filter=args.period,
                                 detail_filter=args.detail,
@@ -2681,7 +3172,7 @@ def run_probe(args: argparse.Namespace) -> int:
                                     continue
                                 metric, failure = _run_case(
                                     run_id=run_id,
-                                    user_alias=user_alias,
+                                    user_alias=artifact_user_alias,
                                     catalog=catalog_payload,
                                     selection=selection,
                                     scope=scope,
@@ -2709,33 +3200,49 @@ def run_probe(args: argparse.Namespace) -> int:
         shutil.rmtree(source_snapshot_dir, ignore_errors=True)
 
     for user_alias, user_data in inventories.items():
+        artifact_user_alias = artifact_aliases[user_alias]
         breadth = next(
             (
                 entry.get("technical_diagnostics")
                 for entry in entries
-                if entry.get("user_alias") == user_alias and entry.get("domain") == "portfolio" and entry.get("scope_alias") == "all" and entry.get("status") == "ok" and isinstance(entry.get("technical_diagnostics"), dict) and entry["technical_diagnostics"].get("covered_asset_count") is not None
+                if entry.get("user_alias") == artifact_user_alias
+                and entry.get("domain") == "portfolio"
+                and entry.get("scope_alias") == "all"
+                and entry.get("status") == "ok"
+                and isinstance(entry.get("technical_diagnostics"), dict)
+                and entry["technical_diagnostics"].get("covered_asset_count") is not None
             ),
             None,
         )
         if isinstance(breadth, dict) and isinstance(user_data.get("inventory"), dict):
-            user_data["inventory"]["technical_eligible_assets"] = breadth.get("eligible_asset_count")
+            # Period-scoped runtime counts kept DISTINCT from the all-time raw
+            # SQL fields (position_legs/unique_held_assets): never conflate the
+            # all-time leg count with the period leg/contributor counts.
             user_data["inventory"]["technical_covered_assets"] = breadth.get("covered_asset_count")
+            user_data["inventory"]["runtime_period_position_leg_count"] = breadth.get("period_position_leg_count")
+            user_data["inventory"]["runtime_period_contributor_asset_count"] = breadth.get("period_contributor_asset_count")
+            user_data["inventory"]["runtime_period_eligible_asset_count"] = breadth.get("eligible_asset_count")
+            user_data["inventory"]["runtime_period_covered_asset_count"] = breadth.get("covered_asset_count")
         asset_diagnostics = next(
             (
                 entry.get("technical_diagnostics")
                 for entry in entries
-                if entry.get("user_alias") == user_alias and entry.get("domain") == "asset" and entry.get("status") == "ok" and isinstance(entry.get("technical_diagnostics"), dict) and int(entry["technical_diagnostics"].get("indicator_instance_count") or 0) > 0
+                if entry.get("user_alias") == artifact_user_alias and entry.get("domain") == "asset" and entry.get("status") == "ok" and isinstance(entry.get("technical_diagnostics"), dict) and int(entry["technical_diagnostics"].get("indicator_instance_count") or 0) > 0
             ),
             None,
         )
-        mapped_asset = actual_id_map.get(user_alias, {}).get("asset") if isinstance(actual_id_map.get(user_alias), dict) else None
+        mapped_asset = actual_id_map.get(artifact_user_alias, {}).get("asset") if isinstance(actual_id_map.get(artifact_user_alias), dict) else None
         if isinstance(mapped_asset, dict) and isinstance(asset_diagnostics, dict):
             mapped_asset["technical_indicator_count"] = asset_diagnostics.get("indicator_instance_count")
 
     comparisons: list[dict[str, object]] = []
     if args.compare_with:
         previous = json.loads(args.compare_with.expanduser().read_text(encoding="utf-8"))
-        comparisons = compare_metric_runs({"entries": entries}, previous)
+        comparisons = compare_metric_runs(
+            {"entries": entries},
+            previous,
+            include_removed=not bool(target_cases),
+        )
     metrics_payload: dict[str, object] = {
         "run_id": run_id,
         "generated_at": utc_now_iso(),
@@ -2755,7 +3262,7 @@ def run_probe(args: argparse.Namespace) -> int:
             "api_mode": "external_local_url" if args.base_url else "managed_local_copied_db",
             "base_url": args.base_url or f"http://127.0.0.1:{args.port}",
         },
-        "users_requested": list(users),
+        "users_requested": [artifact_aliases[user] for user in users],
         "successful_users": successful_users,
         "catalog": catalog_record,
         "filters": {
@@ -2765,22 +3272,34 @@ def run_probe(args: argparse.Namespace) -> int:
             "detail": args.detail,
             "manifest_shape": args.manifest_shape,
             "profile": args.profile,
+            "target_case_count": len(target_cases),
+            "target_selection_ids": sorted({case.selection_id for case in target_cases}),
         },
         "excluded_datasets": excluded_datasets,
         "sampling_profile": {
             "representative_user_default": DEFAULT_REPRESENTATIVE_USER,
-            "representative_scope_policy": ("portfolio all; broker with most positions then longest history; " "one deterministic longest-history asset; one deterministic " "longest-history FX pair"),
-            "case_policy": ("base datasets: 3M/6M/1Y x compact/standard/full; " "analyses with temporal data: 3M/1Y x compact/standard/full; " "all_data excluded from tuning" if args.profile == "tuning-v2" else "representative or exhaustive legacy profile"),
+            "representative_scope_policy": ("explicit target-case scopes" if target_cases else "portfolio all; broker with most positions then longest history; one deterministic longest-history asset; one deterministic longest-history FX pair"),
+            "case_policy": (
+                "exact explicit target cases only" if target_cases else ("base datasets: 3M/6M/1Y x compact/standard/full; analyses with temporal data: 3M/1Y x compact/standard/full; all_data excluded from tuning" if args.profile == "tuning-v2" else "representative or exhaustive legacy profile")
+            ),
         },
-        "inventory": {alias: data["inventory"] for alias, data in inventories.items()},
+        "inventory": {artifact_aliases[alias]: data["inventory"] for alias, data in inventories.items()},
         "inventory_methods": {
-            "positions": "nonzero net transaction quantity grouped by broker and asset",
-            "technical_eligibility": "runtime technical breadth when available; otherwise at least 365 calendar days and 250 stored price observations",
-            "technical_coverage": "runtime portfolio.technical_breadth covered_asset_count when available",
-            "fifo_lot_count": "positive-quantity asset transactions; diagnostic SQL count",
+            "accessible_broker_count": "ALL-TIME access universe: BrokerUserAccess rows available to the probed user. It is not reduced by current positions or the selected period.",
+            "scoped_broker_count": "REQUEST scope: broker IDs selected for one Portfolio/Broker calculation after access validation. A scoped broker may have no current positions.",
+            "position_broker_count": "AS-OF position universe: distinct brokers with current open holdings at snapshot_as_of.",
+            "period_contributor_broker_count": "PERIOD-SCOPED contributor universe: distinct brokers represented by performance contribution rows in the selected period, including historical-only contributors.",
+            "position_legs": "ALL-TIME raw SQL: count of (broker_id, asset_id) groups with nonzero net all-time transaction quantity. NOT period-scoped and NOT directly comparable to runtime_period_position_leg_count.",
+            "unique_held_assets": "ALL-TIME raw SQL: distinct asset IDs with nonzero net all-time quantity, broker-deduplicated.",
+            "technical_eligible_assets": "ALL-TIME heuristic SQL: assets with at least 365 calendar days and 250 stored price observations. NOT the period eligible universe.",
+            "runtime_period_position_leg_count": "PERIOD-SCOPED runtime: portfolio.technical_breadth.period_position_leg_count (period (broker_id, asset_id) legs before eligibility, incl. fully-sold-in-period). Compare against period counts only, never against all-time position_legs.",
+            "runtime_period_contributor_asset_count": "PERIOD-SCOPED runtime: portfolio.technical_breadth.period_contributor_asset_count (unique assets across period legs before eligibility).",
+            "runtime_period_eligible_asset_count": "PERIOD-SCOPED runtime: portfolio.technical_breadth.eligible_asset_count (currently-held nonzero-end-value eligible assets, broker-deduplicated).",
+            "runtime_period_covered_asset_count": "PERIOD-SCOPED runtime: portfolio.technical_breadth.covered_asset_count (eligible assets with classifiable technical coverage).",
+            "fifo_lot_count": "ALL-TIME raw SQL: positive-quantity asset transactions; diagnostic SQL count.",
         },
         "credential_check": {
-            "statuses": credential_status,
+            "statuses": {artifact_aliases.get(alias, alias): status for alias, status in credential_status.items()},
             "normalization_requested": args.normalize_copy_credentials,
             "source_credentials_modified": False,
         },
