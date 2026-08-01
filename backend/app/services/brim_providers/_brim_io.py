@@ -3,7 +3,7 @@
 This module is intentionally **not** a provider: its filename starts with ``_``,
 so ``BRIMProviderRegistry.auto_discover`` skips it (see
 ``backend/app/services/provider_registry.py``). It is imported directly by the
-plugins that need it (Intesa Sanpaolo, Crédit Agricole Italia), both of which
+plugins that need it (Intesa Sanpaolo, Crédit Agricole), both of which
 must read the *same* logical export from either **CSV** or **XLSX**.
 
 Responsibilities:

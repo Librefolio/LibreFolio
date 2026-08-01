@@ -37,9 +37,9 @@ from backend.app.schemas.brim import (
 )
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.brim_providers._brim_io import model_bond_maturity
+from backend.app.services.brim_providers._brim_io import model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
-from backend.app.services.brim_providers.broker_credit_agricole import CreditAgricoleItaliaBrokerProvider
+from backend.app.services.brim_providers.broker_credit_agricole import CreditAgricoleBrokerProvider
 from backend.app.services.brim_providers.broker_degiro import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
 from backend.app.services.brim_providers.broker_directa import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
 from backend.app.services.brim_providers.broker_etoro import EtoroBrokerProvider, _parse_etoro_date, _parse_etoro_number
@@ -62,6 +62,7 @@ SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / 
 DEGIRO_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 DIRECTA_SAMPLE = SAMPLE_DIR / "directa-export.csv"
 CA_SAMPLE = SAMPLE_DIR / "credit_agricole-export.csv"
+CA_CONTI_SAMPLE = SAMPLE_DIR / "credit_agricole-conti.csv"
 INTESA_PATRIMONIO_SAMPLE = SAMPLE_DIR / "intesa-patrimonio.csv"
 FINPENSION_SAMPLE = SAMPLE_DIR / "finpension-export.csv"
 IBKR_SAMPLE = SAMPLE_DIR / "ibkr-trades-export.csv"
@@ -508,7 +509,7 @@ class TestBrokerParserCoverageHelpers:
         ("provider", "sample_name"),
         [
             (CoinbaseBrokerProvider(), "coinbase-export.csv"),
-            (CreditAgricoleItaliaBrokerProvider(), "credit_agricole-export.csv"),
+            (CreditAgricoleBrokerProvider(), "credit_agricole-export.csv"),
             (DegiroBrokerProvider(), "degiro-export.csv"),
             (DirectaBrokerProvider(), "directa-export.csv"),
             (EtoroBrokerProvider(), "etoro-export.csv"),
@@ -685,7 +686,7 @@ class TestBrokerParserCoverageHelpers:
         assert generic_tax.asset_id is None
 
     def test_credit_agricole_imports_succession_as_cashless_adjustment(self):
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
 
         succession = [tx for tx in out.transactions if tx.description and "successione" in tx.description]
         assert succession, "sample must contain succession rows"
@@ -697,10 +698,10 @@ class TestBrokerParserCoverageHelpers:
         assert all(tx.cash is None for tx in succession)
         assert all(tx.cost_basis_override is not None for tx in succession)
         assert not any(tx.type == TransactionType.DEPOSIT and tx.description and "successione" in tx.description for tx in out.transactions)
-        assert any("cashless ADJUSTMENT" in warning for warning in out.warnings)
+        assert any("RETTIFICA senza cassa" in warning for warning in out.warnings)
 
     def test_credit_agricole_buy_has_deposit_before(self):
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
         buy = next(tx for tx in out.transactions if tx.type == TransactionType.BUY and tx.description and tx.description.startswith("SICAV: SOTTOSCR"))
 
         idx = out.transactions.index(buy)
@@ -711,7 +712,7 @@ class TestBrokerParserCoverageHelpers:
         assert deposit.cash.amount == abs(buy.cash.amount)
 
     def test_credit_agricole_sell_has_withdrawal_after(self):
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and tx.description.startswith("FONDI: RIMBORSO"))
 
         idx = out.transactions.index(sell)
@@ -721,14 +722,140 @@ class TestBrokerParserCoverageHelpers:
         assert withdrawal.cash is not None and sell.cash is not None
         assert withdrawal.cash.amount == -abs(sell.cash.amount)
 
-    def test_credit_agricole_trade_cash_is_neutral(self):
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+    def test_credit_agricole_all_cash_is_neutral(self):
+        """The securities-only export is fully balanced: BUY/SELL, coupons and
+        maturity premiums each get a cash counter-entry, so *total* broker cash
+        (every leg, not just trades) nets to zero — no phantom liquidity."""
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
 
-        trade_cash = sum(tx.cash.amount for tx in out.transactions if tx.type in {TransactionType.BUY, TransactionType.SELL, TransactionType.DEPOSIT, TransactionType.WITHDRAWAL} and tx.cash is not None)
-        assert trade_cash == Decimal("0.00")
+        total_cash = sum((tx.cash.amount for tx in out.transactions if tx.cash is not None), Decimal("0"))
+        assert total_cash == Decimal("0.00")
+
+    def test_credit_agricole_coupon_has_balancing_withdrawal(self):
+        """Each coupon (CEDOLA -> INTEREST) is offset by a same-day auto-cash
+        WITHDRAWAL of the opposite amount, so the securities-only export does not
+        accumulate unbalanced liquidity (regression for the coupon-cash fix)."""
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+
+        coupon = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and tx.description and tx.description.startswith("CEDOLA"))
+        assert coupon.cash is not None
+        offset = next(tx for tx in out.transactions if tx.type == TransactionType.WITHDRAWAL and tx.date == coupon.date and tx.cash is not None and tx.cash.amount == -coupon.cash.amount and "auto_cash" in (tx.tags or []))
+        assert offset is not None
+
+    def test_credit_agricole_securities_ignores_recap_footer(self):
+        """CA can append a recap/summary row at the very end of the XLSX export
+        ("Riepilogo ..."). It must be recognised and dropped silently, never
+        warned about nor turned into a phantom transaction."""
+        base = CreditAgricoleBrokerProvider()._parse_securities(read_rows(CA_SAMPLE), broker_id=1)
+
+        rows = read_rows(CA_SAMPLE)
+        rows.append(["", "Riepilogo movimenti deposito titoli", "", "", "", "", "", "", "", ""])
+        out = CreditAgricoleBrokerProvider()._parse_securities(rows, broker_id=1)
+
+        assert not any("missing date/causale" in w for w in out.warnings)
+        assert not any("Riepilogo" in w for w in out.warnings)
+        assert len(out.transactions) == len(base.transactions)
+
+    # ------------------------------------------------------------------
+    # Account "Lista Movimenti Conto" layout (liquidity / fees / taxes / income)
+    # ------------------------------------------------------------------
+
+    def test_credit_agricole_account_can_parse_and_routes(self):
+        prov = CreditAgricoleBrokerProvider()
+        assert prov.can_parse(CA_CONTI_SAMPLE)
+        # The account layout must auto-detect to Crédit Agricole, not another bank.
+        assert BRIMProviderRegistry.auto_detect_plugin(CA_CONTI_SAMPLE) == "broker_credit_agricole"
+
+    def test_credit_agricole_account_maps_types_by_causale(self):
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        types = [tx.type for tx in out.transactions]
+        assert types.count(TransactionType.WITHDRAWAL) == 5
+        assert types.count(TransactionType.DEPOSIT) == 4
+        assert types.count(TransactionType.INTEREST) == 3
+        assert types.count(TransactionType.DIVIDEND) == 1
+        assert types.count(TransactionType.TAX) == 2
+        assert types.count(TransactionType.FEE) == 3
+        assert len(out.validation_issues) == 0
+
+    def test_credit_agricole_account_tax_vs_fee_split(self):
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        # Capital gain / imposta bollo -> TAX; management / coupon-detach / canone -> FEE.
+        tax_descs = " | ".join(tx.description for tx in out.transactions if tx.type == TransactionType.TAX)
+        assert "CAPITAL GAIN" in tax_descs and "Imposta bollo" in tax_descs
+        fee_descs = " | ".join(tx.description for tx in out.transactions if tx.type == TransactionType.FEE)
+        assert "SPESE STACCO CEDOLA" in fee_descs
+        assert "SPESE DI GESTIONE" in fee_descs
+        assert "CANONE MENSILE" in fee_descs
+        # A charge always carries negative cash.
+        assert all(tx.cash is not None and tx.cash.amount < 0 for tx in out.transactions if tx.type in {TransactionType.FEE, TransactionType.TAX})
+
+    def test_credit_agricole_account_coupon_is_interest_dividend_needs_asset(self):
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        # A bond coupon (CEDOLA) is unallocated INTEREST, cash in.
+        coupon = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and tx.description.startswith("CEDOLA:"))
+        assert coupon.asset_id is None
+        assert coupon.cash is not None and coupon.cash.amount > 0
+        # A dividend that names a security (ISIN) is DIVIDEND, asset-linked.
+        dividend = next(tx for tx in out.transactions if tx.type == TransactionType.DIVIDEND)
+        assert dividend.asset_id is not None
+        assert dividend.asset_id in out.extracted_assets
+        assert out.extracted_assets[dividend.asset_id].extracted_isin == "IT0000000002"
+        # A dividend WITHOUT an identifiable asset degrades to unallocated INTEREST.
+        no_asset_div = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and "SENZA TITOLO" in tx.description)
+        assert no_asset_div.asset_id is None
+
+    def test_credit_agricole_account_deposits_withdrawals_by_sign(self):
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        # Pension credit -> DEPOSIT (positive); utility debit -> WITHDRAWAL (negative).
+        deposit = next(tx for tx in out.transactions if tx.type == TransactionType.DEPOSIT and "PENSIONE" in tx.description)
+        assert deposit.cash is not None and deposit.cash.amount > 0
+        withdrawal = next(tx for tx in out.transactions if tx.type == TransactionType.WITHDRAWAL and "UTILITY" in tx.description)
+        assert withdrawal.cash is not None and withdrawal.cash.amount < 0
+
+    def test_credit_agricole_account_carries_causale_tag_and_currency(self):
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        for tx in out.transactions:
+            tags = tx.tags or []
+            assert "credit_agricole" in tags
+            # The causale slug is preserved as the 3rd tag, for traceability.
+            assert len(tags) >= 3
+            assert tx.cash is not None and tx.cash.code == "EUR"
+
+    def test_credit_agricole_account_fee_refund_and_income_clawback_edges(self):
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        # A positive amount on a fee causale is a refund -> DEPOSIT.
+        refund = next(tx for tx in out.transactions if "RIMBORSO COMMISSIONI" in tx.description)
+        assert refund.type == TransactionType.DEPOSIT and refund.cash.amount > 0
+        # A negative amount on an income causale is a clawback -> WITHDRAWAL.
+        clawback = next(tx for tx in out.transactions if "STORNO CEDOLA" in tx.description)
+        assert clawback.type == TransactionType.WITHDRAWAL and clawback.cash.amount < 0
+
+    def test_credit_agricole_account_strips_apostrophe_amount_guard(self):
+        """Negative amounts in the CSV carry a leading ``'`` Excel text-guard
+        (``'-61,20``); the parser must strip it and keep the sign."""
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        utility = next(tx for tx in out.transactions if "UTILITY" in tx.description)
+        assert utility.cash is not None and utility.cash.amount == Decimal("-61.20")
+
+    def test_credit_agricole_account_ignores_recap_footer(self):
+        """The XLSX account export closes with numeric recap totals
+        ("Totale Entrate/Uscite/Movimenti €"). They must be recognised and
+        dropped: no noisy warning, and never leaked as a huge phantom deposit."""
+        base = CreditAgricoleBrokerProvider()._parse_account_movements(read_rows(CA_CONTI_SAMPLE), broker_id=1)
+
+        rows = read_rows(CA_CONTI_SAMPLE)
+        rows.append(["", "", "", "Totale Entrate €", "214.739,70", ""])
+        rows.append(["", "", "", "Totale Uscite €", "-164.652,53", ""])
+        rows.append(["", "", "", "Totale Movimenti €", "50.087,17", ""])
+        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+
+        assert not any("missing date/causale" in w for w in out.warnings)
+        assert not any("Totale" in w for w in out.warnings)
+        assert len(out.transactions) == len(base.transactions)
+        assert all(tx.cash is None or abs(tx.cash.amount) != Decimal("214739.70") for tx in out.transactions)
 
     def test_credit_agricole_preserves_faithful_succession_multi_rows(self):
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
 
         btp_2037 = [tx for tx in out.transactions if tx.description and "successione" in tx.description and "BTP FUT 27-04-37 CUM" in tx.description]
         # Each leg is preserved faithfully as its own ADJUSTMENT, keeping its distinct
@@ -745,7 +872,7 @@ class TestBrokerParserCoverageHelpers:
         held nominal comes from the succession legs (3×10000 = 30000 for BTP 05/26,
         32000+32000+31000 = 95000 for BTP 20-25), never from Ctv/Prezzo (which would
         give the wrong 29985 / 94906)."""
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
 
         # BTP 05/26: held 30000, ctv 30105 -> SELL -30000 @par + INTEREST 105.
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and tx.description.startswith("TITOLI SCADUTI: BTP 05/26"))
@@ -768,7 +895,7 @@ class TestBrokerParserCoverageHelpers:
         """When the held nominal is known (position built from succession legs), the
         redemption must NOT raise a ``derived_quantity`` field-todo: the SELL closes
         an exact position, so there is nothing for the user to verify."""
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
 
         derived = [ft for ft in out.field_todos if ft.reason_code == "derived_quantity"]
         assert derived == [], "position-backed maturities must not need a verify flag"
@@ -776,7 +903,7 @@ class TestBrokerParserCoverageHelpers:
     def test_credit_agricole_matured_bond_net_position_is_zero(self):
         """End-to-end: after import the net quantity of each matured bond must be 0
         (succession transfers in via ADJUSTMENT, par redemption out via SELL)."""
-        out = CreditAgricoleItaliaBrokerProvider().parse(CA_SAMPLE, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
 
         for name in ("BTP 05/26 0.55FOICUM", "BTP 20-25 1.40FOICUM"):
             net = sum((tx.quantity for tx in out.transactions if tx.description and name in tx.description and tx.type in {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT}), Decimal("0"))
@@ -820,7 +947,7 @@ class TestBrokerParserCoverageHelpers:
         csv_path = tmp_path / "credit_agricole-partial.csv"
         csv_path.write_text("\n".join([header, row]) + "\n", encoding="utf-8")
 
-        out = CreditAgricoleItaliaBrokerProvider().parse(csv_path, broker_id=1)
+        out = CreditAgricoleBrokerProvider().parse(csv_path, broker_id=1)
 
         sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL)
         assert sell.quantity == Decimal("-29985.060")

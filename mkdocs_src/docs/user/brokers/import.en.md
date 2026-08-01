@@ -42,7 +42,7 @@ The **Import** (`Upload` icon) button launches the **BRIM** wizard. This module 
 
 The wizard progresses through the following steps:
 
-1.  **Select File & Parser**: Choose the statement file and select the appropriate parser configuration (e.g., Interactive Brokers, Degiro, Directa, Intesa Sanpaolo, Crédit Agricole Italia, Charles Schwab, generic CSV, etc.).
+1.  **Select File & Parser**: Choose the statement file and select the appropriate parser configuration (e.g., Interactive Brokers, Degiro, Directa, Intesa Sanpaolo, Crédit Agricole, Charles Schwab, generic CSV, etc.).
 2.  **Verify Headers & Mapping**: Renders the CSV headers to confirm the parser aligns correctly with the columns.
 3.  **Operation Analysis**: Processes the file and displays a preview grid of parsed actions (Buys, Sells, Dividends, snapshot seeds, automatic cash counter-entries, etc.).
     *   **Badges**: Operations are labeled as `UNIQUE` (new trade), `DUPLICATE` (already exists in database), or `UNRESOLVED` (requires mapping ticker/ISIN).
@@ -57,7 +57,7 @@ The wizard progresses through the following steps:
 
 ## ⚠️ Asset Notices
 
-Some broker plugins attach advisory notices to extracted assets. For example, Intesa Sanpaolo and Crédit Agricole Italia can warn that a security may be matured/redeemed and hard to find online. The create-asset modal groups these notices into amber banners; they are informational and do not change the transaction import.
+Some broker plugins attach advisory notices to extracted assets. For example, Intesa Sanpaolo and Crédit Agricole can warn that a security may be matured/redeemed and hard to find online. The create-asset modal groups these notices into amber banners; they are informational and do not change the transaction import.
 
 ---
 

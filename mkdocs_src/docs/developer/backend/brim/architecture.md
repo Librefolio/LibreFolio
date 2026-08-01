@@ -108,7 +108,7 @@ class MyBrokerProvider(BRIMProvider):
         ...
 ```
 
-`BRIMAssetNotice` entries are attached per extracted asset as `{kind, reason, transaction_indexes}`. The default is `[]`, so older plugins stay compatible; plugins such as Intesa Sanpaolo and Crédit Agricole Italia populate maturity/redemption notices that the asset-create modal groups into amber advisory banners.
+`BRIMAssetNotice` entries are attached per extracted asset as `{kind, reason, transaction_indexes}`. The default is `[]`, so older plugins stay compatible; plugins such as Intesa Sanpaolo and Crédit Agricole populate maturity/redemption notices that the asset-create modal groups into amber advisory banners.
 
 Plugins are auto-discovered at startup. See the [BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md) for a complete walkthrough of creating a new plugin.
 

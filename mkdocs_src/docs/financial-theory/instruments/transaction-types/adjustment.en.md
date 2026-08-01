@@ -30,7 +30,7 @@ Adjustments are used when no other transaction type fits:
 - **Initial balance setup** — bootstrapping a portfolio from a snapshot
 - **Corporate actions** not covered by other types (spinoffs, mergers, etc.)
 
-Imported examples: Intesa Sanpaolo `patrimonio` snapshots use positive `ADJUSTMENT`s to seed existing holdings with a per-unit `cost_basis_override`; Crédit Agricole Italia succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) are also modeled as positive cashless `ADJUSTMENT`s, not as paired `TRANSFER`s, because the source dossier is outside LibreFolio.
+Imported examples: Intesa Sanpaolo `patrimonio` snapshots use positive `ADJUSTMENT`s to seed existing holdings with a per-unit `cost_basis_override`; Crédit Agricole succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) are also modeled as positive cashless `ADJUSTMENT`s, not as paired `TRANSFER`s, because the source dossier is outside LibreFolio.
 
 !!! note "Promote to Transfer"
 

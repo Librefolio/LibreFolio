@@ -261,6 +261,16 @@ transaction breaks these rules, so flip source signs as needed:
   cashless `ADJUSTMENT` for coin-only rewards).
 - Prefer **skipping a row with a warning** over emitting a schema-invalid transaction.
 
+!!! tip "Warning language follows the input format"
+
+    A plugin's user-facing `warnings` (and any `BRIMAssetNotice.reason`) should be written
+    in the language of the export it parses. For a single-nation broker whose report is
+    published in only one language — e.g. Crédit Agricole, Directa, Intesa Sanpaolo, Fineco
+    (Italian) — emit the warnings in that language so they match the report the user is
+    reading. When a broker ships differently localized export layouts (a UK vs. IT Fineco
+    file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
+    warnings in its own language. Code, comments and docstrings stay in English.
+
 !!! warning "`cost_basis_override` is PER-UNIT, never a total"
 
     When a plugin freezes an inherited cost basis (WAC) on a `TRANSFER`/`ADJUSTMENT`
@@ -373,7 +383,7 @@ extracted_assets[asset_id].notices.append(
 )
 ```
 
-The schema is `{kind, reason, transaction_indexes}` with `transaction_indexes=[]` by default. `BRIMAssetMapping.notices` carries those notices into the frontend; the asset-create modal groups them by `kind` and renders amber advisory banners. Notices are informational only and never change import behaviour. Intesa Sanpaolo and Crédit Agricole Italia use this for maturity/redemption warnings.
+The schema is `{kind, reason, transaction_indexes}` with `transaction_indexes=[]` by default. `BRIMAssetMapping.notices` carries those notices into the frontend; the asset-create modal groups them by `kind` and renders amber advisory banners. Notices are informational only and never change import behaviour. Intesa Sanpaolo and Crédit Agricole use this for maturity/redemption warnings.
 
 ## 🚪 Opening-date gate
 

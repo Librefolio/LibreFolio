@@ -693,6 +693,7 @@ class BrokerService:
                             success=False,
                             deleted_count=0,
                             message=(f"Broker has {tx_count} transactions. " f"Use force=True to delete all."),
+                            transaction_count=tx_count,
                         )
                     )
                     continue

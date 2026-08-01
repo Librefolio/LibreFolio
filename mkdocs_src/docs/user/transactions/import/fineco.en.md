@@ -17,6 +17,10 @@ report exported from FinecoBank.
 
 ## 📝 Notes
 
+- **Import warnings are shown in Italian.** The only supported export today is the Italian
+  FinecoBank *Movimenti Dossier Titoli*, so any warnings raised while parsing appear in
+  Italian to match the report. FinecoBank also operates in the UK — if a UK (or other)
+  export layout is added later, its warnings will follow that format's language.
 - Two export layouts are supported automatically:
     - **without commissions** (11 columns), and
     - **with commissions** (15 columns). Commission columns are imported as separate

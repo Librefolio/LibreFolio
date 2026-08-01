@@ -53,7 +53,7 @@ Under the hood, a Transfer is composed of two Adjustment entries. LibreFolio sup
 
 ## 👵 Succession and Untracked Source Brokers
 
-A true `TRANSFER` needs two brokers in LibreFolio: source and destination. If the source dossier is outside LibreFolio, the incoming leg is better modeled as a positive cashless `ADJUSTMENT` with a per-unit `cost_basis_override`, not as a paired transfer. Crédit Agricole Italia succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) use this pattern: the inherited securities enter as in-kind capital, no cash `DEPOSIT` is created, and the origin causale remains in the description for auditability.
+A true `TRANSFER` needs two brokers in LibreFolio: source and destination. If the source dossier is outside LibreFolio, the incoming leg is better modeled as a positive cashless `ADJUSTMENT` with a per-unit `cost_basis_override`, not as a paired transfer. Crédit Agricole succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) use this pattern: the inherited securities enter as in-kind capital, no cash `DEPOSIT` is created, and the origin causale remains in the description for auditability.
 
 ---
 

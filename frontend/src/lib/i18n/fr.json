@@ -463,8 +463,13 @@
         "unresolvedAction": "Utilisez le panneau de résolution ci-dessus pour sélectionner l'actif correspondant ou en créer un nouveau.",
         "possibleDup": "Une transaction similaire a été trouvée dans ce courtier (même date, type et montant, description différente). Vérifiez si elle a déjà été importée avant de continuer.",
         "likelyDup": "Une transaction identique existe déjà dans ce courtier (même date, type, montant et description). Elle a probablement déjà été importée — désélectionnez-la pour éviter les doublons.",
-        "beforeOpening": "Datée d'avant la date d'ouverture de ce courtier — non importable."
-      }
+        "beforeOpening": "Datée d'avant la date d'ouverture de ce courtier — non importable.",
+        "pendingDuplicate": "Correspond à une autre transaction dans cet import ou à une transaction non enregistrée déjà dans l'éditeur. Elle est désélectionnée par défaut ; resélectionnez-la seulement si vous voulez conserver les deux.",
+        "possiblePendingDuplicate": "Correspond à une autre transaction dans cet import, mais la description diffère. Elle reste sélectionnée pour vérification.",
+        "pendingDuplicateJump": "Doublon de la ligne conservée depuis {file}. Cliquez pour la voir."
+      },
+      "pendingDuplicate": "Doublon dans le lot",
+      "possiblePendingDuplicate": "Doublon possible du lot"
     },
     "addIdentifier": {
       "title": "Ajouter l'identifiant à l'actif ?",
@@ -491,7 +496,23 @@
     "brokerOpeningMsg": "{count} transaction(s) datée(s) avant l'ouverture du courtier ({openedAt}). Plus ancienne : {minDate}.",
     "autoFixOpening": "Définir l'ouverture au {date}",
     "autoFixOpeningTip": "Définit la date d'ouverture du courtier sur sa transaction la plus ancienne afin que ses lignes deviennent importables.",
-    "autoFixFailed": "Impossible de mettre à jour la date d'ouverture du courtier."
+    "autoFixFailed": "Impossible de mettre à jour la date d'ouverture du courtier.",
+    "duplicatesSelected": "{n} doublons sélectionnés",
+    "resolver": {
+      "pendingEditor": "éditeur en attente",
+      "title": "Résolution des doublons du lot",
+      "subtitle": "{n} groupe(s) de doublons trouvés entre fichiers.",
+      "priorityHint": "Les fichiers plus hauts gagnent par défaut.",
+      "filePriority": "Priorité des fichiers",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "memberCount": "{n} lignes",
+      "tierSure": "Doublon certain",
+      "tierProbable": "Doublon probable",
+      "groupHelp": "Sélectionnez chaque ligne à conserver. Les groupes non modifiés suivent la priorité des fichiers.",
+      "resetDefault": "Réinitialiser",
+      "defaultKeeper": "conservée par défaut"
+    }
   },
   "brokers": {
     "title": "Courtiers",
@@ -787,7 +808,11 @@
       "annualizedReturn": "Annualisé",
       "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de ce lot unique sur sa durée de détention, net des revenus et frais, pour comparer des lots détenus sur des durées différentes."
     },
-    "createdInSystem": "Créé dans le Système"
+    "createdInSystem": "Créé dans le Système",
+    "deleteBlockedTitle": "Impossible de supprimer le courtier",
+    "deleteBlockedMessage": "Impossible de supprimer : ce courtier a {count} transaction(s).",
+    "forceCascadeDelete": "Supprimer le courtier et les transactions",
+    "goToTransactions": "Aller aux transactions"
   },
   "chart": {
     "tooltip": {
@@ -2368,6 +2393,26 @@
         "all_data": {
           "display": "Toutes les données du portefeuille",
           "description": "Union dédupliquée de tous les jeux de données applicables au portefeuille."
+        },
+        "technical_summary": {
+          "display": "Synthèse technique du portefeuille",
+          "description": "Couverture technique, ampleur agrégée et synthèse des événements récents sans historique complet par actif."
+        },
+        "asset_snapshot": {
+          "display": "Aperçu des actifs du portefeuille",
+          "description": "Aperçu uniforme et concis par actif avec rendements récents, tendance, momentum, volatilité et dernier événement."
+        },
+        "asset_comparison": {
+          "display": "Comparaison des actifs du portefeuille",
+          "description": "Comparaison de marché uniforme par actif avec couverture, ampleur et événements structurels sélectionnés."
+        },
+        "drawdown_context": {
+          "display": "Contexte de Repli du Portefeuille",
+          "description": "Repli courant et maximal par rapport au pic, déterministe, avec dates de l'épisode, statut de récupération, base de calcul et couverture pour l'ensemble du portefeuille (TWRR)."
+        },
+        "income_evidence": {
+          "display": "Preuves de revenus du portefeuille",
+          "description": "Chronologie datée des revenus enregistrés avec couverture de conversion par devise ; aucune prévision de coupons ou d’intérêts courus futurs."
         }
       },
       "broker": {
@@ -2390,6 +2435,26 @@
         "all_data": {
           "display": "Toutes les données du courtier",
           "description": "Union dédupliquée de tous les jeux de données applicables au courtier."
+        },
+        "technical_summary": {
+          "display": "Synthèse technique du courtier",
+          "description": "Couverture technique et ampleur agrégée uniquement dans le périmètre du courtier."
+        },
+        "asset_comparison": {
+          "display": "Comparaison des actifs du courtier",
+          "description": "Comparaison uniforme des actifs du courtier avec contexte de marché, ampleur et événements structurels."
+        },
+        "drawdown_context": {
+          "display": "Contexte de Repli du Courtier",
+          "description": "Repli courant et maximal par rapport au pic, déterministe, avec dates de l'épisode, statut de récupération, base de calcul et couverture pour le périmètre du courtier sélectionné (TWRR)."
+        },
+        "concentration_evidence": {
+          "display": "Preuves de concentration du courtier",
+          "description": "Concentration par position, type d’actif, secteur, géographie et devise, avec comparaison optionnelle sur l’ensemble du portefeuille ; la couverture et la liquidité inconnues sont signalées, non supposées."
+        },
+        "cost_efficiency_evidence": {
+          "display": "Preuves d’efficacité des coûts du courtier",
+          "description": "État des frais enregistrés avec dénominateurs de rotation et d’activité ajustés à la quote-part et disponibilité des ratios ; les données manquantes restent indisponibles, jamais nulles."
         }
       },
       "asset": {
@@ -2408,6 +2473,14 @@
         "all_data": {
           "display": "Toutes les données de l’actif",
           "description": "Union dédupliquée de tous les jeux de données applicables à l’actif."
+        },
+        "position_context": {
+          "display": "Contexte de la position sur l'actif",
+          "description": "Contexte de marché ciblé de la position avec historique limité, états techniques, volatilité et événements récents."
+        },
+        "drawdown_context": {
+          "display": "Contexte de Repli de l'Actif",
+          "description": "Repli courant et maximal par rapport au pic, déterministe, avec dates de l'épisode, statut de récupération et couverture, calculé dans la devise de prix native de l'actif (base prix uniquement)."
         }
       },
       "fx": {
@@ -2426,6 +2499,14 @@
         "all_data": {
           "display": "Toutes les données FX",
           "description": "Union dédupliquée de tous les jeux de données FX applicables."
+        },
+        "market_context": {
+          "display": "Contexte de marché FX",
+          "description": "Contexte ciblé de taux, rendement, volatilité, tendance, événements et couverture de l'historique source."
+        },
+        "conversion_timing_context": {
+          "display": "Contexte de timing de conversion FX",
+          "description": "Contexte de timing non prédictif : position dans la plage observée, rendements observés et volatilité réalisée, couverture ou obsolescence de la source ; montant, échéance, spread et frais non inclus et aucune prévision."
         }
       }
     },
@@ -2502,6 +2583,43 @@
           "description": "Décrit les liens directs des liquidités et positions avec la paire de devises."
         }
       }
+    },
+    "additionalData": {
+      "heading": "Données LibreFolio supplémentaires",
+      "intro": "Demandez ces exports uniquement lorsqu'ils améliorent sensiblement l'analyse.",
+      "none": "Aucun export LibreFolio supplémentaire n'est recommandé.",
+      "what": "Contenu",
+      "why": "Pourquoi cela peut aider",
+      "necessityLabel": "Nécessité",
+      "path": "Parcours LibreFolio",
+      "recommended": "Paramètres recommandés",
+      "technicalReference": "Référence technique secondaire",
+      "steps": {
+        "openLibreFolio": "Ouvrez LibreFolio",
+        "page": "Page",
+        "feature": "Fonction",
+        "exportType": "Type d'export",
+        "dataset": "Jeu de données",
+        "period": "Période",
+        "detail": "Détail"
+      },
+      "period": {
+        "3m": "3 mois",
+        "6m": "6 mois",
+        "1y": "1 an",
+        "maximum_available": "Période maximale disponible"
+      },
+      "necessity": {
+        "required": "Obligatoire",
+        "optional": "Facultatif"
+      },
+      "reason": {
+        "deeperTechnical": "Utilisez-le lorsque l'historique technique complet et tous les signaux disponibles sont réellement nécessaires.",
+        "fifoDetail": "Utilisez-le lorsque l'identité, l'ancienneté, la conservation, les transferts ou le détail FIFO réalisé influencent la question.",
+        "performanceContext": "Utilisez-le lorsque la performance de la période, les flux, revenus, coûts, impôts ou la réconciliation sont nécessaires.",
+        "positionContext": "Utilisez-le lorsque la position réelle, le coût, la valeur, le P&L, le périmètre du courtier ou le rôle FIFO de l'actif comptent.",
+        "directExposure": "Utilisez-le lorsque l'exposition directe de trésorerie ou de position à la paire FX est pertinente."
+      }
     }
   },
   "risk": {
@@ -2537,6 +2655,10 @@
       "portfolioOptimization": {
         "name": "Allocation de portefeuille",
         "description": "Construit une composition hypothétique des actifs à partir de l'échantillon, de la stratégie, des estimateurs et des contraintes sélectionnés."
+      },
+      "drawdownSummary": {
+        "name": "Synthèse des replis",
+        "description": "Épisodes de repli courant et maximal par rapport au pic, datés et avec statut de récupération, à partir des rendements canoniques du périmètre sélectionné."
       }
     },
     "params": {

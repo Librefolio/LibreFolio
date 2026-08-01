@@ -28,7 +28,7 @@ Deposits and withdrawals don't change your portfolio's market value, but they ar
 
 Without accurate deposit/withdrawal tracking, it's impossible to distinguish between returns *generated* by the portfolio and returns *caused* by adding/removing cash.
 
-Broker-import nuance: a securities-only export may omit the bank-account cash legs that funded trades or received proceeds. In that case a plugin can auto-generate cash counterparts to keep the imported broker cash neutral: `DEPOSIT + BUY` for a cash purchase, or `SELL + WITHDRAWAL` for a sale/redemption. Crédit Agricole Italia uses this model; coupons and maturity premiums remain income and do not receive counter-entries.
+Broker-import nuance: a securities-only export may omit the bank-account cash legs that funded trades or received proceeds. In that case a plugin can auto-generate cash counterparts to keep the imported broker cash neutral: `DEPOSIT + BUY` for a cash purchase, or `SELL + WITHDRAWAL` for a sale/redemption. Crédit Agricole uses this model; coupons and maturity premiums remain income and do not receive counter-entries.
 
 !!! tip "Learn more"
 

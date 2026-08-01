@@ -297,6 +297,7 @@ class BRDeleteResult(BaseDeleteResult):
 
     id: int = Field(..., description="Broker ID")
     transactions_deleted: int = Field(default=0, ge=0, description="Number of transactions cascade-deleted (only when force=True)")
+    transaction_count: int = Field(default=0, ge=0, description="Number of transactions blocking deletion (when success=false and force was not used)")
 
 
 class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
