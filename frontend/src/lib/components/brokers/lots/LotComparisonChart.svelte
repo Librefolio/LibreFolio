@@ -246,10 +246,10 @@
         return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
-    function formatAxisDate(value: number | string): string {
+    function formatAxisDate(value: number | string, withYear = false): string {
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, {month: 'short', day: 'numeric'});
+        return date.toLocaleDateString($currentLanguage || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
     }
 
     function formatPercent(value: number): string {
@@ -1376,6 +1376,9 @@
         const gridColors = buildGridColors(isDark);
         const baseSeries = plottedBaseSeries;
         const legendData = baseSeries.map((item) => (item as {name?: unknown}).name).filter((name): name is string => typeof name === 'string' && name !== AXIS_TRIGGER_ANCHOR_ID && name !== PER_LOT_HOVER_DOTS_ID && name !== LOT_INCOME_MARKER_SERIES_ID);
+        const axisFallbackRange = seriesDataDateRange(baseSeries);
+        const axisDateRange = xAxisRange ?? (axisFallbackRange ? {min: axisFallbackRange[0], max: axisFallbackRange[1]} : null);
+        const multiYearAxis = !!axisDateRange && new Date(axisDateRange.min).getFullYear() !== new Date(axisDateRange.max).getFullYear();
         return {
             ...CHART_ANIMATION_CONFIG,
             grid: {
@@ -1428,7 +1431,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate(value),
+                    formatter: (value: number) => formatAxisDate(value, multiYearAxis),
                 },
             },
             yAxis: {

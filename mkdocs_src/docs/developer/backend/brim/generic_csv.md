@@ -61,7 +61,7 @@ The fastest way to import data from an unsupported source is to **paste this ent
     - **`quantity`**: positive when you **receive** units, negative when you **deliver** units
     - **`amount`**: positive when cash **enters** your account, negative when cash **leaves** your account
 
-### Per-type quick reference
+### 📋 Per-type quick reference
 
 | Type | `quantity` sign | `amount` sign | Notes |
 |------|----------------|--------------|-------|
@@ -77,6 +77,19 @@ The fastest way to import data from an unsupported source is to **paste this ent
 | `ADJUSTMENT` | `+` or `−` | **must be empty** | Quantity-only correction (splits, gifts). **No cash movement.** |
 | `FX_CONVERSION` | none | `+` or `−` | Paired with another leg via `related_transaction_id` |
 | `CASH_TRANSFER` | none | `+` or `−` | Cash wire between brokers |
+
+---
+
+!!! warning "Inherited cost basis (WAC) is PER-UNIT"
+
+    A `TRANSFER` / `ADJUSTMENT` row that seeds an **inherited or transferred** position
+    (you owned it before, with a known purchase cost) carries a *frozen cost basis*. The
+    generic CSV has no `cost_basis` column, so the import wizard **prompts you to fill it**
+    ("Missing inherited per-unit cost basis (WAC)"). Enter the **cost per single unit**
+    (e.g. `42.50` for a share bought at €42.50), **not** the position's total value. The
+    engine multiplies it by `quantity`; a total entered here inflates the cost basis by a
+    factor of `quantity`. For bonds, `quantity` is the face value and the per-unit cost is
+    near `1.0`.
 
 ---
 
@@ -98,7 +111,20 @@ The `asset` column accepts:
 
 ## 🔀 When to Use Each Transaction Type
 
-### P2P lending / crowdfunding patterns
+### 🔀 Multi-leg broker rows
+
+Some broker events are one source row but several LibreFolio transactions. The correct model is to emit multiple `TXCreateItem`s on the same date rather than hiding economics inside one row:
+
+| Broker event | LibreFolio transactions |
+|--------------|------------------------|
+| Securities-only cash buy | `DEPOSIT` for funding + `BUY` for the security |
+| Securities-only sale/redemption | `SELL` for the security + `WITHDRAWAL` for cash swept away |
+| Bond maturity above par | `SELL` at par principal + `INTEREST` for the above-par premium/FOI amount |
+| Portfolio snapshot seed | `DEPOSIT` for cash when present + one cashless `ADJUSTMENT` per holding |
+
+This mirrors shipped broker plugins such as Intesa Sanpaolo (snapshot seed) and Crédit Agricole (automatic cash counter-entries and bond maturity split).
+
+### 🤝 P2P lending / crowdfunding patterns
 
 P2P platforms often issue a single report row that bundles capital repayment and interest. You need to **split this into two transactions** for LibreFolio:
 
@@ -121,7 +147,7 @@ P2P platforms often issue a single report row that bundles capital repayment and
 
     The SELL quantity is `−300.50 / 3005 = −0.100000` — the fraction of the 1-unit position being returned.
 
-### Storno / reversal of a broker error
+### ↩️ Storno / reversal of a broker error
 
 When a broker incorrectly credits an amount and then reverses it, you have two options:
 
@@ -141,7 +167,7 @@ Record the reversal as the **opposite transaction** of the original:
 
     `ADJUSTMENT` must have an **empty amount** — it is strictly for quantity-only corrections (stock splits, share gifts). Using ADJUSTMENT for a cash reversal will leave the cash balance wrong.
 
-### Fees and taxes
+### 💸 Fees and taxes
 
 `FEE` and `TAX` are cash-only transactions (no quantity, no asset required):
 
@@ -213,4 +239,3 @@ Key points demonstrated:
 - `INTEREST`: positive amount, asset optional, no quantity
 - `TAX`: negative amount, no quantity, no asset required
 - `WITHDRAWAL`: negative amount, no quantity, no asset
-

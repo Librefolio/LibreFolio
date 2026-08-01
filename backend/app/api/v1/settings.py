@@ -4,7 +4,7 @@ Settings API endpoints.
 Endpoints for managing user and global settings.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
 
 import structlog
@@ -21,9 +21,9 @@ from backend.app.schemas.settings import (
     UserSettingsRead,
     UserSettingsUpdate,
 )
+from backend.app.services.global_settings_service import get_setting_value
 from backend.app.services.scheduler import read_job_log
 from backend.app.services.scheduler.state import load_state
-from backend.app.services.global_settings_service import get_setting_value
 from backend.app.services.settings_service import (
     get_all_global_settings,
     get_global_setting,
@@ -173,7 +173,7 @@ async def get_scheduler_state(
     scheduler_tz = str(tz_value) if tz_value else "UTC"
 
     # UTC wall clock (HH:MM)
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     server_now_utc = now_utc.strftime("%H:%M")
 
     return {

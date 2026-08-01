@@ -24,11 +24,13 @@ By comparing [Cumulative MWRR](mwrr.md#cumulative-mwrr) (which includes cash flo
 - **Negative Timing Effect ($< 0$ pp):** Your cash flows occurred at unfavorable times (e.g., depositing large sums at the peak of the market right before a correction). Your personal return (MWRR) is lower than the pure strategy return (TWRR).
 - **Near-Zero Timing Effect ($\approx 0$ pp):** Your cash flows had little to no impact on performance (e.g., if you made very small deposits or if the market remained flat during your transactions).
 
+Both sides use the same portfolio-engine NAV stream and the same capital-baseline flow model. In-kind capital adjustments therefore affect both MWRR and TWRR boundaries consistently.
+
 ---
 
 ## 🔢 Numerical Examples
 
-### Example 1: Positive Timing Effect (Favorable Inflows)
+### 📈 Example 1: Positive Timing Effect (Favorable Inflows)
 * **Cumulative TWRR (Strategy Performance):** $+20\%$
 * **Cumulative MWRR (Investor Performance):** $+28\%$
 
@@ -38,7 +40,7 @@ $$
 
 * **Interpretation:** The underlying asset strategy generated a return of $+20\%$. However, because you added a significant amount of capital to the portfolio before the market surged, your personal money-weighted return increased to $+28\%$. The timing and size of your inflows contributed **$+8$ percentage points** of additional performance.
 
-### Example 2: Negative Timing Effect (Unfavorable Inflows)
+### 📉 Example 2: Negative Timing Effect (Unfavorable Inflows)
 * **Cumulative TWRR (Strategy Performance):** $+20\%$
 * **Cumulative MWRR (Investor Performance):** $+12\%$
 
@@ -52,12 +54,12 @@ $$
 
 ## ⚖️ What it Captures vs. What it Does Not
 
-### What it Captures
+### 🎯 What it Captures
 - **Impact of Deposit/Withdrawal Timing:** Whether you added cash during market troughs (buying low) or peaks (buying high).
 - **Impact of Flow Sizes:** Larger cash flows have a stronger weighting and a greater impact on the MWRR, which the Timing Effect reflects.
 - **The "Investor Gap":** the distance between the strategy return and the return actually achieved by the investor, due to the timing and size of the cash flows.
 
-### What it Does Not Capture
+### 🚫 What it Does Not Capture
 - **Absolute Monetary Profit:** A positive Timing Effect of $+5$ pp can exist even if the portfolio is in a net loss (e.g., TWRR is $-20\%$ and MWRR is $-15\%$). Use [Period P&L](period-pnl.md) to evaluate monetary gains.
 - **Risk and Volatility:** It does not indicate the risk profile or volatility of the assets.
 - **Disaggregated impact of taxes and costs:** the Timing Effect does not break down taxes and costs; any costs and taxes may be shown separately in the Period P&L.

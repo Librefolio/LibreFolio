@@ -21,13 +21,12 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-import pytest
-
 from backend.app.db.models import TransactionType
 from backend.app.services.portfolio_engine import (
     ClassifiedTransaction,
     DailyStateBuilder,
 )
+from backend.app.services.price_resolver import build_asset_price_series
 
 # =============================================================================
 # HELPERS
@@ -73,10 +72,32 @@ def _ctxn(
 
 
 # Market price for asset 100 = its BUY unit cost, so market_value == open_cost_basis
-# (no unrealized gain/loss). The engine no longer falls back to WAC for valuation
-# (MARKET_PRICE → LAST_BUY_PRICE → MISSING), so a price is required for NAV to be
-# complete; these cash-decomposition tests are about the cash formula, not valuation.
+# (no unrealized gain/loss). The engine values holdings through the unified price resolver
+# (MARKET_PRICE → LAST_TRADE_PRICE → MISSING) and never falls back to WAC, so a priced
+# observation (here an asset-system quote) is required for NAV to be complete; these
+# cash-decomposition tests are about the cash formula, not valuation.
 _PRICE_MAP_100 = {100: [(date(2025, 1, 1), Decimal("100"), "EUR")]}
+
+
+def _mark_series_from(txs, price_map, asset_currencies, quote_base_map):
+    """Mirror PortfolioCalculationEngine: one AssetPriceSeries per asset from prices + trades."""
+    txs_by_asset: dict[int, list] = {}
+    for ctxn in txs:
+        tx = ctxn.tx
+        if tx.asset_id is not None:
+            txs_by_asset.setdefault(tx.asset_id, []).append(tx)
+    mark_series = {}
+    for aid in set(txs_by_asset) | set(price_map or {}):
+        series = build_asset_price_series(
+            price_rows=(price_map or {}).get(aid, []),
+            transactions=txs_by_asset.get(aid, []),
+            split_linked_tx_ids=set(),
+            asset_currency=(asset_currencies or {}).get(aid, "EUR"),
+            quote_base_quantity=(quote_base_map or {}).get(aid) or 1,
+        )
+        if series.has_observations:
+            mark_series[aid] = series
+    return mark_series
 
 
 def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
@@ -97,6 +118,13 @@ def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
         "date_to": date(2025, 1, 1),
     }
     defaults.update(overrides)
+    if "mark_series" not in defaults:
+        defaults["mark_series"] = _mark_series_from(
+            defaults["classified_txs"],
+            defaults["price_map"],
+            defaults["asset_currencies"],
+            defaults["quote_base_map"],
+        )
     return DailyStateBuilder(**defaults)
 
 

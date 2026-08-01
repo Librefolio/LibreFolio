@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
@@ -47,6 +48,8 @@ class BandCompositeFixturePlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.fixtureBandComposite.name"
     description_key = "signals.fixtureBandComposite.description"
+    semantic_id = "fixture_band_composite"
+    semantic_description = "Test composite containing band, line, and bar outputs."
     icon = "chart-no-axes-combined"
     params_model = BandCompositeFixtureParams
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
@@ -54,21 +57,30 @@ class BandCompositeFixturePlugin(SignalPlugin):
         SignalOutputSpec(
             key="envelope",
             label_key="signals.fixtureBandComposite.envelope",
+            semantic_id="fixture_band_composite.envelope",
+            semantic_description="Test lower, middle, and upper envelope.",
             kind=SignalSeriesKind.BAND,
+            aggregation_profile=SignalAggregationProfile.BAND_ENVELOPE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
         ),
         SignalOutputSpec(
             key="momentum",
             label_key="signals.fixtureBandComposite.momentum",
+            semantic_id="fixture_band_composite.momentum",
+            semantic_description="Test close-price displacement from the first point.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(key="fixture-composite", role=SignalAxisRole.INDEPENDENT),
         ),
         SignalOutputSpec(
             key="histogram",
             label_key="signals.fixtureBandComposite.histogram",
+            semantic_id="fixture_band_composite.histogram",
+            semantic_description="Negated test close-price displacement.",
             kind=SignalSeriesKind.BAR,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(key="fixture-composite", role=SignalAxisRole.INDEPENDENT),
         ),
@@ -120,6 +132,8 @@ class BandCompositeFixturePlugin(SignalPlugin):
                 SignalBandSeries(
                     key="envelope",
                     label_key="signals.fixtureBandComposite.envelope",
+                    semantic_id="fixture_band_composite.envelope",
+                    semantic_description="Test lower, middle, and upper envelope.",
                     unit=SignalUnit.PRICE,
                     axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
                     points=band_points,
@@ -127,6 +141,8 @@ class BandCompositeFixturePlugin(SignalPlugin):
                 SignalLineSeries(
                     key="momentum",
                     label_key="signals.fixtureBandComposite.momentum",
+                    semantic_id="fixture_band_composite.momentum",
+                    semantic_description="Test close-price displacement from the first point.",
                     unit=SignalUnit.INDEX,
                     axis=composite_axis,
                     points=momentum_points,
@@ -134,6 +150,8 @@ class BandCompositeFixturePlugin(SignalPlugin):
                 SignalBarSeries(
                     key="histogram",
                     label_key="signals.fixtureBandComposite.histogram",
+                    semantic_id="fixture_band_composite.histogram",
+                    semantic_description="Negated test close-price displacement.",
                     unit=SignalUnit.INDEX,
                     axis=composite_axis,
                     points=histogram_points,

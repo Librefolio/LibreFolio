@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -23,6 +25,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalWarmupRequirement,
@@ -58,9 +61,12 @@ class AtrSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.atr.name"
     description_key = "signals.atr.description"
+    semantic_id = "average_true_range"
+    semantic_description = "Measures absolute price variability from true range."
     icon = "🌡️"
     docs_path = "financial-theory/technical-analysis/indicators/atr/"
     params_model = AtrSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,
@@ -74,7 +80,10 @@ class AtrSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="atr",
             label_key="signals.atr.output",
+            semantic_id="average_true_range.value",
+            semantic_description="Smoothed true range expressed in price units.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.MAX_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="atr",
@@ -123,6 +132,8 @@ class AtrSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     points=[

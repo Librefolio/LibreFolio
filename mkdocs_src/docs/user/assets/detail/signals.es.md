@@ -50,6 +50,27 @@ Compare el rendimiento del activo actual frente a **otro activo**. El precio del
 
 ---
 
+## 🧠 Exportación de IA
+
+El botón **Exportación de IA** (:material-brain:) de la barra de herramientas de
+la página ofrece cinco tareas de Activo:
+
+- **Instantánea del activo**
+- **Análisis de tendencia del activo**
+- **Análisis de la posición**
+- **Contexto temporal del PAC**
+- **Caída y recuperación**
+
+El backend crea la instantánea a partir de la identidad y valoración del activo,
+el historial de precios normalizado, el contexto de la posición en la cartera y
+los resultados técnicos del servicio de señales compartido. El navegador no
+recalcula los indicadores. Las tareas aparecen solo cuando son aplicables al
+activo y a los datos disponibles; por ejemplo, debe existir un contexto de
+posición o de plan periódico para el análisis correspondiente. Consulta la
+[guía de Exportación de IA](../../ai-export/index.md).
+
+---
+
 ## 📚 Análisis Profundo: Teoría Financiera
 
 Para un tratamiento matemático exhaustivo de cada indicador —incluyendo fórmulas, equivalentes de procesamiento de señales e interpretación práctica:

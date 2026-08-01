@@ -5,7 +5,7 @@
  * opened by plain hover closes promptly on mouse-leave (no timer); a
  * tooltip opened/kept open via click ("pinned") stays open indefinitely
  * while the pointer remains over the trigger OR the tooltip body, and only
- * starts a multi-second grace-dismiss timer once contact actually ends.
+ * starts a 30-second grace-dismiss timer once contact actually ends.
  *
  * Bug fixed: previously a fixed 5s auto-dismiss timer fired as soon as a
  * click/tap opened the tooltip, regardless of continued contact — so it
@@ -73,19 +73,19 @@ test.describe('Tooltip component — pinned hover/click model', () => {
         await expect(page.getByTestId('tooltip-content')).toBeVisible();
     });
 
-    test('after pinning via click, moving the mouse away dismisses after a grace period', async ({page}) => {
+    test('after pinning via click, moving the mouse away dismisses after 30 seconds', async ({page}) => {
         test.setTimeout(20_000);
         const trigger = await openAdjustmentCostBasisTooltipTrigger(page);
         await trigger.click();
         await expect(page.getByTestId('tooltip-content')).toBeVisible({timeout: 1_000});
 
+        await page.clock.install();
         await page.mouse.move(10, 10);
-        // Still within the grace period — must remain visible.
-        await page.waitForTimeout(2_000);
+        await page.clock.fastForward(29_000);
         await expect(page.getByTestId('tooltip-content')).toBeVisible();
 
-        // Grace period elapsed — now it must be gone.
-        await expect(page.getByTestId('tooltip-content')).not.toBeVisible({timeout: 6_000});
+        await page.clock.fastForward(1_100);
+        await expect(page.getByTestId('tooltip-content')).not.toBeVisible({timeout: 1_000});
     });
 
     test('clicking an already-pinned-open tooltip closes it (explicit toggle-off)', async ({page}) => {

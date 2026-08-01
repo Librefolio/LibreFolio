@@ -14,6 +14,7 @@
     import {_ as t} from '$lib/i18n';
     import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
+    import {debug} from '$lib/debug';
     import {ChevronDown, ChevronRight, ExternalLink, Info, Loader2, Minus, Plus, RefreshCw, Search, Trash2, Upload, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -26,6 +27,7 @@
     import type {DiffItem} from './ProviderComparisonModal.svelte';
     import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
     import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
+    import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import {getIndexColor} from '$lib/utils/colors';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
@@ -65,7 +67,7 @@
         identifier_sedol?: string | null;
         identifier_figi?: string | null;
         identifier_uuid?: string | null;
-        identifier_other?: string | null;
+        identifier_other?: string | string[] | null;
         // Provider
         provider_code?: string | null;
         provider_identifier?: string;
@@ -104,17 +106,38 @@
          */
         initialSearchBadges?: Array<{label: string; value: string}>;
         /**
+         * Extra search terms (ISIN + all candidate names extracted from the report),
+         * forwarded to the provider search as `hints`. Used only by the link-finder
+         * fallback to build a specific query when a provider's on-site search finds
+         * nothing (e.g. a fund whose bare ISIN surfaces several sibling share classes).
+         */
+        searchHints?: string[];
+        /**
          * When true, open the provider section with "No provider" pre-selected.
          * Used by the BRIM import wizard: assets created manually don't come
          * from an online search, so the UI should default to no-provider mode.
          */
         initialNoProvider?: boolean;
+        /**
+         * Wizard create context only: called when the user, after selecting a search result
+         * whose provider name matches an existing asset, chooses to reuse that asset instead
+         * of creating a duplicate. `addKeys` = also merge the import's search keys into the
+         * existing asset's identifier_other. When undefined, the reuse prompt is disabled.
+         */
+        onReuseExisting?: (existingAssetId: number, addKeys: boolean) => void;
+        /**
+         * Wizard create context only: advisory notices raised by the broker-import plugin for
+         * this asset (e.g. a suspected maturity/redemption implying the security is delisted and
+         * won't be found by the online search). Rendered as amber banners grouped by `kind`;
+         * purely informational — never changes behaviour (the user decides via the active toggle).
+         */
+        importNotices?: Array<{kind: string; reason: string}>;
         oncreated?: (assetId: number) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], initialNoProvider = false, oncreated, onupdated, onclose}: Props = $props();
+    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], searchHints = [], initialNoProvider = false, onReuseExisting, importNotices = [], oncreated, onupdated, onclose}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -131,6 +154,9 @@
     let assetType = $state('STOCK');
     let iconUrl: string | null = $state(null);
     let quoteBaseQuantity = $state(1);
+    // Tracks whether the user manually edited the quote-base field, so the bond heuristic
+    // (default 100) never overrides an explicit choice.
+    let quoteBaseQuantityTouched = $state(false);
     let active = $state(true);
 
     // Identifiers — dynamic rows instead of fixed fields
@@ -144,6 +170,10 @@
 
     // Classification
     let shortDescription = $state('');
+    // True while shortDescription holds a BRIM-import prefill (identified-names block) that
+    // was auto-populated, not typed by the user. Lets provider enrichment merge over it
+    // instead of routing to the diff modal. Cleared on manual edit or provider autofill.
+    let descriptionFromPrefill = $state(false);
     let sectorDistribution: Record<string, number> = $state({});
     let geographicDistribution: Record<string, number> = $state({});
 
@@ -230,12 +260,33 @@
     // Duplicate name detection
     let duplicateAssetName: string | null = $state(null);
 
+    // Reuse-existing prompt (wizard create context only): shown after a search selection
+    // whose provider name matches an existing asset — offers to reuse it instead of creating a dup.
+    let reuseModalOpen = $state(false);
+    let reuseExistingId: number | null = $state(null);
+    let reuseExistingName = $state('');
+
     // =========================================================================
     // Derived
     // =========================================================================
 
     let isValid = $derived(displayName.trim().length > 0);
     let hasProvider = $derived(!providerNoProvider && providerCode !== '' && (providerIdentifier !== '' || providerIdentifierType === 'AUTO_GENERATED'));
+
+    // Import advisory notices grouped by category (`kind`) — rendered as amber banners in the
+    // wizard create context. Category label comes from app i18n; each reason bullet is authored
+    // by the plugin in the report's language. Purely informational (never toggles `active`).
+    let groupedNotices = $derived.by(() => {
+        const groups = new Map<string, string[]>();
+        for (const n of importNotices ?? []) {
+            if (!n || !n.reason) continue;
+            const kind = n.kind || 'generic';
+            const bucket = groups.get(kind) ?? [];
+            if (!bucket.includes(n.reason)) bucket.push(n.reason);
+            groups.set(kind, bucket);
+        }
+        return [...groups.entries()].map(([kind, reasons]) => ({kind, reasons}));
+    });
 
     // I-bis #2 — dirty detection for the provider block.
     //
@@ -286,29 +337,53 @@
     function columnsToIdentifierRows(data: AssetData): IdentifierRow[] {
         const rows: IdentifierRow[] = [];
         for (const idType of IDENTIFIER_TYPES) {
-            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
-            const value = (data[key] as string) ?? '';
-            if (value) rows.push({id: generateUUID(), type: idType, value});
+            if (idType === 'OTHER') {
+                // identifier_other is a JSON list of soft identifiers → one row per element
+                // (tolerate a legacy scalar string too).
+                const raw = data.identifier_other;
+                const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+                for (const v of values) {
+                    // Coerce defensively: a prefill/metadata payload may carry a non-string
+                    // element (number, nested value) which would throw on .trim().
+                    const s = typeof v === 'string' ? v : String(v ?? '');
+                    if (s.trim()) rows.push({id: generateUUID(), type: 'OTHER', value: s});
+                }
+            } else {
+                const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
+                const value = (data[key] as string) ?? '';
+                if (value) rows.push({id: generateUUID(), type: idType, value});
+            }
         }
         return rows;
     }
 
-    function identifierRowsToColumns(rows: IdentifierRow[]): Record<string, string | undefined> {
-        const result: Record<string, string | undefined> = {};
+    function identifierRowsToColumns(rows: IdentifierRow[]): Record<string, string | string[] | undefined> {
+        const result: Record<string, string | string[] | undefined> = {};
         for (const idType of IDENTIFIER_TYPES) {
             result[`identifier_${idType.toLowerCase()}`] = undefined;
         }
+        // OTHER is additive: collect every non-empty OTHER row into a JSON list.
+        const others: string[] = [];
         for (const row of rows) {
-            if (!row.value.trim()) continue;
-            result[`identifier_${row.type.toLowerCase()}`] = row.value.trim();
+            // Coerce defensively so a non-string row value cannot throw at save time.
+            const v = typeof row.value === 'string' ? row.value : String(row.value ?? '');
+            if (!v.trim()) continue;
+            if (row.type === 'OTHER') {
+                others.push(v.trim());
+            } else {
+                result[`identifier_${row.type.toLowerCase()}`] = v.trim();
+            }
         }
+        result.identifier_other = others.length > 0 ? others : undefined;
         return result;
     }
 
     function addIdentifierRow() {
-        // Find first unused type
+        // OTHER (soft identifiers) is managed via the tag/badge input below, so the table
+        // only adds fixed single-valued types. If all are already used, do nothing.
         const usedTypes = new Set(identifierRows.map((r) => r.type));
-        const availableType = IDENTIFIER_TYPES.find((t) => !usedTypes.has(t)) ?? 'TICKER';
+        const availableType = IDENTIFIER_TYPES.find((t) => t !== 'OTHER' && !usedTypes.has(t));
+        if (!availableType) return;
         identifierRows = [...identifierRows, {id: generateUUID(), type: availableType, value: ''}];
     }
 
@@ -349,7 +424,23 @@
     // Identifier DataTable columns
     // =========================================================================
 
-    let idTypeOptions = $derived(IDENTIFIER_TYPES.map((t) => ({value: t, label: t})));
+    let idTypeOptions = $derived(IDENTIFIER_TYPES.filter((t) => t !== 'OTHER').map((t) => ({value: t, label: t})));
+
+    // OTHER (soft identifiers) are rendered as tag badges, not table rows.
+    let identifierRowsFixed = $derived(identifierRows.filter((r) => r.type !== 'OTHER'));
+    let otherIdentifiers = $derived(
+        identifierRows
+            .filter((r) => r.type === 'OTHER')
+            .map((r) => (typeof r.value === 'string' ? r.value : String(r.value ?? '')))
+            .filter((v) => v.trim().length > 0),
+    );
+
+    /** Replace all OTHER rows from the tag/badge input (fixed-type rows untouched). */
+    function setOtherIdentifiers(vals: string[]) {
+        const fixed = identifierRows.filter((r) => r.type !== 'OTHER');
+        const others = vals.map((v) => ({id: generateUUID(), type: 'OTHER', value: v}));
+        identifierRows = [...fixed, ...others];
+    }
 
     let identifierColumns = $derived.by<DTColumnDef<IdentifierRow>[]>(() => [
         {
@@ -466,9 +557,11 @@
         assetType = 'STOCK';
         iconUrl = null;
         quoteBaseQuantity = 1;
+        quoteBaseQuantityTouched = false;
         active = true;
         identifierRows = [];
         shortDescription = '';
+        descriptionFromPrefill = false;
         sectorDistribution = {};
         geographicDistribution = {};
         providerCode = '';
@@ -501,17 +594,18 @@
         if (data.currency) currency = data.currency;
         if (data.asset_type) assetType = data.asset_type;
         if (data.quote_base_quantity && data.quote_base_quantity > 0) quoteBaseQuantity = data.quote_base_quantity;
-        // Build identifier rows from prefilled columns
-        const rows: IdentifierRow[] = [];
-        for (const idType of IDENTIFIER_TYPES) {
-            const key = `identifier_${idType.toLowerCase()}` as keyof AssetData;
-            const value = (data[key] as string) ?? '';
-            if (value) rows.push({id: generateUUID(), type: idType, value});
+        if (data.classification_params?.short_description) {
+            shortDescription = data.classification_params.short_description;
+            descriptionFromPrefill = true;
         }
+        // Build identifier rows from prefilled columns (handles OTHER as a JSON list)
+        const rows = columnsToIdentifierRows(data as AssetData);
         if (rows.length > 0) {
             identifierRows = rows;
             moreInfoExpanded = true;
         }
+        maybeSeedBondQuoteBase();
+        naLog(`prefill from import → name="${data.display_name ?? ''}" type=${data.asset_type ?? '—'} currency=${data.currency ?? '—'} qbq=${data.quote_base_quantity ?? '—'} · suggested identifiers: ${identifiersSummary()}`);
     }
 
     // =========================================================================
@@ -598,6 +692,86 @@
         // Auto-trigger test + metadata fetch (global ask provider)
         autoTriggerProbe();
         handleAskProvider();
+
+        // Wizard create context: if the selected result's provider name matches an existing
+        // asset, offer to reuse it (and add the search keys) instead of creating a duplicate.
+        void maybePromptReuse(result.display_name);
+
+        maybeSeedBondQuoteBase();
+        naLog(`search result selected → name="${result.display_name ?? ''}" provider=${result.provider_code ?? '—'} ${(result.identifier_type ?? 'ID').toUpperCase()}=${result.identifier ?? '—'} type=${result.asset_type ?? '—'} currency=${result.currency ?? '—'}`);
+        naLog(`identifiers now present: ${identifiersSummary()}`);
+    }
+
+    /**
+     * Bonds are conventionally quoted per 100 nominal (BTP/BOT and most MOT bonds). Seed 100
+     * as an *editable* default when the field is still at 1 and the user hasn't touched it; a
+     * reactive info banner reminds to verify. Never overrides an explicit value. This is a
+     * heuristic (per-100 is a market convention, not a hard rule) — hence a suggestion, not a fact.
+     */
+    function maybeSeedBondQuoteBase() {
+        if (assetType === 'BOND' && quoteBaseQuantity === 1 && !quoteBaseQuantityTouched) {
+            quoteBaseQuantity = 100;
+        }
+    }
+
+    /**
+     * Lightweight, text-only console trace for the new-asset (create) flow. Makes the decision
+     * history inspectable in the browser console: detected suggestions, identifiers already present,
+     * duplicate hits (who + which asset), reuse choices and the final created asset. No side effects,
+     * no network. Routed through the shared ``$lib/debug`` helper, so — exactly like the ``[API]`` and
+     * ``[Toast]`` traces — it is active only in dev (``vite dev``) or a debug build (``VITE_DEBUG=true`` /
+     * ``./dev.py server --debug``) and is tree-shaken away in a normal production build. Silent in edit
+     * mode (this is a create-flow aid only).
+     */
+    function naLog(msg: string) {
+        if (editMode) return;
+        debug.info('new-asset', msg);
+    }
+
+    /** Compact "TYPE=value" list of the current identifier rows (for console traces). */
+    function identifiersSummary(): string {
+        return identifierRows.map((r) => `${r.type}=${r.value}`).join(', ') || 'none';
+    }
+
+    /**
+     * After a search selection in the wizard create flow, check whether an existing asset
+     * already has the same provider-supplied name. If so, prompt the user to reuse it
+     * (optionally adding the import's search keys to its identifiers) instead of creating a
+     * duplicate. No-op outside the wizard create context (onReuseExisting undefined) or edit mode.
+     */
+    async function maybePromptReuse(name: string) {
+        if (!onReuseExisting || editMode) return;
+        const trimmed = (name ?? '').trim();
+        if (trimmed.length < 2) return;
+        try {
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}});
+            const items = response as any[];
+            const match = items.find((a: any) => (a.display_name ?? '').toLowerCase() === trimmed.toLowerCase());
+            if (match) {
+                reuseExistingId = match.id;
+                reuseExistingName = match.display_name;
+                reuseModalOpen = true;
+                naLog(`duplicate name detected → existing asset #${match.id} "${match.display_name}" matches provider name "${trimmed}". Prompting reuse (annulla / usa / usa+aggiungi identificatore).`);
+            } else {
+                naLog(`no duplicate for provider name "${trimmed}" → proceeding as a new asset`);
+            }
+        } catch {
+            /* best-effort: if the lookup fails, just let the user create the asset normally */
+        }
+    }
+
+    function reuseExisting(addKeys: boolean) {
+        const id = reuseExistingId;
+        reuseModalOpen = false;
+        reuseExistingId = null;
+        naLog(`reuse choice → asset #${id} ${addKeys ? 'REUSE + add provider search key to its identifiers' : 'REUSE only (no identifier change)'}`);
+        if (id != null) onReuseExisting?.(id, addKeys);
+    }
+
+    function dismissReuse() {
+        reuseModalOpen = false;
+        reuseExistingId = null;
+        naLog('reuse dismissed → keeping the new-asset form (will create a distinct asset)');
     }
 
     async function autoTriggerProbe() {
@@ -616,8 +790,21 @@
 
             const cp = response.current_price;
             const h = response.history;
-            const allSuccess = (cp?.success ?? false) && h?.success !== false;
-            providerTestStatus = allSuccess ? 'passed' : 'failed';
+            // Mirror ProviderAssignmentSection.testConfiguration: a probe is "passed"
+            // unless an operation fails with a *real* error. Expected-empty results —
+            // NO_DATA (e.g. a fund whose NAV isn't dated today) or NOT_IMPLEMENTED —
+            // are soft failures: the provider is correctly configured, so they must not
+            // gate the "Save Without Testing?" warning.
+            const softFailCodes = new Set(['NO_DATA', 'NOT_IMPLEMENTED']);
+            const isRealError = (op: any): boolean => {
+                if (!op || op.success) return false;
+                const code = (op.error_code ?? '').toUpperCase();
+                if (softFailCodes.has(code)) return false;
+                const msg = (op.error ?? '').toLowerCase();
+                return !(msg.includes('not_implemented') || msg.includes('not supported') || msg.includes('not implemented'));
+            };
+            const hasRealError = isRealError(cp) || isRealError(h);
+            providerTestStatus = hasRealError ? 'failed' : 'passed';
 
             if (response.provider_url) providerUrl = response.provider_url;
         } catch {
@@ -642,6 +829,26 @@
         } else {
             identifierRows = [...identifierRows, {id: generateUUID(), type, value: val, autoFilled: true}];
         }
+    }
+
+    /**
+     * Merge provider "soft" identifiers (identifier_other, a JSON list) as separate OTHER rows.
+     * Additive + deduped: never route the array through the string-oriented compare path
+     * (which would stuff the whole list into one row.value and throw `.trim` at save time).
+     * Returns how many new rows were added.
+     */
+    function mergeOtherIdentifiers(raw: unknown): number {
+        const values = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
+        const seen = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => (typeof r.value === 'string' ? r.value.trim() : String(r.value ?? '').trim())));
+        const additions: IdentifierRow[] = [];
+        for (const v of values) {
+            const s = (typeof v === 'string' ? v : String(v ?? '')).trim();
+            if (!s || seen.has(s)) continue;
+            seen.add(s);
+            additions.push({id: generateUUID(), type: 'OTHER', value: s, autoFilled: true});
+        }
+        if (additions.length > 0) identifierRows = [...identifierRows, ...additions];
+        return additions.length;
     }
 
     /**
@@ -704,12 +911,19 @@
             // --- IDENTIFIERS (scope 'all' or 'identifiers') ---
             if (scope === 'all' || scope === 'identifiers') {
                 for (const idType of IDENTIFIER_TYPES) {
+                    // OTHER is a JSON list of soft identifiers, not a scalar string — handled below.
+                    if (idType === 'OTHER') continue;
                     const dbKey = `identifier_${idType.toLowerCase()}`;
                     const provVal = pd[dbKey];
                     if (provVal) {
                         const currentVal = getIdentifierByType(idType);
                         compareStringField(dbKey, idType, currentVal, provVal);
                     }
+                }
+                // OTHER: merge each list element as its own row (additive, deduped) instead of
+                // routing the array through the string compare path.
+                if (mergeOtherIdentifiers(pd.identifier_other) > 0) {
+                    autoFilledFields = new Set([...autoFilledFields, 'identifier_other']);
                 }
             }
 
@@ -725,7 +939,19 @@
 
             if (scope === 'all') {
                 if (cpData?.short_description) {
-                    compareStringField('short_description', 'Description', shortDescription, cpData.short_description);
+                    const provDesc = cpData.short_description;
+                    // BRIM prefill (auto-populated identified-names, not user-typed): merge the
+                    // provider enrichment (head) with the identified-names prefill (tail) instead
+                    // of routing to the diff modal, so the rich description always lands even
+                    // though the import wizard pre-populated the field.
+                    if (descriptionFromPrefill && shortDescription.trim() && shortDescription.trim() !== provDesc.trim()) {
+                        const tail = shortDescription.trim();
+                        shortDescription = provDesc.includes(tail) ? provDesc : `${provDesc}\n\n${tail}`;
+                        descriptionFromPrefill = false;
+                        autoFilledFields = new Set([...autoFilledFields, 'short_description']);
+                    } else {
+                        compareStringField('short_description', 'Description', shortDescription, provDesc);
+                    }
                 }
             }
 
@@ -788,12 +1014,14 @@
                     break;
                 case 'asset_type':
                     assetType = value;
+                    maybeSeedBondQuoteBase();
                     break;
                 case 'currency':
                     currency = value;
                     break;
                 case 'short_description':
                     shortDescription = value;
+                    descriptionFromPrefill = false;
                     break;
             }
         }
@@ -924,6 +1152,7 @@
             throw new Error(result?.message || 'Failed to create asset');
         }
         const assetId = result.asset_id;
+        naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${normalizedQuoteBaseQuantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
         // (transactions cell, AssetCard, LiveTicker, …) reflect the entry
@@ -955,21 +1184,21 @@
             }
         }
 
-        // Trigger a full-history sync for new assets with a real data provider.
-        // Parametric providers (e.g. scheduled_investment) generate their own
-        // data and don't need a historical fetch.
-        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
-            try {
-                const end = new Date().toISOString().slice(0, 10);
-                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any]);
-            } catch (syncErr) {
-                console.warn('Post-create full-history sync failed (non-blocking):', syncErr);
-            }
-        }
-
+        // Success UX first — close the modal and notify immediately. The historical price
+        // sync below is fired in the BACKGROUND so the ~2s network round-trip no longer
+        // blocks the modal close (the user reported the save felt too slow on localhost).
         toasts.success($t('assets.modal.createSuccess', {values: {name: displayName}}));
         open = false;
         oncreated?.(assetId);
+
+        // Trigger a full-history sync for new assets with a real data provider — fire-and-forget.
+        // Parametric providers (e.g. scheduled_investment) generate their own data and don't
+        // need a historical fetch. Errors are non-blocking (chart just stays empty until the
+        // next scheduled sync); we intentionally do NOT await this.
+        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
+            const end = new Date().toISOString().slice(0, 10);
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+        }
     }
 
     async function saveEdit(assetId: number) {
@@ -1173,6 +1402,27 @@
 
     <!-- Body -->
     <div class="px-6 py-4 space-y-5 max-h-[70vh] overflow-y-auto" data-testid="asset-modal-form">
+        <!-- Import advisory notices (wizard create context): amber banners grouped by kind. -->
+        {#if !editMode && groupedNotices.length > 0}
+            <div class="space-y-2" data-testid="asset-import-notices">
+                {#each groupedNotices as group (group.kind)}
+                    {@const _key = `assets.modal.importNotices.kind.${group.kind}`}
+                    {@const _label = $t(_key)}
+                    <div class="rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 space-y-1.5" data-testid="asset-import-notice">
+                        <div class="flex items-center gap-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                            <span aria-hidden="true">⚠️</span>
+                            <span>{_label === _key ? $t('assets.modal.importNotices.kind.generic') : _label}</span>
+                        </div>
+                        <ul class="list-disc list-inside space-y-0.5 text-xs text-amber-700 dark:text-amber-200/90">
+                            {#each group.reasons as reason}
+                                <li>{reason}</li>
+                            {/each}
+                        </ul>
+                        <p class="text-[11px] text-amber-600 dark:text-amber-300/70">{$t('assets.modal.importNotices.intro')}</p>
+                    </div>
+                {/each}
+            </div>
+        {/if}
         <!-- Search Online -->
         {#if !editMode && initialSearchBadges.length > 0}
             <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
@@ -1194,12 +1444,12 @@
                     {/each}
                 </div>
                 {#key activeSearchQuery}
-                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} />
+                    <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} />
                 {/key}
             </div>
         {:else}
             {#key activeSearchQuery}
-                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} />
+                <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} />
             {/key}
         {/if}
 
@@ -1311,11 +1561,18 @@
                                 min="1"
                                 step="1"
                                 bind:value={quoteBaseQuantity}
+                                oninput={() => (quoteBaseQuantityTouched = true)}
                                 data-testid="asset-modal-quote-base-quantity"
                                 class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
                                            focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
                             />
+                            {#if assetType === 'BOND'}
+                                <p class="mt-1 flex items-start gap-1 text-[11px] text-blue-600 dark:text-blue-300" data-testid="asset-modal-bond-qbq-hint">
+                                    <Info size={12} class="mt-0.5 shrink-0" />
+                                    <span>{$t('assets.modal.bondQuoteBaseHint')}</span>
+                                </p>
+                            {/if}
                         </div>
 
                         <!-- Currency -->
@@ -1370,6 +1627,7 @@
                 id="asset-description"
                 data-testid="asset-modal-description"
                 bind:value={shortDescription}
+                oninput={() => (descriptionFromPrefill = false)}
                 rows={2}
                 placeholder="Brief description of the asset…"
                 class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
@@ -1453,9 +1711,9 @@
                                 </button>
                             </div>
                         </div>
-                        {#if identifierRows.length > 0}
+                        {#if identifierRowsFixed.length > 0}
                             <DataTable
-                                data={identifierRows}
+                                data={identifierRowsFixed}
                                 columns={identifierColumns}
                                 getRowId={(r) => r.id}
                                 storageKey="asset-modal-identifiers"
@@ -1476,6 +1734,17 @@
                         {:else}
                             <div class="text-xs text-gray-400 italic py-1">{$t('assets.identifiers.askProviderHint')}</div>
                         {/if}
+
+                        <!-- OTHER / soft identifiers as removable tag badges -->
+                        <div class="space-y-1 pt-1">
+                            <div class="flex items-center gap-1">
+                                <div class="text-[10px] font-medium text-gray-400">{$t('assets.identifiers.otherLabel')}</div>
+                                <Tooltip text={$t('assets.identifiers.otherSeparatorsHint')} position="top" maxWidth="320px">
+                                    <Info size={12} class="text-gray-400 cursor-help" />
+                                </Tooltip>
+                            </div>
+                            <TagInput value={otherIdentifiers} onchange={setOtherIdentifiers} placeholder={$t('assets.identifiers.otherPlaceholder')} />
+                        </div>
                     </div>
 
                     <!-- Sub-section: Classification -->
@@ -1662,6 +1931,40 @@
     zIndex={zIndex + 20}
 />
 
+<!-- Reuse existing asset (wizard create): a search result's provider name matches an existing asset -->
+{#if reuseModalOpen}
+    <ModalBase maxWidth="max-w-md" onRequestClose={dismissReuse} open={reuseModalOpen} zIndex={zIndex + 20}>
+        <div class="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+            <Info class="text-amber-500 shrink-0" size={22} />
+            <h2 class="flex-1 text-lg font-semibold text-gray-900 dark:text-gray-100" data-testid="reuse-existing-title">
+                {$t('assets.modal.reuseExisting.title')}
+            </h2>
+            <button type="button" aria-label={$t('common.close')} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>
+                <X size={20} />
+            </button>
+        </div>
+        <div class="px-5 py-4 text-sm text-gray-700 dark:text-gray-300" data-testid="reuse-existing-message">
+            {$t('assets.modal.reuseExisting.message', {values: {name: reuseExistingName}})}
+        </div>
+        <div class="flex flex-col gap-2 px-5 py-4 border-t border-gray-200 dark:border-slate-700">
+            <button type="button" data-testid="reuse-existing-add" class="w-full px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => reuseExisting(true)}>
+                {$t('assets.modal.reuseExisting.useAndAdd')}
+            </button>
+            <button
+                type="button"
+                data-testid="reuse-existing-use"
+                class="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                onclick={() => reuseExisting(false)}
+            >
+                {$t('assets.modal.reuseExisting.useOnly')}
+            </button>
+            <button type="button" data-testid="reuse-existing-cancel" class="w-full px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>
+                {$t('assets.modal.reuseExisting.changeName')}
+            </button>
+        </div>
+    </ModalBase>
+{/if}
+
 <!-- Confirmation: Discard unsaved changes -->
 <ConfirmModal
     open={showDiscardConfirm}
@@ -1741,7 +2044,7 @@
 <ConfirmModal
     open={showIdentifierDeleteConfirm}
     title={$t('assets.identifiers.deleteSelected')}
-    message={$t('assets.identifiers.deleteConfirmMessage', {values: {count: pendingIdentifierDeleteIds.length}})}
+    message={$t('assets.identifiers.deleteConfirmMessage', {values: {n: pendingIdentifierDeleteIds.length}})}
     confirmText={$t('common.delete')}
     warning={true}
     onConfirm={confirmIdentifierBulkDelete}

@@ -262,11 +262,13 @@ class TXCreateItem(BaseModel):
     tags: Optional[List[str]] = Field(default=None, description="List of tags for filtering/grouping")
     description: Optional[str] = Field(default=None, max_length=500, description="Transaction notes")
 
-    # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time
+    # Frozen cost basis for TRANSFER_IN - snapshot of PMC at transfer time.
+    # IMPORTANT: amount is PER-UNIT (weighted-average cost per single unit), NOT a total.
+    # The engine multiplies it by quantity. Divide any TOTAL countervalue by quantity first.
     # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
     cost_basis_override: Optional[Currency] = Field(
         default=None,
-        description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
+        description="Frozen PER-UNIT cost basis (WAC per single unit) for TRANSFER_IN. Multiplied by quantity to get the total. Object {code, amount}.",
     )
 
     # WAC computation mode — session-only instruction (not persisted in DB).
@@ -711,9 +713,9 @@ class TXMixedBatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    creates: List[dict] = Field(default_factory=list, max_length=500)
-    updates: List[dict] = Field(default_factory=list, max_length=500)
-    deletes: List[int] = Field(default_factory=list, max_length=500)
+    creates: List[dict] = Field(default_factory=list)
+    updates: List[dict] = Field(default_factory=list)
+    deletes: List[int] = Field(default_factory=list)
     splits: List[dict] = Field(default_factory=list, max_length=100)
     promotes: List[dict] = Field(default_factory=list, max_length=100)
 

@@ -9,21 +9,27 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDataPolicy,
     SignalDomain,
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalWarmupRequirement,
@@ -73,9 +79,12 @@ class AroonSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.aroon.name"
     description_key = "signals.aroon.description"
+    semantic_id = "aroon"
+    semantic_description = "Measures how recently lookback-period highs and lows occurred."
     icon = "⏱️"
     docs_path = "financial-theory/technical-analysis/indicators/aroon/"
     params_model = AroonSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,
@@ -88,23 +97,47 @@ class AroonSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="up",
             label_key="signals.aroon.up",
+            description_key="signals.aroon.upDescription",
+            semantic_id="aroon.up",
+            semantic_description="Recency score for the highest high in the lookback window.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.POSITIVE,
+                line_pattern=SignalLinePattern.SOLID,
+            ),
         ),
         SignalOutputSpec(
             key="down",
             label_key="signals.aroon.down",
+            description_key="signals.aroon.downDescription",
+            semantic_id="aroon.down",
+            semantic_description="Recency score for the lowest low in the lookback window.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.NEGATIVE,
+                line_pattern=SignalLinePattern.SOLID,
+            ),
         ),
         SignalOutputSpec(
             key="oscillator",
             label_key="signals.aroon.oscillator",
+            description_key="signals.aroon.oscillatorDescription",
+            semantic_id="aroon.oscillator",
+            semantic_description="Difference between the Aroon up and down scores.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_AROON_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.ACCENT,
+                line_pattern=SignalLinePattern.DASHED,
+            ),
             supports_reference_levels=True,
             default_reference_levels=[_ZERO_LEVEL],
         ),
@@ -170,8 +203,12 @@ class AroonSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
+                    style=spec.style.model_copy(deep=True),
                     reference_levels=([_ZERO_LEVEL.model_copy(deep=True)] if index_position == 2 else []),
                     points=[
                         SignalValuePoint(

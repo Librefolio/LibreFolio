@@ -10,7 +10,7 @@
     import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {getBrokerInfo, getAccessibleBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -52,7 +52,7 @@
 
     let {open = $bindable(false), transaction = null, partner = null, partnerInaccessible = false, partnerBrokerName = '', errors = [], errorVariant = 'error', validating = false, validated = false, onConfirm, onValidate, onCancel}: Props = $props();
 
-    let brkrs = $derived(getAllBrokers() as BrokerLike[]);
+    let brkrs = $derived(getAccessibleBrokers() as BrokerLike[]);
     let isPaired = $derived(transaction?.related_transaction_id != null);
     let isBlocked = $derived(isPaired && (partnerInaccessible || (!partner && transaction?.related_transaction_id != null)));
     let layout: 'A' | 'B' | 'C' = $derived(!isPaired ? 'A' : isBlocked ? 'C' : 'B');

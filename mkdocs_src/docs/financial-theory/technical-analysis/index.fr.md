@@ -8,12 +8,12 @@ L'analyse technique étudie les **schémas de prix et la dynamique du marché** 
 
 ### 📉 [Indicateurs](indicators/index.md)
 
-Superpositions de graphiques qui extraient des informations de tendance, de momentum ou de volatilité à partir des données de prix. LibreFolio implémente quatre indicateurs principaux, chacun expliqué sous un angle **financier** et un angle de **traitement du signal** :
+Superpositions de graphiques qui extraient des informations de tendance, de momentum, de volatilité ou de volume à partir des données de marché. LibreFolio implémente **17 indicateurs backend**, chacun expliqué sous un angle **financier** et un angle de **traitement du signal** :
 
-- **[EMA](indicators/ema.md)** — Moyenne Mobile Exponentielle (suivi de tendance)
-- **[MACD](indicators/macd.md)** — Convergence et Divergence des Moyennes Mobiles (momentum)
-- **[RSI](indicators/rsi.md)** — Indice de Force Relative (surachat/survente)
-- **[Bandes de Bollinger](indicators/bollinger-bands.md)** — Enveloppe de volatilité adaptative
+- 📈 **[Tendance](indicators/trend.md)** — EMA, SMA, KAMA, ADX, Aroon
+- ⚡ **[Momentum](indicators/momentum.md)** — RSI, MACD, ROC, Stochastic RSI, PPO, CCI
+- 🌊 **[Volatilité](indicators/volatility.md)** — Bandes de Bollinger, ATR, NATR, Canaux de Donchian
+- 📊 **[Volume](indicators/volume.md)** — OBV, MFI
 
 ### 🎯 [Benchmarks Synthétiques](synthetic-benchmarks/index.md)
 

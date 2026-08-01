@@ -22,15 +22,22 @@ La columna izquierda de la pestaña Info muestra las propiedades clave y las reg
 
 ## 🧠 Exportación IA Acotada
 
-En la parte superior derecha de la barra de herramientas del bróker, el botón **Exportación IA** (:material-brain:) copia al portapapeles una representación textual estructurada del estado actual del bróker.
+En la parte superior derecha de la barra de herramientas del bróker,
+**Exportación de IA** (:material-brain:) abre cuatro tareas de Bróker dedicadas,
+no prompts de Cartera filtrados:
 
-Esta exportación está **limitada específicamente a este bróker** (a diferencia del botón principal del panel de control que copia los datos de toda la cartera). Agrega:
+- **Análisis del bróker**
+- **Eficiencia de costes del bróker**
+- **Concentración en el bróker**
+- **Análisis de lotes FIFO**
 
-- Saldos de efectivo locales.
-- Posiciones locales de activos y sus cantidades.
-- Pesos de la asignación activa.
-
-Puedes pegar este prompt estructurado directamente en tu LLM preferido (como Gemini o ChatGPT) para obtener un análisis dirigido y personalizado de esta cuenta específica.
+La instantánea del backend se limita al bróker seleccionado y puede incluir su
+efectivo, posiciones, actividad, rendimiento, costes, concentración y lotes FIFO
+según la tarea elegida. Los controles de acceso del servidor impiden exportar un
+bróker al que el usuario actual no tenga acceso. LibreFolio solo copia el
+resultado al portapapeles; revisa los datos financieros sensibles antes de
+compartirlos. Consulta la
+[guía de Exportación de IA](../ai-export/index.md).
 
 ---
 

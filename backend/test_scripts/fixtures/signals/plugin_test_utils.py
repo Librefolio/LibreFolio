@@ -12,6 +12,8 @@ from backend.app.schemas.signals import (
     SignalDomain,
     SignalExecutionContext,
     SignalPricePoint,
+    SignalSourceCapability,
+    SignalVolumeKind,
 )
 from scripts.spikes.signals.run_signal_backend_spike import (
     generate_datasets,
@@ -19,6 +21,16 @@ from scripts.spikes.signals.run_signal_backend_spike import (
 )
 
 VISIBLE_POINTS = 128
+
+# Fixture datasets are synthetic OHLCV series with no real provider behind
+# them. Volume-dependent plugins (MFI, OBV) now require a source that
+# declares `supports_meaningful_volume`; grant it by default here so the many
+# existing plugin tests built on this shared fixture keep exercising their
+# actual math instead of getting gated on capability they never asked about.
+_DEFAULT_SOURCE_CAPABILITY = SignalSourceCapability(
+    supports_meaningful_volume=True,
+    volume_kind=SignalVolumeKind.TRADED_SHARES,
+)
 
 
 def load_signal_frames(names: Iterable[str]):
@@ -45,6 +57,7 @@ def execution_context(
     *,
     visible_points: int = VISIBLE_POINTS,
     domain: SignalDomain = SignalDomain.ASSET,
+    source_capability: SignalSourceCapability = _DEFAULT_SOURCE_CAPABILITY,
 ) -> SignalExecutionContext:
     visible = points[-visible_points:]
     return SignalExecutionContext(
@@ -54,6 +67,7 @@ def execution_context(
             end=visible[-1].date,
         ),
         source_reference=f"{domain.value}:plugin-test",
+        source_capability=source_capability,
     )
 
 

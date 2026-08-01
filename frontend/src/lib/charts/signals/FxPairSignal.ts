@@ -83,6 +83,7 @@ export class FxPairSignal extends ChartSignal {
             markerStart: this.style.markerStart,
             markerEnd: this.style.markerEnd,
             yAxisIndex: 0,
+            aggregationProfile: 'last_with_range',
         };
     }
 

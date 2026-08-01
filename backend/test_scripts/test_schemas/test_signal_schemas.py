@@ -3,25 +3,37 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Literal
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.fx import FXConversionRequest
+from backend.app.schemas.portfolio import DataQualityReport
+from backend.app.schemas.prices import FAPriceQueryItem
+from backend.app.schemas.risk import RiskResultMetadata, RiskReturnBasis
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiDescription,
+    SignalAiOutputDescription,
     SignalAnnotationRequest,
     SignalAnnotationSampling,
+    SignalAreaSeries,
     SignalAvailability,
     SignalAvailabilityReason,
     SignalAxisRole,
     SignalAxisSpec,
+    SignalBandComponent,
     SignalBandPoint,
     SignalBandSeries,
+    SignalBandValueSource,
     SignalCatalogDefinition,
+    SignalCatalogResponse,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDataPolicy,
     SignalDomain,
@@ -33,23 +45,30 @@ from backend.app.schemas.signals import (
     SignalInputData,
     SignalInputRequirements,
     SignalLineCrossoverRequest,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalOutputValueSource,
     SignalPriceField,
     SignalPricePoint,
     SignalPriceValueSource,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalRequest,
     SignalResult,
+    SignalSeries,
     SignalSeriesKind,
+    SignalSourceCapability,
     SignalStatus,
     SignalThresholdCrossingRequest,
     SignalThresholdDirection,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
+    SignalValueSource,
     SignalViewTransform,
+    SignalVolumeKind,
     SignalWarmupMetadata,
     SignalWarmupRequirement,
     SignalWarning,
@@ -74,6 +93,8 @@ def make_line_series(
     return SignalLineSeries(
         key=key,
         label_key=f"signals.{key}.label",
+        semantic_id=f"test.{key}",
+        semantic_description=f"Test semantic value for {key}.",
         unit=SignalUnit.PRICE,
         axis=make_axis(),
         view_transform=SignalViewTransform.BASE_PERCENTAGE,
@@ -148,6 +169,8 @@ def make_result(
     warmup: SignalWarmupMetadata | None | object = _DEFAULT,
     warnings: list[SignalWarning] | None = None,
     error: SignalError | None = None,
+    risk_metadata: RiskResultMetadata | None = None,
+    data_quality: DataQualityReport | None = None,
 ) -> SignalResult:
     return SignalResult(
         instance_id="signal-1",
@@ -160,6 +183,8 @@ def make_result(
         warmup=make_warmup() if warmup is _DEFAULT else warmup,
         warnings=warnings or [],
         error=error,
+        risk_metadata=risk_metadata,
+        data_quality=data_quality,
     )
 
 
@@ -184,7 +209,10 @@ def make_output_spec() -> SignalOutputSpec:
     return SignalOutputSpec(
         key="ema",
         label_key="signals.ema.output",
+        semantic_id="exponential_moving_average.value",
+        semantic_description="Exponentially weighted closing-price average.",
         kind=SignalSeriesKind.LINE,
+        aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
         unit=SignalUnit.PRICE,
         axis=make_axis(),
         view_transform=SignalViewTransform.BASE_PERCENTAGE,
@@ -198,6 +226,8 @@ def make_catalog() -> SignalCatalogDefinition:
         category=SignalCategory.TREND,
         display_name_key="signals.ema.name",
         description_key="signals.ema.description",
+        semantic_id="exponential_moving_average",
+        semantic_description="Smooths prices with greater weight on recent observations.",
         icon="activity",
         docs_path="financial-theory/technical-analysis/indicators/ema/",
         params_schema=DemoParams.model_json_schema(),
@@ -256,6 +286,35 @@ class TestNeutralInputs:
         assert context.target_currency == "EUR"
         assert context.data_policy == SignalDataPolicy.STRICT_CONTIGUOUS
 
+    def test_execution_context_defaults_to_unsupported_source_capability(self):
+        """Safe-by-default: contexts built without an explicit capability
+        never accidentally grant meaningful-volume trust."""
+        context = SignalExecutionContext(
+            domain=SignalDomain.ASSET,
+            requested_range=DateRangeModel(start=DAY_1, end=DAY_2),
+            source_reference="asset:42",
+        )
+        assert context.source_capability.supports_meaningful_volume is False
+        assert context.source_capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+
+class TestSignalSourceCapability:
+    def test_default_is_unsupported_and_unknown(self):
+        capability = SignalSourceCapability()
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_supported_capability_can_declare_traded_shares(self):
+        capability = SignalSourceCapability(supports_meaningful_volume=True, volume_kind=SignalVolumeKind.TRADED_SHARES)
+        assert capability.supports_meaningful_volume is True
+        assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
+
+    def test_unsupported_capability_rejects_a_declared_volume_kind(self):
+        """A source that doesn't support meaningful volume can't claim a
+        specific volume kind — prevents inconsistent half-declarations."""
+        with pytest.raises(ValidationError, match="volume_kind"):
+            SignalSourceCapability(supports_meaningful_volume=False, volume_kind=SignalVolumeKind.TRADED_SHARES)
+
 
 class TestWarmupAndRequirements:
     def test_warmup_total_must_match_components(self):
@@ -288,6 +347,37 @@ class TestWarmupAndRequirements:
         with pytest.raises(ValidationError, match="price fields and/or events"):
             SignalInputRequirements()
 
+    def test_comparison_asset_dependency_requires_prepared_series(self):
+        with pytest.raises(
+            ValidationError,
+            match="uses_prepared_asset_series",
+        ):
+            SignalInputRequirements(
+                price_fields=[SignalPriceField.CLOSE],
+                comparison_asset_param="comparison_asset_id",
+            )
+
+        requirements = SignalInputRequirements(
+            price_fields=[SignalPriceField.CLOSE],
+            uses_prepared_asset_series=True,
+            comparison_asset_param="comparison_asset_id",
+        )
+        assert requirements.comparison_asset_param == "comparison_asset_id"
+
+    def test_requires_meaningful_volume_needs_volume_price_field(self):
+        with pytest.raises(ValidationError, match="requires_meaningful_volume"):
+            SignalInputRequirements(
+                price_fields=[SignalPriceField.CLOSE],
+                requires_meaningful_volume=True,
+            )
+
+    def test_requires_meaningful_volume_is_accepted_with_volume_field(self):
+        requirements = SignalInputRequirements(
+            price_fields=[SignalPriceField.CLOSE, SignalPriceField.VOLUME],
+            requires_meaningful_volume=True,
+        )
+        assert requirements.requires_meaningful_volume is True
+
 
 class TestOutputContracts:
     @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
@@ -305,12 +395,140 @@ class TestOutputContracts:
         with pytest.raises(ValidationError, match="lower bound"):
             SignalValueRegion(key="neutral", label_key="signals.neutral", semantic="neutral", lower=70, upper=30)
 
+    def test_region_can_declare_line_style(self):
+        region = SignalValueRegion(
+            key="neutral",
+            label_key="signals.neutral",
+            semantic="neutral",
+            lower=30,
+            upper=70,
+            line_style=SignalRegionLineStyle(
+                pattern=SignalLinePattern.DASHED,
+                width_delta=1,
+            ),
+        )
+
+        assert region.line_style is not None
+        assert region.line_style.pattern == SignalLinePattern.DASHED
+        with pytest.raises(ValidationError):
+            SignalRegionLineStyle(pattern=SignalLinePattern.SOLID, width_delta=4)
+
+    def test_output_can_declare_plugin_owned_visual_style(self):
+        output = SignalOutputSpec(
+            key="plus_di",
+            label_key="signals.adx.plusDi",
+            description_key="signals.adx.plusDiDescription",
+            semantic_id="average_directional_index.positive_directional_index",
+            semantic_description="Positive directional movement relative to true range.",
+            kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
+            unit=SignalUnit.INDEX,
+            axis=SignalAxisSpec(key="adx", role=SignalAxisRole.INDEPENDENT),
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.POSITIVE,
+                line_pattern=SignalLinePattern.SOLID,
+                width_delta=1,
+                opacity=0.8,
+            ),
+        )
+
+        assert output.style.color_role == SignalColorRole.POSITIVE
+        assert output.style.line_pattern == SignalLinePattern.SOLID
+        assert output.description_key == "signals.adx.plusDiDescription"
+
+    def test_area_series_round_trips_through_discriminated_union(self):
+        payload = make_line_series().model_dump(mode="json")
+        payload["kind"] = SignalSeriesKind.AREA.value
+
+        parsed = TypeAdapter(SignalSeries).validate_python(payload)
+
+        assert isinstance(parsed, SignalAreaSeries)
+        assert parsed.model_dump(mode="json")["kind"] == "area"
+
+    @pytest.mark.parametrize("fill_opacity", [-0.01, 1.01])
+    def test_output_style_rejects_invalid_fill_opacity(self, fill_opacity: float):
+        with pytest.raises(ValidationError, match="fill_opacity"):
+            SignalOutputStyle(fill_opacity=fill_opacity)
+
+    def test_output_spec_rejects_incompatible_aggregation_profiles(self):
+        band_payload = make_output_spec().model_dump(mode="python")
+        band_payload["kind"] = SignalSeriesKind.BAND
+        with pytest.raises(ValidationError, match="band outputs require"):
+            SignalOutputSpec.model_validate(band_payload)
+
+        line_payload = make_output_spec().model_dump(mode="python")
+        line_payload["aggregation_profile"] = SignalAggregationProfile.BAND_ENVELOPE
+        with pytest.raises(ValidationError, match="requires a band output"):
+            SignalOutputSpec.model_validate(line_payload)
+
+        event_payload = make_output_spec().model_dump(mode="python")
+        event_payload["aggregation_profile"] = SignalAggregationProfile.EVENTS_VERBATIM
+        with pytest.raises(ValidationError, match="reserved for annotations"):
+            SignalOutputSpec.model_validate(event_payload)
+
+    def test_aggregation_profile_enum_is_json_serializable(self):
+        payload = make_output_spec().model_dump(mode="json")
+        schema = SignalOutputSpec.model_json_schema()
+
+        assert payload["aggregation_profile"] == "last_with_range"
+        aggregation_schema = schema["properties"]["aggregation_profile"]
+        enum_ref = aggregation_schema["$ref"].split("/")[-1]
+        assert schema["$defs"][enum_ref]["enum"] == [
+            "last_with_range",
+            "first_with_range",
+            "min_with_range",
+            "max_with_range",
+            "band_envelope",
+            "events_verbatim",
+        ]
+
+    def test_output_semantics_are_required_and_canonical(self):
+        payload = make_output_spec().model_dump(mode="python")
+        payload.pop("semantic_id")
+        with pytest.raises(ValidationError, match="semantic_id"):
+            SignalOutputSpec.model_validate(payload)
+
+        payload = make_output_spec().model_dump(mode="python")
+        payload.pop("semantic_description")
+        with pytest.raises(ValidationError, match="semantic_description"):
+            SignalOutputSpec.model_validate(payload)
+
+        for invalid_id in ("UpperCase", "contains space", "trailing.", ".leading", "double..dot"):
+            payload = make_output_spec().model_dump(mode="python")
+            payload["semantic_id"] = invalid_id
+            with pytest.raises(ValidationError, match="semantic_id"):
+                SignalOutputSpec.model_validate(payload)
+
+    @pytest.mark.parametrize(
+        "word",
+        ["buy", "buys", "buying", "bought", "sell", "sells", "selling", "sold"],
+    )
+    def test_semantic_descriptions_reject_standalone_prescriptive_words(self, word: str):
+        payload = make_output_spec().model_dump(mode="python")
+        payload["semantic_description"] = f"Indicates when to {word}."
+        with pytest.raises(ValidationError, match="neutral and non-prescriptive"):
+            SignalOutputSpec.model_validate(payload)
+
+        catalog = make_catalog().model_dump(mode="python")
+        catalog["semantic_description"] = f"A {word} signal."
+        with pytest.raises(ValidationError, match="neutral and non-prescriptive"):
+            SignalCatalogDefinition.model_validate(catalog)
+
+    def test_semantic_descriptions_allow_embedded_non_prescriptive_words(self):
+        payload = make_output_spec().model_dump(mode="python")
+        payload["semantic_description"] = "Describes buyer and seller pressure without instruction."
+        output = SignalOutputSpec.model_validate(payload)
+        assert output.semantic_description == payload["semantic_description"]
+
     def test_output_spec_rejects_unadvertised_defaults(self):
         with pytest.raises(ValidationError, match="supports_reference_levels"):
             SignalOutputSpec(
                 key="rsi",
                 label_key="signals.rsi.output",
+                semantic_id="relative_strength_index.value",
+                semantic_description="Bounded ratio of smoothed gains to total directional movement.",
                 kind=SignalSeriesKind.LINE,
+                aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
                 unit=SignalUnit.INDEX,
                 axis=SignalAxisSpec(key="rsi", role=SignalAxisRole.INDEPENDENT, minimum=0, maximum=100),
                 default_reference_levels=[
@@ -331,6 +549,8 @@ class TestOutputContracts:
         band = SignalBandSeries(
             key="bollinger",
             label_key="signals.bollinger.output",
+            semantic_id="bollinger_bands.envelope",
+            semantic_description="Lower, middle, and upper bands around the moving average.",
             unit=SignalUnit.PRICE,
             axis=make_axis(),
             points=[
@@ -343,6 +563,8 @@ class TestOutputContracts:
             SignalBandSeries(
                 key="empty",
                 label_key="signals.empty",
+                semantic_id="test.empty_band",
+                semantic_description="Test empty band.",
                 unit=SignalUnit.PRICE,
                 axis=make_axis(),
                 points=[SignalBandPoint(date=DAY_1)],
@@ -376,7 +598,7 @@ class TestOutputContracts:
 
     def test_unknown_series_kind_is_rejected(self):
         payload = make_line_series().model_dump(mode="json")
-        payload["kind"] = "area"
+        payload["kind"] = "candlestick"
         with pytest.raises(ValidationError, match="union_tag_invalid"):
             SignalComputation.model_validate({"series": [payload]})
 
@@ -387,6 +609,20 @@ class TestOutputContracts:
                     make_line_series("one"),
                     make_line_series("two", dates=(DAY_1, DAY_3)),
                 ]
+            )
+
+    def test_composite_series_semantic_ids_must_be_unique(self):
+        first = make_line_series("one")
+        second = make_line_series("two").model_dump(mode="python")
+        second["semantic_id"] = first.semantic_id
+        with pytest.raises(ValidationError, match="series semantic_ids"):
+            SignalComputation.model_validate(
+                {
+                    "series": [
+                        first.model_dump(mode="python"),
+                        second,
+                    ]
+                }
             )
 
     def test_effective_reference_levels_and_regions_are_in_result(self):
@@ -410,7 +646,8 @@ class TestOutputContracts:
         result = make_result(SignalStatus.OK, series=[series])
         dumped = result.model_dump(mode="json")
         assert dumped["series"][0]["reference_levels"][0]["value"] == 70.0
-        assert "color" not in json.dumps(dumped)
+        assert dumped["series"][0]["style"]["color_role"] == "primary"
+        assert "#" not in json.dumps(dumped)
 
 
 class TestCoverageAndAvailability:
@@ -558,6 +795,50 @@ class TestRequestAndCatalog:
         assert dumped["compatible_domains"] == ["asset", "fx"]
         assert json.loads(catalog.model_dump_json()) == dumped
 
+    def test_catalog_auto_populates_ai_description_when_omitted(self):
+        """SignalCatalogDefinition derives ai_description from its own
+        existing fields when the caller doesn't supply one — keeping the
+        catalog the single source of truth without per-caller boilerplate."""
+        catalog = make_catalog()
+        assert catalog.ai_description is not None
+        assert catalog.ai_description.signal_code == catalog.signal_code
+        assert catalog.ai_description.semantic_id == catalog.semantic_id
+        assert catalog.ai_description.semantic_description == catalog.semantic_description
+        assert catalog.ai_description.category == catalog.category
+        assert len(catalog.ai_description.outputs) == len(catalog.output_specs)
+        assert catalog.ai_description.outputs[0].semantic_id == catalog.output_specs[0].semantic_id
+        assert catalog.ai_events == []
+
+    def test_catalog_preserves_explicit_ai_description(self):
+        """An explicitly supplied ai_description is never overwritten by
+        the auto-populate validator."""
+        explicit = SignalAiDescription(
+            signal_code="EMA",
+            semantic_id="custom_semantic_id",
+            semantic_description="Custom AI-facing description.",
+            category=SignalCategory.TREND,
+            outputs=(SignalAiOutputDescription(key="custom", semantic_id="custom.value", semantic_description="Custom output.", unit=SignalUnit.PRICE),),
+        )
+        catalog = SignalCatalogDefinition(
+            signal_code="ema",
+            implementation_version="1.0.0",
+            category=SignalCategory.TREND,
+            display_name_key="signals.ema.name",
+            description_key="signals.ema.description",
+            semantic_id="exponential_moving_average",
+            semantic_description="Smooths prices with greater weight on recent observations.",
+            icon="activity",
+            docs_path="financial-theory/technical-analysis/indicators/ema/",
+            params_schema=DemoParams.model_json_schema(),
+            default_params=DemoParams().model_dump(mode="json"),
+            input_requirements=SignalInputRequirements(price_fields=[SignalPriceField.CLOSE]),
+            output_specs=[make_output_spec()],
+            compatible_domains=[SignalDomain.ASSET, SignalDomain.FX],
+            ai_description=explicit,
+        )
+        assert catalog.ai_description.semantic_id == "custom_semantic_id"
+        assert catalog.ai_description.outputs[0].key == "custom"
+
     def test_catalog_rejects_duplicate_outputs_and_domains(self):
         catalog = make_catalog().model_dump()
         catalog["output_specs"] = [make_output_spec(), make_output_spec()]
@@ -568,6 +849,38 @@ class TestRequestAndCatalog:
         catalog["compatible_domains"] = [SignalDomain.ASSET, SignalDomain.ASSET]
         with pytest.raises(ValidationError, match="compatible_domains"):
             SignalCatalogDefinition.model_validate(catalog)
+
+    def test_catalog_rejects_duplicate_output_semantic_ids(self):
+        catalog = make_catalog().model_dump(mode="python")
+        duplicate = make_output_spec().model_dump(mode="python")
+        duplicate["key"] = "ema_secondary"
+        catalog["output_specs"] = [
+            make_output_spec().model_dump(mode="python"),
+            duplicate,
+        ]
+        with pytest.raises(ValidationError, match="output semantic_ids"):
+            SignalCatalogDefinition.model_validate(catalog)
+
+        catalog = make_catalog().model_dump(mode="python")
+        catalog["output_specs"][0]["semantic_id"] = catalog["semantic_id"]
+        with pytest.raises(ValidationError, match="signal and output semantic_ids"):
+            SignalCatalogDefinition.model_validate(catalog)
+
+    def test_catalog_response_rejects_duplicate_signal_or_output_semantic_ids(self):
+        first = make_catalog().model_dump(mode="python")
+        second = make_catalog().model_dump(mode="python")
+        second["signal_code"] = "SMA"
+        second["output_specs"][0]["key"] = "sma"
+        with pytest.raises(ValidationError, match="signal semantic_ids"):
+            SignalCatalogResponse.model_validate({"items": [first, second]})
+
+        second["semantic_id"] = "simple_moving_average"
+        with pytest.raises(ValidationError, match="catalog output semantic_ids"):
+            SignalCatalogResponse.model_validate({"items": [first, second]})
+
+        second["output_specs"][0]["semantic_id"] = second["semantic_id"]
+        with pytest.raises(ValidationError, match="signal and output semantic_ids"):
+            SignalCatalogResponse.model_validate({"items": [first, second]})
 
     def test_catalog_and_result_schemas_do_not_reference_third_party_types(self):
         schema_text = json.dumps(
@@ -623,6 +936,42 @@ class TestAnnotationRequestSchemas:
         assert threshold.direction == SignalThresholdDirection.DOWN
         assert threshold.sampling == SignalAnnotationSampling.UNIFORM
 
+    def test_band_value_source_is_discriminated_and_component_typed(self):
+        adapter = TypeAdapter(SignalValueSource)
+        source = adapter.validate_python(
+            {
+                "kind": "band",
+                "instance_id": "bollinger",
+                "series_key": "bands",
+                "component": "upper",
+            }
+        )
+
+        assert isinstance(source, SignalBandValueSource)
+        assert source.component == SignalBandComponent.UPPER
+        schema = adapter.json_schema()
+        assert set(schema["discriminator"]["mapping"]) == {
+            "band",
+            "price",
+            "signal",
+        }
+        assert schema["$defs"]["SignalBandValueSource"]["properties"]["kind"]["enum"] == ["band"]
+        assert schema["$defs"]["SignalBandComponent"]["enum"] == [
+            "lower",
+            "middle",
+            "upper",
+        ]
+
+        with pytest.raises(ValidationError, match="component"):
+            adapter.validate_python(
+                {
+                    "kind": "band",
+                    "instance_id": "bollinger",
+                    "series_key": "bands",
+                    "component": "median",
+                }
+            )
+
     def test_annotation_union_schema_has_discriminator(self):
         schema = TypeAdapter(SignalAnnotationRequest).json_schema()
         assert schema["discriminator"]["propertyName"] == "kind"
@@ -654,6 +1003,45 @@ class TestAnnotationRequestSchemas:
         }
         with pytest.raises(ValidationError):
             TypeAdapter(SignalAnnotationRequest).validate_python(payload)
+
+    @pytest.mark.parametrize("request_model", [FAPriceQueryItem, FXConversionRequest])
+    def test_domain_requests_reject_unknown_band_source_instance(self, request_model):
+        common = {
+            "date_range": {"start": DAY_1, "end": DAY_2},
+            "signals": [
+                {
+                    "instance_id": "ema",
+                    "signal_code": "EMA",
+                    "params": {"period": 20},
+                }
+            ],
+            "annotation_requests": [
+                {
+                    "kind": "threshold_crossing",
+                    "key": "missing-band",
+                    "attach_to_instance_id": "ema",
+                    "source": {
+                        "kind": "band",
+                        "instance_id": "missing",
+                        "series_key": "bands",
+                        "component": "upper",
+                    },
+                    "threshold": 0,
+                }
+            ],
+        }
+        payload = (
+            {"asset_id": 1, **common}
+            if request_model is FAPriceQueryItem
+            else {
+                "from_amount": Currency(code="EUR", amount=1),
+                "to": "USD",
+                **common,
+            }
+        )
+
+        with pytest.raises(ValidationError, match="annotation source 'missing'"):
+            request_model.model_validate(payload)
 
     def test_annotation_request_rejects_frontend_style(self):
         with pytest.raises(ValidationError, match="extra_forbidden"):
@@ -738,6 +1126,21 @@ class TestResultStatusMatrix:
         )
         assert result.availability.partial_coverage_used is True
 
+    def test_partial_undefined_metric_window_is_explicit(self):
+        warning = SignalWarning(
+            code=SignalWarningCode.UNDEFINED_METRIC_WINDOW,
+            message="One rolling window is undefined",
+        )
+        result = make_result(
+            SignalStatus.PARTIAL,
+            series=[make_line_series(values=(None, 101.0))],
+            availability=make_availability(
+                reason=SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC,
+            ),
+            warnings=[warning],
+        )
+        assert result.availability.reason_code == SignalAvailabilityReason.PARTIAL_UNDEFINED_METRIC
+
     def test_unavailable_uses_availability_reason_without_error(self):
         result = make_result(
             SignalStatus.UNAVAILABLE,
@@ -816,6 +1219,38 @@ class TestResultStatusMatrix:
                 SignalStatus.OK,
                 series=[make_line_series()],
                 availability=availability,
+            )
+
+    def test_risk_metadata_and_data_quality_are_paired(self):
+        metadata = RiskResultMetadata(
+            analyzed_range=DateRangeModel(start=DAY_1, end=DAY_2),
+            n_observations=0,
+            calendar_days=0,
+            annualization_factor=None,
+            coverage=0,
+            currency="EUR",
+            return_basis=RiskReturnBasis.PRICE_ONLY,
+            algorithm_version="1.0.0",
+            computed_at=datetime.now(UTC),
+        )
+        quality = DataQualityReport()
+        result = make_result(
+            SignalStatus.OK,
+            series=[make_line_series()],
+            risk_metadata=metadata,
+            data_quality=quality,
+        )
+        assert result.risk_metadata == metadata
+        assert result.data_quality == quality
+
+        with pytest.raises(
+            ValidationError,
+            match="must be provided together",
+        ):
+            make_result(
+                SignalStatus.OK,
+                series=[make_line_series()],
+                risk_metadata=metadata,
             )
 
     def test_error_details_must_be_json_safe(self):

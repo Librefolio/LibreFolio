@@ -25,7 +25,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, UserRole
@@ -405,6 +405,10 @@ class TransactionService:
         stmt = select(Transaction).where(Transaction.broker_id == broker_id)
         result = await self.session.execute(stmt)
         txs = result.scalars().all()
+        tx_ids = [tx.id for tx in txs if tx.id is not None]
+
+        if tx_ids:
+            await self.session.execute(update(Transaction).where(Transaction.related_transaction_id.in_(tx_ids)).values(related_transaction_id=None))
 
         count = 0
         for tx in txs:

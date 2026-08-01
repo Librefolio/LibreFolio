@@ -53,6 +53,7 @@
         assetIncome: number | null;
         totalPnl: number | null;
         totalReturn: number | null;
+        annualizedReturn: number | null;
         allocatedFees: number | null;
         allocatedTaxes: number | null;
         netTotalPnl: number | null;
@@ -366,6 +367,7 @@
                 assetIncome: safeNum(lot.asset_income),
                 totalPnl: safeNum(lot.total_pnl),
                 totalReturn: safeNum(lot.total_return),
+                annualizedReturn: safeNum(lot.annualized_return),
                 allocatedFees: safeNum(lot.allocated_fees),
                 allocatedTaxes: safeNum(lot.allocated_taxes),
                 netTotalPnl: safeNum(lot.net_total_pnl),
@@ -532,6 +534,19 @@
             sortable: true,
             filterable: false,
             getValue: (row) => row.totalReturn ?? Number.NEGATIVE_INFINITY,
+        },
+        {
+            id: 'annualized-return',
+            header: () => label('brokers.lots.annualizedReturn', 'Annualized'),
+            headerTooltip: () => label('brokers.lots.annualizedReturnTooltip', 'Total return annualized (CAGR) over the lot holding window, for comparison across lots held for different durations.'),
+            cell: (row) => signedPercentCell(row.annualizedReturn),
+            type: 'number',
+            align: 'right',
+            width: 150,
+            minWidth: 130,
+            sortable: true,
+            filterable: false,
+            getValue: (row) => row.annualizedReturn ?? Number.NEGATIVE_INFINITY,
         },
         {
             id: 'asset-income',

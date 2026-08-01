@@ -74,6 +74,7 @@ def test_fixture_catalog_is_sorted_and_json_serializable():
     for definition in definitions:
         assert definition.model_dump_json()
         assert definition.params_schema["additionalProperties"] is False
+        assert definition.ai_export_temporal_rules == []
 
 
 def test_line_fixture_validates_params_warmup_and_output(context):

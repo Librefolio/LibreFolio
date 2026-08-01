@@ -651,6 +651,12 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
         return "Scheduled Investment Calculator"
 
     @property
+    def supports_meaningful_volume(self) -> bool:
+        """Parametrically generated synthetic series (fixed-income
+        schedules) — there is no trading activity and no volume concept."""
+        return False
+
+    @property
     def provider_kind(self) -> FAProviderKind:
         """
         Parametric generation provider (#R3-4): the price series is produced

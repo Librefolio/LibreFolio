@@ -31,6 +31,8 @@
         maxVisibleItems?: number;
         /** Custom class for container */
         class?: string;
+        /** Optional stable selector for functional tests. */
+        testId?: string;
         /** Custom item rendering */
         item?: Snippet<[SelectOption]>;
         /** Custom selected item rendering (for trigger) */
@@ -58,6 +60,7 @@
         inlineSearch = false,
         maxVisibleItems = 8,
         class: className = '',
+        testId,
         item,
         selectedItem,
         onchange,
@@ -325,7 +328,7 @@
     }
 </script>
 
-<div bind:this={containerRef} class="relative {className}">
+<div bind:this={containerRef} class="relative {className}" data-testid={testId}>
     <!-- Trigger Button / Inline Search -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -343,6 +346,7 @@
         onkeydown={handleTriggerKeydown}
         role="combobox"
         tabindex={disabled ? -1 : 0}
+        data-testid={testId ? `${testId}-trigger` : undefined}
     >
         {#if inlineSearch && isOpen}
             <!-- Inline search mode: show search icon + input in trigger -->
@@ -358,6 +362,7 @@
                 onclick={(e) => e.stopPropagation()}
                 class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100"
                 placeholder={$_('common.search')}
+                data-testid={testId ? `${testId}-search` : undefined}
             />
         {:else if selectedOption}
             {#if selectedItem}
@@ -404,6 +409,7 @@
                             class="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg
                                focus:outline-none focus:ring-2 focus:ring-libre-green focus:border-libre-green"
                             placeholder={$_('common.search')}
+                            data-testid={testId ? `${testId}-search` : undefined}
                         />
                         {#if searchQuery}
                             <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">

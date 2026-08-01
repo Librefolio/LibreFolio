@@ -67,6 +67,34 @@ graph TD
 
 ---
 
+## 🧭 Import philosophy & currency rules
+
+A BRIM plugin is a **faithful transcriber, not a re-calculator**. These rules are
+mandatory for every new plugin:
+
+- **Verbatim / copy-paste import.** Import the numbers exactly as they appear in the
+  broker's report. Do not recompute totals, prices or amounts; transcribe them.
+- **No forex system.** A BRIM plugin must **never** invoke the FX subsystem and must
+  **never** convert amounts using the report's own exchange-rate column. If the export
+  has a rate column (e.g. Fineco's *Cambio*), **ignore it**.
+- **Currency from the source.** Derive each transaction's currency from the broker's own
+  currency column (per row) and tag **every** monetary figure in that row with it. A
+  single file may legitimately contain multiple currencies — that's expected, keep them
+  as reported.
+- **Delimiter detection.** Always resolve the separator with
+  `self.detect_csv_delimiter(file_path)` — **never hardcode** `,` or `;`.
+- **Multiple export layouts.** When a broker ships more than one report layout (e.g. with
+  and without commission columns), detect the variant **dynamically** — locate the header
+  row and branch on the actual column set rather than assuming a fixed line offset.
+- **Sign conventions.** Set signs per `TransactionType` (BUY: qty > 0, cash < 0; SELL:
+  qty < 0, cash > 0; DIVIDEND/INTEREST: qty = 0, cash > 0; FEE/TAX: qty = 0, cash < 0;
+  ADJUSTMENT: qty ≠ 0, no cash), but take the **magnitudes** verbatim from the report.
+- **One source row may emit several transactions.** Keep economic legs explicit: securities-only buys can be `DEPOSIT + BUY`, sells can be `SELL + WITHDRAWAL`, maturities can be `SELL at par + INTEREST`, and snapshots can be `DEPOSIT + ADJUSTMENT` seeds.
+- **Fake asset IDs.** Emit high positive fake asset IDs (keyed by ISIN/ticker) plus
+  `BRIMExtractedAssetInfo` so the core can drive the asset-matching UI.
+
+---
+
 ## 📋 ABC Methods
 
 ### ✅ Required (Abstract)
@@ -173,6 +201,8 @@ Copy the structure of an existing, well-tested plugin rather than starting from 
 | `backend/app/services/brim_providers/broker_generic_csv.py` | Column auto-detection, locale-aware number parsing |
 | `backend/app/services/brim_providers/broker_coinbase.py` | Crypto assets (symbol, no ISIN), staking as `ADJUSTMENT`, separate fee tx |
 | `backend/app/services/brim_providers/broker_revolut.py` | **One plugin, two formats** (invest + crypto) via header detection |
+| `backend/app/services/brim_providers/broker_intesa.py` | CSV/XLSX, two layouts in one plugin; patrimonio snapshot → liquidity `DEPOSIT` when present + per-holding `ADJUSTMENT` seed with per-unit `cost_basis_override` |
+| `backend/app/services/brim_providers/broker_credit_agricole.py` | Securities-only export; automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
 | `backend/app/services/brim_providers/broker_saxo.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
 
 ## 📥 Canonical imports
@@ -190,7 +220,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAssetNotice, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
@@ -231,13 +261,94 @@ transaction breaks these rules, so flip source signs as needed:
   cashless `ADJUSTMENT` for coin-only rewards).
 - Prefer **skipping a row with a warning** over emitting a schema-invalid transaction.
 
+!!! tip "Warning language follows the input format"
+
+    A plugin's user-facing `warnings` (and any `BRIMAssetNotice.reason`) should be written
+    in the language of the export it parses. For a single-nation broker whose report is
+    published in only one language — e.g. Crédit Agricole, Directa, Intesa Sanpaolo, Fineco
+    (Italian) — emit the warnings in that language so they match the report the user is
+    reading. When a broker ships differently localized export layouts (a UK vs. IT Fineco
+    file, a non-Italian Crédit Agricole entity), detect the format and emit each variant's
+    warnings in its own language. Code, comments and docstrings stay in English.
+
+!!! warning "`cost_basis_override` is PER-UNIT, never a total"
+
+    When a plugin freezes an inherited cost basis (WAC) on a `TRANSFER`/`ADJUSTMENT`
+    seed — e.g. an opening *patrimonio* snapshot, or a `TRANSFER_IN` — the value you put
+    in `cost_basis_override` (and its `cost_basis_currency`) **must be the cost per single
+    unit**, not the position's total countervalue. The portfolio engine and the lot
+    analysis both **multiply it by `quantity`** to reconstruct the total cost basis, so a
+    total slipped in here is silently multiplied again and blows the cost basis up by a
+    factor of `quantity`.
+
+    If your source only reports a **total** (e.g. Intesa's *"Controvalore di carico
+    fiscale €"*), divide it by the quantity first:
+
+    ```python
+    unit_cost = (total_cost / qty).quantize(Decimal("0.000001"))
+    cost_basis_override = Currency(code="EUR", amount=unit_cost)
+    ```
+
+    Bond nominal note: for bonds `quantity` is the face value (e.g. `50000`) and the seed
+    per-unit cost lands near `1.0` — that is correct, the engine handles the /100 quote
+    scaling elsewhere. Canonical example: `broker_intesa.py` (patrimonio seed).
+
+!!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
+
+    A bond is **redeemed at par (100)** at maturity. When the bank credits *more* than par
+    (e.g. a BTP Italia *premio fedeltà* or a `FOI` inflation revaluation), that surplus is
+    **reddito di capitale** — the same nature as a coupon — and must be booked as a separate
+    **`INTEREST`** leg, *not* folded into the sale price. Folding it in would inflate the
+    realised gain and leave a residual position when `ctv/price` ≠ the true nominal.
+
+    **Working assumption (document it on the plugin's own page):** a maturity/redemption row
+    is a bond quoted at par 100, so *anything above 100 is interest*. A plugin whose maturity
+    causale is bond-specific (e.g. Crédit Agricole's `TITOLI SCADUTI`) can apply this
+    unconditionally; a plugin whose causale is generic (e.g. Fineco's `Rimborso`, which also
+    covers equities) must still gate on `io.looks_like_bond(name)`. Generalise only when a
+    real counter-example appears.
+
+    The nominal to redeem comes from the **held position** (the BUY / succession / seed
+    rows), never from the maturity row itself (whose `quantity` is often `0`). Use the shared
+    helper:
+
+    ```python
+    from backend.app.services.brim_providers import _brim_io as io
+
+    if ctv is not None:                       # (+ io.looks_like_bond(name) if the causale is generic)
+        model = io.model_bond_maturity(ctv=ctv, price=price, held_qty=held or None)
+        sell_qty  = -model.nominal            # SELL closes the nominal at par, e.g. -30000
+        sell_cash = model.principal_cash      # e.g. 30000.00 (nominal × par/100)
+        if model.surplus_cash > 0:            # surplus over par → INTEREST income
+            emit_interest(cash=model.surplus_cash)   # e.g. 105.00
+    ```
+
+    - **`held_qty > 0` → `source == "position"`**: exact close, **no verify flag**. This is
+      the normal case — the nominal lives in the position, so there is nothing for the user
+      to check. If the file is not chronologically ordered, pre-compute the position in a
+      first pass (see `broker_credit_agricole.py`).
+    - **no position → `source == "derived"`**: the nominal is inferred from `ctv/price` (a
+      best effort, imprecise because the quoted price embeds the premium — e.g. `30105/100.40
+      = 29985` vs a true `30000`). This happens on a **partial download** (a "last 3 months"
+      export where the buy legs are missing). Attach a `warning` `BRIMFieldTodo`
+      (`reason_code="derived_quantity"`) so the user verifies the nominal — the plugin sees
+      only the file, so it cannot confirm the close against the position already stored in
+      LibreFolio (that reconciliation happens in the portfolio engine at compute time).
+    - A price **at or below par** yields `surplus_cash == 0` → emit a single plain SELL
+      (pass-through); don't invent negative income.
+    - Keep the plugin's usual cash model: if BUYs get a balancing `DEPOSIT` and SELLs a
+      `WITHDRAWAL`, the par principal nets to zero and only the `INTEREST` surplus adds cash.
+
+    Reference plugins: `broker_credit_agricole.py` (`TITOLI SCADUTI`, position pre-computed
+    from succession legs) and `broker_fineco.py` (`Rimborso` above par, nominal from the row).
+
 ## 🆔 Fake asset IDs
 
-Asset-linked transactions reference a *fake* (negative) asset id at parse time; the core
+Asset-linked transactions reference a *fake* high positive asset id at parse time; the core
 maps it to a real asset later. Allocate them yourself, grouping rows of the same asset:
 
 ```python
-next_fake_id = FAKE_ASSET_ID_BASE          # a large negative sentinel
+next_fake_id = FAKE_ASSET_ID_BASE          # 2**31 - 1 high positive sentinel
 asset_to_fake_id: dict[str, int] = {}
 extracted_assets_raw: dict[int, dict] = {}
 
@@ -257,6 +368,32 @@ else:
 
 Return them as `BRIMExtractedAssetInfo` in `BRIMParseOutput.extracted_assets`. Every
 `tx.asset_id` must appear as a key (checked by `test_extracted_assets_consistent_with_transactions`).
+
+## ⚠️ Per-asset import notices
+
+When the parsed transactions suggest an asset-level warning, attach `BRIMAssetNotice` objects to that `BRIMExtractedAssetInfo`:
+
+```python
+extracted_assets[asset_id].notices.append(
+    BRIMAssetNotice(
+        kind="maturity_suspected",
+        reason="Rilevata almeno una transazione di scadenza/rimborso.",
+        transaction_indexes=[tx_index],
+    )
+)
+```
+
+The schema is `{kind, reason, transaction_indexes}` with `transaction_indexes=[]` by default. `BRIMAssetMapping.notices` carries those notices into the frontend; the asset-create modal groups them by `kind` and renders amber advisory banners. Notices are informational only and never change import behaviour. Intesa Sanpaolo and Crédit Agricole use this for maturity/redemption warnings.
+
+## 🚪 Opening-date gate
+
+Do not implement an opening-date filter in the backend plugin. The shipped gate lives in the Svelte import wizard and uses the local status key `before_opening` (not a backend enum). The exact comparison is strict:
+
+```ts
+return info !== null && txDate !== '' && txDate < info.openedAt;
+```
+
+Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
 
 ## 🔀 One plugin, several export formats
 
@@ -332,12 +469,22 @@ If no working icon exists, ship `icon_url = None` and mark the broker in
 
 ## 📚 Register the user-facing docs
 
-Expose the plugin to users by wiring up its documentation. Point `docs_url` at the page:
+Expose the plugin to users by wiring up its documentation. Point `docs_url` at the page.
+
+`docs_url` accepts **either** an internal MkDocs slug **or** an external absolute URL:
+
+- **Internal wiki slug (recommended, the convention used by every current plugin)** —
+  an absolute `/mkdocs/...` path. Use this whenever you ship a page under
+  `user/transactions/import/`. The frontend localizes it automatically by rewriting
+  `/mkdocs/` → `/mkdocs/<lang>/`, so **only the internal slug form gets translated**.
+- **External URL** — a full `https://...` link to a broker help page. Allowed (opens in a
+  new tab) but it is **not** localized, so prefer an internal page when one exists.
 
 ```python
 @property
 def docs_url(self) -> Optional[str]:
-    return "/mkdocs/user/transactions/import/<slug>/"
+    return "/mkdocs/user/transactions/import/<slug>/"   # internal slug (localized)
+    # or: return "https://broker.example/help/exports"   # external URL (not localized)
 ```
 
 Then, reusing `<slug>` everywhere:
@@ -347,15 +494,37 @@ Then, reusing `<slug>` everywhere:
    the H1, a "how to export" line, a note that it was built from sample exports). Use
    `directa.it.md` as a fuller reference once real export steps are known.
 2. **Index card** — add an `<a href="<slug>/">` card in each
-   `mkdocs_src/docs/user/transactions/import/index.<lang>.md` (before the `generic-csv` card).
-3. **Capacity table** — add one row per language in the `??? info` table of those same index
-   files, **4-space indented** so it stays inside the admonition.
+   `mkdocs_src/docs/user/transactions/import/index.<lang>.md` (in the matching broker group,
+   before the final `Request New Plugin` / `generic-csv` card). Copy an existing card and
+   swap the slug, favicon, name and description:
+
+    ```html
+    <a href="<slug>/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="<favicon-url>" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon <Display>">
+    <span class="card-title" style="margin: 0;"><Display></span>
+    </div>
+    <span class="card-desc">Import the <…> export from <Display>.</span>
+    </a>
+    ```
+
+3. **Capacity table** — add one row per language in the `??? info "📊 Importer Capabilities"`
+   table of those same index files, **4-space indented** so it stays inside the admonition.
+   Columns are `Broker | Status | Format | Buy/Sell | Dividends | Deposits/Cash | Fees/Taxes | Notes`
+   (use ✅ / ❌ per capability):
+
+    ```markdown
+    | <img src="<favicon-url>" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **<Display>** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | <short note> |
+    ```
 4. **Nav** — add `- <Display>: user/transactions/import/<slug>.md` in `mkdocs_src/mkdocs.yml`
    under the right `📥 Import from Broker` subgroup, and add any new group/leaf title to the
    `nav_translations` of each non-English locale.
 5. **Validate** — `./dev.py mkdocs build` must report **no** `unrecognized relative link` /
    `no such anchor`. Internal links use the `.md` form (`how-to.md`,
    `../../../community/contribute.md`), never trailing-slash paths.
+6. **Developer providers overview** — add one row for the broker to
+   [Providers List](../../backend/brim/providers_list.md) (favicon, code, formats, status,
+   notes) so the developer-side catalogue stays in sync.
 
 ---
 
@@ -365,4 +534,3 @@ Then, reusing `<slug>` everywhere:
 - [Generic CSV Provider](../../backend/brim/generic_csv.md) — User-configurable CSV mapper (reference implementation)
 - [Providers List](../../backend/brim/providers_list.md) — All supported brokers
 - [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
-

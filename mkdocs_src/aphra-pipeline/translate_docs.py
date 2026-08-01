@@ -2668,6 +2668,7 @@ def run_diff(args) -> int:
     total_issues = 0
     files_checked = 0
     files_with_issues = 0
+    files_missing = 0
 
     print(f"\n📐 Structural Diff: {len(sources)} source file(s) × {len(target_langs)} language(s)")
     print(f"   Languages: {', '.join(target_langs)}\n")
@@ -2681,8 +2682,8 @@ def run_diff(args) -> int:
             translated_path = source_path.parent / translated_name
 
             if not translated_path.exists():
-                if verbose:
-                    print(f"  ⏭️  {cache_key} → {lang}: translation not found")
+                files_missing += 1
+                print(f"  ❌ {cache_key} → {lang}  (missing translation file)")
                 continue
 
             files_checked += 1
@@ -2706,12 +2707,15 @@ def run_diff(args) -> int:
     print(f"\n{'=' * 50}")
     print(f"📊 Files checked: {files_checked}")
     print(f"✅ Clean: {files_checked - files_with_issues}")
-    print(f"⚠️  With issues: {files_with_issues}  ({total_issues} total anomalies)")
+    if files_with_issues:
+        print(f"⚠️  With issues: {files_with_issues}  ({total_issues} total anomalies)")
+    if files_missing:
+        print(f"❌ Missing translations: {files_missing}")
     if files_with_issues and not verbose:
         print(f"\n💡 Run with --verbose to see detailed reports.")
     print()
 
-    return 1 if files_with_issues else 0
+    return 1 if (files_with_issues or files_missing) else 0
 
 
 # ---------------------------------------------------------------------------

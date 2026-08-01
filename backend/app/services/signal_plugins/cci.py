@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -18,12 +20,15 @@ from backend.app.schemas.signals import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
@@ -73,29 +78,40 @@ _CCI_LEVELS = [
         value=100,
     ),
 ]
+_EXTREME_LINE_STYLE = SignalRegionLineStyle(
+    pattern=SignalLinePattern.SOLID,
+    width_delta=1,
+)
+_NEUTRAL_LINE_STYLE = SignalRegionLineStyle(pattern=SignalLinePattern.DASHED)
 _CCI_REGIONS = [
     SignalValueRegion(
         key="oversold",
         label_key="signals.cci.oversoldRegion",
+        description_key="signals.regions.oversoldDescription",
         semantic="oversold",
         upper=-100,
         include_upper=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
     SignalValueRegion(
         key="neutral",
         label_key="signals.cci.neutralRegion",
+        description_key="signals.regions.neutralDescription",
         semantic="neutral",
         lower=-100,
         upper=100,
         include_lower=True,
         include_upper=True,
+        line_style=_NEUTRAL_LINE_STYLE,
     ),
     SignalValueRegion(
         key="overbought",
         label_key="signals.cci.overboughtRegion",
+        description_key="signals.regions.overboughtDescription",
         semantic="overbought",
         lower=100,
         include_lower=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
 ]
 
@@ -107,9 +123,12 @@ class CciSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.cci.name"
     description_key = "signals.cci.description"
+    semantic_id = "commodity_channel_index"
+    semantic_description = "Measures typical-price deviation from its recent average."
     icon = "🧭"
     docs_path = "financial-theory/technical-analysis/indicators/cci/"
     params_model = CciSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,
@@ -123,7 +142,10 @@ class CciSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="cci",
             label_key="signals.cci.output",
+            semantic_id="commodity_channel_index.value",
+            semantic_description="Normalized typical-price deviation from the lookback average.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(
                 key="cci",
@@ -186,6 +208,8 @@ class CciSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     reference_levels=[item.model_copy(deep=True) for item in _CCI_LEVELS],

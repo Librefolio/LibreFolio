@@ -1,5 +1,6 @@
 <script lang="ts">
     import {onMount} from 'svelte';
+    import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -71,6 +72,7 @@
     let deleteDialogOpen = false;
     let deletingBroker: {id: number; name: string} | null = null;
     let deletingTransactionCount = 0;
+    let deleteBlocked = false;
     let deleteLoading = false;
 
     let sharingModalOpen = false;
@@ -213,7 +215,15 @@
     function handleDelete(event: CustomEvent<{id: number; name: string}>) {
         deletingBroker = event.detail;
         deletingTransactionCount = 0;
+        deleteBlocked = false;
         deleteDialogOpen = true;
+    }
+
+    function closeDeleteDialog() {
+        deleteDialogOpen = false;
+        deletingBroker = null;
+        deletingTransactionCount = 0;
+        deleteBlocked = false;
     }
 
     function openSharingModal(brokerId: number, brokerName: string, readOnly: boolean) {
@@ -241,17 +251,38 @@
         const sessionGeneration = getClientSessionGeneration();
         deleteLoading = true;
         try {
-            await zodiosApi.delete_brokers_api_v1_brokers_delete(undefined, {queries: {ids: [deletingBroker.id], force: event.detail.force}});
+            const result = await zodiosApi.delete_brokers_api_v1_brokers_delete(undefined, {queries: {ids: [deletingBroker.id], force: event.detail.force}});
             if (!isClientSessionCurrent(sessionGeneration)) return;
+            const deleteResult = result.results[0];
+            if (!deleteResult) {
+                console.error('Failed to delete broker: missing delete result');
+                return;
+            }
+            const transactionCount = deleteResult.transaction_count ?? 0;
+            if (!deleteResult.success && !event.detail.force && transactionCount > 0) {
+                deletingTransactionCount = transactionCount;
+                deleteBlocked = true;
+                return;
+            }
+            if (!deleteResult.success) {
+                console.error('Failed to delete broker:', deleteResult.message);
+                return;
+            }
             invalidateBroker(deletingBroker.id);
-            deleteDialogOpen = false;
-            deletingBroker = null;
+            closeDeleteDialog();
             await loadBrokers();
         } catch (e) {
             console.error('Failed to delete broker:', e);
         } finally {
             deleteLoading = false;
         }
+    }
+
+    async function viewBrokerTransactions() {
+        if (!deletingBroker || deleteLoading) return;
+        const brokerId = deletingBroker.id;
+        closeDeleteDialog();
+        await goto(`/transactions?broker_id=${brokerId}`);
     }
 
     function handleModalClose() {
@@ -367,10 +398,11 @@
     isOpen={deleteDialogOpen}
     loading={deleteLoading}
     on:cancel={() => {
-        deleteDialogOpen = false;
-        deletingBroker = null;
+        closeDeleteDialog();
     }}
     on:confirm={confirmDelete}
+    on:viewTransactions={viewBrokerTransactions}
+    blocked={deleteBlocked}
     transactionCount={deletingTransactionCount}
 />
 

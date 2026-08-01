@@ -46,6 +46,25 @@ A **volatility envelope** around the price. The bands widen during volatile peri
 
 ---
 
+## 🧠 AI Export
+
+The **AI Export** (:material-brain:) button in the page toolbar offers three FX
+tasks:
+
+- **FX Trend Review**
+- **FX Exposure Impact**
+- **FX Conversion Timing Context**
+
+The backend snapshot uses the page's canonical currency pair, selected range,
+target currency, rate history, and shared technical-signal results. For FX
+Exposure Impact, exposure is limited to cash currencies and position trading or
+valuation currencies directly linkable to the pair; it does **not** look through
+funds or issuers to infer hidden currency exposure. See
+[FX AI Export](../../ai-export/fx.md) or the
+[AI Export overview](../../ai-export/index.md).
+
+---
+
 ## 📚 Deep Dive: Financial Theory
 
 For a comprehensive mathematical treatment of each indicator — including formulas, signal processing equivalents, and practical interpretation:

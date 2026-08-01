@@ -27,7 +27,7 @@ For each ``(asset_id, date, type, tolerance_days)`` return candidate
   is required.
 - ``tolerance_days=0`` matches only the exact date.
 - ``tolerance_days`` is capped at 7 by the schema (422 beyond).
-- More than 500 requests → 422.
+- Large batches (>500 requests) are delegated without a cap.
 
 Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G.4.
 """
@@ -39,7 +39,6 @@ from datetime import date, timedelta
 
 import httpx
 import pytest
-from fastapi import HTTPException
 
 import backend.app.api.v1.transactions as transactions_api
 from backend.app.config import get_settings
@@ -323,12 +322,24 @@ async def test_suggest_direct_calls_service(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
-async def test_suggest_rejects_more_than_500_requests():
-    """More than 500 items in raw list body → explicit route guard → 422."""
-    print_section("G.4.8 — more than 500 requests rejected")
-    with pytest.raises(HTTPException) as exc_info:
-        await transactions_api.suggest_events(requests=[object()] * 501, session=object(), _current_user=object())
+async def test_suggest_accepts_more_than_500_requests(monkeypatch: pytest.MonkeyPatch):
+    """The 500-item cap was removed: large raw list bodies are delegated as-is."""
+    print_section("G.4.8 — more than 500 requests accepted (no cap)")
 
-    assert exc_info.value.status_code == 422
-    assert exc_info.value.detail == "Max 500 requests per call"
-    print_success(">500 requests rejected with 422")
+    captured: dict = {}
+
+    async def fake_suggest_events_bulk(self, requests):
+        captured["count"] = len(requests)
+        return ["ok"] * len(requests)
+
+    monkeypatch.setattr(
+        transactions_api,
+        "TransactionService",
+        type("FakeTransactionService", (), {"__init__": lambda self, session: None, "suggest_events_bulk": fake_suggest_events_bulk}),
+    )
+
+    result = await transactions_api.suggest_events(requests=[object()] * 501, session=object(), _current_user=object())
+
+    assert captured["count"] == 501
+    assert len(result) == 501
+    print_success(">500 requests accepted and delegated (no cap)")

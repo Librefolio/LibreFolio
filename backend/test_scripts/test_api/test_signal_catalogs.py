@@ -37,6 +37,11 @@ ASSET_CODES = {
     "CCI",
     "OBV",
     "MFI",
+    "RISK_DRAWDOWN",
+    "RISK_ROLLING_BETA",
+    "RISK_ROLLING_RETURN",
+    "RISK_ROLLING_SHARPE",
+    "RISK_ROLLING_VOLATILITY",
 }
 FX_CODES = {
     "EMA",
@@ -138,6 +143,10 @@ async def test_asset_and_fx_catalogs_are_static_and_filtered(
     assert {item.signal_code for item in fx_catalog.items} == FX_CODES
     assert [item.signal_code for item in asset_catalog.items] == sorted(ASSET_CODES)
     assert [item.signal_code for item in fx_catalog.items] == sorted(FX_CODES)
+    beta = next(item for item in asset_catalog.items if item.signal_code == "RISK_ROLLING_BETA")
+    comparison_param = beta.params_schema["properties"]["comparison_asset_id"]
+    assert comparison_param["x-control"] == "comparison_asset"
+    assert beta.input_requirements.comparison_asset_param == "comparison_asset_id"
 
 
 @pytest.mark.asyncio
@@ -178,5 +187,5 @@ async def test_catalog_handlers_have_no_db_or_history_dependency():
 
     asset = await list_asset_signal_catalog(_current_user=object())
     fx = await list_fx_signal_catalog(_current_user=object())
-    assert len(asset.items) == 17
+    assert len(asset.items) == 22
     assert len(fx.items) == 9

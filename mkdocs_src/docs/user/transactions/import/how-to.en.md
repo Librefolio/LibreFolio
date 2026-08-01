@@ -47,7 +47,7 @@ This step accepts CSV, XLSX or PDF reports exported from your broker. You can se
 
 ### ⚙️ Step 2: Parser Configuration
 
-The system automatically detects the broker format (e.g. Degiro, Directa, Interactive Brokers). If you upload a generic spreadsheet, you can use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields.
+The system automatically detects the broker format (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole). If you upload a generic spreadsheet, you can use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Parser Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -86,6 +86,14 @@ If the statement contains ticker symbols or ISINs that are not in your library, 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Step 4: Asset Resolution" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+#### ⛔ Broker Opening Date
+
+If the target broker has an opening date, the wizard flags rows whose date is **strictly before** it with the status `Before opening`. Those rows are deselected and cannot be imported; a row on the opening day remains valid. Use **Edit broker date** and then re-check/refresh if the date is wrong.
+
+#### ⚠️ Asset Notices
+
+Some plugins attach advisory notices to extracted assets. For example, Intesa Sanpaolo and Crédit Agricole can warn that a security may be matured or redeemed. These notices appear as amber banners when you create/map the asset; they do not block the import.
 
 #### ⚠️ Duplicate Detection
 

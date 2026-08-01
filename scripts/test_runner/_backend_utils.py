@@ -111,6 +111,17 @@ def utils_translation_utils(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Translation helper tests", verbose=verbose)
 
 
+def utils_ai_export_probe(verbose: bool = False, test_names: list = None) -> bool:
+    """Test permanent AI Export real-prompt probe helpers and audits."""
+    print_section("Utils: AI Export Real-Prompt Probe")
+    print_info("Testing: backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_utilities/test_ai_export_real_prompt_probe.py",
+        test_names,
+    )
+    return run_command(cmd, "AI Export real-prompt probe tests", verbose=verbose)
+
+
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
     return _run_test_suite(
@@ -147,5 +158,6 @@ Tests for utility modules and helper functions:
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
+    add_test(cat, "ai-export-probe", utils_ai_export_probe, name="AI Export Probe", desc="Real-prompt orchestration, dimensional metrics, and public-output audits")
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")
     registry["utils"] = cat

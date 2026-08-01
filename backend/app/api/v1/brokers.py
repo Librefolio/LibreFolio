@@ -82,6 +82,29 @@ broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
 
 
+def _delete_brim_files_for_brokers(broker_ids: List[int]) -> int:
+    """Delete every BRIM import file that belongs to the given brokers.
+
+    BRIM files live on the filesystem (not the DB), so the ORM cascade that removes a
+    broker and its transactions never touches them. This best-effort helper removes the
+    now-orphaned files after their broker has been deleted. Only files whose
+    ``target_broker_id`` matches exactly are removed — legacy files with no broker
+    (``None``) are left untouched.
+
+    Returns the number of files removed. Performs synchronous filesystem I/O, so callers
+    in async endpoints must invoke it via ``asyncio.to_thread``.
+    """
+    removed = 0
+    for broker_id in broker_ids:
+        try:
+            for file_info in brim_provider.list_files(broker_ids=[broker_id]):
+                if file_info.target_broker_id == broker_id and brim_provider.delete_file(file_info.file_id):
+                    removed += 1
+        except Exception as exc:  # best-effort: the broker is already deleted
+            logger.warning("Failed to clean BRIM files for deleted broker", broker_id=broker_id, error=str(exc))
+    return removed
+
+
 async def _get_brim_file_with_access(
     file_id: str,
     current_user: User,
@@ -353,7 +376,12 @@ async def delete_brokers(
 
     if not response.errors:
         await session.commit()
-        logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=user_id)
+        # Cascade-delete orphaned BRIM import files for each broker that was actually
+        # deleted (files are on the filesystem, so the ORM cascade misses them). Done
+        # post-commit and best-effort so a filesystem hiccup never fails the delete.
+        deleted_broker_ids = [r.id for r in response.results if r.success]
+        files_removed = await asyncio.to_thread(_delete_brim_files_for_brokers, deleted_broker_ids)
+        logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=user_id, brim_files_removed=files_removed)
     else:
         await session.rollback()
         logger.warning(f"Broker deletion had errors: {response.errors}", user_id=user_id)
@@ -770,6 +798,7 @@ async def parse_file(
                     extracted_name=info.extracted_name,
                     candidates=candidates,
                     selected_asset_id=auto_selected,
+                    notices=info.notices,
                 )
             )
 

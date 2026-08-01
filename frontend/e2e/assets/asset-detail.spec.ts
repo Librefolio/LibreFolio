@@ -47,6 +47,36 @@ test.describe('Asset Detail Page', () => {
         await expect(page.getByTestId('asset-detail-filter-bar')).toBeVisible();
     });
 
+    test('AI Export lives in the shared toolbar across Overview and Risk', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        const controls = page.getByTestId('asset-detail-controls');
+        const toolbar = controls.getByTestId('asset-detail-filter-bar');
+        await expect(controls.getByTestId('asset-detail-tab-overview')).toBeVisible();
+        await expect(page.getByTestId('asset-detail-tabs')).toHaveCount(0);
+        const aiExportButton = toolbar.getByTestId('ai-export-button');
+        await expect(aiExportButton).toBeVisible({timeout: 10_000});
+        await expect(aiExportButton).toBeEnabled({timeout: 10_000});
+        await aiExportButton.click();
+        await expect(page.getByTestId('ai-export-menu-panel')).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('ai-export-menu-panel')).toBeHidden();
+        await expect(page.getByTestId('asset-detail-signals-header').getByTestId('ai-export-button')).toHaveCount(0);
+
+        const initialRiskResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/risk/query');
+        await controls.getByTestId('asset-detail-tab-risk').click();
+        await initialRiskResponse;
+        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 10_000});
+        await expect(controls.getByTestId('asset-detail-tab-risk')).toHaveAttribute('aria-selected', 'true');
+        await expect(toolbar).toBeVisible();
+        await expect(toolbar.getByTestId('ai-export-button')).toBeVisible();
+        await expect(page.getByTestId('risk-sync-button')).toHaveCount(0);
+        await expect(page.getByTestId('risk-refresh-button')).toHaveCount(0);
+
+        const refreshedRiskRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/risk/query');
+        await toolbar.getByTestId('asset-detail-refresh-btn').click();
+        await refreshedRiskRequest;
+    });
+
     // ========================================================================
     // Test 3: Edit button opens modal (no effect_update_depth_exceeded)
     // ========================================================================
@@ -92,6 +122,41 @@ test.describe('Asset Detail Page', () => {
         await page.waitForTimeout(300);
         // State should have changed
         expect(true).toBeTruthy(); // Panel toggled without error
+    });
+
+    test('risk signals render and beta requests only after selecting a comparison asset', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        await page.getByTestId('asset-detail-signals-toggle').click();
+        await expect(page.getByTestId('asset-detail-signals-panel')).toBeVisible({timeout: 5_000});
+
+        await page.getByTestId('signals-indicator-select-button').click();
+        await page.getByTestId('signal-tree-group-risk').click();
+        await expect(page.getByTestId('signal-tree-option-risk-drawdown')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-volatility')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-return')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-sharpe')).toBeVisible();
+        await page.getByTestId('signal-tree-option-risk-rolling-beta').click();
+
+        await expect(page.getByTestId('signal-comparison-asset-select-control')).toBeVisible({timeout: 5_000});
+        await page.getByTestId('signal-comparison-asset-select-trigger').click();
+
+        const comparisonOption = page.getByTestId(/^search-select-option-/).first();
+        await expect(comparisonOption).toBeVisible({timeout: 5_000});
+        const betaRequest = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || !request.url().includes('/api/v1/assets/prices/query')) return false;
+                const body = request.postDataJSON();
+                return Array.isArray(body) && body.some((item) => item.signals?.some((signal: {signal_code?: string; params?: {comparison_asset_id?: number}}) => signal.signal_code === 'RISK_ROLLING_BETA' && Number.isInteger(signal.params?.comparison_asset_id)));
+            },
+            {timeout: 10_000},
+        );
+        await comparisonOption.click();
+
+        const requestBody = (await betaRequest).postDataJSON() as Array<{
+            signals?: Array<{signal_code?: string; params?: {comparison_asset_id?: number}}>;
+        }>;
+        const betaSignal = requestBody.flatMap((item) => item.signals ?? []).find((signal) => signal.signal_code === 'RISK_ROLLING_BETA');
+        expect(betaSignal?.params?.comparison_asset_id).toBeGreaterThan(0);
     });
 
     // ========================================================================
@@ -243,7 +308,26 @@ test.describe('Asset Detail Page', () => {
     });
 
     // ========================================================================
-    // Test 17: Chart type toggle — Line → Candlestick → Line
+    // Test 17: Chart-local Abs/% control
+    // ========================================================================
+    test('Abs/% control is chart-local and synchronizes page view mode', async ({page}) => {
+        await goToFirstAssetDetail(page);
+        const filterBar = page.getByTestId('asset-detail-filter-bar');
+        const chart = page.getByTestId('asset-detail-chart');
+        await expect(filterBar.getByTestId('chart-view-mode-toggle')).toHaveCount(0);
+        await expect(chart.getByTestId('chart-view-mode-toggle')).toBeVisible({timeout: 10_000});
+        await expect(chart).toHaveAttribute('data-view-mode', 'percentage');
+
+        await chart.getByTestId('chart-view-absolute').click();
+        await expect(chart).toHaveAttribute('data-view-mode', 'absolute');
+        await expect(chart.getByTestId('chart-view-absolute')).toHaveAttribute('aria-pressed', 'true');
+
+        await chart.getByTestId('chart-view-percentage').click();
+        await expect(chart).toHaveAttribute('data-view-mode', 'percentage');
+    });
+
+    // ========================================================================
+    // Test 18: Chart type toggle — Line → Candlestick → Line
     // ========================================================================
     test('chart type toggle switches between line and candlestick', async ({page}) => {
         await goToFirstAssetDetail(page);
@@ -269,7 +353,7 @@ test.describe('Asset Detail Page', () => {
     });
 
     // ========================================================================
-    // Test 18: Candlestick renders without JS error
+    // Test 19: Candlestick renders without JS error
     // ========================================================================
     test('candlestick chart renders without console errors', async ({page}) => {
         const errors: string[] = [];

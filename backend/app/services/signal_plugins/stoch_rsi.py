@@ -15,20 +15,27 @@ from pydantic import (
 )
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDomain,
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
@@ -56,7 +63,8 @@ class StochRsiSignalParams(BaseModel):
             "x-control-order": 1,
             "x-suffix": "days",
             "x-step": 1,
-            "x-tooltip-key": "chartSettings.tooltips.period",
+            "x-tooltip-key": "signals.tooltips.stochRsiPeriod",
+            "x-affects-outputs": ["k", "d"],
         },
     )
     d_period: int = Field(
@@ -70,6 +78,7 @@ class StochRsiSignalParams(BaseModel):
             "x-suffix": "days",
             "x-step": 1,
             "x-tooltip-key": "signals.tooltips.dPeriod",
+            "x-affects-outputs": ["d"],
         },
     )
     overbought: FiniteFloat = Field(
@@ -81,6 +90,7 @@ class StochRsiSignalParams(BaseModel):
             "x-control-order": 3,
             "x-step": 1,
             "x-tooltip-key": "chartSettings.tooltips.overbought",
+            "x-affects-outputs": ["k"],
         },
     )
     oversold: FiniteFloat = Field(
@@ -92,6 +102,7 @@ class StochRsiSignalParams(BaseModel):
             "x-control-order": 4,
             "x-step": 1,
             "x-tooltip-key": "chartSettings.tooltips.oversold",
+            "x-affects-outputs": ["k"],
         },
     )
 
@@ -108,6 +119,11 @@ _STOCH_RSI_AXIS = SignalAxisSpec(
     minimum=0,
     maximum=100,
 )
+_EXTREME_LINE_STYLE = SignalRegionLineStyle(
+    pattern=SignalLinePattern.SOLID,
+    width_delta=1,
+)
+_NEUTRAL_LINE_STYLE = SignalRegionLineStyle(pattern=SignalLinePattern.DASHED)
 _DEFAULT_LEVELS = [
     SignalReferenceLevel(
         key="oversold",
@@ -126,25 +142,31 @@ _DEFAULT_REGIONS = [
     SignalValueRegion(
         key="oversold",
         label_key="signals.stochRsi.oversoldRegion",
+        description_key="signals.regions.oversoldDescription",
         semantic="oversold",
         upper=20,
         include_upper=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
     SignalValueRegion(
         key="neutral",
         label_key="signals.stochRsi.neutralRegion",
+        description_key="signals.regions.neutralDescription",
         semantic="neutral",
         lower=20,
         upper=80,
         include_lower=True,
         include_upper=True,
+        line_style=_NEUTRAL_LINE_STYLE,
     ),
     SignalValueRegion(
         key="overbought",
         label_key="signals.stochRsi.overboughtRegion",
+        description_key="signals.regions.overboughtDescription",
         semantic="overbought",
         lower=80,
         include_lower=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
 ]
 
@@ -156,17 +178,29 @@ class StochRsiSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.stochRsi.name"
     description_key = "signals.stochRsi.description"
+    semantic_id = "stochastic_relative_strength_index"
+    semantic_description = "Locates RSI within its recent range and applies smoothing."
     icon = "🎛️"
     docs_path = "financial-theory/technical-analysis/indicators/stochastic-rsi/"
     params_model = StochRsiSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.VERY_FAST),)
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(
             key="k",
             label_key="signals.stochRsi.k",
+            description_key="signals.stochRsi.kDescription",
+            semantic_id="stochastic_relative_strength_index.k",
+            semantic_description="Fast stochastic position of RSI within its lookback range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_STOCH_RSI_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.PRIMARY,
+                line_pattern=SignalLinePattern.SOLID,
+                width_delta=1,
+            ),
             supports_reference_levels=True,
             supports_value_regions=True,
             default_reference_levels=_DEFAULT_LEVELS,
@@ -175,9 +209,17 @@ class StochRsiSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="d",
             label_key="signals.stochRsi.d",
+            description_key="signals.stochRsi.dDescription",
+            semantic_id="stochastic_relative_strength_index.d",
+            semantic_description="Smoothed average of the stochastic RSI K line.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_STOCH_RSI_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.SECONDARY,
+                line_pattern=SignalLinePattern.DASHED,
+            ),
         ),
     )
     compatible_domains = (SignalDomain.ASSET, SignalDomain.FX)
@@ -244,25 +286,31 @@ class StochRsiSignalPlugin(SignalPlugin):
             SignalValueRegion(
                 key="oversold",
                 label_key="signals.stochRsi.oversoldRegion",
+                description_key="signals.regions.oversoldDescription",
                 semantic="oversold",
                 upper=params.oversold,
                 include_upper=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="neutral",
                 label_key="signals.stochRsi.neutralRegion",
+                description_key="signals.regions.neutralDescription",
                 semantic="neutral",
                 lower=params.oversold,
                 upper=params.overbought,
                 include_lower=True,
                 include_upper=True,
+                line_style=_NEUTRAL_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="overbought",
                 label_key="signals.stochRsi.overboughtRegion",
+                description_key="signals.regions.overboughtDescription",
                 semantic="overbought",
                 lower=params.overbought,
                 include_lower=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
         ]
         series = []
@@ -277,9 +325,13 @@ class StochRsiSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,
+                    style=spec.style.model_copy(deep=True),
                     reference_levels=([item.model_copy(deep=True) for item in levels] if index == 0 else []),
                     value_regions=([item.model_copy(deep=True) for item in regions] if index == 0 else []),
                     points=[

@@ -46,6 +46,25 @@ Una **envolvente de volatilidad** alrededor del precio. Las bandas se ensanchan 
 
 ---
 
+## 🧠 Exportación de IA
+
+El botón **Exportación de IA** (:material-brain:) de la barra de herramientas de
+la página ofrece tres tareas de FX:
+
+- **Análisis de tendencia cambiaria**
+- **Impacto de la exposición cambiaria**
+- **Contexto temporal de conversión de divisas**
+
+La instantánea del backend usa el par de divisas canónico de la página, el rango
+seleccionado, la moneda objetivo, el historial de tipos y los resultados técnicos
+del servicio de señales compartido. Para Impacto de la exposición cambiaria, la
+exposición se limita a las monedas de efectivo y a las monedas de negociación o
+valoración de posiciones vinculables directamente al par; no realiza
+**look-through** de fondos o emisores para deducir exposición oculta. Consulta la
+[guía de Exportación de IA](../../ai-export/index.md).
+
+---
+
 ## 📚 Profundización: Teoría Financiera
 
 Para un tratamiento matemático exhaustivo de cada indicador — incluyendo fórmulas, equivalentes de procesamiento de señales e interpretación práctica:

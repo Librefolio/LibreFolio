@@ -28,13 +28,14 @@ import hashlib
 import json
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 from typing import AsyncGenerator, Dict, List, Literal, Optional
 
 import structlog
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import String, and_, cast, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -73,6 +74,8 @@ from backend.app.schemas import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalPricePoint,
+    SignalSourceCapability,
+    SignalVolumeKind,
     SyncStatus,
 )
 from backend.app.schemas.assets import (
@@ -89,7 +92,12 @@ from backend.app.schemas.assets import (
     FAinfoResponse,
     FAMetadataChangeDetail,
 )
-from backend.app.schemas.common import Currency, FxBackwardFillInfo, OldNew
+from backend.app.schemas.common import (
+    Currency,
+    DateRangeModel,
+    FxBackwardFillInfo,
+    OldNew,
+)
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAProviderConfigBase,
@@ -98,14 +106,20 @@ from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
     FAProviderSearchResponse,
     FAProviderSearchResultItem,
+    FAVolumeKind,
     ProbeCurrentPriceResult,
     ProbeHistoryResult,
     ProbeMetadataResult,
     ProbeOperation,
 )
+from backend.app.services import web_link_finder
 from backend.app.services.fx import convert_bulk
 from backend.app.services.provider_registry import AssetProviderRegistry
-from backend.app.services.signal_service import SignalService
+from backend.app.services.series_preparation import prepare_asset_series_set
+from backend.app.services.signal_service import (
+    SignalPreparedSeriesBundle,
+    SignalService,
+)
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
@@ -123,6 +137,7 @@ _asset_current_cache = get_ttl_cache("asset_current_fetch", maxsize=300, ttl=120
 _asset_metadata_cache = get_ttl_cache("asset_metadata_fetch", maxsize=200, ttl=1800)  # 30 min
 _search_result_cache = get_ttl_cache("search_results", maxsize=5000, ttl=86400)  # 24h — individual items
 _search_query_cache = get_ttl_cache("search_queries", maxsize=500, ttl=900)  # 15 min — query→results
+_RISK_WARMUP_DAY_MULTIPLIER = 2
 
 AssetHistoryStartDate = date_type | Literal["min"]
 ASSET_HISTORY_MIN_FALLBACK = date_type(1900, 1, 1)
@@ -330,6 +345,38 @@ class AssetSourceProvider(ABC):
         params change requires a destructive-confirm dialog.
         """
         return FAProviderKind.ONLINE_SCRAPER
+
+    @property
+    def supports_meaningful_volume(self) -> bool:
+        """
+        Declares whether this provider's ``volume`` field represents real,
+        comparable trading activity (e.g. exchange-traded share volume)
+        rather than being absent, synthetic, or of unverified origin.
+
+        Default is ``False`` (safe/unknown). Override to ``True`` only when
+        the source's semantics are unambiguous — e.g. a provider that
+        surfaces genuine exchange-traded share volume for the instruments it
+        serves. Do NOT infer this per-asset-type; a provider that mixes
+        volume-bearing and volume-less request paths (e.g. NAV-priced funds
+        vs ISIN-quoted stocks under the same provider) should still declare
+        the provider-level truth here, and rely on downstream structural
+        validation (sufficient non-null observed volume) to reject the
+        volume-less paths at the signal level.
+
+        Consumed by ``AssetSourceService`` to derive
+        ``SignalSourceCapability`` for volume-dependent signals (MFI, OBV),
+        and surfaced to the frontend via ``FAProviderInfo.supports_meaningful_volume``.
+        """
+        return False
+
+    @property
+    def volume_kind(self) -> FAVolumeKind:
+        """
+        Semantic kind of the volume field when ``supports_meaningful_volume``
+        is ``True``. Default ``FAVolumeKind.UNKNOWN``; override alongside
+        ``supports_meaningful_volume`` (e.g. ``FAVolumeKind.TRADED_SHARES``).
+        """
+        return FAVolumeKind.UNKNOWN
 
     @property
     def get_icon(self) -> str | None:
@@ -745,6 +792,59 @@ class AssetSourceProvider(ABC):
 
         Returns:
             URL string or None if provider has no web page for assets
+        """
+        return None
+
+    @property
+    def resolvable_url_domains(self) -> list[str]:
+        """Bare domains whose asset pages this provider can resolve via ``resolve_url``.
+
+        Default: empty list → the provider does not support URL resolution. A
+        provider that can turn one of its public page URLs back into a search-item
+        overrides this with the domains it recognises, e.g. ``["borsaitaliana.it"]``.
+        Sub-domains are covered automatically (``www.borsaitaliana.it`` matches).
+        """
+        return []
+
+    @property
+    def supports_url_resolution(self) -> bool:
+        """Whether this provider implements ``resolve_url`` (derived from the domains)."""
+        return bool(self.resolvable_url_domains)
+
+    async def resolve_url(self, url: str) -> dict | list[dict] | None:
+        """Resolve a provider page URL into search-item(s) (inverse of ``get_asset_url``).
+
+        Given a URL on one of ``resolvable_url_domains``, open and extract it, then
+        return the SAME shape ``search`` produces — either a single item dict or a
+        list of them::
+
+            {identifier, identifier_type, display_name, currency, type, provider_params}
+
+        ``resolve_url`` is only an alternative **entry point** into search: when a
+        single page maps to several canonical rows (e.g. one per language, like an
+        on-site search hit), return them all as a list; the orchestration flattens and
+        de-duplicates by ``(identifier, language)``. This lets an externally-found page
+        (e.g. via ``web_link_finder``) be turned into selectable assets exactly like an
+        on-site search — funds priced by their stored ``provider_params`` afterwards,
+        never by external search.
+
+        PLUGIN RESPONSIBILITY:
+        - Recognise whether ``url`` is one of your asset pages; return ``None`` if not.
+        - Extract identifier/name/currency/type and any ``provider_params`` needed
+          to price the asset later.
+        - Return one item, or the full canonical set (list) the same instrument would
+          yield from ``search``.
+        - Handle errors gracefully (return ``None`` rather than raising).
+
+        Like other provider methods this runs inside the provider thread, so sync
+        I/O is fine. Default: not supported → returns ``None``.
+
+        Args:
+            url: A candidate provider page URL.
+
+        Returns:
+            A search-item dict, a list of them, or ``None`` if the URL is not a
+            recognised asset page.
         """
         return None
 
@@ -1771,6 +1871,7 @@ class AssetSourceManager:
                 return ProbeCurrentPriceResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1807,6 +1908,7 @@ class AssetSourceManager:
                 return ProbeHistoryResult(
                     success=False,
                     error=str(e),
+                    error_code=getattr(e, "error_code", None),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -1902,6 +2004,7 @@ class AssetSourceManager:
                         close=ph.close,
                         volume=ph.volume,
                         currency=ph.currency,
+                        source_plugin_key=ph.source_plugin_key,
                         backward_fill_info=None,
                     )
                 )
@@ -1916,12 +2019,53 @@ class AssetSourceManager:
                         close=last_known.close,
                         volume=last_known.volume,
                         currency=last_known.currency,
+                        source_plugin_key=last_known.source_plugin_key,
                         backward_fill_info=AssetBackwardFillInfo(actual_rate_date=last_known.date, days_back=days_back),
                     )
                 )
             # else: skip days before first known price
             current += timedelta(days=1)
         return results
+
+    @staticmethod
+    def derive_signal_source_capability(prices: Sequence[FAPricePoint]) -> SignalSourceCapability:
+        """Derive the semantic volume capability of a neutral price series
+        from the source plugin(s) that directly observed it.
+
+        Fails closed (unknown/false) whenever:
+        - no point was directly observed (all backward-filled, or empty series),
+        - any observed source_plugin_key does not resolve to a registered
+          provider (e.g. "MANUAL" upserts, test/legacy sentinel keys), or
+        - observed sources disagree (mixed providers with different capability).
+
+        Only points with ``backward_fill_info is None`` count as evidence:
+        backward-filled rows copy the seed price's ``source_plugin_key`` onto
+        dates that source never actually reported, so counting them would let
+        a stale source's capability leak onto data it didn't produce.
+        """
+        observed_keys = {point.source_plugin_key for point in prices if point.backward_fill_info is None and point.source_plugin_key}
+        if not observed_keys:
+            return SignalSourceCapability()
+
+        capabilities: set[tuple[bool, FAVolumeKind]] = set()
+        for key in observed_keys:
+            provider = AssetProviderRegistry.get_provider_instance(key)
+            if provider is None:
+                # Unknown/manual source (e.g. "MANUAL") — fail closed.
+                return SignalSourceCapability()
+            capabilities.add((provider.supports_meaningful_volume, provider.volume_kind))
+
+        if len(capabilities) != 1:
+            # Mixed sources with disagreeing capability — fail closed.
+            return SignalSourceCapability()
+
+        supports_meaningful_volume, volume_kind = next(iter(capabilities))
+        if not supports_meaningful_volume:
+            return SignalSourceCapability()
+        return SignalSourceCapability(
+            supports_meaningful_volume=True,
+            volume_kind=SignalVolumeKind(volume_kind.value),
+        )
 
     @staticmethod
     async def get_prices_bulk(
@@ -1959,8 +2103,12 @@ class AssetSourceManager:
                 context,
                 req.annotation_requests,
             )
-            warmup_days = min(
+            warmup_days = max(
                 plan.max_history_points_before_visible,
+                plan.max_prepared_history_points_before_visible * _RISK_WARMUP_DAY_MULTIPLIER,
+            )
+            warmup_days = min(
+                warmup_days,
                 (req.date_range.start - date_type.min).days,
             )
             load_range = (
@@ -1970,11 +2118,15 @@ class AssetSourceManager:
             request_ranges.append(requested_range)
             load_ranges.append(load_range)
             signal_plans.append(plan)
-            existing = asset_ranges.get(req.asset_id)
-            asset_ranges[req.asset_id] = (
-                min(existing[0], load_range[0]) if existing else load_range[0],
-                max(existing[1], load_range[1]) if existing else load_range[1],
-            )
+            for asset_id in (
+                req.asset_id,
+                *sorted(plan.comparison_asset_ids),
+            ):
+                existing = asset_ranges.get(asset_id)
+                asset_ranges[asset_id] = (
+                    min(existing[0], load_range[0]) if existing else load_range[0],
+                    max(existing[1], load_range[1]) if existing else load_range[1],
+                )
 
         asset_ids = list(asset_ranges.keys())
 
@@ -2085,6 +2237,56 @@ class AssetSourceManager:
             events = [event for event in event_maps.get(aid, []) if start <= event.date <= end] if aid in event_requests else []
             results.append(FAPriceQueryResult(asset_id=aid, prices=series, events=events))
 
+        dependency_results: dict[
+            tuple[int, int],
+            FAPriceQueryResult,
+        ] = {}
+        effective_risk_targets: dict[int, str] = {}
+        for request_index, (
+            req,
+            result,
+            plan,
+            (start, end),
+        ) in enumerate(
+            zip(
+                requests,
+                results,
+                signal_plans,
+                load_ranges,
+                strict=True,
+            )
+        ):
+            if not plan.requires_prepared_asset_series:
+                continue
+            target = req.target_currency or next(
+                (point.currency for point in result.prices if point.currency is not None),
+                None,
+            )
+            if target is not None:
+                effective_risk_targets[request_index] = target
+            for comparison_asset_id in plan.comparison_asset_ids:
+                if comparison_asset_id == req.asset_id:
+                    continue
+                comparison_price_map = price_maps.get(
+                    comparison_asset_id,
+                    {},
+                )
+                in_memory_seed = max(
+                    (price for point_date, price in comparison_price_map.items() if point_date < start),
+                    key=lambda price: price.date,
+                    default=None,
+                )
+                comparison_seed = in_memory_seed or seed_prices.get(comparison_asset_id)
+                dependency_results[(request_index, comparison_asset_id)] = FAPriceQueryResult(
+                    asset_id=comparison_asset_id,
+                    prices=AssetSourceManager._build_backward_filled_series(
+                        comparison_price_map,
+                        start,
+                        end,
+                        seed_price=comparison_seed,
+                    ),
+                )
+
         # ── Currency conversion pass ──────────────────────────────────────
         # For each result whose request has target_currency, convert OHLC
         # values via FX rates in a single batch call per asset.
@@ -2095,8 +2297,18 @@ class AssetSourceManager:
         # with dedicated banners + CTA. Auto-registration is NOT performed:
         # pair registration is an explicit user action (E.4 cancelled).
 
-        for req, result in zip(requests, results, strict=True):
-            target = getattr(req, "target_currency", None)
+        conversion_jobs = [(getattr(req, "target_currency", None), result) for req, result in zip(requests, results, strict=True)]
+        conversion_jobs.extend(
+            (
+                effective_risk_targets.get(request_index),
+                dependency_result,
+            )
+            for (
+                request_index,
+                _comparison_asset_id,
+            ), dependency_result in dependency_results.items()
+        )
+        for target, result in conversion_jobs:
             if not target or not result.prices:
                 continue
 
@@ -2146,6 +2358,7 @@ class AssetSourceManager:
                         original_open=original_point.original_open,
                         original_high=original_point.original_high,
                         original_low=original_point.original_low,
+                        source_plugin_key=original_point.source_plugin_key,
                         backward_fill_info=failed_bfi,
                     )
                     # Surface the per-pair error once per result (dedup)
@@ -2209,9 +2422,54 @@ class AssetSourceManager:
                     original_open=original_point.open,
                     original_high=original_point.high,
                     original_low=original_point.low,
+                    source_plugin_key=original_point.source_plugin_key,
                     backward_fill_info=new_bfi,
                 )
                 conv_idx += 1
+
+        prepared_series_bundles: list[Optional[SignalPreparedSeriesBundle]] = []
+        for request_index, (
+            req,
+            result,
+            plan,
+            (start, end),
+        ) in enumerate(
+            zip(
+                requests,
+                results,
+                signal_plans,
+                load_ranges,
+                strict=True,
+            )
+        ):
+            target = effective_risk_targets.get(request_index)
+            if not plan.requires_prepared_asset_series or target is None:
+                prepared_series_bundles.append(None)
+                continue
+
+            prepared_range = DateRangeModel(start=start, end=end)
+            primary_set = prepare_asset_series_set(
+                [result],
+                requested_range=prepared_range,
+                target_currency=target,
+            )
+            series_sets = {None: primary_set}
+            for comparison_asset_id in plan.comparison_asset_ids:
+                if comparison_asset_id == req.asset_id:
+                    series_sets[comparison_asset_id] = primary_set
+                    continue
+                dependency_result = dependency_results[(request_index, comparison_asset_id)]
+                series_sets[comparison_asset_id] = prepare_asset_series_set(
+                    [result, dependency_result],
+                    requested_range=prepared_range,
+                    target_currency=target,
+                )
+            prepared_series_bundles.append(
+                SignalPreparedSeriesBundle(
+                    primary_asset_id=req.asset_id,
+                    series_sets=series_sets,
+                )
+            )
 
         # ── Event conversion pass (E.8) ───────────────────────────────────
         # Mirror of the price conversion above, applied to ``result.events``
@@ -2263,17 +2521,28 @@ class AssetSourceManager:
                     result.errors.append(err)
 
         # ── Signal computation and response slicing ────────────────────────
-        for req, result, plan, requested_range in zip(
+        for (
+            req,
+            result,
+            plan,
+            requested_range,
+            prepared_series_bundle,
+        ) in zip(
             requests,
             results,
             signal_plans,
             request_ranges,
+            prepared_series_bundles,
             strict=True,
         ):
             if req.signals:
                 target = req.target_currency
-                conversion_complete = not target or all(point.currency == target for point in result.prices)
+                price_currencies = {point.currency for point in result.prices if point.currency}
+                currency_coherent = len(price_currencies) <= 1 and (not target or not price_currencies or price_currencies == {target})
                 event_conversion_complete = not target or all(event.value.code == target for event in result.events)
+                if not currency_coherent:
+                    currencies = ", ".join(sorted(price_currencies))
+                    result.errors.append("Technical signal computation skipped because the price " f"series contains mixed currencies: {currencies}")
                 neutral_prices = (
                     [
                         SignalPricePoint(
@@ -2287,7 +2556,7 @@ class AssetSourceManager:
                         )
                         for point in result.prices
                     ]
-                    if conversion_complete
+                    if currency_coherent
                     else []
                 )
                 neutral_events = (
@@ -2313,6 +2582,8 @@ class AssetSourceManager:
                     neutral_prices,
                     neutral_events,
                     events_loaded=(plan.requires_events and event_conversion_complete),
+                    prepared_series_bundle=prepared_series_bundle,
+                    source_capability=AssetSourceManager.derive_signal_source_capability(result.prices),
                 )
 
             requested_start, requested_end = requested_range
@@ -3576,9 +3847,11 @@ class AssetCRUDService:
         if filters.uuid:
             conditions.append(Asset.identifier_uuid == filters.uuid)
 
-        # identifier_other uses partial match (LIKE) since it can contain anything
+        # identifier_other is a JSON list of soft identifiers: cast the column to text
+        # and substring-match, so any element of the list can match.
+        # NOTE: SQLite LIKE is case-insensitive for ASCII; on Postgres switch to .ilike().
         if filters.identifier_other:
-            conditions.append(Asset.identifier_other.ilike(f"%{filters.identifier_other}%"))
+            conditions.append(cast(Asset.identifier_other, String).like(f"%{filters.identifier_other}%"))
 
         # Partial identifier match (across all identifier columns)
         if filters.identifier_contains:
@@ -3591,7 +3864,7 @@ class AssetCRUDService:
                     Asset.identifier_sedol.ilike(pattern),
                     Asset.identifier_figi.ilike(pattern),
                     Asset.identifier_uuid.ilike(pattern),
-                    Asset.identifier_other.ilike(pattern),
+                    cast(Asset.identifier_other, String).like(pattern),
                 )
             )
 
@@ -4118,7 +4391,152 @@ class AssetSearchService:
     """
 
     @staticmethod
-    async def search(query: str, provider_codes: Optional[list[str]] = None) -> FAProviderSearchResponse:
+    def _build_link_finder_queries(query: str, hints: Optional[list[str]] = None) -> list[str]:
+        """Ordered DDG queries for the link-finder: rich stringone first, base query last.
+
+        The rich query concatenates every hint (all report-extracted identifiers +
+        candidate names) together with the base ``query``, in the order supplied, deduped
+        and whitespace-collapsed. Nothing is sanitised, truncated or reordered — the whole
+        concatenation is handed to DuckDuckGo, which is left to do the ranking. If the rich
+        query yields no URLs the finder falls back to the bare base query. When no hints
+        are supplied this returns just the base query (legacy behaviour).
+        """
+        base = " ".join((query or "").split())
+        terms: list[str] = []
+        seen: set[str] = set()
+
+        def _add(value: str) -> None:
+            value = " ".join((value or "").split())
+            key = value.lower()
+            if value and key not in seen:
+                seen.add(key)
+                terms.append(value)
+
+        for hint in hints or []:
+            _add(hint)
+        _add(base)  # keep the base query terms inside the rich string too
+
+        rich = " ".join(terms).strip()
+
+        candidates: list[str] = []
+        seen_candidates: set[str] = set()
+        for candidate in (rich, base):
+            candidate = candidate.strip()
+            if candidate and candidate.lower() not in seen_candidates:
+                seen_candidates.add(candidate.lower())
+                candidates.append(candidate)
+        return candidates
+
+    @staticmethod
+    async def _augment_with_link_finder(code: str, provider: "AssetSourceProvider", query: str, hints: Optional[list[str]] = None) -> list[dict]:
+        """Last-resort fallback when a provider's on-site search yields nothing.
+
+        Uses the external :mod:`web_link_finder` to turn a query into candidate
+        provider-domain URLs, then asks the provider to ``resolve_url`` each into a
+        search-item dict. Best-effort: any failure returns ``[]`` and is never fatal.
+
+        When ``hints`` are supplied (report-extracted identifiers + names) the finder
+        tries a rich concatenated query first and falls back to the bare ``query`` — a
+        specific ISIN+name query resolves to a single fund page, whereas a bare ISIN can
+        surface several sibling share classes.
+
+        Only runs for providers that opt in via ``supports_url_resolution`` and only
+        when the link-finder is enabled. Provider ``resolve_url`` calls go through the
+        dedicated provider thread, like every other provider method.
+        """
+        try:
+            if not getattr(provider, "supports_url_resolution", False) or not web_link_finder.is_enabled():
+                return []
+
+            for candidate_query in AssetSearchService._build_link_finder_queries(query, hints):
+                urls = await web_link_finder.find_candidate_urls(candidate_query, provider.resolvable_url_domains)
+                if not urls:
+                    continue
+
+                items: list[dict] = []
+                seen_items: set[tuple[str, str]] = set()
+
+                async def _resolve_one(u: str):
+                    try:
+                        return await _run_provider_in_thread(lambda: provider.resolve_url(u), timeout=20.0)
+                    except Exception as e:
+                        logger.debug(f"link-finder: resolve_url failed for '{u}' on provider '{code}': {e}")
+                        return None
+
+                # Resolve candidate URLs concurrently — this was a sequential ``for url in urls``
+                # loop whose per-URL latencies (each up to the 20s provider timeout) SUMMED, the
+                # dominant cost of a web-fallback search. ``asyncio.to_thread`` runs each provider
+                # call on its own worker thread, so total time ≈ the slowest URL instead of the sum.
+                # ``gather`` preserves argument order, so dedup priority (first URL wins) is unchanged.
+                resolved_list = await asyncio.gather(*[_resolve_one(u) for u in urls])
+                for resolved in resolved_list:
+                    if not resolved:
+                        continue
+                    # resolve_url may return one item or the full canonical set (list),
+                    # e.g. one row per language. Flatten and de-dup by (identifier, language)
+                    # so sibling language-URLs of the same instrument don't pile up.
+                    for it in resolved if isinstance(resolved, list) else [resolved]:
+                        if not it:
+                            continue
+                        key = (str(it.get("identifier", "")).strip().upper(), str((it.get("provider_params") or {}).get("language", "")).strip().lower())
+                        if key in seen_items:
+                            continue
+                        seen_items.add(key)
+                        items.append(it)
+
+                if items:
+                    items = AssetSearchService._filter_items_by_known_identifiers(items, [*(hints or []), query])
+                    for it in items:
+                        it["_via_web"] = True
+                    logger.info(f"link-finder: provider '{code}' resolved {len(items)} item(s) via web for '{candidate_query}'")
+                    return items
+
+            return []
+        except Exception as e:
+            logger.debug(f"link-finder: augmentation error on provider '{code}': {e}")
+            return []
+
+    @staticmethod
+    def _filter_items_by_known_identifiers(items: list[dict], known_terms: Optional[list[str]]) -> list[dict]:
+        """Narrow link-finder results to those whose identifier matches a known one.
+
+        The web link-finder can surface sibling instruments (e.g. a bare ISIN search on
+        Borsa Italiana returns every share class of a fund family). When we already hold
+        technical identifiers — the searched query and any report-extracted ``hints`` —
+        and at least one resolved item's ``identifier`` matches one of them, only the
+        matching items are kept. If nothing matches (the terms were only free-text names,
+        or none of the pages carried a known identifier) every item is returned so the
+        user still gets candidates to choose from. Matching is case-insensitive and
+        whitespace-trimmed; non-identifier terms (names) are inert because they never
+        equal an ISIN/ticker identifier.
+        """
+        if not items or not known_terms:
+            return items
+        known = {t.strip().upper() for t in known_terms if t and t.strip()}
+        if not known:
+            return items
+        matching = [it for it in items if str(it.get("identifier", "")).strip().upper() in known]
+        return matching or items
+
+    @staticmethod
+    def _provider_url_for_item(code: str, item: dict) -> Optional[str]:
+        """Compute a search result's ``provider_url`` via the provider's ``get_asset_url``.
+
+        ``provider_params`` MUST be forwarded: some providers (e.g. Borsa Italiana funds)
+        derive the correct page URL from params such as ``codice_fondo`` rather than from
+        the identifier alone. Dropping the params yields a wrong/dead link for those assets.
+        """
+        provider_instance = AssetProviderRegistry.get_provider_instance(code)
+        if not provider_instance:
+            return None
+        return provider_instance.get_asset_url(
+            item.get("identifier", ""),
+            item.get("identifier_type"),
+            item.get("provider_params"),
+        )
+
+    @staticmethod
+    async def search(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> FAProviderSearchResponse:
         """
         Search for assets across one or more providers in parallel.
 
@@ -4126,6 +4544,9 @@ class AssetSearchService:
             query: Search query string
             provider_codes: Optional list of provider codes to query.
                            If None, queries all providers.
+            hints: Optional extra search terms (report-extracted identifiers + names).
+                   Used only by the link-finder fallback to build a specific query when
+                   a provider's on-site search returns nothing.
 
         Returns:
             FAProviderSearchResponse with aggregated results from all providers.
@@ -4187,6 +4608,9 @@ class AssetSearchService:
                     lambda: provider.search(query),
                     timeout=30.0,
                 )
+                # Last-resort: no on-site hits → try the external link-finder + resolve_url.
+                if not search_results:
+                    search_results = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 _search_query_cache.set(query_cache_key, search_results)
                 return (code, search_results, None)
@@ -4224,14 +4648,8 @@ class AssetSearchService:
 
             # Convert provider results to response schema
             for item in items:
-                # Compute provider_url from provider instance
-                provider_instance = AssetProviderRegistry.get_provider_instance(code)
-                item_provider_url = None
-                if provider_instance:
-                    item_provider_url = provider_instance.get_asset_url(
-                        item.get("identifier", ""),
-                        item.get("identifier_type"),
-                    )
+                # Compute provider_url (forwards provider_params for fund-style URLs)
+                item_provider_url = AssetSearchService._provider_url_for_item(code, item)
 
                 # Validate asset_type: fallback to OTHER if unknown
                 raw_asset_type = item.get("type")
@@ -4249,6 +4667,7 @@ class AssetSearchService:
                         asset_type=raw_asset_type,
                         provider_url=item_provider_url,
                         provider_params=item.get("provider_params"),
+                        via_web=bool(item.get("_via_web", False)),
                     )
                 )
 
@@ -4261,7 +4680,7 @@ class AssetSearchService:
         )
 
     @staticmethod
-    async def search_stream(query: str, provider_codes: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover
+    async def search_stream(query: str, provider_codes: Optional[list[str]] = None, hints: Optional[list[str]] = None) -> AsyncGenerator[str]:  # pragma: no cover
         """
         Stream search results as SSE events, one event per provider completion.
 
@@ -4314,8 +4733,11 @@ class AssetSearchService:
             try:
                 items = await _run_provider_in_thread(
                     lambda: provider.search(query),
-                    timeout=30.0,
+                    timeout=20.0,
                 )
+                # Last-resort: no on-site hits → try the external link-finder + resolve_url.
+                if not items:
+                    items = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 _search_query_cache.set(query_cache_key, items)
                 await queue.put((code, items, None))
@@ -4341,14 +4763,8 @@ class AssetSearchService:
             # Convert items to serializable dicts
             result_items = []
             for item in items:
-                # Compute provider_url
-                provider_instance = AssetProviderRegistry.get_provider_instance(code)
-                item_provider_url = None
-                if provider_instance:
-                    item_provider_url = provider_instance.get_asset_url(
-                        item.get("identifier", ""),
-                        item.get("identifier_type"),
-                    )
+                # Compute provider_url (forwards provider_params for fund-style URLs)
+                item_provider_url = AssetSearchService._provider_url_for_item(code, item)
 
                 # Validate asset_type
                 raw_asset_type = item.get("type")
@@ -4369,6 +4785,7 @@ class AssetSearchService:
                         "asset_type": raw_asset_type,
                         "provider_url": item_provider_url,
                         "provider_params": item.get("provider_params"),
+                        "via_web": bool(item.get("_via_web", False)),
                     }
                 )
 

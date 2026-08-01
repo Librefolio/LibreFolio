@@ -73,6 +73,7 @@ from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     SignalPluginRegistry,
 )
+from backend.app.services.signal_service import SignalRequestValidationError
 
 logger = get_logger(__name__)
 
@@ -389,6 +390,8 @@ async def list_providers(
                     params_schema=schema_fields,
                     accepted_identifier_types=[t.value for t in instance.accepted_identifier_types],
                     provider_help_url=instance.provider_help_url,
+                    supports_meaningful_volume=instance.supports_meaningful_volume,
+                    volume_kind=instance.volume_kind,
                 )
             )
 
@@ -399,6 +402,7 @@ async def list_providers(
 async def search_assets_via_providers(
     q: str = Query(..., min_length=1, description="Search query"),
     providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
+    hints: Optional[List[str]] = Query(None, description="Extra search terms (ISIN + candidate names) used only by the link-finder fallback to disambiguate when on-site search finds nothing"),
     _current_user: User = Depends(get_current_user),
 ):
     """
@@ -451,13 +455,14 @@ async def search_assets_via_providers(
         provider_codes = [p.strip() for p in providers.split(",") if p.strip()]
 
     # Delegate to service layer (parallel execution via asyncio.gather)
-    return await AssetSearchService.search(q, provider_codes)
+    return await AssetSearchService.search(q, provider_codes, hints)
 
 
 @provider_router.get("/search/stream")
 async def search_assets_stream(  # pragma: no cover
     q: str = Query(..., min_length=1, description="Search query"),
     providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
+    hints: Optional[List[str]] = Query(None, description="Extra search terms (ISIN + candidate names) used only by the link-finder fallback to disambiguate when on-site search finds nothing"),
     _current_user: User = Depends(get_current_user),
 ):
     """
@@ -477,7 +482,7 @@ async def search_assets_stream(  # pragma: no cover
         provider_codes = [p.strip() for p in providers.split(",") if p.strip()]
 
     return StreamingResponse(
-        AssetSearchService.search_stream(q, provider_codes),
+        AssetSearchService.search_stream(q, provider_codes, hints),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -698,6 +703,8 @@ async def query_prices_bulk(
     try:
         results = await AssetSourceManager.get_prices_bulk(requests, session)
         return FAPriceQueryResponse(items=results)
+    except SignalRequestValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error querying prices bulk: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

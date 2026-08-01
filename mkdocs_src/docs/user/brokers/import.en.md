@@ -28,7 +28,7 @@ For a detailed explanation of transaction fields and validation rules, see the *
 
 The **Import** (`Upload` icon) button launches the **BRIM** wizard. This module allows you to import your broker's exported statements (CSV or Excel formats) in bulk, run automatic sanity validations, and map tickers to local assets before final commit.
 
-### The Import Flow
+### 🖼️ The Import Flow
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-import" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick Import Modal" alt="Import Modal">
@@ -42,15 +42,22 @@ The **Import** (`Upload` icon) button launches the **BRIM** wizard. This module 
 
 The wizard progresses through the following steps:
 
-1.  **Select File & Parser**: Choose the statement file and select the appropriate parser configuration (e.g., Interactive Brokers, Degiro, Directa, Charles Schwab, generic CSV, etc.).
+1.  **Select File & Parser**: Choose the statement file and select the appropriate parser configuration (e.g., Interactive Brokers, Degiro, Directa, Intesa Sanpaolo, Crédit Agricole, Charles Schwab, generic CSV, etc.).
 2.  **Verify Headers & Mapping**: Renders the CSV headers to confirm the parser aligns correctly with the columns.
-3.  **Operation Analysis**: Processes the file and displays a preview grid of parsed actions (Buys, Sells, Dividends, etc.).
+3.  **Operation Analysis**: Processes the file and displays a preview grid of parsed actions (Buys, Sells, Dividends, snapshot seeds, automatic cash counter-entries, etc.).
     *   **Badges**: Operations are labeled as `UNIQUE` (new trade), `DUPLICATE` (already exists in database), or `UNRESOLVED` (requires mapping ticker/ISIN).
     *   **TODO Notes**: Highlight fields requiring attention or items that could not be parsed automatically.
 4.  **Asset Resolution**: If the statement contains tickers or ISINs that do not exist in your local assets registry, BRIM displays a mapping step. You can:
     *   Map the ticker to an existing asset.
     *   Create a new asset directly from this screen, pre-filled with details extracted from the statement.
-5.  **Bulk Staging & Commit**: Review the staged checklist of clean, unique transactions. Uncheck any operations you wish to exclude, then click **Commit** to write the records to your portfolio ledger.
+5.  **Opening-Date Gate**: If a parsed row is strictly before the broker's opening date, the wizard marks it **Before opening**, disables its checkbox, and keeps it out of the import. Rows on the opening day are allowed. Use **Edit broker date** and re-check/refresh if needed.
+6.  **Bulk Staging & Commit**: Review the staged checklist of clean, unique transactions. Uncheck any operations you wish to exclude, then click **Commit** to write the records to your portfolio ledger.
+
+---
+
+## ⚠️ Asset Notices
+
+Some broker plugins attach advisory notices to extracted assets. For example, Intesa Sanpaolo and Crédit Agricole can warn that a security may be matured/redeemed and hard to find online. The create-asset modal groups these notices into amber banners; they are informational and do not change the transaction import.
 
 ---
 

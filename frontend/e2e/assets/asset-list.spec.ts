@@ -156,6 +156,27 @@ test.describe('Asset List Page', () => {
         await expect(page.getByTestId('assets-page')).toBeVisible();
     });
 
+    test('column menu stays compact and lists daily delta after price', async ({page}) => {
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-list').click();
+        await page.waitForTimeout(300);
+
+        await page.getByTestId('column-visibility-toggle').click();
+        const dropdown = page.getByTestId('column-visibility-dropdown');
+        await expect(dropdown).toBeVisible();
+        const box = await dropdown.boundingBox();
+        const viewport = page.viewportSize();
+        if (!box || !viewport) throw new Error('Column visibility dropdown must have measurable viewport bounds.');
+        expect(box.width).toBeLessThan(320);
+        expect(box.x).toBeGreaterThanOrEqual(7);
+        expect(box.x + box.width).toBeLessThanOrEqual(viewport.width - 7);
+
+        const priceItem = page.getByTestId('column-visibility-item-lastPrice');
+        const dailyItem = page.getByTestId('column-visibility-item-delta_1D');
+        await expect(dailyItem).toBeVisible();
+        expect(await priceItem.evaluate((element) => element.compareDocumentPosition(document.querySelector('[data-testid="column-visibility-item-delta_1D"]')!) & Node.DOCUMENT_POSITION_FOLLOWING)).toBeTruthy();
+    });
+
     // ========================================================================
     // Test 11: Type filter dropdown can be opened and has options
     // ========================================================================

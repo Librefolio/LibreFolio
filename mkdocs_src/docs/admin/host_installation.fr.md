@@ -105,9 +105,11 @@ cp .env.example .env
 
 Les paramètres par défaut fonctionnent immédiatement. Voici les variables clés :
 
-* **`PORT`** : Port de liaison du serveur (par défaut : `6040`).
-* **`LIBREFOLIO_DATA_DIR`** : Chemin du répertoire où la base de données, les téléchargements et les journaux sont stockés (par défaut : `./backend/data/prod`).
-* **`LOG_LEVEL`** : Niveau de détail des journaux (par défaut : `INFO`).
+| Variable | Par défaut | Description |
+| --- | --- | --- |
+| `PORT` | `6040` | Port de liaison du serveur. |
+| `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Chemin du répertoire où la base de données, les téléchargements et les journaux sont stockés. |
+| `LOG_LEVEL` | `INFO` | Niveau de détail des journaux. |
 
 Pour une description complète de toutes les variables d'environnement prises en charge, consultez le [Guide des Variables d'Environnement](configuration.md).
 

@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
@@ -24,6 +26,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalViewTransform,
     SignalWarmupRequirement,
@@ -59,9 +62,12 @@ class DonchianSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.donchian.name"
     description_key = "signals.donchian.description"
+    semantic_id = "donchian_channels"
+    semantic_description = "Describes recent high and low boundaries over a rolling window."
     icon = "↔️"
     docs_path = "financial-theory/technical-analysis/indicators/donchian-channels/"
     params_model = DonchianSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM_FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,
@@ -74,7 +80,10 @@ class DonchianSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="channels",
             label_key="signals.donchian.channels",
+            semantic_id="donchian_channels.envelope",
+            semantic_description="Rolling lower, midpoint, and upper price boundaries.",
             kind=SignalSeriesKind.BAND,
+            aggregation_profile=SignalAggregationProfile.BAND_ENVELOPE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",
@@ -131,6 +140,8 @@ class DonchianSignalPlugin(SignalPlugin):
                 SignalBandSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

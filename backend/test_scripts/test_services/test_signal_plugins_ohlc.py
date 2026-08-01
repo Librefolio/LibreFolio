@@ -486,7 +486,7 @@ async def test_missing_required_ohlc_field_is_unavailable(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("signal_code", sorted(OHLC_CODES))
-async def test_partial_ohlc_field_is_not_compacted(
+async def test_partial_ohlc_field_uses_latest_contiguous_segment(
     signal_code,
     neutral_points,
 ):
@@ -508,9 +508,11 @@ async def test_partial_ohlc_field_is_not_compacted(
         )
     )[0]
 
-    assert result.status == SignalStatus.UNAVAILABLE
-    assert result.availability.reason_code == SignalAvailabilityReason.INSUFFICIENT_INPUT_COVERAGE
+    assert result.status == SignalStatus.PARTIAL
+    assert result.availability.reason_code == SignalAvailabilityReason.PARTIAL_INPUT_COVERAGE
     assert result.availability.input_coverage.internal_gap_count == 1
+    gap_date = points[1000].date
+    assert all(point.date > gap_date for series in result.series for point in series.points)
 
 
 @pytest.mark.parametrize(

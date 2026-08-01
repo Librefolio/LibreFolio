@@ -55,6 +55,7 @@ from backend.app.schemas.common import (
 from backend.app.schemas.prices import FAAssetEventPoint, FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderRefreshFieldsDetail
 from backend.app.utils.geo_utils import normalize_country_keys
+from backend.app.utils.identifier_utils import normalize_other_identifiers
 from backend.app.utils.sector_fin_utils import normalize_sector
 
 # ============================================================================
@@ -664,7 +665,12 @@ class FAAssetCreateItem(BaseModel):
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="SEDOL code (7 chars)")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="FIGI code (12 chars)")
     identifier_uuid: Optional[str] = Field(None, max_length=36, description="UUID for custom assets")
-    identifier_other: Optional[str] = Field(None, max_length=100, description="Other identifier")
+    identifier_other: Optional[List[str]] = Field(None, description="JSON list of other/soft identifiers (additive across imports)")
+
+    @field_validator("identifier_other", mode="before")
+    @classmethod
+    def normalize_identifier_other(cls, v) -> Optional[List[str]]:
+        return normalize_other_identifiers(v)
 
     @field_validator("currency")
     @classmethod
@@ -803,11 +809,16 @@ class FAinfoResponse(BaseModel):
     identifier_sedol: Optional[str] = Field(None, description="SEDOL code")
     identifier_figi: Optional[str] = Field(None, description="FIGI code")
     identifier_uuid: Optional[str] = Field(None, description="UUID for custom assets")
-    identifier_other: Optional[str] = Field(None, description="Other identifier")
+    identifier_other: Optional[List[str]] = Field(None, description="JSON list of other/soft identifiers")
 
     # Legacy fields for backward compatibility with provider assignment
     identifier: Optional[str] = Field(None, description="Primary identifier (from provider assignment)")
     identifier_type: Optional[IdentifierType] = Field(None, description="Primary identifier type")
+
+    @field_validator("identifier_other", mode="before")
+    @classmethod
+    def normalize_identifier_other(cls, v) -> Optional[List[str]]:
+        return normalize_other_identifiers(v)
 
 
 class FAAssetDeleteResult(BaseDeleteResult):
@@ -868,7 +879,12 @@ class FAAssetPatchItem(BaseModel):
     identifier_sedol: Optional[str] = Field(None, max_length=7, description="Update SEDOL code")
     identifier_figi: Optional[str] = Field(None, max_length=12, description="Update FIGI code")
     identifier_uuid: Optional[str] = Field(None, max_length=36, description="Update UUID")
-    identifier_other: Optional[str] = Field(None, max_length=100, description="Update other identifier")
+    identifier_other: Optional[List[str]] = Field(None, description="Update other/soft identifiers (JSON list; None = leave unchanged)")
+
+    @field_validator("identifier_other", mode="before")
+    @classmethod
+    def normalize_identifier_other(cls, v) -> Optional[List[str]]:
+        return normalize_other_identifiers(v)
 
     @field_validator("currency")
     @classmethod

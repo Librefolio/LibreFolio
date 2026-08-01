@@ -258,24 +258,24 @@ class DirectaBrokerProvider(BRIMProvider):
 
                     # Need at least basic columns
                     if len(row) < COL_AMOUNT_EUR + 1:
-                        warnings.append(f"Row {row_num}: insufficient columns, skipping")
+                        warnings.append(f"Riga {row_num}: colonne insufficienti, saltata")
                         continue
 
                     # Parse date
                     tx_date = _parse_directa_date(row[COL_DATE])
                     if not tx_date:
-                        warnings.append(f"Row {row_num}: invalid date '{row[COL_DATE]}', skipping")
+                        warnings.append(f"Riga {row_num}: data '{row[COL_DATE]}' non valida, saltata")
                         continue
 
                     # Parse type
                     tipo_raw = row[COL_TYPE].strip()
                     if not tipo_raw:
-                        warnings.append(f"Row {row_num}: empty transaction type, skipping")
+                        warnings.append(f"Riga {row_num}: tipo operazione mancante, saltata")
                         continue
 
                     tx_type = _map_transaction_type(tipo_raw)
                     if not tx_type:
-                        warnings.append(f"Row {row_num}: unknown type '{tipo_raw}', skipping")
+                        warnings.append(f"Riga {row_num}: tipo '{tipo_raw}' sconosciuto, saltata")
                         continue
 
                     # Parse amount
@@ -366,7 +366,7 @@ class DirectaBrokerProvider(BRIMProvider):
             raise BRIMParseError(f"Error parsing file: {e}") from e
 
         if not transactions:
-            warnings.append("No valid transactions found in file")
+            warnings.append("Nessuna transazione valida trovata nel file")
 
         # Convert raw dict to BRIMExtractedAssetInfo
         extracted_assets_typed: Dict[int, BRIMExtractedAssetInfo] = {

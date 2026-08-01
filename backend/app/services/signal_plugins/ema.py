@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -22,6 +24,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalViewTransform,
@@ -70,15 +73,34 @@ class EmaSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.ema.name"
     description_key = "signals.ema.description"
+    semantic_id = "exponential_moving_average"
+    semantic_description = "Smooths prices with greater weight on recent observations."
     icon = "📉"
     docs_path = "financial-theory/technical-analysis/indicators/ema/"
     params_model = EmaSignalParams
+    ai_export_temporal_rules = (
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.MEDIUM,
+            parameter_match={"period": 20},
+        ),
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.SLOW,
+            parameter_match={"period": 50},
+        ),
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.VERY_SLOW,
+            parameter_match={"period": 200},
+        ),
+    )
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(
             key="ema",
             label_key="signals.ema.output",
+            semantic_id="exponential_moving_average.value",
+            semantic_description="Exponentially weighted closing-price average with the configured offset.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",
@@ -130,6 +152,8 @@ class EmaSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

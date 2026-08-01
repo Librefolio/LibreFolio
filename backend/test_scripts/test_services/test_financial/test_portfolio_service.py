@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.portfolio_engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
-from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import IssueCode, PortfolioReportQuery
@@ -849,14 +849,16 @@ class TestPortfolioServicePrivateHelpers:
 
 
 class TestTransactionImpliedDataQuality:
-    """TRANSACTION_IMPLIED must respect the selected date range and a placement grace period.
+    """TRANSACTION_IMPLIED is an *as-of* health flag: it fires only when a held asset is
+    STILL valued at cost on the valuation date (date_to), respecting a placement grace
+    period for brand-new acquisitions.
 
-    Regression test: previously, the issue was aggregated from the engine's full-lifetime
-    daily_states (always computed from t=0 regardless of the requested date_from, for
-    correct cumulative values) with no date_from filtering and no grace period. This meant
-    a placement-period gap (e.g. BTP collocamento) from months/years ago kept showing up
-    as a warning even after the price feed caught up and even when the user's selected
-    date range no longer covered that period at all.
+    Regression test: previously the flag was aggregated across the engine's full-lifetime
+    daily_states (always computed from t=0 for correct cumulative values). Even after a
+    placement gap (e.g. BTP collocamento) was priced, or a fund received its first provider
+    quotes, the asset kept showing the "valued at cost — no market price" warning forever,
+    contradicting the message's own "as of {as_of_date}" wording. The flag now reflects only
+    the valuation-date state, so a currently-priced asset clears the warning.
     """
 
     @pytest.mark.asyncio
@@ -900,34 +902,35 @@ class TestTransactionImpliedDataQuality:
         assert IssueCode.TRANSACTION_IMPLIED in codes
 
     @pytest.mark.asyncio
-    async def test_old_resolved_gap_excluded_when_date_range_narrowed(self, session, test_user, broker_with_access, test_asset_with_provider):
-        """A placement gap that resolved long ago must not resurface once the
-        selected date range no longer includes it (the exact reported bug)."""
+    async def test_resolved_gap_with_current_price_not_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """A placement gap that has since been priced must NOT be flagged as 'valued at
+        cost' once a market price exists on the valuation date — even when the report range
+        still spans the long historical at-cost period. This is the exact reported bug: a
+        fund priced only from its first provider sync onward stayed flagged forever despite a
+        fresh current price. date_from no longer affects the flag (it is purely as-of)."""
         broker, _ = broker_with_access
         buy_date = date(2024, 1, 1)
-        first_price_date = date(2024, 2, 1)  # ~31 days later, well past the grace period
         report_end = date(2024, 6, 1)
+        # Fresh quote two days before the report date -> current value is MARKET, not cost.
+        fresh_price_date = report_end - timedelta(days=2)
         session.add_all(
             [
                 Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=buy_date, amount=Decimal("10000"), currency="EUR"),
                 Transaction(broker_id=broker.id, asset_id=test_asset_with_provider.id, type=TransactionType.BUY, date=buy_date, quantity=Decimal("100"), amount=Decimal("-9950"), currency="EUR"),
-                # Price feed catches up on first_price_date -> backward-fill covers all later days
-                PriceHistory(asset_id=test_asset_with_provider.id, date=first_price_date, open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"),
+                PriceHistory(asset_id=test_asset_with_provider.id, date=fresh_price_date, open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"),
             ]
         )
         await session.flush()
 
         service = PortfolioService(session)
 
-        # "All" — includes the resolved placement gap -> flagged
+        # Full range spans the historical at-cost period, but the asset is currently priced.
         summary_all = await service.get_summary(user_id=test_user.id, date_to=report_end)
-        codes_all = {i.code for i in summary_all.data_quality.issues}
-        assert IssueCode.TRANSACTION_IMPLIED in codes_all
+        assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_all.data_quality.issues}
 
-        # "3 months"-like narrower window that excludes the gap -> NOT flagged
+        # Narrow range behaves identically (the flag is as-of, not range-dependent).
         summary_narrow = await service.get_summary(user_id=test_user.id, date_from=date(2024, 3, 1), date_to=report_end)
-        codes_narrow = {i.code for i in summary_narrow.data_quality.issues}
-        assert IssueCode.TRANSACTION_IMPLIED not in codes_narrow
+        assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_narrow.data_quality.issues}
 
 
 # =============================================================================
@@ -1136,7 +1139,7 @@ class TestNetDepositedCapital:
         assert len(summary.holdings) == 1
         assert summary.holdings[0].price_change_1d == Decimal("0.1000")
         assert summary.holdings[0].gain_loss_change_1d == Decimal("50")
-        assert summary.holdings[0].gain_loss_change_1d_percent == Decimal("100.00")
+        assert summary.holdings[0].gain_loss_change_1d_percent == Decimal("10.00")
 
     @pytest.mark.asyncio
     async def test_holding_gain_loss_change_1d_respects_quote_base_quantity(self, session, test_user, broker_with_access):
@@ -1226,12 +1229,90 @@ class TestNetDepositedCapital:
         # 100x too large. Explicitly guard against regressing to that.
         assert holding.gain_loss_change_1d != Decimal("1900")
 
-        expected_gain_loss_yesterday = holding.gain_loss - expected_change_1d
-        expected_pct = (expected_change_1d / abs(expected_gain_loss_yesterday) * 100).quantize(Decimal("0.01"))
+        previous_position_value = compute_holding_value(Decimal("10000"), Decimal("98.51"), 100)
+        expected_pct = (expected_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
         assert holding.gain_loss_change_1d_percent == expected_pct
+
+    @pytest.mark.asyncio
+    async def test_holding_daily_percent_uses_previous_position_value(self, session, test_user, broker_with_access):
+        """A small market move must stay small even when unrealized P&L is near zero."""
+        broker, _ = broker_with_access
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        asset = Asset(
+            display_name=f"DailyPercent_{utcnow().timestamp()}",
+            asset_type=AssetType.ETF,
+            currency="EUR",
+            quote_base_quantity=1,
+        )
+        session.add(asset)
+        await session.flush()
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    type=TransactionType.BUY,
+                    date=yesterday,
+                    amount=Decimal("-473.11"),
+                    currency="EUR",
+                    asset_id=asset.id,
+                    quantity=Decimal("17"),
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=yesterday,
+                    close=Decimal("27.81"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=today,
+                    close=Decimal("27.84"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+        holding = next(item for item in summary.holdings if item.asset_id == asset.id)
+
+        assert holding.gain_loss_change_1d == Decimal("0.51")
+        assert holding.gain_loss_change_1d_percent == Decimal("0.11")
 
 
 class TestPortfolioServiceDateAwareDashboardData:
+    @pytest.mark.asyncio
+    async def test_summary_selects_historical_buy_reference_before_future_buy(self, session, test_user, broker_with_access, test_asset):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("1"), amount=Decimal("-100"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("1"), amount=Decimal("-120"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        historical = await service.get_summary(user_id=test_user.id, date_to=date(2025, 1, 5))
+        current = await service.get_summary(user_id=test_user.id, date_to=date(2025, 1, 15))
+
+        historical_holding = historical.holdings[0]
+        assert historical_holding.quantity == Decimal("1")
+        assert historical_holding.current_price == Decimal("100")
+        assert historical_holding.current_value == Decimal("100")
+        assert historical_holding.valuation_reference_date == date(2025, 1, 2)
+        assert historical_holding.valuation_reference_unit_price == Decimal("100")
+
+        current_holding = current.holdings[0]
+        assert current_holding.quantity == Decimal("2")
+        assert current_holding.current_price == Decimal("120")
+        assert current_holding.current_value == Decimal("240")
+        assert current_holding.valuation_reference_date == date(2025, 1, 10)
+        assert current_holding.valuation_reference_unit_price == Decimal("120")
+
     @pytest.mark.asyncio
     async def test_summary_holdings_use_date_to_snapshot(self, session, test_user, broker_with_access, test_asset):
         """Summary holdings and cash must reflect selected date_to, not current ledger state."""
@@ -1280,7 +1361,114 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert holding.quantity == Decimal("1")
         assert holding.current_price == Decimal("110")
         assert holding.current_value == Decimal("110")
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == date(2025, 1, 31)
+        assert holding.valuation_reference_unit_price == Decimal("110")
+        assert holding.valuation_reference_currency == "EUR"
+        assert holding.missing_fx_pair is None
         assert holding.nav_weight_percent == Decimal("10.89")
+
+    @pytest.mark.asyncio
+    async def test_summary_maps_seed_cost_valuation_reference(self, session, test_user, broker_with_access, test_asset):
+        broker, _ = broker_with_access
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2025, 1, 10),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2025, 1, 2),
+                    quantity=Decimal("5"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                    cost_basis_override=Decimal("20"),
+                    cost_basis_currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    asset_event_id=split_event.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2025, 1, 10),
+                    quantity=Decimal("5"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(
+            user_id=test_user.id,
+            date_to=date(2025, 1, 31),
+        )
+
+        assert summary.net_worth.amount == Decimal("100")
+        assert len(summary.holdings) == 1
+        holding = summary.holdings[0]
+        assert holding.quantity == Decimal("10")
+        assert holding.current_price == Decimal("10")
+        assert holding.current_value == Decimal("100")
+        assert holding.gain_loss == Decimal("0")
+        assert holding.valuation_source == "LAST_TRADE_PRICE"
+        assert holding.valuation_effective_unit_price == Decimal("10")
+        assert holding.valuation_effective_currency == "EUR"
+        assert holding.valuation_reference_date == date(2025, 1, 2)
+        assert holding.valuation_reference_unit_price == Decimal("20")
+        assert holding.valuation_reference_currency == "EUR"
+        assert holding.valuation_split_adjusted is True
+        assert holding.missing_fx_pair is None
+
+    @pytest.mark.asyncio
+    async def test_summary_deduplicates_shared_split_event_and_maps_effective_price(self, session, test_user, broker_with_access, test_asset):
+        broker_one, _ = broker_with_access
+        broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_split_two")
+        session.add(broker_two)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker_two.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("1")))
+
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2025, 1, 5),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+
+        session.add_all(
+            [
+                Transaction(broker_id=broker_one.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker_two.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker_one.id, asset_id=test_asset.id, asset_event_id=split_event.id, type=TransactionType.ADJUSTMENT, date=date(2025, 1, 5), quantity=Decimal("10"), amount=Decimal("0"), currency="EUR"),
+                Transaction(broker_id=broker_two.id, asset_id=test_asset.id, asset_event_id=split_event.id, type=TransactionType.ADJUSTMENT, date=date(2025, 1, 5), quantity=Decimal("10"), amount=Decimal("0"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, date_to=date(2025, 1, 10))
+
+        assert len(summary.holdings) == 2
+        for holding in summary.holdings:
+            assert holding.quantity == Decimal("20")
+            assert holding.current_price == Decimal("50")
+            assert holding.current_value == Decimal("1000")
+            assert holding.valuation_effective_unit_price == Decimal("50")
+            assert holding.valuation_effective_currency == "EUR"
+            assert holding.valuation_reference_date == date(2025, 1, 2)
+            assert holding.valuation_reference_unit_price == Decimal("100")
+            assert holding.valuation_reference_currency == "EUR"
+            assert holding.valuation_split_adjusted is True
 
     @pytest.mark.asyncio
     async def test_positions_contribution_uses_date_to_and_other_effects(self, session, test_user, broker_with_access, test_asset):
@@ -1390,6 +1578,42 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert row.end_value == Decimal("0")
 
     @pytest.mark.asyncio
+    async def test_positions_contribution_closed_position_has_annualized_return(self, session, test_user, broker_with_access, test_asset):
+        """A fully-closed position (no still-open lot) must still expose an annualized
+        return in the performance/contribution table. The generic path cannot annualize
+        it — there is no open lot to date the window start and no end cost basis to
+        normalize against — so it falls back to the realized net return over the
+        position's real flight time [oldest lot opened -> last lot closed], normalized on
+        the capital actually deployed. Modelled on the real "MARINA DI SCARLINO"
+        (Recrowd/CROWDFUND) case: ~2005 deployed, +257.32 interest, -66.92 tax, sold flat
+        -> ~+9.5% total over ~1000 days -> ~+3.4%/yr net."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2022, 11, 1), amount=Decimal("2100"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2022, 11, 5), quantity=Decimal("1"), amount=Decimal("-2005"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.INTEREST, date=date(2023, 11, 5), amount=Decimal("257.32"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.TAX, date=date(2023, 11, 6), amount=Decimal("-66.92"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.SELL, date=date(2025, 8, 1), quantity=Decimal("-1"), amount=Decimal("2005"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(
+            user_id=test_user.id,
+            date_to=date(2025, 8, 1),
+        )
+
+        assert len(contribution.positions) == 1
+        row = contribution.positions[0]
+        assert row.is_fully_sold is True
+        assert row.period_pnl == Decimal("190.40")  # realized 0 + interest 257.32 - tax 66.92
+        # Closed-position annualized: ~9.5% total over ~1000 days -> ~+3.4%/yr net.
+        assert row.annualized_return is not None
+        assert Decimal("0.02") < row.annualized_return < Decimal("0.05")
+
+    @pytest.mark.asyncio
     async def test_positions_contribution_includes_income_only_asset_rows(self, session, test_user, broker_with_access, test_asset):
         """Asset-linked income/fee rows without BUY/SELL still become contribution rows."""
         broker, _ = broker_with_access
@@ -1436,6 +1660,73 @@ class TestPortfolioServiceDateAwareDashboardData:
         assert contribution.other_effects == []
         assert contribution.gross_gains == Decimal("26")
         assert contribution.gross_losses == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_positions_contribution_in_kind_adjustment_is_held_not_fully_sold(self, session, test_user, broker_with_access, test_asset):
+        """An in-kind ADJUSTMENT-seeded position held through the period must be treated as
+        held (end value + unrealized delta + net annualized return), not collapsed to
+        fully-sold. Regression: qty was summed over BUY/SELL only, so ADJUSTMENT/TRANSFER
+        (e.g. succession in-kind transfers) reported qty 0 at period end -> empty column."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                # In-kind seed: +100 units at a per-unit cost of 10 (amount 0 = no cash leg).
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=date(2024, 1, 1),
+                    quantity=Decimal("100"),
+                    amount=Decimal("0"),
+                    cost_basis_override=Decimal("10"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.INTEREST,
+                    date=date(2024, 6, 1),
+                    amount=Decimal("50"),
+                    currency="EUR",
+                ),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=date(2025, 1, 10),
+                    open=Decimal("11"),
+                    high=Decimal("11"),
+                    low=Decimal("11"),
+                    close=Decimal("11"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(
+            user_id=test_user.id,
+            date_from=date(2023, 12, 1),
+            date_to=date(2025, 1, 15),
+        )
+
+        assert len(contribution.positions) == 1
+        row = contribution.positions[0]
+        assert row.asset_id == test_asset.id
+        # Held, not fully-sold: qty at end = +100 from the ADJUSTMENT.
+        assert row.is_fully_sold is False
+        assert row.end_value == Decimal("1100")  # 100 units * price 11
+        assert row.start_value == Decimal("0")  # seeded after date_from
+        assert row.period_unrealized_delta == Decimal("100")  # mv 1100 - cost 1000
+        assert row.period_income == Decimal("50")
+        assert row.period_pnl == Decimal("150")  # 100 unrealized + 50 income
+        # start_value == 0 -> period_pnl_percent stays None (unchanged semantics),
+        # but the net annualized return uses the end cost basis as fallback base.
+        assert row.period_pnl_percent is None
+        assert row.annualized_return is not None
+        assert row.annualized_return > Decimal("0")  # net positive return, >30-day window
+        assert row.oldest_open_lot_date == date(2024, 1, 1)
 
 
 class TestPortfolioServiceGetReport:

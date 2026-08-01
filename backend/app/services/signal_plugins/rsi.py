@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -17,12 +19,15 @@ from backend.app.schemas.signals import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
@@ -86,6 +91,11 @@ _RSI_AXIS = SignalAxisSpec(
     minimum=0,
     maximum=100,
 )
+_EXTREME_LINE_STYLE = SignalRegionLineStyle(
+    pattern=SignalLinePattern.SOLID,
+    width_delta=1,
+)
+_NEUTRAL_LINE_STYLE = SignalRegionLineStyle(pattern=SignalLinePattern.DASHED)
 _DEFAULT_LEVELS = [
     SignalReferenceLevel(
         key="oversold",
@@ -104,25 +114,31 @@ _DEFAULT_REGIONS = [
     SignalValueRegion(
         key="oversold",
         label_key="signals.rsi.oversoldRegion",
+        description_key="signals.regions.oversoldDescription",
         semantic="oversold",
         upper=30,
         include_upper=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
     SignalValueRegion(
         key="neutral",
         label_key="signals.rsi.neutralRegion",
+        description_key="signals.regions.neutralDescription",
         semantic="neutral",
         lower=30,
         upper=70,
         include_lower=True,
         include_upper=True,
+        line_style=_NEUTRAL_LINE_STYLE,
     ),
     SignalValueRegion(
         key="overbought",
         label_key="signals.rsi.overboughtRegion",
+        description_key="signals.regions.overboughtDescription",
         semantic="overbought",
         lower=70,
         include_lower=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
 ]
 
@@ -134,15 +150,21 @@ class RsiSignalPlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.rsi.name"
     description_key = "signals.rsi.description"
+    semantic_id = "relative_strength_index"
+    semantic_description = "Measures recent gain and loss magnitude on a bounded scale."
     icon = "💪"
     docs_path = "financial-theory/technical-analysis/indicators/rsi/"
     params_model = RsiSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.VERY_FAST),)
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(
             key="rsi",
             label_key="signals.rsi.output",
+            semantic_id="relative_strength_index.value",
+            semantic_description="Bounded ratio of smoothed gains to total directional movement.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_RSI_AXIS,
             supports_reference_levels=True,
@@ -207,25 +229,31 @@ class RsiSignalPlugin(SignalPlugin):
             SignalValueRegion(
                 key="oversold",
                 label_key="signals.rsi.oversoldRegion",
+                description_key="signals.regions.oversoldDescription",
                 semantic="oversold",
                 upper=params.oversold,
                 include_upper=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="neutral",
                 label_key="signals.rsi.neutralRegion",
+                description_key="signals.regions.neutralDescription",
                 semantic="neutral",
                 lower=params.oversold,
                 upper=params.overbought,
                 include_lower=True,
                 include_upper=True,
+                line_style=_NEUTRAL_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="overbought",
                 label_key="signals.rsi.overboughtRegion",
+                description_key="signals.regions.overboughtDescription",
                 semantic="overbought",
                 lower=params.overbought,
                 include_lower=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
         ]
         return SignalComputation(
@@ -233,6 +261,8 @@ class RsiSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

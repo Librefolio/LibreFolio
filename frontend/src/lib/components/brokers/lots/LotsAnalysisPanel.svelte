@@ -8,7 +8,7 @@
 
   Fetch strategy (two tiers, per plan v2 §13 "il frontend non effettua autonomamente ...
   calcoli WAC"):
-  - Main fetch (asset/broker/date-range change): LOT_SUMMARY + GANTT_TOPOLOGY +
+  - Main fetch (asset/broker change): LOT_SUMMARY + GANTT_TOPOLOGY +
     EVENT_HISTORY + PRICE_HISTORY + BROKER_WAC_HISTORY + CUMULATIVE_WAC_HISTORY, with
     NO selected_lot_ids (service defaults to "all lots" — see
     LotsAnalysisService._resolve_selected_lot_ids). EVENT_HISTORY (superset of the old
@@ -43,7 +43,8 @@
     import LotCustodyModal from './LotCustodyModal.svelte';
     import LotComparisonChart from './LotComparisonChart.svelte';
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
-    import DataQualityBanner, {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import LotDataQualityBanner from './LotDataQualityBanner.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -84,14 +85,11 @@
         brokerIds: number[];
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
-        dateFrom: string;
-        dateTo: string;
-        isAllPeriod: boolean;
         assetName?: string | null;
         onClose: () => void;
     }
 
-    let {open, assetId, brokerIds, brokers, currency, dateFrom, dateTo, isAllPeriod, assetName = null, onClose}: Props = $props();
+    let {open, assetId, brokerIds, brokers, currency, assetName = null, onClose}: Props = $props();
 
     let loading = $state(false);
     let error = $state<string | null>(null);
@@ -122,6 +120,7 @@
 
     let ganttRef: LotGanttChart | undefined = $state(undefined);
     let tableRef: UnifiedLotsTable | undefined = $state(undefined);
+    let wacRef: LotWacPriceChart | undefined = $state(undefined);
 
     let fetchVersion = 0;
     let selectionFetchVersion = 0;
@@ -148,6 +147,14 @@
         return lots.filter((lot) => (lotIsOpenish(lot) ? showOpen : showClosed));
     });
 
+    /** lot_id → opening_date for the currently visible lots, so the data-quality banner can turn each
+     * issue's message_params.lot_id into a labelled, clickable chip (→ pulses that lot's bubble). */
+    let visibleLotDates = $derived.by((): Map<number, string> => {
+        const map = new Map<number, string>();
+        for (const lot of visibleLots) map.set(lot.lot_id, lot.opening_date);
+        return map;
+    });
+
     let selectedLots = $derived.by((): LotSummarySchema[] => {
         const selected = new Set(selectedLotIds);
         return lots.filter((lot) => selected.has(lot.lot_id));
@@ -162,10 +169,7 @@
 
     let effectiveSelectedLots = $derived.by((): LotSummarySchema[] => (selectedLotIds.length > 0 ? selectedLots : visibleLots));
 
-    let xAxisRange = $derived.by((): DateRange | null => {
-        if (!isAllPeriod) return {min: dateFrom, max: dateTo};
-        return computedRange;
-    });
+    let xAxisRange = $derived(computedRange);
 
     function handleZoomChange(start: number, end: number) {
         sharedZoomStart = start;
@@ -180,7 +184,6 @@
             const body = {
                 asset_id: currentAssetId,
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
                 requested_analyses: ['LOT_SUMMARY', 'GANTT_TOPOLOGY', 'EVENT_HISTORY', 'PRICE_HISTORY', 'BROKER_WAC_HISTORY', 'CUMULATIVE_WAC_HISTORY', 'INCOME_EVENTS'] as const,
             };
@@ -248,7 +251,6 @@
             const body = {
                 asset_id: currentAssetId,
                 broker_ids: currentBrokerIds.length > 0 ? currentBrokerIds : undefined,
-                date_range: isAllPeriod ? undefined : {start: dateFrom, end: dateTo},
                 target_currency: currency,
                 selected_lot_ids: ids,
                 requested_analyses: ['VALUE_HISTORY', 'RETURN_HISTORY'] as const,
@@ -387,9 +389,10 @@
         })();
     }
 
-    function handleDataQualityAction(_action: string, _target: string | null, _issue: DataQualityIssue) {
-        // No CTA navigation defined yet for FIFO lots issues (reference-price fallback etc.
-        // are informational-only) — placeholder kept so DataQualityBanner's contract is honored.
+    /** Click on an affected-lot chip in the data-quality banner → pulse that lot's bubble in the price
+     * chart so the user can locate the flagged lot (mirrors the gantt/table pulseLot precedent). */
+    function handleLotWarningClick(lotId: number) {
+        wacRef?.pulseLot(lotId);
     }
 </script>
 
@@ -421,7 +424,7 @@
 
         <div class="p-4 space-y-4">
             {#if dataQualityIssues.length > 0}
-                <DataQualityBanner issues={dataQualityIssues} mode="flat" onaction={handleDataQualityAction} />
+                <LotDataQualityBanner issues={dataQualityIssues} lotDates={visibleLotDates} onLotClick={handleLotWarningClick} />
             {/if}
 
             {#if calculationStatus === 'FAILED'}
@@ -445,6 +448,7 @@
                 </div>
             {:else}
                 <LotWacPriceChart
+                    bind:this={wacRef}
                     lots={visibleLots}
                     {selectedLotIds}
                     {brokerWacHistory}

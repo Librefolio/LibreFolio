@@ -5,6 +5,43 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
+## 📊 Risk Analysis — evoluzioni scenario catalog e replay
+
+**Data aggiunta**: 29 Luglio 2026
+**Status**: 📋 FUTURO — escluso da G6 iniziale
+**Priorità**: Da valutare dopo il rilascio del catalogo statico
+**Piano corrente**:
+`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`
+
+### Catalogo scenari dinamico
+
+- rilevamento dei file senza riavvio;
+- reload manuale o hot reload;
+- CRUD scenari personali;
+- salvataggio delle modifiche effettuate dalla UI;
+- import/export YAML;
+- override espliciti dei preset built-in;
+- validazione e diagnostica amministrativa.
+
+La prima implementazione G6 resta startup-loaded, senza CRUD, database o watcher.
+
+### Proxy historical replay
+
+- persistenza delle associazioni asset → proxy;
+- proposta di proxy solo esplicita e confermata dall'utente;
+- riuso delle associazioni nei replay successivi;
+- diagnostica di copertura/qualità prima di proporre il proxy.
+
+G6 richiede invece scelta manuale per singola esecuzione o esclusione.
+
+### RQMC
+
+Resta a priorità bassa: eventuale scrambling deve avere contratto separato da
+`sobol_start_index`, oracle di convergenza e processo `spawn`, senza fallback
+SciPy production.
+
+---
+
 ## 📈 Gestione Stock Splits nel Calcolo FIFO
 
 **Data aggiunta**: 10 Giugno 2026

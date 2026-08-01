@@ -22,15 +22,21 @@ La colonna sinistra della scheda Info mostra le proprietà chiave e le regole di
 
 ## 🧠 Esportazione AI con Ambito Specifico
 
-Nell'angolo in alto a destra della barra degli strumenti del broker, il pulsante **Esportazione AI** (:material-brain:) copia una rappresentazione testuale strutturata dello stato corrente del broker negli appunti.
+Nell'angolo in alto a destra della barra degli strumenti del broker,
+**Esportazione AI** (:material-brain:) apre quattro task Broker dedicati, non
+prompt Portafoglio filtrati:
 
-Questa esportazione ha **ambito specifico per questo broker** (a differenza del pulsante principale della dashboard che copia i dati per l'intero portafoglio). Aggrega:
+- **Analisi del broker**
+- **Efficienza dei costi del broker**
+- **Concentrazione presso il broker**
+- **Analisi dei lotti FIFO**
 
-- Saldi di contante locali.
-- Detenzioni e quantità di asset locali.
-- Pesi di allocazione attivi.
-
-Puoi incollare questo prompt strutturato direttamente nel tuo LLM preferito (come Gemini o ChatGPT) per un'analisi mirata e personalizzata di questo specifico account.
+L'istantanea del backend è limitata al broker selezionato e può includere
+liquidità, posizioni, attività, performance, costi, concentrazione e lotti FIFO
+secondo il task scelto. I controlli di accesso sul server impediscono di
+esportare un broker non accessibile all'utente corrente. LibreFolio copia solo il
+risultato negli appunti: controlla i dati finanziari sensibili prima di
+condividerli. Consulta la [guida Esportazione AI](../ai-export/index.md).
 
 ---
 

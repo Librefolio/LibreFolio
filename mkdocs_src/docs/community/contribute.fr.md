@@ -29,10 +29,10 @@ LibreFolio utilise un [Système de Registre & Plugins](../developer/architecture
 | 📥 **BRIM** | [Guide Plugin BRIM](../developer/architecture/patterns/brim_plugin_guide.md) | Importer des transactions depuis un nouveau courtier (CSV/Excel) |
 | 📈 **Actif** | [Guide Plugin Actif](../developer/architecture/patterns/asset_plugin_guide.md) | Récupérer les prix depuis une nouvelle source de données |
 | 💱 **FX** | [Guide Plugin FX](../developer/architecture/patterns/fx_plugin_guide.md) | Ajouter un nouveau fournisseur de taux de change |
-| 📊 **Chart Signals** | *Guide bientôt disponible* | Nouveaux indicateurs techniques et superpositions de graphiques (EMA, MACD, RSI, Bollinger…) |
+| 📊 **Signaux Techniques** | [Guide Plugin Signaux](../developer/architecture/patterns/signal_plugin_guide.md) | Ajouter des indicateurs backend avec des paramètres pilotés par schéma, des sorties, des seuils et un style de graphique |
 
 * **Si vous n'êtes pas développeur** : vous pouvez demander un nouveau plugin en remplissant notre [Formulaire de Demande de Plugin](https://github.com/Librefolio/LibreFolio/issues/new?template=plugin_request.yml). En plus des détails de la demande, il est nécessaire de fournir des exemples réels et anonymisés (par exemple, des fichiers CSV ou Excel) du rapport de votre courtier.
-* **Si vous êtes développeur** : vous pouvez procéder directement de votre côté à leur implémentation. Consultez le [Guide du Registry & Plugin System](../developer/architecture/patterns/registry_pattern.md) et les guides spécifiques liés dans le tableau ci-dessus pour découvrir comment créer des plugins.
+* **Si vous êtes développeur** : vous pouvez procéder directement de votre côté à leur implémentation. Consultez le [Guide du Registry & Plugin System](../developer/architecture/patterns/registry_pattern.md), puis suivez le guide pertinent ci-dessus — y compris le [Guide Plugin Signaux](../developer/architecture/patterns/signal_plugin_guide.md) pour les nouveaux indicateurs techniques.
 
 ### :art: Idées UI/UX
 

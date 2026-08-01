@@ -19,6 +19,7 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
@@ -166,7 +167,7 @@
      *  quantity of 0 makes "Total" meaningless, so conversions fall back to
      *  the raw per-unit value in that case regardless of `unitMode`. */
     let quantityNum = $derived.by(() => {
-        const n = Math.abs(Number(quantity ?? '0'));
+        const n = Math.abs(Number(normalizeDecimalInput(quantity ?? '0')));
         return Number.isFinite(n) ? n : 0;
     });
     /** Whether the Total/Per-unit toggle can actually take effect right now. */
@@ -176,7 +177,7 @@
      *  (× quantity when in "Total" mode), or pass through unchanged. */
     function toDisplayAmount(v: {code: string; amount: string} | null): {code: string; amount: string} | null {
         if (!v || !unitToggleActive) return v;
-        const amt = Number(v.amount);
+        const amt = Number(normalizeDecimalInput(v.amount));
         if (!Number.isFinite(amt)) return v;
         return {code: v.code, amount: String(amt * quantityNum)};
     }
@@ -186,7 +187,7 @@
      *  `value`/`onChange` always deal in per-unit amounts. */
     function toPerUnitAmount(v: {code: string; amount: string} | null): {code: string; amount: string} | null {
         if (!v || !unitToggleActive) return v;
-        const amt = Number(v.amount);
+        const amt = Number(normalizeDecimalInput(v.amount));
         if (!Number.isFinite(amt)) return v;
         return {code: v.code, amount: String(amt / quantityNum)};
     }

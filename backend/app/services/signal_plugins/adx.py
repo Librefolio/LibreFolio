@@ -9,20 +9,26 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
+    SignalColorRole,
     SignalComputation,
     SignalDataPolicy,
     SignalDomain,
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
+    SignalOutputStyle,
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalWarmupRequirement,
@@ -66,9 +72,12 @@ class AdxSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.adx.name"
     description_key = "signals.adx.description"
+    semantic_id = "average_directional_index"
+    semantic_description = "Measures trend strength from directional price movement without indicating trend direction."
     icon = "💹"
     docs_path = "financial-theory/technical-analysis/indicators/adx/"
     params_model = AdxSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,
@@ -82,23 +91,48 @@ class AdxSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="adx",
             label_key="signals.adx.adx",
+            description_key="signals.adx.adxDescription",
+            semantic_id="average_directional_index.strength",
+            semantic_description="Smoothed strength of directional price movement.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.PRIMARY,
+                line_pattern=SignalLinePattern.SOLID,
+                width_delta=1,
+            ),
         ),
         SignalOutputSpec(
             key="plus_di",
             label_key="signals.adx.plusDi",
+            description_key="signals.adx.plusDiDescription",
+            semantic_id="average_directional_index.positive_directional_index",
+            semantic_description="Positive directional movement relative to true range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.POSITIVE,
+                line_pattern=SignalLinePattern.SOLID,
+            ),
         ),
         SignalOutputSpec(
             key="minus_di",
             label_key="signals.adx.minusDi",
+            description_key="signals.adx.minusDiDescription",
+            semantic_id="average_directional_index.negative_directional_index",
+            semantic_description="Negative directional movement relative to true range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_ADX_AXIS,
+            style=SignalOutputStyle(
+                color_role=SignalColorRole.NEGATIVE,
+                line_pattern=SignalLinePattern.SOLID,
+            ),
         ),
     )
     compatible_domains = (SignalDomain.ASSET,)
@@ -163,8 +197,12 @@ class AdxSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    description_key=spec.description_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
+                    style=spec.style.model_copy(deep=True),
                     points=[
                         SignalValuePoint(
                             date=point.date,

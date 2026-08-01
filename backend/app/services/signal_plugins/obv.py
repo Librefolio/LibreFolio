@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -23,6 +25,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalWarmupRequirement,
@@ -45,9 +48,12 @@ class ObvSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLUME
     display_name_key = "signals.obv.name"
     description_key = "signals.obv.description"
+    semantic_id = "on_balance_volume"
+    semantic_description = "Accumulates volume according to closing-price direction."
     icon = "📊"
     docs_path = "financial-theory/technical-analysis/indicators/obv/"
     params_model = ObvSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.CLOSE,
@@ -55,12 +61,16 @@ class ObvSignalPlugin(SignalPlugin):
         ],
         data_policy=SignalDataPolicy.ALLOW_PARTIAL_CONTIGUOUS,
         minimum_coverage=0.5,
+        requires_meaningful_volume=True,
     )
     output_specs = (
         SignalOutputSpec(
             key="obv",
             label_key="signals.obv.output",
+            semantic_id="on_balance_volume.value",
+            semantic_description="Cumulative signed volume rebased at the requested range.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.VOLUME,
             axis=SignalAxisSpec(
                 key="obv",
@@ -82,6 +92,19 @@ class ObvSignalPlugin(SignalPlugin):
             stabilization_points=0,
             total_points=1,
             normalized_tolerance=1e-6,
+        )
+
+    @classmethod
+    def validate_input(
+        cls,
+        price_points: Sequence[SignalPricePoint],
+        event_points: Sequence[SignalEventPoint],
+        params: ObvSignalParams,
+        context: SignalExecutionContext,
+    ) -> None:
+        cls.validate_meaningful_volume_input(
+            price_points,
+            minimum_coverage=cls.input_requirements.minimum_coverage,
         )
 
     def compute(
@@ -120,6 +143,8 @@ class ObvSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     points=[

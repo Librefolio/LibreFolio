@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -22,6 +24,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalViewTransform,
@@ -58,15 +61,30 @@ class SmaSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.sma.name"
     description_key = "signals.sma.description"
+    semantic_id = "simple_moving_average"
+    semantic_description = "Averages closing prices over a rolling window."
     icon = "📏"
     docs_path = "financial-theory/technical-analysis/indicators/sma/"
     params_model = SmaSignalParams
+    ai_export_temporal_rules = (
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.SLOW,
+            parameter_match={"period": 50},
+        ),
+        SignalAiExportTemporalRule(
+            temporal_class=SignalTemporalClass.VERY_SLOW,
+            parameter_match={"period": 200},
+        ),
+    )
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(
             key="sma",
             label_key="signals.sma.output",
+            semantic_id="simple_moving_average.value",
+            semantic_description="Arithmetic mean of closing prices in the lookback window.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",
@@ -116,6 +134,8 @@ class SmaSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,
