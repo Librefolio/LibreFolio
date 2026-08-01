@@ -1,6 +1,7 @@
 import {describe, expect, it, vi} from 'vitest';
 
 import {AiExportContractMismatchError, AiExportUnknownError, AiExportValidationError, canonicalizeAiExportSnapshotRequest, fetchAiExportSnapshot, normalizeAiExportClientError, type AiExportSnapshotRequestInput} from '../aiExportClient';
+import {AI_EXPORT_CATALOG_VERSION, AI_EXPORT_SELECTION_VERSION} from '../catalog/shared';
 import {selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 function requestFixture(): AiExportSnapshotRequestInput {
@@ -9,16 +10,16 @@ function requestFixture(): AiExportSnapshotRequestInput {
         selection: {
             kind: 'analysis',
             id: 'asset.trend_analysis',
-            version: 1,
+            version: AI_EXPORT_SELECTION_VERSION,
             instruction_template_id: 'asset.trend_analysis.instructions',
-            instruction_template_version: 1,
+            instruction_template_version: AI_EXPORT_SELECTION_VERSION,
             response_contract_id: 'asset.trend_analysis.response',
-            response_contract_version: 1,
+            response_contract_version: AI_EXPORT_SELECTION_VERSION,
         },
         detail_level: 'standard',
         period: {start: '2026-01-01', end: '2026-03-31'},
         target_currency: ' eur ',
-        expected_catalog_version: 1,
+        expected_catalog_version: AI_EXPORT_CATALOG_VERSION,
         asset_id: 7,
         broker_ids: [3, 1],
     };

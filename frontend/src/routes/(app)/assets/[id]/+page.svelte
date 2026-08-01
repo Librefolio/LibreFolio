@@ -228,7 +228,7 @@
     let assetAiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
     let assetAiExportCatalogLoading = $state(true);
     let assetAiExportCatalogFailed = $state(false);
-    let assetAiExportLabels = $derived(buildAiExportMenuLabels($t, assetAiExportCompatibility, $t('assetDetail.aiExport'), $t('assetDetail.aiExportBuilding')));
+    let assetAiExportLabels = $derived(buildAiExportMenuLabels($t, assetAiExportCompatibility, $t('assetDetail.aiExport')));
 
     // Provider icon for header badge
     let providerIconUrl = $state<string | null>(null);

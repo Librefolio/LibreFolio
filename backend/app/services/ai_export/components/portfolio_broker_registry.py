@@ -6,7 +6,7 @@ This module is a **domain integration gate**, not the central catalog wiring: it
 deliberately does **not** edit `backend.app.services.ai_export.components.catalog`
 (that file is owned by the later serial "component-registry-integration" gate that
 cuts over every domain at once). Instead it builds a *local* real
-`ComponentRegistry` fragment - substituting only the 25 Portfolio/Broker
+`ComponentRegistry` fragment - substituting only the 39 Portfolio/Broker
 `component_id`s with their real implementations from `portfolio_financial`,
 `broker_financial` and `portfolio_broker_technical`, while every other
 `component_id` (Asset/FX and anything else the frozen catalog declares) keeps its
@@ -59,11 +59,16 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from backend.app.services.ai_export.components.broker_concentration_context import BROKER_CONCENTRATION_COMPONENTS
+from backend.app.services.ai_export.components.broker_cost_efficiency import BROKER_COST_EFFICIENCY_COMPONENTS
 from backend.app.services.ai_export.components.broker_financial import BROKER_FINANCIAL_COMPONENTS
+from backend.app.services.ai_export.components.drawdown_context import BROKER_DRAWDOWN_CONTEXT_COMPONENTS, PORTFOLIO_DRAWDOWN_CONTEXT_COMPONENTS
 from backend.app.services.ai_export.components.portfolio_broker_technical import PORTFOLIO_BROKER_TECHNICAL_COMPONENTS
 from backend.app.services.ai_export.components.portfolio_financial import PORTFOLIO_FINANCIAL_COMPONENTS
+from backend.app.services.ai_export.components.portfolio_income import PORTFOLIO_INCOME_TIMELINE_COMPONENTS
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
+from backend.app.services.ai_export.components.technical_context import BROKER_TECHNICAL_CONTEXT_COMPONENTS, PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS
 from backend.app.services.ai_export.components.types import Domain
 
 if TYPE_CHECKING:
@@ -119,15 +124,24 @@ PORTFOLIO_BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     *PORTFOLIO_FINANCIAL_COMPONENTS,
     *BROKER_FINANCIAL_COMPONENTS,
     *PORTFOLIO_BROKER_TECHNICAL_COMPONENTS,
+    *PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS,
+    *BROKER_TECHNICAL_CONTEXT_COMPONENTS,
+    *PORTFOLIO_DRAWDOWN_CONTEXT_COMPONENTS,
+    *BROKER_DRAWDOWN_CONTEXT_COMPONENTS,
+    *PORTFOLIO_INCOME_TIMELINE_COMPONENTS,
+    *BROKER_CONCENTRATION_COMPONENTS,
+    *BROKER_COST_EFFICIENCY_COMPONENTS,
 )
 
-# 10 Portfolio financial + 4 Portfolio technical = 14; 8 Broker financial + 3
-# Broker technical = 11; combined = 25. Asserted at import time so any future
-# drift in the source waves' tuples fails immediately, not deep inside a test.
+# 10 Portfolio financial + 4 full technical + 4 context + 2 drawdown + 1 income
+# timeline = 21; 8 Broker financial + 3 full technical + 3 context + 1 drawdown +
+# 2 concentration + 1 cost efficiency = 18; combined = 39. Asserted at import time
+# so any future drift in the source waves' tuples fails immediately, not deep
+# inside a test.
 PORTFOLIO_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.PORTFOLIO in spec.domains)
 BROKER_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.BROKER in spec.domains)
-PORTFOLIO_REAL_COMPONENT_COUNT = 14
-BROKER_REAL_COMPONENT_COUNT = 11
+PORTFOLIO_REAL_COMPONENT_COUNT = 21
+BROKER_REAL_COMPONENT_COUNT = 18
 
 assert len(PORTFOLIO_BROKER_COMPONENTS) == PORTFOLIO_REAL_COMPONENT_COUNT + BROKER_REAL_COMPONENT_COUNT, f"PORTFOLIO_BROKER_COMPONENTS must contain exactly {PORTFOLIO_REAL_COMPONENT_COUNT + BROKER_REAL_COMPONENT_COUNT} real component_ids, got {len(PORTFOLIO_BROKER_COMPONENTS)}"
 assert len(PORTFOLIO_REAL_COMPONENT_IDS) == PORTFOLIO_REAL_COMPONENT_COUNT, f"expected {PORTFOLIO_REAL_COMPONENT_COUNT} Portfolio component_ids, got {len(PORTFOLIO_REAL_COMPONENT_IDS)}"
@@ -228,11 +242,11 @@ def build_portfolio_broker_component_registry(
 
 
 def build_portfolio_broker_dataset_registry(component_registry: ComponentRegistry | None = None) -> DatasetRegistry:
-    """Builds the frozen 18-dataset `DatasetRegistry` over a real Portfolio/Broker `ComponentRegistry`.
+    """Builds the frozen 32-dataset `DatasetRegistry` over a real Portfolio/Broker `ComponentRegistry`.
 
     Defaults to `build_portfolio_broker_component_registry()` when no registry is
     supplied. Every dataset (all 4 domains, per `datasets.catalog`'s frozen
-    18-dataset wiring) is still validated as a whole - the DatasetRegistry does
+    32-dataset wiring) is still validated as a whole - the DatasetRegistry does
     not know or care which component_ids are backed by real builders vs.
     placeholders, only that every declared component_id/domain pairing resolves.
 
@@ -251,7 +265,7 @@ def build_portfolio_broker_dataset_registry(component_registry: ComponentRegistr
 
 
 def build_portfolio_broker_analysis_registry(dataset_registry: DatasetRegistry | None = None) -> AnalysisRegistry:
-    """Builds the frozen 17-analysis `AnalysisRegistry` over a real Portfolio/Broker `DatasetRegistry`.
+    """Builds the frozen 16-analysis `AnalysisRegistry` over a real Portfolio/Broker `DatasetRegistry`.
 
     Defaults to `build_portfolio_broker_dataset_registry()` when no registry is
     supplied.

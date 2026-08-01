@@ -1,4 +1,4 @@
-"""Public v1 contracts for component-based AI Export datasets and analyses."""
+"""Public v2 contracts for component-based AI Export datasets and analyses."""
 
 from __future__ import annotations
 
@@ -102,6 +102,18 @@ class AiExportManifestRole(StrEnum):
     OPTIONAL = "optional"
 
 
+class AiExportAdditionalExportPeriod(StrEnum):
+    THREE_MONTHS = "3m"
+    SIX_MONTHS = "6m"
+    ONE_YEAR = "1y"
+    MAXIMUM_AVAILABLE = "maximum_available"
+
+
+class AiExportAdditionalExportNecessity(StrEnum):
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+
+
 class AiExportPeriod(AiExportModel):
     """Inclusive AI Export period with an always-explicit upper bound."""
 
@@ -113,6 +125,14 @@ class AiExportPeriod(AiExportModel):
         if self.end < self.start:
             raise ValueError("period end must not precede start")
         return self
+
+
+class AiExportAdditionalExportSuggestion(AiExportModel):
+    dataset_id: SelectionId
+    reason_i18n_key: str = Field(..., min_length=1)
+    recommended_period: AiExportAdditionalExportPeriod
+    recommended_detail: AiExportDetailLevel
+    necessity: AiExportAdditionalExportNecessity
 
 
 class AiExportDatasetSelection(AiExportModel):
@@ -237,6 +257,7 @@ class AiExportAnalysisCatalogEntry(AiExportModel):
     response_contract_id: ContractId
     response_contract_version: PositiveInt
     supports_user_notes: bool = True
+    additional_export_suggestions: tuple[AiExportAdditionalExportSuggestion, ...] = ()
 
     @model_validator(mode="after")
     def validate_entry(self) -> Self:
@@ -244,12 +265,17 @@ class AiExportAnalysisCatalogEntry(AiExportModel):
             raise ValueError("analysis id must belong to domain")
         if set(self.required_dataset_ids) & set(self.optional_dataset_ids):
             raise ValueError("required and optional datasets must not overlap")
+        suggestion_ids = [suggestion.dataset_id for suggestion in self.additional_export_suggestions]
+        if len(suggestion_ids) != len(set(suggestion_ids)):
+            raise ValueError("additional export suggestion dataset IDs must be unique")
+        if any(not dataset_id.startswith(f"{self.domain.value}.") for dataset_id in suggestion_ids):
+            raise ValueError("additional export suggestions must belong to the analysis domain")
         return self
 
 
 class AiExportCatalogResponse(AiExportModel):
-    schema_version: Literal[1] = 1
-    catalog_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
+    catalog_version: Literal[2] = 2
     datasets: tuple[AiExportDatasetCatalogEntry, ...]
     analyses: tuple[AiExportAnalysisCatalogEntry, ...]
 
@@ -340,9 +366,47 @@ class AiExportEntityDirectory(AiExportModel):
         return self
 
 
+class AiExportHistoryCoverage(AiExportModel):
+    requested_period: AiExportPeriod
+    available_period: AiExportPeriod | None = None
+    requested_calendar_days: PositiveInt
+    covered_calendar_days: int = Field(..., ge=0)
+    coverage_ratio: float = Field(..., ge=0, le=1)
+    complete: bool
+    reason_code: Literal["insufficient_source_history"] | None = None
+    observed_count: int = Field(..., ge=0)
+    backward_filled_count: int = Field(..., ge=0)
+    earliest_source_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_coverage(self) -> Self:
+        expected_requested_days = (self.requested_period.end - self.requested_period.start).days + 1
+        if self.requested_calendar_days != expected_requested_days:
+            raise ValueError("requested_calendar_days must match requested_period")
+        if self.available_period is None:
+            if self.covered_calendar_days != 0 or self.coverage_ratio != 0:
+                raise ValueError("missing available_period requires zero coverage")
+        else:
+            if self.available_period.start < self.requested_period.start or self.available_period.end > self.requested_period.end:
+                raise ValueError("available_period must fall inside requested_period")
+            expected_covered_days = (self.available_period.end - self.available_period.start).days + 1
+            if self.covered_calendar_days != expected_covered_days:
+                raise ValueError("covered_calendar_days must match available_period")
+        expected_ratio = self.covered_calendar_days / self.requested_calendar_days
+        if not math.isclose(self.coverage_ratio, expected_ratio, rel_tol=0, abs_tol=1e-12):
+            raise ValueError("coverage_ratio must reconcile calendar-day coverage")
+        if self.complete != (self.covered_calendar_days == self.requested_calendar_days):
+            raise ValueError("complete must reflect full requested-period coverage")
+        if self.complete != (self.reason_code is None):
+            raise ValueError("reason_code must be absent only for complete coverage")
+        if self.earliest_source_date is None and (self.observed_count > 0 or self.backward_filled_count > 0):
+            raise ValueError("non-empty history coverage requires earliest_source_date")
+        return self
+
+
 class AiExportSnapshotMeta(AiExportModel):
-    schema_version: Literal[1] = 1
-    catalog_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
+    catalog_version: Literal[2] = 2
     request_id: str = Field(..., min_length=1)
     generated_at: datetime
     snapshot_as_of: date
@@ -351,6 +415,7 @@ class AiExportSnapshotMeta(AiExportModel):
     warmup_policy: Literal["component_owned"] = "component_owned"
     earliest_calculation_date: date | None = None
     target_currency: CurrencyCode
+    history_coverage: AiExportHistoryCoverage | None = None
 
     @model_validator(mode="after")
     def validate_ranges(self) -> Self:
@@ -391,6 +456,7 @@ class AiExportSnapshotStats(AiExportModel):
     dataset_count: int = Field(..., ge=1)
     section_count: int = Field(..., ge=1)
     serialized_characters: int = Field(..., ge=0)
+    serialized_bytes: int = Field(..., ge=0)
     estimated_tokens: int = Field(..., ge=0)
     token_estimation_method: Literal["chars_div_4_v1"] = "chars_div_4_v1"
 
@@ -522,6 +588,7 @@ class AiExportSnapshotSourceFailureProblem(AiExportProblemBase):
     code: Literal["snapshot_source_failure"] = Field(json_schema_extra={"enum": ["snapshot_source_failure"]})
     component_id: SelectionId
     retryable: bool
+    reason_code: str | None = Field(None, min_length=1, pattern=_ID_PATTERN)
 
 
 AiExportProblem = Annotated[
@@ -542,6 +609,9 @@ class AiExportProblemResponse(AiExportModel):
 
 
 __all__ = [
+    "AiExportAdditionalExportNecessity",
+    "AiExportAdditionalExportPeriod",
+    "AiExportAdditionalExportSuggestion",
     "AiExportAnalysisCatalogEntry",
     "AiExportAnalysisContract",
     "AiExportAnalysisSelection",
@@ -559,6 +629,7 @@ __all__ = [
     "AiExportEntityNotFoundProblem",
     "AiExportFxPairTargetReference",
     "AiExportFxSnapshotRequest",
+    "AiExportHistoryCoverage",
     "AiExportManifestRole",
     "AiExportPeriod",
     "AiExportPeriodSemantics",

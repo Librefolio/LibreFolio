@@ -114,7 +114,7 @@ class PortfolioSummaryPayload(BaseModel):
     period_start: Date
     target_currency: str
     position_count: int
-    broker_count: int
+    position_broker_count: int
     net_worth: Currency
     total_invested: Currency
     total_gain_loss: Currency
@@ -144,7 +144,7 @@ async def _build_portfolio_summary(context: BuildContext, dependencies: Mapping[
         period_start=scope.period_start,
         target_currency=scope.target_currency,
         position_count=len(summary.holdings),
-        broker_count=len({holding.broker_id for holding in summary.holdings if holding.broker_id is not None}),
+        position_broker_count=len({holding.broker_id for holding in summary.holdings if holding.broker_id is not None}),
         net_worth=summary.net_worth,
         total_invested=summary.total_invested,
         total_gain_loss=summary.total_gain_loss,
@@ -246,6 +246,7 @@ class PortfolioProvenancePayload(BaseModel):
     target_currency: str
     period_start: Date
     period_end: Date
+    scoped_broker_count: int
     broker_scope: list[int] = Field(default_factory=list)
     engine_source: str
     fifo_methodology: str
@@ -260,6 +261,7 @@ def _build_portfolio_provenance(context: BuildContext, dependencies: Mapping[str
         target_currency=scope.target_currency,
         period_start=scope.period_start,
         period_end=scope.period_end,
+        scoped_broker_count=len(scope.broker_scope),
         broker_scope=list(scope.broker_scope),
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
@@ -293,6 +295,7 @@ class PortfolioPerformancePayload(BaseModel):
     bucket_count: int
     buckets: list[PerformanceBucketRow] = Field(default_factory=list)
     contributor_count: int
+    period_contributor_broker_count: int
     contributors: list[ContributionRow] = Field(default_factory=list)
 
 
@@ -331,6 +334,7 @@ async def _build_portfolio_performance(context: BuildContext, dependencies: Mapp
         bucket_count=len(buckets),
         buckets=buckets,
         contributor_count=len(contributors),
+        period_contributor_broker_count=(len({item.broker_id for item in contribution.positions}) if contribution is not None else 0),
         contributors=contributors,
     )
 

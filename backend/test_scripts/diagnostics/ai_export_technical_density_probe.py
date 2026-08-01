@@ -983,7 +983,7 @@ async def _run_probe(
         "indicators_exported_total": len(indicators),
         "indicators_exported_unique_instances": len({item["instance_id"] for item in indicators}),
         "asset_count": len(asset_ids),
-        "broker_count": len(prepared.broker_scope),
+        "scoped_broker_count": len(prepared.broker_scope),
         **position_metrics,
     }
     probe = {

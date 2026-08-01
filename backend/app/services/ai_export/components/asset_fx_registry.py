@@ -61,9 +61,12 @@ from typing import TYPE_CHECKING
 
 from backend.app.services.ai_export.components.asset_core import ASSET_CORE_COMPONENTS
 from backend.app.services.ai_export.components.asset_fx_technical import ASSET_FX_TECHNICAL_COMPONENTS
+from backend.app.services.ai_export.components.drawdown_context import ASSET_DRAWDOWN_CONTEXT_COMPONENTS
 from backend.app.services.ai_export.components.fx_core import FX_CORE_COMPONENTS
+from backend.app.services.ai_export.components.fx_timing_context import FX_TIMING_CONTEXT_COMPONENTS
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
+from backend.app.services.ai_export.components.technical_context import ASSET_TECHNICAL_CONTEXT_COMPONENTS, FX_TECHNICAL_CONTEXT_COMPONENTS
 from backend.app.services.ai_export.components.types import Domain
 
 if TYPE_CHECKING:
@@ -119,16 +122,20 @@ ASSET_FX_COMPONENTS: tuple[ComponentSpec, ...] = (
     *ASSET_CORE_COMPONENTS,
     *FX_CORE_COMPONENTS,
     *ASSET_FX_TECHNICAL_COMPONENTS,
+    *ASSET_TECHNICAL_CONTEXT_COMPONENTS,
+    *FX_TECHNICAL_CONTEXT_COMPONENTS,
+    *ASSET_DRAWDOWN_CONTEXT_COMPONENTS,
+    *FX_TIMING_CONTEXT_COMPONENTS,
 )
 
-# 8 Asset core + 3 Asset technical (of `asset_fx_technical`'s 7) = 11; 5 FX core +
-# 4 FX technical (of the same 7) = 9; combined = 20. Asserted at import time so
-# any future drift in the source waves' tuples fails immediately, not deep inside
-# a test.
+# 8 Asset core + 3 full technical + 2 context + 1 drawdown = 14; 5 FX core + 4 full
+# technical + 2 context + 1 timing context = 12; combined = 26. Asserted at import
+# time so any future drift in the source waves' tuples fails immediately, not deep
+# inside a test.
 ASSET_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in ASSET_FX_COMPONENTS if Domain.ASSET in spec.domains)
 FX_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in ASSET_FX_COMPONENTS if Domain.FX in spec.domains)
-ASSET_REAL_COMPONENT_COUNT = 11
-FX_REAL_COMPONENT_COUNT = 9
+ASSET_REAL_COMPONENT_COUNT = 14
+FX_REAL_COMPONENT_COUNT = 12
 
 assert len(ASSET_FX_COMPONENTS) == ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT, f"ASSET_FX_COMPONENTS must contain exactly {ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT} real component_ids, got {len(ASSET_FX_COMPONENTS)}"
 assert len(ASSET_REAL_COMPONENT_IDS) == ASSET_REAL_COMPONENT_COUNT, f"expected {ASSET_REAL_COMPONENT_COUNT} Asset component_ids, got {len(ASSET_REAL_COMPONENT_IDS)}"
@@ -231,11 +238,11 @@ def build_asset_fx_component_registry(
 
 
 def build_asset_fx_dataset_registry(component_registry: ComponentRegistry | None = None) -> DatasetRegistry:
-    """Builds the frozen 18-dataset `DatasetRegistry` over a real Asset/FX `ComponentRegistry`.
+    """Builds the frozen 32-dataset `DatasetRegistry` over a real Asset/FX `ComponentRegistry`.
 
     Defaults to `build_asset_fx_component_registry()` when no registry is
     supplied. Every dataset (all 4 domains, per `datasets.catalog`'s frozen
-    18-dataset wiring) is still validated as a whole - the DatasetRegistry does
+    32-dataset wiring) is still validated as a whole - the DatasetRegistry does
     not know or care which component_ids are backed by real builders vs.
     placeholders, only that every declared component_id/domain pairing resolves.
     Asset's 4 datasets (`asset.overview`, `asset.position_performance`,
@@ -259,7 +266,7 @@ def build_asset_fx_dataset_registry(component_registry: ComponentRegistry | None
 
 
 def build_asset_fx_analysis_registry(dataset_registry: DatasetRegistry | None = None) -> AnalysisRegistry:
-    """Builds the frozen 17-analysis `AnalysisRegistry` over a real Asset/FX `DatasetRegistry`.
+    """Builds the frozen 16-analysis `AnalysisRegistry` over a real Asset/FX `DatasetRegistry`.
 
     Defaults to `build_asset_fx_dataset_registry()` when no registry is
     supplied. Asset's 3 analyses and FX's 3 analyses now resolve against real

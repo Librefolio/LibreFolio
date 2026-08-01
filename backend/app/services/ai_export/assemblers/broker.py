@@ -58,7 +58,6 @@ from backend.app.services.ai_export.assemblers.portfolio import (
     _build_summary,
     _build_unallocated_contributions,
     _compact_events,
-    _decimal,
     _default_asset_metadata_loader,
     _default_broker_metadata_loader,
     _domain_notes,

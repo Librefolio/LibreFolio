@@ -431,10 +431,32 @@ def eligible_positions(report: PortfolioReportResponse) -> tuple[AssetPeriodCont
     return tuple(position for position in contribution.positions if not position.is_fully_sold and position.end_value is not None and position.end_value != 0)
 
 
-def considered_position_count(report: PortfolioReportResponse) -> int:
-    """Total positions considered before the eligibility filter (coverage denominator)."""
+def period_position_leg_count(report: PortfolioReportResponse) -> int:
+    """Count of period ``(broker_id, asset_id)`` position-contribution legs before eligibility.
+
+    One leg per contribution row, so the *same* asset held at two brokers
+    counts as two legs, and a leg that was fully sold *inside* the period is
+    still counted (it contributed period P&L). This is the raw pre-eligibility
+    leg denominator - NOT a unique-asset count (see
+    `period_contributor_asset_count`) and NOT the currently-held eligible
+    universe (see `eligible_positions`).
+    """
     contribution = report.positions_contribution
     return len(contribution.positions) if contribution is not None else 0
+
+
+def period_contributor_asset_count(report: PortfolioReportResponse) -> int:
+    """Count of unique asset IDs across ALL period contribution legs before eligibility.
+
+    Broker-deduplicated over the same raw pre-eligibility legs counted by
+    `period_position_leg_count` (so an asset held at two brokers counts once,
+    and an asset fully sold inside the period still counts). Always
+    ``<= period_position_leg_count`` and ``>= eligible_asset_count``.
+    """
+    contribution = report.positions_contribution
+    if contribution is None:
+        return 0
+    return len({position.asset_id for position in contribution.positions})
 
 
 def compute_nav_weights(positions: Sequence[AssetPeriodContribution]) -> Mapping[int, Decimal]:
@@ -464,7 +486,8 @@ class TechnicalUniverseBundle:
 
     positions: tuple[AssetPeriodContribution, ...]
     asset_ids: tuple[int, ...]
-    considered_count: int
+    period_position_leg_count: int
+    period_contributor_asset_count: int
     weights: Mapping[int, Decimal]
     price_results: PriceResultsResource
 
@@ -492,7 +515,8 @@ async def load_technical_universe_bundle(
         report = await load_portfolio_or_broker_report(context, report_key=report_key)
         positions = eligible_positions(report)
         asset_ids = tuple(sorted({position.asset_id for position in positions}))
-        considered = considered_position_count(report)
+        leg_count = period_position_leg_count(report)
+        contributor_asset_count = period_contributor_asset_count(report)
         weights = compute_nav_weights(positions)
 
         async def _price_loader(session: AsyncSession) -> PriceResultsResource:
@@ -519,7 +543,8 @@ async def load_technical_universe_bundle(
         return TechnicalUniverseBundle(
             positions=positions,
             asset_ids=asset_ids,
-            considered_count=considered,
+            period_position_leg_count=leg_count,
+            period_contributor_asset_count=contributor_asset_count,
             weights=weights,
             price_results=price_results,
         )
@@ -565,6 +590,14 @@ BROKER_TECHNICAL_UNIVERSE_KWARGS: Mapping[str, ResourceKey] = MappingProxyType(
 _FX_TECHNICAL_RATE_SERIES_RESOURCE: ResourceKey[FxRateSeriesResource] = ResourceKey("fx.technical_rate_series", FxRateSeriesResource)
 
 
+class FxRateHistoryError(RuntimeError):
+    """Typed FX source-history failure surfaced through AI Export problem details."""
+
+    def __init__(self, reason_code: str, message: str) -> None:
+        self.reason_code = reason_code
+        super().__init__(message)
+
+
 def _fx_warmup_days(scope: BuildScope) -> int:
     context = SignalExecutionContext(
         domain=SignalDomain.FX,
@@ -598,15 +631,25 @@ async def load_fx_rate_series(context: BuildContext) -> FxRateSeriesResource:
         load_start = scope.period_start - timedelta(days=warmup_days)
         dates = tuple(load_start + timedelta(days=offset) for offset in range((scope.period_end - load_start).days + 1))
         conversions = [(Currency(code=scope.base_currency, amount=Decimal(1)), scope.quote_currency, day) for day in dates]
-        results, _errors = await convert_bulk(session, conversions, raise_on_error=True)
+        results, _errors = await convert_bulk(session, conversions, raise_on_error=False)
 
         observations: list[FxRateObservation] = []
+        source_history_started = False
         for requested_date, result in zip(dates, results, strict=True):
             if result is None:
-                raise RuntimeError(f"convert_bulk unexpectedly returned no result for {scope.base_currency}->{scope.quote_currency} on {requested_date.isoformat()}")
+                if source_history_started:
+                    raise FxRateHistoryError(
+                        "fx_minimum_payload_unavailable",
+                        f"FX source history became unavailable after it had started for {scope.base_currency}->{scope.quote_currency} on {requested_date.isoformat()}",
+                    )
+                continue
+            source_history_started = True
             converted, actual_date, backward_filled = result
             if converted.code != scope.quote_currency or converted.amount <= 0:
-                raise RuntimeError(f"invalid FX conversion result for {scope.base_currency}->{scope.quote_currency} on {requested_date.isoformat()}")
+                raise FxRateHistoryError(
+                    "fx_minimum_payload_unavailable",
+                    f"invalid FX conversion result for {scope.base_currency}->{scope.quote_currency} on {requested_date.isoformat()}",
+                )
             observations.append(
                 FxRateObservation(
                     requested_date=requested_date,
@@ -614,6 +657,11 @@ async def load_fx_rate_series(context: BuildContext) -> FxRateSeriesResource:
                     rate=Decimal(str(converted.amount)),
                     backward_filled=bool(backward_filled),
                 )
+            )
+        if not observations or observations[-1].requested_date != scope.period_end:
+            raise FxRateHistoryError(
+                "fx_no_usable_rate",
+                f"no FX rate exists for {scope.base_currency}->{scope.quote_currency} on or before {scope.period_end.isoformat()}",
             )
         return FxRateSeriesResource.from_observations(observations)
 
@@ -638,6 +686,8 @@ async def load_fx_technical_bundle(context: BuildContext) -> FxTechnicalBundle:
 
     async def _build() -> FxTechnicalBundle:
         rate_series = await load_fx_rate_series(context)
+        source_start = rate_series.observations[0].requested_date
+        effective_start = max(scope.period_start, source_start)
         price_points = tuple(
             SignalPricePoint(
                 date=observation.requested_date,
@@ -655,7 +705,7 @@ async def load_fx_technical_bundle(context: BuildContext) -> FxTechnicalBundle:
         )
         signal_context = SignalExecutionContext(
             domain=SignalDomain.FX,
-            requested_range=DateRangeModel(start=scope.period_start, end=scope.period_end),
+            requested_range=DateRangeModel(start=effective_start, end=scope.period_end),
             cadence=SignalCadence.DAILY,
             source_reference=f"fx:{scope.base_currency}/{scope.quote_currency}",
         )
@@ -1248,7 +1298,8 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
     volume-capability gating - no manual gating here.
     """
     eligible_asset_count = len(universe.asset_ids)
-    considered_asset_count = universe.considered_count
+    leg_count = universe.period_position_leg_count
+    contributor_asset_count = universe.period_contributor_asset_count
     eligible_portfolio_weight = float(sum(universe.weights.values(), Decimal(0)))
 
     # (signal_code, output_key) -> {asset_id: (state, weight)}
@@ -1319,7 +1370,8 @@ def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthP
     )
     return UniverseBreadthPayload(
         eligible_asset_count=eligible_asset_count,
-        considered_asset_count=considered_asset_count,
+        period_position_leg_count=leg_count,
+        period_contributor_asset_count=contributor_asset_count,
         covered_asset_count=len(covered_asset_ids),
         eligible_portfolio_weight_ratio=eligible_portfolio_weight,
         covered_portfolio_weight_ratio=covered_portfolio_weight,
@@ -1336,6 +1388,7 @@ __all__ = [
     "EVENT_SELECTION_MINIMUM_LATEST",
     "EVENT_SELECTION_RECENT_WINDOW_DAYS",
     "FX_CURATED_SIGNALS",
+    "FxRateHistoryError",
     "FxTechnicalBundle",
     "OHLC_BUCKET_AGGREGATOR",
     "SIGNAL_PROFILE_BUCKET_AGGREGATOR",
@@ -1353,7 +1406,6 @@ __all__ = [
     "build_price_buckets",
     "classify_reference_level_state",
     "compute_nav_weights",
-    "considered_position_count",
     "eligible_positions",
     "latest_point_value",
     "load_asset_price_results",
@@ -1362,6 +1414,8 @@ __all__ = [
     "load_portfolio_or_broker_report",
     "load_technical_universe_bundle",
     "observations_to_rate_points",
+    "period_contributor_asset_count",
+    "period_position_leg_count",
     "price_result_to_close_points",
     "select_technical_events",
     "signal_results_to_discrete_events",

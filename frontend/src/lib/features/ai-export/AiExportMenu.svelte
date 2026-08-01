@@ -16,7 +16,6 @@
 
     export interface AiExportMenuLabels {
         readonly triggerLabel: string;
-        readonly loadingLabel: string;
         readonly panelLabel: string;
         readonly options: AiExportOptionsPanelLabels;
     }
@@ -211,13 +210,13 @@
     aria-expanded={open}
     aria-controls={panelId}
     aria-haspopup="dialog"
-    aria-label={loading ? labels.loadingLabel : labels.triggerLabel}
+    aria-label={labels.triggerLabel}
     class="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-300 dark:hover:bg-slate-600"
     onclick={() => (open ? closeMenu() : void openMenu())}
     data-testid="ai-export-button"
 >
     {#if loading}<LoaderCircle size={14} class="animate-spin" />{:else}<Brain size={14} />{/if}
-    {#if showLabel}<span>{loading ? labels.loadingLabel : labels.triggerLabel}</span>{/if}
+    {#if showLabel}<span>{labels.triggerLabel}</span>{/if}
 </button>
 
 {#if open}
@@ -242,6 +241,7 @@
             {disabled}
             {loading}
             labels={labels.options}
+            locale={$currentLanguage}
             onprepare={(options) => void prepare(options)}
             oncopyanyway={() => void copyAnyway()}
             onusecompact={(options) => void prepare(options)}

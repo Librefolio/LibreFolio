@@ -4,7 +4,7 @@ import {z, ZodError} from 'zod';
 
 import {schemas, zodiosApi} from '$lib/api';
 
-import {normalizeAiExportSnapshotResponse, type AiExportCompatibleSelection, type AiExportSnapshotResponse} from './catalog/shared';
+import {AI_EXPORT_SCHEMA_VERSION, normalizeAiExportSnapshotResponse, type AiExportCompatibleSelection, type AiExportSnapshotResponse} from './catalog/shared';
 
 export type AiExportSnapshotRequestInput = z.input<typeof schemas.build_ai_export_snapshot_api_v1_ai_export_snapshot_post_Body>;
 export type AiExportProblemDetail = z.output<typeof schemas.AiExportProblemResponse>['detail'];
@@ -194,7 +194,7 @@ function assertResponseMatchesRequest(request: AiExportSnapshotRequestInput, res
     addMismatch(mismatches, 'response.selection.id', request.selection.id, response.selection.id);
     addMismatch(mismatches, 'response.selection.version', request.selection.version, response.selection.version);
     addMismatch(mismatches, 'response.detail_level', request.detail_level, response.detail_level);
-    addMismatch(mismatches, 'response.meta.schema_version', 1, response.meta.schema_version ?? null);
+    addMismatch(mismatches, 'response.meta.schema_version', AI_EXPORT_SCHEMA_VERSION, response.meta.schema_version ?? null);
     addMismatch(mismatches, 'response.meta.catalog_version', request.expected_catalog_version, response.meta.catalog_version ?? null);
     addMismatch(mismatches, 'response.meta.target_currency', request.target_currency, response.meta.target_currency);
     addMismatch(mismatches, 'response.meta.exported_period.start', request.period.start, response.meta.exported_period.start);

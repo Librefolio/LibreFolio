@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {aiExportOptionsFingerprint, areAiExportOptionsEqual, estimateAiExportTokenSeverity, normalizeAiExportPeriod, reconcileAiExportOptions, resolveAiExportPeriod} from '../aiExportOptions';
+import {aiExportOptionsFingerprint, areAiExportOptionsEqual, estimateAiExportTokenSeverity, formatAiExportByteSize, formatAiExportTokenCount, normalizeAiExportPeriod, reconcileAiExportOptions, resolveAiExportPeriod} from '../aiExportOptions';
 import {compatibilityFixture} from './runtimeFixtures';
 
 describe('AI Export options', () => {
@@ -13,9 +13,18 @@ describe('AI Export options', () => {
 
     it('normalizes invalid custom values and classifies token severity', () => {
         expect(normalizeAiExportPeriod({preset: 'custom', customAmount: 0, customUnit: 'weeks'})).toMatchObject({customAmount: 1});
-        expect(estimateAiExportTokenSeverity(7_999)).toBe('normal');
-        expect(estimateAiExportTokenSeverity(8_000)).toBe('warning');
-        expect(estimateAiExportTokenSeverity(16_000)).toBe('large');
+        expect(estimateAiExportTokenSeverity(20_000)).toBe('normal');
+        expect(estimateAiExportTokenSeverity(20_001)).toBe('warning');
+        expect(estimateAiExportTokenSeverity(59_999)).toBe('warning');
+        expect(estimateAiExportTokenSeverity(60_000)).toBe('large');
+    });
+
+    it('formats tokens and bytes with localized two-decimal compact units', () => {
+        expect(formatAiExportTokenCount(32_426, 'it', 'token')).toBe('32,43 k token');
+        expect(formatAiExportTokenCount(999, 'en', 'tokens')).toBe('999.00 tokens');
+        expect(formatAiExportTokenCount(1_250_000, 'fr', 'jetons')).toBe('1,25 M jetons');
+        expect(formatAiExportByteSize(1_536, 'it')).toBe('1,50 KB');
+        expect(formatAiExportByteSize(2_621_440, 'en')).toBe('2.50 MB');
     });
 
     it('reconciles stale selections against the real catalog', () => {

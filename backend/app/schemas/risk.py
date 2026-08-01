@@ -62,6 +62,15 @@ class RiskOutputKind(StrEnum):
     VAR_CVAR = "var_cvar"
     SIMULATION = "simulation"
     OPTIMIZATION = "optimization"
+    DRAWDOWN = "drawdown"
+
+
+class RiskDrawdownRecoveryStatus(StrEnum):
+    """Recovery lifecycle of the maximum drawdown episode."""
+
+    NO_DRAWDOWN = "no_drawdown"
+    RECOVERED = "recovered"
+    OPEN = "open"
 
 
 class RiskResultStatus(StrEnum):
@@ -994,6 +1003,67 @@ class RiskPortfolioOptimizationOutput(BaseModel):
     algorithm_version: str = Field(..., min_length=1)
 
 
+class RiskDrawdownOutput(BaseModel):
+    """Renderer-neutral current and maximum drawdown episode summary.
+
+    All magnitudes are decimal ratios (``-0.1`` == 10% peak-relative decline);
+    percentage formatting is a renderer concern handled by a later todo.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal[RiskOutputKind.DRAWDOWN] = Field(default=RiskOutputKind.DRAWDOWN, json_schema_extra={"enum": ["drawdown"]})
+    current_drawdown: FiniteFloat = Field(..., le=0)
+    current_peak_date: date
+    current_drawdown_duration_days: int = Field(..., ge=0)
+    maximum_drawdown: FiniteFloat = Field(..., le=0)
+    maximum_drawdown_peak_date: Optional[date] = None
+    maximum_drawdown_trough_date: Optional[date] = None
+    maximum_drawdown_recovery_status: RiskDrawdownRecoveryStatus
+    maximum_drawdown_recovery_date: Optional[date] = None
+    maximum_drawdown_duration_days: int = Field(..., ge=0)
+    maximum_drawdown_recovered_ratio: Optional[FiniteFloat] = Field(None, ge=0, le=1)
+    remaining_to_peak_ratio: FiniteFloat = Field(..., ge=0)
+    available_start: date
+    available_end: date
+    n_observations: int = Field(..., ge=0)
+    coverage: FiniteFloat = Field(..., ge=0, le=1)
+    calculation_basis: str = Field(..., min_length=1)
+    return_basis: RiskReturnBasis
+
+    @model_validator(mode="after")
+    def validate_episode_contract(self) -> RiskDrawdownOutput:
+        if self.available_end < self.available_start:
+            raise ValueError("available_end must not precede available_start")
+        status = self.maximum_drawdown_recovery_status
+        if status == RiskDrawdownRecoveryStatus.NO_DRAWDOWN:
+            if self.maximum_drawdown != 0:
+                raise ValueError("no_drawdown requires a zero maximum_drawdown")
+            if self.maximum_drawdown_peak_date is not None or self.maximum_drawdown_trough_date is not None or self.maximum_drawdown_recovery_date is not None:
+                raise ValueError("no_drawdown must not expose episode dates")
+            if self.maximum_drawdown_recovered_ratio is not None:
+                raise ValueError("no_drawdown must not expose a recovered ratio")
+            if self.maximum_drawdown_duration_days != 0:
+                raise ValueError("no_drawdown must report a zero maximum duration")
+        else:
+            if self.maximum_drawdown >= 0:
+                raise ValueError("a drawdown episode requires a negative maximum_drawdown")
+            if self.maximum_drawdown_peak_date is None or self.maximum_drawdown_trough_date is None:
+                raise ValueError("a drawdown episode requires peak and trough dates")
+            if self.maximum_drawdown_trough_date < self.maximum_drawdown_peak_date:
+                raise ValueError("maximum_drawdown_trough_date must not precede the peak date")
+            if self.maximum_drawdown_recovered_ratio is None:
+                raise ValueError("a drawdown episode requires a recovered ratio")
+            if status == RiskDrawdownRecoveryStatus.RECOVERED:
+                if self.maximum_drawdown_recovery_date is None:
+                    raise ValueError("recovered episodes require a recovery date")
+                if self.maximum_drawdown_recovery_date < self.maximum_drawdown_trough_date:
+                    raise ValueError("recovery date must not precede the trough date")
+            elif self.maximum_drawdown_recovery_date is not None:
+                raise ValueError("open episodes must not expose a recovery date")
+        return self
+
+
 RiskAnalyticOutput = Annotated[
     Union[
         RiskKpiOutput,
@@ -1004,6 +1074,7 @@ RiskAnalyticOutput = Annotated[
         RiskVarCvarOutput,
         RiskSimulationOutput,
         RiskPortfolioOptimizationOutput,
+        RiskDrawdownOutput,
     ],
     Field(discriminator="kind"),
 ]
@@ -1083,6 +1154,8 @@ __all__ = [
     "RiskContributionOutput",
     "RiskCorrelationOutput",
     "RiskDataFrequency",
+    "RiskDrawdownOutput",
+    "RiskDrawdownRecoveryStatus",
     "RiskError",
     "RiskErrorCode",
     "RiskExcludedAsset",

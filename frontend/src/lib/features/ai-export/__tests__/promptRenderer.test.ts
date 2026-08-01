@@ -19,7 +19,7 @@ describe('AI Export prompt renderer', () => {
             translate: probeTranslation('it'),
         });
 
-        const headings = ['## Analysis Objective', '## Shared Verification Instructions', '## Response Contract', '## Snapshot Metadata and Dataset Manifest', '## Snapshot Data', '## Additional LibreFolio Data', '## Domain Notes', '## User Notes', '## Response Language'];
+        const headings = ['## Analysis Objective', '## Shared Verification Instructions', '## Response Contract', '## Snapshot Metadata and Dataset Manifest', '## Snapshot Data', '## Altri dati LibreFolio', '## Domain Notes', '## User Notes', '## Response Language'];
         let previous = -1;
         for (const heading of headings) {
             const index = rendered.prompt.indexOf(heading);
@@ -31,8 +31,8 @@ describe('AI Export prompt renderer', () => {
         expect(rendered.prompt).toContain('calculation sandbox');
         expect(rendered.prompt).toContain('web access is available');
         expect(rendered.prompt).toContain('Never use those codes as user-facing names.');
-        expect(rendered.prompt).toContain('A1, B1, L1');
-        expect(rendered.prompt).toContain('asset.market_technical');
+        expect(rendered.prompt).toContain('A1, B1, F1, L1');
+        expect(rendered.prompt).toContain('asset.position_performance');
         expect(rendered.prompt).toContain('Please provide your answer in: Italian.');
     });
 
@@ -47,6 +47,66 @@ describe('AI Export prompt renderer', () => {
         expect(text).not.toContain('drawdown');
         expect(text).not.toContain('VaR');
         expect(text).not.toContain('CVaR');
+    });
+
+    it('renders localized catalog-driven additional export guidance', () => {
+        const compatibility = compatibilityFixture();
+        const selection = selectionFixture('analysis', 'portfolio.rebalancing');
+        const rendered = renderAiExportPrompt({
+            selection,
+            compatibility,
+            snapshot: snapshotFixture(selection),
+            responseLanguage: 'Italian',
+            translate: probeTranslation('it'),
+        });
+
+        expect(rendered.prompt).toContain('## Altri dati LibreFolio');
+        expect(rendered.prompt).toContain('Dati tecnici portafoglio');
+        expect(rendered.prompt).toContain('Percorso LibreFolio');
+        expect(rendered.prompt).toContain('"Dashboard"');
+        expect(rendered.prompt).toContain('"Export AI"');
+        expect(rendered.prompt).not.toContain('common.aiExport');
+        expect(rendered.prompt).toContain('"Esporta dati"');
+        expect(rendered.prompt).toContain('"1 anno"');
+        expect(rendered.prompt).toContain('"Compatto"');
+        expect(rendered.prompt).toContain('Facoltativo');
+        expect(rendered.prompt).toContain('Riferimento tecnico secondario');
+        expect(rendered.prompt).toContain('`portfolio.technical`');
+    });
+
+    it('renders partial FX history coverage as an explicit percentage', () => {
+        const compatibility = compatibilityFixture();
+        const selection = selectionFixture('analysis', 'fx.trend_review');
+        const snapshot = snapshotFixture(selection);
+        const rendered = renderAiExportPrompt({
+            selection,
+            compatibility,
+            snapshot: {
+                ...snapshot,
+                meta: {
+                    ...snapshot.meta,
+                    history_coverage: {
+                        requested_period: {start: '2025-04-01', end: '2026-03-31'},
+                        available_period: {start: '2026-01-01', end: '2026-03-31'},
+                        requested_calendar_days: 365,
+                        covered_calendar_days: 90,
+                        coverage_ratio: 90 / 365,
+                        complete: false,
+                        reason_code: 'insufficient_source_history',
+                        observed_count: 64,
+                        backward_filled_count: 26,
+                        earliest_source_date: '2026-01-01',
+                    },
+                },
+            },
+            responseLanguage: 'English',
+            translate: probeTranslation('en'),
+        });
+
+        expect(rendered.prompt).toContain('history_coverage:');
+        expect(rendered.prompt).toContain('coverage_percent: 24.6575%');
+        expect(rendered.prompt).not.toContain('coverage_ratio:');
+        expect(rendered.prompt).toContain('reason_code: insufficient_source_history');
     });
 
     it('renders dataset selection as data-only metadata plus snapshot', () => {
@@ -264,7 +324,7 @@ describe('AI Export prompt renderer', () => {
             utf8_bytes_match: true,
         });
         expect(result.prompt).toContain('## Analysis Objective');
-        expect(result.prompt).toContain('Dati di mercato e tecnici asset');
+        expect(result.prompt).toContain('Performance posizione asset');
         expect(result.breakdown).toMatchObject({
             format_diagnostics: {
                 empty_columns_removed: expect.any(Number),

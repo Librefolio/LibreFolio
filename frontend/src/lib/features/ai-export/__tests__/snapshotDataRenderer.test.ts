@@ -57,7 +57,8 @@ function indicatorSection(rows = 1) {
         schema_id: 'portfolio.technical_indicators',
         schema_version: 1,
         payload: {
-            considered_asset_count: 2,
+            period_position_leg_count: 3,
+            period_contributor_asset_count: 2,
             eligible_asset_count: 2,
             covered_asset_count: 2,
             eligible_portfolio_weight_ratio: 1,
@@ -101,6 +102,63 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content).toContain("portfolio_weight_percent and *_portfolio_weight_percent use gross absolute open-position market value. technical_normalized_weight_percent sums to 100% across each signal instance's covered technical universe.");
         expect(rendered.content).toContain('|A1|2026/03/01|2026/03/02|2|2|f:10@2026/03/01;l:11@2026/03/02;n:9@2026/03/01;x:12@2026/03/02;c:2|');
         expect(rendered.content).not.toContain('semantic_description:');
+    });
+
+    it('exposes period-scoped universe count names and drops the ambiguous considered name', () => {
+        const rendered = renderSnapshotDataText([indicatorSection()], {kind: 'portfolio'}).content;
+
+        expect(rendered).toContain('period_position_leg_count');
+        expect(rendered).toContain('period_contributor_asset_count');
+        expect(rendered).toContain('eligible_asset_count');
+        expect(rendered).toContain('covered_asset_count');
+        expect(rendered).not.toContain('considered_asset_count');
+        expect(rendered).not.toContain('considered_entity_count');
+    });
+
+    it('renders technical breadth summary with period-scoped count names only', () => {
+        const breadthSection = {
+            component_id: 'portfolio.technical_breadth',
+            component_version: 1,
+            schema_id: 'portfolio.technical_breadth',
+            schema_version: 1,
+            payload: {
+                period_position_leg_count: 4,
+                period_contributor_asset_count: 3,
+                eligible_asset_count: 2,
+                covered_asset_count: 2,
+                eligible_portfolio_weight_ratio: 1,
+                covered_portfolio_weight_ratio: 1,
+                covered_weight_ratio: 1,
+                states: [
+                    {
+                        signal_code: 'RSI',
+                        output_key: 'rsi',
+                        state: 'oversold',
+                        covered_asset_count: 1,
+                        covered_portfolio_weight_ratio: 0.5,
+                        unweighted_count: 1,
+                        unweighted_ratio: 0.5,
+                        technical_normalized_weight_ratio: 0.5,
+                    },
+                    {
+                        signal_code: 'RSI',
+                        output_key: 'rsi',
+                        state: 'neutral',
+                        covered_asset_count: 1,
+                        covered_portfolio_weight_ratio: 0.5,
+                        unweighted_count: 1,
+                        unweighted_ratio: 0.5,
+                        technical_normalized_weight_ratio: 0.5,
+                    },
+                ],
+            },
+        };
+
+        const rendered = renderSnapshotDataText([breadthSection], {kind: 'portfolio'}).content;
+
+        expect(rendered).toContain('|period_position_leg_count|period_contributor_asset_count|eligible_asset_count|covered_asset_count|');
+        expect(rendered).toContain('|4|3|2|2|');
+        expect(rendered).not.toContain('considered_asset_count');
     });
 
     it('groups multiple instances under their owning signal definition', () => {
@@ -507,9 +565,11 @@ describe('AI Export compact Snapshot Data renderer', () => {
             schema_version: 1,
             payload: {
                 herfindahl_index_points: '944.233500000000',
+                covered_weight_ratio: '0.75',
                 classifications: [
                     {name: 'Italy', weight: '0.1704'},
                     {name: 'Other', weight: '0.8296'},
+                    {name: 'Normalized universe', weight: '1.0000000000000002'},
                 ],
             },
         };
@@ -517,10 +577,12 @@ describe('AI Export compact Snapshot Data renderer', () => {
         const rendered = renderSnapshotDataText([section], {kind: 'broker'});
 
         expect(rendered.content).toContain('|herfindahl_index_points|944.2335|');
+        expect(rendered.content).toContain('|covered_weight_ratio_percent|75%|');
         expect(rendered.content).not.toContain('944.2335%');
         expect(rendered.content).toContain('|row|name|weight_percent|');
         expect(rendered.content).toContain('|1|Italy|17.04%|');
         expect(rendered.content).toContain('|2|Other|82.96%|');
+        expect(rendered.content).toContain('|3|Normalized universe|100%|');
     });
 
     it('keeps FIFO lots auditable with local refs and custody broker refs', () => {
@@ -595,6 +657,105 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content).not.toContain('asset_name');
     });
 
+    it('omits only fully empty financial temporal rows and preserves observed zero values', () => {
+        const section = {
+            component_id: 'portfolio.performance',
+            component_version: 1,
+            schema_id: 'portfolio.performance',
+            schema_version: 1,
+            payload: {
+                coverage_ratio: 0.25,
+                buckets: [
+                    {
+                        start_date: '2026/01/01',
+                        end_date: '2026/01/31',
+                        index: 0,
+                        has_data: false,
+                        end_value: null,
+                        net_external_flow: null,
+                        period_pnl: null,
+                    },
+                    {
+                        start_date: '2026/02/01',
+                        end_date: '2026/02/28',
+                        index: 1,
+                        has_data: false,
+                        net_external_flow: {amount: 100, code: 'EUR'},
+                    },
+                    {
+                        start_date: '2026/03/01',
+                        end_date: '2026/03/31',
+                        index: 2,
+                        has_data: false,
+                        period_pnl: {amount: 5, code: 'EUR'},
+                    },
+                    {
+                        start_date: '2026/04/01',
+                        end_date: '2026/04/30',
+                        index: 3,
+                        has_data: false,
+                        period_pnl: {amount: 0, code: 'EUR'},
+                    },
+                    {
+                        start_date: '2026/05/01',
+                        end_date: '2026/05/31',
+                        index: 4,
+                        end_value: null,
+                        period_pnl: null,
+                    },
+                ],
+            },
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'portfolio'});
+        const table = rendered.content.split('TABLE buckets')[1];
+        const rows = table.split('\n').filter((line) => /^\|\d+\|/.test(line));
+
+        expect(rendered.content).toContain('|coverage_percent|25%|');
+        expect(rows).toHaveLength(3);
+        expect(table).not.toContain('2026/01/01');
+        expect(table).not.toContain('2026/05/01');
+        expect(table).toContain('2026/02/01');
+        expect(table).toContain('2026/03/01');
+        expect(table).toContain('2026/04/01');
+        expect(table).toContain('|0|EUR|');
+        expect(rendered.formatDiagnostics.empty_temporal_rows_detected).toBe(2);
+        expect(rendered.formatDiagnostics.empty_temporal_rows_omitted).toBe(2);
+        expect(rendered.formatDiagnostics.temporal_rows_rendered).toBe(3);
+    });
+
+    it('keeps period and coverage metadata when requested history starts before available data', () => {
+        const section = {
+            component_id: 'portfolio.performance',
+            component_version: 1,
+            schema_id: 'portfolio.performance',
+            schema_version: 1,
+            payload: {
+                requested_period: {start: '2025/01/01', end: '2026/01/01'},
+                effective_period: {start: '2025/01/01', end: '2026/01/01'},
+                available_period: {start: '2025/12/01', end: '2026/01/01'},
+                coverage_ratio: 0.0877,
+                insufficient_history: true,
+                buckets: [
+                    {start_date: '2025/01/01', end_date: '2025/11/30', has_data: false, end_value: null},
+                    {start_date: '2025/12/01', end_date: '2026/01/01', has_data: true, end_value: {amount: 1000, code: 'EUR'}},
+                ],
+            },
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'portfolio'});
+
+        expect(rendered.content).toContain('|requested_period.start|2025/01/01|');
+        expect(rendered.content).toContain('|effective_period.start|2025/01/01|');
+        expect(rendered.content).toContain('|available_period.start|2025/12/01|');
+        expect(rendered.content).toContain('|coverage_percent|8.77%|');
+        expect(rendered.content).toContain('|insufficient_history|true|');
+        expect(rendered.content).not.toContain('|1|2025/01/01|');
+        expect(rendered.content).toContain('|1|2025/12/01|');
+        expect(rendered.formatDiagnostics.empty_temporal_rows_omitted).toBe(1);
+        expect(rendered.formatDiagnostics.temporal_rows_rendered).toBe(1);
+    });
+
     it('uses the centralized directory even when selected components contain no identity payload', () => {
         const section = {
             component_id: 'asset.position_performance',
@@ -645,6 +806,145 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content).toContain('|row|broker_ref|custody_type|quantity|');
         expect(rendered.content).toContain('|1|B1|BROKER|50000|');
         expect(rendered.content).toContain('PRICE NORMALIZATION');
+    });
+
+    it('uses F# refs and formats focused context ratios as percentages', () => {
+        const section = {
+            component_id: 'fx.market_summary',
+            component_version: 1,
+            schema_id: 'fx.market_summary',
+            schema_version: 1,
+            payload: {
+                policy_code: 'fx_market_context_v1',
+                entities: [
+                    {
+                        entity_id: 'fx:USD/EUR',
+                        value_unit: 'EUR_per_USD',
+                        observation_count: 64,
+                        current_value: 0.92,
+                        return_1m_ratio: 0.0125,
+                        daily_return_volatility_ratio: 0.0042,
+                        ppo_12_26_9_percent: 1.5,
+                    },
+                ],
+                history: [],
+                events: [],
+            },
+        };
+        const directory = {
+            assets: [],
+            brokers: [],
+            fx_pairs: [{base_currency: 'USD', quote_currency: 'EUR'}],
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'fx_pair', base_currency: 'USD', quote_currency: 'EUR'}, directory);
+
+        expect(rendered.content).toContain('|F1|USD/EUR|USD|EUR|');
+        expect(rendered.content).toContain('|1|F1|EUR_per_USD|64|0.92|1.25%|0.42%|1.5%|');
+        expect(rendered.content).not.toContain('FX1');
+    });
+
+    it('renders latest_events as a clean category table with public refs and no null rows', () => {
+        const section = {
+            component_id: 'portfolio.asset_market_context',
+            component_version: 1,
+            schema_id: 'portfolio.asset_market_context',
+            schema_version: 1,
+            payload: {
+                policy_code: 'portfolio_asset_snapshot_v1',
+                entities: [
+                    {entity_id: 'asset:1', value_unit: 'USD', observation_count: 120, current_value: 10.5},
+                    {entity_id: 'asset:2', value_unit: 'USD', observation_count: 118, current_value: 42},
+                ],
+                latest_events: [
+                    {
+                        entity_id: 'asset:1',
+                        date: '2026-06-01',
+                        key: 'ema_50_ema_200',
+                        signal_code: 'EMA',
+                        signal_category: 'trend',
+                        direction: 'up',
+                        semantic_description: 'EMA 50 crossed above EMA 200.',
+                        values: {difference: 0.5},
+                    },
+                    {
+                        entity_id: 'asset:2',
+                        date: '2026-06-02',
+                        key: 'rsi_14_oversold_30',
+                        signal_code: 'RSI',
+                        signal_category: 'momentum',
+                        direction: 'down',
+                        semantic_description: 'RSI 14 fell below 30.',
+                        values: {difference: -1},
+                    },
+                ],
+            },
+        };
+        const directory = {
+            assets: [
+                {asset_id: 1, display_name: 'First Asset'},
+                {asset_id: 2, display_name: 'Second Asset'},
+            ],
+            brokers: [],
+            fx_pairs: [],
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'portfolio'}, directory);
+
+        // A dedicated TABLE latest_events with a category column and public entity refs (never raw asset ids).
+        expect(rendered.content).toContain('TABLE latest_events');
+        const table = rendered.content.split('TABLE latest_events')[1];
+        expect(table).toContain('signal_category');
+        const header = table.split('\n').find((line) => line.startsWith('|row|'));
+        expect(header).toContain('|entity_ref|');
+        expect(header).toContain('|signal_category|');
+        expect(header).not.toContain('|entity_id|');
+        // Two fully populated rows, public refs, categories, no null cells.
+        const rows = table.split('\n').filter((line) => /^\|\d+\|/.test(line));
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toContain('A1');
+        expect(rows[0]).toContain('trend');
+        expect(rows[1]).toContain('A2');
+        expect(rows[1]).toContain('momentum');
+        for (const row of rows) {
+            expect(row).not.toContain('|null|');
+        }
+        expect(table).not.toContain('asset:1');
+        expect(table).not.toContain('asset:2');
+    });
+
+    it('maps numeric scope arrays and isolated values to public refs', () => {
+        const section = {
+            component_id: 'portfolio.provenance',
+            component_version: 1,
+            schema_id: 'portfolio.provenance',
+            schema_version: 1,
+            payload: {
+                broker_scope: [5, 7],
+                asset_ids: [42],
+                nested: [{broker_ids: [7], asset_ids: [42]}],
+            },
+        };
+        const directory = {
+            assets: [{asset_id: 42, display_name: 'Named Asset'}],
+            brokers: [
+                {broker_id: 5, display_name: 'First Broker'},
+                {broker_id: 7, display_name: 'Second Broker'},
+            ],
+            fx_pairs: [],
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'portfolio'}, directory);
+
+        expect(rendered.content).toContain('TABLE broker_scope');
+        expect(rendered.content).toContain('|1|B1|');
+        expect(rendered.content).toContain('|2|B2|');
+        expect(rendered.content).toContain('TABLE asset_ids');
+        expect(rendered.content).toContain('|1|A1|');
+        expect(rendered.content).toContain('|row|broker_refs|asset_refs|');
+        expect(rendered.content).toContain('|1|["B2"]|["A1"]|');
+        expect(rendered.content).not.toContain('[5,7]');
+        expect(rendered.content).not.toContain('[42]');
     });
 
     it('materially reduces repeated indicator history without dropping values', () => {

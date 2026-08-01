@@ -1,9 +1,10 @@
-"""Service tests for the component-based public AI Export runtime."""
+"""Service tests for the component-based public AI Export V2 runtime."""
 
 from __future__ import annotations
 
+import decimal
 import json
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -11,6 +12,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import backend.app.services.ai_export.runtime_service as rs_module
 from backend.app.db.models import Asset, Broker, BrokerUserAccess
 from backend.app.schemas.ai_export_runtime import (
     AiExportAnalysisSelection,
@@ -24,7 +26,9 @@ from backend.app.schemas.signals import SignalTemporalClass
 from backend.app.services.ai_export.analyses.spec import AnalysisRegistry, AnalysisSpec
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
 from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.resources import FxRateObservation, FxRateSeriesResource
 from backend.app.services.ai_export.components.spec import ComponentSpec
+from backend.app.services.ai_export.components.technical_shared import FxRateHistoryError
 from backend.app.services.ai_export.components.types import (
     ALL_DETAIL_LEVELS,
     Domain,
@@ -195,7 +199,7 @@ def _portfolio_dataset_request() -> AiExportPortfolioSnapshotRequest:
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=1,
+        expected_catalog_version=2,
     )
 
 
@@ -214,15 +218,15 @@ def _portfolio_analysis_request() -> AiExportPortfolioSnapshotRequest:
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=1,
+        expected_catalog_version=2,
     )
 
 
-def test_catalog_exposes_exact_18_datasets_and_17_analyses_without_prompts():
+def test_catalog_exposes_exact_25_datasets_and_16_analyses_without_prompts():
     catalog = AiExportSnapshotService.get_catalog()
     serialized = catalog.model_dump_json()
 
-    assert len(catalog.datasets) == 18
+    assert len(catalog.datasets) == 32
     assert len(catalog.analyses) == 16
     assert {entry.id for entry in catalog.datasets} >= {
         "portfolio.overview",
@@ -270,6 +274,7 @@ async def test_dataset_selection_builds_manifest_sections_and_stable_stats():
         ensure_ascii=False,
     )
     assert response.stats.serialized_characters == len(serialized)
+    assert response.stats.serialized_bytes == len(serialized.encode("utf-8"))
     assert response.stats.estimated_tokens == (len(serialized) + 3) // 4
 
 
@@ -322,8 +327,8 @@ async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
 
     response = await service.build_snapshot(41, request)
 
-    assert response.meta.schema_version == 1
-    assert response.meta.catalog_version == 1
+    assert response.meta.schema_version == 2
+    assert response.meta.catalog_version == 2
     assert response.technical_sampling is not None
     assert response.technical_sampling.detail_level == "standard"
     assert response.technical_sampling.price_policy is not None
@@ -409,6 +414,63 @@ async def test_snapshot_builds_minimal_entity_directory_from_component_reference
 
 
 @pytest.mark.asyncio
+async def test_all_accessible_scope_keeps_inactive_broker_in_entity_directory():
+    session = AsyncMock(spec=AsyncSession)
+
+    async def _execute(statement):
+        entity = statement.column_descriptions[0].get("entity")
+        result = MagicMock()
+        if entity is BrokerUserAccess:
+            result.scalars.return_value.all.return_value = [3, 4]
+        elif entity is Asset:
+            result.scalars.return_value = (
+                SimpleNamespace(
+                    id=7,
+                    display_name="Named Asset",
+                    identifier_ticker=None,
+                    identifier_isin=None,
+                    identifier_cusip=None,
+                    identifier_sedol=None,
+                    identifier_figi=None,
+                    identifier_other=None,
+                    currency="EUR",
+                    asset_type=SimpleNamespace(value="ETF"),
+                    quote_base_quantity=1,
+                ),
+            )
+        elif entity is Broker:
+            result.scalars.return_value = (
+                SimpleNamespace(id=3, name="Position Broker"),
+                SimpleNamespace(id=4, name="Inactive Scoped Broker"),
+            )
+        else:
+            raise AssertionError(f"unexpected entity query: {entity}")
+        return result
+
+    session.execute.side_effect = _execute
+    component = _component(
+        "portfolio.summary",
+        Domain.PORTFOLIO,
+        _EntityPayload,
+        _EntityPayload(asset_id=7, broker_id=3),
+    )
+    dataset = _dataset(
+        "portfolio.overview",
+        Domain.PORTFOLIO,
+        ("portfolio.summary",),
+    )
+    service = _service(session, (component,), (dataset,))
+
+    response = await service.build_snapshot(41, _portfolio_dataset_request())
+
+    assert [entry.broker_id for entry in response.entity_directory.brokers] == [3, 4]
+    assert [entry.display_name for entry in response.entity_directory.brokers] == [
+        "Position Broker",
+        "Inactive Scoped Broker",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_analysis_selection_echoes_contract_and_required_manifest():
     session = _session_with_accessible_brokers([])
     component = _component(
@@ -458,7 +520,7 @@ async def test_prepare_request_rejects_catalog_selection_and_contract_mismatches
     )
     service = _service(session, (component,), (dataset,), (analysis,))
 
-    catalog_mismatch = _portfolio_dataset_request().model_copy(update={"expected_catalog_version": 2})
+    catalog_mismatch = _portfolio_dataset_request().model_copy(update={"expected_catalog_version": 3})
     with pytest.raises(AiExportVersionMismatchError):
         await service.prepare_request(41, catalog_mismatch)
 
@@ -531,7 +593,7 @@ async def test_required_component_failure_and_missing_asset_are_typed():
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=1,
+        expected_catalog_version=2,
         asset_id=7,
     )
 
@@ -585,7 +647,7 @@ async def test_fx_exposure_analysis_with_empty_rows_is_not_applicable():
         "detail_level": "standard",
         "period": {"start": START, "end": END},
         "target_currency": "EUR",
-        "expected_catalog_version": 1,
+        "expected_catalog_version": 2,
         "base_currency": "USD",
         "quote_currency": "EUR",
     }
@@ -655,7 +717,7 @@ async def test_asset_analysis_applicability_uses_real_component_payloads(
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=1,
+        expected_catalog_version=2,
         asset_id=7,
     )
 
@@ -663,3 +725,183 @@ async def test_asset_analysis_applicability_uses_real_component_payloads(
         await service.build_snapshot(41, request)
 
     assert exc_info.value.reason_code == reason_code
+
+
+# =============================================================================
+# FX partial history (requirement 7): history_coverage meta and reason_code
+# =============================================================================
+
+
+def _fx_request_with_catalog_v2(*, start: date, end: date) -> AiExportFxSnapshotRequest:
+    return AiExportFxSnapshotRequest(
+        domain="fx",
+        selection=AiExportDatasetSelection(
+            kind="dataset",
+            id="fx.overview",
+            version=1,
+        ),
+        detail_level=AiExportDetailLevel.STANDARD,
+        period={"start": start, "end": end},
+        target_currency="EUR",
+        expected_catalog_version=2,
+        base_currency="USD",
+        quote_currency="EUR",
+    )
+
+
+@pytest.mark.asyncio
+async def test_fx_direct_exposure_does_not_force_rate_history_coverage():
+    period_start = date(2026, 1, 1)
+    period_end = date(2026, 3, 31)
+    session = _session_with_accessible_brokers([])
+    component = _component("fx.exposure_base_quote", Domain.FX, _RowsPayload, _RowsPayload())
+    dataset = _dataset("fx.direct_exposure", Domain.FX, ("fx.exposure_base_quote",))
+    service = _service(session, (component,), (dataset,))
+    request = AiExportFxSnapshotRequest(
+        domain="fx",
+        selection=AiExportDatasetSelection(kind="dataset", id="fx.direct_exposure", version=1),
+        detail_level=AiExportDetailLevel.STANDARD,
+        period={"start": period_start, "end": period_end},
+        target_currency="EUR",
+        expected_catalog_version=2,
+        base_currency="USD",
+        quote_currency="EUR",
+    )
+
+    original_load = rs_module.load_fx_rate_series
+
+    async def _unexpected_load(context):
+        raise AssertionError("fx.direct_exposure must not load base/quote rate history")
+
+    rs_module.load_fx_rate_series = _unexpected_load
+    try:
+        response = await service.build_snapshot(41, request)
+    finally:
+        rs_module.load_fx_rate_series = original_load
+
+    assert response.meta.history_coverage is None
+
+
+@pytest.mark.asyncio
+async def test_fx_snapshot_with_complete_history_has_no_history_coverage_warning():
+    """When FX source history fully covers the requested period, meta.history_coverage
+    must be None (no partial-history warning is surfaced)."""
+    period_start = date(2026, 1, 1)
+    period_end = date(2026, 3, 31)
+    session = _session_with_accessible_brokers([])
+
+    # Full coverage: history starts exactly at period_start
+    full_observations = [
+        FxRateObservation(
+            requested_date=period_start + timedelta(days=i),
+            actual_date=period_start + timedelta(days=i),
+            rate=__import__("decimal").Decimal("1.10"),
+            backward_filled=False,
+        )
+        for i in range((period_end - period_start).days + 1)
+    ]
+    full_series = FxRateSeriesResource.from_observations(full_observations)
+
+    component = _component("fx.overview", Domain.FX, _ValuePayload, _ValuePayload(value=1))
+    dataset = _dataset("fx.overview", Domain.FX, ("fx.overview",))
+    service = _service(session, (component,), (dataset,))
+    request = _fx_request_with_catalog_v2(start=period_start, end=period_end)
+
+    original_load = rs_module.load_fx_rate_series
+
+    async def _stub_load(context):
+        return full_series
+
+    rs_module.load_fx_rate_series = _stub_load
+    try:
+        response = await service.build_snapshot(41, request)
+    finally:
+        rs_module.load_fx_rate_series = original_load
+
+    # Complete coverage → history_coverage must have complete=True and reason_code=None
+    assert response.meta.history_coverage is not None
+    assert response.meta.history_coverage.complete is True
+    assert response.meta.history_coverage.reason_code is None
+
+
+@pytest.mark.asyncio
+async def test_fx_snapshot_with_partial_history_yields_coverage_and_reason():
+    """When FX history starts mid-period, meta.history_coverage has calendar
+    ratio < 1, reason_code='insufficient_source_history', and observed/backfill counts."""
+    period_start = date(2025, 10, 1)  # 6M period
+    period_end = date(2026, 3, 31)
+    history_start = date(2026, 1, 1)  # data only from Jan → short history
+
+    visible_range = range((period_end - history_start).days + 1)
+    observations = []
+    for i in visible_range:
+        day = history_start + timedelta(days=i)
+        is_bf = i % 7 == 6  # simulate ~1/7 backward-filled
+        observations.append(
+            FxRateObservation(
+                requested_date=day,
+                actual_date=(day - timedelta(days=1)) if is_bf else day,
+                rate=decimal.Decimal("1.10"),
+                backward_filled=is_bf,
+            )
+        )
+    partial_series = FxRateSeriesResource.from_observations(observations)
+
+    session = _session_with_accessible_brokers([])
+    component = _component("fx.overview", Domain.FX, _ValuePayload, _ValuePayload(value=1))
+    dataset = _dataset("fx.overview", Domain.FX, ("fx.overview",))
+    service = _service(session, (component,), (dataset,))
+    request = _fx_request_with_catalog_v2(start=period_start, end=period_end)
+
+    original_load = rs_module.load_fx_rate_series
+
+    async def _stub_load(context):
+        return partial_series
+
+    rs_module.load_fx_rate_series = _stub_load
+    try:
+        response = await service.build_snapshot(41, request)
+    finally:
+        rs_module.load_fx_rate_series = original_load
+
+    coverage = response.meta.history_coverage
+    assert coverage is not None
+    assert coverage.complete is False
+    assert coverage.reason_code == "insufficient_source_history"
+    expected_requested_days = (period_end - period_start).days + 1
+    expected_covered_days = (period_end - history_start).days + 1
+    assert coverage.requested_calendar_days == expected_requested_days
+    assert coverage.covered_calendar_days == expected_covered_days
+    assert coverage.coverage_ratio == pytest.approx(expected_covered_days / expected_requested_days)
+    assert coverage.observed_count + coverage.backward_filled_count == expected_covered_days
+
+
+@pytest.mark.asyncio
+async def test_fx_snapshot_source_error_propagates_reason_code():
+    """A FxRateHistoryError with reason_code='fx_no_usable_rate' propagates through
+    RequiredComponentBuildError to AiExportSnapshotSourceError.reason_code."""
+
+    def _build_with_fx_error(context, dependencies):  # noqa: ARG001
+        raise FxRateHistoryError(
+            "fx_no_usable_rate",
+            "no FX rate exists for USD->EUR on or before 2026-03-31",
+        )
+
+    component = ComponentSpec(
+        component_id="fx.overview",
+        version=1,
+        domains=frozenset({Domain.FX}),
+        output_model=_ValuePayload,
+        builder=_build_with_fx_error,
+        period_behavior=PeriodBehavior.WINDOWED,
+    )
+    session = _session_with_accessible_brokers([])
+    dataset = _dataset("fx.overview", Domain.FX, ("fx.overview",))
+    service = _service(session, (component,), (dataset,))
+    request = _fx_request_with_catalog_v2(start=date(2026, 1, 1), end=date(2026, 3, 31))
+
+    with pytest.raises(AiExportSnapshotSourceError) as exc_info:
+        await service.build_snapshot(41, request)
+
+    assert exc_info.value.component_id == "fx.overview"
+    assert exc_info.value.reason_code == "fx_no_usable_rate"

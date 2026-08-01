@@ -15,6 +15,7 @@ Every model is deliberately `extra="forbid"` and Decimal/date-safe so it survive
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
@@ -331,13 +332,161 @@ class FxExposureRow(BaseModel):
         return self
 
 
+class FxExposureRole(StrEnum):
+    """Which leg of the pair an exposure row's currency matches."""
+
+    BASE = "base"
+    QUOTE = "quote"
+
+
+class FxExposureRoleSummary(BaseModel):
+    """Deterministic per-leg (base or quote) rollup of the preserved exposure rows.
+
+    Every count/total is derived purely from the preserved ``rows`` (no row is
+    dropped to produce it). ``has_direct_exposure`` is the explicit boolean
+    zero-state: ``False`` here means a genuinely *computed* absence of any direct
+    exposure in that currency, never "data missing" - the exposure builder always
+    resolves the real portfolio report, so an absent row is a real zero.
+    ``net_target_amount`` sums the signed ``target_amount``s (a net figure that
+    can be negative, e.g. a net short/negative-cash leg); ``gross_target_amount``
+    sums their absolute values, so a reader can tell an offsetting net-flat leg
+    from a truly empty one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    currency: str
+    role: FxExposureRole
+    row_count: int = Field(..., ge=0)
+    cash_row_count: int = Field(..., ge=0)
+    position_row_count: int = Field(..., ge=0)
+    net_target_amount: Decimal
+    gross_target_amount: Decimal
+    has_direct_exposure: bool
+
+    @field_validator("currency")
+    @classmethod
+    def _normalize(cls, value: str) -> str:
+        return _validate_currency(value)
+
+    @field_validator("net_target_amount")
+    @classmethod
+    def _validate_net(cls, value: Decimal) -> Decimal:
+        return _validate_finite_decimal(value, field_name="net_target_amount")
+
+    @field_validator("gross_target_amount")
+    @classmethod
+    def _validate_gross(cls, value: Decimal) -> Decimal:
+        value = _validate_finite_decimal(value, field_name="gross_target_amount")
+        if value < 0:
+            raise ValueError("gross_target_amount must not be negative")
+        return value
+
+    @model_validator(mode="after")
+    def _check_consistency(self) -> Self:
+        if self.cash_row_count + self.position_row_count != self.row_count:
+            raise ValueError("row_count must equal cash_row_count + position_row_count")
+        if self.has_direct_exposure != (self.row_count > 0):
+            raise ValueError("has_direct_exposure must match row_count > 0")
+        if self.row_count == 0:
+            if self.net_target_amount != 0 or self.gross_target_amount != 0:
+                raise ValueError("a zero-row leg must carry zero net/gross totals")
+        elif abs(self.net_target_amount) > self.gross_target_amount:
+            raise ValueError("abs(net_target_amount) must not exceed gross_target_amount")
+        return self
+
+
+def _role_summary(rows: Sequence[FxExposureRow], *, currency: str, role: FxExposureRole) -> FxExposureRoleSummary:
+    normalized = normalize_currency_code(currency)
+    matching = [row for row in rows if row.linked_currency == normalized]
+    cash_count = sum(row.kind is FxExposureKind.CASH for row in matching)
+    position_count = sum(row.kind is FxExposureKind.POSITION for row in matching)
+    net = sum((row.target_amount for row in matching), Decimal(0))
+    gross = sum((abs(row.target_amount) for row in matching), Decimal(0))
+    return FxExposureRoleSummary(
+        currency=normalized,
+        role=role,
+        row_count=len(matching),
+        cash_row_count=cash_count,
+        position_row_count=position_count,
+        net_target_amount=net,
+        gross_target_amount=gross,
+        has_direct_exposure=len(matching) > 0,
+    )
+
+
+class FxExposureSummary(BaseModel):
+    """Explicit base/quote exposure rollup + zero-state for ``fx.exposure_base_quote``.
+
+    Fully derived from the preserved rows (see ``FxExposureBaseQuotePayload`` -
+    the rows themselves are never removed to build this). ``has_direct_quote_exposure``
+    / ``has_direct_base_exposure`` make the direct-exposure zero-state explicit so
+    an analysis never has to infer "no exposure" from an empty row list.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_currency: str
+    quote_currency: str
+    target_currency: str
+    total_row_count: int = Field(..., ge=0)
+    base: FxExposureRoleSummary
+    quote: FxExposureRoleSummary
+    has_direct_base_exposure: bool
+    has_direct_quote_exposure: bool
+    has_any_direct_exposure: bool
+
+    @field_validator("base_currency", "quote_currency", "target_currency")
+    @classmethod
+    def _normalize(cls, value: str) -> str:
+        return _validate_currency(value)
+
+    @model_validator(mode="after")
+    def _check_consistency(self) -> Self:
+        if self.base_currency == self.quote_currency:
+            raise ValueError("base_currency and quote_currency must differ")
+        if self.base.role is not FxExposureRole.BASE or self.base.currency != self.base_currency:
+            raise ValueError("base summary must describe the base_currency with role BASE")
+        if self.quote.role is not FxExposureRole.QUOTE or self.quote.currency != self.quote_currency:
+            raise ValueError("quote summary must describe the quote_currency with role QUOTE")
+        if self.total_row_count != self.base.row_count + self.quote.row_count:
+            raise ValueError("total_row_count must equal base.row_count + quote.row_count")
+        if self.has_direct_base_exposure != self.base.has_direct_exposure:
+            raise ValueError("has_direct_base_exposure must match base.has_direct_exposure")
+        if self.has_direct_quote_exposure != self.quote.has_direct_exposure:
+            raise ValueError("has_direct_quote_exposure must match quote.has_direct_exposure")
+        if self.has_any_direct_exposure != (self.has_direct_base_exposure or self.has_direct_quote_exposure):
+            raise ValueError("has_any_direct_exposure must match base/quote exposure booleans")
+        return self
+
+    @classmethod
+    def from_rows(cls, rows: Sequence[FxExposureRow], *, base_currency: str, quote_currency: str, target_currency: str) -> FxExposureSummary:
+        base = _role_summary(rows, currency=base_currency, role=FxExposureRole.BASE)
+        quote = _role_summary(rows, currency=quote_currency, role=FxExposureRole.QUOTE)
+        return cls(
+            base_currency=base_currency,
+            quote_currency=quote_currency,
+            target_currency=target_currency,
+            total_row_count=base.row_count + quote.row_count,
+            base=base,
+            quote=quote,
+            has_direct_base_exposure=base.has_direct_exposure,
+            has_direct_quote_exposure=quote.has_direct_exposure,
+            has_any_direct_exposure=base.has_direct_exposure or quote.has_direct_exposure,
+        )
+
+
 class FxExposureBaseQuotePayload(BaseModel):
     """`fx.exposure_base_quote`: every direct base/quote exposure row, preserved.
 
     `rows` deliberately preserves every candidate row across all detail
     levels (no top-N sampling): applicability/summarization is a higher-level
     concern outside this runtime. An empty `rows` tuple is a valid, successful
-    "no direct exposure" result, not an error.
+    "no direct exposure" result, not an error. `summary` is an explicit,
+    fully-derived base/quote rollup (totals, counts, and an explicit
+    `has_direct_quote_exposure`/`has_direct_base_exposure` zero-state) computed
+    from those preserved rows - it never removes or overrides any row, and is
+    recomputed on validation so it can never drift from `rows`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -348,6 +497,7 @@ class FxExposureBaseQuotePayload(BaseModel):
     as_of: date
     broker_scope: tuple[int, ...] = ()
     rows: tuple[FxExposureRow, ...] = ()
+    summary: FxExposureSummary | None = None
 
     @field_validator("base_currency", "quote_currency", "target_currency")
     @classmethod
@@ -364,6 +514,15 @@ class FxExposureBaseQuotePayload(BaseModel):
                 raise ValueError(f"exposure row linked_currency {row.linked_currency!r} is not base_currency/quote_currency")
             # `FxExposureRow` itself already enforces native_amount == target_amount for
             # IDENTITY conversions and native_amount is None for ENGINE_VALUATION ones.
+        # Always (re)derive the explicit summary from the preserved rows so the
+        # zero-state/totals can never diverge from `rows`, whether this payload
+        # was built fresh or re-validated from a serialized envelope.
+        self.summary = FxExposureSummary.from_rows(
+            self.rows,
+            base_currency=self.base_currency,
+            quote_currency=self.quote_currency,
+            target_currency=self.target_currency,
+        )
         return self
 
 
@@ -446,7 +605,10 @@ __all__ = [
     "FxExposureKind",
     "FxExposureLinkage",
     "FxExposureProvenancePayload",
+    "FxExposureRole",
+    "FxExposureRoleSummary",
     "FxExposureRow",
+    "FxExposureSummary",
     "FxPairIdentityPayload",
     "FxRateDirection",
 ]

@@ -1,5 +1,5 @@
 import type {AiExportCatalogCompatibilityResult} from '../catalog/compatibility';
-import {aiExportSelectionKey, isAiExportAnalysisId, type AiExportAnalysisCatalogEntry, type AiExportCompatibleSelection, type AiExportDatasetCatalogEntry, type AiExportSnapshotResponse} from '../catalog/shared';
+import {AI_EXPORT_PAGE_FEATURE_LABEL_KEYS, AI_EXPORT_PAGE_LABEL_KEYS, AI_EXPORT_SCHEMA_VERSION, aiExportSelectionKey, isAiExportAnalysisId, type AiExportAnalysisCatalogEntry, type AiExportCompatibleSelection, type AiExportDatasetCatalogEntry, type AiExportSnapshotResponse} from '../catalog/shared';
 import {renderFencedSection, serializeYaml} from '../serialization';
 import {findAiExportResponseContract} from './responseContracts';
 import {renderSnapshotDataText, type RenderedSnapshotDataText, type SnapshotFormatDiagnostics, type SnapshotSignalMetric} from './snapshotDataRenderer';
@@ -31,6 +31,7 @@ export interface RenderAiExportPromptInput {
 
 export interface AiExportFinalPromptStats {
     readonly characterCountUtf16CodeUnits: number;
+    readonly byteCountUtf8: number;
     readonly estimatedTokens: number;
     readonly estimationMethod: 'ceil_utf16_code_units_div_4_v1';
 }
@@ -96,7 +97,7 @@ function copiedValue(value: unknown): unknown {
 function validateSnapshot(input: RenderAiExportPromptInput): void {
     const {selection, snapshot} = input;
     const selectionMatches = snapshot.domain === selection.domain && snapshot.selection.kind === selection.kind && snapshot.selection.id === selection.id && snapshot.selection.version === selection.version && selection.supportedDetailLevels.includes(snapshot.detail_level);
-    if (!selectionMatches || snapshot.meta.schema_version !== 1 || snapshot.meta.catalog_version !== 1) {
+    if (!selectionMatches || snapshot.meta.schema_version !== AI_EXPORT_SCHEMA_VERSION || snapshot.meta.catalog_version !== input.compatibility.catalog.catalog_version) {
         throw new AiExportPromptRenderError('incompatible_snapshot', 'Snapshot identity does not match the selected catalog entry');
     }
     if (selection.kind === 'analysis') {
@@ -144,6 +145,10 @@ function requiredDirectoryRef(index: number, prefix: 'A' | 'B', target: string):
     return `${prefix}${index + 1}`;
 }
 
+function publicPercent(ratio: number): string {
+    return `${Math.round(ratio * 1_000_000) / 10_000}%`;
+}
+
 function snapshotMetadataValue(snapshot: AiExportSnapshotResponse): Record<string, unknown> {
     const technicalSampling = snapshot.technical_sampling
         ? {
@@ -152,6 +157,12 @@ function snapshotMetadataValue(snapshot: AiExportSnapshotResponse): Record<strin
           }
         : undefined;
     const snapshotTarget = snapshot.target;
+    const historyCoverage = snapshot.meta.history_coverage
+        ? (({coverage_ratio, ...coverage}) => ({
+              ...coverage,
+              coverage_percent: publicPercent(coverage_ratio),
+          }))(snapshot.meta.history_coverage)
+        : undefined;
     const target =
         snapshotTarget.kind === 'asset'
             ? {
@@ -174,7 +185,7 @@ function snapshotMetadataValue(snapshot: AiExportSnapshotResponse): Record<strin
               : snapshotTarget.kind === 'fx_pair'
                 ? {
                       kind: 'fx_pair',
-                      fx_ref: 'FX1',
+                      fx_ref: 'F1',
                       display_name: `${snapshotTarget.base_currency}/${snapshotTarget.quote_currency}`,
                   }
                 : {kind: 'portfolio'};
@@ -190,6 +201,7 @@ function snapshotMetadataValue(snapshot: AiExportSnapshotResponse): Record<strin
             exported_period: snapshot.meta.exported_period,
             target_currency: snapshot.meta.target_currency,
             ...(snapshot.meta.calculation_range ? {calculation_range: snapshot.meta.calculation_range} : {}),
+            ...(historyCoverage ? {history_coverage: historyCoverage} : {}),
         },
         dataset_manifest: snapshot.dataset_manifest.map((entry) => ({
             dataset_id: entry.dataset_id,
@@ -260,17 +272,50 @@ function renderSnapshotData(
 }
 
 function renderAdditionalData(input: RenderAiExportPromptInput): string {
+    if (input.selection.kind !== 'analysis' || input.selection.entry.kind !== 'analysis') {
+        throw new AiExportPromptRenderError('incompatible_selection', 'Additional LibreFolio data guidance requires an analysis selection');
+    }
     const included = new Set(input.snapshot.dataset_manifest.map((entry) => entry.dataset_id));
-    const available = input.compatibility.catalog.datasets.filter((dataset) => dataset.domain === input.snapshot.domain && !included.has(dataset.id));
     const translate = input.translate ?? ((key: string) => key);
-    const lines = ['## Additional LibreFolio Data', '', 'Do not assume absent data. If useful, ask the user to export one of these separate datasets:'];
-    if (available.length === 0) lines.push('', '- None');
-    else {
-        for (const dataset of available) {
-            const label = translate(dataset.display_i18n_key);
-            const description = translate(dataset.description_i18n_key);
-            lines.push(`- \`${dataset.id}\` — ${label}: ${description}`);
+    const suggestions = (input.selection.entry.additional_export_suggestions ?? []).filter((suggestion) => !included.has(suggestion.dataset_id));
+    const lines = [`## ${translate('aiExport.additionalData.heading')}`, '', translate('aiExport.additionalData.intro')];
+    if (suggestions.length === 0) {
+        lines.push('', `- ${translate('aiExport.additionalData.none')}`);
+        return lines.join('\n');
+    }
+    for (const suggestion of suggestions) {
+        const dataset = input.compatibility.catalog.datasets.find((entry) => entry.id === suggestion.dataset_id);
+        if (!dataset || dataset.domain !== input.snapshot.domain) {
+            throw new AiExportPromptRenderError('incompatible_selection', `Additional export suggestion does not resolve a same-domain dataset: ${suggestion.dataset_id}`);
         }
+        const pageCode = dataset.applicable_pages[0];
+        const pageLabelKey = pageCode ? AI_EXPORT_PAGE_LABEL_KEYS[pageCode] : undefined;
+        const featureLabelKey = pageCode ? AI_EXPORT_PAGE_FEATURE_LABEL_KEYS[pageCode] : undefined;
+        if (!pageLabelKey || !featureLabelKey) {
+            throw new AiExportPromptRenderError('incompatible_selection', `Unknown AI Export page code for ${dataset.id}: ${pageCode ?? 'missing'}`);
+        }
+        const label = translate(dataset.display_i18n_key);
+        const period = translate(`aiExport.additionalData.period.${suggestion.recommended_period}`);
+        const detail = translate(`aiExport.details.${suggestion.recommended_detail}`);
+        const necessity = translate(`aiExport.additionalData.necessity.${suggestion.necessity}`);
+        lines.push(
+            '',
+            `### ${label}`,
+            '',
+            `- **${translate('aiExport.additionalData.what')}**: ${translate(dataset.description_i18n_key)}`,
+            `- **${translate('aiExport.additionalData.why')}**: ${translate(suggestion.reason_i18n_key)}`,
+            `- **${translate('aiExport.additionalData.necessityLabel')}**: ${necessity}`,
+            `- **${translate('aiExport.additionalData.path')}**:`,
+            `  1. ${translate('aiExport.additionalData.steps.openLibreFolio')}`,
+            `  2. ${translate('aiExport.additionalData.steps.page')}: "${translate(pageLabelKey)}"`,
+            `  3. ${translate('aiExport.additionalData.steps.feature')}: "${translate(featureLabelKey)}"`,
+            `  4. ${translate('aiExport.additionalData.steps.exportType')}: "${translate('aiExport.exportData')}"`,
+            `  5. ${translate('aiExport.additionalData.steps.dataset')}: "${label}"`,
+            `  6. ${translate('aiExport.additionalData.steps.period')}: "${period}"`,
+            `  7. ${translate('aiExport.additionalData.steps.detail')}: "${detail}"`,
+            `- **${translate('aiExport.additionalData.recommended')}**: ${period}; ${detail}`,
+            `- **${translate('aiExport.additionalData.technicalReference')}**: \`${dataset.id}\``,
+        );
     }
     return lines.join('\n');
 }
@@ -363,6 +408,7 @@ export function calculateAiExportPromptStats(prompt: string, snapshotBackendStat
     return {
         finalPrompt: {
             characterCountUtf16CodeUnits: prompt.length,
+            byteCountUtf8: new TextEncoder().encode(prompt).length,
             estimatedTokens: Math.ceil(prompt.length / 4),
             estimationMethod: 'ceil_utf16_code_units_div_4_v1',
         },

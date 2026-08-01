@@ -23,6 +23,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
     RiskCompositionPolicy,
+    RiskDrawdownRecoveryStatus,
     RiskMode,
     RiskReturnBasis,
     RiskScopeKind,
@@ -51,6 +52,10 @@ from backend.app.services.risk_plugins.comparison import (
 from backend.app.services.risk_plugins.correlation import (
     CorrelationAnalytic,
     CorrelationParams,
+)
+from backend.app.services.risk_plugins.drawdown_summary import (
+    DrawdownSummaryAnalytic,
+    DrawdownSummaryParams,
 )
 from backend.app.services.risk_plugins.historical_kpi import (
     HistoricalKpiAnalytic,
@@ -211,6 +216,7 @@ def test_registry_discovers_all_deterministic_analytics():
     assert [definition.analytic_code for definition in definitions] == [
         "comparison",
         "correlation",
+        "drawdown_summary",
         "historical_kpi",
         "historical_var",
         "portfolio_optimization",
@@ -259,7 +265,95 @@ def test_historical_kpi_consumes_asset_close_returns():
     )
 
 
-def test_correlation_marks_flat_cells_undefined_without_inventing_zero():
+def test_drawdown_summary_registers_canonical_capabilities():
+    assert DrawdownSummaryAnalytic.analytic_code == "drawdown_summary"
+    assert DrawdownSummaryAnalytic.output_kind.value == "drawdown"
+    assert DrawdownSummaryAnalytic.supported_scopes == (
+        RiskScopeKind.ASSET,
+        RiskScopeKind.PORTFOLIO,
+    )
+    assert DrawdownSummaryAnalytic.supported_modes == (RiskMode.HISTORICAL,)
+    assert DrawdownSummaryAnalytic.min_observations == 2
+    assert DrawdownSummaryAnalytic.catalog_definition().name_i18n_key == "risk.analytics.drawdownSummary.name"
+
+
+def test_drawdown_summary_asset_scope_uses_price_only_basis():
+    returns = [0.05, -0.10, -0.05, 0.02, 0.01]
+    computation = DrawdownSummaryAnalytic().compute(
+        DrawdownSummaryParams(),
+        make_context(
+            {1: returns},
+            scope_kind=RiskScopeKind.ASSET,
+            scope_asset_ids=(1,),
+        ),
+    )
+    output = computation.output
+    assert output.kind.value == "drawdown"
+    assert output.return_basis == RiskReturnBasis.PRICE_ONLY
+    assert output.calculation_basis == "price_only_close"
+    assert computation.method == "price_only_close"
+    assert computation.return_basis == RiskReturnBasis.PRICE_ONLY
+    assert output.maximum_drawdown < 0
+    assert output.n_observations == len(returns)
+    assert output.available_end >= output.available_start
+
+
+def test_drawdown_summary_portfolio_twrr_external_cashflow_has_no_false_drawdown():
+    # Flow-adjusted TWRR stays non-negative: contributions must not read as drawdown.
+    returns = [0.004, 0.006, 0.003, 0.005, 0.002, 0.004]
+    computation = DrawdownSummaryAnalytic().compute(
+        DrawdownSummaryParams(),
+        make_context({1: returns, 2: returns}),
+    )
+    output = computation.output
+    assert output.return_basis == RiskReturnBasis.TWRR
+    assert output.calculation_basis == "historical_twrr"
+    assert output.maximum_drawdown_recovery_status == RiskDrawdownRecoveryStatus.NO_DRAWDOWN
+    assert output.maximum_drawdown == 0
+    assert output.current_drawdown == 0
+    assert output.maximum_drawdown_peak_date is None
+    assert output.maximum_drawdown_recovery_date is None
+
+
+def test_drawdown_summary_broker_filtered_portfolio_reuses_twrr_path():
+    returns = [0.01, -0.04, -0.02, 0.03]
+    context = replace(
+        make_context({1: returns, 2: returns}),
+        broker_ids=(3, 7),
+    )
+    computation = DrawdownSummaryAnalytic().compute(DrawdownSummaryParams(), context)
+    output = computation.output
+    assert context.broker_ids == (3, 7)
+    assert output.return_basis == RiskReturnBasis.TWRR
+    assert output.calculation_basis == "historical_twrr"
+    assert output.maximum_drawdown < 0
+
+
+def test_drawdown_summary_requires_primary_history():
+    context = replace(
+        make_context({1: [0.01, -0.02], 2: [0.01, -0.02]}),
+        primary_returns=(),
+        primary_return_dates=(),
+    )
+    with pytest.raises(RiskUnavailableError):
+        DrawdownSummaryAnalytic().compute(DrawdownSummaryParams(), context)
+
+
+def test_drawdown_summary_output_serializes_through_discriminated_union():
+    returns = [0.05, -0.20, -0.10, 0.60, -0.03]
+    computation = DrawdownSummaryAnalytic().compute(
+        DrawdownSummaryParams(),
+        make_context(
+            {1: returns},
+            scope_kind=RiskScopeKind.ASSET,
+            scope_asset_ids=(1,),
+        ),
+    )
+    payload = computation.output.model_dump(mode="json")
+    assert payload["kind"] == "drawdown"
+    assert payload["maximum_drawdown_recovery_status"] == "recovered"
+    assert payload["current_drawdown"] <= 0
+    assert payload["return_basis"] == "price_only"
     varying = [0.01, -0.01] * 10
     flat = [0.0] * 20
     computation = CorrelationAnalytic().compute(

@@ -273,7 +273,7 @@ def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, S
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
             ProvenanceNote(subject="period", text=f"Period is inclusive [{scope.period_start.isoformat()}, {scope.period_end.isoformat()}]; snapshot_as_of == period_end."),
-            ProvenanceNote(subject="scope", text=f"Scoped to broker_id={scope.broker_id} only."),
+            ProvenanceNote(subject="scope", text="Scoped to the selected broker only."),
             ProvenanceNote(subject="empty_data", text="An empty broker (no holdings, no lots, no transactions) is valid successfully-built data, not a source failure."),
         ],
     )

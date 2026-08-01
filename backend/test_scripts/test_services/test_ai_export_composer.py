@@ -290,7 +290,7 @@ class TestFoundationCatalogComposition:
         return cause
 
     @pytest.mark.asyncio
-    async def test_compose_all_18_datasets_fail_closed_on_unimplemented_builders(
+    async def test_compose_all_25_datasets_fail_closed_on_unimplemented_builders(
         self,
         foundation_component_registry: ComponentRegistry,
         foundation_dataset_registry: DatasetRegistry,
@@ -334,14 +334,14 @@ class TestFoundationCatalogComposition:
         foundation_dataset_registry: DatasetRegistry,
         foundation_analysis_registry,
     ):
-        assert len(foundation_dataset_registry) == 18
+        assert len(foundation_dataset_registry) == 32
         assert len(foundation_analysis_registry) == 16
 
 
 def test_production_component_registry_contains_only_real_specs():
     registry = build_component_registry()
 
-    assert len(registry) == 45
+    assert len(registry) == 65
     assert registry.canonical_order == tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
     assert all(registry.get(component_id).output_model is not FoundationComponentPayload for component_id in registry.canonical_order)
 

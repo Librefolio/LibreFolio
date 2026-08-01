@@ -21,7 +21,7 @@ never referenced here.
 from __future__ import annotations
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -52,11 +52,22 @@ from backend.app.services.ai_export.components.fx_payloads import (
     FxExposureKind,
     FxExposureLinkage,
     FxExposureProvenancePayload,
+    FxExposureRole,
+    FxExposureSummary,
     FxRateDirection,
 )
+from backend.app.services.ai_export.components.fx_timing_context import (
+    FX_TIMING_CONTEXT_COMPONENTS,
+    REASON_FLAT_RANGE,
+    REASON_HISTORY_STARTS_LATE,
+    FxNeutralScenarioInput,
+    FxTimingContextPayload,
+)
 from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.technical_context import FX_TECHNICAL_CONTEXT_COMPONENTS
+from backend.app.services.ai_export.components.technical_shared import FxRateHistoryError, load_fx_rate_series
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
-from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, build_bucket_plan_for_scope
+from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError, build_bucket_plan_for_scope
 from backend.app.services.fx import RateNotFoundError, convert_bulk
 from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
 from backend.app.utils.datetime_utils import utcnow
@@ -769,3 +780,494 @@ class TestExposureSourceFailure:
                 await context.resolve("fx.exposure_base_quote", required=True)
         finally:
             fx_core_module._load_exposure_report = original
+
+
+# =============================================================================
+# FX Partial History (V2, requirement 7)
+# =============================================================================
+
+
+def _fx_technical_registry() -> ComponentRegistry:
+    """Registry that includes FX core + FX technical context components."""
+    return ComponentRegistry((*FX_CORE_COMPONENTS, *FX_TECHNICAL_CONTEXT_COMPONENTS))
+
+
+def _fx_technical_context(session, scope: BuildScope) -> BuildContext:
+    bucket_plan = build_bucket_plan_for_scope(scope)
+    return BuildContext(_fx_technical_registry(), request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=session)
+
+
+class TestFxPartialHistory:
+    """Real-DB tests for FX partial-history coverage semantics (V2 requirement 7).
+
+    Verifies that:
+    - Missing pre-source warm-up dates are silently skipped (leading Nones)
+    - fx_no_usable_rate is raised when no rate covers period_end
+    - fx.technical_coverage succeeds even when some signals are unavailable
+    """
+
+    @pytest.mark.asyncio
+    async def test_missing_pre_source_warmup_dates_succeed(self, session, test_user):
+        """Seeding rates from period_start (not the warmup start) should succeed.
+
+        The warmup window precedes period_start; the dates before our first seeded
+        rate will be None → skipped as pre-source gaps. The visible period is
+        fully covered → `load_fx_rate_series` succeeds.
+        """
+        period_start = date(2026, 6, 1)
+        period_end = date(2026, 6, 10)
+
+        # Seed only the visible period (no warmup rates) + one anchor for backward-fill
+        for offset in range((period_end - period_start).days + 1):
+            day = period_start + timedelta(days=offset)
+            await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=day)
+
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=period_start, end=period_end)
+        context = _fx_technical_context(session, scope)
+        # Should not raise - pre-source warmup gaps are allowed
+        series = await load_fx_rate_series(context)
+        assert series is not None
+        # The series covers at least the visible period
+        obs_dates = {obs.requested_date for obs in series.observations}
+        assert period_end in obs_dates
+
+    @pytest.mark.asyncio
+    async def test_no_rate_at_or_before_period_end_raises_fx_no_usable_rate(self, session, test_user):
+        """When no rate exists at or before period_end, FxRateHistoryError with
+        reason_code='fx_no_usable_rate' must be raised (wrapped in ResourceLoadError)."""
+        period_start = date(2025, 5, 1)
+        period_end = date(2025, 5, 1)
+
+        # EUR/AUD on this date is the same known-absent route used by the core FX failure test above.
+        scope = _scope(user_id=test_user.id, base="EUR", quote="AUD", target="EUR", start=period_start, end=period_end)
+        context = _fx_technical_context(session, scope)
+        # load_fx_rate_series wraps FxRateHistoryError in ResourceLoadError via db_resource()
+        with pytest.raises(ResourceLoadError) as exc_info:
+            await load_fx_rate_series(context)
+        cause = exc_info.value.cause
+        assert isinstance(cause, FxRateHistoryError)
+        assert cause.reason_code == "fx_no_usable_rate"
+
+    @pytest.mark.asyncio
+    async def test_fx_technical_coverage_builds_with_partial_signal_history(self, session, test_user):
+        """fx.technical_coverage builds successfully even when signal indicators
+        have limited history (fewer data points than the full warmup window).
+
+        Seeds rates for only 10 days (shorter than most indicator warmup windows),
+        so some signals will be unavailable/zero coverage. The component must
+        still build without raising an exception.
+        """
+        period_start = date(2026, 8, 1)
+        period_end = date(2026, 8, 10)
+
+        for offset in range((period_end - period_start).days + 1):
+            day = period_start + timedelta(days=offset)
+            await _seed_rate(session, base="EUR", quote="USD", rate=str(Decimal("1.10") + Decimal(offset) / Decimal(100)), day=day)
+
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=period_start, end=period_end)
+        context = _fx_technical_context(session, scope)
+        # Should not raise even with limited history
+        envelope = await context.resolve("fx.technical_coverage", required=True)
+        assert envelope is not None
+        payload = envelope.payload
+        # single-entity selected count must be at least 1 (the FX pair itself)
+        assert payload["selected_entity_count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_three_month_source_history_includes_short_signals_and_omits_long_ones(self, session, test_user):
+        """A 1Y request backed by only 93 days computes against the available span.
+
+        Shorter-horizon signals remain usable as PARTIAL results while long warm-up
+        instances remain explicitly unavailable; the component still succeeds.
+        """
+        requested_start = date(2032, 1, 1)
+        available_start = date(2032, 10, 1)
+        period_end = date(2033, 1, 1)
+        for offset in range((period_end - available_start).days + 1):
+            day = available_start + timedelta(days=offset)
+            await _seed_rate(session, base="XPF", quote="CLP", rate=str(Decimal("7.10") + Decimal(offset) / Decimal(10_000)), day=day)
+
+        scope = _scope(user_id=test_user.id, base="XPF", quote="CLP", target="XPF", start=requested_start, end=period_end)
+        context = _fx_technical_context(session, scope)
+        bundle = await technical_shared_module.load_fx_technical_bundle(context)
+        envelope = await context.resolve("fx.technical_coverage", required=True)
+        assert envelope is not None
+
+        signal_rows = {row["instance_id"]: row for row in envelope.payload["signals"]}
+        result_details = {
+            result.instance_id: {
+                "status": result.status,
+                "warmup": result.warmup,
+                "availability": result.availability,
+            }
+            for result in bundle.signal_results
+        }
+        assert signal_rows["ema_20"]["partial_count"] == 1, result_details
+        assert signal_rows["rsi_14"]["partial_count"] == 1, result_details
+        for instance_id in ("ema_200", "sma_200"):
+            assert signal_rows[instance_id]["unavailable_count"] == 1, result_details
+            assert signal_rows[instance_id]["omission_reasons"] == {"insufficient_history": 1}, result_details
+        assert envelope.payload["entities"][0]["included_signal_count"] == 10
+        assert envelope.payload["entities"][0]["omitted_signal_count"] == 2
+        assert envelope.payload["covered_entity_count"] == 1
+
+
+# =============================================================================
+# fx.exposure_base_quote - explicit base/quote summary + zero-state (requirement 4)
+# =============================================================================
+
+
+class TestExposureSummary:
+    """The preserved rows are never removed; an explicit base/quote rollup and
+    `has_direct_quote_exposure`/`has_direct_base_exposure` zero-state are derived
+    from them so an analysis never infers "no exposure" from an empty row list."""
+
+    @pytest.mark.asyncio
+    async def test_zero_exposure_summary_is_explicit_not_missing(self, session, test_user):
+        """No matching rows => explicit computed zero-state (False/0), never "missing data"."""
+        await _make_broker(session, test_user, name="ZeroSummaryBroker")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
+        context = _context(session, scope)
+        payload = FxExposureBaseQuotePayload.model_validate((await context.resolve("fx.exposure_base_quote", required=True)).payload)
+
+        assert payload.rows == ()
+        summary = payload.summary
+        assert summary is not None
+        assert summary.has_any_direct_exposure is False
+        assert summary.has_direct_base_exposure is False
+        assert summary.has_direct_quote_exposure is False
+        assert summary.total_row_count == 0
+        assert summary.base.row_count == 0 and summary.base.gross_target_amount == Decimal(0)
+        assert summary.quote.row_count == 0 and summary.quote.net_target_amount == Decimal(0)
+        assert summary.base.role is FxExposureRole.BASE
+        assert summary.quote.role is FxExposureRole.QUOTE
+
+    @pytest.mark.asyncio
+    async def test_nonzero_quote_exposure_summary_counts_and_totals(self, session, test_user):
+        """A real USD (quote) cash balance => has_direct_quote_exposure True with matching totals; rows preserved."""
+        broker = await _make_broker(session, test_user, name="QuoteExpBroker")
+        await _deposit(session, broker, amount="1000", currency="USD", day=date(2025, 1, 2))
+        await _seed_warmup_anchor(session, base="EUR", quote="USD", rate="1.10")
+        for offset in range(5):
+            await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=date(2025, 1, 1 + offset))
+
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
+        context = _context(session, scope)
+        payload = FxExposureBaseQuotePayload.model_validate((await context.resolve("fx.exposure_base_quote", required=True)).payload)
+
+        quote_rows = [row for row in payload.rows if row.linked_currency == "USD"]
+        assert quote_rows, "expected at least one USD cash exposure row"
+        summary = payload.summary
+        assert summary.has_direct_quote_exposure is True
+        assert summary.quote.row_count == len(quote_rows)
+        assert summary.quote.cash_row_count == len(quote_rows)
+        assert summary.quote.position_row_count == 0
+        expected_net = sum((row.target_amount for row in quote_rows), Decimal(0))
+        assert summary.quote.net_target_amount == expected_net
+        assert summary.quote.gross_target_amount == sum((abs(row.target_amount) for row in quote_rows), Decimal(0))
+        # rows themselves are untouched by summarization
+        assert len(payload.rows) == summary.total_row_count
+
+    @pytest.mark.asyncio
+    async def test_summary_recomputed_on_revalidation_matches_rows(self, session, test_user):
+        """Summary is fully derived: constructing directly from rows equals the builder output."""
+        broker = await _make_broker(session, test_user, name="ResummaryBroker")
+        await _deposit(session, broker, amount="500", currency="USD", day=date(2025, 1, 2))
+        await _seed_warmup_anchor(session, base="EUR", quote="USD", rate="1.10")
+        for offset in range(5):
+            await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=date(2025, 1, 1 + offset))
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
+        context = _context(session, scope)
+        payload = FxExposureBaseQuotePayload.model_validate((await context.resolve("fx.exposure_base_quote", required=True)).payload)
+
+        rebuilt = FxExposureSummary.from_rows(payload.rows, base_currency="EUR", quote_currency="USD", target_currency="EUR")
+        assert rebuilt == payload.summary
+
+
+# =============================================================================
+# fx.timing_context - non-predictive observed conversion-timing evidence (goal A)
+# =============================================================================
+
+
+def _timing_registry() -> ComponentRegistry:
+    return ComponentRegistry((*FX_CORE_COMPONENTS, *FX_TIMING_CONTEXT_COMPONENTS))
+
+
+def _timing_context(session, scope: BuildScope) -> BuildContext:
+    bucket_plan = build_bucket_plan_for_scope(scope)
+    return BuildContext(_timing_registry(), request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=session)
+
+
+async def _seed_linear_series(session, *, base: str, quote: str, start: date, end: date, first: str, step: str) -> None:
+    """Seed a genuine rate every calendar day in [start, end], rate = first + step*offset."""
+    first_dec = Decimal(first)
+    step_dec = Decimal(step)
+    for offset in range((end - start).days + 1):
+        day = start + timedelta(days=offset)
+        await _seed_rate(session, base=base, quote=quote, rate=str(first_dec + step_dec * offset), day=day)
+
+
+class TestTimingContextObservedRange:
+    @pytest.mark.asyncio
+    async def test_increasing_series_current_at_range_maximum(self, session, test_user):
+        start, end = date(2027, 3, 1), date(2027, 3, 20)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.10", step="0.01")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        rng = payload.observed_range
+        assert rng.observed_minimum == Decimal("1.10")
+        assert rng.observed_minimum_date == start
+        assert rng.observed_maximum_date == end
+        # current (as-of end) is the highest observed value => range position 1.0
+        assert payload.current_rate == rng.observed_maximum
+        assert rng.range_position_ratio == pytest.approx(1.0)
+        assert rng.range_position_unavailable_reason is None
+        assert rng.distance_to_max_ratio == pytest.approx(0.0)
+        assert rng.distance_to_min_ratio > 0
+        # observed period return is positive for a strictly increasing series
+        assert payload.observed_returns.return_period_ratio is not None and payload.observed_returns.return_period_ratio > 0
+
+    @pytest.mark.asyncio
+    async def test_decreasing_series_current_at_range_minimum(self, session, test_user):
+        start, end = date(2027, 4, 1), date(2027, 4, 20)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.40", step="-0.01")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        rng = payload.observed_range
+        assert payload.current_rate == rng.observed_minimum
+        assert rng.range_position_ratio == pytest.approx(0.0)
+        assert rng.distance_to_min_ratio == pytest.approx(0.0)
+        assert rng.distance_to_max_ratio > 0
+        assert payload.observed_returns.return_period_ratio is not None and payload.observed_returns.return_period_ratio < 0
+
+    @pytest.mark.asyncio
+    async def test_flat_series_range_position_unavailable_with_reason(self, session, test_user):
+        start, end = date(2027, 5, 1), date(2027, 5, 10)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.20", step="0")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        rng = payload.observed_range
+        assert rng.observed_minimum == rng.observed_maximum == Decimal("1.20")
+        assert rng.range_position_ratio is None
+        assert rng.range_position_unavailable_reason == REASON_FLAT_RANGE
+        # a flat series has zero realized volatility and zero period return
+        assert payload.observed_returns.return_period_ratio == pytest.approx(0.0)
+        assert payload.observed_returns.daily_return_volatility_ratio == pytest.approx(0.0)
+
+
+class TestTimingContextObservedOnly:
+    @pytest.mark.asyncio
+    async def test_backfilled_days_excluded_from_observed_stats(self, session, test_user):
+        """A gap day is backward-filled: it is counted as backfilled, never as a genuine observation."""
+        start, end = date(2027, 6, 1), date(2027, 6, 10)
+        gap_day = date(2027, 6, 5)
+        for offset in range((end - start).days + 1):
+            day = start + timedelta(days=offset)
+            if day == gap_day:
+                continue  # leave a gap => this visible day backward-fills
+            await _seed_rate(session, base="EUR", quote="USD", rate=str(Decimal("1.10") + Decimal(offset) / Decimal(100)), day=day)
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        # Derive the ground truth directly from the loaded series (robust against any
+        # rows other suites may have committed to the shared test DB).
+        series = await load_fx_rate_series(context)
+        visible = [obs for obs in series.observations if start <= obs.requested_date <= end]
+        genuine = [obs for obs in visible if not obs.backward_filled and obs.actual_date == obs.requested_date]
+        gap_obs = next(obs for obs in visible if obs.requested_date == gap_day)
+
+        sh = payload.source_history
+        assert gap_obs.backward_filled is True  # the gap day carries forward the prior rate
+        assert sh.backfilled_observation_count >= 1
+        assert sh.observed_observation_count == len(genuine)
+        assert sh.observed_observation_count + sh.backfilled_observation_count == len(visible)
+        # the backfilled gap date is never an observed extreme date
+        assert payload.observed_range.observed_minimum_date != gap_day
+        assert payload.observed_range.observed_maximum_date != gap_day
+
+    @pytest.mark.asyncio
+    async def test_future_rates_never_consulted(self, session, test_user):
+        """Rates seeded after period_end must not influence observed range/returns."""
+        start, end = date(2027, 7, 1), date(2027, 7, 10)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.10", step="0.01")
+        # A far-higher future rate that must be ignored entirely.
+        await _seed_rate(session, base="EUR", quote="USD", rate="9.99", day=date(2027, 7, 20))
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        assert payload.as_of == end
+        assert payload.observed_range.observed_maximum < Decimal("9.99")
+        assert payload.observed_range.observed_maximum_date == end
+        assert payload.source_history.requested_period_end == end
+
+    @pytest.mark.asyncio
+    async def test_missing_user_inputs_always_full_set(self, session, test_user):
+        start, end = date(2027, 8, 1), date(2027, 8, 10)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.10", step="0.01")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        assert set(payload.missing_user_inputs) == {
+            FxNeutralScenarioInput.CONVERSION_AMOUNT,
+            FxNeutralScenarioInput.CONVERSION_DEADLINE,
+            FxNeutralScenarioInput.EXECUTION_SPREAD,
+            FxNeutralScenarioInput.TRANSACTION_FEES,
+        }
+        # no forecast/predictive band fields exist on the payload
+        assert "forecast" not in payload.model_dump()
+        assert not any("forecast" in key or "predicted" in key or "band" in key for key in payload.model_dump())
+
+    @pytest.mark.asyncio
+    async def test_inverse_pair_current_rate_is_canonical(self, session, test_user):
+        """Direction canonical: an inverse-stored pair still yields the quote-per-base current rate."""
+        start, end = date(2027, 9, 1), date(2027, 9, 5)
+        for offset in range((end - start).days + 1):
+            await _seed_rate(session, base="USD", quote="CHF", rate="1.25", day=start + timedelta(days=offset))
+        scope = _scope(user_id=test_user.id, base="USD", quote="CHF", target="USD", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+        current = (await context.resolve("fx.current_rate", required=True)).payload
+        assert current["direction"] == FxRateDirection.INVERSE.value
+        assert payload.current_rate == Decimal("1.25")
+
+
+class TestTimingContextPartialHistory:
+    @pytest.mark.parametrize(
+        ("history_days", "expect_1m", "expect_3m"),
+        [
+            (100, True, True),  # ~3M+ of history: 1M and 3M both available
+            (200, True, True),  # ~6M of history
+            (370, True, True),  # ~1Y of history
+            (20, False, False),  # < 1M of history: short-horizon returns unavailable
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_trailing_returns_available_only_when_history_covers_window(self, session, test_user, history_days, expect_1m, expect_3m):
+        period_end = date(2029, 12, 31)
+        available_start = period_end - timedelta(days=history_days - 1)
+        requested_start = period_end - timedelta(days=400)  # always requests a wide window
+        await _seed_linear_series(session, base="XPF", quote="CLP", start=available_start, end=period_end, first="7.10", step="0.001")
+        scope = _scope(user_id=test_user.id, base="XPF", quote="CLP", target="XPF", start=requested_start, end=period_end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        sh = payload.source_history
+        assert sh.observed_observation_count == history_days
+        assert sh.available_start == available_start
+        assert sh.is_partial_history is True
+        assert sh.complete is False
+        assert sh.partial_history_reason == REASON_HISTORY_STARTS_LATE
+        assert sh.covered_calendar_days == (period_end - available_start).days + 1
+        assert 0 < sh.coverage_ratio < 1
+        returns = payload.observed_returns
+        assert (returns.return_1m_ratio is not None) is expect_1m
+        assert (returns.return_3m_ratio is not None) is expect_3m
+        # period return is always available when >= 2 observations exist
+        assert returns.return_period_ratio is not None
+
+    @pytest.mark.asyncio
+    async def test_complete_history_reports_not_partial(self, session, test_user):
+        start, end = date(2029, 1, 1), date(2029, 1, 20)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.10", step="0.001")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+        context = _timing_context(session, scope)
+        payload = FxTimingContextPayload.model_validate((await context.resolve("fx.timing_context", required=True)).payload)
+
+        sh = payload.source_history
+        assert sh.complete is True
+        assert sh.is_partial_history is False
+        assert sh.partial_history_reason is None
+        assert sh.available_start == start
+        assert sh.coverage_ratio == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    async def test_backfilled_period_start_is_still_complete_source_coverage(self, session, test_user):
+        start, end = date(2036, 1, 5), date(2036, 1, 12)
+        await _seed_rate(session, base="XPF", quote="CLP", rate="7.10", day=start - timedelta(days=1))
+        await _seed_linear_series(session, base="XPF", quote="CLP", start=start + timedelta(days=1), end=end, first="7.11", step="0.001")
+        scope = _scope(user_id=test_user.id, base="XPF", quote="CLP", target="XPF", start=start, end=end)
+        payload = FxTimingContextPayload.model_validate((await _timing_context(session, scope).resolve("fx.timing_context", required=True)).payload)
+
+        sh = payload.source_history
+        assert sh.available_start == start
+        assert sh.backfilled_observation_count >= 1
+        assert sh.complete is True
+        assert sh.is_partial_history is False
+        assert sh.partial_history_reason is None
+        assert sh.coverage_ratio == pytest.approx(1.0)
+
+
+class TestTimingContextDeterminism:
+    @pytest.mark.asyncio
+    async def test_identical_output_across_fresh_contexts(self, session, test_user):
+        start, end = date(2028, 2, 1), date(2028, 2, 20)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.10", step="0.005")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=start, end=end)
+
+        first = FxTimingContextPayload.model_validate((await _timing_context(session, scope).resolve("fx.timing_context", required=True)).payload)
+        second = FxTimingContextPayload.model_validate((await _timing_context(session, scope).resolve("fx.timing_context", required=True)).payload)
+        assert first.model_dump(mode="json") == second.model_dump(mode="json")
+
+
+# =============================================================================
+# Signal coverage partial_reasons (requirement 3)
+# =============================================================================
+
+
+class TestSignalCoveragePartialReasons:
+    @pytest.mark.asyncio
+    async def test_partial_signals_report_incomplete_warmup_separate_from_omissions(self, session, test_user):
+        """A 1Y request backed by ~93 days: short signals are included PARTIAL with an explicit
+        `incomplete_warmup` partial reason (separate from omission_reasons), while long warm-up
+        instances (ema_200/sma_200) remain omitted/unavailable with `insufficient_history`."""
+        requested_start = date(2034, 1, 1)
+        available_start = date(2034, 10, 1)
+        period_end = date(2035, 1, 1)
+        for offset in range((period_end - available_start).days + 1):
+            day = available_start + timedelta(days=offset)
+            await _seed_rate(session, base="XPF", quote="CLP", rate=str(Decimal("7.10") + Decimal(offset) / Decimal(10_000)), day=day)
+
+        scope = _scope(user_id=test_user.id, base="XPF", quote="CLP", target="XPF", start=requested_start, end=period_end)
+        context = _fx_technical_context(session, scope)
+        envelope = await context.resolve("fx.technical_coverage", required=True)
+
+        signal_rows = {row["instance_id"]: row for row in envelope.payload["signals"]}
+        # Included PARTIAL results carry incomplete_warmup as a partial reason, NOT as an omission.
+        for instance_id in ("ema_20", "rsi_14"):
+            assert signal_rows[instance_id]["partial_count"] == 1
+            assert signal_rows[instance_id]["partial_reasons"] == {"incomplete_warmup": 1}
+            assert signal_rows[instance_id]["omission_reasons"] == {}
+        # Long warm-up instances remain genuinely omitted (unavailable) - never marked partial-equivalent.
+        for instance_id in ("ema_200", "sma_200"):
+            assert signal_rows[instance_id]["partial_reasons"] == {}
+            assert signal_rows[instance_id]["omission_reasons"] == {"insufficient_history": 1}
+
+        entity = envelope.payload["entities"][0]
+        assert entity["included_partial_signal_count"] >= 2
+        assert entity["included_partial_signal_count"] <= entity["included_signal_count"]
+        assert "incomplete_warmup" in entity["partial_reasons"]
+
+    @pytest.mark.asyncio
+    async def test_full_history_has_no_partial_reasons(self, session, test_user):
+        """With ample history every included signal is complete OK: no partial reasons at all."""
+        start = date(2033, 1, 1)
+        end = date(2034, 6, 1)
+        await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.10", step="0.0002")
+        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2034, 5, 1), end=end)
+        context = _fx_technical_context(session, scope)
+        envelope = await context.resolve("fx.technical_coverage", required=True)
+
+        entity = envelope.payload["entities"][0]
+        assert entity["included_partial_signal_count"] == 0
+        assert entity["partial_reasons"] == {}
+        for row in envelope.payload["signals"]:
+            assert row["partial_reasons"] == {}

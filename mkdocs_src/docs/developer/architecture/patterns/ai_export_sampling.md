@@ -61,8 +61,9 @@ $$
 $$
 
 The most recent seven calendar days therefore remain daily. This is calendar
-sampling, not market-session sampling; empty market days remain empty bucket
-intervals rather than invented observations.
+sampling, not market-session sampling. Empty intervals remain in backend bucket
+plans and diagnostics; the public renderer omits only completely empty temporal
+rows and never invents observations or converts absence to zero.
 
 ## 🧮 Full Policy Matrix
 
@@ -185,6 +186,13 @@ The component response declares `warmup_policy: component_owned`; the current
 aggregate `calculation_range` and `earliest_calculation_date` metadata fields are
 not populated.
 
+FX source history may begin after the requested start. Dates before the first
+stored rate are omitted from the warm-up input rather than failing the entire
+snapshot. SignalService then includes calculable `ok`/`partial` instances and
+reports unavailable instances through technical coverage. The snapshot metadata
+publishes requested/available ranges and calendar-day coverage. No future rate is
+ever used.
+
 ## 🎯 Event Selection
 
 Events are validated, observed-only filtered, epsilon checked, gap checked, and
@@ -228,6 +236,84 @@ policy, or cap on recent events.
 Each group exports a selection summary with detected/recent/exported counts,
 selection status, oldest/newest detected and exported dates, and optional
 upward/downward counts.
+
+## 🧭 Focused Context Policies
+
+The complete technical datasets and explicitly technical analyses continue to use
+the global policy above unchanged.
+
+Semantic Composition V2 also exposes separate focused context components for
+financial analyses. Their backend-declared policies are intentionally narrower and
+do not alter global Compact/Standard/Full:
+
+- Portfolio/Broker snapshots expose current/summary market fields and at most the
+  latest selected structural event per Asset;
+- multi-Asset comparisons expose a bounded set of latest structural event types;
+- Portfolio Description uses an aggregate 30-day event digest, with the latest
+  prior event when a type has no recent occurrence;
+- Asset Position Context exposes three recent rows in Compact, six in Standard,
+  and twelve in Full;
+- FX Market Context exposes no context history in Compact, four recent rows in
+  Standard, and eight in Full;
+- Drawdown context sections carry no numeric history at all: they reuse the Risk
+  `drawdown_summary` current/maximum episode dates and coverage verbatim;
+- PAC's per-Asset Drawdown snapshot is one observed-price row per Asset and also
+  carries no Drawdown history;
+- task-specific evidence datasets apply component-local monotonic detail (for
+  example income Compact aggregates by `(month, asset, income_type)`, Standard
+  adds bounded recent dated rows, Full exposes every dated row).
+
+These limits are semantic component contracts, not token-triggered truncation.
+They never change the complete technical Export Data payload.
+
+### 🧹 Public Empty Temporal Rows
+
+The generic public renderer applies the same no-empty-row principle to financial
+temporal tables that technical histories already use.
+
+A row is omitted only when it contains nominal start/end/index metadata and no
+observation, flow, variation, P&L, extrema, reconciliation, meaningful observed
+date, or explicit non-absence status. Numeric zero remains meaningful and keeps
+the row.
+
+This presentation rule does not modify:
+
+- backend bucket boundaries;
+- calculations or requested frequency;
+- sampling policy;
+- requested/effective/available periods;
+- coverage or insufficient-history warnings.
+
+Probe diagnostics count empty rows detected/omitted and temporal rows remaining.
+
+### 🏷️ Latest-per-category Context Events
+
+Focused market-context components select **at most one latest event per
+`(entity_id, signal_category)`**. The category is plugin-owned (read from the
+Signal plugin's `category`, failing loudly for unknown plugins); candidates are
+the allowlist-filtered observation-level discrete events. Tie-breaks within a
+category are deterministic by `(date, annotation key, signal code)`, and
+categories with no eligible event are omitted rather than emitted as null rows.
+
+This is distinct from the complete/technical global event policy above, which
+keeps the 20-event minimum plus every recent event. The permanent density probe
+therefore tracks these event families **separately**: `detailed_event_rows`
+(complete-policy events), `context_event_rows`, `latest_event_rows` with
+`latest_event_category_count`, and the Portfolio Description
+`event_digest_group_count` / `event_digest_underlying_event_count`.
+
+### 💱 FX Observed Range Position
+
+FX conversion-timing evidence frames the current rate against the observed period
+minimum/maximum as a plain range position `(current - min) / (max - min)`,
+deliberately **not** a historical percentile or rank and **not** a forecast. A
+flat range (`observed_maximum == observed_minimum`) or an empty period reports
+`range_position_ratio = None` with an explicit reason
+(`flat_observed_range` / `no_observed_rates_in_period`). Partial source history is
+explicit through `is_partial_history` plus a `partial_history_reason`
+(`source_history_starts_after_period_start` /
+`no_genuine_observations_in_period`); only genuine, non-backfilled observations
+count and no future rate is ever consulted.
 
 ## 🧾 Manifest Examples
 
@@ -311,4 +397,5 @@ When adding or changing an exportable indicator:
 
 - [AI Export Overview](ai_export_snapshot.md)
 - [Composition & Prompt](ai_export_composition.md)
+- [Probe Workflow & Review](ai_export_probe_workflow.md)
 - [Signal Plugin Guide](signal_plugin_guide.md)

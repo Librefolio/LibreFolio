@@ -55,7 +55,7 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.signals import SignalCadence, SignalDomain, SignalPricePoint
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
-from backend.app.services.ai_export.components import broker_financial, portfolio_financial
+from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, portfolio_financial
 from backend.app.services.ai_export.components import portfolio_broker_registry as portfolio_broker_registry_module
 from backend.app.services.ai_export.components.catalog import (
     ALL_FOUNDATION_COMPONENTS,
@@ -484,11 +484,23 @@ def _broker_fifo_lots_response(broker_id: int) -> LotsAnalysisResponse:
     return _lots_response(4, lots)
 
 
+def _patch_broker_period_activity(monkeypatch: pytest.MonkeyPatch, *, ownership_share: str = "1") -> None:
+    """Patches the DB-backed broker activity loader so `broker.cost_efficiency`
+    builds without a real `broker_user_access`/transactions table. An empty record
+    set yields a valid payload (turnover zero, ratios unavailable-with-reason)."""
+
+    async def _fake_load(context, scope):  # noqa: ARG001
+        return broker_cost_efficiency.BrokerPeriodActivity(records=(), ownership_share=Decimal(ownership_share))
+
+    monkeypatch.setattr(broker_cost_efficiency, "_load_broker_period_activity", _fake_load)
+
+
 def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, broker_id: int = 9) -> None:
     _patch_report(monkeypatch, _broker_report_full(scope, broker_id))
     _patch_lots(monkeypatch, {4: _broker_fifo_lots_response(broker_id)}, asset_ids={4})
     _patch_metadata(monkeypatch, asset_ids=[4], broker_ids=[broker_id])
     _patch_get_prices_bulk(monkeypatch)
+    _patch_broker_period_activity(monkeypatch)
 
 
 # =============================================================================
@@ -498,11 +510,11 @@ def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, b
 
 class TestPortfolioBrokerFragmentSanity:
     def test_exact_component_counts(self):
-        assert len(PORTFOLIO_BROKER_COMPONENTS) == 25
-        assert PORTFOLIO_REAL_COMPONENT_COUNT == 14
-        assert BROKER_REAL_COMPONENT_COUNT == 11
-        assert len(PORTFOLIO_REAL_COMPONENT_IDS) == 14
-        assert len(BROKER_REAL_COMPONENT_IDS) == 11
+        assert len(PORTFOLIO_BROKER_COMPONENTS) == 39
+        assert PORTFOLIO_REAL_COMPONENT_COUNT == 21
+        assert BROKER_REAL_COMPONENT_COUNT == 18
+        assert len(PORTFOLIO_REAL_COMPONENT_IDS) == 21
+        assert len(BROKER_REAL_COMPONENT_IDS) == 18
 
     def test_no_duplicate_component_ids(self):
         ids = [spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS]
@@ -524,6 +536,16 @@ class TestPortfolioBrokerFragmentSanity:
             "portfolio.technical_events",
             "portfolio.fifo_summary",
             "portfolio.fifo_lots",
+            # V2 context components
+            "portfolio.technical_coverage",
+            "portfolio.asset_market_context",
+            "portfolio.asset_drawdown_snapshot",
+            "portfolio.context_events",
+            "portfolio.event_digest",
+            # V1 drawdown context component
+            "portfolio.drawdown_summary",
+            # AI adequacy remediation: income timeline evidence
+            "portfolio.income_timeline",
         }
         assert set(PORTFOLIO_REAL_COMPONENT_IDS) == expected
 
@@ -540,6 +562,16 @@ class TestPortfolioBrokerFragmentSanity:
             "broker.technical_breadth",
             "broker.technical_events",
             "broker.fifo_lots",
+            # V2 context components
+            "broker.technical_coverage",
+            "broker.asset_market_context",
+            "broker.context_events",
+            # V1 drawdown context component
+            "broker.drawdown_summary",
+            # AI adequacy remediation: concentration + cost efficiency evidence
+            "broker.concentration_context",
+            "broker.concentration_comparison",
+            "broker.cost_efficiency",
         }
         assert set(BROKER_REAL_COMPONENT_IDS) == expected
 
@@ -580,9 +612,9 @@ class TestPortfolioBrokerFragmentSanity:
 
 
 class TestComponentRegistryConstruction:
-    def test_merged_registry_has_45_components(self):
+    def test_merged_registry_has_65_components(self):
         registry = build_portfolio_broker_component_registry()
-        assert len(registry) == 45
+        assert len(registry) == 65
 
     def test_pb_component_ids_resolve_to_real_specs(self):
         registry = build_portfolio_broker_component_registry()
@@ -625,9 +657,9 @@ def registry_placeholder(component_id: str):
 
 
 class TestDatasetAndAnalysisRegistryConstruction:
-    def test_dataset_registry_has_18_datasets(self):
+    def test_dataset_registry_has_25_datasets(self):
         registry = build_portfolio_broker_dataset_registry()
-        assert len(registry) == EXPECTED_DATASET_COUNT == 18
+        assert len(registry) == EXPECTED_DATASET_COUNT == 32
 
     def test_analysis_registry_has_16_analyses(self):
         dataset_registry = build_portfolio_broker_dataset_registry()
@@ -638,8 +670,32 @@ class TestDatasetAndAnalysisRegistryConstruction:
         registry = build_portfolio_broker_dataset_registry()
         portfolio_ids = {spec.dataset_id for spec in registry.for_domain(Domain.PORTFOLIO)}
         broker_ids = {spec.dataset_id for spec in registry.for_domain(Domain.BROKER)}
-        assert portfolio_ids == {"portfolio.overview", "portfolio.performance_flows", "portfolio.technical", "portfolio.fifo", "portfolio.all_data"}
-        assert broker_ids == {"broker.overview", "broker.performance_flows", "broker.technical", "broker.fifo", "broker.all_data"}
+        assert portfolio_ids == {
+            "portfolio.overview",
+            "portfolio.performance_flows",
+            "portfolio.technical",
+            "portfolio.fifo",
+            "portfolio.all_data",
+            # V2 derived public datasets
+            "portfolio.technical_summary",
+            "portfolio.asset_snapshot",
+            "portfolio.asset_comparison",
+            "portfolio.drawdown_context",
+            "portfolio.income_evidence",
+        }
+        assert broker_ids == {
+            "broker.overview",
+            "broker.performance_flows",
+            "broker.technical",
+            "broker.fifo",
+            "broker.all_data",
+            # V2 derived public datasets
+            "broker.technical_summary",
+            "broker.asset_comparison",
+            "broker.drawdown_context",
+            "broker.concentration_evidence",
+            "broker.cost_efficiency_evidence",
+        }
 
     def test_portfolio_and_broker_analyses_present(self):
         analysis_registry = build_portfolio_broker_analysis_registry()
@@ -939,7 +995,7 @@ class TestOptionalDatasetSemantics:
         composition = await composer.compose_analysis(rebalancing, dataset_registry, context, detail_level=DetailLevel.STANDARD)
 
         assert "portfolio.overview" in composition.dataset_ids  # required dataset still succeeds
-        assert "portfolio.technical" not in composition.dataset_ids  # optional dataset silently omitted, not partially included
+        assert "portfolio.asset_comparison" not in composition.dataset_ids  # optional dataset silently omitted, not partially included
         assert not any(section.component_id.startswith("portfolio.technical_") for section in composition.sections)
 
     @pytest.mark.asyncio
@@ -963,7 +1019,7 @@ class TestOptionalDatasetSemantics:
         assert "broker.overview" in composition.dataset_ids
         assert "broker.performance_flows" in composition.dataset_ids
         assert "broker.fifo" not in composition.dataset_ids  # optional, source failed -> omitted
-        assert "broker.technical" in composition.dataset_ids  # sibling optional dataset unaffected
+        assert "broker.asset_comparison" in composition.dataset_ids  # sibling optional dataset unaffected
 
 
 # =============================================================================
@@ -1254,4 +1310,4 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        assert result.stdout.strip() == "45 18 16"
+        assert result.stdout.strip() == "65 32 16"

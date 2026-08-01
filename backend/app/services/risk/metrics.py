@@ -5,8 +5,13 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 
 _ZERO_TOLERANCE = 1e-15
+
+DRAWDOWN_RECOVERY_NO_DRAWDOWN = "no_drawdown"
+DRAWDOWN_RECOVERY_RECOVERED = "recovered"
+DRAWDOWN_RECOVERY_OPEN = "open"
 
 
 @dataclass(frozen=True, slots=True)
@@ -15,6 +20,30 @@ class DrawdownSummary:
     max_duration: int
     wealth_index: tuple[float, ...]
     drawdowns: tuple[float, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DrawdownEpisodeReport:
+    """Deterministic dated current/maximum drawdown episode primitive.
+
+    All magnitudes are decimal ratios (``-0.1`` means a 10% peak-relative
+    decline); the presentation layer owns any percentage formatting.
+    """
+
+    current_drawdown: float
+    current_peak_date: date
+    current_drawdown_duration_days: int
+    maximum_drawdown: float
+    maximum_drawdown_peak_date: date | None
+    maximum_drawdown_trough_date: date | None
+    maximum_drawdown_recovery_status: str
+    maximum_drawdown_recovery_date: date | None
+    maximum_drawdown_duration_days: int
+    maximum_drawdown_recovered_ratio: float | None
+    remaining_to_peak_ratio: float
+    available_start: date
+    available_end: date
+    n_observations: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +253,129 @@ def summarize_drawdown(
         max_duration=longest_duration,
         wealth_index=tuple(wealth),
         drawdowns=drawdowns,
+    )
+
+
+def drawdown_episodes(
+    returns: Sequence[float],
+    *,
+    dates: Sequence[date],
+    baseline_date: date,
+) -> DrawdownEpisodeReport:
+    """Return dated current and maximum peak-relative drawdown episodes.
+
+    ``dates`` are the observation dates aligned with ``returns``; ``baseline_date``
+    is the pre-return valuation date. The wealth grid therefore spans
+    ``(baseline_date, *dates)`` and is reused via :func:`wealth_index` /
+    :func:`underwater_drawdown` so no raw NAV is recomputed here.
+    """
+    normalized = _finite_values(returns, name="returns")
+    if not normalized:
+        raise ValueError("drawdown episodes require at least one return")
+    observation_dates = tuple(dates)
+    if len(observation_dates) != len(normalized):
+        raise ValueError("dates must align with returns")
+    grid_dates = (baseline_date, *observation_dates)
+    if any(later <= earlier for earlier, later in zip(grid_dates[:-1], grid_dates[1:], strict=True)):
+        raise ValueError("observation dates must be strictly increasing after the baseline")
+
+    wealth = wealth_index(normalized)
+    underwater = underwater_drawdown(wealth)
+    last = len(wealth) - 1
+
+    running_peak = wealth[0]
+    peak_index = 0
+    open_peak_index: int | None = None
+    open_trough_index = 0
+    open_trough_wealth = wealth[0]
+    episodes: list[tuple[int, int, int | None]] = []
+    for index in range(1, len(wealth)):
+        value = wealth[index]
+        if value >= running_peak:
+            if open_peak_index is not None:
+                episodes.append((open_peak_index, open_trough_index, index))
+                open_peak_index = None
+            running_peak = value
+            peak_index = index
+            continue
+        if open_peak_index is None:
+            open_peak_index = peak_index
+            open_trough_index = index
+            open_trough_wealth = value
+        elif value < open_trough_wealth:
+            open_trough_index = index
+            open_trough_wealth = value
+    if open_peak_index is not None:
+        episodes.append((open_peak_index, open_trough_index, None))
+
+    current_drawdown = min(0.0, underwater[last])
+    current_underwater = current_drawdown < -_ZERO_TOLERANCE
+    current_peak_date = grid_dates[peak_index]
+    current_drawdown_duration_days = (grid_dates[last] - grid_dates[peak_index]).days if current_underwater else 0
+    remaining_to_peak_ratio = max(0.0, -current_drawdown / (1.0 + current_drawdown)) if current_underwater else 0.0
+
+    best: tuple[int, int, int | None] | None = None
+    best_depth = 0.0
+    for episode in episodes:
+        depth = underwater[episode[1]]
+        if depth < -_ZERO_TOLERANCE and depth < best_depth:
+            best = episode
+            best_depth = depth
+
+    if best is None:
+        return DrawdownEpisodeReport(
+            current_drawdown=current_drawdown,
+            current_peak_date=current_peak_date,
+            current_drawdown_duration_days=current_drawdown_duration_days,
+            maximum_drawdown=0.0,
+            maximum_drawdown_peak_date=None,
+            maximum_drawdown_trough_date=None,
+            maximum_drawdown_recovery_status=DRAWDOWN_RECOVERY_NO_DRAWDOWN,
+            maximum_drawdown_recovery_date=None,
+            maximum_drawdown_duration_days=0,
+            maximum_drawdown_recovered_ratio=None,
+            remaining_to_peak_ratio=remaining_to_peak_ratio,
+            available_start=observation_dates[0],
+            available_end=observation_dates[-1],
+            n_observations=len(normalized),
+        )
+
+    max_peak_index, max_trough_index, max_recovery_index = best
+    maximum_drawdown = min(0.0, underwater[max_trough_index])
+    peak_wealth = wealth[max_peak_index]
+    trough_wealth = wealth[max_trough_index]
+    recovered = max_recovery_index is not None
+    reference_index = max_recovery_index if recovered else last
+    denominator = peak_wealth - trough_wealth
+    if denominator > _ZERO_TOLERANCE:
+        recovered_ratio = (wealth[reference_index] - trough_wealth) / denominator
+        recovered_ratio = max(0.0, min(1.0, recovered_ratio))
+    else:
+        recovered_ratio = 1.0
+    if recovered:
+        recovery_status = DRAWDOWN_RECOVERY_RECOVERED
+        recovery_date = grid_dates[max_recovery_index]
+        maximum_duration_days = (grid_dates[max_recovery_index] - grid_dates[max_peak_index]).days
+    else:
+        recovery_status = DRAWDOWN_RECOVERY_OPEN
+        recovery_date = None
+        maximum_duration_days = (grid_dates[last] - grid_dates[max_peak_index]).days
+
+    return DrawdownEpisodeReport(
+        current_drawdown=current_drawdown,
+        current_peak_date=current_peak_date,
+        current_drawdown_duration_days=current_drawdown_duration_days,
+        maximum_drawdown=maximum_drawdown,
+        maximum_drawdown_peak_date=grid_dates[max_peak_index],
+        maximum_drawdown_trough_date=grid_dates[max_trough_index],
+        maximum_drawdown_recovery_status=recovery_status,
+        maximum_drawdown_recovery_date=recovery_date,
+        maximum_drawdown_duration_days=maximum_duration_days,
+        maximum_drawdown_recovered_ratio=recovered_ratio,
+        remaining_to_peak_ratio=remaining_to_peak_ratio,
+        available_start=observation_dates[0],
+        available_end=observation_dates[-1],
+        n_observations=len(normalized),
     )
 
 

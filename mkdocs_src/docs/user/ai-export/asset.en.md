@@ -8,44 +8,45 @@ for the asset currently open. LibreFolio never sends it to an AI service.
 Open an Asset detail page. In the **Signals** header, select **AI Export**. Your
 draft is remembered separately for this user and asset.
 
-## 🎯 Asset Tasks
+## 🎯 Asset Analyses
 
 | Task | Focus |
 |---|---|
-| **Data Snapshot** | Raw asset identity, valuation, position, performance, and available technical facts. |
 | **Asset Trend Analysis** | Price trend, normalized returns, drawdown, and technical signals. |
 | **Position Review** | Position size, cost basis, performance, income, and concentration. |
-| **Drawdown and Recovery** | Drawdown depth, duration, recovery progress, and related context. |
 
 ## 🗂️ Scope and Data
 
 The export uses the current asset, selected date range, display/target currency,
 and the user's accessible broker scope when portfolio context is required.
-Depending on the task, it can include identifiers, prices, returns, valuation,
+Depending on the selection, it can include identifiers, prices, returns, valuation,
 position and FIFO facts, income, corporate events, and backend-computed technical
 results. The browser does not recalculate indicators.
 
-## 📸 Snapshot and Analyses
+## 📤 Export Data and Request Analysis
 
-- **Data Snapshot** uses the backend Asset Snapshot facts, but copies them as raw
-  structured data without analysis instructions or interpretation.
-- An **analysis task** uses relevant facts and adds task-specific instructions
+- **Export Data** copies a selected factual Asset dataset without analysis
+  instructions or interpretation.
+- **Request Analysis** uses relevant facts and adds task-specific instructions
   plus a response contract so the receiving AI can interpret them. The requested
   response language follows the current LibreFolio interface language.
-- Optional notes are included only when supported by the selected task.
+- Optional notes are included only when supported by the selected Analysis.
+
+Available data exports include Asset Overview, Position Performance, Position
+Context, Asset Drawdown Context, Market & Technical Data, and All Asset Data.
+Drawdown Context is data/evidence; there is no separate Drawdown Recovery Analysis.
 
 ## 📏 Detail and Sampling
 
 | Detail | Exact sampling |
 |---|---|
-| **Compact** | Latest values and aggregates only; no time series. Where applicable, the task profile explicitly selects relevant position, lot, or event entities. |
-| **Standard** | All applicable entities; up to **7 recent daily points** plus **8 preceding weekly points**. |
-| **Full** | All applicable entities; **7 recent daily points** plus weekly points across the **full technical window**. |
+| **Compact** | Same data universe with the sparsest supported temporal buckets (up to 30 days). Focused Position Context can include a very small recent history. |
+| **Standard** | Same data universe with temporal buckets up to 14 days. |
+| **Full** | Same data universe with temporal buckets up to 7 days. |
 
-A task/profile may omit sections whose data is unavailable or not applicable.
-The separate **Technical window** selector uses **3M** by default and can be set
-to **6M**, **1Y**, or a custom duration. It always ends on the snapshot date and
-does not change the Asset page's selected financial range.
+A dataset or Analysis can omit unavailable or non-applicable optional sections.
+The **AI period** ends on the snapshot date. Available dates, coverage, partial
+Signal, and omission reasons remain explicit.
 
 ## 🔒 Applicability, Errors, and Privacy
 

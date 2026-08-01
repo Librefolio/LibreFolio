@@ -7,6 +7,7 @@ export type AiExportDatasetCatalogEntry = z.output<typeof schemas.AiExportDatase
 export type AiExportAnalysisCatalogEntry = z.output<typeof schemas.AiExportAnalysisCatalogEntry>;
 export type AiExportBackendCatalogResponse = z.output<typeof schemas.AiExportCatalogResponse>;
 type GeneratedAiExportSnapshotResponse = z.output<typeof schemas.AiExportSnapshotResponse>;
+type GeneratedAiExportSnapshotMeta = GeneratedAiExportSnapshotResponse['meta'];
 export interface AiExportTechnicalSamplingManifest {
     readonly detail_level: AiExportDetailLevel;
     readonly price_policy?: z.output<typeof schemas.AiExportPriceSamplingPolicy> | null;
@@ -17,38 +18,67 @@ export interface AiExportEntityDirectory {
     readonly brokers: readonly z.output<typeof schemas.AiExportBrokerDirectoryEntry>[];
     readonly fx_pairs: readonly z.output<typeof schemas.AiExportFxPairDirectoryEntry>[];
 }
-export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract' | 'technical_sampling' | 'event_selection' | 'entity_directory'> & {
+export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract' | 'technical_sampling' | 'event_selection' | 'entity_directory' | 'meta'> & {
     analysis_contract?: z.output<typeof schemas.AiExportAnalysisContract> | null;
     technical_sampling?: AiExportTechnicalSamplingManifest | null;
     event_selection?: z.output<typeof schemas.AiExportEventSelectionManifest> | null;
     entity_directory: AiExportEntityDirectory;
+    meta: Omit<GeneratedAiExportSnapshotMeta, 'history_coverage'> & {
+        history_coverage?: z.output<typeof schemas.AiExportHistoryCoverage> | null;
+    };
 };
 export type AiExportSelectionKind = 'dataset' | 'analysis';
 export type AiExportCatalogEntry = AiExportDatasetCatalogEntry | AiExportAnalysisCatalogEntry;
 
-export const AI_EXPORT_SCHEMA_VERSION = 1;
-export const AI_EXPORT_CATALOG_VERSION = 1;
-export const AI_EXPORT_SELECTION_VERSION = 1;
+export const AI_EXPORT_SCHEMA_VERSION = 2;
+export const AI_EXPORT_CATALOG_VERSION = 2;
+export const AI_EXPORT_SELECTION_VERSION = 2;
 export const AI_EXPORT_DETAIL_LEVELS = ['compact', 'standard', 'full'] as const satisfies readonly AiExportDetailLevel[];
 export const AI_EXPORT_DEFAULT_DETAIL_LEVEL = 'standard' satisfies AiExportDetailLevel;
 export const AI_EXPORT_DOMAIN_ORDER = ['portfolio', 'broker', 'asset', 'fx'] as const satisfies readonly AiExportDomain[];
+export const AI_EXPORT_PAGE_LABEL_KEYS: Readonly<Record<string, string>> = {
+    dashboard: 'nav.dashboard',
+    broker: 'brokers.title',
+    asset: 'common.assets',
+    fx: 'fx.title',
+};
+export const AI_EXPORT_PAGE_FEATURE_LABEL_KEYS: Readonly<Record<string, string>> = {
+    dashboard: 'dashboard.aiExport',
+    broker: 'dashboard.aiExport',
+    asset: 'assetDetail.aiExport',
+    fx: 'fxDetail.aiExport',
+};
 
 export const AI_EXPORT_DATASET_IDS = [
     'portfolio.overview',
     'portfolio.performance_flows',
+    'portfolio.technical_summary',
+    'portfolio.asset_snapshot',
+    'portfolio.asset_comparison',
+    'portfolio.drawdown_context',
+    'portfolio.income_evidence',
     'portfolio.technical',
     'portfolio.fifo',
     'portfolio.all_data',
     'broker.overview',
     'broker.performance_flows',
+    'broker.technical_summary',
+    'broker.asset_comparison',
+    'broker.drawdown_context',
+    'broker.concentration_evidence',
+    'broker.cost_efficiency_evidence',
     'broker.technical',
     'broker.fifo',
     'broker.all_data',
     'asset.overview',
     'asset.position_performance',
+    'asset.position_context',
+    'asset.drawdown_context',
     'asset.market_technical',
     'asset.all_data',
     'fx.overview',
+    'fx.market_context',
+    'fx.conversion_timing_context',
     'fx.market_technical',
     'fx.direct_exposure',
     'fx.all_data',
@@ -81,7 +111,7 @@ export interface AiExportCompatibleSelection {
     readonly kind: AiExportSelectionKind;
     readonly id: AiExportSelectionId;
     readonly domain: AiExportDomain;
-    readonly version: 1;
+    readonly version: 2;
     readonly supportedDetailLevels: readonly AiExportDetailLevel[];
     readonly entry: AiExportCatalogEntry;
 }
@@ -107,6 +137,8 @@ export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSna
     if (Array.isArray(pricePolicy)) throw new TypeError('AI Export technical_sampling.price_policy must not be an array');
     const eventSelection = response.event_selection;
     if (Array.isArray(eventSelection)) throw new TypeError('AI Export event_selection must not be an array');
+    const historyCoverage = response.meta.history_coverage;
+    if (Array.isArray(historyCoverage)) throw new TypeError('AI Export meta.history_coverage must not be an array');
     return {
         ...response,
         analysis_contract: analysisContract,
@@ -118,6 +150,10 @@ export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSna
               }
             : technicalSampling,
         event_selection: eventSelection,
+        meta: {
+            ...response.meta,
+            history_coverage: historyCoverage,
+        },
         entity_directory: {
             assets: response.entity_directory?.assets ?? [],
             brokers: response.entity_directory?.brokers ?? [],

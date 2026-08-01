@@ -12,12 +12,14 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from enum import StrEnum
 from types import MappingProxyType
 
-from backend.app.services.ai_export.components.types import CODE_PATTERN, PAGE_PATTERN, Domain
+from backend.app.services.ai_export.components.types import CODE_PATTERN, PAGE_PATTERN, DetailLevel, Domain
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry
 
 _ANALYSIS_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
+_DATASET_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 # i18n keys must be dotted with at least 2 segments (e.g. "aiExport.analysis.x.display"),
 # never bare English text - mirrors the pattern used by `datasets.spec`.
 _I18N_KEY_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$")
@@ -25,6 +27,41 @@ _I18N_KEY_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)
 
 class AnalysisSpecError(ValueError):
     """Raised when an `AnalysisSpec` declaration is internally inconsistent."""
+
+
+class AdditionalExportPeriod(StrEnum):
+    THREE_MONTHS = "3m"
+    SIX_MONTHS = "6m"
+    ONE_YEAR = "1y"
+    MAXIMUM_AVAILABLE = "maximum_available"
+
+
+class AdditionalExportNecessity(StrEnum):
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+
+
+@dataclass(frozen=True, slots=True)
+class AdditionalExportSuggestion:
+    """Structured, frontend-localized recommendation for a separate public dataset."""
+
+    dataset_id: str
+    reason_i18n_key: str
+    recommended_period: AdditionalExportPeriod
+    recommended_detail: DetailLevel
+    necessity: AdditionalExportNecessity = AdditionalExportNecessity.OPTIONAL
+
+    def __post_init__(self) -> None:
+        if not _DATASET_ID_PATTERN.fullmatch(self.dataset_id):
+            raise AnalysisSpecError(f"additional export dataset_id has invalid format: {self.dataset_id!r}")
+        if not _I18N_KEY_PATTERN.fullmatch(self.reason_i18n_key):
+            raise AnalysisSpecError(f"{self.dataset_id}: reason_i18n_key must be a dotted i18n key, got {self.reason_i18n_key!r}")
+        if not isinstance(self.recommended_period, AdditionalExportPeriod):
+            raise AnalysisSpecError(f"{self.dataset_id}: recommended_period must be an AdditionalExportPeriod member")
+        if not isinstance(self.recommended_detail, DetailLevel):
+            raise AnalysisSpecError(f"{self.dataset_id}: recommended_detail must be a DetailLevel member")
+        if not isinstance(self.necessity, AdditionalExportNecessity):
+            raise AnalysisSpecError(f"{self.dataset_id}: necessity must be an AdditionalExportNecessity member")
 
 
 def _require_positive_int(value: object, *, label: str, analysis_id: str) -> int:
@@ -89,6 +126,7 @@ class AnalysisSpec:
     response_contract_id: str
     response_contract_version: int
     supports_notes: bool = True
+    additional_export_suggestions: tuple[AdditionalExportSuggestion, ...] = ()
 
     def __post_init__(self) -> None:
         if not _ANALYSIS_ID_PATTERN.fullmatch(self.analysis_id):
@@ -125,6 +163,13 @@ class AnalysisSpec:
         if not self.response_contract_id:
             raise AnalysisSpecError(f"{self.analysis_id}: response_contract_id must not be empty")
         _require_positive_int(self.response_contract_version, label="response_contract_version", analysis_id=self.analysis_id)
+        suggestions = tuple(self.additional_export_suggestions)
+        if any(not isinstance(suggestion, AdditionalExportSuggestion) for suggestion in suggestions):
+            raise AnalysisSpecError(f"{self.analysis_id}: additional_export_suggestions must contain AdditionalExportSuggestion values")
+        suggestion_ids = [suggestion.dataset_id for suggestion in suggestions]
+        if len(suggestion_ids) != len(set(suggestion_ids)):
+            raise AnalysisSpecError(f"{self.analysis_id}: additional export dataset IDs must be unique")
+        object.__setattr__(self, "additional_export_suggestions", suggestions)
 
     @property
     def dataset_order(self) -> tuple[str, ...]:
@@ -170,6 +215,12 @@ class AnalysisRegistry:
                 dataset_spec = dataset_registry.get(dataset_id)
                 if dataset_spec.domain != spec.domain:
                     raise AnalysisDatasetDomainMismatchError(f"{spec.analysis_id}: dataset {dataset_id!r} belongs to domain {dataset_spec.domain.value!r}, expected {spec.domain.value!r}")
+            for suggestion in spec.additional_export_suggestions:
+                if suggestion.dataset_id not in dataset_registry:
+                    raise UnknownAnalysisDatasetError(f"{spec.analysis_id} suggests unknown dataset {suggestion.dataset_id!r}")
+                dataset_spec = dataset_registry.get(suggestion.dataset_id)
+                if dataset_spec.domain != spec.domain:
+                    raise AnalysisDatasetDomainMismatchError(f"{spec.analysis_id}: suggested dataset {suggestion.dataset_id!r} belongs to domain {dataset_spec.domain.value!r}, expected {spec.domain.value!r}")
         self._specs: MappingProxyType[str, AnalysisSpec] = MappingProxyType(ordered)
         self._dataset_registry = dataset_registry
 

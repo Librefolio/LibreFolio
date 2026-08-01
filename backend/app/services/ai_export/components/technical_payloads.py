@@ -91,7 +91,10 @@ class AssetPriceSeriesPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
-    portfolio_weight_ratio: float | None = None
+    portfolio_weight_ratio: float | None = Field(
+        None,
+        description="Gross absolute open-position value of this unique asset / gross eligible exposure. Aggregated once per asset ID across brokers. Fraction in [0,1]; None if weightless.",
+    )
     currency: str
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None
@@ -116,8 +119,26 @@ class PortfolioTechnicalPricesPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     assets: tuple[AssetPriceSeriesPayload, ...]
-    eligible_asset_count: int
-    considered_asset_count: int
+    eligible_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Unique eligible currently-held (not fully sold, non-zero end value) assets, broker-deduplicated. Denominator of the eligible technical universe. Unit: assets.",
+    )
+    period_position_leg_count: int = Field(
+        ...,
+        ge=0,
+        description="Period (broker_id, asset_id) position-contribution legs before eligibility, including legs fully sold inside the period. NOT a unique-asset count. Unit: legs.",
+    )
+    period_contributor_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Unique asset IDs across ALL period contribution legs before eligibility (broker-deduplicated, includes fully-sold-in-period assets). Between eligible_asset_count and period_position_leg_count. Unit: assets.",
+    )
+    covered_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Eligible assets with a returned price series in this payload (subset of eligible_asset_count). Unit: assets.",
+    )
 
 
 class TechnicalDatedValue(BaseModel):
@@ -237,8 +258,14 @@ class IndicatorTablePayload(BaseModel):
     semantic_id: str
     semantic_description: str
     category: str
-    portfolio_weight_ratio: float | None = None
-    technical_normalized_weight_ratio: float | None = None
+    portfolio_weight_ratio: float | None = Field(
+        None,
+        description="Gross absolute open-position value per unique asset / gross eligible exposure. Fraction in [0,1]; None if weightless.",
+    )
+    technical_normalized_weight_ratio: float | None = Field(
+        None,
+        description="portfolio_weight_ratio renormalized to sum to 1 across the covered universe of THIS Signal instance/state only (not across the whole portfolio). Fraction in [0,1]; None if uncovered.",
+    )
     columns: tuple[IndicatorOutputColumn, ...] = Field(..., min_length=1)
     period_summary: dict[str, TechnicalIndicatorCell | None]
     rows: tuple[IndicatorBucketRow, ...] = Field(..., min_length=1)
@@ -266,7 +293,10 @@ class AssetIndicatorsPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
-    portfolio_weight_ratio: float | None = None
+    portfolio_weight_ratio: float | None = Field(
+        None,
+        description="Gross absolute open-position value of this unique asset / gross eligible exposure. Aggregated once per asset ID across brokers. Fraction in [0,1]; None if weightless.",
+    )
     indicators: tuple[IndicatorTablePayload, ...]
 
 
@@ -276,12 +306,38 @@ class UniverseIndicatorsPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     assets: tuple[AssetIndicatorsPayload, ...]
-    eligible_asset_count: int
-    considered_asset_count: int
-    covered_asset_count: int
-    eligible_portfolio_weight_ratio: float
-    covered_portfolio_weight_ratio: float
-    covered_weight_ratio: float
+    eligible_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Unique eligible currently-held (not fully sold, non-zero end value) assets, broker-deduplicated. Unit: assets.",
+    )
+    period_position_leg_count: int = Field(
+        ...,
+        ge=0,
+        description="Period (broker_id, asset_id) position-contribution legs before eligibility, including legs fully sold inside the period. NOT a unique-asset count. Unit: legs.",
+    )
+    period_contributor_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Unique asset IDs across ALL period contribution legs before eligibility (broker-deduplicated, includes fully-sold-in-period assets). Unit: assets.",
+    )
+    covered_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Eligible assets that produced at least one curated indicator instance (subset of eligible_asset_count). Unit: assets.",
+    )
+    eligible_portfolio_weight_ratio: float = Field(
+        ...,
+        description="Sum of gross absolute open-position weight ratios across all eligible assets. Denominator for covered_weight_ratio. Fraction in [0,1].",
+    )
+    covered_portfolio_weight_ratio: float = Field(
+        ...,
+        description="Sum of gross absolute open-position weight ratios across covered assets only. Fraction in [0,1].",
+    )
+    covered_weight_ratio: float = Field(
+        ...,
+        description="covered_portfolio_weight_ratio / eligible_portfolio_weight_ratio. Share of eligible gross exposure that is indicator-covered. Fraction in [0,1].",
+    )
 
 
 class SingleTargetIndicatorsPayload(BaseModel):
@@ -427,11 +483,28 @@ class BreadthStateBucket(BaseModel):
     signal_code: str
     output_key: str
     state: str
-    covered_asset_count: int
-    covered_portfolio_weight_ratio: float
-    unweighted_count: int
-    unweighted_ratio: float
-    technical_normalized_weight_ratio: float
+    covered_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Eligible assets classified into any state for this (signal_code, output_key). Denominator of unweighted_ratio within this indicator. Unit: assets.",
+    )
+    covered_portfolio_weight_ratio: float = Field(
+        ...,
+        description="Sum of gross absolute weight ratios of the assets classified for this indicator. Fraction in [0,1].",
+    )
+    unweighted_count: int = Field(
+        ...,
+        ge=0,
+        description="Assets currently in THIS state for this indicator. Unit: assets.",
+    )
+    unweighted_ratio: float = Field(
+        ...,
+        description="unweighted_count / covered_asset_count for this indicator. Sums to 1 across the indicator's states. Fraction in [0,1].",
+    )
+    technical_normalized_weight_ratio: float = Field(
+        ...,
+        description="State weight / covered_portfolio_weight_ratio for this indicator. Sums to 1 across the indicator's states. Fraction in [0,1].",
+    )
 
 
 class UniverseBreadthPayload(BaseModel):
@@ -439,12 +512,38 @@ class UniverseBreadthPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    eligible_asset_count: int
-    considered_asset_count: int
-    covered_asset_count: int
-    eligible_portfolio_weight_ratio: float
-    covered_portfolio_weight_ratio: float
-    covered_weight_ratio: float
+    eligible_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Unique eligible currently-held (not fully sold, non-zero end value) assets, broker-deduplicated. Unit: assets.",
+    )
+    period_position_leg_count: int = Field(
+        ...,
+        ge=0,
+        description="Period (broker_id, asset_id) position-contribution legs before eligibility, including legs fully sold inside the period. NOT a unique-asset count. Unit: legs.",
+    )
+    period_contributor_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Unique asset IDs across ALL period contribution legs before eligibility (broker-deduplicated, includes fully-sold-in-period assets). Unit: assets.",
+    )
+    covered_asset_count: int = Field(
+        ...,
+        ge=0,
+        description="Eligible assets with at least one classifiable reference-level indicator value (subset of eligible_asset_count). Unit: assets.",
+    )
+    eligible_portfolio_weight_ratio: float = Field(
+        ...,
+        description="Sum of gross absolute open-position weight ratios across all eligible assets. Fraction in [0,1].",
+    )
+    covered_portfolio_weight_ratio: float = Field(
+        ...,
+        description="Sum of gross absolute open-position weight ratios across covered assets only. Fraction in [0,1].",
+    )
+    covered_weight_ratio: float = Field(
+        ...,
+        description="covered_portfolio_weight_ratio / eligible_portfolio_weight_ratio. Fraction in [0,1].",
+    )
     states: tuple[BreadthStateBucket, ...]
 
 

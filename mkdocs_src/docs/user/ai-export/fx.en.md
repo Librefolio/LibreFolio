@@ -9,43 +9,60 @@ service.
 Open an FX detail page. In the **Signals** header, select **AI Export**. Your
 draft is remembered separately for this user and canonical pair.
 
-## 🎯 FX Tasks
+## 🎯 FX Analyses
 
 | Task | Focus |
 |---|---|
-| **Data Snapshot** | Raw pair, rate-history, provider, and technical facts. |
 | **FX Trend Review** | Pair direction, returns, volatility, and technical context. |
 | **FX Conversion Timing Context** | Trend, volatility, and rate context for a possible conversion. |
+| **FX Exposure Impact** | Direct cash, trading-currency, and valuation-currency links to the pair. |
 
 ## 🗂️ Scope and Data
 
 The export uses the page's canonical pair, selected date range, target currency,
 rate history, provider context, and backend-computed technical results.
 
-## 📸 Snapshot and Analyses
+## 📤 Export Data and Request Analysis
 
-- **Data Snapshot** copies factual structured FX data only.
-- An **analysis task** adds task-specific instructions and a response contract.
+- **Export Data** copies one factual FX dataset only.
+- **Request Analysis** adds task-specific instructions, a response contract, and
+  the datasets declared for the Analysis.
   The requested response language follows the current LibreFolio interface
   language.
-- Optional notes are included only when supported by the selected task.
+- Optional notes are included only when supported by the selected Analysis.
+
+Available exports include FX Overview, Market Context, Conversion Timing Context,
+Market & Technical Data, Direct Exposure, and All FX Data.
+
+## 📉 Partial History
+
+When the requested AI period begins before stored rate history, LibreFolio exports
+the genuine history it can use and reports:
+
+- requested and available dates;
+- coverage;
+- observed and backward-filled counts;
+- partial Signal;
+- omitted Signal and reasons;
+- insufficient-history warnings.
+
+No future rate is used. A partial Signal is not presented as equivalent to a full
+history.
 
 ## 📏 Detail and Sampling
 
 | Detail | Exact sampling |
 |---|---|
-| **Compact** | Latest values and aggregates only; no time series. Where applicable, the task profile explicitly selects relevant entities. |
-| **Standard** | All applicable entities; up to **7 recent daily points** plus **8 preceding weekly points**. |
-| **Full** | All applicable entities; **7 recent daily points** plus weekly points across the **full technical window**. |
+| **Compact** | Same data universe with the sparsest supported temporal buckets (up to 30 days). |
+| **Standard** | Same data universe with temporal buckets up to 14 days. |
+| **Full** | Same data universe with temporal buckets up to 7 days. |
 
-A task/profile may omit sections whose data is unavailable or not applicable.
-The separate **Technical window** selector uses **3M** by default and can be set
-to **6M**, **1Y**, or a custom duration. It always ends on the snapshot date and
-does not change the FX page's selected financial range.
+A dataset or Analysis can omit unavailable or non-applicable optional sections.
+The **AI period** ends on the snapshot date.
 
 ## 🔒 Applicability, Errors, and Privacy
 
-Tasks or detail choices can be disabled when required data is absent. Catalog
+Analyses or detail choices can be disabled when required data is absent. Catalog
 and response-contract mismatches fail closed. Typed errors report applicability,
 source, entity, or contract problems.
 

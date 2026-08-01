@@ -851,6 +851,7 @@ nav:
                   - Overview: developer/architecture/patterns/ai_export_snapshot.md
                   - Composition & Prompt: developer/architecture/patterns/ai_export_composition.md
                   - Technical Sampling: developer/architecture/patterns/ai_export_sampling.md
+                  - Probe Workflow & Review: developer/architecture/patterns/ai_export_probe_workflow.md
               - Database Migrations (Alembic): developer/architecture/patterns/alembic.md
           - ⚙️ Core Systems:
               - Security & Authentication: developer/architecture/security.md

@@ -65,8 +65,7 @@
     "openFxPair": "Open FX pair detail",
     "editorTipDesktop": "Double-click on the chart to jump to that date",
     "editorTipMobile": "Long-press on the chart to jump to that date",
-    "aiExport": "AI Export",
-    "aiExportBuilding": "Building export…"
+    "aiExport": "AI Export"
   },
   "assets": {
     "create": "New asset",
@@ -1176,7 +1175,6 @@
     "losses": "Losses",
     "seeAllPositions": "See all →",
     "aiExport": "AI Export",
-    "aiExportBuilding": "Building export…",
     "costsTooltip": "Fees and taxes recorded in the selected period.",
     "periodPnlTooltip": "Total gain or loss attributable to the selected period only (unrealized change + realized + income − fees). May differ from the position's total lifetime gain.",
     "unrealizedPnlPercent": "P&L %",
@@ -1427,8 +1425,7 @@
     "syncDisabledManual": "Sync disabled — no provider configured. Add a provider or insert rates manually.",
     "editorTipDesktop": "Double-click on the chart to jump to that date",
     "editorTipMobile": "Long-press on the chart to jump to that date",
-    "aiExport": "AI Export",
-    "aiExportBuilding": "Building export…"
+    "aiExport": "AI Export"
   },
   "help": {
     "helpAndSupport": "Help & Support",
@@ -2361,7 +2358,7 @@
     "preparing": "Preparing export…",
     "copyAnyway": "Copy Anyway",
     "useCompact": "Use Compact",
-    "copied": "AI export copied to clipboard (detail: {detail}).",
+    "copied": "AI export copied to clipboard ({tokens} · {bytes}; detail: {detail}).",
     "privacyNotice": "Detail level: {detail}. This export may contain sensitive financial data; review it before sharing.",
     "catalogUnavailable": "AI Export is currently unavailable. Refresh and try again.",
     "contractMismatch": "AI Export is out of sync with the server. Refresh and try again.",
@@ -2620,7 +2617,8 @@
         "positionContext": "Use it when the asset's actual position, cost, value, P&L, Broker scope, or FIFO role matters.",
         "directExposure": "Use it when direct cash or position exposure to the FX pair is relevant."
       }
-    }
+    },
+    "tokenUnit": "tokens"
   },
   "risk": {
     "analytics": {
@@ -2853,6 +2851,10 @@
       "proxySeriesUsages": {
         "returns_only": "Historical returns only"
       }
+    },
+    "betaBanner": {
+      "title": "Risk Analysis is in beta.",
+      "description": "Calculations, results, and the interface may change before the stable release."
     }
   }
 }

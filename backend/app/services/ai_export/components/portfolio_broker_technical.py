@@ -97,7 +97,9 @@ async def _build_portfolio_technical_prices(context: BuildContext, dependencies:
     return PortfolioTechnicalPricesPayload(
         assets=tuple(assets),
         eligible_asset_count=len(universe.asset_ids),
-        considered_asset_count=universe.considered_count,
+        period_position_leg_count=universe.period_position_leg_count,
+        period_contributor_asset_count=universe.period_contributor_asset_count,
+        covered_asset_count=len(assets),
     )
 
 
@@ -163,7 +165,8 @@ async def _build_universe_technical_indicators(context: BuildContext, *, univers
     return UniverseIndicatorsPayload(
         assets=tuple(assets),
         eligible_asset_count=len(universe.asset_ids),
-        considered_asset_count=universe.considered_count,
+        period_position_leg_count=universe.period_position_leg_count,
+        period_contributor_asset_count=universe.period_contributor_asset_count,
         covered_asset_count=sum(1 for asset in assets if asset.indicators),
         eligible_portfolio_weight_ratio=eligible_portfolio_weight,
         covered_portfolio_weight_ratio=covered_portfolio_weight,
@@ -222,7 +225,6 @@ PORTFOLIO_TECHNICAL_BREADTH_SPEC = ComponentSpec(
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=UniverseBreadthPayload,
     builder=_build_portfolio_technical_breadth,
-    dependencies=("portfolio.technical_indicators",),
     period_behavior=PeriodBehavior.WINDOWED,
 )
 
@@ -232,7 +234,6 @@ BROKER_TECHNICAL_BREADTH_SPEC = ComponentSpec(
     domains=frozenset({Domain.BROKER}),
     output_model=UniverseBreadthPayload,
     builder=_build_broker_technical_breadth,
-    dependencies=("broker.technical_indicators",),
     period_behavior=PeriodBehavior.WINDOWED,
 )
 
@@ -275,7 +276,6 @@ PORTFOLIO_TECHNICAL_EVENTS_SPEC = ComponentSpec(
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=TechnicalEventsPayload,
     builder=_build_portfolio_technical_events,
-    dependencies=("portfolio.technical_indicators",),
     period_behavior=PeriodBehavior.WINDOWED,
 )
 
@@ -285,7 +285,6 @@ BROKER_TECHNICAL_EVENTS_SPEC = ComponentSpec(
     domains=frozenset({Domain.BROKER}),
     output_model=TechnicalEventsPayload,
     builder=_build_broker_technical_events,
-    dependencies=("broker.technical_indicators",),
     period_behavior=PeriodBehavior.WINDOWED,
 )
 

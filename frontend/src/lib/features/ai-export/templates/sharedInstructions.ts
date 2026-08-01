@@ -6,9 +6,11 @@ Use a calculation sandbox or calculator when available to verify arithmetic, per
 
 When web access is available and external context materially improves the analysis, search recent reliable sources. Cite source, publication date, and access date; keep external findings clearly separate from LibreFolio facts. If web access is unavailable, continue from LibreFolio data and say so briefly.
 
-Internal references such as A1, B1, L1, numeric asset or broker IDs, component IDs, dataset IDs, signal instance IDs, and annotation keys are audit/lookup codes. Never use those codes as user-facing names. In the final answer, refer to assets and brokers by their display names, or by a clear shortened form when a name is especially long; refer to FX pairs by their named currencies.
+Internal references such as A1, B1, F1, L1, numeric asset or broker IDs, component IDs, dataset IDs, signal instance IDs, and annotation keys are audit/lookup codes. Never use those codes as user-facing names. In the final answer, refer to assets and brokers by their display names, or by a clear shortened form when a name is especially long; refer to FX pairs by their named currencies.
 
-Technical indicators are descriptive evidence, not deterministic forecasts or buy/sell instructions.`;
+Technical indicators are descriptive evidence, not deterministic forecasts or buy/sell instructions.
+
+Ask for additional LibreFolio data only when it is materially useful. When requesting it, use the localized public export label, explain why it is needed, give the localized UI path, recommend period and detail, distinguish required from optional data, and never ask the user only for an internal dataset ID.`;
 
 export const AI_EXPORT_DOMAIN_NOTES: Readonly<Record<AiExportDomain, readonly string[]>> = {
     portfolio: ['Portfolio values use the selected target currency and the active broker scope.', 'FIFO lots are runtime calculations; allocation currency is not look-through exposure.'],
@@ -19,7 +21,7 @@ export const AI_EXPORT_DOMAIN_NOTES: Readonly<Record<AiExportDomain, readonly st
 
 export interface AiExportAnalysisInstructionTemplate {
     readonly id: string;
-    readonly version: 1;
+    readonly version: 2;
     readonly analysisId: AiExportAnalysisId;
     readonly objective: string;
     readonly steps: readonly string[];
@@ -28,7 +30,7 @@ export interface AiExportAnalysisInstructionTemplate {
 function defineAnalysisInstruction(analysisId: AiExportAnalysisId, objective: string, steps: readonly string[]): AiExportAnalysisInstructionTemplate {
     return {
         id: `${analysisId}.instructions`,
-        version: 1,
+        version: 2,
         analysisId,
         objective,
         steps,
@@ -38,11 +40,15 @@ function defineAnalysisInstruction(analysisId: AiExportAnalysisId, objective: st
 export const AI_EXPORT_ANALYSIS_INSTRUCTIONS: Readonly<Record<AiExportAnalysisId, AiExportAnalysisInstructionTemplate>> = {
     'portfolio.pac_planning': defineAnalysisInstruction('portfolio.pac_planning', 'Develop neutral accumulation-plan scenarios grounded in the supplied portfolio facts.', [
         'Summarize allocation, concentration, cash, flows, and constraints relevant to recurring contributions.',
-        'Identify missing budget, horizon, target, and risk-preference inputs.',
-        'Present two or three conditional PAC scenarios with rationale and trade-offs.',
+        'Use all supplied facts and User Notes first. Ask only for still-missing user inputs that would materially change the scenarios; never repeat facts already present in the snapshot.',
+        'Group necessary questions by capital and cadence, goals and horizon, risk preferences, and operational constraints. Label indispensable answers separately from optional refinements; do not produce an undifferentiated questionnaire.',
+        'Treat budget, targets, horizon, acceptable volatility/drawdown, liquidity needs, exclusions, and operating constraints as user preferences unless explicitly supplied; never infer or invent them from portfolio metrics.',
+        'Treat supplied portfolio/asset Drawdown, trend, momentum, volatility, and recent-event context as historical subordinate evidence, never as a forecast or standalone purchase signal.',
+        'Present two or three conditional PAC scenarios when possible even before every optional refinement is answered, stating which indispensable inputs still block a concrete plan.',
     ]),
     'portfolio.rebalancing': defineAnalysisInstruction('portfolio.rebalancing', 'Compare current composition with user-supplied targets and frame neutral rebalancing pathways.', [
         'Quantify gaps only where a target or tolerance was supplied.',
+        'Use the uniform per-asset market context for horizontal comparison; do not request or infer complete Signal history for every asset unless materially necessary.',
         'Compare cash-flow-only, one-time, and mixed pathways.',
         'Separate measured costs from tax, timing, and execution assumptions.',
     ]),
@@ -69,21 +75,24 @@ export const AI_EXPORT_ANALYSIS_INSTRUCTIONS: Readonly<Record<AiExportAnalysisId
     ]),
     'portfolio.description': defineAnalysisInstruction('portfolio.description', 'Produce a concise neutral portfolio description from supplied facts.', [
         'Summarize composition, cash, capital, performance, and concentration.',
+        'Use aggregate technical coverage and breadth only for general recent direction, momentum, volatility, and material recent transitions.',
         'Keep measured facts, notes, technical context, and assumptions separate.',
         'State coverage, stale values, and unresolved questions.',
     ]),
     'broker.review': defineAnalysisInstruction('broker.review', 'Provide a neutral review of the selected broker scope.', [
         'Summarize holdings, cash, performance, flows, income, costs, FIFO, and concentration.',
-        'Use technical breadth only as secondary evidence.',
+        'Use the supplied uniform broker-scoped asset comparison and technical breadth only as secondary evidence; do not infer missing full histories.',
         'State access, scope, and data-quality limits.',
     ]),
     'broker.cost_efficiency': defineAnalysisInstruction('broker.cost_efficiency', 'Review fees and taxes within the selected broker scope.', [
-        'Summarize total costs and contributors.',
-        'Use ratios only when the relevant activity or asset denominator is supplied.',
+        'Summarize recorded fees, taxes, total recorded costs, typed contributors, source coverage, and any unavailable cost subcategories without inventing classifications.',
+        'Distinguish a recorded zero from unavailable source data and from a ratio that is not applicable.',
+        'Use only ratios whose supplied status is recorded and preserve each supplied formula, numerator, denominator, unit, period, and coverage.',
         'Present neutral efficiency considerations and missing context.',
     ]),
     'broker.concentration_context': defineAnalysisInstruction('broker.concentration_context', 'Describe concentration and diversification within the selected broker scope.', [
         'Separate position, asset-type, sector, geography, currency, and cash dimensions.',
+        'Keep technical evidence limited to the supplied aggregate coverage and breadth.',
         'Distinguish broker concentration from whole-portfolio concentration.',
         'Frame diversification choices as questions, not instructions.',
     ]),
@@ -96,15 +105,18 @@ export const AI_EXPORT_ANALYSIS_INSTRUCTIONS: Readonly<Record<AiExportAnalysisId
     'asset.position_review': defineAnalysisInstruction('asset.position_review', 'Review the current position in the selected asset.', [
         'Summarize quantity, value, cost, P&L, broker scope, and valuation source.',
         'Separate aggregate performance from FIFO lot facts.',
+        'Use focused trend, momentum, volatility, limited history, and recent events without treating this as a complete Asset Trend Analysis.',
         'State missing prices, estimated values, and concentration limits.',
     ]),
     'fx.trend_review': defineAnalysisInstruction('fx.trend_review', 'Explain the selected FX pair trend in quote-per-base direction.', [
         'State current rate, period movement, extrema, source, and direction semantics.',
+        'If source history is partial, distinguish requested and available periods, coverage, included Signal, and omitted Signal reasons.',
         'Separate trend, momentum, volatility, and events.',
         'Keep observed rate facts distinct from external interpretation.',
     ]),
     'fx.conversion_timing': defineAnalysisInstruction('fx.conversion_timing', 'Provide neutral conversion-timing context under uncertainty.', [
         'Describe rate location, trend, momentum, volatility, and events.',
+        'If source history is partial, use only calculable Signal and preserve the supplied coverage warning.',
         'Present multiple conditional timing approaches without point forecasts.',
         'State horizon, execution, provider, and exposure assumptions.',
     ]),

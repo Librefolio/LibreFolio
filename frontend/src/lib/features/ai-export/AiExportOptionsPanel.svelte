@@ -18,6 +18,8 @@
         normalizeAiExportPeriod,
         normalizeAiExportUserNotes,
         reconcileAiExportOptions,
+        formatAiExportByteSize,
+        formatAiExportTokenCount,
         type AiExportOptionsPanelLabels,
         type AiExportOptionsSelection,
         type AiExportPeriodPreset,
@@ -32,6 +34,7 @@
         pending?: PreparedAiExport;
         disabled?: boolean;
         loading?: boolean;
+        locale: string;
         labels: AiExportOptionsPanelLabels;
         onprepare: (options: AiExportOptionsSelection) => void;
         oncopyanyway: () => void;
@@ -39,7 +42,7 @@
         ondraftchange?: (options: AiExportOptionsSelection) => void;
     }
 
-    let {domain, compatibility, initialOptions, responseLanguage, pending, disabled = false, loading = false, labels, onprepare, oncopyanyway, onusecompact, ondraftchange}: Props = $props();
+    let {domain, compatibility, initialOptions, responseLanguage, pending, disabled = false, loading = false, locale, labels, onprepare, oncopyanyway, onusecompact, ondraftchange}: Props = $props();
 
     const componentId = $props.id();
     const selectionKinds = ['dataset', 'analysis'] as const;
@@ -284,9 +287,15 @@
             <h3 class="text-xs font-semibold">{labels.payloadStatsLabel}</h3>
             <dl class="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
                 <dt>{labels.backendEstimatedTokensLabel}</dt>
-                <dd>{pending.stats.snapshotBackendStats.estimated_tokens}</dd>
+                <dd>
+                    {formatAiExportTokenCount(pending.stats.snapshotBackendStats.estimated_tokens, locale, labels.tokenUnitLabel)}
+                    · {formatAiExportByteSize(pending.stats.snapshotBackendStats.serialized_bytes, locale)}
+                </dd>
                 <dt>{labels.finalEstimatedTokensLabel}</dt>
-                <dd>{pending.stats.finalPrompt.estimatedTokens}</dd>
+                <dd>
+                    {formatAiExportTokenCount(pending.stats.finalPrompt.estimatedTokens, locale, labels.tokenUnitLabel)}
+                    · {formatAiExportByteSize(pending.stats.finalPrompt.byteCountUtf8, locale)}
+                </dd>
             </dl>
             <p class="mt-2 rounded-md px-2 py-1 text-xs font-medium {severityClasses(severity)}" data-testid="ai-export-token-severity">{labels.tokenSeverityLabels[severity]}</p>
             {#if warningVisible}

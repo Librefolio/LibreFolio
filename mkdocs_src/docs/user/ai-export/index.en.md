@@ -18,33 +18,35 @@ AI Export is available from:
 - the Signals header on Asset and FX detail pages.
 
 The backend supplies valuations, performance, allocations, FIFO facts, FX
-exposure, and technical indicators. **Data Snapshot** copies those facts without
-analysis instructions. Every analysis choice automatically adds its task
-instructions and response contract, plus optional notes and safe YAML/Markdown
-formatting. The requested response language always follows the current
-LibreFolio interface language.
+exposure, and technical indicators. **Export Data** copies one selected dataset
+without analysis instructions. **Request Analysis** combines the datasets
+declared for that Analysis with an objective and response contract. Optional notes
+and the requested response language apply only to analyses.
 
 ## 🚀 How to Use It
 
 1. Open the relevant Portfolio, Broker, Asset, or FX page.
 2. Select **AI Export** (:material-brain:).
-3. Choose **Data Snapshot** or an analysis task, then choose the detail level.
-4. For an analysis, add optional notes when the task supports them.
-5. Select **Copy AI Export**, then paste the result into the tool of your choice.
+3. Choose **Export Data** or **Request Analysis**, then select a dataset or
+   Analysis.
+4. Choose the AI period and detail level.
+5. For an analysis, add optional notes when the Analysis supports them.
+6. Select **Copy AI Export**, then paste the result into the tool of your choice.
 
 ## 🎛️ Export Options
 
 | Option | Meaning |
 |---|---|
-| **Analysis type** | **Data Snapshot** is always first and copies factual data only. Every other choice is an analysis that automatically includes its task instructions and response contract. |
-| **Detail level** | **Compact** uses latest values/aggregates only with no series and an explicit compact entity selection where applicable. **Standard** includes all applicable entities with up to 7 recent daily points plus 8 preceding weekly points. **Full** includes all applicable entities with 7 recent daily points plus weekly points across the full technical window. A task/profile may omit unavailable or non-applicable sections. |
-| **Technical window** | Select **3M** (default), **6M**, **1Y**, or a custom duration in days, weeks, months, or years. It controls how far back technical signals and series are evaluated, always ending on the snapshot date; it does not change the selected financial date range. |
+| **Export type** | **Export Data** creates a factual dataset prompt. **Request Analysis** adds the Analysis objective, verification instructions, response contract, and relevant datasets. |
+| **Dataset or analysis** | The available choices come from the current LibreFolio runtime catalog for the page/domain. |
+| **AI period** | **3M**, **6M**, **1Y**, or Custom when offered. The period ends on the snapshot date. Partial source history remains explicit. |
+| **Detail level** | **Compact**, **Standard**, and **Full** keep the same data universe but use progressively denser temporal buckets where supported (up to 30, 14, or 7 days). Synthetic snapshots can remain similar across levels; Full is not always necessary. |
 | **Notes for the AI** | Available for supported analyses. Adds optional user context as a safely serialized data block. |
 
-Draft task, detail, technical window, and notes are remembered per authenticated user and page
+Draft export type, selection, detail, AI period, and notes are remembered per authenticated user and page
 context. Closing the panel or navigating away does not discard them.
 
-## 🗂️ Available Tasks
+## 🗂️ Available Analyses
 
 ### 📊 Portfolio
 
@@ -71,18 +73,39 @@ context. Closing the panel or navigating away does not discard them.
 
 | Task | Purpose |
 |---|---|
-| Data Snapshot | Copy raw asset identity, valuation, position, performance, and available technical facts without interpretation. |
 | Asset Trend Analysis | Review price trends, normalized returns, drawdowns, and technical signals. |
 | Position Review | Review size, cost basis, performance, income, and concentration context. |
-| Drawdown and Recovery | Analyze drawdown depth, duration, recovery progress, and related market context. |
 
 ### 💱 FX
 
 | Task | Purpose |
 |---|---|
-| Data Snapshot | Copy raw pair, rate-history, provider, and technical facts without interpretation. |
 | FX Trend Review | Review pair direction, returns, volatility, and technical context. |
 | FX Conversion Timing Context | Review trend, volatility, and rate context for a possible conversion. |
+| FX Exposure Impact | Review direct cash, trading-currency, and valuation-currency links to the pair. |
+
+## 🧩 Partial History and Additional Data
+
+LibreFolio can export the history that is actually available when it is shorter
+than the requested AI period. The prompt shows requested/available dates, coverage,
+warnings, and any Signal that is partial or omitted. It never uses future prices
+or rates.
+
+An Analysis can recommend **Additional LibreFolio Data** when another export would
+materially improve the answer. The prompt gives the public export name, UI path,
+recommended period/detail, reason, and whether it is required or optional.
+
+## 🔗 Local References
+
+The prompt uses local references to join compact tables:
+
+- A# for Assets;
+- B# for Brokers;
+- F# for FX pairs;
+- L# for FIFO lots.
+
+The Entity Directory resolves those references. The receiving model should use
+readable names in its answer; database IDs are not needed.
 
 ## 🔒 Scope and Privacy
 

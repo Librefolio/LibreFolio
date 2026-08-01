@@ -325,6 +325,21 @@ def scoped_holdings(report: PortfolioReportResponse, asset_id: int) -> Sequence:
     return tuple(sorted(holdings, key=lambda h: h.broker_id))
 
 
+def all_open_holdings(report: PortfolioReportResponse) -> Sequence:
+    """Every open-position holding leg in the scoped report, ordered by (asset_id, broker_id).
+
+    Unlike `scoped_holdings` (which narrows to one asset), this returns the
+    whole scoped-portfolio open-position universe the `asset.position_scope`
+    portfolio-role denominator aggregates over. The report is already scoped
+    to `BuildScope.broker_scope` at load time (see `load_asset_report`), so
+    this is exactly the accessible/whole or broker-scoped portfolio depending
+    on whether a broker scope was requested. Legs with a `None` `broker_id`
+    (broker-less reconciliation rows) are excluded, matching `scoped_holdings`.
+    """
+    holdings = [] if report.summary is None else [h for h in report.summary.holdings if h.broker_id is not None]
+    return tuple(sorted(holdings, key=lambda h: (h.asset_id, h.broker_id)))
+
+
 def scoped_contributions(report: PortfolioReportResponse, asset_id: int) -> Sequence:
     """Deterministically ordered (by broker_id) period contributions for `asset_id` within `report`."""
     if report.positions_contribution is None:
@@ -349,4 +364,5 @@ __all__ = [
     "market_snapshot_from_price_result",
     "scoped_contributions",
     "scoped_holdings",
+    "all_open_holdings",
 ]
