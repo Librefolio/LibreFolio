@@ -1,10 +1,10 @@
-# ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Adjustment
+# 🧮 ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Adjustment
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
 </div>
 
-**Adjustments** are a catch-all transaction type for manual corrections to either cash or asset balances. Unlike the paired types (Transfer, Cash Transfer, FX Conversion), adjustments are **standalone** — each adjustment is a single, independent row.
+**Adjustments** are standalone asset-quantity corrections. They are cashless in the shipped transaction schema: quantity changes, cash does not. Unlike paired types (Transfer, Cash Transfer, FX Conversion), each adjustment is a single, independent row.
 
 ---
 
@@ -13,7 +13,7 @@
 | Property | Value |
 |----------|-------|
 | **Code** | `ADJUSTMENT` |
-| **Cash effect** | Optional (± any amount) |
+| **Cash effect** | None — `ADJUSTMENT` is cashless |
 | **Asset effect** | Required (± any quantity) |
 | **Tax event** | No |
 
@@ -26,8 +26,11 @@ Adjustments are used when no other transaction type fits:
 - **Correcting import errors** — e.g., a broker import missed a corporate action
 - **Stock splits / reverse splits** — adjust quantity without cash movement
 - **Gifts** — receiving or giving shares
+- **Inherited or succession holdings** — securities arrive in-kind, with no broker cash movement
 - **Initial balance setup** — bootstrapping a portfolio from a snapshot
 - **Corporate actions** not covered by other types (spinoffs, mergers, etc.)
+
+Imported examples: Intesa Sanpaolo `patrimonio` snapshots use positive `ADJUSTMENT`s to seed existing holdings with a per-unit `cost_basis_override`; Crédit Agricole succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) are also modeled as positive cashless `ADJUSTMENT`s, not as paired `TRANSFER`s, because the source dossier is outside LibreFolio.
 
 !!! note "Promote to Transfer"
 
@@ -50,11 +53,13 @@ for adjustment-created lots depends on whether a **Cost Basis Override** is prov
 
     $$\text{Total cost} = \text{WAC} \times \text{quantity}$$
 
-### 🏦 Automatic Cost Basis on Transfers
+### 🏦 Automatic Cost Basis on Transfers and Seeds
 
-When transferring assets between brokers, LibreFolio **automatically computes** the
-Cost Basis Override on the receiving side using the **Weighted Average Cost (WAC)** of
-the source broker's position.
+When transferring assets between brokers, LibreFolio **automatically computes** the Cost Basis Override on the receiving side using the **Weighted Average Cost (WAC)** of the source broker's position. Broker-import seeds may set it directly from the source report instead. The value is always **per unit**, not the total position value; for a snapshot with total fiscal value \(C\) and quantity \(q\), plugins store:
+
+$$\text{Cost Basis Override} = \frac{C}{q}$$
+
+This records in-kind capital, not P&L: the adjustment creates/changes lots but does not create a cash contribution or realised gain.
 
 !!! tip "Learn more"
 

@@ -15,6 +15,8 @@ from pydantic import (
 )
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -24,12 +26,15 @@ from backend.app.schemas.signals import (
     SignalEventPoint,
     SignalExecutionContext,
     SignalInputRequirements,
+    SignalLinePattern,
     SignalLineSeries,
     SignalOutputSpec,
     SignalPriceField,
     SignalPricePoint,
     SignalReferenceLevel,
+    SignalRegionLineStyle,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalValueRegion,
@@ -93,6 +98,11 @@ _MFI_AXIS = SignalAxisSpec(
     minimum=0,
     maximum=100,
 )
+_EXTREME_LINE_STYLE = SignalRegionLineStyle(
+    pattern=SignalLinePattern.SOLID,
+    width_delta=1,
+)
+_NEUTRAL_LINE_STYLE = SignalRegionLineStyle(pattern=SignalLinePattern.DASHED)
 _DEFAULT_LEVELS = [
     SignalReferenceLevel(
         key="oversold",
@@ -111,25 +121,31 @@ _DEFAULT_REGIONS = [
     SignalValueRegion(
         key="oversold",
         label_key="signals.mfi.oversoldRegion",
+        description_key="signals.regions.oversoldDescription",
         semantic="oversold",
         upper=20,
         include_upper=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
     SignalValueRegion(
         key="neutral",
         label_key="signals.mfi.neutralRegion",
+        description_key="signals.regions.neutralDescription",
         semantic="neutral",
         lower=20,
         upper=80,
         include_lower=True,
         include_upper=True,
+        line_style=_NEUTRAL_LINE_STYLE,
     ),
     SignalValueRegion(
         key="overbought",
         label_key="signals.mfi.overboughtRegion",
+        description_key="signals.regions.overboughtDescription",
         semantic="overbought",
         lower=80,
         include_lower=False,
+        line_style=_EXTREME_LINE_STYLE,
     ),
 ]
 
@@ -141,9 +157,12 @@ class MfiSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLUME
     display_name_key = "signals.mfi.name"
     description_key = "signals.mfi.description"
+    semantic_id = "money_flow_index"
+    semantic_description = "Measures price-and-volume flow over a rolling window."
     icon = "💸"
     docs_path = "financial-theory/technical-analysis/indicators/mfi/"
     params_model = MfiSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.VERY_FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,
@@ -153,12 +172,16 @@ class MfiSignalPlugin(SignalPlugin):
         ],
         data_policy=SignalDataPolicy.ALLOW_PARTIAL_CONTIGUOUS,
         minimum_coverage=0.5,
+        requires_meaningful_volume=True,
     )
     output_specs = (
         SignalOutputSpec(
             key="mfi",
             label_key="signals.mfi.output",
+            semantic_id="money_flow_index.value",
+            semantic_description="Bounded price-and-volume flow index.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=_MFI_AXIS,
             supports_reference_levels=True,
@@ -182,6 +205,19 @@ class MfiSignalPlugin(SignalPlugin):
             stabilization_points=0,
             total_points=total_points,
             normalized_tolerance=1e-6,
+        )
+
+    @classmethod
+    def validate_input(
+        cls,
+        price_points: Sequence[SignalPricePoint],
+        event_points: Sequence[SignalEventPoint],
+        params: MfiSignalParams,
+        context: SignalExecutionContext,
+    ) -> None:
+        cls.validate_meaningful_volume_input(
+            price_points,
+            minimum_coverage=cls.input_requirements.minimum_coverage,
         )
 
     def compute(
@@ -236,25 +272,31 @@ class MfiSignalPlugin(SignalPlugin):
             SignalValueRegion(
                 key="oversold",
                 label_key="signals.mfi.oversoldRegion",
+                description_key="signals.regions.oversoldDescription",
                 semantic="oversold",
                 upper=params.oversold,
                 include_upper=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="neutral",
                 label_key="signals.mfi.neutralRegion",
+                description_key="signals.regions.neutralDescription",
                 semantic="neutral",
                 lower=params.oversold,
                 upper=params.overbought,
                 include_lower=True,
                 include_upper=True,
+                line_style=_NEUTRAL_LINE_STYLE.model_copy(deep=True),
             ),
             SignalValueRegion(
                 key="overbought",
                 label_key="signals.mfi.overboughtRegion",
+                description_key="signals.regions.overboughtDescription",
                 semantic="overbought",
                 lower=params.overbought,
                 include_lower=False,
+                line_style=_EXTREME_LINE_STYLE.model_copy(deep=True),
             ),
         ]
         spec = self.output_specs[0]
@@ -263,6 +305,8 @@ class MfiSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     reference_levels=levels,

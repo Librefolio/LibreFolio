@@ -50,6 +50,26 @@ Confronta la performance dell'asset corrente con **un altro asset**. Il prezzo d
 
 ---
 
+## 🧠 Esportazione AI
+
+Il pulsante **Esportazione AI** (:material-brain:) nella barra degli strumenti
+della pagina offre cinque task Asset:
+
+- **Istantanea dell'asset**
+- **Analisi del trend dell'asset**
+- **Analisi della posizione**
+- **Contesto temporale del PAC**
+- **Drawdown e recupero**
+
+Il backend crea l'istantanea da identità e valutazione dell'asset, storico prezzi
+normalizzato, contesto della posizione nel portafoglio e risultati tecnici del
+servizio segnali condiviso. Il browser non ricalcola gli indicatori. I task
+compaiono solo quando sono applicabili all'asset e ai dati disponibili: per
+esempio, il contesto della posizione o del piano ricorrente deve esistere per la
+relativa analisi. Consulta la [guida Esportazione AI](../../ai-export/index.md).
+
+---
+
 ## 📚 Approfondimento: Teoria Finanziaria
 
 Per un trattamento matematico completo di ogni indicatore — incluse formule, equivalenti di elaborazione dei segnali e interpretazione pratica:

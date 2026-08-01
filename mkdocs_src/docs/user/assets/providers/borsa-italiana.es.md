@@ -40,6 +40,10 @@ El proveedor de Borsa Italiana participa en el ciclo estándar de **asset sync**
 
     El proveedor aplica un control de flujo automático para evitar ser bloqueado por Borsa Italiana. Si tiene muchos activos de esta bolsa, la sincronización completa puede tardar unos minutos.
 
+!!! note "Fondos de inversión (NAV)"
+
+    Los fondos de inversión y las SICAV se valoran por su **NAV** (valor liquidativo) diario, publicado una vez al día con un retraso. LibreFolio identifica cada fondo por su código de fondo de Borsa, por lo que el historial de precios muestra el NAV en su fecha real, y el valor actual solo se actualiza cuando el NAV publicado tiene fecha de hoy (de lo contrario, se usa como estimación el precio de su última compra).
+
 ---
 
 ## 🔗 Documentación para Desarrolladores

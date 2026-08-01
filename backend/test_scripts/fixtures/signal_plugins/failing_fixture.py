@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -40,6 +41,8 @@ class FailingFixturePlugin(SignalPlugin):
     category = SignalCategory.MOMENTUM
     display_name_key = "signals.fixtureFailing.name"
     description_key = "signals.fixtureFailing.description"
+    semantic_id = "fixture_failure"
+    semantic_description = "Test signal that raises during computation."
     icon = "triangle-alert"
     params_model = FailingFixtureParams
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
@@ -47,7 +50,10 @@ class FailingFixturePlugin(SignalPlugin):
         SignalOutputSpec(
             key="failure",
             label_key="signals.fixtureFailing.failure",
+            semantic_id="fixture_failure.value",
+            semantic_description="Test output declared by the failing signal.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.INDEX,
             axis=SignalAxisSpec(key="failure", role=SignalAxisRole.INDEPENDENT),
         ),

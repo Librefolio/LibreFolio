@@ -25,13 +25,15 @@ Aggregate, WAC-based accounting for the whole portfolio (or any broker/asset sco
 
 | Metric / Concept | Description |
 |------------------|-------------|
-| **[Portfolio Engine Overview](portfolio-engine/index.md)** | Complete mathematical model: valuation chain, WAC, aggregation, 3-pool model, contribution, pre-frame/frame architecture. |
-| **[Net Asset Value (NAV)](portfolio-engine/nav.md)** | Total market valuation of the portfolio (assets + cash + in-transit). Uses the valuation chain: Market Price → Last Buy Price → Missing. |
+| **[Portfolio Engine Overview](portfolio-engine/index.md)** | Complete mathematical model: unified price resolver, WAC, aggregation, 3-pool model, contribution, pre-frame/frame architecture. |
+| **[Price Resolution](portfolio-engine/price-resolution.md)** | Unified resolver tiers: MARKET → TRADE_AVG → CARRIED → MISSING, with native marks and per-date FX. |
+| **[Net Asset Value (NAV)](portfolio-engine/nav.md)** | Total market valuation of the portfolio (assets + cash + in-transit), using the unified resolver. |
 | **[Book Value](portfolio-engine/book-value.md)** | Historical accounting cost of open positions (WAC × qty) plus cash. Difference from NAV = unrealized P&L. |
 | **[Period P&L](portfolio-engine/period-pnl.md)** | Cash-flow adjusted monetary profit/loss in a window. Decomposes into: unrealized delta + realized + income − fees. Includes per-asset contribution attribution. |
 | **[Deposited Capital & Total P&L](portfolio-engine/deposited-capital.md)** | Net external capital since inception. Documents the **3-pool event-driven** cash decomposition model (K, R, W) with formal transaction-level update rules. |
 | **[Timing Effect](portfolio-engine/timing-effect.md)** | Difference between Cumulative MWRR and Cumulative TWRR — quantifies the impact of cash flow timing on returns. |
 | **[Simple ROI](portfolio-engine/roi.md)** | Percentage return relative to net invested capital. Simple but subject to cash flow dilution. |
+| **[Net Annualized Return](portfolio-engine/net-annualized-return.md)** | Net CAGR definitions for holdings, period contribution, and FIFO lots, with 30-day minimum window. |
 | **[TWRR](portfolio-engine/twrr.md)** | Time-Weighted Rate of Return. Pure asset/strategy performance, neutralizing deposit/withdrawal timing. |
 | **[MWRR (XIRR)](portfolio-engine/mwrr.md)** | Money-Weighted Rate of Return. Personal investor performance accounting for cash flow timing. Annualized and Cumulative forms. |
 
@@ -44,7 +46,7 @@ Per-lot accounting: tracks each acquisition batch through its own lifecycle inst
 | **[FIFO Engine Overview](fifo-engine/index.md)** | Lot lifecycle states, chronological event processing, FIFO matching, splits, and transfers between brokers. |
 | **[FIFO Lot Analysis](fifo-engine/fifo-lot-analysis.md)** | Per-lot complement to WAC: tracks each acquisition batch through its own lifecycle, matches sells in FIFO order, and computes open/total return per lot. |
 
-### Weighted Average Cost
+### 📊 Weighted Average Cost
 
 | Metric / Concept | Description |
 |------------------|-------------|
@@ -56,42 +58,42 @@ Per-lot accounting: tracks each acquisition batch through its own lifecycle inst
 
 To help you choose the right metric for your analysis, use this comparison guide:
 
-### 1. [Net Asset Value (NAV) / Net Worth](portfolio-engine/nav.md)
+### 💼 1. [Net Asset Value (NAV) / Net Worth](portfolio-engine/nav.md)
 * **Core Question:** "How much is the portfolio in the selected scope worth right now?"
 * **Formula Concept:** $\text{Market Value} + \text{Cash} + \text{In Transit Assets}$ at end of period.
 * **Best Use Case:** Snapshot of absolute wealth on the selected end date (`date_to`).
 
-### 2. [Book Value](portfolio-engine/book-value.md)
+### 📖 2. [Book Value](portfolio-engine/book-value.md)
 * **Core Question:** "How much did my current portfolio cost to build?"
 * **Formula Concept:** $\text{Open Cost Basis} + \text{Cash} + \text{In Transit Book Value}$ using Weighted Average Cost (WAC).
 * **Best Use Case:** Evaluating acquisition costs and comparing with current market value (NAV) to find latent gains.
 
-### 3. [Period P&L](portfolio-engine/period-pnl.md)
+### 📊 3. [Period P&L](portfolio-engine/period-pnl.md)
 * **Core Question:** "How much money did I actually earn or lose during this period?"
-* **Formula Concept:** $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net External Flows}$.
+* **Formula Concept:** $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \Delta\text{CapitalBaseline}$.
 * **Best Use Case:** Measuring period gains in absolute currency, independent of investor cash injections/withdrawals.
 
-### 4. [Timing Effect](portfolio-engine/timing-effect.md)
+### ⏱️ 4. [Timing Effect](portfolio-engine/timing-effect.md)
 * **Core Question:** "How did the timing and size of my cash flows affect my overall return compared to a buy-and-hold strategy?"
 * **Formula Concept:** $\text{MWRR}_{\text{cumulative}} - \text{TWRR}_{\text{cumulative}}$.
 * **Best Use Case:** Diagnosing whether deposits and withdrawals added value ($>0$ pp) or dragged down performance ($<0$ pp).
 
-### 5. [Simple ROI](portfolio-engine/roi.md)
+### 📉 5. [Simple ROI](portfolio-engine/roi.md)
 * **Core Question:** "How much did I gain relative to the net capital I invested?"
-* **Formula Denominator:** Weighted Average Cost (WAC).
+* **Formula Denominator:** Capital baseline, including priced in-kind capital.
 * **Limitations:** Does not account for *when* cash flows occurred, leading to cash flow dilution when subsequently buying more of an asset.
 
-### 6. [TWRR (Time-Weighted Rate of Return)](portfolio-engine/twrr.md)
+### ⏱️ 6. [TWRR (Time-Weighted Rate of Return)](portfolio-engine/twrr.md)
 * **Core Question:** "How did my chosen asset allocation/strategy perform, ignoring my cash timing?"
 * **Formula Concept:** Breaks the timeline at each cash flow, calculates sub-period returns, and multiplies them.
 * **Best Use Case:** Comparing your performance with external benchmarks (like the S&P 500) or evaluating the pure performance of the assets.
 
-### 7. [Annualized MWRR (Money-Weighted Rate of Return)](portfolio-engine/mwrr.md#annualized-mwrr)
+### 📈 7. [Annualized MWRR (Money-Weighted Rate of Return)](portfolio-engine/mwrr.md#annualized-mwrr)
 * **Core Question:** "At what compound annual rate did my actual capital grow, considering my deposits and withdrawals?"
 * **Formula Concept:** Solves for the internal rate of return ($r$) that brings the net present value of all cash flows to zero.
 * **Best Use Case:** Comparing your personal performance against long-term interest rates or evaluating compound growth over long horizons. Can be highly volatile on short windows.
 
-### 8. [Cumulative MWRR](portfolio-engine/mwrr.md#cumulative-mwrr)
+### 📊 8. [Cumulative MWRR](portfolio-engine/mwrr.md#cumulative-mwrr)
 * **Core Question:** "What is the equivalent money-weighted cumulative return over this selected time window?"
 * **Formula Concept:** Compounds the annualized MWRR for the actual number of days elapsed.
 * **Best Use Case:** Serial charts and dashboard widgets to compare visual performance trends side-by-side with TWRR and ROI.
@@ -108,7 +110,7 @@ Let's look at an extreme example to see how TWRR, MWRR, and Simple ROI tell diff
 
 Here is what LibreFolio will calculate for this scenario:
 
-### Cumulative TWRR: +80.00%
+### 📊 Cumulative TWRR: +80.00%
 The assets you picked went up +100%, and then dropped -10%. Mathematically: 
 
 $$
@@ -117,7 +119,7 @@ $$
 
 This isolates the pure performance of the stock. Your *asset picking* was excellent. If you had invested all your money on day 1, you would have made an 80% return.
 
-### Simple ROI: -9.11%
+### 📉 Simple ROI: -9.11%
 You deposited a total of €101,000 out of your own pocket (€1,000 + €100,000), but you currently hold €91,800:
 
 $$
@@ -126,7 +128,7 @@ $$
 
 This represents your actual, raw wallet gain/loss relative to your net invested capital.
 
-### Cumulative MWRR: -16.99%
+### 💵 Cumulative MWRR: -16.99%
 Because you deposited €100,000 right at the peak before a drop, your timing dragged down your return significantly:
 
 $$
@@ -135,7 +137,7 @@ $$
 
 This money-weighted cumulative return represents the performance of a "theoretical euro" under your actual cash flow timing.
 
-### Annualized MWRR: -67.19%
+### 📈 Annualized MWRR: -67.19%
 Since the substantial drop occurred over a very short time window (31 days) on a massive capital base (€100,000), the annualized compound rate of loss is very high:
 
 $$

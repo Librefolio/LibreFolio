@@ -12,6 +12,8 @@ function makeCatalog(signalCode: string, domains: Array<'asset' | 'fx'> = ['asse
         category: 'trend',
         display_name_key: `chartSettings.signals.${signalCode.toLowerCase()}`,
         description_key: `chartSettings.signals.${signalCode.toLowerCase()}Desc`,
+        semantic_id: `test.${signalCode.toLowerCase()}`,
+        semantic_description: `Canonical description for ${signalCode}.`,
         icon: 'chart-spline',
         docs_path: `financial-theory/${signalCode.toLowerCase()}/`,
         params_schema: {
@@ -38,9 +40,12 @@ function makeCatalog(signalCode: string, domains: Array<'asset' | 'fx'> = ['asse
             {
                 key: 'output',
                 label_key: 'signals.output',
+                semantic_id: `test.${signalCode.toLowerCase()}.output`,
+                semantic_description: `Canonical output description for ${signalCode}.`,
                 unit: 'price',
                 axis: {key: 'price', role: 'price'},
                 kind: 'line',
+                aggregation_profile: 'last_with_range',
             },
         ],
         compatible_domains: domains,
@@ -69,6 +74,8 @@ describe('signal catalog mapper', () => {
         expect(definition.indicatorGroup).toBe('trend');
         expect(definition.inputPriceFields).toEqual(['close']);
         expect(definition.compatibleDomains).toEqual(['asset', 'fx']);
+        expect(definition.visualComponents).toHaveLength(1);
+        expect(definition.visualComponents?.[0].fullyPartitioned).toBe(false);
         expect(definition.paramDescriptors[0]).toMatchObject({
             key: 'period',
             type: 'number',
@@ -80,6 +87,13 @@ describe('signal catalog mapper', () => {
     it('merges remote and local definitions for one domain', () => {
         const definitions = mergeSignalDefinitions([makeCatalog('EMA')], [localDefinition], 'fx');
         expect(definitions.map((definition) => definition.type)).toEqual(['ema', 'linear']);
+    });
+
+    it('maps risk as a supported backend indicator group', () => {
+        const catalog = makeCatalog('RISK_ROLLING_RETURN', ['asset']);
+        catalog.category = 'risk';
+
+        expect(mapBackendSignalDefinition(catalog).indicatorGroup).toBe('risk');
     });
 
     it('rejects duplicate normalized codes', () => {
@@ -107,5 +121,110 @@ describe('signal catalog mapper', () => {
             markerStart: null,
             markerEnd: null,
         });
+    });
+
+    it('marks backend line styles controlled by value regions', () => {
+        const catalog = makeCatalog('RSI');
+        catalog.output_specs[0].style = {
+            color_role: 'accent',
+            line_pattern: 'solid',
+            width_delta: 1,
+            opacity: 0.8,
+        };
+        catalog.output_specs[0].default_value_regions = [
+            {
+                key: 'neutral',
+                label_key: 'signals.rsi.neutralRegion',
+                semantic: 'neutral',
+                lower: 30,
+                upper: 70,
+                line_style: {
+                    pattern: 'dashed',
+                    width_delta: 0,
+                },
+            },
+        ];
+
+        const definition = mapBackendSignalDefinition(catalog);
+        expect(definition.visualComponents?.[0].style).toEqual({
+            colorRole: 'accent',
+            lineType: 'solid',
+            lineWidthDelta: 1,
+            opacity: 0.8,
+            fillOpacity: 0.2,
+        });
+        expect(definition.visualComponents?.[0].fullyPartitioned).toBe(false);
+        expect(definition.visualPartitions).toMatchObject([
+            {
+                key: 'output:neutral',
+                semantic: 'neutral',
+                style: {
+                    lineType: 'dashed',
+                },
+            },
+        ]);
+    });
+
+    it('marks an output fully partitioned only when regions cover the whole value domain', () => {
+        const catalog = makeCatalog('RSI');
+        catalog.output_specs[0].default_value_regions = [
+            {
+                key: 'low',
+                label_key: 'signals.low',
+                semantic: 'low',
+                upper: 30,
+                include_upper: false,
+                line_style: {pattern: 'solid'},
+            },
+            {
+                key: 'middle',
+                label_key: 'signals.middle',
+                semantic: 'middle',
+                lower: 30,
+                upper: 70,
+                include_lower: true,
+                include_upper: true,
+                line_style: {pattern: 'dashed'},
+            },
+            {
+                key: 'high',
+                label_key: 'signals.high',
+                semantic: 'high',
+                lower: 70,
+                include_lower: false,
+                line_style: {pattern: 'solid'},
+            },
+        ];
+
+        expect(mapBackendSignalDefinition(catalog).visualComponents?.[0].fullyPartitioned).toBe(true);
+
+        catalog.output_specs[0].default_value_regions = catalog.output_specs[0].default_value_regions?.slice(1);
+        expect(mapBackendSignalDefinition(catalog).visualComponents?.[0].fullyPartitioned).toBe(false);
+    });
+
+    it('maps AREA and plugin-owned aggregation/fill metadata generically', () => {
+        const catalog = makeCatalog('RISK_DRAWDOWN', ['asset']);
+        catalog.output_specs[0].kind = 'area';
+        catalog.output_specs[0].aggregation_profile = 'min_with_range';
+        catalog.output_specs[0].style = {
+            color_role: 'negative',
+            fill_opacity: 0.35,
+        };
+
+        expect(mapBackendSignalDefinition(catalog).visualComponents?.[0]).toMatchObject({
+            kind: 'area',
+            aggregationProfile: 'min_with_range',
+            style: {
+                colorRole: 'negative',
+                fillOpacity: 0.35,
+            },
+        });
+    });
+
+    it('fails closed when a production output omits aggregation metadata', () => {
+        const catalog = makeCatalog('EMA');
+        delete catalog.output_specs[0].aggregation_profile;
+
+        expect(() => mapBackendSignalDefinition(catalog)).toThrow('missing signal aggregation profile');
     });
 });

@@ -241,7 +241,7 @@
     "analysis_model": "google/gemma-4-31b-it:free"
   },
   "index.en.md": {
-    "md5": "a535c6949cc4cf124b074f6e5b255164",
+    "md5": "764a1270aa3ebf308430018294516d9f",
     "langs_done": [
       "es",
       "fr",
@@ -261,7 +261,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.7,
-        "stamped_at": "2026-07-07T12:01:51.905588+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -274,7 +274,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.2,
-        "stamped_at": "2026-07-07T12:01:51.905588+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -287,7 +287,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 197.2,
-        "stamped_at": "2026-07-07T12:01:51.905588+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -2568,11 +2568,11 @@
     }
   },
   "financial-theory/technical-analysis/index.en.md": {
-    "md5": "e6b1f63f37630f0b409e2ef6159e76aa",
+    "md5": "7a4bef4d3b6ff5c44712d44ad7c78675",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-04-12T13:29:52.077548+00:00",
     "analysis": "[{\"name\": \"Technical analysis\", \"keywords\": [\"technical analysis financial markets trading\"]}, {\"name\": \"Fundamental analysis\", \"keywords\": [\"fundamental analysis investing intrinsic value\"]}, {\"name\": \"Intrinsic value\", \"keywords\": [\"intrinsic value finance valuation\"]}, {\"name\": \"Indicators\", \"keywords\": [\"technical indicators trading charts\"]}, {\"name\": \"EMA\", \"keywords\": [\"Exponential Moving Average finance\"]}, {\"name\": \"MACD\", \"keywords\": [\"Moving Average Convergence Divergence finance\"]}, {\"name\": \"RSI\", \"keywords\": [\"Relative Strength Index finance\"]}, {\"name\": \"Bollinger Bands\", \"keywords\": [\"Bollinger Bands volatility envelope\"]}, {\"name\": \"Overbought/oversold\", \"keywords\": [\"overbought oversold RSI trading\"]}, {\"name\": \"Synthetic Benchmarks\", \"keywords\": [\"synthetic benchmark finance reference curve\"]}, {\"name\": \"Linear Growth\", \"keywords\": [\"linear growth simple interest finance\"]}, {\"name\": \"Compound Growth\", \"keywords\": [\"compound growth compound interest finance\"]}, {\"name\": \"Time constant\", \"keywords\": [\"time constant signal processing tau\"]}, {\"name\": \"Cut-off frequency\", \"keywords\": [\"cut-off frequency filter signal processing\"]}, {\"name\": \"Noise rejection\", \"keywords\": [\"noise rejection signal filtering\"]}, {\"name\": \"HF\", \"keywords\": [\"HF high frequency signal processing\"]}, {\"name\": \"Phase lag\", \"keywords\": [\"phase lag signal processing delay\"]}, {\"name\": \"Instruments\", \"keywords\": [\"financial instruments assets\"]}, {\"name\": \"Day count conventions\", \"keywords\": [\"day count convention finance accrual\"]}, {\"name\": \"Portfolio Theory\", \"keywords\": [\"Modern Portfolio Theory risk allocation\"]}]",
@@ -2587,7 +2587,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency:** In the \"Noise rejection\" row of the table, the term \"smoothing\" is left in English. While common in technical contexts, for a polished Italian translation, it should be translated to \"smoothing\" (kept as is) or \"livellamento\". However, since \"HF\" (High Frequency) is also left as an abbreviation without explanation, it should be clarified or translated. Suggestion: Change \"forte smoothing\" to \"forte livellamento\" or \"forte smorzamento\".\n- **Semantic Accuracy (Technical):** In the table under \"Noise rejection\", \"lascia passare le HF\" uses an English abbreviation (HF for High Frequency). For better clarity in Italian technical documentation, use \"alte frequenze\". Suggestion: Change \"lascia passare le HF\" to \"lascia passare le alte frequenze\".\n- **Terminology Consistency (Glossary):** The term \"Fundamentals\" in the \"Related Sections\" is translated as \"Fondamentali\". While acceptable in finance, the glossary does not explicitly define this, but the source refers to a section. Ensure this aligns with the linked page's title.\n- **Grammar/Natural Flow:** In the \"Indicators\" section, \"Sovrapposizioni ai grafici\" is a literal translation of \"Chart overlays\". In Italian technical analysis, the term \"Overlay\" is often kept in English or translated as \"Indicatori overlay\" or \"Indicatori sovrapposti al grafico\". Suggestion: Change \"Sovrapposizioni ai grafici\" to \"Indicatori overlay\".\n- **Accuracy:** In the \"Synthetic Benchmarks\" section, the phrase \"generati puramente da parametri\" is slightly clunky. Suggestion: Change to \"generati esclusivamente a partire da parametri\".\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 49.9
+        "elapsed_s": 49.9,
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-04-12T13:29:52.077493+00:00",
@@ -2598,7 +2600,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (MACD):** The translation leaves \"Moving Average Convergence Divergence\" in English. While the acronym MACD is universal, the full name should be translated for consistency with the other indicators (like EMA and RSI). \n  - Change: `Moving Average Convergence Divergence (momentum)` $\\rightarrow$ `Convergence et Divergence des Moyennes Mobiles (momentum)`\n- **Terminology/Clarity (HF):** In the \"Rejet du bruit\" row of the table, \"HF\" (High Frequency) is used. While understood in signal processing, it is an English abbreviation. It should be replaced with the French equivalent \"HF\" (Hautes Fréquences) or written out for clarity.\n  - Change: `laisse passer les HF` $\\rightarrow$ `laisse passer les hautes fréquences (HF)`\n- **Semantic Accuracy (Phase lag):** The translation uses \"Faible\" and \"Important\" for phase lag. In technical signal processing, \"Small\" phase lag is better translated as \"Faible\" (correct), but \"Large\" phase lag is more accurately \"Important\" or \"Élevé\". However, to maintain symmetry with the \"Fast/Slow\" intuition, \"Important\" is acceptable, but \"Élevé\" is more standard for a measurement of lag.\n  - Suggestion: Change `Important — retard significatif` $\\rightarrow$ `Élevé — retard significatif`\n- **Stylistic consistency (Sommaire):** The source uses \"What's Inside\". \"Sommaire\" is a correct translation, but in technical documentation for a specific page section, \"Contenu\" or \"Au programme\" is often more natural. However, \"Sommaire\" is acceptable.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 50.3
+        "elapsed_s": 50.3,
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-04-12T13:29:52.077550+00:00",
@@ -2609,7 +2613,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology Consistency (Glossary):** The glossary explicitly mandates that \"benchmark\" should remain as \"**benchmark**\". In the section \"### [Benchmarks Sintéticos]\", the translation uses \"benchmarks\" (correct) but in the following sentence, it refers to them as \"curvas de referencia\" in the first sentence and \"benchmarks\" in the second. While \"curvas de referencia\" is a descriptive translation, the glossary mapping is mandatory. Ensure the term is used consistently.\n- **Semantic Accuracy/Technical Precision:** In the table, the translation \"Desfase de fase\" for \"Phase lag\" is redundant (pleonasm), as *desfase* already implies a difference in phase. It should be translated as \"**Desfase**\" or \"**Retraso de fase**\".\n- **Technical Accuracy (Acronyms):** In the table under \"Noise rejection\", the translation \"deja pasar HF\" is used. While \"HF\" (High Frequency) is understood by engineers, it is not defined in the Spanish text. To maintain the technical clarity of the English source \"lets HF through\", it is acceptable, but ensure that acronyms are not translated if they are standard technical shorthand. \n- **Grammar/Syntax:** In the \"Related Sections\" list, the phrase \"Los activos que analizan estos indicadores\" is syntactically inverted and suggests the assets are doing the analyzing. It should be \"**Los activos que estos indicadores analizan**\" or \"**Los activos analizados por estos indicadores**\" to correctly reflect that the indicators analyze the assets.\n- **Terminology Consistency:** The term \"impulso (momentum)\" is used. While helpful, the source simply uses \"momentum\" (which is standard in Spanish financial contexts) or \"impulso\". To be cleaner and more professional, choose one; however, \"momentum\" is widely accepted in technical analysis.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 49.6
+        "elapsed_s": 49.6,
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -3636,7 +3642,7 @@
     "last_translated": "2026-06-03T09:37:05.598952+00:00"
   },
   "community/contribute.en.md": {
-    "md5": "4abb411da56856b899dd6e871b5d7770",
+    "md5": "5b5a0932d27efc1982c898d43d21a999",
     "langs_done": [
       "es",
       "fr",
@@ -3655,7 +3661,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 189.2,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -3668,7 +3674,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 197.2,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -3681,7 +3687,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 262.1,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       }
     },
@@ -5111,7 +5117,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "d917ba169e0795f2aee34c2e705737b6",
+    "md5": "eb9de99666287e3e79084358a13dc217",
     "langs_done": [
       "es",
       "fr",
@@ -5131,7 +5137,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 143.7,
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5144,7 +5150,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 138.4,
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5157,7 +5163,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 138.3,
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-07-25T09:13:25.707666+00:00",
         "stamped_by": "translate-stamp"
       }
     }

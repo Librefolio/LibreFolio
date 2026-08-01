@@ -41,6 +41,7 @@ from backend.app.schemas.assets import (
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
+from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
 from backend.app.utils.sector_fin_utils import validate_sector
@@ -154,6 +155,16 @@ class YahooFinanceProvider(AssetSourceProvider):
     @property
     def provider_name(self) -> str:
         return "Yahoo Finance"
+
+    @property
+    def supports_meaningful_volume(self) -> bool:
+        """Yahoo Finance reports real exchange-traded share volume (the
+        `Volume` column from the underlying OHLCV history)."""
+        return True
+
+    @property
+    def volume_kind(self) -> FAVolumeKind:
+        return FAVolumeKind.TRADED_SHARES
 
     @property
     def accepted_identifier_types(self) -> list:

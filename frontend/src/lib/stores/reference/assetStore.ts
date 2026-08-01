@@ -55,7 +55,7 @@ export interface AssetInfo {
     identifier_sedol?: string | null;
     identifier_figi?: string | null;
     identifier_uuid?: string | null;
-    identifier_other?: string | null;
+    identifier_other?: string[] | null;
 }
 
 // ============================================================================
@@ -93,7 +93,9 @@ function normalize(raw: Record<string, unknown>): AssetInfo {
     copyFlat('identifier_sedol');
     copyFlat('identifier_figi');
     copyFlat('identifier_uuid');
-    copyFlat('identifier_other');
+    // identifier_other is a genuine JSON list — copy it as-is (never flatten to [0],
+    // which would silently drop every soft identifier past the first).
+    copyDirect('identifier_other');
     return out as unknown as AssetInfo;
 }
 

@@ -116,6 +116,13 @@ LibreFolio prend en charge l'importation de fichiers de relevés provenant des c
  </div>
  <span class="card-desc">Importez l'export CSV de l'historique des transactions depuis Rabobank.</span>
  </a>
+ <a href="fineco/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+ <div style="display: flex; align-items: center; gap: 0.75rem;">
+ <img src="https://finecobank.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Fineco">
+ <span class="card-title" style="margin: 0;">Fineco</span>
+ </div>
+ <span class="card-desc">Importez l'export CSV "Movimenti Dossier Titoli" depuis Fineco.</span>
+ </a>
  <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
  <img src="https://traderepublic.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trade Republic">
@@ -228,6 +235,7 @@ LibreFolio prend en charge l'importation de fichiers de relevés provenant des c
     | <img src="https://disnat.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Disnat** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
     | <img src="https://www.investengine.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **InvestEngine** | 🧪 Bêta | CSV | ✅ | ✅ | ❌ | ❌ | Écrit à partir des fichiers d'exemple |
     | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
+    | <img src="https://finecobank.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Les deux modèles d'exportation ; montants dans la devise du rapport |
     | <img src="https://traderepublic.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trade Republic** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
     | <img src="https://www.xtb.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **XTB** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |
     | <img src="https://parqet.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Parqet** | 🧪 Bêta | CSV | ✅ | ✅ | ✅ | ✅ | Écrit à partir des fichiers d'exemple |

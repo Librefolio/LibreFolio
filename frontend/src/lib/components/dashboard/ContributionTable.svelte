@@ -45,9 +45,11 @@
         period_fees_taxes?: NumericLike;
         period_pnl?: NumericLike;
         period_pnl_percent?: NumericLike;
+        annualized_return?: NumericLike;
         start_value?: NumericLike;
         end_value?: NumericLike;
         is_fully_sold?: boolean;
+        oldest_open_lot_date?: NumericLike;
     }
 
     interface Props {
@@ -88,6 +90,11 @@
         return Array.isArray(v) ? (v[0] ?? null) : v;
     }
 
+    function safeStr(v: NumericLike | undefined): string | null {
+        if (v == null) return null;
+        return Array.isArray(v) ? (v[0] ?? null) : v;
+    }
+
     function makeHoldingLookupKey(assetId: number, brokerId: number | null): string {
         return `${assetId}-${brokerId ?? 0}`;
     }
@@ -113,6 +120,7 @@
         brokerName: string;
         broker: BrokerLike | null;
         pnl: number | null;
+        annualizedReturn: number | null;
         unrealizedDelta: number | null;
         realizedSales: number | null;
         income: number | null;
@@ -125,6 +133,7 @@
         statusLabel: string;
         isFullySold: boolean;
         assetId: number;
+        oldestOpenLotDate: string | null;
     }
 
     let displayRows = $derived.by<DisplayRow[]>(() => {
@@ -151,6 +160,7 @@
                     brokerName: p.broker_name,
                     broker: brokerMap.get(p.broker_id) ?? null,
                     pnl: safeNum(p.period_pnl),
+                    annualizedReturn: safeNum(p.annualized_return),
                     unrealizedDelta: safeNum(p.period_unrealized_delta),
                     realizedSales: safeNum(p.period_realized_gain_loss),
                     income: safeNum(p.period_income),
@@ -163,6 +173,7 @@
                     statusLabel: statusLabel(status),
                     isFullySold,
                     assetId: p.asset_id,
+                    oldestOpenLotDate: safeStr(p.oldest_open_lot_date),
                 };
             })
             .sort((a, b) => Math.abs(b.pnl ?? 0) - Math.abs(a.pnl ?? 0));
@@ -309,6 +320,19 @@
                 cell: (row) => signedAmountCell(row.pnl),
             },
             {
+                id: 'annualized-return',
+                header: () => label('dashboard.annualizedReturn', 'Annualized'),
+                headerTooltip: () => label('dashboard.annualizedReturnPeriodTooltip', 'Period return annualized (CAGR) over the selected period length, for comparison across periods of different durations.'),
+                type: 'number',
+                width: 130,
+                minWidth: 110,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                getValue: (row) => row.annualizedReturn ?? 0,
+                cell: (row) => percentChangeCell(row.annualizedReturn),
+            },
+            {
                 id: 'unrealized-delta',
                 header: () => label('dashboard.unrealizedDelta', 'Unrealized Δ'),
                 type: 'number',
@@ -406,6 +430,20 @@
                 cell: (row) => amountCell(row.endValue),
             },
             {
+                id: 'oldest-open-lot',
+                header: () => label('dashboard.oldestOpenLotDate', 'Oldest open lot'),
+                headerTooltip: () => label('dashboard.oldestOpenLotDateTooltip', 'Opening date of the oldest FIFO lot still open for this position.'),
+                type: 'date',
+                width: 150,
+                minWidth: 130,
+                sortable: true,
+                filterable: false,
+                align: 'right',
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
+            },
+            {
                 id: 'status',
                 header: () => label('dashboard.status', 'Status'),
                 type: 'enum',
@@ -436,7 +474,8 @@
         enableSelection={false}
         selectionMode="none"
         enableActions={true}
-        enablePagination={false}
+        enablePagination={true}
+        defaultPageSize={25}
         enableColumnVisibility={true}
         enableColumnFilters={true}
         enableSorting={true}

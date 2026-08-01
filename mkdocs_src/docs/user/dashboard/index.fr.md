@@ -44,9 +44,13 @@ En haut à droite du tableau de bord, plusieurs contrôles vous permettent de pe
 - **Période** — préréglages de 1 semaine à Tout (MAX), ou une période personnalisée via le sélecteur de dates.
 - **Filtre courtier** — filtrer tous les indicateurs sur un ou plusieurs courtiers spécifiques.
 - **Devise cible** — convertit dynamiquement tous les actifs et soldes de liquidités dans une devise unique sélectionnée pour une vue agrégée.
-- **Export IA** (:material-brain:) — Cliquez sur ce bouton pour copier dans le presse-papiers un résumé textuel de l'état actuel de votre portefeuille, optimisé pour être collé dans des LLM (ex. Gemini). Vous pouvez choisir entre :
- - **Export complet** : Inclut toutes les valeurs KPI, les positions, les pondérations et les allocations.
- - **Données uniquement** : Une représentation compacte en JSON/texte de vos avoirs et soldes.
+- **Export IA** (:material-brain:) — ouvre un export vers le presse-papiers.
+  Choisissez **Instantané des données** pour copier uniquement les données
+  factuelles, ou une **tâche d'analyse** qui inclut automatiquement ses
+  instructions et son contrat de réponse, puis sélectionnez le **niveau de
+  détail** (Compact, Standard ou Complet). L'instantané du backend suit le filtre
+  de courtier actif, la période et la devise cible ; LibreFolio ne contacte aucun
+  service d'IA. Consultez le [guide de l'Export IA](../ai-export/index.md).
 
 !!! tip "Le périmètre a son importance"
 

@@ -5,14 +5,16 @@
     import type {SignalParamDescriptor} from '$lib/charts/signals';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import SignalAssetParamControl from './SignalAssetParamControl.svelte';
 
     interface Props {
         descriptor: SignalParamDescriptor;
         value: unknown;
+        affectsLabel?: string;
         onchange: (value: unknown) => void;
     }
 
-    let {descriptor, value, onchange}: Props = $props();
+    let {descriptor, value, affectsLabel = '', onchange}: Props = $props();
 
     function translatedLabel(): string {
         const direct = $t(descriptor.label);
@@ -33,6 +35,13 @@
         return typeof value === 'string' ? value : String(descriptor.default ?? '');
     }
 
+    function translatedSuffix(): string {
+        if (!descriptor.suffix) return '';
+        const key = `signals.units.${descriptor.suffix}`;
+        const translated = $t(key);
+        return translated === key ? descriptor.suffix : translated;
+    }
+
     function handleNumberInput(rawValue: string) {
         const parsed = Number(rawValue);
         if (!Number.isFinite(parsed)) return;
@@ -40,7 +49,7 @@
     }
 </script>
 
-<div class="flex items-center gap-1.5" data-testid="signal-param-{descriptor.key}">
+<div class="flex flex-wrap items-center gap-1.5" data-testid="signal-param-{descriptor.key}">
     <span class="text-[10px] text-gray-500 dark:text-gray-400 uppercase">
         {translatedLabel()}
     </span>
@@ -49,8 +58,15 @@
             <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
         </Tooltip>
     {/if}
+    {#if affectsLabel}
+        <span class="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] normal-case text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+            {$t('signals.visual.affects')}: {affectsLabel}
+        </span>
+    {/if}
 
-    {#if descriptor.type === 'number'}
+    {#if descriptor.control === 'comparison_asset'}
+        <SignalAssetParamControl {value} onchange={(assetId) => onchange(assetId)} />
+    {:else if descriptor.type === 'number'}
         <div class="flex items-center gap-1">
             <input
                 type="number"
@@ -62,7 +78,7 @@
                 oninput={(event) => handleNumberInput(event.currentTarget.value)}
             />
             {#if descriptor.suffix}
-                <span class="text-[10px] text-gray-400">{descriptor.suffix}</span>
+                <span class="text-[10px] text-gray-400">{translatedSuffix()}</span>
             {/if}
         </div>
     {:else if descriptor.type === 'boolean'}

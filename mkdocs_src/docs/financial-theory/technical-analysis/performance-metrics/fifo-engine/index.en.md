@@ -8,6 +8,8 @@ While [Weighted Average Cost](../weighted-average-cost.md) blends every acquisit
 
 This page describes the **mechanics** of that engine: how lots are created, matched, and closed. For the **metrics** derived from this engine (Open/Total Return, qbq scaling, income allocation, a worked example), see [FIFO Lot Analysis](fifo-lot-analysis.md).
 
+The FIFO engine is price-feed-independent. It replays quantities, lots, fragments, transfers, and realized closures. Current valuation tiers live outside it: [Price Resolution](../portfolio-engine/price-resolution.md) and `LotsAnalysisService` supply reference/current marks and estimated-at-cost behavior.
+
 !!! info "Two engines, two questions"
 
     [Portfolio Engine](../index.md) (WAC-based) answers: _"What is my blended cost basis for this position?"_
@@ -27,6 +29,7 @@ A **lot** is one economic acquisition batch for one asset: a single BUY, the ope
 | Original quantity & cost | Fixed at opening, later rescaled only by splits — never by transfers |
 | Open quantity | How much of the lot has **not** yet been matched by an opposite transaction |
 | Custody | Which broker (or brokers, over time) currently holds the open quantity |
+| Reference price | `reference_unit_price` plus `reference_price_source` (`exact`, `fallback`, `unavailable`) for open-return comparisons |
 
 ---
 
@@ -98,6 +101,8 @@ $$
 
 The economic cost of the position is invariant across a split — only quantity and per-unit cost move, in opposite directions, so $\text{Quantity} \times \text{UnitCost}$ stays constant for every lot.
 
+Reference prices are rescaled with open quantity when splits alter the lot quantity, preserving comparison on the post-split unit axis.
+
 ---
 
 ## 🚚 Transfers — Custody Movement, Not a Sale
@@ -124,6 +129,7 @@ The overall result is then marked **complete** or **degraded** as a whole, but c
 ## 🔗 Related
 
 - 🔬 **[FIFO Lot Analysis](fifo-lot-analysis.md)** — Metrics derived from this engine: Open/Total Return per lot, qbq scaling, income allocation, worked example
+- 🧭 **[Price Resolution](../portfolio-engine/price-resolution.md)** — Valuation tiers used by the lots service
 - ⚙️ **[Portfolio Engine](../index.md)** — The complementary aggregate/WAC-based engine, and how the two relate
 - 📊 **[Weighted Average Cost](../weighted-average-cost.md)** — Blended, position-level cost basis
 - 🧬 **[FIFO Lot Engine (Developer Manual)](../../../../developer/backend/transactions/fifo_lot_engine.md)** — Implementation deep-dive: classes, event dispatch, code-level constraints

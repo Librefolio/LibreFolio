@@ -10,7 +10,7 @@
     import {Unlink, Link2, ArrowDown} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
-    import {getBrokerInfo, getAllBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {getBrokerInfo, getAccessibleBrokers, getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getStringBadgeStyle} from '$lib/utils/colors';
     import {formatTxQuantity, formatTxCash} from '../shared/txDisplayHelpers';
@@ -52,7 +52,7 @@
 
     let {open, mode, transaction = null, partner = null, targetTypeLabel = '', targetType = '', loading = false, onConfirm, onCancel}: Props = $props();
 
-    let brkrs = $derived(getAllBrokers() as BrokerLike[]);
+    let brkrs = $derived(getAccessibleBrokers() as BrokerLike[]);
 
     function bLike(brokerId: number): BrokerLike {
         return (getBrokerInfo(brokerId) as BrokerLike) ?? ({id: brokerId, name: `#${brokerId}`} as BrokerLike);

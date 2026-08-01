@@ -6,6 +6,7 @@ Tests provider auto-discovery for Asset and FX providers.
 
 import pytest
 
+from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source import AssetSourceProvider
 from backend.app.services.fx import FXRateProvider
 from backend.app.services.provider_registry import AssetProviderRegistry, FXProviderRegistry
@@ -72,3 +73,52 @@ def test_fx_static_url_nested_path():
     """generate_static_url handles nested paths correctly."""
     url = FXRateProvider.generate_static_url("snb/icons/small.png")
     assert url == "/api/v1/uploads/plugin/fx/snb/icons/small.png"
+
+
+# ============================================================================
+# MEANINGFUL-VOLUME CAPABILITY AUDIT (workstream B, item 4)
+# ============================================================================
+
+
+def test_meaningful_volume_capability_is_declared_only_where_authoritative():
+    """Only providers with an unambiguous traded-volume meaning declare
+    supports_meaningful_volume=True; all others default/override to False.
+    """
+    expected_traded_shares = {"yfinance", "borsa_italiana"}
+    expected_false = {"justetf", "css_scraper", "scheduled_investment", "mockprov"}
+
+    for code in expected_traded_shares:
+        provider = AssetProviderRegistry.get_provider_instance(code)
+        assert provider is not None, f"Expected provider {code!r} to be registered"
+        assert provider.supports_meaningful_volume is True, f"{code} should declare meaningful volume support"
+        assert provider.volume_kind == FAVolumeKind.TRADED_SHARES, f"{code} should declare TRADED_SHARES volume kind"
+
+    for code in expected_false:
+        provider = AssetProviderRegistry.get_provider_instance(code)
+        assert provider is not None, f"Expected provider {code!r} to be registered"
+        assert provider.supports_meaningful_volume is False, f"{code} should NOT declare meaningful volume support"
+        assert provider.volume_kind == FAVolumeKind.UNKNOWN, f"{code} should default to UNKNOWN volume kind"
+
+
+def test_base_provider_defaults_to_no_meaningful_volume():
+    """AssetSourceProvider base class defaults are safe (unknown/false) for
+    any provider that doesn't explicitly override the capability."""
+
+    class _MinimalProvider(AssetSourceProvider):
+        provider_code = "test_minimal_provider"
+        provider_name = "Test Minimal Provider"
+        test_cases = []
+        test_search_query = None
+
+        def validate_params(self, params):
+            return None
+
+        async def get_current_value(self, *args, **kwargs):
+            raise NotImplementedError
+
+        async def get_history_value(self, *args, **kwargs):
+            raise NotImplementedError
+
+    provider = _MinimalProvider()
+    assert provider.supports_meaningful_volume is False
+    assert provider.volume_kind == FAVolumeKind.UNKNOWN

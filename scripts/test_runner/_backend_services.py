@@ -2,6 +2,8 @@
 Backend service tests: FX conversion, asset source, provider registry, transactions, etc.
 """
 
+from scripts.cli_base import pipenv_prefix
+
 from . import _common
 from ._backend_db import db_create
 from ._common import (
@@ -17,6 +19,43 @@ from ._common import (
     print_success,
     print_warning,
     run_command,
+)
+
+AI_EXPORT_SERVICE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_asset_fx.py",
+    "backend/test_scripts/test_services/test_ai_export_component_runtime.py",
+    "backend/test_scripts/test_services/test_ai_export_components_asset.py",
+    "backend/test_scripts/test_services/test_ai_export_components_asset_fx_integration.py",
+    "backend/test_scripts/test_services/test_ai_export_components_fx.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py",
+    "backend/test_scripts/test_services/test_ai_export_components_technical.py",
+    "backend/test_scripts/test_services/test_ai_export_composer.py",
+    "backend/test_scripts/test_services/test_ai_export_coverage.py",
+    "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
+    "backend/test_scripts/test_services/test_ai_export_normalization.py",
+    "backend/test_scripts/test_services/test_ai_export_portfolio_broker.py",
+    "backend/test_scripts/test_services/test_ai_export_profiles.py",
+    "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
+    "backend/test_scripts/test_services/test_ai_export_sampling.py",
+    "backend/test_scripts/test_services/test_ai_export_service.py",
+    "backend/test_scripts/test_services/test_ai_export_technical.py",
+    "backend/test_scripts/test_services/test_ai_export_telemetry.py",
+    "backend/test_scripts/test_services/test_ai_export_temporal.py",
+)
+
+RISK_SERVICE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_quantlib_smoke.py",
+    "backend/test_scripts/test_services/test_series_preparation.py",
+    "backend/test_scripts/test_services/test_risk_metrics.py",
+    "backend/test_scripts/test_services/test_risk_registry.py",
+    "backend/test_scripts/test_services/test_risk_signal_plugins.py",
+    "backend/test_scripts/test_services/test_risk_service.py",
+    "backend/test_scripts/test_services/test_risk_scenario_catalog.py",
+    "backend/test_scripts/test_services/test_risk_analytics.py",
+    "backend/test_scripts/test_services/test_risk_simulation.py",
+    "backend/test_scripts/test_services/test_risk_optimization.py",
+    "backend/test_scripts/test_services/test_risk_spawn_worker.py",
 )
 
 
@@ -66,6 +105,65 @@ def services_provider_registry(verbose: bool = False, test_names: list = None) -
     print_info("Testing: backend/app/services/provider_registry.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_registry.py", test_names)
     return run_command(cmd, "Provider registry tests", verbose=verbose)
+
+
+def services_quantlib_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Smoke test the pinned QuantLib runtime and deterministic path generation."""
+    print_section("Services: QuantLib Runtime")
+    print_info("Testing: QuantLib version, required APIs and seeded path reproducibility")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_quantlib_smoke.py", test_names)
+    return run_command(cmd, "QuantLib runtime smoke tests", verbose=verbose)
+
+
+def services_risk_simulation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test serializable stochastic simulation contracts and numerical engine."""
+    print_section("Services: Risk Simulation")
+    print_info("Testing: contracts, sampling, seed, moments, chunking and cache")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_simulation.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk simulation tests", verbose=verbose)
+
+
+def services_risk_optimization(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Riskfolio strategies, estimators, constraints and cache."""
+    print_section("Services: Risk Optimization")
+    print_info("Testing: objectives, risk contribution, frontier, sensitivity and cache")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_optimization.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk optimization tests", verbose=verbose)
+
+
+def services_risk_workers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test spawned quantitative worker lifecycle and failure isolation."""
+    print_section("Services: Risk Workers")
+    print_info("Testing: lazy spawn, queues, timeout, recycle and cancellation")
+    cmd = _build_pytest_cmd(
+        "backend/test_scripts/test_services/test_risk_spawn_worker.py",
+        test_names,
+    )
+    return run_command(cmd, "Risk worker tests", verbose=verbose)
+
+
+def services_risk_all(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the complete risk-analysis service test set."""
+    print_section("Services: Risk Analysis")
+    print_info("Testing canonical series, analytics, QuantLib, Riskfolio and workers")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RISK_SERVICE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "Risk analysis service tests", verbose=verbose)
+
+
+def services_series_preparation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test canonical target-currency valuation and return preparation."""
+    print_section("Services: Canonical Series Preparation")
+    print_info("Testing: joint calendar, FX/price provenance, annualization and fingerprints")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_series_preparation.py", test_names)
+    return run_command(cmd, "Canonical series preparation tests", verbose=verbose)
 
 
 def services_signal_registry(verbose: bool = False, test_names: list = None) -> bool:
@@ -469,6 +567,46 @@ def services_scheduler_settings_misc(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Scheduler settings TZ conversion tests", verbose=verbose)
 
 
+def services_ai_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the complete AI Export service test set in one pytest invocation."""
+    print_section("Services: AI Export")
+    print_info("Testing all AI Export service files")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *AI_EXPORT_SERVICE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "AI Export service tests", verbose=verbose)
+
+
+def services_borsa_italiana_search(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Borsa Italiana provider search (single-fetch, IT+EN variants, ISIN hit)."""
+    print_section("Services: Borsa Italiana Search")
+    print_info("Testing: backend/app/services/asset_source_providers/borsa_italiana.py (search)")
+    print_info("External engine mocked — no live Borsa Italiana calls")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_borsa_italiana_search.py", test_names)
+    return run_command(cmd, "Borsa Italiana search tests", verbose=verbose)
+
+
+def services_borsa_italiana_funds(verbose: bool = False, test_names: list = None) -> bool:
+    """Test Borsa Italiana mutual-fund NAV path + resolve_url capability."""
+    print_section("Services: Borsa Italiana Funds")
+    print_info("Testing: fund detail-page NAV via provider_params.codice_fondo")
+    print_info("Scraping library mocked — no live Borsa Italiana calls")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_borsa_italiana_funds.py", test_names)
+    return run_command(cmd, "Borsa Italiana funds tests", verbose=verbose)
+
+
+def services_web_link_finder(verbose: bool = False, test_names: list = None) -> bool:
+    """Test web_link_finder unit behaviour + search orchestration augmentation."""
+    print_section("Services: Web Link Finder")
+    print_info("Testing: backend/app/services/web_link_finder.py")
+    print_info("External engine mocked — no live ddgs/network call")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_web_link_finder.py", test_names)
+    return run_command(cmd, "Web link finder tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     print_header("LibreFolio Backend Services Tests")
@@ -515,6 +653,12 @@ Note: No backend server required.
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
+    add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
+    add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
+    add_test(cat, "risk-optimization", services_risk_optimization, name="Risk Optimization", desc="Riskfolio objectives, estimators, constraints, frontier and cache")
+    add_test(cat, "risk-workers", services_risk_workers, name="Risk Workers", desc="Spawn lifecycle, queue bounds, timeout, recycle and cancellation")
+    add_test(cat, "risk-all", services_risk_all, name="Risk Analysis", desc="Complete canonical-series, analytic, QuantLib, Riskfolio and worker suite")
+    add_test(cat, "series-preparation", services_series_preparation, name="Canonical Series", desc="Converted valuations, joint calendar, returns, annualization and FX fingerprint")
     add_test(cat, "signal-registry", services_signal_registry, name="Signal Registry", desc="SignalPlugin contract, strict discovery and duplicate rejection")
     add_test(cat, "signal-runtime", services_signal_runtime, name="Signal Runtime", desc="Composite-stack fail-fast and startup integration")
     add_test(cat, "signal-contracts", services_signal_contracts, name="Signal Contracts", desc="Auto-discovered test-only line, band/composite, warm-up, failure and event fixtures")
@@ -524,7 +668,7 @@ Note: No backend server required.
     add_test(cat, "signal-plugins-close-only", services_signal_plugins_close_only, name="Close-only Signal Plugins", desc="SMA, ROC, StochRSI, KAMA and PPO delegation, warm-up and Asset/FX parity")
     add_test(cat, "signal-plugins-ohlc", services_signal_plugins_ohlc, name="OHLC Signal Plugins", desc="ATR, ADX, NATR, Aroon, Donchian and CCI strict input and numerical regression")
     add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
-    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 17-plugin domains, fields, gaps, boundaries and isolation gate")
+    add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
@@ -560,5 +704,9 @@ Note: No backend server required.
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
     add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")
+    add_test(cat, "ai-export", services_ai_export, name="AI Export", desc="All AI Export service test files in one pytest invocation")
+    add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
+    add_test(cat, "borsa-italiana-funds", services_borsa_italiana_funds, name="Borsa Italiana Funds", desc="Mutual-fund NAV via codice_fondo detail page + resolve_url (scraper mocked)")
+    add_test(cat, "web-link-finder", services_web_link_finder, name="Web Link Finder", desc="find_candidate_urls + search orchestration augmentation (ddgs mocked)")
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

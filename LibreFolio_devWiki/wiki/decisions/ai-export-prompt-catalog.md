@@ -1,13 +1,35 @@
 ---
 title: "AI export: single kitchen-sink prompt replaced by a single-purpose prompt catalog"
 category: decision
-status: resolved
+status: superseded
 date: 2026-07-15
+superseded_date: 2026-07-26
+mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
 tags: [frontend, ai-export, architecture, prompt-engineering, dashboard, asset-detail]
-related: [problems/ai-export-name-not-ticker, features/F-054]
+related: [problems/ai-export-name-not-ticker, features/F-054, decisions/ai-export-versioned-snapshot-boundary, decisions/ai-export-contextual-ui-memory, entities/ai-export-snapshot-service]
 ---
 
 # Decision: AI export prompt catalog (replaces the single "Full/Data-only" prompt)
+
+> **Historical status (2026-07-26):** this frontend-only architecture was superseded by
+> [[decisions/ai-export-versioned-snapshot-boundary]]. Its single-purpose task rationale
+> survives, but production data now comes from versioned backend snapshots and the current
+> frontend catalog participates in a fail-closed backend contract.
+
+## Phase 0 final UI closure
+
+The final V2 interface retains the single-purpose-analysis principle but no longer exposes the historical prompt IDs or a separate Full/Data-only switch directly:
+
+- one custom analysis select renders an icon, localized name, and localized description for both the selected item and each option;
+- a synthetic **Data Snapshot** entry maps to the domain's factual snapshot task and `data_only`;
+- every real analysis uses `full_prompt`;
+- response language always follows the current UI locale;
+- response-language, render-mode, web-research, and compatibility-status controls are hidden, while catalog compatibility remains fail-closed internally and web research is normalized off;
+- draft task/detail/mode/notes persist per authenticated user and Portfolio/Broker/Asset/canonical-FX context under [[decisions/ai-export-contextual-ui-memory]];
+- Snapshot hides notes but never exports them, even though the draft is retained for a later analysis;
+- the options panel is body-portalized above chart controls and offers a domain-aware book link to the English domain manual or localized shared fallback.
+
+The project owner approved this desktop/mobile UI on 27 July 2026.
 
 ## Context
 
@@ -108,12 +130,31 @@ a third time on the asset detail page.
   replaced by `dashboard.aiExportMenu.<id>.{label,description}` (6 entries) +
   `assetDetail.aiExportMenu.<id>.{label,description}` (2 entries) + one generic, interpolated
   `dashboard.aiExportCopiedGeneric` toast (`'{label}' copied to clipboard`) reused by every catalog entry.
-- No backend changes anywhere in this round — same principle as the original MVP (frontend composes
-  the prompt from data already available via `/portfolio/report` + frontend-computed technical signals).
+- At the time, this round intentionally made no backend changes and composed prompts from
+  `/portfolio/report` plus frontend-computed technical signals. Phase 0 later superseded that
+  ownership model: see [[entities/ai-export-snapshot-service]].
 - `svelte-check`: 0 errors/warnings; `./dev.py i18n audit`: 0 incomplete keys. No e2e tests existed for
   the old `ai-export-full`/`ai-export-data-only` test ids, so none needed updating.
 
 ## Links
 - [[problems/ai-export-name-not-ticker]]
 - [[features/F-054]] (Dashboard KPI & Overview — mentions the old AI export in passing; still accurate re: NAV/KPI, not re: AI export shape)
+- [[decisions/ai-export-versioned-snapshot-boundary]] — current production architecture
+- [[entities/ai-export-snapshot-service]] — current backend snapshot platform
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/Ai_consultant_engine/report_ai_export_mvp.md` (superseded for the prompt catalog shape; allocation-basis/compaction/WAC-policy sections it documents are still accurate and unchanged)
+
+## Source files
+
+| Role | Path |
+|------|------|
+| Historical MVP report | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/Ai_consultant_engine/report_ai_export_mvp.md` |
+| Superseding Phase 0 plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
+| Current backend platform | `backend/app/services/ai_export/` |
+| Current frontend task catalog | `frontend/src/lib/features/ai-export/catalog/` |
+| Current analysis/options UI | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/features/ai-export/aiExportOptions.ts` |
+| Current contextual memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts`, `frontend/src/lib/features/ai-export/AiExportMenuV2.svelte` |
+| Domain-aware manual link | `frontend/src/lib/components/ui/DocsLink.svelte` |
+| Current prompt renderer | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |
+| Final cross-surface E2E | `frontend/e2e/ai-export.spec.ts` |
+| Completed Phase 0 index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
+| Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |

@@ -2,6 +2,8 @@
 Backend schema validation tests: computed fields, common, assets, transactions, brokers.
 """
 
+from scripts.cli_base import pipenv_prefix
+
 from . import _common
 from ._common import (
     _build_pytest_cmd,
@@ -71,6 +73,34 @@ def schemas_signals(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Signal schemas tests", verbose=verbose)
 
 
+def schemas_risk(verbose: bool = False, test_names: list = None) -> bool:
+    """Test canonical risk-series and metadata schemas."""
+    print_section("Schemas: Risk Analysis")
+    print_info("Testing: backend/app/schemas/risk.py and DataQualityReport extensions")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_risk_schemas.py", test_names)
+    return run_command(cmd, "Risk schemas tests", verbose=verbose)
+
+
+def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
+    """Test AI Export request, response, and catalog schemas."""
+    print_section("Schemas: AI Export")
+    print_info("Testing: legacy fixtures + component-based public runtime contracts")
+
+    cmd = [
+        *pipenv_prefix(),
+        "python",
+        "-m",
+        "pytest",
+        "backend/test_scripts/test_schemas/test_ai_export_schemas.py",
+        "backend/test_scripts/test_schemas/test_ai_export_runtime_schemas.py",
+        "-v",
+    ]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "AI Export schemas tests", verbose=verbose)
+
+
 def schemas_all(verbose: bool = False) -> bool:
     """Run all schema validation tests."""
     return _run_test_suite(
@@ -102,5 +132,7 @@ Tests for Pydantic/SQLModel schema validation:
     add_test(cat, "transactions", schemas_transactions, name="Transaction Schemas", desc="TXCreateItem, TXReadItem")
     add_test(cat, "brokers", schemas_brokers, name="Broker Schemas", desc="BRCreateItem, BRReadItem")
     add_test(cat, "signals", schemas_signals, name="Signal Schemas", desc="Plugin, catalog, canonical output, status and availability contracts")
+    add_test(cat, "risk", schemas_risk, name="Risk Schemas", desc="Canonical valuations, returns, metadata and data-quality contracts")
+    add_test(cat, "ai-export", schemas_ai_export, name="AI Export Schemas", desc="Strict requests, responses, catalog, and typed problem contracts")
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")
     registry["schemas"] = cat

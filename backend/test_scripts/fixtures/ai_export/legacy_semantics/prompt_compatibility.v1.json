@@ -1,0 +1,227 @@
+{
+  "fixture_schema_version": "1.0.0",
+  "legacy_catalog_version": "frontend-ai-export-v1",
+  "target_contract_version": 1,
+  "classifications": ["migration-parity", "greenfield"],
+  "domains": {
+    "portfolio": {
+      "legacy_mappings": [
+        {
+          "legacy_prompt_id": "snapshot",
+          "target_domain": "portfolio",
+          "target_task": "portfolio_description",
+          "render_mode": "data_only",
+          "classification": "migration-parity"
+        },
+        {
+          "legacy_prompt_id": "pac_planning",
+          "target_domain": "portfolio",
+          "target_task": "pac_planning",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity"
+        },
+        {
+          "legacy_prompt_id": "rebalancing",
+          "target_domain": "portfolio",
+          "target_task": "rebalancing",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity"
+        },
+        {
+          "legacy_prompt_id": "market_trend",
+          "target_domain": "portfolio",
+          "target_task": "technical_breadth",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity"
+        },
+        {
+          "legacy_prompt_id": "income_review",
+          "target_domain": "portfolio",
+          "target_task": "income_review",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity"
+        },
+        {
+          "legacy_prompt_id": "describe_portfolio",
+          "target_domain": "portfolio",
+          "target_task": "portfolio_description",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity"
+        }
+      ],
+      "greenfield_tasks": [
+        {
+          "target_task": "performance_attribution",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        },
+        {
+          "target_task": "portfolio_fifo_lot_review",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        }
+      ]
+    },
+    "asset": {
+      "legacy_mappings": [
+        {
+          "legacy_prompt_id": "asset_snapshot",
+          "target_domain": "asset",
+          "target_task": "asset_snapshot",
+          "render_mode": "data_only",
+          "classification": "migration-parity"
+        },
+        {
+          "legacy_prompt_id": "asset_classify",
+          "target_domain": "asset",
+          "target_task": "asset_trend_analysis",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity"
+        }
+      ],
+      "greenfield_tasks": [
+        {
+          "target_task": "position_review",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        },
+        {
+          "target_task": "asset_pac_timing_context",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        },
+        {
+          "target_task": "drawdown_recovery",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        }
+      ]
+    },
+    "fx": {
+      "legacy_mappings": [
+        {
+          "legacy_prompt_id": "fx_snapshot",
+          "target_domain": "fx",
+          "target_task": "fx_trend_review",
+          "render_mode": "data_only",
+          "classification": "migration-parity"
+        },
+        {
+          "legacy_prompt_id": "fx_trend",
+          "target_domain": "fx",
+          "target_task": "fx_trend_review",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity"
+        }
+      ],
+      "greenfield_tasks": [
+        {
+          "target_task": "fx_exposure_impact",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        },
+        {
+          "target_task": "fx_conversion_timing_context",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        }
+      ]
+    },
+    "broker": {
+      "legacy_surface": {
+        "catalog_source": "portfolio",
+        "scope": "single_broker_filter",
+        "task_specific_behavior": false
+      },
+      "legacy_mappings": [
+        {
+          "legacy_prompt_id": "snapshot",
+          "target_domain": "portfolio",
+          "target_task": "portfolio_description",
+          "render_mode": "data_only",
+          "classification": "migration-parity",
+          "scope": "single_broker_filter"
+        },
+        {
+          "legacy_prompt_id": "pac_planning",
+          "target_domain": "portfolio",
+          "target_task": "pac_planning",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity",
+          "scope": "single_broker_filter"
+        },
+        {
+          "legacy_prompt_id": "rebalancing",
+          "target_domain": "portfolio",
+          "target_task": "rebalancing",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity",
+          "scope": "single_broker_filter"
+        },
+        {
+          "legacy_prompt_id": "market_trend",
+          "target_domain": "portfolio",
+          "target_task": "technical_breadth",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity",
+          "scope": "single_broker_filter"
+        },
+        {
+          "legacy_prompt_id": "income_review",
+          "target_domain": "portfolio",
+          "target_task": "income_review",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity",
+          "scope": "single_broker_filter"
+        },
+        {
+          "legacy_prompt_id": "describe_portfolio",
+          "target_domain": "portfolio",
+          "target_task": "portfolio_description",
+          "render_mode": "full_prompt",
+          "classification": "migration-parity",
+          "scope": "single_broker_filter"
+        }
+      ],
+      "greenfield_tasks": [
+        {
+          "target_task": "broker_review",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        },
+        {
+          "target_task": "broker_cost_efficiency",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        },
+        {
+          "target_task": "broker_concentration_context",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        },
+        {
+          "target_task": "broker_fifo_lot_review",
+          "render_modes": ["data_only", "full_prompt"],
+          "classification": "greenfield"
+        }
+      ]
+    }
+  },
+  "greenfield_capabilities": [
+    {
+      "capability": "detail_levels",
+      "values": ["compact", "standard", "full"],
+      "classification": "greenfield"
+    },
+    {
+      "capability": "fx_exposure",
+      "target_task": "fx_exposure_impact",
+      "classification": "greenfield"
+    },
+    {
+      "capability": "broker_task_specific_behavior",
+      "target_domain": "broker",
+      "classification": "greenfield"
+    }
+  ]
+}

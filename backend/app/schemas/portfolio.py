@@ -14,7 +14,7 @@ from datetime import date as date_type
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal
 from backend.app.schemas.wac import WACMissingPairInfo
@@ -139,6 +139,33 @@ class StalePriceAsset(BaseModel):
     stale_days: int
 
 
+class DataQualityStatus(StrEnum):
+    """Overall source-data quality for a derived result."""
+
+    OK = "ok"
+    CARRIED_FORWARD = "carried_forward"
+    PARTIAL = "partial"
+
+
+class DataQualityExclusionReason(StrEnum):
+    """Why an asset cannot participate in a source-data calculation."""
+
+    MISSING_PRICE = "missing_price"
+    MISSING_FX = "missing_fx"
+    INVALID_CURRENCY = "invalid_currency"
+
+
+class DataQualityExcludedAsset(BaseModel):
+    """Asset excluded before metric-specific eligibility is evaluated."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: int
+    reason: DataQualityExclusionReason
+    symbol: Optional[str] = None
+    name: Optional[str] = None
+
+
 # =============================================================================
 # DATA QUALITY ENUMS + ISSUE DTO
 # =============================================================================
@@ -233,9 +260,26 @@ class DataQualityReport(BaseModel):
     incomplete_nav_dates: List[date_type] = Field(default_factory=list)
     incomplete_book_value_dates: List[date_type] = Field(default_factory=list)
     incomplete_allocation_dates: List[date_type] = Field(default_factory=list)
+    incomplete_valuation_dates: List[date_type] = Field(default_factory=list)
+    carried_forward_price_points: int = Field(0, ge=0)
+    carried_forward_fx_points: int = Field(0, ge=0)
+    carried_forward_price_asset_ids: List[int] = Field(default_factory=list)
+    carried_forward_fx_pairs: List[str] = Field(default_factory=list)
+    unresolved_fx_pairs: List[str] = Field(default_factory=list)
+    unusable_assets: List[DataQualityExcludedAsset] = Field(default_factory=list)
     in_transit_cost_basis_warnings: List[str] = Field(default_factory=list)
     share_mismatch_warnings: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def data_quality_status(self) -> DataQualityStatus:
+        """Derive status so legacy producers cannot emit contradictory values."""
+        if self.missing_price_assets or self.missing_fx_pairs or self.incomplete_nav_dates or self.incomplete_book_value_dates or self.incomplete_allocation_dates or self.incomplete_valuation_dates or self.unresolved_fx_pairs or self.unusable_assets:
+            return DataQualityStatus.PARTIAL
+        if self.stale_prices or self.carried_forward_price_points or self.carried_forward_fx_points:
+            return DataQualityStatus.CARRIED_FORWARD
+        return DataQualityStatus.OK
 
 
 # =============================================================================
@@ -284,15 +328,30 @@ class PortfolioHolding(BaseModel):
     broker_name: Optional[str] = Field(None, description="Broker display name")
     quantity: SafeDecimal
     wac_per_unit: Optional[SafeDecimal] = Field(None, description="None if FX rate missing")
-    current_price: Optional[SafeDecimal] = Field(None, description="Snapshot price at report end date. None if FX rate missing")
+    current_price: Optional[SafeDecimal] = Field(None, description="Effective current-unit price converted to report currency. None if FX rate missing")
     current_value: Optional[SafeDecimal] = Field(None, description="Snapshot position value at report end date")
+    valuation_source: Optional[Literal["MARKET_PRICE", "LAST_TRADE_PRICE", "MISSING"]] = Field(
+        None,
+        description="Source selected by the valuation hierarchy",
+    )
+    valuation_effective_unit_price: Optional[SafeDecimal] = Field(None, description="Native-currency unit price actually used for current_value")
+    valuation_effective_currency: Optional[str] = Field(None, description="Native currency of valuation_effective_unit_price")
+    valuation_reference_date: Optional[date_type] = Field(None, description="Original date of the selected market or transaction reference")
+    valuation_reference_unit_price: Optional[SafeDecimal] = Field(None, description="Original source unit price before split adjustment or target-currency conversion")
+    valuation_reference_currency: Optional[str] = Field(None, description="Native currency of valuation_reference_unit_price")
+    valuation_split_adjusted: bool = Field(False, description="Whether intervening split events restated the transaction reference for current units")
+    missing_fx_pair: Optional[str] = Field(None, description="Required source/target FX pair when valuation conversion is unavailable")
     gain_loss: Optional[SafeDecimal] = Field(None, description="Unrealized P&L at report end date: current_value - cost_basis")
     gain_loss_percent: Optional[SafeDecimal] = None
+    annualized_return: Optional[SafeDecimal] = Field(
+        None, description="Net annualized return (CAGR) of the still-open position over first-transaction -> report-end window: (1 + (unrealized + income - fees)/cost_basis)^(365/days)-1. Value-at-cost when market price missing (income-only). Fraction. None if <30 days / no cost basis."
+    )
     price_change_1d: Optional[SafeDecimal] = Field(None, description="Percentage price change vs previous day relative to report end date")
     gain_loss_change_1d: Optional[SafeDecimal] = Field(None, description="Change in unrealized P&L vs previous day using current quantity and base-currency prices")
-    gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="gain_loss_change_1d as percentage of previous day's unrealized P&L; None if prior unrealized P&L is ~0")
+    gain_loss_change_1d_percent: Optional[SafeDecimal] = Field(None, description="Daily unrealized P&L change as percentage of the previous day's absolute position market value; None if prior value is ~0")
     allocation_percent: Optional[SafeDecimal] = Field(None, description="Weight vs total market value (excludes cash)")
     nav_weight_percent: Optional[SafeDecimal] = Field(None, description="Weight vs NAV at report end date (includes cash): current_value / NAV * 100")
+    oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at report end for this (asset, broker); None if fully closed")
 
 
 class AssetPeriodContribution(BaseModel):
@@ -312,9 +371,13 @@ class AssetPeriodContribution(BaseModel):
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
     period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
     period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")
+    annualized_return: Optional[SafeDecimal] = Field(
+        None, description="Net annualized return (CAGR) over the position's holding window inside the period (oldest lot opening in period -> period end), base = |start_value| or end cost basis when opened mid-period: (1+period_pnl_pct)^(365/days)-1. Fraction. None if <30 days / no base."
+    )
     start_value: Optional[SafeDecimal] = Field(None, description="Position value at period start (0 if there was no opening position)")
     end_value: Optional[SafeDecimal] = Field(None, description="Position value at period end (0 if the position was closed by period end)")
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
+    oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at period end for this (asset, broker); None if fully closed")
 
 
 class UnallocatedContribution(BaseModel):
@@ -528,6 +591,7 @@ class LotSummarySchema(BaseModel):
     direction: LotDirection
     opening_broker_id: int
     opening_date: date_type
+    closing_date: Optional[date_type] = Field(None, description="Authoritative closing date (max LotClosure.close_date) when fully closed (open_quantity == 0). None otherwise.")
     opening_unit_price: SafeDecimal = Field(..., description="Opening unit price converted to response target_currency.")
     original_quantity: SafeDecimal
     original_cost: SafeDecimal = Field(..., description="Original lot cost in response target_currency.")
@@ -549,6 +613,7 @@ class LotSummarySchema(BaseModel):
     total_pnl: Optional[SafeDecimal] = Field(None, description="market_pnl + realized_pnl + asset_income, in target_currency.")
     cash_yield: Optional[SafeDecimal] = Field(None, description="asset_income / opening_value, when opening_value > 0.")
     total_return: Optional[SafeDecimal] = Field(None, description="total_pnl / opening_value (opening_value = original_cost), when > 0.")
+    annualized_return: Optional[SafeDecimal] = Field(None, description="Net annualized return (CAGR) of net_total_return over the lot holding window (opening_date -> closing_date if closed, else analysis end): (1+net_total_return)^(365/days)-1. Fraction. None if net metrics unavailable / <30 days.")
     value_source: Optional[LotValueSource] = Field(None, description="MARKET_PRICE when a real current price exists, else ESTIMATED_AT_COST (open value assumed at cost, market_pnl=0).")
     allocated_fees: SafeDecimal = Field(default=0, description="Cumulative FEE allocated to this lot, target_currency (positive magnitude).")
     allocated_taxes: SafeDecimal = Field(default=0, description="Cumulative TAX allocated to this lot, target_currency (positive magnitude).")
@@ -663,6 +728,7 @@ class LotPriceHistoryPoint(BaseModel):
     date: date_type
     market_price: SafeDecimal
     currency: str = Field(..., description="Currency of market_price, normally equal to response target_currency.")
+    estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote.")
 
     @field_validator("currency")
     @classmethod

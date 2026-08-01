@@ -188,6 +188,13 @@ class JustETFProvider(AssetSourceProvider):
         return "JustETF"
 
     @property
+    def supports_meaningful_volume(self) -> bool:
+        """JustETF is a NAV-based data source (no exchange trading volume);
+        it never populates the `volume` field. Explicit False to make the
+        audit decision visible (inherits the safe base default anyway)."""
+        return False
+
+    @property
     def accepted_identifier_types(self) -> list:
         return [ProviderInputType.ISIN]
 

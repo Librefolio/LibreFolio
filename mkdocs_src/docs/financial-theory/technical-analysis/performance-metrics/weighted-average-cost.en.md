@@ -153,7 +153,7 @@ When a portfolio contains acquisitions in different currencies, LibreFolio:
 
 !!! warning "WAC is never used for asset valuation"
 
-    WAC is an accounting construct for cost basis. The valuation chain for market value uses: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. See [NAV](portfolio-engine/nav.md).
+    WAC is an accounting construct for cost basis. Market value uses the unified resolver tiers: `MARKET → TRADE_AVG → CARRIED → MISSING`, exposed to portfolio rows as `MARKET_PRICE`, `LAST_TRADE_PRICE`, or `MISSING`. See [Price Resolution](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implementation: Position-Level Scope
 
@@ -165,7 +165,7 @@ $$
 
 The engine computes WAC inline during the daily transaction loop — no separate database queries needed. This achieves O(1) amortized cost per transaction instead of the O(N) cost of re-querying the full history.
 
-### Same-day transaction ordering
+### 📅 Same-day transaction ordering
 
 Within the same date, **additions are processed before reductions**:
 

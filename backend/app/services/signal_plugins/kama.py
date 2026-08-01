@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -22,6 +24,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalViewTransform,
@@ -58,15 +61,21 @@ class KamaSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.kama.name"
     description_key = "signals.kama.description"
+    semantic_id = "kaufman_adaptive_moving_average"
+    semantic_description = "Smooths prices with responsiveness adjusted by market efficiency."
     icon = "🛣️"
     docs_path = "financial-theory/technical-analysis/indicators/kama/"
     params_model = KamaSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM),)
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(
             key="kama",
             label_key="signals.kama.output",
+            semantic_id="kaufman_adaptive_moving_average.value",
+            semantic_description="Adaptive moving average of closing prices.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",
@@ -121,6 +130,8 @@ class KamaSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

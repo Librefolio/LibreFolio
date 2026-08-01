@@ -1107,6 +1107,8 @@ async def search_asset_candidates(
     1. ISIN exact match → EXACT confidence (Asset.identifier_isin)
     2. Symbol exact match → MEDIUM confidence (Asset.identifier_ticker)
     3. Name partial match → LOW confidence (display_name search)
+    4. Soft-identifier match → MEDIUM (ISIN) / LOW (name) against the
+       Asset.identifier_other JSON list (soft broker labels + technical codes)
 
     Args:
         session: AsyncSession for database queries
@@ -1166,6 +1168,33 @@ async def search_asset_candidates(
                     match_confidence=BRIMMatchConfidence.LOW,
                 )
             )
+
+    # Priority 4: Soft-identifier match against the identifier_other JSON list.
+    # Catches assets whose soft broker label (e.g. "BTP 1/12/2026 1.25%") or a stored
+    # technical code/ISIN was saved in identifier_other on a previous import. Runs only
+    # as a last resort (no stronger candidate found) via substring LIKE on the list text.
+    if not candidates:
+        seen_ids: set = set()
+        soft_terms = []
+        if extracted_isin:
+            soft_terms.append((extracted_isin, BRIMMatchConfidence.MEDIUM))
+        if extracted_name:
+            soft_terms.append((extracted_name, BRIMMatchConfidence.LOW))
+        for term, confidence in soft_terms:
+            results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_other=term), session=session)
+            for asset in results:
+                if asset.id in seen_ids:
+                    continue
+                seen_ids.add(asset.id)
+                candidates.append(
+                    BRIMAssetCandidate(
+                        asset_id=asset.id,
+                        symbol=asset.identifier_ticker,
+                        isin=asset.identifier_isin,
+                        name=asset.display_name,
+                        match_confidence=confidence,
+                    )
+                )
 
     # Auto-select if exactly 1 candidate found
     auto_selected = candidates[0].asset_id if len(candidates) == 1 else None

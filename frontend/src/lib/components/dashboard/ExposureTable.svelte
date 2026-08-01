@@ -36,8 +36,10 @@
         nav_weight_percent?: string | (string | null)[] | null;
         gain_loss?: string | (string | null)[] | null;
         gain_loss_percent?: string | (string | null)[] | null;
+        annualized_return?: string | (string | null)[] | null;
         gain_loss_change_1d?: string | (string | null)[] | null;
         gain_loss_change_1d_percent?: string | (string | null)[] | null;
+        oldest_open_lot_date?: string | (string | null)[] | null;
     }
 
     interface Props {
@@ -60,11 +62,13 @@
         navWeight: number | null;
         unrealizedPnl: number | null;
         unrealizedPnlPercent: number | null;
+        annualizedReturn: number | null;
         gainLossChange1d: number | null;
         gainLossChange1dPercent: number | null;
         quantity: number | null;
         price: number | null;
         wacPerUnit: number | null;
+        oldestOpenLotDate: string | null;
     }
 
     let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, ..._legacyProps}: Props & Record<string, unknown> = $props();
@@ -157,11 +161,13 @@
                     navWeight: safeNum(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
                     unrealizedPnl: safeNum(holding.gain_loss),
                     unrealizedPnlPercent: safeNum(holding.gain_loss_percent),
+                    annualizedReturn: safeNum(holding.annualized_return),
                     gainLossChange1d: safeNum(holding.gain_loss_change_1d),
                     gainLossChange1dPercent: safeNum(holding.gain_loss_change_1d_percent),
                     quantity: safeNum(holding.quantity),
                     price: safeNum(holding.current_price),
                     wacPerUnit: safeNum(holding.wac_per_unit),
+                    oldestOpenLotDate: safeStr(holding.oldest_open_lot_date),
                 };
             })
             .filter((row) => row.quantity == null || row.quantity !== 0)
@@ -275,6 +281,20 @@
                 cell: (row) => percentChangeCell(row.unrealizedPnlPercent),
             },
             {
+                id: 'annualized-return',
+                header: () => $_('dashboard.annualizedReturn') || 'Annualized',
+                headerTooltip: () => $_('dashboard.annualizedReturnTooltip') || 'P&L % annualized (CAGR) over the holding window (from the oldest open lot), for comparison across positions held for different durations.',
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 100,
+                maxWidth: 180,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => row.annualizedReturn ?? 0,
+                cell: (row) => percentChangeCell(row.annualizedReturn),
+            },
+            {
                 id: 'value',
                 header: () => $_('common.value'),
                 type: 'number',
@@ -342,6 +362,21 @@
                 getValue: (row) => row.wacPerUnit ?? 0,
                 cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency)),
             },
+            {
+                id: 'oldest-open-lot',
+                header: () => $_('dashboard.oldestOpenLotDate') || 'Oldest open lot',
+                headerTooltip: () => $_('dashboard.oldestOpenLotDateTooltip') || 'Opening date of the oldest FIFO lot still open for this position.',
+                type: 'date',
+                align: 'right',
+                width: 150,
+                minWidth: 130,
+                maxWidth: 220,
+                resizable: true,
+                sortable: true,
+                hiddenByDefault: true,
+                getValue: (row) => row.oldestOpenLotDate ?? '',
+                cell: (row) => (row.oldestOpenLotDate ? {type: 'date' as const, value: row.oldestOpenLotDate, format: 'date' as const} : '—'),
+            },
             brokerColumn,
         ];
     });
@@ -378,7 +413,8 @@
         enableSelection={false}
         selectionMode="none"
         enableActions={true}
-        enablePagination={false}
+        enablePagination={true}
+        defaultPageSize={25}
         enableColumnVisibility={true}
         enableColumnFilters={false}
         enableSorting={true}

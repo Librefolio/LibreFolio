@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -53,6 +54,8 @@ class LineFixturePlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.fixtureLine.name"
     description_key = "signals.fixtureLine.description"
+    semantic_id = "fixture_rolling_average"
+    semantic_description = "Test rolling average over closing prices."
     icon = "activity"
     params_model = LineFixtureParams
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
@@ -60,7 +63,10 @@ class LineFixturePlugin(SignalPlugin):
         SignalOutputSpec(
             key="average",
             label_key="signals.fixtureLine.average",
+            semantic_id="fixture_rolling_average.value",
+            semantic_description="Test rolling average value.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
         ),
@@ -99,6 +105,8 @@ class LineFixturePlugin(SignalPlugin):
                 SignalLineSeries(
                     key="average",
                     label_key="signals.fixtureLine.average",
+                    semantic_id="fixture_rolling_average.value",
+                    semantic_description="Test rolling average value.",
                     unit=SignalUnit.PRICE,
                     axis=SignalAxisSpec(key="price", role=SignalAxisRole.PRICE),
                     points=output,

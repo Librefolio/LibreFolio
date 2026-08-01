@@ -2582,8 +2582,7 @@ test.describe('Gallery Screenshots', () => {
                         if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
                             await indicatorSelect.click();
                             await page.waitForTimeout(300);
-                            // SimpleSelect options use role="menuitem"
-                            const emaOption = page.locator('[role="menuitem"]').filter({hasText: /EMA/i}).first();
+                            const emaOption = page.locator('[role="option"]').filter({hasText: /EMA/i}).first();
                             if (await emaOption.isVisible({timeout: 1000}).catch(() => false)) {
                                 await emaOption.click();
                                 await page.waitForTimeout(1500); // Wait for EMA to render on chart
@@ -2624,7 +2623,7 @@ test.describe('Gallery Screenshots', () => {
                         if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
                             await indicatorSelect.click();
                             await page.waitForTimeout(300);
-                            const rsiOption = page.locator('[role="menuitem"]').filter({hasText: /RSI/i}).first();
+                            const rsiOption = page.locator('[role="option"]').filter({hasText: /RSI/i}).first();
                             if (await rsiOption.isVisible({timeout: 1000}).catch(() => false)) {
                                 await rsiOption.click();
                                 await page.waitForTimeout(1500);
@@ -2665,7 +2664,7 @@ test.describe('Gallery Screenshots', () => {
                         if (await indicatorSelect.isVisible({timeout: 2000}).catch(() => false)) {
                             await indicatorSelect.click();
                             await page.waitForTimeout(300);
-                            const macdOption = page.locator('[role="menuitem"]').filter({hasText: /MACD/i}).first();
+                            const macdOption = page.locator('[role="option"]').filter({hasText: /MACD/i}).first();
                             if (await macdOption.isVisible({timeout: 1000}).catch(() => false)) {
                                 await macdOption.click();
                                 await page.waitForTimeout(1500);
@@ -2707,7 +2706,7 @@ test.describe('Gallery Screenshots', () => {
                             await indicatorSelect.click();
                             await page.waitForTimeout(300);
                             const bollingerOption = page
-                                .locator('[role="menuitem"]')
+                                .locator('[role="option"]')
                                 .filter({hasText: /Bollinger/i})
                                 .first();
                             if (await bollingerOption.isVisible({timeout: 1000}).catch(() => false)) {

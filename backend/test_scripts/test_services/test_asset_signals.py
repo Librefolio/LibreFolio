@@ -291,6 +291,126 @@ async def test_multi_asset_signals_use_one_bulk_price_query(
 
 
 @pytest.mark.asyncio
+async def test_risk_beta_loads_comparison_asset_in_same_bulk_query(
+    monkeypatch,
+    asset_signal_data,
+):
+    primary_id, comparison_id = asset_signal_data["asset_ids"][:2]
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        original_execute = session.execute
+        price_queries = 0
+
+        async def tracked_execute(statement, *args, **kwargs):
+            nonlocal price_queries
+            sql = str(statement)
+            if "FROM price_history" in sql and "ORDER BY price_history.asset_id" in sql:
+                price_queries += 1
+            return await original_execute(statement, *args, **kwargs)
+
+        monkeypatch.setattr(session, "execute", tracked_execute)
+        result = (
+            await AssetSourceManager.get_prices_bulk(
+                [
+                    FAPriceQueryItem(
+                        asset_id=primary_id,
+                        date_range=visible_range(asset_signal_data),
+                        signals=[
+                            SignalRequest(
+                                instance_id="beta",
+                                signal_code="RISK_ROLLING_BETA",
+                                params={
+                                    "window": 10,
+                                    "comparison_asset_id": comparison_id,
+                                },
+                            )
+                        ],
+                    )
+                ],
+                session,
+            )
+        )[0]
+
+    assert price_queries == 1
+    assert result.signals[0].status == SignalStatus.OK
+    assert result.signals[0].risk_metadata.comparison_asset_id == comparison_id
+    assert result.signals[0].risk_metadata.currency == "EUR"
+
+
+@pytest.mark.asyncio
+async def test_risk_beta_can_reuse_primary_as_comparison(
+    asset_signal_data,
+):
+    asset_id = asset_signal_data["asset_ids"][0]
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        result = (
+            await AssetSourceManager.get_prices_bulk(
+                [
+                    FAPriceQueryItem(
+                        asset_id=asset_id,
+                        date_range=visible_range(asset_signal_data),
+                        signals=[
+                            SignalRequest(
+                                instance_id="beta",
+                                signal_code="RISK_ROLLING_BETA",
+                                params={
+                                    "window": 10,
+                                    "comparison_asset_id": asset_id,
+                                },
+                            )
+                        ],
+                    )
+                ],
+                session,
+            )
+        )[0]
+
+    signal = result.signals[0]
+    assert signal.status == SignalStatus.OK
+    assert signal.series[0].points[-1].value == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_risk_signal_uses_target_currency_prepared_returns(
+    asset_signal_data,
+):
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        result = (
+            await AssetSourceManager.get_prices_bulk(
+                [
+                    FAPriceQueryItem(
+                        asset_id=asset_signal_data["asset_ids"][2],
+                        date_range=visible_range(asset_signal_data),
+                        target_currency="JPY",
+                        signals=[
+                            SignalRequest(
+                                instance_id="return",
+                                signal_code="RISK_ROLLING_RETURN",
+                                params={"window": 2},
+                            )
+                        ],
+                    )
+                ],
+                session,
+            )
+        )[0]
+
+    signal = result.signals[0]
+    assert signal.status == SignalStatus.OK
+    assert signal.risk_metadata.currency == "JPY"
+    assert signal.risk_metadata.return_basis == "price_only"
+    assert signal.data_quality.carried_forward_fx_points > 0
+
+
+@pytest.mark.asyncio
 async def test_target_currency_conversion_precedes_signal_compute(
     asset_signal_data,
 ):
@@ -323,6 +443,84 @@ async def test_target_currency_conversion_precedes_signal_compute(
     last_prices = [float(point.close) for point in result.prices[-2:]]
     expected_sma = sum(last_prices) / 2
     assert result.signals[0].series[0].points[-1].value == pytest.approx(expected_sma)
+
+
+@pytest.mark.asyncio
+async def test_partial_target_currency_conversion_never_computes_mixed_signals(
+    asset_signal_data,
+):
+    requested_range = visible_range(asset_signal_data)
+    first_convertible_date = requested_range.start + timedelta(days=10)
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        session.add(
+            FxRate(
+                base="CAD",
+                quote="XTS",
+                date=first_convertible_date,
+                rate=Decimal("2"),
+                source="MANUAL",
+            )
+        )
+        await session.flush()
+        result = (
+            await AssetSourceManager.get_prices_bulk(
+                [
+                    FAPriceQueryItem(
+                        asset_id=asset_signal_data["asset_ids"][2],
+                        date_range=requested_range,
+                        target_currency="XTS",
+                        signals=[
+                            SignalRequest(
+                                instance_id="ema",
+                                signal_code="EMA",
+                                params={"period": 14},
+                            )
+                        ],
+                    )
+                ],
+                session,
+            )
+        )[0]
+
+    assert {point.currency for point in result.prices} == {"CAD", "XTS"}
+    assert any("mixed currencies" in error for error in result.errors)
+    assert result.signals[0].status == SignalStatus.UNAVAILABLE
+    assert result.signals[0].series == []
+
+
+@pytest.mark.asyncio
+async def test_target_currency_equal_to_native_remains_signal_coherent(
+    asset_signal_data,
+):
+    async with AsyncSession(
+        get_async_engine(),
+        expire_on_commit=False,
+    ) as session:
+        result = (
+            await AssetSourceManager.get_prices_bulk(
+                [
+                    FAPriceQueryItem(
+                        asset_id=asset_signal_data["asset_ids"][0],
+                        date_range=visible_range(asset_signal_data),
+                        target_currency="EUR",
+                        signals=[
+                            SignalRequest(
+                                instance_id="ema",
+                                signal_code="EMA",
+                                params={"period": 14},
+                            )
+                        ],
+                    )
+                ],
+                session,
+            )
+        )[0]
+
+    assert {point.currency for point in result.prices} == {"EUR"}
+    assert result.signals[0].status == SignalStatus.OK
 
 
 @pytest.mark.asyncio

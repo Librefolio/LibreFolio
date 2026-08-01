@@ -105,6 +105,7 @@
     {dateEnd}
     {dateStart}
     description={$t('assets.sync.modalDescription') ?? 'Synchronize prices from configured providers for the selected date range.'}
+    maxWidth="max-w-3xl"
     {onclose}
     {onsynced}
     {sections}
@@ -162,7 +163,7 @@
         {/if}
 
         {#if pr.status === 'failed' || pr.status === 'partial'}
-            {@const fullErr = pr.errors?.join('; ') ?? pr.message ?? ''}
+            {@const fullErr = pr.errors && pr.errors.length ? pr.errors.join('; ') : (pr.message ?? '')}
             {@const shortErr = pr.errors?.[0] ?? pr.message ?? 'Failed'}
             <!-- #R4-6: Tooltip exposes the full (possibly long) error text that
                  otherwise gets visually clipped by the truncate class inside a

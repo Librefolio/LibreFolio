@@ -1,0 +1,35 @@
+schema_version: 1
+id: global_risk_off
+kind: hypothetical_shock
+tags: [global, risk_off]
+name:
+  en: Global risk-off
+  it: Avversione globale al rischio
+  fr: Aversion mondiale au risque
+  es: Aversión global al riesgo
+description:
+  en: Editable asset-class shocks representing a broad flight from risky assets.
+  it: Shock modificabili per classe di asset che rappresentano una fuga generalizzata dagli asset rischiosi.
+  fr: Chocs modifiables par classe d'actifs représentant une fuite générale des actifs risqués.
+  es: Choques editables por clase de activo que representan una huida generalizada de los activos de riesgo.
+allowed_dimensions: [asset_class]
+defaults:
+  dimension: asset_class
+  bucket_shocks:
+    STOCK: -0.20
+    ETF: -0.15
+    FUND: -0.15
+    BOND: -0.05
+    CRYPTO: -0.30
+    CROWDFUND: -0.10
+    HOLD: -0.05
+    INDEX: -0.20
+    OTHER: 0.0
+editable:
+  dimension: false
+  bucket_shocks: true
+  manual_overrides: true
+limits:
+  minimum_shock: -1.0
+  maximum_shock: 1.0
+  maximum_buckets: 100

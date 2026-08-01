@@ -29,6 +29,7 @@ describe('signal params JSON Schema mapper', () => {
                         'x-suffix': 'days',
                         'x-i18n-key': 'chartSettings.params.period',
                         'x-tooltip-key': 'chartSettings.tooltips.period',
+                        'x-affects-outputs': ['k', 'd'],
                         'x-control-order': 1,
                     },
                     multiplier: {
@@ -37,12 +38,17 @@ describe('signal params JSON Schema mapper', () => {
                         multipleOf: 0.1,
                         'x-control-order': 4,
                     },
+                    comparison_asset_id: {
+                        type: 'integer',
+                        'x-control': 'comparison_asset',
+                        'x-control-order': 5,
+                    },
                 },
             },
             {period: 20},
         );
 
-        expect(descriptors.map((descriptor) => descriptor.key)).toEqual(['period', 'enabled', 'mode', 'multiplier']);
+        expect(descriptors.map((descriptor) => descriptor.key)).toEqual(['period', 'enabled', 'mode', 'multiplier', 'comparison_asset_id']);
         expect(descriptors[0]).toMatchObject({
             type: 'number',
             integer: true,
@@ -54,6 +60,7 @@ describe('signal params JSON Schema mapper', () => {
             suffix: 'days',
             label: 'chartSettings.params.period',
             tooltip: 'chartSettings.tooltips.period',
+            affectsOutputs: ['k', 'd'],
         });
         expect(descriptors[1]).toMatchObject({
             type: 'boolean',
@@ -70,6 +77,12 @@ describe('signal params JSON Schema mapper', () => {
             type: 'number',
             step: 0.1,
         });
+        expect(descriptors[4]).toMatchObject({
+            key: 'comparison_asset_id',
+            type: 'number',
+            integer: true,
+            control: 'comparison_asset',
+        });
     });
 
     it('rejects unsupported nested parameters explicitly', () => {
@@ -79,6 +92,20 @@ describe('signal params JSON Schema mapper', () => {
                 properties: {
                     windows: {
                         type: 'array',
+                    },
+                },
+            }),
+        ).toThrow(UnsupportedSignalSchemaError);
+    });
+
+    it('rejects malformed output-affinity metadata', () => {
+        expect(() =>
+            mapSignalParamsSchema({
+                type: 'object',
+                properties: {
+                    period: {
+                        type: 'integer',
+                        'x-affects-outputs': ['k', 1],
                     },
                 },
             }),

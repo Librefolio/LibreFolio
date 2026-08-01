@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -23,6 +25,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalValuePoint,
     SignalWarmupRequirement,
@@ -58,9 +61,12 @@ class NatrSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.natr.name"
     description_key = "signals.natr.description"
+    semantic_id = "normalized_average_true_range"
+    semantic_description = "Measures true-range variability relative to price."
     icon = "📐"
     docs_path = "financial-theory/technical-analysis/indicators/natr/"
     params_model = NatrSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.FAST),)
     input_requirements = SignalInputRequirements(
         price_fields=[
             SignalPriceField.HIGH,
@@ -74,7 +80,10 @@ class NatrSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="natr",
             label_key="signals.natr.output",
+            semantic_id="normalized_average_true_range.value",
+            semantic_description="Average true range expressed as a percentage of price.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.MAX_WITH_RANGE,
             unit=SignalUnit.PERCENTAGE,
             axis=SignalAxisSpec(
                 key="natr",
@@ -135,6 +144,8 @@ class NatrSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     points=[

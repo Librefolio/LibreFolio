@@ -50,11 +50,11 @@ from backend.app.db.models import (
     User,
 )
 from backend.app.db.session import get_async_engine
-from backend.app.schemas import FAGeographicArea, FASectorArea
+from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
 from backend.app.schemas.assets import FAAssetCreateItem, FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.prices import FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
-from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, ProbeOperation
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
+from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, FAVolumeKind, ProbeOperation
 from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest
 from backend.app.services import asset_source as asset_source_module
 from backend.app.services.asset_source import (
@@ -1880,3 +1880,114 @@ async def test_asset_search_service_search_handles_cache_and_errors(monkeypatch)
     assert second.providers_with_errors == []
     assert second.results[0].display_name == "Provider result alpha"
     print_success("✓ Search cache and per-provider error handling both covered")
+
+
+# ============================================================================
+# SIGNAL SOURCE CAPABILITY DERIVATION (workstream B)
+# ============================================================================
+
+
+def _capable_point(day: int, source: str, backward_filled: bool = False) -> FAPricePoint:
+    """Build a minimal FAPricePoint for capability-derivation tests."""
+    return FAPricePoint(
+        date=date(2025, 6, day),
+        close=Decimal("10"),
+        volume=Decimal("100"),
+        source_plugin_key=source,
+        backward_fill_info=(AssetBackwardFillInfo(actual_rate_date=date(2025, 6, 1), days_back=day - 1) if backward_filled else None),
+    )
+
+
+class TestDeriveSignalSourceCapability:
+    """Unit tests for AssetSourceManager.derive_signal_source_capability (item 5)."""
+
+    def test_empty_series_is_unknown_and_unsupported(self):
+        capability = AssetSourceManager.derive_signal_source_capability([])
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_all_backward_filled_series_is_unsupported(self, monkeypatch):
+        """Backward-filled points must never count as observed evidence."""
+        monkeypatch.setattr(
+            AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
+        )
+        points = [_capable_point(1, "yfinance", backward_filled=True)]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+
+    def test_single_registered_capable_source_is_supported(self, monkeypatch):
+        monkeypatch.setattr(
+            AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)),
+        )
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "yfinance")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is True
+        assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
+
+    def test_unregistered_source_fails_closed(self, monkeypatch):
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: None))
+        points = [_capable_point(1, "MANUAL")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    @pytest.mark.parametrize("sentinel_key", ["MANUAL", "provider:unknown"])
+    def test_known_sentinel_keys_fail_closed_against_real_registry(self, sentinel_key):
+        """Binding architecture-review requirement: capability reduction must
+        fail closed for the exact literal sentinel keys the codebase actually
+        writes — ``"MANUAL"`` (default bulk_upsert_prices source, see
+        AssetSourceManager.bulk_upsert_prices) and ``"provider:unknown"``
+        (refresh_assets_from_provider fallback when item.source is empty).
+        Exercised against the REAL, unmocked AssetProviderRegistry: neither
+        key is ever registered, so this must fail closed without needing to
+        simulate an unresolvable provider.
+        """
+        assert AssetProviderRegistry.get_provider_instance(sentinel_key) is None
+        points = [_capable_point(1, sentinel_key)]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_mixed_sources_with_disagreeing_capability_fail_closed(self, monkeypatch):
+        providers = {
+            "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
+            "justetf": SimpleNamespace(supports_meaningful_volume=False, volume_kind=FAVolumeKind.UNKNOWN),
+        }
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "justetf")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+
+    def test_mixed_incompatible_real_registered_sources_fail_closed(self):
+        """Same scenario as above, but against the REAL, unmocked registry
+        using two genuinely registered providers with disagreeing declared
+        capability (yfinance=True vs justetf=False) — proves the fail-closed
+        rule holds against actual provider declarations, not just mocks."""
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "justetf")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False
+        assert capability.volume_kind == SignalVolumeKind.UNKNOWN
+
+    def test_mixed_sources_with_agreeing_capability_are_supported(self, monkeypatch):
+        providers = {
+            "yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
+            "borsa_italiana": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES),
+        }
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "borsa_italiana")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is True
+        assert capability.volume_kind == SignalVolumeKind.TRADED_SHARES
+
+    def test_one_unregistered_source_among_many_fails_closed(self, monkeypatch):
+        """Even a single unresolvable source_plugin_key among otherwise-capable
+        sources must fail closed (no partial trust)."""
+        providers = {"yfinance": SimpleNamespace(supports_meaningful_volume=True, volume_kind=FAVolumeKind.TRADED_SHARES)}
+        monkeypatch.setattr(AssetProviderRegistry, "get_provider_instance", classmethod(lambda cls, code, **kwargs: providers.get(code)))
+        points = [_capable_point(1, "yfinance"), _capable_point(2, "MANUAL")]
+        capability = AssetSourceManager.derive_signal_source_capability(points)
+        assert capability.supports_meaningful_volume is False

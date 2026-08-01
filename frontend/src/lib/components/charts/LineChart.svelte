@@ -19,7 +19,7 @@
     import * as echarts from 'echarts';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
@@ -45,6 +45,13 @@
         low?: number | null;
         close?: number | null;
         volume?: number | null;
+        /** Logical aggregation bucket boundaries. */
+        bucketStart?: string;
+        bucketEnd?: string;
+        /** Real observation date selected as the bucket representative. */
+        representativeDate?: string;
+        /** Number of finite source points observed in this bucket. */
+        sourcePointCount?: number;
     }
 
     interface Props {
@@ -345,11 +352,16 @@
             renderedData = getCompactAggregatedData(resolution);
 
             if (resolution !== 'daily') {
-                const bucketedDates = renderedData.map((point) => point.date);
-                activeOverlaySignals = overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, bucketedDates)).filter((signal) => signal.data.length > 0);
+                activeOverlaySignals = overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, renderedData)).filter((signal) => signal.data.length > 0);
             }
         }
         activeOverlaySignals = assignOverlaySignalAxes(activeOverlaySignals);
+        const overlayPointMeta = new Map<string, LineDataPoint>();
+        for (const signal of activeOverlaySignals) {
+            for (const point of signal.data) {
+                overlayPointMeta.set(`${signal.label}|${point.date}`, point);
+            }
+        }
 
         currentRenderedData = renderedData;
 
@@ -444,14 +456,24 @@
                         color: signal.color,
                         width: signal.lineWidth,
                         type: signal.lineType,
+                        opacity: signal.opacity ?? 1,
                     },
                     itemStyle: {
                         color: signal.color,
+                        opacity: signal.opacity ?? 1,
                     },
+                    ...(sType === 'area'
+                        ? {
+                              areaStyle: {
+                                  color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                                  origin: 0,
+                              },
+                          }
+                        : {}),
                     emphasis: {
                         focus: 'none',
                     },
-                    z: 1, // below main series
+                    z: sType === 'area' ? 0 : 1, // below main series
                     ...buildSignalReferencePrimitives(signal, isDark),
                 };
 
@@ -692,6 +714,10 @@
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
                               const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
                               html += `<br/>${colorDot}${truncateName(String(p.seriesName ?? ''))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                              const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
+                              if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
+                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                              }
 
                               // For band signals, also show upper/lower in the tooltip
                               const bandSignal = activeOverlaySignals.find((s) => s.label === p.seriesName && (s.seriesType ?? 'line') === 'band' && s.bandData);

@@ -39,9 +39,26 @@
         onclose: () => void;
         /** z-index for stacking above other modals (default 50) */
         zIndex?: number;
+        /** Max width token passed to ModalBase (default max-w-md) */
+        maxWidth?: string;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-amber-100 dark:bg-amber-900/30', headerIconColor = 'text-amber-600 dark:text-amber-400', sections, onsynced, onclose, zIndex = 50}: Props = $props();
+    let {
+        open = $bindable(),
+        dateStart,
+        dateEnd,
+        title,
+        description,
+        testId,
+        headerIcon: HeaderIcon = RefreshCw,
+        headerIconBg = 'bg-amber-100 dark:bg-amber-900/30',
+        headerIconColor = 'text-amber-600 dark:text-amber-400',
+        sections,
+        onsynced,
+        onclose,
+        zIndex = 50,
+        maxWidth = 'max-w-md',
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -77,6 +94,8 @@
     let remainingSec = $derived(Math.max(0, timeoutSec - Math.floor(elapsedMs / 1000)));
     let progressPct = $derived(Math.min(100, (elapsedMs / (timeoutSec * 1000)) * 100));
     let failedItems = $derived(allResults.filter((r) => r.status === 'failed' || r.status === 'partial'));
+    /** True when there are failures and every one is a soft (partial) failure — used to soften the retry-all accent to amber. */
+    let allFailuresPartial = $derived(failedItems.length > 0 && failedItems.every((r) => r.status === 'partial'));
     let successCount = $derived(allResults.filter((r) => r.status === 'ok').length);
     let totalPointsFetched = $derived(allResults.reduce((sum, r) => sum + (r.points_fetched ?? 0), 0));
     let totalPointsChanged = $derived(allResults.reduce((sum, r) => sum + (r.points_changed ?? 0), 0));
@@ -235,7 +254,7 @@
     }
 </script>
 
-<ModalBase maxWidth="max-w-md" onRequestClose={onclose} {open} {testId} {zIndex}>
+<ModalBase {maxWidth} onRequestClose={onclose} {open} {testId} {zIndex}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-2.5">
@@ -252,7 +271,7 @@
     </div>
 
     <!-- Body -->
-    <div class="px-6 py-4 space-y-3">
+    <div class="px-6 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
         <p class="text-sm text-gray-600 dark:text-gray-400">
             {description}
         </p>
@@ -298,7 +317,11 @@
         {#if hasResults}
             <!-- Retry all failed button -->
             {#if failedItems.length > 1 && !syncing}
-                <button class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors" onclick={handleRetryFailed}>
+                <button
+                    class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors
+                        {allFailuresPartial ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'}"
+                    onclick={handleRetryFailed}
+                >
                     <SkipForward size={13} />
                     Retry {failedItems.length} failed
                 </button>

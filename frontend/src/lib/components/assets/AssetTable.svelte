@@ -33,6 +33,7 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active: boolean;
+        quote_base_quantity?: number | null;
         lastPrice?: number | null;
         deltaAbs?: number | null;
         deltaPercent?: number | null;
@@ -195,6 +196,21 @@
                 width: 150,
                 minWidth: 100,
             },
+            {
+                id: 'delta_1D',
+                header: 'Δ 1D',
+                cell: (row) => {
+                    const val = row.deltas?.['1D'] ?? null;
+                    return {
+                        type: 'html',
+                        html: `<span class="font-mono ${deltaColorClass(val)}">${formatDelta(val, '%')}</span>`,
+                    };
+                },
+                type: 'number',
+                getValue: (row) => row.deltas?.['1D'] ?? 0,
+                width: 80,
+                minWidth: 60,
+            },
             // Dynamic Δ multi-period columns
             ...visiblePeriods.map((period) => ({
                 id: `delta_${period.key}`,
@@ -223,6 +239,19 @@
                 width: 240,
                 minWidth: 160,
                 filterable: false,
+            },
+            {
+                id: 'quoteBaseQuantity',
+                header: () => $t('assets.table.quoteBaseQuantity'),
+                headerTooltip: () => $t('assets.modal.quoteBaseTooltip'),
+                cell: (row) => ({type: 'html', html: `<span class="font-mono tabular-nums">${row.quote_base_quantity ?? 1}</span>`}),
+                type: 'number',
+                getValue: (row) => row.quote_base_quantity ?? 1,
+                width: 100,
+                minWidth: 70,
+                align: 'right',
+                filterable: false,
+                hiddenByDefault: true,
             },
         ]),
     );
@@ -258,8 +287,11 @@
                         syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== rid));
                     }
                 },
-                disabled: (row) => !row.provider_code,
+                disabled: (row) => !row.provider_code || row.active === false,
                 iconClass: (row) => (syncingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
+                labelClass: (row) => (!row.provider_code || row.active === false ? 'line-through' : ''),
+                testid: 'asset-table-sync-action',
+                title: (row) => (!row.provider_code ? $t('assetDetail.syncDisabledManual') : row.active === false ? $t('assetDetail.syncDisabledInactive') : ''),
             },
             {
                 id: 'refresh',

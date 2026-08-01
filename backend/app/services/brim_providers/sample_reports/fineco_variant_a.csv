@@ -1,0 +1,11 @@
+Dossier: 987654321,,,,,,,,,,
+Intestatario: BIANCHI LUIGI,,,,,,,,,,
+,,,,,,,,,,
+Titoli e operazioni,,,,,,,,,,
+,,,,,,,,,,
+Operazione,Data valuta,Descrizione,Titolo,Isin,Segno,Quantita,Divisa,Prezzo,Cambio,Controvalore
+10/01/2024,12/01/2024,Compravendita titoli,VANGUARD FTSE ALL-WORLD,IE00BK5BQT80,A,8,EUR,105.20,,841.60
+14/02/2024,16/02/2024,Compravendita titoli,MICROSOFT CORP,US5949181045,A,3,USD,405.10,1.0790,1126.24
+20/03/2024,22/03/2024,Compravendita titoli,VANGUARD FTSE ALL-WORLD,IE00BK5BQT80,V,2,EUR,110.50,,221.00
+15/04/2024,17/04/2024,Dividendo,MICROSOFT CORP,US5949181045,,,USD,,1.0850,2.25
+01/05/2024,03/05/2024,Stacco Cedole,BTP VALORE SC MZ30,IT0005583478,,,EUR,,,18.40

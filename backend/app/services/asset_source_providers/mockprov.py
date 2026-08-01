@@ -44,6 +44,12 @@ class MockProvider(AssetSourceProvider):
         return "Mock Provider (TESTING ONLY)"
 
     @property
+    def supports_meaningful_volume(self) -> bool:
+        """Test double — never reports real volume ("Mock doesn't provide
+        volume", see get_history_value below)."""
+        return False
+
+    @property
     def accepted_identifier_types(self) -> list:
         return [ProviderInputType.TICKER, ProviderInputType.AUTO_GENERATED]
 

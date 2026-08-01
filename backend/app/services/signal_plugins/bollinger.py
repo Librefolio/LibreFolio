@@ -9,6 +9,8 @@ import pandas_ta_classic as ta
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
+    SignalAiExportTemporalRule,
     SignalAxisRole,
     SignalAxisSpec,
     SignalBandPoint,
@@ -23,6 +25,7 @@ from backend.app.schemas.signals import (
     SignalPriceField,
     SignalPricePoint,
     SignalSeriesKind,
+    SignalTemporalClass,
     SignalUnit,
     SignalViewTransform,
     SignalWarmupRequirement,
@@ -70,15 +73,21 @@ class BollingerSignalPlugin(SignalPlugin):
     category = SignalCategory.VOLATILITY
     display_name_key = "signals.bollinger.name"
     description_key = "signals.bollinger.description"
+    semantic_id = "bollinger_bands"
+    semantic_description = "Describes a moving-average envelope scaled by recent price dispersion."
     icon = "🌊"
     docs_path = "financial-theory/technical-analysis/indicators/bollinger-bands/"
     params_model = BollingerSignalParams
+    ai_export_temporal_rules = (SignalAiExportTemporalRule(temporal_class=SignalTemporalClass.MEDIUM_FAST),)
     input_requirements = SignalInputRequirements(price_fields=[SignalPriceField.CLOSE])
     output_specs = (
         SignalOutputSpec(
             key="bands",
             label_key="signals.bollinger.bands",
+            semantic_id="bollinger_bands.envelope",
+            semantic_description="Lower, middle, and upper bands around the moving average.",
             kind=SignalSeriesKind.BAND,
+            aggregation_profile=SignalAggregationProfile.BAND_ENVELOPE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",
@@ -131,6 +140,8 @@ class BollingerSignalPlugin(SignalPlugin):
                 SignalBandSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,

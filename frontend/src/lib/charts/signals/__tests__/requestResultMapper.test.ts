@@ -90,6 +90,29 @@ describe('backend signal request/result mapping', () => {
         ]);
     });
 
+    it('keeps backend signals with missing required params out of requests', () => {
+        const betaDefinition: SignalDefinition = {
+            ...backendDefinition,
+            type: 'risk-rolling-beta',
+            backendSignalCode: 'RISK_ROLLING_BETA',
+            paramDescriptors: [
+                {
+                    key: 'comparison_asset_id',
+                    label: 'Comparison asset',
+                    type: 'number',
+                    required: true,
+                    control: 'comparison_asset',
+                    default: undefined,
+                },
+            ],
+        };
+        const beta = config('beta-a', 'risk-rolling-beta', {window: 90});
+        const plan = buildBackendSignalRequestPlan([beta], [betaDefinition]);
+
+        expect(plan.requests).toEqual([]);
+        expect(plan.unavailableConfigs).toEqual([beta]);
+    });
+
     it('maps mixed local/backend/unavailable configs in input order', () => {
         const configs = [config('linear-a', 'linear'), config('ema-a', 'ema'), config('unknown-a', 'removed-signal')];
         const plan = buildBackendSignalRequestPlan(configs, [backendDefinition, localDefinition]);

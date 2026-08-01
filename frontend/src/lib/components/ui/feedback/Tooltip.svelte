@@ -41,10 +41,12 @@
         maxWidth?: string;
         /** Extra classes for the trigger wrapper (e.g. `min-w-0` to allow shrinking/truncating inside a flex row) */
         wrapperClass?: string;
+        /** Child owns native interaction semantics (for example, a button or link). */
+        interactiveChild?: boolean;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -53,6 +55,7 @@
     // Fixed position coordinates (viewport-relative)
     let fixedTop = $state(0);
     let fixedLeft = $state(0);
+    let pendingPositionFrame: number | null = null;
 
     /** True once opened via click/tap ("pinned") rather than plain hover.
      *  Pinned tooltips stay open indefinitely while the pointer remains over
@@ -66,7 +69,7 @@
 
     /** Grace period after a *pinned* tooltip loses contact (mouse leaves both
      *  trigger and tooltip, or a touch ends) before it auto-dismisses. */
-    const PINNED_LEAVE_GRACE_MS = 5000;
+    const PINNED_LEAVE_GRACE_MS = 30000;
     /** Near-instant delay for plain hover — bridges the gap between trigger
      *  and tooltip elements when the pointer moves from one to the other,
      *  without introducing a perceptible "stays open" timer. */
@@ -92,8 +95,7 @@
 
     function show() {
         visible = true;
-        // Defer position calculation to next frame (tooltip must be in DOM first)
-        requestAnimationFrame(calculateFixedPosition);
+        schedulePositionUpdate();
     }
 
     function hide() {
@@ -265,6 +267,14 @@
         fixedLeft = left;
     }
 
+    function schedulePositionUpdate() {
+        if (pendingPositionFrame !== null) cancelAnimationFrame(pendingPositionFrame);
+        pendingPositionFrame = requestAnimationFrame(() => {
+            pendingPositionFrame = null;
+            calculateFixedPosition();
+        });
+    }
+
     /**
      * Compute the final tooltip content as HTML string.
      * Priority: html prop > text prop. If math=true, process LaTeX.
@@ -277,23 +287,25 @@
         return content;
     });
 
-    // Register/unregister click-outside listener + scroll-dismiss
+    // Keep fixed coordinates aligned while nested panels or the page scroll.
     $effect(() => {
         if (visible) {
             document.addEventListener('click', handleClickOutside);
             document.addEventListener('touchstart', handleTouchOutside);
-            document.addEventListener('scroll', handleScrollDismiss, {capture: true, passive: true});
+            document.addEventListener('scroll', schedulePositionUpdate, {capture: true, passive: true});
+            window.addEventListener('resize', schedulePositionUpdate);
             return () => {
                 document.removeEventListener('click', handleClickOutside);
                 document.removeEventListener('touchstart', handleTouchOutside);
-                document.removeEventListener('scroll', handleScrollDismiss, true);
+                document.removeEventListener('scroll', schedulePositionUpdate, true);
+                window.removeEventListener('resize', schedulePositionUpdate);
+                if (pendingPositionFrame !== null) {
+                    cancelAnimationFrame(pendingPositionFrame);
+                    pendingPositionFrame = null;
+                }
             };
         }
     });
-
-    function handleScrollDismiss() {
-        if (visible) hide();
-    }
 
     function handleTouchOutside(event: TouchEvent) {
         if (visible && triggerElement && !triggerElement.contains(event.target as Node)) {
@@ -302,25 +314,44 @@
     }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-    bind:this={triggerElement}
-    class="tooltip-wrapper {wrapperClass}"
-    onclick={(e) => {
-        if (!isTouchInteraction) toggle(e);
-    }}
-    onkeydown={handleKeydown}
-    onmouseenter={handlePointerEnter}
-    onmouseleave={handlePointerLeave}
-    ontouchstart={handleTouchStart}
-    ontouchend={handleTouchEnd}
-    role="button"
-    tabindex="0"
->
-    {#if children}
-        {@render children()}
-    {/if}
-</div>
+{#if interactiveChild}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+        bind:this={triggerElement}
+        class="tooltip-wrapper {wrapperClass}"
+        onclick={(e) => {
+            if (!isTouchInteraction) toggle(e);
+        }}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+    >
+        {#if children}
+            {@render children()}
+        {/if}
+    </div>
+{:else}
+    <div
+        bind:this={triggerElement}
+        class="tooltip-wrapper {wrapperClass}"
+        onclick={(e) => {
+            if (!isTouchInteraction) toggle(e);
+        }}
+        onkeydown={handleKeydown}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+        ontouchstart={handleTouchStart}
+        ontouchend={handleTouchEnd}
+        role="button"
+        tabindex="0"
+    >
+        {#if children}
+            {@render children()}
+        {/if}
+    </div>
+{/if}
 
 {#if visible}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -365,6 +396,15 @@
         overflow-y: auto;
         cursor: default;
         user-select: text;
+    }
+
+    @media (max-width: 640px) {
+        .tooltip-fixed {
+            min-width: min(18rem, calc(100vw - 20px));
+            padding: 0.75rem 0.875rem;
+            font-size: 0.875rem;
+            line-height: 1.35rem;
+        }
     }
 
     /* Dark mode tooltip */

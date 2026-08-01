@@ -201,6 +201,18 @@
                 minWidth: 80,
             },
             {
+                id: 'delta_1D',
+                header: 'Δ 1D',
+                cell: (row) => {
+                    const val = row.deltas?.['1D'] ?? null;
+                    return {type: 'html', html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
+                },
+                type: 'number',
+                getValue: (row) => row.deltas?.['1D'] ?? 0,
+                width: 90,
+                minWidth: 70,
+            },
+            {
                 id: 'deltaAbs',
                 header: 'Δ Abs',
                 cell: (row) => {

@@ -40,6 +40,10 @@ Le fournisseur Borsa Italiana participe au cycle standard de **synchronisation d
 
     Le fournisseur limite automatiquement le débit pour éviter d'être bloqué par Borsa Italiana. Si vous possédez de nombreux actifs de cette bourse, la synchronisation complète peut prendre quelques minutes.
 
+!!! note "Fonds communs (VNI)"
+
+    Les fonds communs et les SICAV sont valorisés par leur **VNI** (valeur nette d'inventaire) quotidienne, publiée une fois par jour avec un décalage. LibreFolio identifie chaque fonds par son code fonds Borsa, de sorte que l'historique des prix affiche la VNI à sa date réelle, et la valeur actuelle n'est mise à jour que lorsque la VNI publiée est datée d'aujourd'hui (sinon, votre dernier prix d'achat est utilisé comme estimation).
+
 ---
 
 ## 🔗 Documentation Développeur

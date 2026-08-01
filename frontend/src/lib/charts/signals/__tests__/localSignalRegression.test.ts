@@ -1,11 +1,13 @@
 import {describe, expect, it} from 'vitest';
 
 import {AssetComparisonSignal} from '../AssetComparisonSignal';
+import {CompoundSignal} from '../CompoundSignal';
 import {FxPairSignal} from '../FxPairSignal';
 import {LinearSignal} from '../LinearSignal';
 import {MeasureSignal} from '../MeasureSignal';
-import {getLocalSignalDefinitions} from '../registry';
-import type {SignalStyle} from '../ChartSignal';
+import {SineSignal} from '../SineSignal';
+import {getLocalSignalDefinitions, getRegisteredSignalTypes, signalFromConfig} from '../registry';
+import type {SignalConfig, SignalStyle} from '../ChartSignal';
 
 const style: SignalStyle = {
     color: '#3b82f6',
@@ -20,14 +22,31 @@ const baseData = [
     {date: '2026-07-23', value: 110},
 ];
 
+const localSignalTypes = ['fx-pair', 'asset-comparison', 'linear', 'compound', 'sine'];
+
 describe('local signal regression', () => {
-    it('keeps only comparison and benchmark definitions in the local catalog', () => {
-        expect(getLocalSignalDefinitions().map((definition) => definition.type)).toEqual(['fx-pair', 'asset-comparison', 'linear', 'compound', 'sine']);
+    it('keeps exactly the local comparison and benchmark signals', () => {
+        expect(getLocalSignalDefinitions().map((definition) => definition.type)).toEqual(localSignalTypes);
+        expect(getRegisteredSignalTypes().map((definition) => definition.type)).toEqual(localSignalTypes);
+    });
+
+    it('does not recreate backend technical signals through the local registry', () => {
+        const config: SignalConfig = {
+            id: 'backend-ema',
+            signalType: 'ema',
+            params: {period: 14},
+            style,
+        };
+
+        expect(signalFromConfig(config)).toBeNull();
     });
 
     it('keeps synthetic benchmark rendering local', () => {
-        const signal = new LinearSignal('linear-1', style, {annualRate: 10, offset: 0});
-        expect(signal.renderMulti(baseData, 'absolute')[0].data).toHaveLength(2);
+        const signals = [new LinearSignal('linear-1', style, {annualRate: 10, offset: 0}), new CompoundSignal('compound-1', style, {annualRate: 10, offset: 0}), new SineSignal('sine-1', style, {amplitude: 10, period: 30, offset: 0})];
+
+        for (const signal of signals) {
+            expect(signal.renderMulti(baseData, 'absolute')[0].data).toHaveLength(2);
+        }
     });
 
     it('keeps FX and Asset comparison rendering from injected data', () => {

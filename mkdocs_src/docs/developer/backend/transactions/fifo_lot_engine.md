@@ -6,7 +6,7 @@
 
     `FifoLotEngine` answers **lot-level lifecycle** questions: FIFO matching, realized P&L per lot, custody fragments, transfer transit, split-adjusted quantities, and lot history for charts/modals.
 
-    `wac_service.py` answers **position-level cost basis** questions: one running WAC per `(broker, asset)` scope, suitable for transaction validation and broker summaries.
+    `portfolio_service.compute_wac_iterative()` plus `utils/financial/wac_utils.py` answer **position-level cost basis** questions: one running WAC per `(broker, asset)` scope, suitable for transaction validation and broker summaries.
 
 ---
 
@@ -18,8 +18,9 @@ The engine is intentionally isolated from I/O:
 - **No FX conversion**
 - **No `quote_base_quantity` scaling**
 - **No current-price fetches**
+- **No asset price-feed dependency**
 
-It consumes already-loaded transactions plus a few deterministic helpers, then returns a `FifoEngineResult`.
+It consumes already-loaded transactions plus a few deterministic helpers, then returns a `FifoEngineResult`. FIFO cost matching and realized P&L always come from real transaction prices (`amount / quantity`, cost-basis overrides, and split/transfer replay), never from the asset price feed. Open-position valuation is added later by [`LotsAnalysisService`](lots_analysis_service.md) through the unified `build_asset_price_series()` resolver.
 
 ```python
 def run_fifo_lot_engine(
@@ -81,6 +82,8 @@ One FIFO lot. Usually opened by a `BUY`, by the remainder of an `ADJUSTMENT_IN`,
 | `cumulative_proceeds` | Cumulative sale proceeds for LONG lots, or opening proceeds for SHORT lots. |
 | `reference_unit_price` | Optional reference price the engine resolves for a lot (e.g. when an `ADJUSTMENT_IN` opens a new LONG lot), consumed downstream by `LotsAnalysisService`. |
 | `reference_price_source` | `"exact"`, `"fallback"`, `"unavailable"`, or `None`. |
+
+`reference_unit_price` is stored on the market/`quote_base_quantity` axis when the resolver supplies one. If no opening quote is available, `LotsAnalysisService._opening_reference_price()` falls back to `lot.opening_unit_price * quote_base_quantity` before computing `relative_return`; the engine itself does not know `quote_base_quantity`.
 
 ### 🧩 `FragmentInterval`
 
@@ -365,6 +368,10 @@ numeric net breakdown).
     `FEE` / `TAX` with `asset_id = null` are excluded from `economic_events` entirely — the Portfolio Engine
     accounts for them. Only asset-linked cost reaches this stage.
 
+### 📈 Net annualization handoff
+
+The engine returns realized P&L plus economic accumulators; `LotsAnalysisService._build_lot_summaries()` derives `total_pnl`, subtracts allocated FEE/TAX into `net_total_pnl`, computes `net_total_return`, and annualizes **that net figure** over `opening_date → closing_date` (closed lots) or `opening_date → analysis_end` (open lots). The shipped `LotSummarySchema.annualized_return` therefore annualizes `net_total_return`, not gross `total_return`.
+
 ---
 
 ## ⚠️ Known Constraints and Gotchas
@@ -376,6 +383,10 @@ numeric net breakdown).
 !!! warning "Reference price behavior is narrower in code than broad system docs may suggest"
 
     Current implementation calls `_resolve_reference_price()` only in `_apply_adjustment_in()` before opening a remainder LONG lot. Ordinary `BUY` openings pass `reference_resolution=None`, so many lots will have `reference_unit_price is None` unless populated by adjustment flow.
+
+!!! note "Estimated valuation lives outside FIFO"
+
+    The engine has no `ESTIMATED_AT_COST` branch and does not emit `CURRENT_PRICE_ASSUMED_AT_COST`. When lots analysis has no usable mark for an open LONG lot on a price-less asset, the service values the open slice at cost and sets `market_pnl = 0`; when the unified resolver can derive a trade-origin mark, that mark is flagged `estimated=True` on the price-history line.
 
 !!! info "Issues degrade result instead of aborting run"
 

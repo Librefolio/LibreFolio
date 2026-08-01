@@ -67,6 +67,12 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
+| [[decisions/ai-export-technical-series-and-density-contract]] | Homogeneous observed-only technical inputs now use beta-v1 plugin-owned temporal classes, central indicator density, and deterministic per-entity event selection without price changes or truncation | 2026-07-30 | ai-export, signals, timeseries, sampling, events, payload-size, risk |
+| [[decisions/risk-g6-application-contracts]] | Stable/pending-approval G6 contracts: proxy audit trail, lazy-panel cache identity, present-buckets + Show all UX, and optional inert YAML tags | 2026-07-29 | risk, frontend, scenarios, cache, yaml |
+| [[decisions/risk-quant-engine-process-boundary]] | QuantLib simulation and Riskfolio optimization run in separate lazy spawn pools with warm reuse, safe idle reap, and no in-process native math or silent fallback | 2026-07-28 | backend, risk, quantlib, riskfolio, multiprocessing |
+| [[decisions/ai-export-contextual-ui-memory]] | AI Export drafts persist in browser storage per client-session user and Portfolio/Broker/Asset/canonical-FX context; Snapshot remembers hidden notes but never exports them | 2026-07-27 | frontend, ai-export, ui-memory, auth, privacy |
+| [[decisions/ai-export-versioned-snapshot-boundary]] | Backend owns 54 versioned factual snapshots; frontend owns fail-closed prompt/clipboard UX, synthetic Snapshot, locale-derived language, and contextual memory | 2026-07-26 | ai-export, backend, frontend, snapshot, security, mcp |
+| [[decisions/credit-agricole-securities-only-cash-neutral-brim]] | Crédit Agricole securities-only BRIM imports trades cash-neutral; succession legs become faithful BUY+DEPOSIT pairs | 2026-07-25 | backend, brim, broker, credit-agricole, cash |
 | [[decisions/fifo-v4-income-eligibility-d1]] | FIFO v4 income eligibility uses D-1 open quantity, scoped to paying broker, transfer-aware | 2026-07-22 | backend, fifo, dividend, interest |
 | [[decisions/fifo-v4-cost-allocation-ladder]] | Distinct deterministic FEE/TAX matching ladders route asset-linked costs to lots | 2026-07-22 | backend, fifo, fee, tax |
 | [[decisions/fifo-v4-engine-architecture]] | One canonical FifoLotEngine path; native+target economic events; always-inline 3-level audit | 2026-07-22 | backend, fifo, architecture |
@@ -120,13 +126,14 @@
 | [[decisions/portfolio-summary-direct-wiring]] | `get_summary()` wired directly to `PortfolioCalculationEngine` (no separate `DerivedViewsBuilder.build_summary()`); unified `/portfolio/report` replaces planned `/allocation-history`; `net_worth` field name kept | 2026-07-07 | backend, portfolio, architecture, api, design-decision |
 | [[decisions/broker-list-visibility-non-members]] | Broker discovery opt-in (`include_inaccessible`) + read-only sharing visibility (icon everywhere) for EDITOR/VIEWER/non-members, no request-access flow | 2026-07-06 | backend, frontend, brokers, sharing, discovery, access-control |
 | [[decisions/broker-card-aggregation-no-n-plus-one]] | Per-card quota%/NAV/Gain/cash-multivaluta on broker list via `GET /brokers` + one breakdown-enabled `/portfolio/report` call — never per-broker `/summary` | 2026-07-06 | backend, frontend, brokers, portfolio-engine, performance |
-| [[decisions/ai-export-prompt-catalog]] | Single "Full/Data-only" AI export prompt replaced by a 6-entry single-purpose prompt catalog (Snapshot, PAC Planning, Rebalancing, Market Trend, Income Review, Describe Portfolio) + new asset-level export | 2026-07-15 | frontend, ai-export, architecture, prompt-engineering |
+| [[decisions/ai-export-prompt-catalog]] | Historical frontend-only single-purpose prompt catalog; superseded by the Phase 0 versioned backend snapshot architecture | 2026-07-15 | frontend, ai-export, architecture, prompt-engineering |
 | [[decisions/signal-backend-plugin-architecture]] | Technical indicators move to pure auto-discovered Python plugins consumed through one Asset/FX bulk request | 2026-07-23 | backend, frontend, signals, plugins, bulk-api |
 
 ## Concepts
 
 | Page | Summary | Tags |
 |------|---------|------|
+| [[concepts/cancellation-safe-inflight-deduplication]] | Shield followers and explicitly resolve leader cancellation when collapsing identical expensive async jobs | backend, async, cache, cancellation, risk |
 | [[concepts/d1-income-eligibility-window]] | Income eligibility = open quantity at end of D-1, never same-day state | backend, fifo, dividend |
 | [[concepts/deterministic-cost-matching-ladder]] | Ordered FEE/TAX target search (same-day trades → prev-day trades → open holdings → orphan) | backend, fifo, fee, tax |
 | [[concepts/asset-orphan-vs-portfolio-level-cost]] | Asset orphan (unmatched but asset-linked) vs assetless portfolio-level cost — different buckets | backend, fifo, data-quality |
@@ -172,6 +179,14 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/quantlib-sobol-seed-skipto]] | QuantLib Sobol constructor seed did not implement a stream offset; MC now uses `random_seed` and QMC uses `skipTo(sobol_start_index)` | resolved | backend, risk, quantlib, sobol, qmc |
+| [[problems/risk-spawn-worker-idle-residency]] | Lazy Risk workers stayed resident until app shutdown; generation-safe idle reap now releases all lanes and preserves lazy restart | resolved | backend, risk, multiprocessing, memory |
+| [[problems/spawn-worker-response-queue-semaphore-leak]] | Forced worker crashes leaked response-queue semaphores; one-way response pipes removed the leak | resolved | backend, multiprocessing, spawn, ipc |
+| [[problems/riskfolio-numpy-vectorbt-dependency-trap]] | Riskfolio 7.3.0 conflicts with NumPy 2.5.1 through vectorbt/Numba; exact 7.0.1 provides P13 without either dependency | resolved | backend, riskfolio, numpy, dependencies |
+| [[problems/ai-export-drawdown-selected-history-fallback]] | Asset drawdown returned 409 when the technical window was empty despite valid selected-period history; market context now falls back to selected observations | resolved | backend, ai-export, asset, drawdown |
+| [[problems/ai-export-clipboard-fallback-unreachable]] | Non-modern clipboard fallback was unreachable; V2 now prepares once and uses `writeText`/`execCommand` while preserving the immediate `ClipboardItem` path | resolved | frontend, ai-export, clipboard, compatibility |
+| [[problems/ai-export-cash-fx-valuation-basis-mismatch]] | Invalid equality between transaction-date engine cash and snapshot-date native-cash exposure caused Portfolio AI Export 503; currency allocation now uses its declared own denominator | resolved | backend, ai-export, portfolio, cash, fx |
+| [[problems/import-wizard-fake-id-collision]] | Multi-file import merged fake asset-ids from different files onto one asset — namespaced per-file + clone txs | resolved | frontend, brim, import, data-integrity |
 | [[problems/datatable-net-columns-hidden-override-model]] | DataTable visibility snapshot couldn't react to dynamic hasNetCosts default — switched to override model | resolved | frontend, datatable, fifo |
 | [[problems/transaction-update-bypassed-sign-validation]] | Transaction UPDATE could persist positive FEE/TAX — CREATE validated, PATCH didn't | resolved | backend, validation, transactions |
 | [[problems/fifo-income-silently-dropped-after-full-close]] | Pre-v4 income allocator silently skipped income when no lot was open — now becomes asset_orphan_income | resolved | backend, fifo, dividend, data-quality |
@@ -211,6 +226,7 @@
 
 | Page | Summary |
 |------|---------|
+| [[entities/ai-export-snapshot-service]] | FastAPI-independent 54-profile snapshot platform plus final custom-select, locale-owned, context-memory, body-portalized frontend boundary |
 | [[entities/fifo-lot-engine]] | Canonical FIFO engine (backend/app/services/fifo_lot_engine.py) — quantitative replay + v4 economic allocation (income/fees/taxes, net metrics, 3-level audit) |
 | [[entities/lots-analysis-service]] | Orchestration service between API and FifoLotEngine — FX prep, economic event building, DTO mapping; no longer the income allocator of record |
 | [[entities/api-router]] | FastAPI router structure — all v1 API routes and their modules |
@@ -235,6 +251,8 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/phase00-risk-analysis-backend]] | Completed and audited `Release_2/Phase_0/02_riskfolioIntegration/` backend G0-G5 chain; G6 reconciled but not executed | 2026-07-28 | phase0, backend, risk, quantlib, riskfolio |
+| [[sources/phase00-ai-export-backend-snapshot]] | Completed `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` chain: plan + frozen profile contract + equivalence report + approved final UI ✅ | 2026-07-27 | phase0, ai-export, snapshot, hard-cutover, ui-memory, mcp |
 | [[sources/fifo-v4-fee-tax-integration]] | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/` | 2026-07-22 | backend, fifo, fee, tax, dividend, cost-basis |
 | [[sources/roadmap-v1-summary]] | `RoadMapV1/01-Riassunto_generale.md` | 2026-04-24 | roadmap, architecture, history |
 | [[sources/todos]] | `TODO_Completati.md` + `TODO_FUTURI.md` | 2026-05-10 | todo, planning, roadmap, features |

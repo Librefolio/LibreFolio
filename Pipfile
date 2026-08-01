@@ -44,10 +44,14 @@ argcomplete = "*"
 pillow = "*"
 PyJWT = "*"
 mkdocs-static-i18n = "*"
-"borsa-italiana-scraping " = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git"}
 scipy = "*"
+quantlib = "==1.43"
+riskfolio-lib = "==7.0.1"
 justetf-scraping = {git = "https://github.com/Librefolio/justetf-scraping.git", ref = "main"}
 xlrd = "*"
+borsa-italiana-scraping = {git = "https://github.com/Librefolio/borsaItaliana-scraping.git", ref = "main"}
+ddgs = "*"
+pyyaml = "==6.0.3"
 
 [dev-packages]
 pytest = "*"
