@@ -43,7 +43,22 @@
         maxWidth?: string;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-amber-100 dark:bg-amber-900/30', headerIconColor = 'text-amber-600 dark:text-amber-400', sections, onsynced, onclose, zIndex = 50, maxWidth = 'max-w-md'}: Props = $props();
+    let {
+        open = $bindable(),
+        dateStart,
+        dateEnd,
+        title,
+        description,
+        testId,
+        headerIcon: HeaderIcon = RefreshCw,
+        headerIconBg = 'bg-amber-100 dark:bg-amber-900/30',
+        headerIconColor = 'text-amber-600 dark:text-amber-400',
+        sections,
+        onsynced,
+        onclose,
+        zIndex = 50,
+        maxWidth = 'max-w-md',
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -239,7 +254,7 @@
     }
 </script>
 
-<ModalBase maxWidth={maxWidth} onRequestClose={onclose} {open} {testId} {zIndex}>
+<ModalBase {maxWidth} onRequestClose={onclose} {open} {testId} {zIndex}>
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
         <div class="flex items-center gap-2.5">
@@ -304,9 +319,7 @@
             {#if failedItems.length > 1 && !syncing}
                 <button
                     class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors
-                        {allFailuresPartial
-                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30'
-                        : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'}"
+                        {allFailuresPartial ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'}"
                     onclick={handleRetryFailed}
                 >
                     <SkipForward size={13} />

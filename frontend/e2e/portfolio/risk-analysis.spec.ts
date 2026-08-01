@@ -561,6 +561,8 @@ test.describe('Risk analysis functional integration', () => {
         const requests = await installRiskMocks(page);
         await openDashboardRisk(page);
 
+        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
         await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
         await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: 8_000});
         await expect(page.getByTestId('risk-contribution-bars')).toBeVisible({timeout: 8_000});
@@ -600,6 +602,8 @@ test.describe('Risk analysis functional integration', () => {
 
         await navigateTo(page, '/assets?tab=correlation');
         await expect(page.getByTestId('asset-global-risk-panel')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
         await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: 8_000});
 
         const selectedAssets = page.getByTestId(/^risk-selected-asset-\d+$/);
@@ -633,6 +637,8 @@ test.describe('Risk analysis functional integration', () => {
         const requests = await installRiskMocks(page);
         const brokerId = await openFirstBrokerRisk(page);
 
+        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
         await expect(page.getByTestId('risk-scope-label')).toBeVisible();
         await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
         await expect.poll(() => requests.some((request) => request.scope.kind === 'portfolio' && request.scope.broker_ids?.length === 1 && request.scope.broker_ids[0] === brokerId)).toBe(true);
@@ -643,11 +649,14 @@ test.describe('Risk analysis functional integration', () => {
         await openFirstAssetDetail(page);
 
         await expect(page.getByTestId('asset-detail-signals-toggle')).toBeVisible({timeout: 8_000});
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
         await expect(page.getByTestId('asset-detail-risk-panel')).toHaveCount(0);
 
         await page.getByTestId('asset-detail-tab-risk').click();
         await expect(page).toHaveURL(/[?&]tab=risk(?:&|$)/);
         await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
+        await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
+        await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
         await expect(page.getByTestId('asset-detail-signals-toggle')).toHaveCount(0);
 
         await page.getByTestId('asset-risk-configure-signals').click();

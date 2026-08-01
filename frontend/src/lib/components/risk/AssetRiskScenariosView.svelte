@@ -5,6 +5,7 @@
     import {_ as t} from '$lib/i18n';
 
     import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
+    import RiskBetaBanner from './RiskBetaBanner.svelte';
 
     interface Props {
         assetId: number;
@@ -58,6 +59,8 @@
 </script>
 
 <div class="space-y-4" data-testid="asset-risk-scenarios-view">
+    <RiskBetaBanner />
+
     <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800" data-testid="asset-risk-summary">
         <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{$t('risk.assetDetail.summaryTitle')}</h2>
         <p class="text-sm text-gray-500 dark:text-gray-400">{$t('risk.assetDetail.summaryDescription')}</p>
@@ -96,6 +99,7 @@
         {geographyExposure}
         {refreshVersion}
         showHeaderActions={false}
+        showBetaBanner={false}
         {onsynced}
     />
 </div>

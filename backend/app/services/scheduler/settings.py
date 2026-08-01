@@ -1,7 +1,7 @@
 """Scheduler settings — read from GlobalSetting table every tick."""
 
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
+from datetime import UTC, datetime, time
 from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,11 +47,11 @@ def _local_times_to_utc(local_times: List[time], tz_name: str) -> List[time]:
     except (KeyError, Exception):
         return local_times  # invalid tz → assume already UTC
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     utc_times = []
     for t in local_times:
         local_dt = datetime(today.year, today.month, today.day, t.hour, t.minute, tzinfo=tz)
-        utc_dt = local_dt.astimezone(timezone.utc)
+        utc_dt = local_dt.astimezone(UTC)
         utc_times.append(time(utc_dt.hour, utc_dt.minute))
     return sorted(utc_times)
 

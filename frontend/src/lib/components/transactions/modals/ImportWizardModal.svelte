@@ -10,7 +10,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X, Wand2, Pencil, Loader2, ArrowUp, ArrowDown} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
@@ -43,6 +43,7 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import type {ColumnDef, RowAction, EnumOption} from '$lib/components/table/types';
     import type {BrimDuplicateMatch} from '$lib/types/files';
     import TransactionFormModal from '$lib/components/transactions/modals/TransactionFormModal.svelte';
@@ -344,9 +345,13 @@
     }
 
     function normalizeDedupDescription(tx: TransactionCreateItem): string {
+        // Whitespace-insensitive: some brokers (e.g. Crédit Agricole) reformat the SAME
+        // transaction's description between two exports by inserting/removing a space
+        // (observed: "DTEMISS." vs "DT EMISS."). Collapsing all whitespace lets genuine
+        // twins match while distinct rows (different ISIN / movement id) stay distinct.
         return String(tx.description ?? '')
-            .trim()
-            .toLowerCase();
+            .toLowerCase()
+            .replace(/\s+/g, '');
     }
 
     function pendingDuplicateStatusFor(a: TransactionCreateItem, b: TransactionCreateItem): 'pending_duplicate' | 'pending_possible_duplicate' {
@@ -369,11 +374,21 @@
         return clusters
             .filter((cluster) => new Set(cluster.members.map((mt) => mt.sourceFileId)).size >= 2)
             .map((cluster) => {
-                const descriptions = new Set(cluster.members.map((mt) => normalizeDedupDescription(mt.tx)));
+                // Partition the loose cluster by normalized description. A partition whose rows
+                // span >=2 source files is a confirmed cross-file duplicate set ("total overlap");
+                // a single-file partition is an ambiguous row with no exact twin ("partial").
+                const filesByDesc = new Map<string, Set<string>>();
+                for (const mt of cluster.members) {
+                    const d = normalizeDedupDescription(mt.tx);
+                    const files = filesByDesc.get(d) ?? new Set<string>();
+                    files.add(mt.sourceFileId);
+                    filesByDesc.set(d, files);
+                }
+                const allPartitionsCrossFile = [...filesByDesc.values()].every((files) => files.size >= 2);
                 return {
                     key: describeDedupKey(cluster.key),
                     memberIndices: cluster.members.map((mt) => mt.index),
-                    tier: descriptions.size <= 1 ? 'sure' : 'probable',
+                    tier: (allPartitionsCrossFile ? 'sure' : 'probable') as DuplicateTier,
                 };
             });
     }
@@ -384,13 +399,41 @@
         duplicateFilePriorityIds = [...duplicateFilePriorityIds.filter((id) => known.has(id)), ...ids.filter((id) => !duplicateFilePriorityIds.includes(id))];
     }
 
-    function defaultKeeperIndices(group: DuplicateGroup, txArr: MergedTx[] = mergedTransactions): Set<number> {
+    interface GroupPartition {
+        primaryIndex: number;
+        memberIndices: number[];
+        crossFile: boolean;
+    }
+
+    /**
+     * Partition a duplicate group by normalized description. Each partition is a set of rows
+     * that share the numeric/fixed key AND the (whitespace-insensitive) description. The primary
+     * is the partition member from the highest-priority file; the rest are exact cross-file twins.
+     */
+    function groupPartitions(group: DuplicateGroup, txArr: MergedTx[] = mergedTransactions): GroupPartition[] {
         const members = group.memberIndices.map((idx) => txArr.find((mt) => mt.index === idx)).filter((mt): mt is MergedTx => mt !== undefined);
-        if (members.length === 0) return new Set();
-        const priority = new Map(duplicateFilePriorityIds.map((id, idx) => [id, idx]));
-        const bestRank = Math.min(...members.map((mt) => priority.get(mt.sourceFileId) ?? Number.MAX_SAFE_INTEGER));
-        const bestSource = members.find((mt) => (priority.get(mt.sourceFileId) ?? Number.MAX_SAFE_INTEGER) === bestRank)?.sourceFileId ?? members[0].sourceFileId;
-        return new Set(members.filter((mt) => mt.sourceFileId === bestSource).map((mt) => mt.index));
+        if (members.length === 0) return [];
+        const priority = new Map(duplicateFilePriorityIds.map((id, idx) => [id, idx] as const));
+        const rank = (mt: MergedTx) => priority.get(mt.sourceFileId) ?? Number.MAX_SAFE_INTEGER;
+        const byDesc = new Map<string, MergedTx[]>();
+        for (const mt of members) {
+            const d = normalizeDedupDescription(mt.tx);
+            const arr = byDesc.get(d) ?? [];
+            arr.push(mt);
+            byDesc.set(d, arr);
+        }
+        return [...byDesc.values()].map((part) => {
+            const primary = part.reduce((best, mt) => (rank(mt) < rank(best) ? mt : best), part[0]);
+            const files = new Set(part.map((mt) => mt.sourceFileId));
+            return {primaryIndex: primary.index, memberIndices: part.map((mt) => mt.index), crossFile: files.size >= 2};
+        });
+    }
+
+    function defaultKeeperIndices(group: DuplicateGroup, txArr: MergedTx[] = mergedTransactions): Set<number> {
+        // Keep exactly one primary per description-partition (highest file priority). A cross-file
+        // duplicate keeps a single copy; genuinely-distinct rows that only share the numeric key
+        // (different descriptions) are each their own partition primary, so all are kept.
+        return new Set(groupPartitions(group, txArr).map((p) => p.primaryIndex));
     }
 
     function resolverHasManualChoice(group: DuplicateGroup): boolean {
@@ -399,7 +442,9 @@
 
     function resolverSelectionFor(group: DuplicateGroup, rowIndex: number, txArr: MergedTx[] = mergedTransactions): boolean {
         if (resolverHasManualChoice(group)) return duplicateResolverSelections[rowIndex] ?? false;
-        if (group.tier === 'probable') return true;
+        // Default keeps one primary per description-partition (BOTH tiers). Distinct rows that
+        // share the numeric key but not the description are each a partition primary, so they are
+        // all kept; only exact cross-file twins (secondaries) are deselected.
         return defaultKeeperIndices(group, txArr).has(rowIndex);
     }
 
@@ -411,6 +456,7 @@
         next[rowIndex] = selected;
         duplicateResolverSelections = next;
         duplicateResolverTouchedKeys = new Set(duplicateResolverTouchedKeys).add(group.key);
+        reapplyResolverGroups();
     }
 
     function resetDuplicateResolverChoice(group: DuplicateGroup) {
@@ -420,28 +466,47 @@
         const touched = new Set(duplicateResolverTouchedKeys);
         touched.delete(group.key);
         duplicateResolverTouchedKeys = touched;
+        reapplyResolverGroups();
+    }
+
+    /**
+     * Re-apply in-batch duplicate resolution to the already-merged rows after a resolver change
+     * (checkbox, reset, priority reorder) so step 3 (member table) and step 4 stay live. Mutates
+     * MergedTx in place, then reassigns the array to trigger Svelte reactivity.
+     */
+    function reapplyResolverGroups() {
+        if (mergedTransactions.length === 0 || duplicateGroups.length === 0) return;
+        applyPendingDuplicateGroups(mergedTransactions, duplicateGroups);
+        mergedTransactions = [...mergedTransactions];
     }
 
     function applyPendingDuplicateGroups(txArr: MergedTx[], groups: DuplicateGroup[]) {
         for (const group of groups) {
-            const manual = resolverHasManualChoice(group);
-            const defaultKeepers = defaultKeeperIndices(group, txArr);
-            const kept = new Set(group.memberIndices.filter((idx) => (manual ? (duplicateResolverSelections[idx] ?? false) : defaultKeepers.has(idx))));
-            const keeperIndex = [...kept][0] ?? [...defaultKeepers][0] ?? group.memberIndices[0];
-            const keeperFileName = getSourceFileName(txArr.find((mt) => mt.index === keeperIndex)?.sourceFileId ?? '');
+            const partitions = groupPartitions(group, txArr);
+            const primaryIndices = new Set(partitions.map((p) => p.primaryIndex));
+            // Back-reference each secondary to its own partition primary (its exact twin).
+            const primaryOf = new Map<number, number>();
+            for (const p of partitions) {
+                for (const idx of p.memberIndices) primaryOf.set(idx, p.primaryIndex);
+            }
             for (const idx of group.memberIndices) {
                 const mt = txArr.find((row) => row.index === idx);
                 if (!mt) continue;
-                const selected = resolverSelectionFor(group, idx, txArr);
-                const treatedAsKeeper = manual ? selected : defaultKeepers.has(idx);
-                mt.selected = selected;
+                const isPrimary = primaryIndices.has(idx);
+                mt.selected = resolverSelectionFor(group, idx, txArr);
                 mt.dupGroupKey = group.key;
                 mt.dupTier = group.tier;
-                mt.isDupKeeper = treatedAsKeeper;
-                if (!treatedAsKeeper) {
-                    mt.duplicateStatus = group.tier === 'sure' ? 'pending_duplicate' : 'pending_possible_duplicate';
+                mt.isDupKeeper = isPrimary;
+                if (isPrimary) {
+                    // Keep the primary's own vs-existing status; it is not an in-batch duplicate.
+                    mt.dupKeeperIndex = undefined;
+                    mt.dupKeeperFileName = undefined;
+                } else {
+                    // Every secondary shares its partition's description+key → exact in-batch duplicate.
+                    mt.duplicateStatus = 'pending_duplicate';
+                    const keeperIndex = primaryOf.get(idx) ?? idx;
                     mt.dupKeeperIndex = keeperIndex;
-                    mt.dupKeeperFileName = keeperFileName;
+                    mt.dupKeeperFileName = getSourceFileName(txArr.find((row) => row.index === keeperIndex)?.sourceFileId ?? '');
                 }
             }
         }
@@ -550,9 +615,20 @@
         return true;
     }
 
+    /**
+     * A resolved-away in-batch duplicate: a non-keeper member of a duplicate group that the user
+     * did not deliberately keep. These are hidden from step 4 entirely (out of table AND payload):
+     * only one keeper per group survives by default. Kept secondaries (selected) and bulk-modal
+     * duplicates (no dupGroupKey) are never hidden.
+     */
+    function isResolvedAwayDuplicate(t: MergedTx): boolean {
+        return t.dupGroupKey != null && t.isDupKeeper === false && !t.selected;
+    }
+
     // Step 4 deriveds
+    let step4Rows = $derived(mergedTransactions.filter((t) => !isResolvedAwayDuplicate(t)));
     let step4SelectedCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index)).length);
-    let step4TotalCount = $derived(mergedTransactions.filter((t) => !beforeOpeningIndices.has(t.index)).length);
+    let step4TotalCount = $derived(step4Rows.filter((t) => !beforeOpeningIndices.has(t.index)).length);
     let step4UnresolvedCount = $derived(assetResolutions.filter((r) => r.resolvedAssetId === null).length);
     let step4HasUnresolvedSelected = $derived(mergedTransactions.some((t) => t.selected && !beforeOpeningIndices.has(t.index) && !isRowAssetResolved(t)));
     let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
@@ -886,22 +962,12 @@
         return parseResults.find((r) => r.fileId === fileId)?.fileName ?? fileId;
     }
 
-    function formatTxAmountText(tx: TransactionCreateItem): string {
-        const cash = getDedupCash(tx);
-        if (!cash) return '—';
-        return `${cash.amount.toFixed(2)} ${cash.code}`;
-    }
-
     function getDuplicateGroupTitle(group: DuplicateGroup): string {
         const first = mergedTransactions.find((mt) => mt.index === group.memberIndices[0]);
         if (!first) return group.key;
         const description = String(first.tx.description ?? '').trim();
         if (description) return description;
         return getAssetDisplayName(typeof first.tx.asset_id === 'number' ? first.tx.asset_id : null);
-    }
-
-    function duplicateTierLabel(tier: DuplicateTier): string {
-        return tier === 'sure' ? $t('importWizard.resolver.tierSure') : $t('importWizard.resolver.tierProbable');
     }
 
     function duplicateTierBadgeClass(tier: DuplicateTier): string {
@@ -915,13 +981,144 @@
         expandedDuplicateGroupKeys = next;
     }
 
-    function movePriorityFile(fileId: string, direction: -1 | 1) {
-        const idx = duplicateFilePriorityIds.indexOf(fileId);
-        const nextIdx = idx + direction;
-        if (idx < 0 || nextIdx < 0 || nextIdx >= duplicateFilePriorityIds.length) return;
-        const next = [...duplicateFilePriorityIds];
-        [next[idx], next[nextIdx]] = [next[nextIdx], next[idx]];
-        duplicateFilePriorityIds = next;
+    /** Discrete overlap-similarity label for a group header (Totale / Parziale). */
+    function duplicateSimilarityLabel(tier: DuplicateTier): string {
+        return tier === 'sure' ? $t('importWizard.resolver.similarityTotal') : $t('importWizard.resolver.similarityPartial');
+    }
+
+    /**
+     * Drop every manual resolver choice so keepers recompute from the current file priority.
+     * Step-3 member checkboxes read `resolverSelectionFor` live; step-4 recomputes on entry.
+     */
+    function recalcResolverDefaults() {
+        duplicateResolverTouchedKeys = new Set();
+        duplicateResolverSelections = {};
+        reapplyResolverGroups();
+    }
+
+    /** Members of a duplicate group as MergedTx rows, in group order. */
+    function resolverGroupMembers(group: DuplicateGroup): MergedTx[] {
+        return group.memberIndices.map((idx) => mergedTransactions.find((mt) => mt.index === idx)).filter((mt): mt is MergedTx => mt !== undefined);
+    }
+
+    /**
+     * Transaction-style columns for the in-group member table (DataTable), mirroring the main
+     * transactions page (type icon, cash formatting) plus a keeper checkbox and a File column.
+     * A function (not a derived) so the keeper column can close over the specific group.
+     */
+    function resolverMemberColumns(group: DuplicateGroup): ColumnDef<MergedTx>[] {
+        const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return [
+            {
+                id: 'keep',
+                header: () => $t('importWizard.resolver.keepColumn'),
+                displayName: () => $t('importWizard.resolver.keepColumn'),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 84,
+                minWidth: 64,
+                align: 'center' as const,
+                pinned: 'left' as const,
+                cell: (mt) => ({
+                    type: 'editable-checkbox',
+                    value: resolverSelectionFor(group, mt.index),
+                    onchange: (v: boolean) => applyDuplicateResolverChoice(group, mt.index, v),
+                    testId: `import-wizard-resolver-keep-${mt.index}`,
+                }),
+            },
+            {
+                id: 'role',
+                header: '',
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 104,
+                minWidth: 80,
+                cell: (mt) => {
+                    if (defaultKeeperIndices(group).has(mt.index)) {
+                        return {type: 'html', html: `<span class="inline-block rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">${$t('importWizard.resolver.defaultKeeper')}</span>`};
+                    }
+                    return {type: 'html', html: `<span class="inline-block rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">${$t('importWizard.resolver.duplicateBadge')}</span>`};
+                },
+            },
+            {
+                id: 'date',
+                header: () => $t('common.date'),
+                type: 'date',
+                sortable: true,
+                filterable: false,
+                width: 116,
+                minWidth: 96,
+                getValue: (mt) => String(mt.tx.date ?? ''),
+                cell: (mt) => ({type: 'date', value: mt.tx.date ?? '', format: 'date'}),
+            },
+            {
+                id: 'type',
+                header: () => $t('common.type'),
+                type: 'text',
+                sortable: true,
+                filterable: false,
+                width: 140,
+                minWidth: 100,
+                getValue: (mt) => String(mt.tx.type ?? ''),
+                cell: (mt) => {
+                    const type = String(mt.tx.type ?? '');
+                    const slug = type.toLowerCase().replace(/_/g, '-');
+                    const label = $t(`transactions.types.${type}`) || type;
+                    const isPair = getTypeRule(type).requiresPair;
+                    const arrow = isPair ? '<span class="shrink-0 mr-0.5">↔</span>' : '';
+                    return {
+                        type: 'html',
+                        html: `<span class="inline-flex items-center gap-1.5 text-xs leading-snug"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/>${arrow}<span>${esc(label)}</span></span>`,
+                    };
+                },
+            },
+            {
+                id: 'cash',
+                header: () => $t('common.cash'),
+                type: 'text',
+                sortable: true,
+                filterable: false,
+                width: 150,
+                minWidth: 120,
+                align: 'right' as const,
+                getValue: (mt) => {
+                    const cash = mt.tx.cash;
+                    return cash && typeof cash === 'object' && !Array.isArray(cash) ? Number((cash as {amount: string}).amount) : 0;
+                },
+                cell: (mt) => {
+                    const cash = mt.tx.cash;
+                    if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
+                        const c = cash as {code: string; amount: string};
+                        return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
+                    }
+                    return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                },
+            },
+            {
+                id: 'sourceFileId',
+                header: () => $t('importWizard.sourceFile'),
+                displayName: () => $t('importWizard.sourceFile'),
+                type: 'text',
+                sortable: true,
+                filterable: false,
+                width: 170,
+                minWidth: 130,
+                getValue: (mt) => getSourceFileName(mt.sourceFileId),
+                cell: (mt) => ({type: 'html', html: `<span class="truncate text-xs text-gray-600 dark:text-gray-300" title="${esc(getSourceFileName(mt.sourceFileId))}">${esc(getSourceFileName(mt.sourceFileId))}</span>`}),
+            },
+            {
+                id: 'description',
+                header: () => $t('common.description'),
+                type: 'text',
+                sortable: false,
+                filterable: false,
+                minWidth: 200,
+                getValue: (mt) => String(mt.tx.description ?? ''),
+                cell: (mt) => ({type: 'html', html: `<span class="truncate text-xs text-gray-800 dark:text-gray-100" title="${esc(String(mt.tx.description ?? '').trim())}">${esc(String(mt.tx.description ?? '').trim() || '—')}</span>`}),
+            },
+        ];
     }
 
     function jumpToDuplicateKeeper(mt: MergedTx) {
@@ -1490,7 +1687,9 @@ ${arrow}<span>${label}</span></span>`,
     });
 
     function step4SelectAll() {
-        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: !beforeOpeningIndices.has(t.index)}));
+        // Do not re-select in-batch duplicates that were resolved away (non-keeper group members):
+        // selecting them would surface hidden duplicates. Keepers and non-group rows are selected.
+        mergedTransactions = mergedTransactions.map((t) => ({...t, selected: !beforeOpeningIndices.has(t.index) && !(t.dupGroupKey != null && t.isDupKeeper === false)}));
     }
     function step4DeselectAll() {
         mergedTransactions = mergedTransactions.map((t) => ({...t, selected: false}));
@@ -2722,51 +2921,44 @@ ${arrow}<span>${label}</span></span>`,
                 {#if duplicateGroups.length > 0}
                     <section class="rounded-lg border border-amber-200 bg-amber-50/40 dark:border-amber-800/70 dark:bg-amber-900/10" data-testid="import-wizard-duplicate-resolver">
                         <div class="border-b border-amber-200 px-3 py-2 dark:border-amber-800/70">
-                            <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-100">{$t('importWizard.resolver.title')}</h3>
-                                    <p class="text-xs text-amber-700 dark:text-amber-300">{$t('importWizard.resolver.subtitle', {values: {n: duplicateGroups.length}})}</p>
-                                </div>
-                                <span class="text-xs text-amber-700 dark:text-amber-300">{$t('importWizard.resolver.priorityHint')}</span>
-                            </div>
+                            <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-100">{$t('importWizard.resolver.title')}</h3>
+                            <p class="text-xs text-amber-700 dark:text-amber-300">{$t('importWizard.resolver.subtitle', {values: {n: duplicateGroups.length}})}</p>
                         </div>
 
-                        <div class="grid gap-3 p-3 lg:grid-cols-[260px_1fr]">
-                            <div class="rounded-lg border border-amber-200 bg-white p-2 dark:border-amber-800 dark:bg-slate-900/60" data-testid="import-wizard-file-priority">
-                                <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.filePriority')}</div>
-                                <div class="space-y-1">
-                                    {#each duplicateFilePriorityIds as fileId, i (fileId)}
-                                        <div class="flex items-center gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800" data-testid="import-wizard-priority-file-{fileId}">
-                                            <span class="w-5 text-xs font-semibold text-gray-400">{i + 1}</span>
-                                            <span class="min-w-0 flex-1 truncate text-xs text-gray-700 dark:text-gray-200" title={getSourceFileName(fileId)}>{getSourceFileName(fileId)}</span>
-                                            <button
-                                                type="button"
-                                                class="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30 dark:hover:bg-slate-700 dark:hover:text-gray-200"
-                                                onclick={() => movePriorityFile(fileId, -1)}
-                                                disabled={i === 0}
-                                                aria-label={$t('importWizard.resolver.moveUp')}
-                                                data-testid="import-wizard-priority-up-{fileId}"
-                                            >
-                                                <ArrowUp size={13} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                class="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-700 disabled:opacity-30 dark:hover:bg-slate-700 dark:hover:text-gray-200"
-                                                onclick={() => movePriorityFile(fileId, 1)}
-                                                disabled={i === duplicateFilePriorityIds.length - 1}
-                                                aria-label={$t('importWizard.resolver.moveDown')}
-                                                data-testid="import-wizard-priority-down-{fileId}"
-                                            >
-                                                <ArrowDown size={13} />
-                                            </button>
+                        <div class="grid min-w-0 gap-3 p-3 lg:grid-cols-[280px_minmax(0,1fr)]">
+                            <div class="min-w-0 space-y-2 rounded-lg border border-amber-200 bg-white p-2 dark:border-amber-800 dark:bg-slate-900/60" data-testid="import-wizard-file-priority">
+                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.filePriority')}</div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.priorityPanelHint')}</p>
+                                <OrderableList
+                                    items={duplicateFilePriorityIds}
+                                    keyFn={(id) => id}
+                                    onReorder={(ids) => {
+                                        duplicateFilePriorityIds = ids;
+                                        reapplyResolverGroups();
+                                    }}
+                                    compact
+                                >
+                                    {#snippet children({item, index})}
+                                        <div class="flex min-w-0 items-center gap-2" data-testid="import-wizard-priority-file-{item}">
+                                            <span class="w-5 shrink-0 text-xs font-semibold text-gray-400">{index + 1}</span>
+                                            <span class="min-w-0 flex-1 truncate text-xs text-gray-700 dark:text-gray-200" title={getSourceFileName(item)}>{getSourceFileName(item)}</span>
                                         </div>
-                                    {/each}
-                                </div>
+                                    {/snippet}
+                                </OrderableList>
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:bg-slate-800 dark:text-amber-200 dark:hover:bg-slate-700"
+                                    onclick={recalcResolverDefaults}
+                                    data-testid="import-wizard-resolver-recalc"
+                                >
+                                    <RefreshCw size={13} />
+                                    {$t('importWizard.resolver.recalcDefaults')}
+                                </button>
                             </div>
 
-                            <div class="space-y-2">
+                            <div class="min-w-0 space-y-2">
                                 {#each duplicateGroups as group (group.key)}
-                                    <div class="overflow-hidden rounded-lg border border-amber-200 bg-white dark:border-amber-800 dark:bg-slate-900/60" data-testid="import-wizard-duplicate-group">
+                                    <div class="min-w-0 overflow-hidden rounded-lg border border-amber-200 bg-white dark:border-amber-800 dark:bg-slate-900/60" data-testid="import-wizard-duplicate-group">
                                         <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-amber-50 dark:hover:bg-amber-900/20" onclick={() => toggleDuplicateGroup(group.key)}>
                                             {#if expandedDuplicateGroupKeys.has(group.key)}
                                                 <ChevronDown size={14} class="shrink-0 text-gray-400" />
@@ -2774,46 +2966,37 @@ ${arrow}<span>${label}</span></span>`,
                                                 <ChevronRight size={14} class="shrink-0 text-gray-400" />
                                             {/if}
                                             <span class="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">{getDuplicateGroupTitle(group)}</span>
-                                            <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300">{$t('importWizard.resolver.memberCount', {values: {n: group.memberIndices.length}})}</span>
-                                            <span class="rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(group.tier)}">{duplicateTierLabel(group.tier)}</span>
+                                            <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300">{$t('importWizard.resolver.memberCount', {values: {n: group.memberIndices.length}})}</span>
+                                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(group.tier)}" title={$t('importWizard.resolver.similarityTooltip')}>{duplicateSimilarityLabel(group.tier)}</span>
                                         </button>
 
                                         {#if expandedDuplicateGroupKeys.has(group.key)}
-                                            <div class="border-t border-amber-100 p-3 dark:border-amber-900/60">
+                                            <div class="min-w-0 border-t border-amber-100 p-3 dark:border-amber-900/60">
                                                 <div class="mb-2 flex items-center justify-between gap-2">
                                                     <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.groupHelp')}</p>
                                                     {#if resolverHasManualChoice(group)}
-                                                        <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => resetDuplicateResolverChoice(group)} data-testid="import-wizard-resolver-reset">
+                                                        <button type="button" class="shrink-0 text-xs text-libre-green hover:underline" onclick={() => resetDuplicateResolverChoice(group)} data-testid="import-wizard-resolver-reset">
                                                             {$t('importWizard.resolver.resetDefault')}
                                                         </button>
                                                     {/if}
                                                 </div>
-                                                <div class="space-y-2">
-                                                    {#each group.memberIndices as memberIndex (memberIndex)}
-                                                        {@const mt = mergedTransactions.find((row) => row.index === memberIndex)}
-                                                        {#if mt}
-                                                            {@const checked = resolverSelectionFor(group, mt.index)}
-                                                            {@const defaultKeeper = defaultKeeperIndices(group).has(mt.index)}
-                                                            <label class="flex cursor-pointer gap-3 rounded-lg border border-gray-200 p-2 hover:bg-gray-50 dark:border-slate-700 dark:hover:bg-slate-800" data-testid="import-wizard-resolver-member-{mt.index}">
-                                                                <input type="checkbox" class="mt-1 h-4 w-4 rounded border-gray-300 text-libre-green focus:ring-libre-green" {checked} onchange={(e) => applyDuplicateResolverChoice(group, mt.index, e.currentTarget.checked)} />
-                                                                <div class="min-w-0 flex-1">
-                                                                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
-                                                                        <span><strong>{$t('common.date')}:</strong> {String(mt.tx.date ?? '').slice(0, 10) || '—'}</span>
-                                                                        <span><strong>{$t('common.type')}:</strong> {$t(`transactions.types.${String(mt.tx.type ?? '')}`) || String(mt.tx.type ?? '—')}</span>
-                                                                        <span><strong>{$t('common.amount')}:</strong> {formatTxAmountText(mt.tx)}</span>
-                                                                        <span><strong>{$t('importWizard.sourceFile')}:</strong> {getSourceFileName(mt.sourceFileId)}</span>
-                                                                        {#if defaultKeeper}
-                                                                            <span class="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{$t('importWizard.resolver.defaultKeeper')}</span>
-                                                                        {/if}
-                                                                    </div>
-                                                                    <div class="mt-1 truncate text-xs text-gray-800 dark:text-gray-100">
-                                                                        <strong>{$t('common.description')}:</strong>
-                                                                        {String(mt.tx.description ?? '').trim() || '—'}
-                                                                    </div>
-                                                                </div>
-                                                            </label>
-                                                        {/if}
-                                                    {/each}
+                                                <div class="min-w-0" data-testid="import-wizard-resolver-member-table-{group.key}">
+                                                    <DataTable
+                                                        data={resolverGroupMembers(group)}
+                                                        columns={resolverMemberColumns(group)}
+                                                        getRowId={(mt) => String(mt.index)}
+                                                        storageKey="import-wizard-resolver-members"
+                                                        enableSelection={false}
+                                                        enableActions={false}
+                                                        enablePagination={false}
+                                                        enableSorting={false}
+                                                        enableColumnFilters={false}
+                                                        enableColumnVisibility={false}
+                                                        enableColumnResize={false}
+                                                        enableContextMenu={false}
+                                                        stickyHeader={false}
+                                                        tableLayout="auto"
+                                                    />
                                                 </div>
                                             </div>
                                         {/if}
@@ -3055,7 +3238,7 @@ ${arrow}<span>${label}</span></span>`,
 
                     <DataTable
                         bind:this={step4TableRef}
-                        data={mergedTransactions}
+                        data={step4Rows}
                         columns={step4Columns}
                         getRowId={(mt) => String(mt.index)}
                         storageKey="import-wizard-step4"
