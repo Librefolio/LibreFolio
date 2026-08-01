@@ -463,8 +463,13 @@
         "unresolvedAction": "Usa el panel de resolución de arriba para seleccionar el activo correspondiente o crear uno nuevo.",
         "possibleDup": "Se encontró una transacción similar en este bróker (misma fecha, tipo e importe, descripción diferente). Verifica si ya fue importada antes de continuar.",
         "likelyDup": "Ya existe una transacción idéntica en este bróker (misma fecha, tipo, importe y descripción). Probablemente ya fue importada — deselecciónala para evitar duplicados.",
-        "beforeOpening": "Fechada antes de la fecha de apertura de este bróker — no importable."
-      }
+        "beforeOpening": "Fechada antes de la fecha de apertura de este bróker — no importable.",
+        "pendingDuplicate": "Coincide con otra transacción de esta importación o con una transacción no guardada que ya está en el editor. Está deseleccionada por defecto; vuelve a seleccionarla solo si quieres conservar ambas.",
+        "possiblePendingDuplicate": "Coincide con otra transacción de esta importación, pero la descripción difiere. Permanece seleccionada para revisar.",
+        "pendingDuplicateJump": "Duplicado de la fila conservada de {file}. Haz clic para verla."
+      },
+      "pendingDuplicate": "Duplicado en el lote",
+      "possiblePendingDuplicate": "Posible duplicado del lote"
     },
     "addIdentifier": {
       "title": "¿Agregar el identificador al activo?",
@@ -491,7 +496,23 @@
     "brokerOpeningMsg": "{count} transacción(es) con fecha anterior a la apertura del bróker ({openedAt}). Más antigua: {minDate}.",
     "autoFixOpening": "Fijar apertura en {date}",
     "autoFixOpeningTip": "Fija la fecha de apertura del bróker en su transacción más antigua para que sus filas se puedan importar.",
-    "autoFixFailed": "No se pudo actualizar la fecha de apertura del bróker."
+    "autoFixFailed": "No se pudo actualizar la fecha de apertura del bróker.",
+    "duplicatesSelected": "{n} duplicados seleccionados",
+    "resolver": {
+      "pendingEditor": "editor pendiente",
+      "title": "Resolutor de duplicados del lote",
+      "subtitle": "{n} grupo(s) de duplicados encontrados entre archivos.",
+      "priorityHint": "Los archivos superiores ganan por defecto.",
+      "filePriority": "Prioridad de archivos",
+      "moveUp": "Subir",
+      "moveDown": "Bajar",
+      "memberCount": "{n} filas",
+      "tierSure": "Duplicado seguro",
+      "tierProbable": "Duplicado probable",
+      "groupHelp": "Selecciona cada fila que quieras conservar. Los grupos sin cambios siguen la prioridad de archivos.",
+      "resetDefault": "Restablecer valores",
+      "defaultKeeper": "conservada por defecto"
+    }
   },
   "brokers": {
     "title": "Brókeres",
@@ -787,7 +808,11 @@
       "annualizedReturn": "Anualizado",
       "annualizedReturnTooltip": "Rendimiento neto anualizado (CAGR) de este lote individual durante su periodo de tenencia, neto de ingresos y gastos, para comparar lotes mantenidos durante distintas duraciones."
     },
-    "createdInSystem": "Creado en el Sistema"
+    "createdInSystem": "Creado en el Sistema",
+    "deleteBlockedTitle": "No se puede eliminar el bróker",
+    "deleteBlockedMessage": "No se puede eliminar: este bróker tiene {count} transacción(es).",
+    "forceCascadeDelete": "Eliminar bróker y transacciones",
+    "goToTransactions": "Ir a transacciones"
   },
   "chart": {
     "tooltip": {
@@ -2368,6 +2393,26 @@
         "all_data": {
           "display": "Todos los datos de la cartera",
           "description": "Unión deduplicada de todos los conjuntos de datos aplicables a la cartera."
+        },
+        "technical_summary": {
+          "display": "Resumen técnico de la cartera",
+          "description": "Cobertura técnica, amplitud agregada y resumen de eventos recientes sin historial completo por activo."
+        },
+        "asset_snapshot": {
+          "display": "Resumen de activos de la cartera",
+          "description": "Resumen uniforme y compacto por activo con rendimientos recientes, tendencia, momentum, volatilidad y último evento."
+        },
+        "asset_comparison": {
+          "display": "Comparación de activos de la cartera",
+          "description": "Comparación de mercado uniforme por activo con cobertura, amplitud y eventos estructurales seleccionados."
+        },
+        "drawdown_context": {
+          "display": "Contexto de Caída de la Cartera",
+          "description": "Caída actual y máxima respecto al pico, determinista, con fechas del episodio, estado de recuperación, base de cálculo y cobertura para toda la cartera (TWRR)."
+        },
+        "income_evidence": {
+          "display": "Evidencia de ingresos de la cartera",
+          "description": "Cronología fechada de ingresos registrados con cobertura de conversión por divisa; sin previsiones de cupones o devengos futuros."
         }
       },
       "broker": {
@@ -2390,6 +2435,26 @@
         "all_data": {
           "display": "Todos los datos del bróker",
           "description": "Unión deduplicada de todos los conjuntos de datos aplicables al bróker."
+        },
+        "technical_summary": {
+          "display": "Resumen técnico del bróker",
+          "description": "Solo cobertura técnica y amplitud agregada dentro del ámbito del bróker."
+        },
+        "asset_comparison": {
+          "display": "Comparación de activos del bróker",
+          "description": "Comparación uniforme de los activos del bróker con contexto de mercado, amplitud y eventos estructurales."
+        },
+        "drawdown_context": {
+          "display": "Contexto de Caída del Bróker",
+          "description": "Caída actual y máxima respecto al pico, determinista, con fechas del episodio, estado de recuperación, base de cálculo y cobertura para el ámbito del bróker seleccionado (TWRR)."
+        },
+        "concentration_evidence": {
+          "display": "Evidencia de concentración del bróker",
+          "description": "Concentración por posición, tipo de activo, sector, geografía y divisa, con comparación opcional de toda la cartera; la cobertura y liquidez desconocidas se declaran, no se asumen."
+        },
+        "cost_efficiency_evidence": {
+          "display": "Evidencia de eficiencia de costes del bróker",
+          "description": "Estado de comisiones registradas con denominadores de rotación y actividad ajustados por participación y disponibilidad de ratios; los datos faltantes siguen no disponibles, nunca cero."
         }
       },
       "asset": {
@@ -2408,6 +2473,14 @@
         "all_data": {
           "display": "Todos los datos del activo",
           "description": "Unión deduplicada de todos los conjuntos de datos aplicables al activo."
+        },
+        "position_context": {
+          "display": "Contexto de la posición del activo",
+          "description": "Contexto de mercado focalizado de la posición con historial limitado, estados técnicos, volatilidad y eventos recientes."
+        },
+        "drawdown_context": {
+          "display": "Contexto de Caída del Activo",
+          "description": "Caída actual y máxima respecto al pico, determinista, con fechas del episodio, estado de recuperación y cobertura, calculada en la moneda de precio nativa del activo (base solo precio)."
         }
       },
       "fx": {
@@ -2426,6 +2499,14 @@
         "all_data": {
           "display": "Todos los datos FX",
           "description": "Unión deduplicada de todos los conjuntos de datos FX aplicables."
+        },
+        "market_context": {
+          "display": "Contexto de mercado FX",
+          "description": "Contexto focalizado de tipo, rendimiento, volatilidad, tendencia, eventos y cobertura del historial de origen."
+        },
+        "conversion_timing_context": {
+          "display": "Contexto de momento de conversión FX",
+          "description": "Contexto de momento no predictivo: posición en el rango observado, rendimientos observados y volatilidad realizada, cobertura u obsolescencia de la fuente; importe, plazo, spread y comisiones no se incluyen y no se hacen previsiones."
         }
       }
     },
@@ -2502,6 +2583,43 @@
           "description": "Describe los vínculos directos de efectivo y posiciones con el par de divisas."
         }
       }
+    },
+    "additionalData": {
+      "heading": "Datos adicionales de LibreFolio",
+      "intro": "Solicita estas exportaciones solo cuando mejoren materialmente el análisis.",
+      "none": "No se recomienda ninguna exportación adicional de LibreFolio.",
+      "what": "Qué contiene",
+      "why": "Por qué puede ayudar",
+      "necessityLabel": "Necesidad",
+      "path": "Ruta en LibreFolio",
+      "recommended": "Parámetros recomendados",
+      "technicalReference": "Referencia técnica secundaria",
+      "steps": {
+        "openLibreFolio": "Abre LibreFolio",
+        "page": "Página",
+        "feature": "Función",
+        "exportType": "Tipo de exportación",
+        "dataset": "Conjunto de datos",
+        "period": "Periodo",
+        "detail": "Detalle"
+      },
+      "period": {
+        "3m": "3 meses",
+        "6m": "6 meses",
+        "1y": "1 año",
+        "maximum_available": "Periodo máximo disponible"
+      },
+      "necessity": {
+        "required": "Obligatorio",
+        "optional": "Opcional"
+      },
+      "reason": {
+        "deeperTechnical": "Úsalo cuando sean realmente necesarios el historial técnico completo y todas las señales disponibles.",
+        "fifoDetail": "Úsalo cuando la identidad, antigüedad, custodia, transferencias o detalle FIFO realizado afecten a la pregunta.",
+        "performanceContext": "Úsalo cuando se necesiten rendimiento del periodo, flujos, ingresos, costes, impuestos o conciliación.",
+        "positionContext": "Úsalo cuando importen la posición real, coste, valor, P&L, ámbito del bróker o función FIFO del activo.",
+        "directExposure": "Úsalo cuando sea relevante la exposición directa de efectivo o posiciones al par FX."
+      }
     }
   },
   "risk": {
@@ -2537,6 +2655,10 @@
       "portfolioOptimization": {
         "name": "Asignación de cartera",
         "description": "Construye una composición hipotética de activos a partir de la muestra, la estrategia, los estimadores y las restricciones seleccionados."
+      },
+      "drawdownSummary": {
+        "name": "Resumen de caídas",
+        "description": "Episodios de caída actual y máxima respecto al pico, fechados y con estado de recuperación, a partir de los rendimientos canónicos del ámbito seleccionado."
       }
     },
     "params": {

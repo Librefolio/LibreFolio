@@ -149,7 +149,7 @@ Exit Tax, inheritances, gifts, corporate actions — these require a user-specif
 BRIM plugins may set `cost_basis_override` directly when the source report already contains the fiscal book value:
 
 - Intesa Sanpaolo `patrimonio` snapshots create a cash `DEPOSIT` when non-zero liquidity is present plus one cashless `ADJUSTMENT` per holding. The plugin divides total *Controvalore di carico fiscale €* by quantity and stores the result as a **per-unit** override.
-- Crédit Agricole Italia succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) are cashless transfer-ins from an untracked dossier, so they are positive `ADJUSTMENT`s with per-unit override and no `DEPOSIT`.
+- Crédit Agricole succession rows (`GIRO ALTRO DOSSIER`, `VERS.TITOLI`) are cashless transfer-ins from an untracked dossier, so they are positive `ADJUSTMENT`s with per-unit override and no `DEPOSIT`.
 
 ### 🚪 `opened_at` and BRIM preview gate
 

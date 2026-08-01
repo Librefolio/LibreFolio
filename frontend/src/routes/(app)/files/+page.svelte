@@ -23,7 +23,7 @@
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo as StoreBrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, type BrokerInfo as StoreBrokerInfo} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import {FileEditModal, ImageEditModal} from '$lib/components/ui/media';
@@ -254,7 +254,7 @@
             // brokers/brokerMap are kept in sync via the brokerStoreVersion
             // subscription (see below). Default-select-all runs only on the
             // first hydration when no filter is active.
-            const list = getAllBrokers();
+            const list = getEditableBrokers();
             if (selectedBrokerIds.size === 0 && list.length > 0) {
                 selectedBrokerIds = new Set(list.map((b) => b.id));
                 saveBrokerFilter(selectedBrokerIds);
@@ -269,7 +269,7 @@
      *  $brokerStoreVersion → we rebuild the local snapshots so icon/name
      *  changes propagate without a manual reload. */
     const _brokerStoreUnsub = brokerStoreVersion.subscribe(() => {
-        const list = getAllBrokers();
+        const list = getEditableBrokers();
         brokers = list;
         brokerMap = new Map(list.map((b) => [b.id, {id: b.id, name: b.name, icon_url: b.icon_url ?? null, portal_url: b.portal_url ?? null, default_import_plugin: (b as any).default_import_plugin ?? null}]));
     });

@@ -60,7 +60,7 @@
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/reference/assetStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/stores/transactions/transactionTypeStore';
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
@@ -512,7 +512,7 @@
                     } else if (defaultBrokerId != null) {
                         draft = {...draft, broker_id: defaultBrokerId};
                     } else {
-                        const all = getAllBrokers();
+                        const all = getEditableBrokers();
                         if (all.length === 1) draft = {...draft, broker_id: all[0].id};
                     }
                 }

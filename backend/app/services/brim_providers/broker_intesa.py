@@ -204,17 +204,17 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
             if tx_date is None or not operazione:
                 # Footer/summary or malformed row: silently skip blanks, warn otherwise.
                 if operazione:
-                    warnings.append(f"Row {offset}: missing date for '{operazione}', skipping")
+                    warnings.append(f"Riga {offset}: data mancante per '{operazione}', saltata")
                 continue
 
             tx_type = _map_movement_type(operazione)
             if tx_type is None:
-                warnings.append(f"Row {offset}: unrecognised operation '{operazione}', skipped (not a security movement)")
+                warnings.append(f"Riga {offset}: operazione '{operazione}' non riconosciuta, saltata (non è un movimento titoli)")
                 continue
 
             amount = io.to_decimal_it(io.row_get(row, col, "importo"))
             if amount is None:
-                warnings.append(f"Row {offset}: invalid amount for '{operazione}', skipping")
+                warnings.append(f"Riga {offset}: importo non valido per '{operazione}', saltata")
                 continue
 
             currency = io.cell_str(io.row_get(row, col, "ccy")) or "EUR"
@@ -255,7 +255,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
             )
 
         if not transactions:
-            warnings.append("No importable securities movements found (only everyday-banking rows?)")
+            warnings.append("Nessun movimento titoli importabile trovato (solo righe di conto corrente?)")
 
         # Advisory: flag assets whose movements include a maturity/redemption cue so the
         # create-asset UI can warn the security may be delisted/unsearchable. Advisory only.
@@ -334,7 +334,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
 
         snapshot_date = max(quote_dates) if quote_dates else date_type.today()
         if not quote_dates:
-            warnings.append("No quote date found in snapshot; using today's date as the seed date")
+            warnings.append("Nessuna data di quotazione trovata nello snapshot; uso la data odierna come data seme")
 
         # Cash balance (Liquidità section): the "Saldo totale" row carries the amount.
         cash_amount = self._extract_liquidity(rows)
@@ -354,7 +354,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
                 tags=["import", "intesa", "snapshot-seed"],
             )
         else:
-            warnings.append("No cash liquidity found in snapshot; deposit seed not created")
+            warnings.append("Nessuna liquidità trovata nello snapshot; deposito seme non creato")
 
         for idx, asset in enumerate(pending_assets):
             key = f"isin:{asset['isin'].upper()}"
@@ -375,7 +375,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
             unit_cost = (cost / qty) if (cost is not None and qty and qty > 0) else None
             cost_override = Currency(code="EUR", amount=unit_cost) if unit_cost is not None else None
             if cost_override is None:
-                warnings.append(f"Asset '{asset['name']}': no fiscal cost basis in snapshot; adjustment created without cost override")
+                warnings.append(f"Titolo '{asset['name']}': nessun costo fiscale nello snapshot; rettifica creata senza override del costo")
 
             self._create_transaction(
                 row_num=idx + 1,
@@ -395,7 +395,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
             )
 
         if not transactions:
-            warnings.append("No holdings or cash found in the patrimonio snapshot")
+            warnings.append("Nessuna posizione o liquidità trovata nello snapshot patrimonio")
 
         logger.info("Intesa patrimonio parsed", transaction_count=len(transactions), warning_count=len(warnings), asset_count=len(extracted_assets), snapshot_date=str(snapshot_date))
         return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets)

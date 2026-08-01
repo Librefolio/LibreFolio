@@ -122,7 +122,7 @@ Some broker events are one source row but several LibreFolio transactions. The c
 | Bond maturity above par | `SELL` at par principal + `INTEREST` for the above-par premium/FOI amount |
 | Portfolio snapshot seed | `DEPOSIT` for cash when present + one cashless `ADJUSTMENT` per holding |
 
-This mirrors shipped broker plugins such as Intesa Sanpaolo (snapshot seed) and Crédit Agricole Italia (automatic cash counter-entries and bond maturity split).
+This mirrors shipped broker plugins such as Intesa Sanpaolo (snapshot seed) and Crédit Agricole (automatic cash counter-entries and bond maturity split).
 
 ### 🤝 P2P lending / crowdfunding patterns
 

@@ -132,10 +132,10 @@ LibreFolio supports importing statement files from the following brokers:
     </a>
     <a href="credit_agricole/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
-    <img src="https://www.credit-agricole.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Crédit Agricole Italia">
-    <span class="card-title" style="margin: 0;">Crédit Agricole Italia</span>
+    <img src="https://www.credit-agricole.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Crédit Agricole">
+    <span class="card-title" style="margin: 0;">Crédit Agricole</span>
     </div>
-    <span class="card-desc">Import CSV/XLSX Lista Movimenti Deposito Titoli exports from Crédit Agricole Italia.</span>
+    <span class="card-desc">Import account movements from Crédit Agricole — real cash, fees, taxes and coupons/dividends; optional securities export for pre-2-year history.</span>
     </a>
     <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -251,7 +251,7 @@ LibreFolio supports importing statement files from the following brokers:
     | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Built from sample exports |
     | <img src="https://finecobank.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Both export layouts; amounts in report currency |
     | <img src="https://www.intesasanpaolo.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Intesa Sanpaolo** | 🧪 Beta | CSV/XLSX | ❌ | ✅ | ✅ | ✅ | Movements coupons/dividends/fees/taxes; patrimonio snapshot seeds cash when present + holdings |
-    | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Crédit Agricole Italia** | 🧪 Beta | CSV/XLSX | ✅ | ✅ | ✅ | ❌ | Securities-only export; auto cash counter-entries; maturities and succession adjustments |
+    | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Crédit Agricole** | ✅ Stable | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | Account movements bring real cash, fees, taxes and coupons/dividends; optional securities export recovers pre-2-year history; auto cash counter-entries, maturities and succession adjustments |
     | <img src="https://traderepublic.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trade Republic** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Built from sample exports |
     | <img src="https://www.xtb.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **XTB** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Built from sample exports |
     | <img src="https://parqet.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Parqet** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Built from sample exports |
@@ -280,6 +280,12 @@ During the preview step, LibreFolio attempts to **auto-match** each asset name f
 ## ♻️ Duplicate Detection {: #duplicate-detection }
 
 BRIM checks for **duplicate transactions** based on date, type, asset, quantity, and amount. Duplicate rows are flagged in the preview — you can choose to skip or force-import them.
+
+---
+
+## ⛔ Before the broker opening date {: #before-opening }
+
+If a broker has an **opening date** set, any transaction dated **before** that date is flagged in the preview as **"Before opening"** and cannot be imported (its checkbox is disabled). The opening day itself is still valid. If a row is flagged by mistake, use the **Edit broker date** action, then **re-check / refresh** so the wizard re-evaluates every row against the updated date.
 
 ---
 

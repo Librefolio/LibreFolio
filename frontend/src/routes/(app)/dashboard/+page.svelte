@@ -25,7 +25,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
@@ -50,6 +50,7 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
@@ -497,7 +498,7 @@
         void loadAiExportCompatibility();
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
-            allBrokers = getAllBrokers();
+            allBrokers = getAccessibleBrokers();
             await loadAll();
         })();
         return () => document.removeEventListener('click', handleDocumentClick);
@@ -603,6 +604,8 @@
                             <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
                                 {#each allBrokers as broker (broker.id)}
                                     {@const isSelected = selectedBrokerIds.includes(broker.id)}
+                                    {@const role = getBrokerRole(broker.id)}
+                                    {@const RoleIcon = role ? getRoleIcon(role) : null}
                                     <button
                                         type="button"
                                         class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
@@ -611,6 +614,9 @@
                                     >
                                         <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size={16} />
                                         <span class="flex-1 truncate">{broker.name}</span>
+                                        {#if RoleIcon}
+                                            <RoleIcon size={14} class={getRoleIconColor(role)} />
+                                        {/if}
                                         {#if isSelected}
                                             <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />

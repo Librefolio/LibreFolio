@@ -463,8 +463,13 @@
         "unresolvedAction": "Use the resolution panel above to select the matching asset or create a new one.",
         "possibleDup": "A similar transaction was found in this broker (same date, type and amount, different description). Verify whether it has already been imported before proceeding.",
         "likelyDup": "An identical transaction already exists in this broker (same date, type, amount and description). It has likely already been imported — deselect it to avoid duplicates.",
-        "beforeOpening": "Dated before this broker's opening date — not importable."
-      }
+        "beforeOpening": "Dated before this broker's opening date — not importable.",
+        "pendingDuplicate": "Matches another transaction in this import or an unsaved transaction already in the editor. It is deselected by default; reselect only if you want to keep both.",
+        "possiblePendingDuplicate": "Matches another transaction in this import, but the description differs. It stays selected for review.",
+        "pendingDuplicateJump": "Duplicate of row kept from {file}. Click to view."
+      },
+      "pendingDuplicate": "Duplicate in batch",
+      "possiblePendingDuplicate": "Possible batch dup"
     },
     "addIdentifier": {
       "title": "Add identifier to asset?",
@@ -491,7 +496,23 @@
     "brokerOpeningMsg": "{count} transaction(s) dated before this broker's opening ({openedAt}). Earliest: {minDate}.",
     "autoFixOpening": "Set opening to {date}",
     "autoFixOpeningTip": "Set the broker's opening date to its earliest transaction so its rows become importable.",
-    "autoFixFailed": "Could not update the broker's opening date."
+    "autoFixFailed": "Could not update the broker's opening date.",
+    "duplicatesSelected": "{n} duplicates selected",
+    "resolver": {
+      "pendingEditor": "pending editor",
+      "title": "Batch duplicate resolver",
+      "subtitle": "{n} duplicate group(s) found across files.",
+      "priorityHint": "Higher files win defaults.",
+      "filePriority": "File priority",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "memberCount": "{n} rows",
+      "tierSure": "Sure duplicate",
+      "tierProbable": "Probable duplicate",
+      "groupHelp": "Select every row to keep. Untouched groups follow file priority.",
+      "resetDefault": "Reset defaults",
+      "defaultKeeper": "default keeper"
+    }
   },
   "brokers": {
     "title": "Brokers",
@@ -787,7 +808,11 @@
       "annualizedReturn": "Annualized",
       "annualizedReturnTooltip": "Net annualized return (CAGR) of this single lot over its holding window, net of income and fees, for comparison across lots held for different durations."
     },
-    "createdInSystem": "Created in System"
+    "createdInSystem": "Created in System",
+    "deleteBlockedTitle": "Cannot delete broker",
+    "deleteBlockedMessage": "Cannot delete: this broker has {count} transaction(s).",
+    "forceCascadeDelete": "Delete broker and transactions",
+    "goToTransactions": "Go to transactions"
   },
   "chart": {
     "tooltip": {
@@ -2368,6 +2393,26 @@
         "all_data": {
           "display": "All Portfolio Data",
           "description": "Deduplicated union of every applicable portfolio dataset."
+        },
+        "technical_summary": {
+          "display": "Portfolio Technical Summary",
+          "description": "Technical coverage, aggregate breadth, and a recent event digest without complete per-asset history."
+        },
+        "asset_snapshot": {
+          "display": "Portfolio Asset Snapshot",
+          "description": "Small uniform per-asset snapshot with recent returns, trend, momentum, volatility, and latest event."
+        },
+        "asset_comparison": {
+          "display": "Portfolio Asset Comparison",
+          "description": "Uniform per-asset market comparison with coverage, breadth, and selected structural events."
+        },
+        "drawdown_context": {
+          "display": "Portfolio Drawdown Context",
+          "description": "Deterministic current and maximum peak-relative drawdown with episode dates, recovery status, calculation basis, and coverage for the whole portfolio (TWRR)."
+        },
+        "income_evidence": {
+          "display": "Portfolio Income Evidence",
+          "description": "Dated recorded income timeline with per-currency conversion coverage; no future coupon or accrual forecasts."
         }
       },
       "broker": {
@@ -2390,6 +2435,26 @@
         "all_data": {
           "display": "All Broker Data",
           "description": "Deduplicated union of every applicable broker dataset."
+        },
+        "technical_summary": {
+          "display": "Broker Technical Summary",
+          "description": "Broker-scoped technical coverage and aggregate breadth only."
+        },
+        "asset_comparison": {
+          "display": "Broker Asset Comparison",
+          "description": "Uniform broker-scoped asset comparison with market context, breadth, and structural events."
+        },
+        "drawdown_context": {
+          "display": "Broker Drawdown Context",
+          "description": "Deterministic current and maximum peak-relative drawdown with episode dates, recovery status, calculation basis, and coverage for the selected broker scope (TWRR)."
+        },
+        "concentration_evidence": {
+          "display": "Broker Concentration Evidence",
+          "description": "Concentration by position, asset type, sector, geography, and currency, with an optional whole-portfolio comparison; unknown coverage and liquidity are disclosed, not assumed."
+        },
+        "cost_efficiency_evidence": {
+          "display": "Broker Cost Efficiency Evidence",
+          "description": "Recorded fee status with share-adjusted turnover and activity denominators and ratio availability; missing data stays unavailable, never zero."
         }
       },
       "asset": {
@@ -2408,6 +2473,14 @@
         "all_data": {
           "display": "All Asset Data",
           "description": "Deduplicated union of every applicable asset dataset."
+        },
+        "position_context": {
+          "display": "Asset Position Context",
+          "description": "Focused position market context with limited history, technical states, volatility, and recent events."
+        },
+        "drawdown_context": {
+          "display": "Asset Drawdown Context",
+          "description": "Deterministic current and maximum peak-relative drawdown with episode dates, recovery status, and coverage, computed in the asset's native price currency (price-only basis)."
         }
       },
       "fx": {
@@ -2426,6 +2499,14 @@
         "all_data": {
           "display": "All FX Data",
           "description": "Deduplicated union of every applicable FX dataset."
+        },
+        "market_context": {
+          "display": "FX Market Context",
+          "description": "Focused rate, return, volatility, trend, event, and source-history context."
+        },
+        "conversion_timing_context": {
+          "display": "FX Conversion Timing Context",
+          "description": "Non-predictive timing context: observed range position, observed returns and realized volatility, and source coverage or staleness; amount, deadline, spread, and fees are not included and no forecasts are made."
         }
       }
     },
@@ -2502,6 +2583,43 @@
           "description": "Describe direct cash and position links to the currency pair."
         }
       }
+    },
+    "additionalData": {
+      "heading": "Additional LibreFolio Data",
+      "intro": "Ask for these exports only when they materially improve the analysis.",
+      "none": "No additional LibreFolio export is recommended.",
+      "what": "What it contains",
+      "why": "Why it may help",
+      "necessityLabel": "Need",
+      "path": "LibreFolio path",
+      "recommended": "Recommended parameters",
+      "technicalReference": "Secondary technical reference",
+      "steps": {
+        "openLibreFolio": "Open LibreFolio",
+        "page": "Page",
+        "feature": "Feature",
+        "exportType": "Export type",
+        "dataset": "Dataset",
+        "period": "Period",
+        "detail": "Detail"
+      },
+      "period": {
+        "3m": "3 months",
+        "6m": "6 months",
+        "1y": "1 year",
+        "maximum_available": "Maximum available period"
+      },
+      "necessity": {
+        "required": "Required",
+        "optional": "Optional"
+      },
+      "reason": {
+        "deeperTechnical": "Use it when complete technical history and all available Signal are materially needed.",
+        "fifoDetail": "Use it when lot identity, age, custody, transfers, or realized FIFO detail affects the question.",
+        "performanceContext": "Use it when selected-period performance, flows, income, costs, taxes, or reconciliation are needed.",
+        "positionContext": "Use it when the asset's actual position, cost, value, P&L, Broker scope, or FIFO role matters.",
+        "directExposure": "Use it when direct cash or position exposure to the FX pair is relevant."
+      }
     }
   },
   "risk": {
@@ -2537,6 +2655,10 @@
       "portfolioOptimization": {
         "name": "Portfolio allocation",
         "description": "Builds a hypothetical asset composition from the selected sample, strategy, estimators and constraints."
+      },
+      "drawdownSummary": {
+        "name": "Drawdown summary",
+        "description": "Dated current and maximum peak-relative drawdown episodes with recovery status from the selected scope's canonical returns."
       }
     },
     "params": {

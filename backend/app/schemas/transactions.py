@@ -713,9 +713,9 @@ class TXMixedBatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    creates: List[dict] = Field(default_factory=list, max_length=500)
-    updates: List[dict] = Field(default_factory=list, max_length=500)
-    deletes: List[int] = Field(default_factory=list, max_length=500)
+    creates: List[dict] = Field(default_factory=list)
+    updates: List[dict] = Field(default_factory=list)
+    deletes: List[int] = Field(default_factory=list)
     splits: List[dict] = Field(default_factory=list, max_length=100)
     promotes: List[dict] = Field(default_factory=list, max_length=100)
 

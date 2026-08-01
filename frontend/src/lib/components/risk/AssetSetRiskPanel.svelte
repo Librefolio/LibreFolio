@@ -8,7 +8,7 @@
     import type {SelectOption} from '$lib/components/ui/select/types';
     import {singleValue} from '$lib/risk/riskTypes';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {brokerStoreVersion, ensureBrokersLoaded, getAllBrokers} from '$lib/stores/reference/brokerStore';
+    import {brokerStoreVersion, ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
 
@@ -43,7 +43,7 @@
 
     let brokers = $derived.by(() => {
         void $brokerStoreVersion;
-        return getAllBrokers();
+        return getAccessibleBrokers();
     });
     let brokerOptions = $derived([{value: '', label: $t('dashboard.allBrokers')}, ...brokers.map((broker) => ({value: String(broker.id), label: broker.name}))]);
     let selectedAssets = $derived(selectedAssetIds.map((assetId) => assets.find((asset) => asset.id === assetId)).filter((asset): asset is AssetOption => Boolean(asset)));

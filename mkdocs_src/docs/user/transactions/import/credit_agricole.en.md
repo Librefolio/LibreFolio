@@ -1,4 +1,4 @@
-# 📥 <img src="https://www.credit-agricole.it/favicon.ico" alt=""> Crédit Agricole Italia
+# 📥 <img src="https://www.credit-agricole.it/favicon.ico" alt=""> Crédit Agricole
 
 !!! info "Beta"
 
@@ -6,11 +6,11 @@
 
 ## 📥 How to Export
 
-LibreFolio reads Crédit Agricole Italia exports in **CSV** *or* **XLSX** — you do not need
+LibreFolio reads Crédit Agricole exports in **CSV** *or* **XLSX** — you do not need
 to convert the file, just import it as downloaded. The supported report is the
 **"Lista Movimenti Deposito Titoli"** (securities dossier movements) of your account.
 
-From your Crédit Agricole Italia online banking, open the securities dossier, select the
+From your Crédit Agricole online banking, open the securities dossier, select the
 period you want, and export the movements list.
 
 ## 📝 Notes

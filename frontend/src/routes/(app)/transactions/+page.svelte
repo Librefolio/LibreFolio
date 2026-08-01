@@ -9,7 +9,7 @@
     import {zodiosApi} from '$lib/api';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getAccessibleBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -55,7 +55,7 @@
     let brokers = $derived.by<BrokerLike[]>(() => {
         void $brokerStoreVersion;
         void pluginIconsReady; // Re-run after plugin icon cache is populated
-        return getAllBrokers() as BrokerLike[];
+        return getAccessibleBrokers() as BrokerLike[];
     });
     let eventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
 
@@ -715,7 +715,7 @@
 
     /** Build resolver context for resolveIssueMessage (same shape as BulkModal). */
     function buildResolverCtx(): ResolverContext {
-        const brkrs = getAllBrokers();
+        const brkrs = getAccessibleBrokers();
         return {
             brokers: brkrs as unknown as Array<{id: number; name: string}>,
             assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
@@ -732,7 +732,7 @@
     function brokerHtml(brokerId: number): string {
         const info = getBrokerInfo(brokerId);
         const name = info?.name ?? `#${brokerId}`;
-        const brkrs = getAllBrokers();
+        const brkrs = getAccessibleBrokers();
         const iconTag = getBrokerIconHtmlById(brokerId, brkrs as any[], {
             width: 14,
             height: 14,

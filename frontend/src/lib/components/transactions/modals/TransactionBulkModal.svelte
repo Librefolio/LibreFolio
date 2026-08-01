@@ -40,7 +40,7 @@
     import type {ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
-    import {ensureBrokersLoaded, getAllBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
@@ -157,7 +157,7 @@
 
     /** Default DraftFields for a brand-new transaction. */
     function defaultFields(): DraftFields {
-        const brokers = getAllBrokers();
+        const brokers = getEditableBrokers();
         // defaultBrokerId (e.g. opened from a broker-scoped page) wins over the
         // single-broker heuristic; both are just an initial value, still editable.
         const defaultBroker = defaultBrokerId ?? (brokers.length === 1 ? brokers[0].id : 0);
@@ -517,7 +517,7 @@
 
     let brokers = $derived.by<BrokerInfo[]>(() => {
         void $brokerStoreVersion;
-        return getAllBrokers();
+        return getEditableBrokers();
     });
 
     // =========================================================================
@@ -2006,6 +2006,12 @@
     // ImportWizardModal (Phase 07 Part 5 v5 M1→M4): BRIM Import Wizard → BulkModal bridge.
     // -------------------------------------------------------------------------
     let importWizardOpen = $state(false);
+    let pendingCreateTransactions = $derived.by<TransactionCreateItem[]>(() =>
+        ops.flatMap((op) => {
+            if (op.op !== 'create') return [];
+            return [buildCreatePayload(opToTxFields(op), getTypeRule(op.fields.type as TransactionTypeCode)) as TransactionCreateItem];
+        }),
+    );
 
     /** Convert a TXCreateItem (from BRIM parse) to a PendingOp 'create' row.
      *  Signs are converted to display values (BulkModal convention: positive display,
@@ -3218,4 +3224,4 @@
 />
 
 <!-- Phase 07 Part 5 v5 M1: BRIM Import Wizard -->
-<ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} onClose={() => (importWizardOpen = false)} {onImportBatch} />
+<ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} {pendingCreateTransactions} onClose={() => (importWizardOpen = false)} {onImportBatch} />
