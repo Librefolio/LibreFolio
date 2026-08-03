@@ -33,7 +33,7 @@ flowchart LR
     S["Authoritative sources and engines"] --> C["65 granular components"]
     C --> D["32 composed datasets"]
     D --> E["Export Data<br/>data-only prompt"]
-    D --> A["16 analysis profiles"]
+    D --> A["17 analysis profiles"]
     A --> F["Frontend instructions<br/>and response contract"]
     F --> P["Request Analysis<br/>full prompt"]
 ```
@@ -54,7 +54,7 @@ sequenceDiagram
     participant C as Clipboard
 
     F->>A: GET /catalog
-    A-->>F: 32 datasets + 16 analyses, V2 identities
+    A-->>F: 32 datasets + 17 analyses, V2 identities
     U->>F: Export Data or Request Analysis
     F->>A: POST /snapshot with selected V2 contract
     A->>R: Authenticated request + accessible broker scope

@@ -414,8 +414,8 @@ class TestDrawdownCatalogWiring:
         assert len(ALL_COMPONENTS) == 65
         assert EXPECTED_DATASET_COUNT == 32
         assert len(build_dataset_registry()) == 32
-        assert EXPECTED_ANALYSIS_COUNT == 16
-        assert len(build_analysis_registry()) == 16
+        assert EXPECTED_ANALYSIS_COUNT == 17
+        assert len(build_analysis_registry()) == 17
 
     def test_drawdown_datasets_excluded_from_all_data(self):
         registry = build_dataset_registry()

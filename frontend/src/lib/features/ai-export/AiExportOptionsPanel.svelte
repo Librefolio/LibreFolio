@@ -1,6 +1,6 @@
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {Activity, ArrowLeftRight, Banknote, CalendarClock, CircleHelp, Clock, Coins, Database, FileText, Landmark, LayoutDashboard, ListOrdered, PieChart, Receipt, Scale, Target, TrendingDown, TrendingUp, Wallet} from 'lucide-svelte';
+    import {Activity, ArrowLeftRight, Banknote, CalendarClock, CircleHelp, Clock, Coins, Database, FileText, Landmark, LayoutDashboard, ListOrdered, Newspaper, PieChart, Receipt, Scale, Target, TrendingDown, TrendingUp, Wallet} from 'lucide-svelte';
 
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
@@ -30,6 +30,7 @@
         domain: AiExportDomain;
         compatibility: AiExportCatalogCompatibilityResult;
         initialOptions: AiExportOptionsSelection;
+        initialUserNotes?: string;
         responseLanguage: AiExportOptionsSelection['responseLanguage'];
         pending?: PreparedAiExport;
         disabled?: boolean;
@@ -39,10 +40,10 @@
         onprepare: (options: AiExportOptionsSelection) => void;
         oncopyanyway: () => void;
         onusecompact: (options: AiExportOptionsSelection) => void;
-        ondraftchange?: (options: AiExportOptionsSelection) => void;
+        ondraftchange?: (options: AiExportOptionsSelection, userNotesDraft: string) => void;
     }
 
-    let {domain, compatibility, initialOptions, responseLanguage, pending, disabled = false, loading = false, locale, labels, onprepare, oncopyanyway, onusecompact, ondraftchange}: Props = $props();
+    let {domain, compatibility, initialOptions, initialUserNotes, responseLanguage, pending, disabled = false, loading = false, locale, labels, onprepare, oncopyanyway, onusecompact, ondraftchange}: Props = $props();
 
     const componentId = $props.id();
     const selectionKinds = ['dataset', 'analysis'] as const;
@@ -59,6 +60,7 @@
         landmark: Landmark,
         'layout-dashboard': LayoutDashboard,
         'list-ordered': ListOrdered,
+        newspaper: Newspaper,
         'pie-chart': PieChart,
         receipt: Receipt,
         scale: Scale,
@@ -74,7 +76,7 @@
     let periodPreset = $state<AiExportPeriodPreset>(initial.period.preset);
     let customAmount = $state(initial.period.customAmount);
     let customUnit = $state<AiExportPeriodUnit>(initial.period.customUnit);
-    let userNotes = $state(initial.userNotes ?? '');
+    let userNotes = $state(untrack(() => initialUserNotes ?? initialOptions.userNotes ?? ''));
 
     let selections = $derived(selectionsForDomain(compatibility, domain, selectionKind));
     let selectionOptions = $derived<SelectOption[]>(
@@ -93,7 +95,7 @@
             detailLevel,
             period: normalizeAiExportPeriod({preset: periodPreset, customAmount, customUnit}),
             responseLanguage,
-            userNotes: normalizeAiExportUserNotes(selectionKind, userNotes),
+            userNotes: selected?.entry.kind === 'analysis' && selected.entry.supports_user_notes ? normalizeAiExportUserNotes(selectionKind, userNotes) : undefined,
         }),
     );
     let controlsDisabled = $derived(disabled || loading);
@@ -118,7 +120,8 @@
 
     $effect(() => {
         const draft = currentOptions;
-        untrack(() => ondraftchange?.(draft));
+        const notesDraft = userNotes;
+        untrack(() => ondraftchange?.(draft, notesDraft));
     });
 
     function setCategory(kind: AiExportSelectionKind) {
@@ -128,7 +131,6 @@
             selectionId = first.id;
             detailLevel = first.supportedDetailLevels.includes('standard') ? 'standard' : first.supportedDetailLevels[0];
         }
-        if (kind === 'dataset') userNotes = '';
     }
 
     function handleSelection(value: string) {

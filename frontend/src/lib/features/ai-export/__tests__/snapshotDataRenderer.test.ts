@@ -95,13 +95,53 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content.match(/SIGNAL 1/g)).toHaveLength(1);
         expect(rendered.content.match(/Signal semantic appears once\./g)).toHaveLength(1);
         expect(rendered.content.match(/Output semantic appears once\./g)).toHaveLength(1);
-        expect(rendered.content).toContain('|instance_id|temporal_class|bucket_count|entity_count|');
-        expect(rendered.content).toContain('|ema_20|medium|32|2|');
+        expect(rendered.content).toContain('|instance_id|temporal_class|bucket_count|rendered_history_limit|history_selection|entity_count|');
+        expect(rendered.content).toContain('|ema_20|medium|32|all|all_nonempty_buckets|2|');
         expect(rendered.content).toContain('|A1|60%|60%|ema|12@2026/03/31|');
         expect(rendered.content).toContain('|A2|40%|40%|ema|22@2026/03/31|');
         expect(rendered.content).toContain("portfolio_weight_percent and *_portfolio_weight_percent use gross absolute open-position market value. technical_normalized_weight_percent sums to 100% across each signal instance's covered technical universe.");
-        expect(rendered.content).toContain('|A1|2026/03/01|2026/03/02|2|2|f:10@2026/03/01;l:11@2026/03/02;n:9@2026/03/01;x:12@2026/03/02;c:2|');
+        expect(rendered.content).toContain('|A1|2026/03/01|2026/03/02|2|2|f:10@s;l:11@e;n:9@s;x:12@e;c:2|');
         expect(rendered.content).not.toContain('semantic_description:');
+    });
+
+    it('samples indicator history by detail while preserving the full-period summary and endpoints', () => {
+        const section = indicatorSection(26);
+        const sampling = {
+            indicator_policies: [
+                {
+                    signal_instance_id: 'ema_20',
+                    temporal_class: 'medium',
+                    bucket_count: 26,
+                },
+            ],
+        };
+
+        const compact = renderSnapshotDataText([section], {kind: 'portfolio'}, undefined, {...sampling, detail_level: 'compact', indicator_history_row_limit: 5});
+        const standard = renderSnapshotDataText([section], {kind: 'portfolio'}, undefined, {...sampling, detail_level: 'standard', indicator_history_row_limit: 10});
+        const full = renderSnapshotDataText([section], {kind: 'portfolio'}, undefined, {...sampling, detail_level: 'full', indicator_history_row_limit: null});
+
+        expect(compact.signalMetrics[0]).toMatchObject({
+            source_history_row_count: 52,
+            history_row_count: 10,
+            sampled_history_row_count: 42,
+        });
+        expect(standard.signalMetrics[0]).toMatchObject({
+            source_history_row_count: 52,
+            history_row_count: 20,
+            sampled_history_row_count: 32,
+        });
+        expect(full.signalMetrics[0]).toMatchObject({
+            source_history_row_count: 52,
+            history_row_count: 52,
+            sampled_history_row_count: 0,
+        });
+        expect(standard.content).toContain('rendered_limit_per_entity_instance=10');
+        expect(standard.content).toContain('period_summary=full exported period');
+        expect(standard.content).toContain('|A1|2026/03/01|2026/03/02|');
+        expect(standard.content).toContain('|A1|2026/03/26|2026/03/27|');
+        expect(standard.content).toContain('f:10@2026/01/01;l:12@2026/03/31');
+        expect(standard.formatDiagnostics.indicator_history_rows_sampled_out).toBe(32);
+        expect(full.content).toContain('|all|all_nonempty_buckets|');
     });
 
     it('exposes period-scoped universe count names and drops the ambiguous considered name', () => {
@@ -179,9 +219,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content.match(/SIGNAL 1/g)).toHaveLength(1);
         expect(rendered.content.match(/Signal semantic appears once\./g)).toHaveLength(1);
         expect(rendered.content).toContain('|EMA|trend|ema.signal|Signal semantic appears once.|2|');
-        expect(rendered.content).toContain('|instance_id|temporal_class|entity_count|');
-        expect(rendered.content).toContain('|ema_20|medium|2|');
-        expect(rendered.content).toContain('|ema_50|slow|2|');
+        expect(rendered.content).toContain('|instance_id|temporal_class|rendered_history_limit|history_selection|entity_count|');
+        expect(rendered.content).toContain('|ema_20|medium|all|all_nonempty_buckets|2|');
+        expect(rendered.content).toContain('|ema_50|slow|all|all_nonempty_buckets|2|');
         expect(rendered.content).toContain('|ema_20,ema_50|ema|ema|price|line|last_with_range|ema.value|Output semantic appears once.|');
         expect(rendered.content).toContain('INSTANCE ema_20');
         expect(rendered.content).toContain('INSTANCE ema_50');
@@ -233,7 +273,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
                         entity_id: 'asset:7',
                         annotation_key: 'price_ema_20',
                         detected_count: 2,
-                        recent_30d_count: 2,
+                        recent_window_count: 2,
                         exported_count: 2,
                         selection_applied: false,
                         oldest_detected_event_date: '2026/03/03',
@@ -252,8 +292,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content.match(/Price crossed EMA20\./g)).toHaveLength(1);
         expect(rendered.content).toContain('SIGNAL EVENTS 1');
         expect(rendered.content).toContain('|1|2026/03/01|2026/03/07|7|2|');
-        expect(rendered.content).toContain('ema=100,price=101');
-        expect(rendered.content).toContain('|A1|price_ema_20|2|2|2|false|');
+        expect(rendered.content).toContain('|E1|price_ema_20|line_crossover|ema,price|Price crossed EMA20.|');
+        expect(rendered.content).toContain('|1|E1|A1|2026/03/03|up|100,101|');
+        expect(rendered.content).toContain('|A1|E1|2|2|2|false|');
     });
 
     it('renders continuous buckets as one compact table with explicit nulls', () => {
@@ -427,7 +468,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
         const rendered = renderSnapshotDataText([section], {kind: 'portfolio'});
 
         expect(rendered.content).toContain('|A1|60%|60%|ema|100@2026/03/31|f:0@2026/01/01;l:100@2026/03/31;n:0@2026/01/01;x:100@2026/03/31;c:2|');
-        expect(rendered.content).toContain('|A1|2026/03/01|2026/03/02|2|2|f:0@2026/03/01;l:100@2026/03/02;n:0@2026/03/01;x:100@2026/03/02;c:2|');
+        expect(rendered.content).toContain('|A1|2026/03/01|2026/03/02|2|2|f:0@s;l:100@e;n:0@s;x:100@e;c:2|');
         expect(rendered.formatDiagnostics.bounded_values_snapped).toBeGreaterThan(0);
     });
 
@@ -474,7 +515,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
                         entity_id: 'asset:7',
                         annotation_key: 'bounded_cross',
                         detected_count: 1,
-                        recent_30d_count: 1,
+                        recent_window_count: 1,
                         exported_count: 1,
                         selection_applied: false,
                         oldest_detected_event_date: '2026/03/03',
@@ -490,7 +531,8 @@ describe('AI Export compact Snapshot Data renderer', () => {
 
         const rendered = renderSnapshotDataText([section], {kind: 'asset', asset_id: 7});
 
-        expect(rendered.content).toContain('difference=0,left=100,right=0');
+        expect(rendered.content).toContain('|difference,left,right|');
+        expect(rendered.content).toContain('|0,100,0|');
         expect(rendered.formatDiagnostics.bounded_values_snapped).toBe(2);
         expect(rendered.formatDiagnostics.event_differences_zeroed).toBe(1);
     });
@@ -953,6 +995,6 @@ describe('AI Export compact Snapshot Data renderer', () => {
         const rendered = renderSnapshotDataText([section], {kind: 'portfolio'}).content;
 
         expect(rendered.length).toBeLessThan(yaml.length * 0.45);
-        expect(rendered).toContain('f:29@2026/03/20;l:30@2026/03/21;n:28@2026/03/20;x:31@2026/03/21;c:2');
+        expect(rendered).toContain('f:29@s;l:30@e;n:28@s;x:31@e;c:2');
     });
 });

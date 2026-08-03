@@ -15,6 +15,7 @@ export type AiExportMemoryStorage = Pick<Storage, 'getItem' | 'setItem' | 'remov
 
 export interface AiExportMemoryState {
     readonly options: AiExportOptionsSelection;
+    readonly userNotesDraft: string;
     readonly copyAnywayFingerprint?: string;
 }
 
@@ -30,6 +31,7 @@ interface LoadAiExportMemoryInput {
 interface SaveAiExportMemoryInput {
     readonly memoryKey: AiExportMemoryKey;
     readonly options: AiExportOptionsSelection;
+    readonly userNotesDraft?: string;
     readonly copyAnywayFingerprint?: string;
     readonly storage?: AiExportMemoryStorage;
 }
@@ -89,6 +91,7 @@ function fallbackState(input: LoadAiExportMemoryInput): AiExportMemoryState {
                 period: AI_EXPORT_DEFAULT_PERIOD,
                 responseLanguage: input.responseLanguage,
             },
+            userNotesDraft: '',
         };
     }
     return {
@@ -99,6 +102,7 @@ function fallbackState(input: LoadAiExportMemoryInput): AiExportMemoryState {
             period: AI_EXPORT_DEFAULT_PERIOD,
             responseLanguage: input.responseLanguage,
         },
+        userNotesDraft: '',
     };
 }
 
@@ -118,6 +122,7 @@ function hydrate(stored: StoredAiExportMemory & {selectionId: AiExportSelectionI
             responseLanguage,
             userNotes: normalizeAiExportUserNotes(stored.selectionKind, stored.notes),
         },
+        userNotesDraft: stored.notes,
         copyAnywayFingerprint: stored.copyAnywayFingerprint,
     };
 }
@@ -133,6 +138,7 @@ function discard(key: string, storage: AiExportMemoryStorage | undefined): void 
 
 export function loadAiExportMemory(input: LoadAiExportMemoryInput): AiExportMemoryState {
     const fallback = fallbackState(input);
+    if (input.compatibility.selections.length === 0) return fallback;
     const userId = getClientSessionUserId();
     if (!userId) return fallback;
     const key = buildAiExportMemoryStorageKey(userId, input.memoryKey);
@@ -166,19 +172,33 @@ export function loadAiExportMemory(input: LoadAiExportMemoryInput): AiExportMemo
 export function saveAiExportMemory(input: SaveAiExportMemoryInput): void {
     const userId = getClientSessionUserId();
     if (!userId) return;
+    const key = buildAiExportMemoryStorageKey(userId, input.memoryKey);
+    const storage = storageFor(input.storage);
+    let previous = memoryCache.get(key);
+    if (!previous) {
+        try {
+            const raw = storage?.getItem(key);
+            if (raw) {
+                const parsed = storedMemorySchema.safeParse(JSON.parse(raw));
+                if (parsed.success) previous = parsed.data;
+            }
+        } catch {
+            // Invalid or restricted storage is replaced by the current valid draft.
+        }
+    }
+    const notes = input.userNotesDraft !== undefined ? input.userNotesDraft : input.options.selectionKind === 'analysis' ? (normalizeAiExportUserNotes(input.options.selectionKind, input.options.userNotes) ?? '') : (previous?.notes ?? '');
     const stored = storedMemorySchema.parse({
         version: AI_EXPORT_MEMORY_VERSION,
         selectionKind: input.options.selectionKind,
         selectionId: input.options.selectionId,
         detailLevel: input.options.detailLevel,
         period: normalizeAiExportPeriod(input.options.period),
-        notes: normalizeAiExportUserNotes(input.options.selectionKind, input.options.userNotes) ?? '',
+        notes,
         copyAnywayFingerprint: input.copyAnywayFingerprint,
     });
-    const key = buildAiExportMemoryStorageKey(userId, input.memoryKey);
     memoryCache.set(key, stored);
     try {
-        storageFor(input.storage)?.setItem(key, JSON.stringify(stored));
+        storage?.setItem(key, JSON.stringify(stored));
     } catch {
         // In-memory state remains available for this SPA session.
     }

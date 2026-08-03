@@ -55,6 +55,7 @@ context. Closing the panel or navigating away does not discard them.
 | Recurring Investment Plan | Review portfolio structure, cash flows, and constraints for recurring investments. |
 | Portfolio Rebalancing | Compare current allocation with diversification and target-allocation context. |
 | Performance Attribution | Identify the main contributors to performance over the selected period. |
+| Portfolio News & Price Drivers | Match material dated Asset movements with cited current news while keeping correlation distinct from causation. |
 | Portfolio Income Review | Review dividends, interest, and other portfolio income. |
 | Portfolio FIFO Lot Review | Review all open lots plus lots closed during the previous three months across the active Dashboard broker scope. |
 | Technical Breadth | Summarize technical signal breadth across portfolio assets. |

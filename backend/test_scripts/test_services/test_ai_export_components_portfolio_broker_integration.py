@@ -661,10 +661,10 @@ class TestDatasetAndAnalysisRegistryConstruction:
         registry = build_portfolio_broker_dataset_registry()
         assert len(registry) == EXPECTED_DATASET_COUNT == 32
 
-    def test_analysis_registry_has_16_analyses(self):
+    def test_analysis_registry_has_17_analyses(self):
         dataset_registry = build_portfolio_broker_dataset_registry()
         analysis_registry = build_portfolio_broker_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 16
+        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 17
 
     def test_portfolio_and_broker_datasets_present(self):
         registry = build_portfolio_broker_dataset_registry()
@@ -701,7 +701,7 @@ class TestDatasetAndAnalysisRegistryConstruction:
         analysis_registry = build_portfolio_broker_analysis_registry()
         portfolio_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.PORTFOLIO}
         broker_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.BROKER}
-        assert len(portfolio_analysis_ids) == 7
+        assert len(portfolio_analysis_ids) == 8
         assert len(broker_analysis_ids) == 4
 
 
@@ -931,7 +931,7 @@ class TestAnalysisComposition:
         composer = Composer()
 
         portfolio_analyses = [spec for spec in analysis_registry if spec.domain == Domain.PORTFOLIO]
-        assert len(portfolio_analyses) == 7
+        assert len(portfolio_analyses) == 8
         for analysis in portfolio_analyses:
             composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
             assert set(analysis.required_dataset_ids).issubset(set(composition.dataset_ids))
@@ -1310,4 +1310,4 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        assert result.stdout.strip() == "65 32 16"
+        assert result.stdout.strip() == "65 32 17"

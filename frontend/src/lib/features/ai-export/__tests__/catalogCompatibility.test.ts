@@ -4,11 +4,11 @@ import {findCompatibleAiExportSelection, reconcileAiExportCatalog, selectionsFor
 import {backendCatalogFixture} from './runtimeFixtures';
 
 describe('AI Export catalog compatibility', () => {
-    it('accepts the exact 32 dataset / 16 analysis V2 catalog', () => {
+    it('accepts the exact 32 dataset / 17 analysis V2 catalog', () => {
         const compatibility = reconcileAiExportCatalog(backendCatalogFixture());
 
         expect(compatibility.status).toBe('compatible');
-        expect(compatibility.selections).toHaveLength(48);
+        expect(compatibility.selections).toHaveLength(49);
         expect(selectionsForDomain(compatibility, 'portfolio', 'dataset')).toHaveLength(10);
         expect(selectionsForDomain(compatibility, 'broker', 'analysis')).toHaveLength(4);
         expect(selectionsForDomain(compatibility, 'asset')).toHaveLength(8);

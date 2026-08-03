@@ -160,7 +160,7 @@ def _typed_problem(response: httpx.Response) -> AiExportProblem:
 
 
 @pytest.mark.asyncio
-async def test_catalog_returns_32_datasets_and_16_analyses():
+async def test_catalog_returns_32_datasets_and_17_analyses():
     app = _app()
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -173,7 +173,7 @@ async def test_catalog_returns_32_datasets_and_16_analyses():
     assert payload["schema_version"] == 2
     assert payload["catalog_version"] == 2
     assert len(payload["datasets"]) == 32
-    assert len(payload["analyses"]) == 16
+    assert len(payload["analyses"]) == 17
     assert "asset.drawdown_recovery" not in {entry["id"] for entry in payload["analyses"]}
     assert {"portfolio.drawdown_context", "broker.drawdown_context", "asset.drawdown_context"} <= {entry["id"] for entry in payload["datasets"]}
     assert "fx.drawdown_context" not in {entry["id"] for entry in payload["datasets"]}

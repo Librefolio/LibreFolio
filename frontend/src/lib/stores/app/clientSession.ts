@@ -1,3 +1,5 @@
+import {writable, type Readable} from 'svelte/store';
+
 /**
  * Auth-boundary coordinator for module-level frontend state.
  *
@@ -25,6 +27,8 @@ export class ClientSessionState {
     private generation = 0;
     private hasResolvedIdentity = false;
     private readonly resetters = new Map<string, ClientSessionResetter>();
+    private readonly userIdStore = writable<string | null>(null);
+    readonly subscribe = this.userIdStore.subscribe;
 
     register(key: string, resetter: ClientSessionResetter): () => void {
         this.resetters.set(key, resetter);
@@ -41,6 +45,7 @@ export class ClientSessionState {
             this.hasResolvedIdentity = true;
             this.userId = normalizedNext;
             this.generation += 1;
+            this.userIdStore.set(normalizedNext);
             return true;
         }
         if (normalizedNext === this.userId) return false;
@@ -61,6 +66,7 @@ export class ClientSessionState {
                 console.error(`[clientSession] Failed to reset "${key}"`, error);
             }
         }
+        this.userIdStore.set(normalizedNext);
         return true;
     }
 
@@ -79,6 +85,7 @@ export class ClientSessionState {
 
 const clientSession = new ClientSessionState();
 
+export const clientSessionUserId: Readable<string | null> = {subscribe: clientSession.subscribe};
 export const registerClientSessionReset = (key: string, resetter: ClientSessionResetter): (() => void) => clientSession.register(key, resetter);
 export const transitionClientSession = (userId: ClientSessionUserId): boolean => clientSession.transition(userId);
 export const getClientSessionUserId = (): string | null => clientSession.getUserId();

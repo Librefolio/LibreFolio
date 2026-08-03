@@ -15,6 +15,7 @@ Open **Dashboard** and select **AI Export** in the top toolbar, beside
 | **Recurring Investment Plan** | Portfolio structure, cash flows, constraints, and recurring-investment context. |
 | **Portfolio Rebalancing** | Current allocation, concentration, diversification, and target-allocation context. |
 | **Performance Attribution** | Main contributors and detractors over the selected period. |
+| **Portfolio News & Price Drivers** | Dated Asset movements matched with cited current news, qualified as supported, inferred, speculative, or unexplained. |
 | **Portfolio Income Review** | Dividends, interest, fees, taxes, and other income. |
 | **Portfolio FIFO Lot Review** | Open lots and lots closed during the previous three months across the active Dashboard broker scope. |
 | **Technical Breadth** | Technical states and signals across applicable assets. |
@@ -81,9 +82,9 @@ Drawdown history is added.
 
 | Detail | Exact sampling |
 |---|---|
-| **Compact** | Same data universe with the sparsest supported temporal buckets (up to 30 days). |
-| **Standard** | Same data universe with temporal buckets up to 14 days. |
-| **Full** | Same data universe with temporal buckets up to 7 days. Use it only when the extra history density matters. |
+| **Compact** | Same Asset/Signal universe; up to 5 non-empty indicator rows per Asset/Signal and a 7-day/minimum-3 event policy. |
+| **Standard** | Same Asset/Signal universe; up to 10 non-empty indicator rows per Asset/Signal and a 21-day/minimum-10 event policy. |
+| **Full** | Every non-empty indicator bucket and the 30-day/minimum-20 event policy. Use it only when the extra history density matters. |
 
 A dataset or Analysis can omit unavailable or non-applicable optional sections.
 The **AI period** uses 3M, 6M, 1Y, or Custom when offered and always ends on the

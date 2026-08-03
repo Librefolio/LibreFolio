@@ -14,17 +14,18 @@ Design notes:
   instance, one `IndicatorBucketRow` per temporal bucket, and one cell per
   scalar output or band component. Cells preserve real observation dates and
   use a compact single-observation shape or complete first/min/max/last stats.
-- Discrete events/state-changes are never bucket-aggregated numerically: they
-  are assigned to buckets verbatim via `temporal.aggregators.assign_discrete_events`
-  (dedup, never averaged/truncated/capped) and exposed as `TechnicalEventBucket`.
-- Detail level (Compact/Standard/Full) only changes bucket *counts* (via the
-  `BuildContext.bucket_plan`), never the emitted signal/entity/event set - see
-  the module-level requirement in the refinement plan/todo.
+- Discrete events/state-changes are never bucket-aggregated numerically. The
+  detail-owned selection policy first preserves a complete recent window plus a
+  minimum latest count per entity/annotation; selected events are then assigned
+  verbatim via `temporal.aggregators.assign_discrete_events`.
+- Detail never changes the Signal or entity set. It controls bucket density,
+  public non-empty indicator-history rows, and event density; latest values and
+  full-period summaries remain complete.
 """
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
@@ -268,7 +269,9 @@ class IndicatorTablePayload(BaseModel):
     )
     columns: tuple[IndicatorOutputColumn, ...] = Field(..., min_length=1)
     period_summary: dict[str, TechnicalIndicatorCell | None]
-    rows: tuple[IndicatorBucketRow, ...] = Field(..., min_length=1)
+    source_bucket_count: int = Field(..., ge=1)
+    source_nonempty_row_count: int = Field(..., ge=0)
+    rows: tuple[IndicatorBucketRow, ...]
 
     @model_validator(mode="after")
     def validate_table(self) -> IndicatorTablePayload:
@@ -278,12 +281,16 @@ class IndicatorTablePayload(BaseModel):
         expected_keys = set(column_keys)
         if set(self.period_summary) != expected_keys:
             raise ValueError("period_summary must contain exactly the declared columns")
+        if len(self.rows) > self.source_nonempty_row_count:
+            raise ValueError("rendered indicator rows cannot exceed source non-empty rows")
+        if self.source_nonempty_row_count > self.source_bucket_count:
+            raise ValueError("source non-empty rows cannot exceed source bucket count")
         for row in self.rows:
             if set(row.cells) != expected_keys:
                 raise ValueError("every indicator row must contain exactly the declared columns")
         for previous, current in zip(self.rows, self.rows[1:], strict=False):
-            if current.start_date != previous.end_date + timedelta(days=1):
-                raise ValueError("indicator rows must be contiguous and ordered")
+            if current.start_date <= previous.end_date:
+                raise ValueError("indicator rows must be ordered and non-overlapping")
         return self
 
 
@@ -414,7 +421,7 @@ class TechnicalEventSelectionSummary(BaseModel):
     entity_id: str = Field(..., min_length=1)
     annotation_key: str = Field(..., min_length=1)
     detected_count: int = Field(..., ge=1)
-    recent_30d_count: int = Field(..., ge=0)
+    recent_window_count: int = Field(..., ge=0)
     exported_count: int = Field(..., ge=1)
     selection_applied: bool
     oldest_detected_event_date: date
@@ -426,8 +433,8 @@ class TechnicalEventSelectionSummary(BaseModel):
 
     @model_validator(mode="after")
     def validate_summary(self) -> TechnicalEventSelectionSummary:
-        if self.recent_30d_count > self.detected_count:
-            raise ValueError("recent_30d_count cannot exceed detected_count")
+        if self.recent_window_count > self.detected_count:
+            raise ValueError("recent_window_count cannot exceed detected_count")
         if self.exported_count > self.detected_count:
             raise ValueError("exported_count cannot exceed detected_count")
         if self.selection_applied != (self.exported_count < self.detected_count):

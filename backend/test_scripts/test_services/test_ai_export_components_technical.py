@@ -6,7 +6,7 @@ Covers `backend.app.services.ai_export.components.technical_shared`,
 plugin bundle reused unchanged across every Asset-like target, warm-up-aware
 loading via `AssetSourceManager.get_prices_bulk`/`backend.app.services.fx.
 convert_bulk`, strict period slicing (warm-up never emitted), multi-output OHLC
-row bucketing with dated cells, uncapped event preservation, full portfolio/broker universe
+row bucketing with dated cells, detail-owned event density, full portfolio/broker universe
 analysis with weighted/unweighted breadth, partial-success isolation,
 authoritative-vs-unavailable volume gating, FX no-volume gating, resource
 memoization and deterministic ordering.
@@ -85,6 +85,11 @@ from backend.app.services.ai_export.temporal import (
     DiscreteEvent,
 )
 from backend.app.services.ai_export.temporal.points import ContinuousMultiOutputPoint
+from backend.app.services.ai_export.temporal.policy import (
+    BucketDetailLevel,
+    EventSelectionPolicy,
+    indicator_history_row_limit,
+)
 from backend.app.services.asset_source import AssetSourceManager
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.provider_registry import SignalPluginRegistry
@@ -488,23 +493,32 @@ class TestCuratedBundleAcrossDetailLevels:
         assert len(compact_ind["indicators"]) == 20
 
         assert compact_events["detected_event_count"] == standard_events["detected_event_count"] == full_events["detected_event_count"]
-        assert compact_events["exported_event_count"] == standard_events["exported_event_count"] == full_events["exported_event_count"]
+        assert compact_events["exported_event_count"] <= standard_events["exported_event_count"] <= full_events["exported_event_count"]
 
         by_detail = {
             DetailLevel.COMPACT: (compact_ind, compact_ctx),
             DetailLevel.STANDARD: (standard_ind, standard_ctx),
             DetailLevel.FULL: (full_ind, full_ctx),
         }
-        for _detail_level, (payload, current_context) in by_detail.items():
+        for detail_level, (payload, current_context) in by_detail.items():
             by_instance = {indicator["instance_id"]: indicator for indicator in payload["indicators"]}
             assert by_instance["rsi_14"]["temporal_class"] == "very_fast"
             assert by_instance["ema_20"]["temporal_class"] == "medium"
-            assert len(by_instance["rsi_14"]["rows"]) == len(current_context.bucket_plan.buckets)
+            rsi_limit = indicator_history_row_limit(BucketDetailLevel(detail_level.value))
+            assert len(by_instance["rsi_14"]["rows"]) == min(
+                by_instance["rsi_14"]["source_nonempty_row_count"],
+                rsi_limit or by_instance["rsi_14"]["source_nonempty_row_count"],
+            )
+            assert by_instance["rsi_14"]["source_bucket_count"] == len(current_context.bucket_plan.buckets)
             expected_ema_plan = build_indicator_bucket_plan_for_scope(
                 current_context.scope,
                 SignalTemporalClass.MEDIUM,
             )
-            assert len(by_instance["ema_20"]["rows"]) == len(expected_ema_plan.buckets)
+            assert by_instance["ema_20"]["source_bucket_count"] == len(expected_ema_plan.buckets)
+            assert len(by_instance["ema_20"]["rows"]) == min(
+                by_instance["ema_20"]["source_nonempty_row_count"],
+                rsi_limit or by_instance["ema_20"]["source_nonempty_row_count"],
+            )
             assert by_instance["ema_20"]["period_summary"]
 
         compact_by_id = {item["instance_id"]: item for item in compact_ind["indicators"]}
@@ -1121,7 +1135,7 @@ class TestEventSelection:
         else:
             summary = selection.summaries[0]
             assert summary.detected_count == total
-            assert summary.recent_30d_count == recent
+            assert summary.recent_window_count == recent
             assert summary.exported_count == expected
             assert summary.selection_applied == (expected < total)
         assert [event.date for event in selection.events] == sorted(event.date for event in selection.events)
@@ -1165,10 +1179,43 @@ class TestEventSelection:
 
         summary = selection.summaries[0]
         assert summary.detected_count == 21
-        assert summary.recent_30d_count == 20
+        assert summary.recent_window_count == 20
         assert summary.exported_count == 20
         assert snapshot - timedelta(days=30) in {event.date for event in selection.events}
         assert snapshot - timedelta(days=31) not in {event.date for event in selection.events}
+
+    @pytest.mark.parametrize(
+        ("detail_level", "expected_recent_days", "expected_minimum"),
+        (
+            (DetailLevel.COMPACT, 7, 3),
+            (DetailLevel.STANDARD, 21, 10),
+            (DetailLevel.FULL, 30, 20),
+        ),
+    )
+    def test_event_selection_policy_is_detail_owned(
+        self,
+        detail_level: DetailLevel,
+        expected_recent_days: int,
+        expected_minimum: int,
+    ):
+        snapshot = date(2026, 7, 30)
+        selection = technical_shared.select_technical_events(
+            self._events(total=50, recent=25, snapshot=snapshot),
+            snapshot_as_of=snapshot,
+            detail_level=detail_level,
+        )
+        policy = EventSelectionPolicy.for_detail_level(BucketDetailLevel(detail_level.value))
+
+        assert policy.complete_recent_window_days == expected_recent_days
+        assert policy.minimum_latest_events_per_annotation == expected_minimum
+        assert (
+            len(selection.events)
+            == {
+                DetailLevel.COMPACT: 8,
+                DetailLevel.STANDARD: 22,
+                DetailLevel.FULL: 25,
+            }[detail_level]
+        )
 
     def test_event_selection_is_independent_per_entity_and_annotation(self):
         snapshot = date(2026, 7, 30)
@@ -1225,7 +1272,7 @@ class TestEventSelection:
                 summary["detected_count"],
                 max(
                     technical_shared.EVENT_SELECTION_MINIMUM_LATEST,
-                    summary["recent_30d_count"],
+                    summary["recent_window_count"],
                 ),
             )
         for bucket in payload["buckets"]:

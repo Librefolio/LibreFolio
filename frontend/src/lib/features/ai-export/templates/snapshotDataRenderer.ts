@@ -31,6 +31,7 @@ export interface SnapshotFormatDiagnostics {
     readonly empty_temporal_rows_detected: number;
     readonly empty_temporal_rows_omitted: number;
     readonly temporal_rows_rendered: number;
+    readonly indicator_history_rows_sampled_out: number;
 }
 
 export interface SnapshotSignalMetric {
@@ -39,6 +40,8 @@ export interface SnapshotSignalMetric {
     readonly signal_code: string;
     readonly instance_count: number;
     readonly history_row_count: number;
+    readonly source_history_row_count: number;
+    readonly sampled_history_row_count: number;
     readonly history_chars: number;
     readonly event_count: number;
     readonly event_chars: number;
@@ -59,6 +62,7 @@ const BASE_FORMAT_PREAMBLE_LINES = [
     'null=explicitly unavailable',
     'dated_scalar=value@date',
     'range=f:first;l:last;n:min;x:max;c:observation_count',
+    'history_date_refs=s:row start;e:row end;+N:N calendar days after row start',
     'table delimiters use | and embedded delimiters are escaped',
 ] as const;
 const MISSING_PRICE_POLICY = 'missing_price_policy=When a price is needed for a date without an observation, use the latest available observation on or before that date. Never use a future price.';
@@ -79,6 +83,7 @@ interface MutableSnapshotFormatDiagnostics {
     empty_temporal_rows_detected: number;
     empty_temporal_rows_omitted: number;
     temporal_rows_rendered: number;
+    indicator_history_rows_sampled_out: number;
 }
 
 export interface PromptNumberSemantics {
@@ -103,6 +108,7 @@ function createFormatDiagnostics(): MutableSnapshotFormatDiagnostics {
         empty_temporal_rows_detected: 0,
         empty_temporal_rows_omitted: 0,
         temporal_rows_rendered: 0,
+        indicator_history_rows_sampled_out: 0,
     };
 }
 
@@ -143,6 +149,37 @@ interface EntityDirectory {
 interface IndicatorSampling {
     readonly temporalClass?: unknown;
     readonly bucketCount?: unknown;
+}
+
+type IndicatorHistoryDetail = 'compact' | 'standard' | 'full';
+
+function isIndicatorHistoryDetail(value: unknown): value is IndicatorHistoryDetail {
+    return value === 'compact' || value === 'standard' || value === 'full';
+}
+
+function indicatorHistoryLimit(technicalSampling: unknown): number | undefined {
+    if (!isRecord(technicalSampling)) return undefined;
+    const value = technicalSampling.indicator_history_row_limit;
+    if (value === null || value === undefined) return undefined;
+    if (!Number.isInteger(value) || Number(value) < 1) {
+        throw new TypeError('AI Export indicator history row limit must be a positive integer or null');
+    }
+    return Number(value);
+}
+
+function sampleIndicatorHistoryRows(rows: readonly JsonRecord[], limit: number | undefined): JsonRecord[] {
+    if (limit === undefined || rows.length <= limit) return [...rows];
+    const indexes = new Set<number>();
+    for (let index = 0; index < limit; index += 1) {
+        indexes.add(Math.round((index * (rows.length - 1)) / (limit - 1)));
+    }
+    return [...indexes]
+        .sort((left, right) => left - right)
+        .map((index) => {
+            const row = rows[index];
+            if (!row) throw new TypeError('AI Export indicator history sample index is out of range');
+            return row;
+        });
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -286,22 +323,55 @@ function valueMap(value: unknown, boundsByKey?: JsonRecord, diagnostics?: Mutabl
     if (!isRecord(value)) return scalar(value);
     return Object.keys(value)
         .sort()
-        .map((key) => {
-            const bounds = isRecord(boundsByKey?.[key]) ? boundsByKey[key] : undefined;
-            const semantics: PromptNumberSemantics = {
-                minimum: typeof bounds?.minimum === 'number' ? bounds.minimum : undefined,
-                maximum: typeof bounds?.maximum === 'number' ? bounds.maximum : undefined,
-                zeroEpsilon: key === 'difference' ? EVENT_DIFFERENCE_EPSILON : undefined,
-            };
-            const nested = value[key];
-            const rendered =
-                typeof nested === 'number' && Number.isFinite(nested) ? formatPromptNumberWithDiagnostics(nested, semantics, diagnostics) : typeof nested === 'string' && /^-?\d+(?:\.\d+)?$/.test(nested) ? formatPromptNumberWithDiagnostics(nested, semantics, diagnostics) : scalar(nested);
-            return `${key}=${rendered}`;
-        })
+        .map((key) => `${key}=${mapValueEntry(key, value[key], boundsByKey, diagnostics)}`)
         .join(',');
 }
 
-function datedValue(value: unknown, semantics: PromptNumberSemantics = {}, diagnostics?: MutableSnapshotFormatDiagnostics): string {
+function mapValueEntry(key: string, value: unknown, boundsByKey?: JsonRecord, diagnostics?: MutableSnapshotFormatDiagnostics): string {
+    const bounds = isRecord(boundsByKey?.[key]) ? boundsByKey[key] : undefined;
+    const semantics: PromptNumberSemantics = {
+        minimum: typeof bounds?.minimum === 'number' ? bounds.minimum : undefined,
+        maximum: typeof bounds?.maximum === 'number' ? bounds.maximum : undefined,
+        zeroEpsilon: key === 'difference' ? EVENT_DIFFERENCE_EPSILON : undefined,
+    };
+    return typeof value === 'number' && Number.isFinite(value) ? formatPromptNumberWithDiagnostics(value, semantics, diagnostics) : typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value) ? formatPromptNumberWithDiagnostics(value, semantics, diagnostics) : scalar(value);
+}
+
+function valueList(value: unknown, keys: readonly string[], boundsByKey?: JsonRecord, diagnostics?: MutableSnapshotFormatDiagnostics): string {
+    if (value === null || value === undefined) return 'null';
+    if (!isRecord(value)) return scalar(value);
+    return keys.map((key) => mapValueEntry(key, value[key], boundsByKey, diagnostics)).join(',');
+}
+
+interface HistoryDateContext {
+    readonly start: string;
+    readonly end: string;
+}
+
+function dateOrdinal(value: string): number | undefined {
+    const match = /^(\d{4})[/-](\d{2})[/-](\d{2})$/.exec(value);
+    if (!match) return undefined;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const timestamp = Date.UTC(year, month - 1, day);
+    const parsed = new Date(timestamp);
+    if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) return undefined;
+    return timestamp / 86_400_000;
+}
+
+function historyDate(value: unknown, context: HistoryDateContext | undefined): string {
+    const rendered = scalar(value);
+    if (!context) return rendered;
+    if (rendered === context.start) return 's';
+    if (rendered === context.end) return 'e';
+    const start = dateOrdinal(context.start);
+    const current = dateOrdinal(rendered);
+    if (start === undefined || current === undefined || current < start) return rendered;
+    return `+${current - start}`;
+}
+
+function datedValue(value: unknown, semantics: PromptNumberSemantics = {}, diagnostics?: MutableSnapshotFormatDiagnostics, dateContext?: HistoryDateContext): string {
     if (!isRecord(value)) return 'null';
     const renderedValue =
         typeof value.value === 'number' && Number.isFinite(value.value)
@@ -309,15 +379,21 @@ function datedValue(value: unknown, semantics: PromptNumberSemantics = {}, diagn
             : typeof value.value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value.value)
               ? formatPromptNumberWithDiagnostics(value.value, semantics, diagnostics)
               : scalar(value.value);
-    return `${renderedValue}@${scalar(value.date)}`;
+    return `${renderedValue}@${historyDate(value.date, dateContext)}`;
 }
 
-function indicatorCell(value: unknown, semantics: PromptNumberSemantics = {}, diagnostics?: MutableSnapshotFormatDiagnostics): string {
+function indicatorCell(value: unknown, semantics: PromptNumberSemantics = {}, diagnostics?: MutableSnapshotFormatDiagnostics, dateContext?: HistoryDateContext): string {
     if (value === null || value === undefined) return 'null';
     if (!isRecord(value)) return scalar(value);
-    if (value.kind === 'single') return datedValue(value, semantics, diagnostics);
+    if (value.kind === 'single') return datedValue(value, semantics, diagnostics, dateContext);
     if (value.kind !== 'range') return scalar(value);
-    return [`f:${datedValue(value.first, semantics, diagnostics)}`, `l:${datedValue(value.last, semantics, diagnostics)}`, `n:${datedValue(value.min, semantics, diagnostics)}`, `x:${datedValue(value.max, semantics, diagnostics)}`, `c:${scalar(value.observation_count)}`].join(';');
+    return [
+        `f:${datedValue(value.first, semantics, diagnostics, dateContext)}`,
+        `l:${datedValue(value.last, semantics, diagnostics, dateContext)}`,
+        `n:${datedValue(value.min, semantics, diagnostics, dateContext)}`,
+        `x:${datedValue(value.max, semantics, diagnostics, dateContext)}`,
+        `c:${scalar(value.observation_count)}`,
+    ].join(';');
 }
 
 function mergeAssetEntry(entries: Map<string, AssetDirectoryEntry>, assetIdValue: unknown, values: Partial<AssetDirectoryEntry>): void {
@@ -647,7 +723,16 @@ function outputNumberSemantics(column: JsonRecord): PromptNumberSemantics {
     };
 }
 
-function renderIndicators(componentId: string, payload: JsonRecord, target: unknown, directory: EntityDirectory, samplingByInstance: ReadonlyMap<string, IndicatorSampling>, signalMetrics: SnapshotSignalMetric[], diagnostics: MutableSnapshotFormatDiagnostics): string | undefined {
+function renderIndicators(
+    componentId: string,
+    payload: JsonRecord,
+    target: unknown,
+    directory: EntityDirectory,
+    samplingByInstance: ReadonlyMap<string, IndicatorSampling>,
+    historyLimit: number | undefined,
+    signalMetrics: SnapshotSignalMetric[],
+    diagnostics: MutableSnapshotFormatDiagnostics,
+): string | undefined {
     const entities = indicatorEntities(payload, target, directory);
     if (!entities) return undefined;
     const bySignal = new Map<
@@ -730,6 +815,12 @@ function renderIndicators(componentId: string, payload: JsonRecord, target: unkn
     ].filter((row) => row[1] !== undefined);
     const blocks: string[] = [];
     if (globalRows.length) blocks.push('SUMMARY', pipeTable(['field', 'value'], globalRows, diagnostics));
+    blocks.push(
+        'HISTORY SEMANTICS',
+        historyLimit === undefined
+            ? 'indicator_history=all nonempty source buckets; period_summary=full exported period'
+            : `indicator_history=uniform sample across nonempty source buckets; rendered_limit_per_entity_instance=${historyLimit}; period_summary=full exported period; use Full for every source bucket`,
+    );
     if (payload.covered_asset_count !== undefined) {
         blocks.push('WEIGHT SEMANTICS', "portfolio_weight_percent and *_portfolio_weight_percent use gross absolute open-position market value. technical_normalized_weight_percent sums to 100% across each signal instance's covered technical universe.");
     }
@@ -756,10 +847,10 @@ function renderIndicators(componentId: string, payload: JsonRecord, target: unkn
             pipeTable(['signal_code', 'category', 'semantic_id', 'semantic_description', 'instance_count'], [[definition.signal_code, definition.category, definition.semantic_id, definition.semantic_description, signal.instances.size]], diagnostics),
             'INSTANCES',
             pipeTable(
-                ['instance_id', 'temporal_class', 'bucket_count', ...(includeEntityCount ? ['entity_count'] : [])],
+                ['instance_id', 'temporal_class', 'bucket_count', 'rendered_history_limit', 'history_selection', ...(includeEntityCount ? ['entity_count'] : [])],
                 instanceEntries.map(([instanceId, instance]) => {
                     const sampling = samplingByInstance.get(instanceId);
-                    return [instanceId, sampling?.temporalClass ?? instance.definition.temporal_class, sampling?.bucketCount, ...(includeEntityCount ? [instance.entities.length] : [])];
+                    return [instanceId, sampling?.temporalClass ?? instance.definition.temporal_class, sampling?.bucketCount, historyLimit ?? 'all', historyLimit === undefined ? 'all_nonempty_buckets' : 'uniform_across_nonempty_buckets', ...(includeEntityCount ? [instance.entities.length] : [])];
                 }),
                 diagnostics,
             ),
@@ -788,6 +879,7 @@ function renderIndicators(componentId: string, payload: JsonRecord, target: unkn
         let summaryChars = 0;
         let historyChars = 0;
         let historyRowCount = 0;
+        let sourceHistoryRowCount = 0;
         for (const [instanceId, instance] of signal.instances) {
             const columns = records(instance.definition.columns);
             if (!columns) return undefined;
@@ -812,16 +904,26 @@ function renderIndicators(componentId: string, payload: JsonRecord, target: unkn
                         indicatorCell(periodSummary[columnKey], semantics, diagnostics),
                     ]);
                 }
+                const nonemptyRows: JsonRecord[] = [];
                 for (const row of rows) {
                     if (Number(row.observation_count) === 0) {
                         diagnostics.empty_temporal_rows_detected += 1;
                         diagnostics.empty_temporal_rows_omitted += 1;
                         continue;
                     }
+                    nonemptyRows.push(row);
+                }
+                const renderedRows = sampleIndicatorHistoryRows(nonemptyRows, historyLimit);
+                const declaredSourceRows = Number(entity.indicator.source_nonempty_row_count);
+                const sourceRows = Number.isInteger(declaredSourceRows) && declaredSourceRows >= nonemptyRows.length ? declaredSourceRows : nonemptyRows.length;
+                sourceHistoryRowCount += sourceRows;
+                diagnostics.indicator_history_rows_sampled_out += sourceRows - renderedRows.length;
+                for (const row of renderedRows) {
                     diagnostics.temporal_rows_rendered += 1;
                     const cells = isRecord(row.cells) ? row.cells : undefined;
                     if (!cells) return undefined;
-                    historyRows.push([entity.entity, row.start_date, row.end_date, row.calendar_days, row.observation_count, ...columnKeys.map((columnKey) => indicatorCell(cells[columnKey], outputNumberSemantics(columnByKey.get(columnKey) ?? {}), diagnostics))]);
+                    const dateContext = {start: scalar(row.start_date), end: scalar(row.end_date)};
+                    historyRows.push([entity.entity, row.start_date, row.end_date, row.calendar_days, row.observation_count, ...columnKeys.map((columnKey) => indicatorCell(cells[columnKey], outputNumberSemantics(columnByKey.get(columnKey) ?? {}), diagnostics, dateContext))]);
                 }
             }
             const summaryBlock = [`INSTANCE ${instanceId}`, 'PERIOD SUMMARY', pipeTable(['entity', 'portfolio_weight_percent', 'technical_normalized_weight_percent', 'column_key', 'latest', 'period_summary'], summaryRows, diagnostics)].join('\n');
@@ -837,6 +939,8 @@ function renderIndicators(componentId: string, payload: JsonRecord, target: unkn
             signal_code: scalar(definition.signal_code),
             instance_count: signal.instances.size,
             history_row_count: historyRowCount,
+            source_history_row_count: sourceHistoryRowCount,
+            sampled_history_row_count: sourceHistoryRowCount - historyRowCount,
             history_chars: historyChars,
             event_count: 0,
             event_chars: 0,
@@ -855,7 +959,8 @@ function renderEvents(componentId: string, payload: JsonRecord, directory: Entit
     const signalGroups = new Map<
         string,
         {
-            readonly definitions: Map<string, {readonly id: string; readonly event: JsonRecord}>;
+            readonly definitions: Map<string, {readonly id: string; readonly event: JsonRecord; readonly valueKeys: readonly string[]}>;
+            readonly definitionByAnnotation: Map<string, string>;
             readonly events: unknown[][];
             readonly annotationKeys: Set<string>;
         }
@@ -870,27 +975,30 @@ function renderEvents(componentId: string, payload: JsonRecord, directory: Entit
         for (const event of events) {
             const signalCode = scalar(event.signal_code);
             const annotationKey = scalar(event.key);
+            const valueKeys = isRecord(event.values) ? Object.keys(event.values).sort() : [];
             const definitionSignature = JSON.stringify(
                 normalizeJsonSafeValue({
                     annotation_key: event.key,
                     annotation_type: event.annotation_type,
                     semantic_description: event.semantic_description,
+                    value_keys: valueKeys,
                 }),
             );
             let group = signalGroups.get(signalCode);
             if (!group) {
-                group = {definitions: new Map(), events: [], annotationKeys: new Set()};
+                group = {definitions: new Map(), definitionByAnnotation: new Map(), events: [], annotationKeys: new Set()};
                 signalGroups.set(signalCode, group);
             }
             let definition = group.definitions.get(definitionSignature);
             if (!definition) {
                 definitionIndex += 1;
-                definition = {id: `event_definition_${definitionIndex}`, event};
+                definition = {id: `E${definitionIndex}`, event, valueKeys};
                 group.definitions.set(definitionSignature, definition);
             }
             group.annotationKeys.add(annotationKey);
+            group.definitionByAnnotation.set(annotationKey, definition.id);
             signalByAnnotation.set(annotationKey, signalCode);
-            group.events.push([bucketId, definition.id, eventEntityRef(event.entity_id, event.asset_id, directory), event.date, event.key, event.direction, valueMap(event.values, isRecord(event.value_bounds) ? event.value_bounds : undefined, diagnostics)]);
+            group.events.push([bucketId, definition.id, eventEntityRef(event.entity_id, event.asset_id, directory), event.date, event.direction, valueList(event.values, definition.valueKeys, isRecord(event.value_bounds) ? event.value_bounds : undefined, diagnostics)]);
         }
     }
     for (const summary of summaries) {
@@ -913,21 +1021,21 @@ function renderEvents(componentId: string, payload: JsonRecord, directory: Entit
             pipeTable(['signal_code'], [[signalCode]], diagnostics),
             'ANNOTATION DEFINITIONS',
             pipeTable(
-                ['definition_id', 'annotation_key', 'annotation_type', 'semantic_description'],
-                [...group.definitions.values()].map(({id, event}) => [id, event.key, event.annotation_type, event.semantic_description]),
+                ['definition_id', 'annotation_key', 'annotation_type', 'value_fields', 'semantic_description'],
+                [...group.definitions.values()].map(({id, event, valueKeys}) => [id, event.key, event.annotation_type, valueKeys.join(','), event.semantic_description]),
                 diagnostics,
             ),
         ].join('\n');
-        const eventsBlock = ['EVENTS', pipeTable(['bucket_id', 'definition_id', 'entity_ref', 'date', 'annotation_key', 'direction', 'values'], group.events, diagnostics)].join('\n');
+        const eventsBlock = ['EVENTS', pipeTable(['bucket_id', 'definition_id', 'entity_ref', 'date', 'direction', 'values_in_definition_order'], group.events, diagnostics)].join('\n');
         const selectionBlock = [
             'SELECTION',
             pipeTable(
-                ['entity', 'annotation_key', 'detected', 'recent_30d', 'exported', 'selection_applied', 'detected_from', 'detected_to', 'exported_from', 'exported_to', 'up', 'down'],
+                ['entity', 'definition_id', 'detected', 'recent_window', 'exported', 'selection_applied', 'detected_from', 'detected_to', 'exported_from', 'exported_to', 'up', 'down'],
                 signalSummaries.map((summary) => [
                     eventEntityRef(summary.entity_id, undefined, directory),
-                    summary.annotation_key,
+                    group.definitionByAnnotation.get(scalar(summary.annotation_key)) ?? summary.annotation_key,
                     summary.detected_count,
-                    summary.recent_30d_count,
+                    summary.recent_window_count,
                     summary.exported_count,
                     summary.selection_applied,
                     summary.oldest_detected_event_date,
@@ -947,6 +1055,8 @@ function renderEvents(componentId: string, payload: JsonRecord, directory: Entit
             signal_code: signalCode,
             instance_count: 0,
             history_row_count: 0,
+            source_history_row_count: 0,
+            sampled_history_row_count: 0,
             history_chars: 0,
             event_count: group.events.length,
             event_chars: eventsBlock.length,
@@ -1275,6 +1385,7 @@ function technicalPayload(
     target: unknown,
     directory: EntityDirectory,
     samplingByInstance: ReadonlyMap<string, IndicatorSampling>,
+    historyLimit: number | undefined,
     signalMetrics: SnapshotSignalMetric[],
     diagnostics: MutableSnapshotFormatDiagnostics,
 ): {readonly format: string; readonly content: string} | undefined {
@@ -1283,7 +1394,7 @@ function technicalPayload(
         return {format: 'technical_coverage_tables_v1', content: renderGenericPayload(publicPayload, directory, diagnostics)};
     }
     if (componentId.endsWith('.indicators') || componentId.includes('technical_indicators')) {
-        const content = renderIndicators(componentId, payload, target, directory, samplingByInstance, signalMetrics, diagnostics);
+        const content = renderIndicators(componentId, payload, target, directory, samplingByInstance, historyLimit, signalMetrics, diagnostics);
         return content ? {format: 'signal_tables_v1', content} : undefined;
     }
     if (componentId.includes('technical_events') || componentId.endsWith('.states_events')) {
@@ -1301,11 +1412,11 @@ function technicalPayload(
     return undefined;
 }
 
-function renderComponent(section: JsonRecord, target: unknown, directory: EntityDirectory, samplingByInstance: ReadonlyMap<string, IndicatorSampling>, signalMetrics: SnapshotSignalMetric[], diagnostics: MutableSnapshotFormatDiagnostics): string {
+function renderComponent(section: JsonRecord, target: unknown, directory: EntityDirectory, samplingByInstance: ReadonlyMap<string, IndicatorSampling>, historyLimit: number | undefined, signalMetrics: SnapshotSignalMetric[], diagnostics: MutableSnapshotFormatDiagnostics): string {
     const componentId = scalar(section.component_id);
     const payload = isRecord(section.payload) ? section.payload : undefined;
     const compactVersion = section.component_version === 1 && section.schema_version === 1;
-    const technical = compactVersion && payload ? technicalPayload(componentId, payload, target, directory, samplingByInstance, signalMetrics, diagnostics) : undefined;
+    const technical = compactVersion && payload ? technicalPayload(componentId, payload, target, directory, samplingByInstance, historyLimit, signalMetrics, diagnostics) : undefined;
     if (technical) return `${componentHeader(section)}\n${technical.content}`;
     if (compactVersion && payload) return `${componentHeader(section)}\n${renderGenericPayload(payload, directory, diagnostics)}`;
     return `${componentHeader(section)}\nPAYLOAD YAML FALLBACK\n${serializeYaml({payload: section.payload})}`;
@@ -1318,6 +1429,10 @@ export function renderSnapshotDataText(sectionsValue: unknown, target: unknown, 
     const signalMetrics: SnapshotSignalMetric[] = [];
     const formatDiagnostics = createFormatDiagnostics();
     const samplingByInstance = new Map<string, IndicatorSampling>();
+    if (isRecord(technicalSampling) && technicalSampling.detail_level !== undefined && !isIndicatorHistoryDetail(technicalSampling.detail_level)) {
+        throw new TypeError('AI Export technical sampling detail level is invalid');
+    }
+    const historyLimit = indicatorHistoryLimit(technicalSampling);
     if (isRecord(technicalSampling)) {
         for (const policy of records(technicalSampling.indicator_policies) ?? []) {
             samplingByInstance.set(scalar(policy.signal_instance_id), {
@@ -1330,7 +1445,7 @@ export function renderSnapshotDataText(sectionsValue: unknown, target: unknown, 
     const wrapper = `${preamble}${directory.content}`;
     const blocks = sections.map((section, index) => ({
         id: scalar(section.component_id),
-        content: `${renderComponent(section, target, directory, samplingByInstance, signalMetrics, formatDiagnostics)}${index < sections.length - 1 ? COMPONENT_SEPARATOR : ''}`,
+        content: `${renderComponent(section, target, directory, samplingByInstance, historyLimit, signalMetrics, formatDiagnostics)}${index < sections.length - 1 ? COMPONENT_SEPARATOR : ''}`,
     }));
     return {
         content: `${wrapper}${blocks.map((block) => block.content).join('')}`,

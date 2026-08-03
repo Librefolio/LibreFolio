@@ -4,6 +4,53 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-08-03] update | AI Export applied density policy and final hardening closure
+
+Updated [[decisions/ai-export-technical-series-and-density-contract]],
+[[decisions/ai-export-versioned-snapshot-boundary]], and
+[[sources/phase00-ai-export-backend-snapshot]]. Recorded the approved and applied
+event policy: Compact complete 7 calendar days/minimum latest 3, Standard complete
+21 calendar days/minimum latest 10, and Full complete 30 calendar days/minimum
+latest 20 per entity/annotation; indicator history remains 5/10/all non-empty rows.
+Recorded the project owner's approval of empty-temporal-row hardening, explicit
+Broker nomenclature, and `20260801T085820.657238Z` as final targeted evidence.
+Applied-policy run `20260803T164514.504966Z` passed 7/7 prompts with zero
+failures/public violations, UI/probe equivalence, a passed secret scan, and
+unchanged source/production databases. Dense Portfolio/Broker output may exceed
+60k, so the UI warning remains and no automatic cap is introduced. Closed the
+Developer test-walkthrough and repository-instruction follow-ups; User Guide
+IT/FR/ES translations remain explicitly deferred.
+Graph: incremental detection found 240 semantic changes overall (237 pre-existing
+plus these three AI Export pages). The scoped semantic refresh replaced only the
+three AI Export page fragments, preserved their external links, and regenerated
+`graph.json`, `GRAPH_REPORT.md`, and `graph.html`: 1,516→1,524 nodes,
+2,189→2,214 edges, 144 communities. Post-refresh queries resolve the approved
+21d/min10 policy and both final evidence runs.
+
+## [2026-08-03] update | AI Export E2E and contextual-memory hardening
+
+Updated [[decisions/ai-export-contextual-ui-memory]] with reactive async
+client-session hydration, V2 per-user/context storage, separate raw Analysis-note
+memory, and epoch/operation/session/context guards that make stale preparation
+results inert before clipboard, persistence, or callbacks. Recorded the
+panel/catalog/memory/contract Playwright split, focused runner actions plus the
+cutover alias, and the final canonical gate: 214 unit tests and 32 desktop/mobile
+E2E tests passed. The separate density recommendation remains awaiting user
+decision and was not filed as resolved.
+Graph: incrementally replaced the decision's semantic fragment, regenerated
+`graph.json`, `GRAPH_REPORT.md`, and `graph.html`, and verified the four new
+hardening concept nodes linked from the existing decision node.
+
+## [2026-08-03] file | AI Export density, news causality, and Transactions NaN loop
+
+Updated [[decisions/ai-export-technical-series-and-density-contract]] with explicit
+backend-owned Compact/Standard/Full history and event density, source-row
+diagnostics, lossless prompt encoding, and targeted real-prompt measurements.
+Created [[decisions/ai-export-news-driver-analysis]] for cited dated web research,
+source hierarchy, supported/inferred/speculative links, and unexplained movements.
+Created [[problems/transactions-without-asset-filter-nan-loop]] for the
+`__null__` → `NaN` reactive navigation loop and explicit `without_asset` state.
+
 ## [2026-07-30] update | AI Export Signal Density V2 contract
 
 Updated [[decisions/ai-export-technical-series-and-density-contract]] with the

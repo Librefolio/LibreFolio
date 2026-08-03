@@ -75,6 +75,27 @@ export const AI_EXPORT_RESPONSE_CONTRACTS: Readonly<Record<AiExportAnalysisId, A
         section('Result Reconciliation', 'Separate realized, unrealized, income, costs, taxes, flows, and return metrics.'),
         limits,
     ]),
+    'portfolio.market_events_review': contract('portfolio.market_events_review', [
+        section(
+            'Observed Portfolio Movements',
+            'List every materially researched Asset movement using the supplied display name, exact period or dated extrema, movement magnitude, portfolio weight when available, coverage, and relevant LibreFolio trend/volatility context.',
+            'Do not treat missing or partial history as a flat movement, and do not infer intraperiod paths that the supplied buckets do not show.',
+        ),
+        section(
+            'Dated News Research',
+            'For each external source provide publisher, title, URL, publication date, access date, source type, and the Asset/date window it may explain.',
+            'Prefer primary issuer, exchange, regulator, central-bank, and government sources; distinguish established reporting from lower-quality secondary commentary.',
+            'If web access is unavailable, state that clearly and do not fabricate citations, URLs, publication dates, or current events.',
+        ),
+        section(
+            'Movement-to-Driver Assessment',
+            'For each proposed link separate the observed LibreFolio movement from issuer-specific, sector/industry, and macro/market candidate drivers.',
+            'Label confidence exactly as supported, inferred, or speculative. Explain timing and directional fit, cite corroborating or conflicting evidence, and never present temporal correlation as proven causation.',
+        ),
+        section('Cross-Portfolio Patterns', 'Identify shared dated drivers across multiple Assets only when evidence supports the common link; keep unrelated coincident moves separate.'),
+        section('Unexplained or Weakly Explained Movements', 'List every material movement for which reliable dated evidence is absent, conflicting, too broad, or temporally mismatched. Never invent a driver.'),
+        section('Limits and Follow-up Data', 'State source, timing, coverage, identity, and interpretation limits. Treat technical context as historical and subordinate, never as a forecast or recommendation.'),
+    ]),
     'portfolio.income_review': contract('portfolio.income_review', [
         facts,
         section('Recorded Income Timeline', 'Use only the supplied dated recorded income entries and their per-currency conversion coverage.', 'Do not project, accrue, or forecast future coupons, dividends, or interest that the supplied timeline does not contain.'),
