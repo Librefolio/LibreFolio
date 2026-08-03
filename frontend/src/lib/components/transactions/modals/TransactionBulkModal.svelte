@@ -2012,6 +2012,10 @@
             return [buildCreatePayload(opToTxFields(op), getTypeRule(op.fields.type as TransactionTypeCode)) as TransactionCreateItem];
         }),
     );
+    /** DB transaction ids the user has marked for deletion in the bulk editor. Passed to the
+     *  import wizard so DB-duplicate detection drops matches against to-be-deleted rows — a
+     *  re-imported row is not flagged as a duplicate of a transaction that is about to go. */
+    let pendingDeleteTxIds = $derived.by<number[]>(() => ops.flatMap((op) => (op.op === 'edit' && op.markedDelete ? [op.txId] : [])));
 
     /** Convert a TXCreateItem (from BRIM parse) to a PendingOp 'create' row.
      *  Signs are converted to display values (BulkModal convention: positive display,
@@ -3224,4 +3228,4 @@
 />
 
 <!-- Phase 07 Part 5 v5 M1: BRIM Import Wizard -->
-<ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} {pendingCreateTransactions} onClose={() => (importWizardOpen = false)} {onImportBatch} />
+<ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} {pendingCreateTransactions} {pendingDeleteTxIds} onClose={() => (importWizardOpen = false)} {onImportBatch} />
