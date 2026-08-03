@@ -24,6 +24,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import List, Set
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -52,6 +53,8 @@ from backend.app.services.brim_providers.broker_intesa import IntesaSanpaoloBrok
 from backend.app.services.brim_providers.broker_revolut import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
 from backend.app.services.brim_providers.broker_schwab import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
 from backend.app.services.brim_providers.broker_trading212 import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
+from backend.app.services.portfolio_engine import ClassifiedTransaction, DailyStateBuilder
+from backend.app.services.price_resolver import build_asset_price_series
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
 # =============================================================================
@@ -770,7 +773,10 @@ class TestBrokerParserCoverageHelpers:
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
         types = [tx.type for tx in out.transactions]
         assert types.count(TransactionType.WITHDRAWAL) == 5
-        assert types.count(TransactionType.DEPOSIT) == 4
+        assert types.count(TransactionType.DEPOSIT) == 3
+        # The unidentifiable ``TITOLI SCADUTI O ESTRATTI`` row (no same-day coupon) is
+        # booked entirely as a SELL at par, not a plain cash DEPOSIT.
+        assert types.count(TransactionType.SELL) == 1
         assert types.count(TransactionType.INTEREST) == 3
         assert types.count(TransactionType.DIVIDEND) == 1
         assert types.count(TransactionType.TAX) == 2
@@ -789,12 +795,14 @@ class TestBrokerParserCoverageHelpers:
         # A charge always carries negative cash.
         assert all(tx.cash is not None and tx.cash.amount < 0 for tx in out.transactions if tx.type in {TransactionType.FEE, TransactionType.TAX})
 
-    def test_credit_agricole_account_coupon_is_interest_dividend_needs_asset(self):
+    def test_credit_agricole_account_coupon_and_dividend_link_asset_by_isin(self):
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
-        # A bond coupon (CEDOLA) is unallocated INTEREST, cash in.
+        # A bond coupon (CEDOLA) that names its bond by ISIN is INTEREST linked to
+        # that bond, so it shows under the asset in the FIFO lot detail.
         coupon = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and tx.description.startswith("CEDOLA:"))
-        assert coupon.asset_id is None
         assert coupon.cash is not None and coupon.cash.amount > 0
+        assert coupon.asset_id is not None and coupon.asset_id in out.extracted_assets
+        assert out.extracted_assets[coupon.asset_id].extracted_isin == "IT0000000001"
         # A dividend that names a security (ISIN) is DIVIDEND, asset-linked.
         dividend = next(tx for tx in out.transactions if tx.type == TransactionType.DIVIDEND)
         assert dividend.asset_id is not None
@@ -803,6 +811,9 @@ class TestBrokerParserCoverageHelpers:
         # A dividend WITHOUT an identifiable asset degrades to unallocated INTEREST.
         no_asset_div = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and "SENZA TITOLO" in tx.description)
         assert no_asset_div.asset_id is None
+        # Bank credit interest carries no ISIN and stays unallocated INTEREST.
+        bank_interest = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and "INTERESSI CREDITORI" in tx.description)
+        assert bank_interest.asset_id is None
 
     def test_credit_agricole_account_deposits_withdrawals_by_sign(self):
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
@@ -811,6 +822,118 @@ class TestBrokerParserCoverageHelpers:
         assert deposit.cash is not None and deposit.cash.amount > 0
         withdrawal = next(tx for tx in out.transactions if tx.type == TransactionType.WITHDRAWAL and "UTILITY" in tx.description)
         assert withdrawal.cash is not None and withdrawal.cash.amount < 0
+
+    def test_credit_agricole_account_identifiable_maturity_closes_wac_cost_basis(self):
+        """Account-only maturity rows must not stay cash-only when same-day coupon identifies ISIN + nominal.
+
+        This mirrors the real Nonna Anna 2025 case: the truncated securities export
+        opened BTP 20-25, while the later account export had only
+        ``TITOLI SCADUTI O ESTRATTI`` cash. The plugin must emit a SELL leg so the
+        engine's ``book_asset_like`` drops instead of staying flat forever.
+        """
+        rows = read_rows(CA_CONTI_SAMPLE)
+        rows.extend(
+            [
+                ["26/05/2025", "26/05/2025", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP 20-25 1.40FOICU IT0005410904 DOS:00496/05246854 NOMINALE: 95.000,00 TASSO: 3,62", "1.506,00", "EUR"],
+                ["26/05/2025", "26/05/2025", "TITOLI SCADUTI O ESTRATTI", "RIMB.TIT. BTP 20-25 1.40FOICUM(0541090 ) DOS:0496/05246854 26/05/25", "95.665,00", "EUR"],
+            ]
+        )
+
+        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+        sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and "BTP 20-25" in tx.description)
+        assert sell.asset_id is not None
+        assert sell.quantity == Decimal("-95000.00")
+        assert sell.cash is not None and sell.cash.amount == Decimal("95000.00")
+        assert "account_maturity" in (sell.tags or [])
+        assert out.extracted_assets[sell.asset_id].extracted_isin == "IT0005410904"
+        assert not any(tx.type == TransactionType.DEPOSIT and tx.cash and tx.cash.amount == Decimal("95665.00") and tx.description and "BTP 20-25" in tx.description for tx in out.transactions)
+
+        premium = next(tx for tx in out.transactions if tx.type == TransactionType.INTEREST and tx.description and "premio/rivalutazione da conto" in tx.description)
+        assert premium.asset_id == sell.asset_id
+        assert premium.cash is not None and premium.cash.amount == Decimal("665.00")
+
+        opening = MagicMock()
+        opening.id = 999001
+        opening.broker_id = 1
+        opening.type = TransactionType.ADJUSTMENT
+        opening.date = date(2025, 5, 25)
+        opening.asset_id = sell.asset_id
+        opening.quantity = Decimal("95000")
+        opening.amount = Decimal("0")
+        opening.currency = None
+        opening.cost_basis_override = Decimal("1")
+        opening.cost_basis_currency = "EUR"
+        opening.related_transaction_id = None
+        opening.asset_event_id = None
+
+        parsed_txs = [tx for tx in out.transactions if tx.date == date(2025, 5, 26) and (tx.asset_id == sell.asset_id or (tx.description and "BTP 20-25" in tx.description))]
+
+        def as_engine_tx(idx: int, item: TXCreateItem) -> MagicMock:
+            tx = MagicMock()
+            tx.id = 999100 + idx
+            tx.broker_id = item.broker_id
+            tx.type = item.type
+            tx.date = item.date
+            tx.asset_id = item.asset_id
+            tx.quantity = Decimal(item.quantity or 0)
+            tx.amount = item.cash.amount if item.cash else Decimal("0")
+            tx.currency = item.cash.code if item.cash else None
+            tx.cost_basis_override = item.cost_basis_override.amount if item.cost_basis_override else None
+            tx.cost_basis_currency = item.cost_basis_override.code if item.cost_basis_override else None
+            tx.related_transaction_id = None
+            tx.asset_event_id = None
+            return tx
+
+        engine_txs = [opening] + [as_engine_tx(idx, item) for idx, item in enumerate(parsed_txs)]
+        mark_series = {
+            sell.asset_id: build_asset_price_series(
+                price_rows=[],
+                transactions=engine_txs,
+                split_linked_tx_ids=set(),
+                asset_currency="EUR",
+                quote_base_quantity=1,
+            )
+        }
+        states = (
+            DailyStateBuilder(
+                classified_txs=[ClassifiedTransaction(tx=tx, classification="normal", share=Decimal("1"), paired_tx=None) for tx in engine_txs],
+                in_transit_intervals=[],
+                external_cash_flows=[],
+                price_map={},
+                quote_base_map={},
+                fx_rate_map={},
+                asset_classifications={},
+                asset_types={},
+                asset_currencies={sell.asset_id: "EUR"},
+                mark_series=mark_series,
+                target_currency="EUR",
+                date_from=date(2025, 5, 25),
+                date_to=date(2025, 5, 27),
+            )
+            .build()
+            .daily_states
+        )
+        assert states[0].book_asset_like == Decimal("95000")
+        assert states[1].book_asset_like == Decimal("0")
+        assert states[2].book_asset_like == Decimal("0")
+
+    def test_credit_agricole_account_unidentifiable_maturity_books_full_sell(self):
+        """A maturity row with no same-day coupon (no recoverable ISIN + NOMINALE) is
+        booked entirely as a SELL — everything as sold, unknown nominal (quantity 0),
+        no INTEREST split — never a plain cash DEPOSIT, plus a warning."""
+        rows = read_rows(CA_CONTI_SAMPLE)
+        rows.append(
+            ["10/06/2025", "10/06/2025", "TITOLI SCADUTI O ESTRATTI", "RIMB.TIT. MYSTERY BOND 30(9999999 ) DOS:0496/05246854 10/06/25", "12.345,00", "EUR"],
+        )
+        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+        sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and tx.description and "MYSTERY BOND" in tx.description)
+        assert sell.asset_id is not None
+        assert sell.quantity == Decimal("-12345")
+        assert sell.cash is not None and sell.cash.amount == Decimal("12345.00")
+        assert "account_maturity" in (sell.tags or [])
+        assert not any(tx.type == TransactionType.INTEREST and tx.description and "MYSTERY BOND" in tx.description for tx in out.transactions)
+        assert not any(tx.type == TransactionType.DEPOSIT and tx.cash and tx.cash.amount == Decimal("12345.00") for tx in out.transactions)
+        assert any("non collegabile" in w and "vendita" in w for w in out.warnings)
 
     def test_credit_agricole_account_carries_causale_tag_and_currency(self):
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)

@@ -42,11 +42,12 @@ Causale mapping:
 
 This single plugin also reads the account "Lista Movimenti Conto" cash-movements
 layout (``Data Op.;Data Val.;Causale;Descrizione;Importo;Divisa``). Those rows are
-bank cash with no per-asset detail, mapped by causale to FEE/TAX (capital gain,
-bollo, canone, spese), INTEREST/DIVIDEND (coupons/dividends) or DEPOSIT/WITHDRAWAL
-by sign (POS, utenze, prelievi, emoluments, giroconto and the cash side of
-trades). Every account-mode transaction is unallocated (no asset), keeps the bank
-description verbatim and carries the causale as a tag.
+bank cash, mapped by causale to FEE/TAX (capital gain, bollo, canone, spese),
+INTEREST/DIVIDEND (coupons/dividends, linked to their security by ISIN when named),
+identifiable bond maturity SELL + optional premium INTEREST, or DEPOSIT/WITHDRAWAL by
+sign (POS, utenze, prelievi, emoluments, giroconto and unidentified cash side of
+trades). Account-mode transactions keep the bank description verbatim and carry the
+causale as a tag.
 
 Because the securities "Deposito Titoli" export is securities-only and does not
 include bank cash movements, the plugin adds same-day cash counter-entries so the
@@ -136,12 +137,20 @@ def _resolve_currency(row: Sequence, divisa_cols: Sequence[int], default: str = 
 # Account "Lista Movimenti Conto" layout — cash-movement classification
 # ---------------------------------------------------------------------------
 
-# ISIN pattern used only to decide whether an income row names a security
-# (a dividend must reference an asset; a bond coupon names the bond by ISIN).
+# ISIN pattern used to decide whether an income row names a security. Both bond
+# coupons (``CEDOLA:… ISIN …``) and dividends reference their security by ISIN and
+# are linked to it; bank credit interest carries no ISIN and stays unallocated.
 _ISIN_RE = re.compile(r"\b[A-Z]{2}[A-Z0-9]{9}[0-9]\b")
 
 # Causali whose rows are coupon/dividend income (cash in, unless clawed back).
 _ACCT_INCOME_CAUSALI = {"CEDOLE, DIVIDENDI, PREMI ESTRATTI"}
+
+# Account cash rows that can represent a matured / redeemed security. When the
+# same account export also contains the final coupon with an ISIN + NOMINALE, the
+# nominal is recovered in-file and the disposal is split into par SELL + premium
+# INTEREST. When it is not identifiable, the whole redemption is still booked as a
+# SELL (everything as sold, unknown nominal) — never a generic DEPOSIT.
+_ACCT_MATURITY_CAUSALI = {"TITOLI SCADUTI O ESTRATTI"}
 
 # Causali whose rows are securities fees/taxes (split by description keyword).
 _ACCT_FEETAX_CAUSALI = {"COMMISS./SPESE SU OPERAZ. TITOLI", "COMMISSIONI/SPESE"}
@@ -157,6 +166,9 @@ _TAX_KEYWORDS = ("CAPITAL GAIN", "D.LGS 461", "461/97", "IMPOSTA", "BOLLO", "RIT
 # Description keyword that marks a dividend (vs a bond coupon "CEDOLA").
 _DIVIDEND_KEYWORDS = ("DIVIDEND",)
 
+_ACCOUNT_MATURITY_RE = re.compile(r"RIMB\.TIT\.\s*(?P<name>.+?)\s*\((?P<code>[^)]*)\)", re.IGNORECASE)
+_ACCOUNT_NOMINALE_RE = re.compile(r"\bNOMINALE\s*:\s*(?P<nominale>[\d\.\,]+)", re.IGNORECASE)
+
 
 def _slug_causale(causale: str) -> str:
     """Compact, tag-safe slug of a causale (``"CEDOLE, DIVIDENDI"`` -> ``cedole_dividendi``)."""
@@ -168,12 +180,18 @@ def _names_an_asset(description_upper: str) -> bool:
     return bool(_ISIN_RE.search(description_upper))
 
 
-def _dividend_asset_name(description: str, isin: str) -> str:
-    """Best-effort security name for an account-mode dividend (before the ISIN)."""
+def _income_asset_name(description: str, isin: str) -> str:
+    """Best-effort security name for an account-mode income row (bond coupon or
+    dividend): the text before the ISIN, minus a leading ``CEDOLA``/``DIVIDENDO``."""
     idx = description.upper().find(isin)
     head = description[:idx] if idx > 0 else description
-    head = re.sub(r"^\s*DIVIDEND[OIA]?\s*", "", head, flags=re.IGNORECASE).strip(" :-\t")
+    head = re.sub(r"^\s*(CEDOLA|DIVIDEND[OIA]?)\s*", "", head, flags=re.IGNORECASE).strip(" :-\t")
     return head or isin
+
+
+def _digits_only(value: str) -> str:
+    """Return only decimal digits from a broker identifier fragment."""
+    return re.sub(r"\D+", "", value)
 
 
 @register_provider(BRIMProviderRegistry)
@@ -573,8 +591,9 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
     def _classify_account_row(self, causale: str, description: str, amount: Decimal, currency: str) -> tuple[TransactionType, Currency]:
         """Map one account-movements row to a ``(type, cash)`` pair.
 
-        Typed mapping (verbatim amounts, per-row currency; only an identifiable
-        dividend is asset-linked, everything else is unallocated):
+        Typed mapping (verbatim amounts, per-row currency; identifiable income —
+        bond coupon or dividend, both carrying an ISIN — is asset-linked by the
+        caller, bank interest and generic cash stay unallocated):
         - securities fees/taxes -> TAX (capital gain / imposta / bollo / ritenuta)
           or FEE (management, administration, coupon-detach, monthly canone);
         - coupons / dividends / credit interest -> INTEREST, or DIVIDEND when the
@@ -612,12 +631,13 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
     def _parse_account_movements(self, rows: List[List], broker_id: int) -> BRIMParseOutput:
         """Parse the account "Lista Movimenti Conto" cash-movements layout.
 
-        Header: ``Data Op.;Data Val.;Causale;Descrizione;Importo;Divisa``. Unlike
-        the securities export, these rows are bank cash with no per-asset detail,
-        so transactions are unallocated (``asset_id=None``) — the causale is kept
-        as a tag and the bank description is preserved verbatim. The sole
-        exception is a dividend that names a security: DIVIDEND requires an asset,
-        so it is linked to a fake asset keyed by the ISIN in its description.
+        Header: ``Data Op.;Data Val.;Causale;Descrizione;Importo;Divisa``. Most
+        rows are bank cash with no per-asset detail, so transactions are
+        unallocated (``asset_id=None``) — the causale is kept as a tag and the bank
+        description is preserved verbatim. Exceptions are income rows (bond coupons
+        and dividends) and maturity/redemption rows that name a security by ISIN,
+        linked to fake assets keyed by that ISIN so the income appears under the
+        asset in the FIFO lot detail.
         """
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
@@ -626,14 +646,8 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
 
-        def dividend_asset_id(desc: str) -> Optional[int]:
-            """Link a dividend to a fake asset keyed by its ISIN (schema requires one)."""
+        def asset_id_for(*, key: str, name: str, isin: Optional[str]) -> int:
             nonlocal next_fake_id
-            match = _ISIN_RE.search(desc.upper())
-            if match is None:
-                return None
-            isin = match.group(0)
-            key = f"isin:{isin}"
             if key in asset_to_fake_id:
                 return asset_to_fake_id[key]
             new_id = next_fake_id
@@ -641,10 +655,19 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
             extracted_assets[new_id] = BRIMExtractedAssetInfo(
                 extracted_symbol=None,
                 extracted_isin=isin,
-                extracted_name=_dividend_asset_name(desc, isin),
+                extracted_name=name,
             )
             next_fake_id -= 1
             return new_id
+
+        def income_asset_id(desc: str) -> Optional[int]:
+            """Link an income row (bond coupon or dividend) to a fake asset keyed by its
+            ISIN. Returns None when the row names no security (e.g. bank credit interest)."""
+            match = _ISIN_RE.search(desc.upper())
+            if match is None:
+                return None
+            isin = match.group(0)
+            return asset_id_for(key=f"isin:{isin}", name=_income_asset_name(desc, isin), isin=isin)
 
         header_idx = io.find_header_row(rows, ["Data Op.", "Descrizione", "Importo"])
         if header_idx is None:
@@ -659,6 +682,32 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                 "divisa": ["Divisa"],
             },
         )
+
+        income_identity_by_date: Dict = {}
+        for row in rows[header_idx + 1 :]:
+            if io.is_blank_row(row):
+                continue
+            identity_date = io.to_date(io.row_get(row, col, "date"))
+            identity_causale = io.cell_str(io.row_get(row, col, "causale")).upper()
+            identity_description = io.cell_str(io.row_get(row, col, "descrizione"))
+            if identity_date is None or identity_causale not in _ACCT_INCOME_CAUSALI:
+                continue
+            isin_match = _ISIN_RE.search(identity_description.upper())
+            nominale_match = _ACCOUNT_NOMINALE_RE.search(identity_description)
+            if isin_match is None or nominale_match is None:
+                continue
+            isin = isin_match.group(0)
+            nominale = io.to_decimal_it(nominale_match.group("nominale"))
+            if nominale is None or nominale <= 0:
+                continue
+            income_identity_by_date.setdefault(identity_date, []).append(
+                {
+                    "isin": isin,
+                    "isin_digits": _digits_only(isin),
+                    "name": _income_asset_name(identity_description, isin),
+                    "nominale": nominale,
+                }
+            )
 
         for offset, row in enumerate(rows[header_idx + 1 :], start=header_idx + 2):
             if io.is_blank_row(row):
@@ -679,10 +728,86 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                 continue
 
             currency = io.cell_str(io.row_get(row, col, "divisa")) or "EUR"
-            tx_type, cash = self._classify_account_row(causale, description, amount, currency)
-            asset_id = dividend_asset_id(description) if tx_type == TransactionType.DIVIDEND else None
-
             context = f"{causale}: {description}" if description else causale
+
+            if causale in _ACCT_MATURITY_CAUSALI and amount > 0:
+                maturity_match = _ACCOUNT_MATURITY_RE.search(description)
+                maturity_code = _digits_only(maturity_match.group("code")) if maturity_match else ""
+                maturity_name = maturity_match.group("name").strip() if maturity_match else description
+                identity = next((item for item in income_identity_by_date.get(tx_date, []) if maturity_code and maturity_code in item["isin_digits"]), None)
+                if identity is None:
+                    # No same-day coupon carries this security's ISIN + NOMINALE, so we
+                    # cannot split par principal from any premium. Book the whole redemption
+                    # as a SELL at par — everything treated as the bond's disposal, no
+                    # INTEREST leg — instead of external cash, so it reduces a position and
+                    # never inflates paid-in capital (consistent with the securities-export
+                    # fallback at ``_parse_securities``). With no position and no reported
+                    # price we assume a par (100) redemption, so the derived nominal equals
+                    # the cash (quantity < 0); flag it for the user to verify.
+                    warnings.append(f"Riga {offset}: scadenza/rimborso '{description}' non collegabile a un titolo (ISIN/nominale non trovati nella stessa data); importata interamente come vendita a valore nominale (par 100, nessuna quota di interesse) — verifica il nominale.")
+                    model = io.model_bond_maturity(ctv=abs(amount), price=Decimal(100), held_qty=None)
+                    fallback_asset_id = asset_id_for(key=f"maturity:{maturity_code or maturity_name}", name=maturity_name, isin=None) if maturity_name else None
+                    self._create_transaction(
+                        row_num=offset,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=context,
+                        broker_id=broker_id,
+                        asset_id=fallback_asset_id,
+                        type=TransactionType.SELL,
+                        date=tx_date,
+                        quantity=-model.nominal,
+                        cash=Currency(code=currency, amount=model.principal_cash),
+                        description=f"[{causale} — rimborso/scadenza da conto, titolo non identificato] {maturity_name} (source: {description}; venduto interamente a par {model.par_price}, nominale derivato {model.nominal})"[:500],
+                        tags=["import", "credit_agricole", _slug_causale(causale), "account_maturity"],
+                    )
+                    continue
+                else:
+                    nominale = identity["nominale"]
+                    # Reuse the shared bond-redemption model (par principal + surplus-as-INTEREST),
+                    # the same knowledge already used by the securities export and Fineco. The nominal
+                    # is recovered in-file from the same-day coupon (income_identity_by_date), never the DB.
+                    model = io.model_bond_maturity(ctv=abs(amount), price=None, held_qty=nominale)
+                    asset_id = asset_id_for(key=f"isin:{identity['isin']}", name=identity["name"] or maturity_name, isin=identity["isin"])
+                    sell_description = f"[{causale} — rimborso/scadenza da conto] {identity['name'] or maturity_name} (source: {description}; redeemed at par {model.par_price}, nominal {model.nominal})"
+                    created = self._create_transaction(
+                        row_num=offset,
+                        transactions=transactions,
+                        validation_issues=validation_issues,
+                        context=context,
+                        broker_id=broker_id,
+                        asset_id=asset_id,
+                        type=TransactionType.SELL,
+                        date=tx_date,
+                        quantity=-model.nominal,
+                        cash=Currency(code=currency, amount=model.principal_cash),
+                        description=sell_description[:500],
+                        tags=["import", "credit_agricole", _slug_causale(causale), "account_maturity"],
+                    )
+                    if created is not None and model.surplus_cash > 0:
+                        self._create_transaction(
+                            row_num=offset,
+                            transactions=transactions,
+                            validation_issues=validation_issues,
+                            context=f"Maturity premium for {identity['name'] or maturity_name}",
+                            broker_id=broker_id,
+                            asset_id=asset_id,
+                            type=TransactionType.INTEREST,
+                            date=tx_date,
+                            quantity=Decimal("0"),
+                            cash=Currency(code=currency, amount=model.surplus_cash),
+                            description=f"[{causale} — premio/rivalutazione da conto] {identity['name'] or maturity_name} (source: {description}; surplus over par {model.surplus_cash})"[:500],
+                            tags=["import", "credit_agricole", _slug_causale(causale), "maturity_premium"],
+                        )
+                    continue
+
+            tx_type, cash = self._classify_account_row(causale, description, amount, currency)
+            # Coupons (INTEREST) and dividends both name their security by ISIN — link the
+            # income to that bond/fund so it shows under the asset in the FIFO lot detail.
+            # Bank credit interest ("INTERESSI/COMPETENZE" credit) carries no ISIN and stays
+            # unallocated (income_asset_id returns None).
+            asset_id = income_asset_id(description) if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND) else None
+
             self._create_transaction(
                 row_num=offset,
                 transactions=transactions,

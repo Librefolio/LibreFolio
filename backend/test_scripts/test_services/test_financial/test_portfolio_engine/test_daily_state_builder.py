@@ -283,6 +283,27 @@ class TestBookValueFormula:
         assert s.unrealized_gain_loss == s.nav_value - s.book_value
         assert s.unrealized_gain_loss == Decimal("100")  # NAV 1100 - book 1000
 
+    def test_book_asset_like_drops_after_maturity_sell(self):
+        """A maturity encoded as SELL closes the WAC pool, so growth cost basis drops."""
+        txs = [
+            _ctxn(_tx(id=1, dt="2025-01-01", type="BUY", amount="-95000", quantity="95000", asset_id=100)),
+            _ctxn(_tx(id=2, dt="2025-01-02", type="SELL", amount="95000", quantity="-95000", asset_id=100)),
+        ]
+        builder = _builder(
+            classified_txs=txs,
+            price_map={100: [(date(2025, 1, 1), Decimal("100"), "EUR")]},
+            quote_base_map={100: 100},
+            asset_types={100: "Bond"},
+            asset_classifications={100: None},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 3),
+        )
+        states = builder.build().daily_states
+
+        assert states[0].book_asset_like == Decimal("95000")
+        assert states[1].book_asset_like == Decimal("0")
+        assert states[2].book_asset_like == Decimal("0")
+
 
 class TestSplitRescale:
     """SPLIT-linked ADJUSTMENT rescales the WAC pool instead of add/reduce (Fase 0 fix).

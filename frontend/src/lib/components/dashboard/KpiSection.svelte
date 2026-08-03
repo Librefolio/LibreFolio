@@ -88,14 +88,6 @@
         if (prevNav === 0 || pnlDeltaDay == null) return null;
         return ((pnlDeltaDay / prevNav) * 100).toFixed(2);
     });
-    const periodPnlDeltaDayPct = $derived.by(() => {
-        if (!firstHistoryPoint || !prevHistoryPoint || firstHistoryPoint === prevHistoryPoint || pnlDeltaDay == null) return null;
-        const firstTotalPnl = parseFloat(firstHistoryPoint.total_pnl.amount);
-        const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
-        const periodPnlYesterday = prevTotalPnl - firstTotalPnl;
-        if (!Number.isFinite(periodPnlYesterday) || Math.abs(periodPnlYesterday) < 0.01) return null;
-        return ((pnlDeltaDay / periodPnlYesterday) * 100).toFixed(2);
-    });
 
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
     const cashGeneratedAmt = $derived(lastHistoryPoint?.cash_from_generated_returns != null ? parseFloat(lastHistoryPoint.cash_from_generated_returns.amount) : null);
@@ -123,11 +115,17 @@
         const amount = parseFloat(totalPnlCur.amount);
         return Number.isFinite(amount) ? amount : null;
     });
-    const totalPnlDeltaPct = $derived.by(() => {
+    const pnlDeltaDayVsPrevTotalPct = $derived.by(() => {
         if (!prevHistoryPoint || pnlDeltaDay == null) return null;
         const prevTotalPnl = parseFloat(prevHistoryPoint.total_pnl.amount);
         if (!Number.isFinite(prevTotalPnl) || Math.abs(prevTotalPnl) < 0.01) return null;
         return ((pnlDeltaDay / prevTotalPnl) * 100).toFixed(2);
+    });
+    const simpleRoiPct = $derived.by(() => {
+        if (!summary) return null;
+        const roi = parseFloat(summary.simple_roi_percent);
+        if (!Number.isFinite(roi)) return null;
+        return (roi * 100).toFixed(2);
     });
     const nwBarMax = $derived(Math.max(navHeroAmt, marketValueStartAmt, marketValueAmt, purchaseCostAmt, purchaseCostStartAmt, cashAmt, cashStartAmt, totalDepositedAmt, totalWithdrawnAmt) || 1);
     const marketBarPct = $derived((marketValueAmt / nwBarMax) * 100);
@@ -260,8 +258,8 @@
                 {#if pnlDeltaDay != null}
                     <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day">
                         <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
-                        {#if periodPnlDeltaDayPct != null}
-                            <span> ({pnlDeltaDay >= 0 ? '+' : ''}{periodPnlDeltaDayPct}%)</span>
+                        {#if pnlDeltaDayVsPrevTotalPct != null}
+                            <span> ({pnlDeltaDay >= 0 ? '+' : ''}{pnlDeltaDayVsPrevTotalPct}%)</span>
                         {/if}
                     </p>
                 {/if}
@@ -339,8 +337,8 @@
             {#if totalPnlAmt != null}
                 <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-total-pnl-delta">
                     <TweenedValue value={totalPnlAmt} format={fmtMoney} />
-                    {#if totalPnlDeltaPct != null}
-                        <span> ({pnlDeltaDay != null && pnlDeltaDay >= 0 ? '+' : ''}{totalPnlDeltaPct}%)</span>
+                    {#if simpleRoiPct != null}
+                        <span> ({parseFloat(simpleRoiPct) >= 0 ? '+' : ''}{simpleRoiPct}%)</span>
                     {/if}
                 </p>
             {/if}

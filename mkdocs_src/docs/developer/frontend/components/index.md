@@ -18,6 +18,7 @@ The library is split into two architectural layers: **Core UI** (generic atoms a
 | Component | Details |
 |-----------|---------|
 | **[Transaction Form](features/transaction-form.md)** | Complex modal for creating/editing transactions with reactive auto-calculation and live WAC preview. |
+| **[Import Wizard](features/import-wizard.md)** | Multi-file staged broker import: duplicate detection (vs DB and in-batch), the file-priority batch resolver, and the N-way compare modal. |
 | **[Brokers](features/brokers/index.md)** | `BrokerCard`, `BrokerForm`, `BrokerModal`, `CashBalanceCard`, and Broker Sharing. |
 | **[Settings](features/settings.md)** | `SettingsLayout`, `PreferencesTab`, `GlobalSettingsTab`. |
 | **[Authentication](features/auth.md)** | `LoginCard`, `RegisterCard`, `ForgotPasswordCard`. |
