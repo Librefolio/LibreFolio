@@ -334,13 +334,32 @@ transaction breaks these rules, so flip source signs as needed:
       (`reason_code="derived_quantity"`) so the user verifies the nominal — the plugin sees
       only the file, so it cannot confirm the close against the position already stored in
       LibreFolio (that reconciliation happens in the portfolio engine at compute time).
+    - **Cash-only maturity in a bank/account export → nominal from a same-day companion
+      row (still in-file).** Some exports carry the redemption only as a *cash* row with no
+      securities position and no reliable price (e.g. Crédit Agricole's account
+      `TITOLI SCADUTI O ESTRATTI`, whose truncated securities export had already dropped the
+      opening BUY). Such a row has just the total cash, so it cannot split par vs premium on
+      its own. Recover the nominal from **another row in the same file**: the final coupon
+      paid on the same date states the security's `ISIN` + `NOMINALE`. Match the two by
+      security code in a first pass, then feed that nominal as `held_qty` to
+      `model_bond_maturity` (`source == "position"`). This **never touches the database** — a
+      plugin only ever reads its own file. If no same-day companion row identifies the
+      security, **book the whole redemption as a `SELL` for the full cash (everything as sold,
+      no premium split) plus a `warning`** — never a plain cash `DEPOSIT`, so the proceeds
+      reduce a position instead of inflating paid-in capital (consistent with the
+      securities-export fallback). With no held position and no reported price, assume a par
+      (100) redemption so the derived nominal equals the cash (`SELL` with `quantity < 0`,
+      flagged for the user to verify). See `broker_credit_agricole.py`
+      (`_parse_account_movements`, `income_identity_by_date`, `_ACCT_MATURITY_CAUSALI`).
     - A price **at or below par** yields `surplus_cash == 0` → emit a single plain SELL
       (pass-through); don't invent negative income.
     - Keep the plugin's usual cash model: if BUYs get a balancing `DEPOSIT` and SELLs a
       `WITHDRAWAL`, the par principal nets to zero and only the `INTEREST` surplus adds cash.
 
-    Reference plugins: `broker_credit_agricole.py` (`TITOLI SCADUTI`, position pre-computed
-    from succession legs) and `broker_fineco.py` (`Rimborso` above par, nominal from the row).
+    Reference plugins: `broker_credit_agricole.py` (`TITOLI SCADUTI` in the securities export
+    with the position pre-computed from succession legs, **and** the account cash-only
+    `TITOLI SCADUTI O ESTRATTI` with the nominal recovered from the same-day coupon) and
+    `broker_fineco.py` (`Rimborso` above par, nominal from the row).
 
 ## 🆔 Fake asset IDs
 

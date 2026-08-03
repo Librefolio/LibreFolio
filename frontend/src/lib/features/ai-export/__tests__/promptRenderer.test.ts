@@ -158,6 +158,7 @@ describe('AI Export prompt renderer', () => {
             ...snapshotFixture(selection),
             technical_sampling: {
                 detail_level: 'standard' as const,
+                indicator_history_row_limit: 10,
                 price_policy: {
                     bucket_count: 46,
                 },
@@ -171,8 +172,8 @@ describe('AI Export prompt renderer', () => {
                 ],
             },
             event_selection: {
-                minimum_latest_events_per_annotation: 20 as const,
-                complete_recent_window_days: 30 as const,
+                minimum_latest_events_per_annotation: 10,
+                complete_recent_window_days: 21,
                 grouped_by: ['entity_id', 'annotation_key'],
             },
         };
@@ -187,12 +188,13 @@ describe('AI Export prompt renderer', () => {
         expect(rendered.prompt).toContain('technical_sampling:');
         expect(rendered.prompt).toContain('detail_level: standard');
         expect(rendered.prompt).toContain('price_bucket_count: 46');
+        expect(rendered.prompt).toContain('indicator_history_row_limit: 10');
         expect(rendered.prompt).not.toContain('indicator_policies:');
         expect(rendered.prompt).not.toContain('temporal_class: medium');
         expect(rendered.prompt).not.toContain('bucket_count: 32');
         expect(rendered.prompt).not.toMatch(/^\s*[pmk]:/mu);
         expect(rendered.prompt).toContain('event_selection:');
-        expect(rendered.prompt).toContain('minimum_latest_events_per_annotation: 20');
+        expect(rendered.prompt).toContain('minimum_latest_events_per_annotation: 10');
     });
 
     it('keeps instruction-like user content inside a dynamic fenced data block', () => {
@@ -266,6 +268,7 @@ describe('AI Export prompt renderer', () => {
             ...snapshotFixture(selection),
             technical_sampling: {
                 detail_level: 'standard' as const,
+                indicator_history_row_limit: 10,
                 price_policy: {bucket_count: 46},
                 indicator_policies: [
                     {

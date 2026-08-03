@@ -12,6 +12,7 @@ export interface AiExportTechnicalSamplingManifest {
     readonly detail_level: AiExportDetailLevel;
     readonly price_policy?: z.output<typeof schemas.AiExportPriceSamplingPolicy> | null;
     readonly indicator_policies: readonly z.output<typeof schemas.AiExportIndicatorSamplingPolicy>[];
+    readonly indicator_history_row_limit: number | null;
 }
 export interface AiExportEntityDirectory {
     readonly assets: readonly z.output<typeof schemas.AiExportAssetDirectoryEntry>[];
@@ -88,6 +89,7 @@ export const AI_EXPORT_ANALYSIS_IDS = [
     'portfolio.pac_planning',
     'portfolio.rebalancing',
     'portfolio.performance_attribution',
+    'portfolio.market_events_review',
     'portfolio.income_review',
     'portfolio.fifo_review',
     'portfolio.technical_breadth',
@@ -128,6 +130,11 @@ export function isAiExportAnalysisId(value: string): value is AiExportAnalysisId
     return AI_EXPORT_ANALYSIS_IDS.some((id) => id === value);
 }
 
+function requireIndicatorHistoryRowLimit(value: number | null | undefined): number | null {
+    if (value === undefined) throw new TypeError('AI Export technical_sampling.indicator_history_row_limit is required');
+    return value;
+}
+
 export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSnapshotResponse): AiExportSnapshotResponse {
     const analysisContract = response.analysis_contract;
     if (Array.isArray(analysisContract)) throw new TypeError('AI Export analysis_contract must not be an array');
@@ -135,20 +142,24 @@ export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSna
     if (Array.isArray(technicalSampling)) throw new TypeError('AI Export technical_sampling must not be an array');
     const pricePolicy = technicalSampling?.price_policy;
     if (Array.isArray(pricePolicy)) throw new TypeError('AI Export technical_sampling.price_policy must not be an array');
+    const indicatorHistoryRowLimit = technicalSampling?.indicator_history_row_limit;
+    if (Array.isArray(indicatorHistoryRowLimit)) throw new TypeError('AI Export technical_sampling.indicator_history_row_limit must not be an array');
     const eventSelection = response.event_selection;
     if (Array.isArray(eventSelection)) throw new TypeError('AI Export event_selection must not be an array');
     const historyCoverage = response.meta.history_coverage;
     if (Array.isArray(historyCoverage)) throw new TypeError('AI Export meta.history_coverage must not be an array');
+    const normalizedTechnicalSampling: AiExportTechnicalSamplingManifest | null | undefined = technicalSampling
+        ? {
+              ...technicalSampling,
+              price_policy: pricePolicy,
+              indicator_policies: technicalSampling.indicator_policies ?? [],
+              indicator_history_row_limit: requireIndicatorHistoryRowLimit(indicatorHistoryRowLimit),
+          }
+        : technicalSampling;
     return {
         ...response,
         analysis_contract: analysisContract,
-        technical_sampling: technicalSampling
-            ? {
-                  ...technicalSampling,
-                  price_policy: pricePolicy,
-                  indicator_policies: technicalSampling.indicator_policies ?? [],
-              }
-            : technicalSampling,
+        technical_sampling: normalizedTechnicalSampling,
         event_selection: eventSelection,
         meta: {
             ...response.meta,

@@ -228,6 +228,7 @@ def test_sampling_manifests_are_strict_deduplicated_v1_contracts():
         detail_level="full",
         price_policy=price,
         indicator_policies=(indicator,),
+        indicator_history_row_limit=None,
     )
     event_policy = AiExportEventSelectionManifest()
 
@@ -245,6 +246,7 @@ def test_sampling_manifests_are_strict_deduplicated_v1_contracts():
                 "bucket_count": 51,
             }
         ],
+        "indicator_history_row_limit": None,
     }
     assert event_policy.grouped_by == ("entity_id", "annotation_key")
 
@@ -252,9 +254,13 @@ def test_sampling_manifests_are_strict_deduplicated_v1_contracts():
         AiExportTechnicalSamplingManifest(
             detail_level="full",
             indicator_policies=(indicator, indicator),
+            indicator_history_row_limit=None,
         )
     with pytest.raises(ValidationError, match="price or indicator policy"):
-        AiExportTechnicalSamplingManifest(detail_level="full")
+        AiExportTechnicalSamplingManifest(
+            detail_level="full",
+            indicator_history_row_limit=None,
+        )
     with pytest.raises(ValidationError, match="extra_forbidden"):
         AiExportPriceSamplingPolicy.model_validate(
             {
@@ -266,7 +272,7 @@ def test_sampling_manifests_are_strict_deduplicated_v1_contracts():
         )
     with pytest.raises(ValidationError):
         AiExportEventSelectionManifest(
-            minimum_latest_events_per_annotation=19,
+            minimum_latest_events_per_annotation=0,
         )
 
 

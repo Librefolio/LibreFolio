@@ -3,7 +3,7 @@ title: "Backend-owned versioned AI snapshots with a frontend-owned safe prompt a
 category: decision
 status: resolved
 date: 2026-07-26
-updated: 2026-07-27
+updated: 2026-08-03
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
 tags: [ai-export, backend, frontend, architecture, snapshot, versioning, security, mcp, hard-cutover]
 related:
@@ -49,6 +49,8 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - **Contextual UI memory:** task, detail, mode, and raw notes draft persist under a client-session user ID plus `portfolio`, `broker:{id}`, `asset:{id}`, or `fx:{canonical_slug}`. Response language is always refreshed from the current locale. Snapshot may preserve hidden notes in memory, but normalization removes them from the exported prompt and clipboard. See [[decisions/ai-export-contextual-ui-memory]].
 - **Portal and documentation boundary:** the panel is appended to `document.body`, fixed and viewport-positioned above chart controls, while the book link targets the current domain's English manual or the localized shared fallback.
 - **Safe rendering boundary:** snapshot values and user notes are normalized to JSON-safe data, deterministically serialized as YAML, and placed in dynamically sized Markdown fences. Untrusted values are never interpolated as raw instructions.
+- **Empty temporal rows are a presentation-only omission:** the public renderer removes a temporal row only when it contains no observation, economic value, flow, P&L, extrema, reconciliation, economic date, or explicit state. Observed zero remains data, diagnostics report detected/omitted/rendered row counts, and backend buckets and calculations remain intact.
+- **Broker universes use explicit names:** `accessible_broker_count` is the authorization universe, `scoped_broker_count`/`broker_scope` are the effective calculation universe, `position_broker_count` counts Brokers with open positions at snapshot date, and `period_contributor_broker_count` counts period-performance contributors. The Entity Directory uses the effective prepared scope, including a scoped Broker with no current position rows.
 - **Selected-period applicability:** task applicability is evaluated from the task's selected observations. Trailing technical observations may enrich market context, but an empty technical window must not invalidate a historical `drawdown_recovery` request that has two selected observations and a measurable prior maximum.
 - **Transport-only clipboard fallback:** preserve the immediate `ClipboardItem(Promise<Blob>)` route when supported; otherwise prepare the same V2 export once and use `writeText`/`execCommand`. Clipboard capability never permits fallback to legacy builders or prompt logic.
 - **Standalone/MCP-ready service:** `AiExportSnapshotService` has no FastAPI dependency. HTTP is one adapter; a future MCP server can invoke the same authenticated service and typed snapshots.
@@ -64,6 +66,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - Hiding controls does not weaken the underlying contracts: response language remains deterministic from locale, web research remains false, catalog compatibility still fails closed, and clipboard compatibility remains an internal transport choice.
 - Portalization prevents Asset/FX chart overlays from covering the panel and keeps the task select and book link keyboard-operable.
 - Required source failures produce typed non-success responses; a missing optional indicator is omitted or marked unavailable without fabricating data.
+- Dense Portfolio/Broker output remains explicit rather than silently truncated: the 20k/60k frontend warning stays in place and no automatic token cap or detail downgrade is introduced.
 - The old [[decisions/ai-export-prompt-catalog]] remains historical context but is superseded as the production architecture.
 - The live-E2E cash valuation-basis error established an explicit rule: never assert equality between metrics evaluated on different dates or denominators. See [[problems/ai-export-cash-fx-valuation-basis-mismatch]].
 - Final review established two further boundary rules: presentation context cannot tighten task applicability ([[problems/ai-export-drawdown-selected-history-fallback]]), and transport compatibility cannot revive product-level legacy behavior ([[problems/ai-export-clipboard-fallback-unreachable]]).
@@ -78,10 +81,13 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - Browser E2E across all four surfaces.
 - Canonical runner registration for AI Export service/schema/API tests and the explicit frontend AI Export+signal unit/E2E set, so aggregate suites execute them; unrelated pre-existing orphan tests remain outside this decision's scope.
 - Manual desktop/mobile approval on 27 July 2026 covering Dashboard layout, custom task selection, chart-layer stacking, per-context memory, domain manual links, clipboard behavior, and representative prompts.
+- On 3 August 2026 the project owner explicitly approved empty-temporal-row hardening, explicit Broker nomenclature, and `20260801T085820.657238Z` as final targeted evidence. The run passed 4/4 prompts with no failures, skips, or regressions; UI/probe matched 4/4, the secret scan passed, and source/production databases were unchanged.
+- Applied Standard-policy run `20260803T164514.504966Z` passed 7/7 prompts with zero failures/public violations, UI/probe equivalence, a passed secret scan, and unchanged source/production databases.
+- Documentation closure is explicit: `mkdocs_src/docs/developer/test-walkthrough/api.md` lists AI Export API, service, probe, frontend-unit, and Playwright commands; `.github/copilot-instructions.md` states the AI Export product and backend/frontend boundary. User Guide IT/FR/ES translations remain deliberately deferred.
 
 ## Participants
 
-The completed Phase 0 plan records approval by the project owner and implementation/review work across backend and frontend agents. The project owner manually approved the final desktop/mobile UX on 27 July 2026. Individual participant names were not recorded in the source chain.
+The completed Phase 0 plan records approval by the project owner and implementation/review work across backend and frontend agents. The project owner manually approved the final desktop/mobile UX on 27 July 2026 and the final temporal-row/Broker hardening plus evidence designation on 3 August 2026. Individual participant names were not recorded in the source chain.
 
 ## Links
 
@@ -105,6 +111,8 @@ The completed Phase 0 plan records approval by the project owner and implementat
 | Decision and implementation plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
 | Frozen task/profile contract | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/contract-phase00AiExportTaskProfiles.md` |
 | Migration evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` |
+| Final hardening approval and targeted evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalHardeningAndDocumentationV1.md` |
+| Applied density policy and validation evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportCrossDomainDensityAuditV1.md` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |
 | Strict API schemas | `backend/app/schemas/ai_export.py` |
 | Exact profile resolver | `backend/app/services/ai_export/resolver.py` |
@@ -118,9 +126,15 @@ The completed Phase 0 plan records approval by the project owner and implementat
 | Domain-aware manual link | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/components/ui/DocsLink.svelte` |
 | Safe serialization | `frontend/src/lib/features/ai-export/serialization/` |
 | Prompt renderer | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |
+| Empty temporal-row renderer and diagnostics | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
+| Explicit Broker universe fields | `backend/app/services/ai_export/components/portfolio_financial.py`, `backend/app/services/ai_export/runtime_service.py` |
+| Real-prompt evidence probe | `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` |
+| Prompt-size warning boundary | `frontend/src/lib/features/ai-export/aiExportOptions.ts`, `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte` |
 | Clipboard orchestration | `frontend/src/lib/features/ai-export/aiExportClipboardV2.ts` |
 | Drawdown applicability regression | `backend/app/services/ai_export/assemblers/asset.py`, `backend/test_scripts/test_services/test_ai_export_asset_fx.py` |
 | Clipboard fallback regression | `frontend/src/lib/features/ai-export/__tests__/aiExportClipboardV2.test.ts` |
 | Canonical test registration | `scripts/test_runner/_backend_services.py`, `scripts/test_runner/_backend_schemas.py`, `scripts/test_runner/_backend_api.py`, `scripts/test_runner/_frontend_ai_export.py`, `scripts/test_runner/_registry.py`, `scripts/test_runner/_suites.py` |
 | Final UI unit coverage | `frontend/src/lib/features/ai-export/__tests__/aiExportMemory.test.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportOptions.test.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportUi.test.ts` |
 | Final UI browser coverage | `frontend/e2e/ai-export.spec.ts` |
+| AI Export test walkthrough | `mkdocs_src/docs/developer/test-walkthrough/api.md` |
+| Repository product/boundary instructions | `.github/copilot-instructions.md` |

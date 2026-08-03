@@ -82,6 +82,11 @@ from backend.app.services.ai_export.dependencies import (
     ResourceLoadError,
     build_bucket_plan_for_scope,
 )
+from backend.app.services.ai_export.temporal.policy import (
+    BucketDetailLevel,
+    EventSelectionPolicy,
+    indicator_history_row_limit,
+)
 
 SCHEMA_VERSION = 2
 CATALOG_VERSION = 2
@@ -652,6 +657,21 @@ class AiExportSnapshotService:
                 else None
             ),
             indicator_policies=indicator_policies,
+            indicator_history_row_limit=indicator_history_row_limit(BucketDetailLevel(context.scope.detail_level.value)),
+        )
+
+    @staticmethod
+    def _event_selection_manifest(
+        context: BuildContext,
+    ) -> AiExportEventSelectionManifest | None:
+        if not context.event_selection_used:
+            return None
+        if context.scope is None:
+            raise RuntimeError("event selection diagnostics require a request scope")
+        policy = EventSelectionPolicy.for_detail_level(BucketDetailLevel(context.scope.detail_level.value))
+        return AiExportEventSelectionManifest(
+            minimum_latest_events_per_annotation=policy.minimum_latest_events_per_annotation,
+            complete_recent_window_days=policy.complete_recent_window_days,
         )
 
     async def build_snapshot(
@@ -763,7 +783,7 @@ class AiExportSnapshotService:
             dataset_manifest=dataset_manifest,
             analysis_contract=analysis_contract,
             technical_sampling=self._technical_sampling_manifest(context),
-            event_selection=(AiExportEventSelectionManifest() if context.event_selection_used else None),
+            event_selection=self._event_selection_manifest(context),
             sections=sections,
         )
 

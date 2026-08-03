@@ -79,6 +79,47 @@ assert set(_INDICATOR_POLICY_PARAMETERS) == set(BucketDetailLevel)
 assert all(set(parameters) == set(SignalTemporalClass) for parameters in _INDICATOR_POLICY_PARAMETERS.values())
 
 
+_INDICATOR_HISTORY_ROW_LIMITS: dict[BucketDetailLevel, int | None] = {
+    BucketDetailLevel.COMPACT: 5,
+    BucketDetailLevel.STANDARD: 10,
+    BucketDetailLevel.FULL: None,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class EventSelectionPolicy:
+    """Detail-owned event density while preserving complete recent context."""
+
+    complete_recent_window_days: int
+    minimum_latest_events_per_annotation: int
+
+    @classmethod
+    def for_detail_level(cls, detail_level: BucketDetailLevel) -> EventSelectionPolicy:
+        if not isinstance(detail_level, BucketDetailLevel):
+            raise TypeError("detail_level must be a BucketDetailLevel")
+        return {
+            BucketDetailLevel.COMPACT: cls(
+                complete_recent_window_days=7,
+                minimum_latest_events_per_annotation=3,
+            ),
+            BucketDetailLevel.STANDARD: cls(
+                complete_recent_window_days=21,
+                minimum_latest_events_per_annotation=10,
+            ),
+            BucketDetailLevel.FULL: cls(
+                complete_recent_window_days=30,
+                minimum_latest_events_per_annotation=20,
+            ),
+        }[detail_level]
+
+
+def indicator_history_row_limit(detail_level: BucketDetailLevel) -> int | None:
+    """Return the public non-empty history-row limit per entity and instance."""
+    if not isinstance(detail_level, BucketDetailLevel):
+        raise TypeError("detail_level must be a BucketDetailLevel")
+    return _INDICATOR_HISTORY_ROW_LIMITS[detail_level]
+
+
 @dataclass(frozen=True, slots=True)
 class BucketingPolicy:
     """Immutable rational bucket-width policy.

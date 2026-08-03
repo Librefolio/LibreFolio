@@ -57,6 +57,15 @@ export const AI_EXPORT_ANALYSIS_INSTRUCTIONS: Readonly<Record<AiExportAnalysisId
         'Identify positive and negative contributors without truncating the supplied universe.',
         'Interpret TWRR, MWRR, and ROI only when present and with their declared semantics.',
     ]),
+    'portfolio.market_events_review': defineAnalysisInstruction('portfolio.market_events_review', 'Relate material portfolio asset movements to dated current news and public events without claiming unsupported causality.', [
+        'Identify the material supplied movements and their exact observation windows first. Use portfolio weight, movement magnitude, extrema, coverage, and available performance context to prioritize research without dropping the supplied Asset universe.',
+        'When web access is available, research each material movement in the matching date window. Prefer issuer filings, earnings releases, regulator or exchange notices, central-bank and government publications, then established financial reporting; use lower-quality sources only as clearly labelled secondary context.',
+        'For every external claim provide publisher, title, URL, publication date, and access date. Keep LibreFolio facts and external facts visibly separate.',
+        'Separate issuer-specific, sector/industry, and macro/market candidate drivers. Compare timing and direction, include conflicting evidence, and label every proposed link as supported, inferred, or speculative; temporal coincidence alone never proves causation.',
+        'List material movements that remain unexplained or have insufficient reliable evidence. Never invent a news driver to fill a gap.',
+        'If web access is unavailable, provide the deterministic movement inventory and state that external attribution could not be performed; do not simulate sources or current news.',
+        'Treat technical evidence as subordinate historical context, not a forecast, investment recommendation, or proof of a news-driven move.',
+    ]),
     'portfolio.income_review': defineAnalysisInstruction('portfolio.income_review', 'Review portfolio income, concentration, costs, and cash-flow context.', [
         'Summarize income and material contributors.',
         'Keep gross income, fees, taxes, and net cash-flow context separate.',

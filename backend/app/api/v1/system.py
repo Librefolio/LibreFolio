@@ -12,32 +12,13 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from fastapi import APIRouter
-from pydantic import BaseModel
 
 from backend.app.config import PROJECT_ROOT
+from backend.app.schemas.system import DependencyInfo, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
 from backend.app.utils.version import get_git_version
 
 router = APIRouter(prefix="/system", tags=["System"])
-
-
-class DependencyInfo(BaseModel):
-    """Information about a dependency."""
-
-    name: str
-    version: str
-
-
-class SystemInfoResponse(BaseModel):
-    """System information response."""
-
-    app_version: str
-    python_version: str
-    os_name: str
-    os_version: str
-    platform: str
-    deployment_mode: str
-    backend_dependencies: list[DependencyInfo]
-    frontend_dependencies: list[DependencyInfo]
 
 
 # Display name mappings for packages
@@ -183,6 +164,30 @@ async def get_system_info() -> SystemInfoResponse:
         deployment_mode=get_deployment_mode(),
         backend_dependencies=get_backend_deps(),
         frontend_dependencies=get_frontend_deps(),
+    )
+
+
+def _plugin_discovery_failures(system: str, registry) -> list[PluginDiscoveryFailureInfo]:
+    return [
+        PluginDiscoveryFailureInfo(
+            system=system,
+            filename=f"{failure.module_name.rsplit('.', 1)[-1]}.py",
+            error=f"{failure.error_type}: {failure.message}",
+        )
+        for failure in registry.get_discovery_errors()
+    ]
+
+
+@router.get("/plugin-diagnostics", response_model=PluginDiagnosticsResponse)
+def get_plugin_diagnostics() -> PluginDiagnosticsResponse:
+    """Return plugin discovery import failures for all plugin registries."""
+    return PluginDiagnosticsResponse(
+        [
+            *_plugin_discovery_failures("asset", AssetProviderRegistry),
+            *_plugin_discovery_failures("fx", FXProviderRegistry),
+            *_plugin_discovery_failures("brim", BRIMProviderRegistry),
+            *_plugin_discovery_failures("signals", SignalPluginRegistry),
+        ]
     )
 
 

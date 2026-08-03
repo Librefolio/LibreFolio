@@ -93,6 +93,7 @@
     let txLoading = false;
     let txLoaded = false;
     let txCurrentPage = 1;
+    let txPageSize = 50;
     let txTableComponent: TransactionsTable | undefined;
 
     const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni', 'info'] as const;
@@ -624,8 +625,13 @@
                             brokers={allBrokersForTable}
                             eventTooltipMap={txEventTooltipMap}
                             currentPage={txCurrentPage}
+                            pageSize={txPageSize}
                             hideActions={true}
                             onPageChange={(page) => (txCurrentPage = page)}
+                            onPageSizeChange={(size) => {
+                                txPageSize = size;
+                                txCurrentPage = 1;
+                            }}
                             onViewRow={(row) => {
                                 txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
                                 txViewOpen = true;

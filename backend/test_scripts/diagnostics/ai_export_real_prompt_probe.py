@@ -1313,6 +1313,8 @@ def signal_metric_summary(metric: Mapping[str, object] | None) -> dict[str, obje
         "signal_codes": sorted({str(row.get("signal_code")) for row in valid if row.get("signal_code")}),
         "instance_count": sum(int(row.get("instance_count") or 0) for row in valid),
         "history_row_count": sum(int(row.get("history_row_count") or 0) for row in valid),
+        "source_history_row_count": sum(int(row.get("source_history_row_count") or 0) for row in valid),
+        "sampled_history_row_count": sum(int(row.get("sampled_history_row_count") or 0) for row in valid),
         "history_chars": sum(int(row.get("history_chars") or 0) for row in valid),
         "event_count": sum(int(row.get("event_count") or 0) for row in valid),
         "event_chars": sum(int(row.get("event_chars") or 0) for row in valid),
@@ -1508,6 +1510,8 @@ def compare_metric_runs(
                 "current_signal_summary": current_signals,
                 "signal_instance_delta": int(current_signals["instance_count"]) - int(previous_signals["instance_count"]),
                 "history_row_delta": int(current_signals["history_row_count"]) - int(previous_signals["history_row_count"]),
+                "source_history_row_delta": int(current_signals["source_history_row_count"]) - int(previous_signals["source_history_row_count"]),
+                "sampled_history_row_delta": int(current_signals["sampled_history_row_count"]) - int(previous_signals["sampled_history_row_count"]),
                 "event_delta": int(current_signals["event_count"]) - int(previous_signals["event_count"]),
                 "definition_chars_delta": int(current_signals["definition_chars"]) - int(previous_signals["definition_chars"]),
                 "eligible_entity_delta": (

@@ -476,6 +476,7 @@ class AiExportTechnicalSamplingManifest(AiExportModel):
     detail_level: AiExportDetailLevel
     price_policy: AiExportPriceSamplingPolicy | None = None
     indicator_policies: tuple[AiExportIndicatorSamplingPolicy, ...] = ()
+    indicator_history_row_limit: int | None = Field(..., ge=1)
 
     @model_validator(mode="after")
     def validate_manifest(self) -> Self:
@@ -490,8 +491,8 @@ class AiExportTechnicalSamplingManifest(AiExportModel):
 
 
 class AiExportEventSelectionManifest(AiExportModel):
-    minimum_latest_events_per_annotation: Literal[20] = 20
-    complete_recent_window_days: Literal[30] = 30
+    minimum_latest_events_per_annotation: int = Field(20, ge=1)
+    complete_recent_window_days: int = Field(30, ge=0)
     grouped_by: tuple[
         Literal["entity_id"],
         Literal["annotation_key"],

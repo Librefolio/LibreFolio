@@ -1,4 +1,4 @@
-"""Frontend AI Export unit and hard-cutover E2E tests."""
+"""Frontend AI Export unit and concern-based E2E tests."""
 
 import subprocess
 
@@ -31,6 +31,13 @@ AI_EXPORT_UNIT_TEST_PATHS = (
     "src/lib/charts/signals/__tests__/signalProblem.test.ts",
 )
 
+AI_EXPORT_E2E_SPECS = (
+    "ai-export/ai-export-panel.spec.ts",
+    "ai-export/ai-export-catalog.spec.ts",
+    "ai-export/ai-export-memory.spec.ts",
+    "ai-export/ai-export-contract.spec.ts",
+)
+
 
 def front_ai_export_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all AI Export and current signal Vitest files."""
@@ -50,25 +57,50 @@ def front_ai_export_unit(verbose: bool = False, ui: bool = False, headed: bool =
         return False
 
 
-def front_ai_export_cutover(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the focused cross-domain AI Export cutover E2E test."""
-    print_section("Frontend AI Export Cutover Tests")
+def _run_ai_export_e2e(specs: str | list[str], section: str, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run one or more concern-based AI Export Playwright specs."""
+    print_section(section)
     if not _ensure_frontend_build():
         return False
     if not _ensure_db_populated():
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("ai-export.spec.ts", ui=ui, headed=headed, debug=debug, project=None, test_names=test_names, coverage=coverage)
+    return _run_playwright(specs, ui=ui, headed=headed, debug=debug, project=None, test_names=test_names, coverage=coverage)
+
+
+def front_ai_export_panel(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run AI Export panel behavior E2E tests."""
+    return _run_ai_export_e2e(AI_EXPORT_E2E_SPECS[0], "Frontend AI Export Panel Tests", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_ai_export_catalog(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run AI Export catalog E2E tests."""
+    return _run_ai_export_e2e(AI_EXPORT_E2E_SPECS[1], "Frontend AI Export Catalog Tests", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_ai_export_memory(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run AI Export contextual memory E2E tests."""
+    return _run_ai_export_e2e(AI_EXPORT_E2E_SPECS[2], "Frontend AI Export Memory Tests", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_ai_export_contract(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run AI Export request and clipboard contract E2E tests."""
+    return _run_ai_export_e2e(AI_EXPORT_E2E_SPECS[3], "Frontend AI Export Contract Tests", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_ai_export_cutover(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Compatibility alias: run all four AI Export E2E concerns."""
+    return _run_ai_export_e2e(list(AI_EXPORT_E2E_SPECS), "Frontend AI Export Cutover Tests", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_ai_export_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all AI Export frontend tests."""
     return _run_test_suite(
-        suite_name="All AI Export Tests (Unit + Cross-Domain E2E)",
+        suite_name="All AI Export Tests (Unit + Concern-Based E2E)",
         tests=[
             ("AI Export + Signal Unit (Vitest)", lambda: front_ai_export_unit(verbose=verbose)),
-            ("AI Export Cross-Domain E2E", lambda: front_ai_export_cutover(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("AI Export E2E", lambda: front_ai_export_cutover(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         summary_title="AI Export Test Summary",
@@ -80,7 +112,7 @@ def front_ai_export_all(verbose: bool = False, ui: bool = False, headed: bool = 
 def populate_registry(registry: dict) -> None:
     """Register frontend AI Export test entries."""
     cat = make_category(
-        help_text="Frontend AI Export unit and cross-domain cutover E2E tests",
+        help_text="Frontend AI Export unit and concern-based E2E tests",
         description="""Frontend AI Export Tests\n\nOptions: --ui, --headed, --debug""",
     )
     add_test(
@@ -94,11 +126,43 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "panel",
+        front_ai_export_panel,
+        name="AI Export Panel Tests",
+        desc="Panel selectors, focus, close behavior, portal, layout, help, and warning flow",
+        tests=AI_EXPORT_E2E_SPECS[0],
+    )
+    add_test(
+        cat,
+        "catalog",
+        front_ai_export_catalog,
+        name="AI Export Catalog Tests",
+        desc="Dataset/Analysis categories, V2 IDs, domain visibility, labels, and icons",
+        tests=AI_EXPORT_E2E_SPECS[1],
+    )
+    add_test(
+        cat,
+        "memory",
+        front_ai_export_memory,
+        name="AI Export Memory Tests",
+        desc="Per-user and per-context drafts, canonical FX, periods, detail, and notes",
+        tests=AI_EXPORT_E2E_SPECS[2],
+    )
+    add_test(
+        cat,
+        "contract",
+        front_ai_export_contract,
+        name="AI Export Contract Tests",
+        desc="V2 request shape and Dataset/Analysis clipboard boundaries",
+        tests=AI_EXPORT_E2E_SPECS[3],
+    )
+    add_test(
+        cat,
         "cutover",
         front_ai_export_cutover,
         name="AI Export Cutover Tests",
-        desc="Live dashboard, asset, FX, and broker snapshot/copy contract",
-        tests="ai-export.spec.ts",
+        desc="Compatibility alias running panel, catalog, memory, and contract E2E specs",
+        tests=", ".join(AI_EXPORT_E2E_SPECS),
     )
-    add_test(cat, "all", front_ai_export_all, test_names=False, name="All AI Export Tests", desc="Run unit tests, then cross-domain E2E")
+    add_test(cat, "all", front_ai_export_all, test_names=False, name="All AI Export Tests", desc="Run unit tests, then all four E2E concerns")
     registry["front-ai-export"] = cat

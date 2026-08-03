@@ -7,9 +7,8 @@ modules (`portfolio_broker_technical.py`, `asset_fx_technical.py`):
   explicit replica of the legacy `ASSET_FULL_BUNDLE` (20 instances, reused
   unchanged across Asset/Portfolio-per-asset/Broker-per-asset) and
   `FX_FULL_BUNDLE` (12 instances) signal sets and annotation topology,
-  reused unchanged across every detail level - only `BuildContext.bucket_plan`
-  (K=30/14/7) varies bucket granularity - see requirement 1 of the
-  `ai-refinement-pb-technical-components` todo;
+  reused unchanged across every detail level. Detail changes bucket granularity,
+  public non-empty history-row density, and event density, never the Signal set;
 - price/rate loading with SignalService-computed warm-up, using
   `AssetSourceManager.get_prices_bulk` (Asset/Portfolio/Broker) or a
   backward-filled `FxRate` range query (FX), normalized into the shared
@@ -93,7 +92,7 @@ from backend.app.services.ai_export.components.technical_payloads import (
     TechnicalSingleValueCell,
     UniverseBreadthPayload,
 )
-from backend.app.services.ai_export.components.types import BuildScope, ResourceKey, TemporalAggregatorSpec
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey, TemporalAggregatorSpec
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     build_indicator_bucket_plan_for_scope,
@@ -112,6 +111,11 @@ from backend.app.services.ai_export.temporal.points import (
     ContinuousMultiOutputPoint,
     DiscreteEvent,
     ObservedPoint,
+)
+from backend.app.services.ai_export.temporal.policy import (
+    BucketDetailLevel,
+    EventSelectionPolicy,
+    indicator_history_row_limit,
 )
 from backend.app.services.ai_export.temporal.warmup import slice_to_requested_period
 from backend.app.services.asset_source import AssetSourceManager
@@ -154,9 +158,10 @@ EVENT_SELECTION_RECENT_WINDOW_DAYS = 30
 # class plus the request detail into its own plan. The signal/annotation set
 # itself never changes.
 #
-# Unlike the legacy profile system, no per-detail-level `EventLimitSpec`
-# (10/40/120 max events), no `SignalOutputMode`/`requested_components`
-# narrowing and no `SignalEligibility` marker are replicated here:
+# Unlike the legacy profile system, no global max-event `EventLimitSpec`, no
+# `SignalOutputMode`/`requested_components` narrowing and no `SignalEligibility`
+# marker are replicated here. The central detail-owned event policy preserves a
+# complete recent window plus a minimum latest count per entity/annotation:
 # `SignalPluginRegistry`'s own `compatible_domains` gating naturally omits
 # FX-incompatible plugins (ATR/MFI/OBV are simply absent from the FX bundle
 # by construction), and `SignalService`'s own `requires_meaningful_volume`
@@ -1003,7 +1008,7 @@ def build_indicator_table_payloads(
 
         if not columns:
             continue
-        rows = tuple(
+        source_rows = tuple(
             IndicatorBucketRow(
                 start_date=bucket.start_date,
                 end_date=bucket.end_date,
@@ -1013,6 +1018,9 @@ def build_indicator_table_payloads(
             )
             for index, bucket in enumerate(plan.buckets)
         )
+        nonempty_rows = tuple(row for row in source_rows if row.observation_count > 0)
+        history_limit = indicator_history_row_limit(BucketDetailLevel(scope.detail_level.value))
+        rows = _uniform_sample_rows(nonempty_rows, history_limit)
         payloads.append(
             IndicatorTablePayload(
                 instance_id=result.instance_id,
@@ -1023,6 +1031,8 @@ def build_indicator_table_payloads(
                 category=ai_description.category.value,
                 columns=tuple(columns),
                 period_summary=period_summary,
+                source_bucket_count=len(source_rows),
+                source_nonempty_row_count=len(nonempty_rows),
                 rows=rows,
             )
         )
@@ -1033,6 +1043,16 @@ def build_indicator_table_payloads(
             bucket_plan=plan,
         )
     return tuple(payloads)
+
+
+def _uniform_sample_rows(
+    rows: Sequence[IndicatorBucketRow],
+    limit: int | None,
+) -> tuple[IndicatorBucketRow, ...]:
+    if limit is None or len(rows) <= limit:
+        return tuple(rows)
+    indexes = {(2 * index * (len(rows) - 1) + (limit - 1)) // (2 * (limit - 1)) for index in range(limit)}
+    return tuple(rows[index] for index in sorted(indexes))
 
 
 def _annotation_semantic_description(signal_code: str, annotation) -> str:
@@ -1138,8 +1158,10 @@ def select_technical_events(
     events: Sequence[DiscreteEvent],
     *,
     snapshot_as_of: date,
+    detail_level: DetailLevel = DetailLevel.FULL,
 ) -> SelectedTechnicalEvents:
-    """Apply the 30-calendar-day/minimum-latest-20 policy per event group."""
+    """Apply the detail-owned complete-recent-window/minimum-latest policy."""
+    event_policy = EventSelectionPolicy.for_detail_level(BucketDetailLevel(detail_level.value))
     deduplicated: dict[object, DiscreteEvent] = {}
     for event in events:
         deduplicated.setdefault(event.dedup_key, event)
@@ -1156,7 +1178,7 @@ def select_technical_events(
             raise ValueError("technical event payload requires annotation key")
         grouped.setdefault((entity_id, annotation_key), []).append(event)
 
-    recent_boundary = snapshot_as_of - timedelta(days=EVENT_SELECTION_RECENT_WINDOW_DAYS)
+    recent_boundary = snapshot_as_of - timedelta(days=event_policy.complete_recent_window_days)
     selected: list[DiscreteEvent] = []
     summaries: list[TechnicalEventSelectionSummary] = []
     for entity_id, annotation_key in sorted(grouped):
@@ -1168,7 +1190,7 @@ def select_technical_events(
         recent_count = sum(event.date >= recent_boundary for event in detected)
         exported_count = min(
             len(detected),
-            max(EVENT_SELECTION_MINIMUM_LATEST, recent_count),
+            max(event_policy.minimum_latest_events_per_annotation, recent_count),
         )
         exported = detected[:exported_count]
         selected.extend(exported)
@@ -1178,7 +1200,7 @@ def select_technical_events(
                 entity_id=entity_id,
                 annotation_key=annotation_key,
                 detected_count=len(detected),
-                recent_30d_count=recent_count,
+                recent_window_count=recent_count,
                 exported_count=exported_count,
                 selection_applied=exported_count < len(detected),
                 oldest_detected_event_date=detected[-1].date,
@@ -1215,6 +1237,7 @@ def build_events_payload(
     selection = select_technical_events(
         events,
         snapshot_as_of=plan.end,
+        detail_level=context.scope.detail_level if context.scope is not None else DetailLevel.FULL,
     )
     assignments = assign_discrete_events(selection.events, plan)
     buckets: list[TechnicalEventBucket] = []

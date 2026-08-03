@@ -61,9 +61,10 @@ $$
 $$
 
 The most recent seven calendar days therefore remain daily. This is calendar
-sampling, not market-session sampling. Empty intervals remain in backend bucket
-plans and diagnostics; the public renderer omits only completely empty temporal
-rows and never invents observations or converts absence to zero.
+sampling, not market-session sampling. Empty intervals remain in bucket plans and
+diagnostics. Indicator payloads publish source/non-empty counts but omit empty rows;
+the public renderer also omits completely empty financial temporal rows. Neither
+path invents observations or converts absence to zero.
 
 ## 🧮 Full Policy Matrix
 
@@ -165,6 +166,29 @@ For each populated cell:
 `period_summary` is calculated across the entire exported period, independent of
 bucket density. Each output column also carries its latest observed value/date.
 
+### 📦 Public Indicator History Limits
+
+The backend applies one additional deterministic presentation limit to non-empty
+indicator buckets for each entity and Signal instance:
+
+| Detail | Non-empty rows |
+|---|---:|
+| Compact | 5 |
+| Standard | 10 |
+| Full | All |
+
+Compact and Standard select rows uniformly across the full exported period,
+including the first and last non-empty rows. This does not change the Signal set,
+Asset scope, output columns, latest values, or full-period summary. The public
+manifest exposes `indicator_history_row_limit`; each indicator payload retains
+source bucket and source non-empty row counts.
+
+The compact text renderer uses row-relative date references inside history cells:
+`s` is the row start, `e` is the row end, and `+N` is a calendar-day offset from
+the row start. Event values are positional only when their definition declares the
+exact `value_fields` order. These are lossless text encodings, not additional
+financial calculations.
+
 ## 🔥 Calculation Range, Exported Range, and Warm-up
 
 Indicators calculate from observation-level input with plugin-owned,
@@ -208,30 +232,26 @@ entity_id + annotation_key
 For Portfolio and Broker, `entity_id` retains the originating Asset identity before
 events are merged. FX uses the canonical pair identity.
 
+The complete recent window and minimum latest count are detail-owned:
+
+| Detail | Complete recent window | Minimum latest events |
+|---|---:|---:|
+| Compact | 7 calendar days | 3 |
+| Standard | 21 calendar days | 10 |
+| Full | 30 calendar days | 20 |
+
 For each group:
 
 1. sort newest to oldest;
-2. include every event satisfying
-   `event_date >= snapshot_as_of - 30 calendar days`;
-3. if fewer than 20 are included, continue linearly backward to 20;
-4. if fewer than 20 exist, include all;
-5. if more than 20 are recent, include all recent events;
-6. restore deterministic public chronological order after group selection.
+2. include every event satisfying the detail-owned inclusive recent boundary;
+3. if fewer than the detail-owned minimum are included, continue backward to that
+   minimum;
+4. if fewer events exist, include all;
+5. restore deterministic public chronological order after selection.
 
-Formally:
-
-$$
-\text{exported\_count}
-=
-\min\left(
-\text{total\_count},
-\max(20,\text{recent\_count})
-\right)
-$$
-
-The 30-day boundary is inclusive. There is no ranking, relevance score, distributed
-historical sampling, family quota, episode consolidation, detail-specific event
-policy, or cap on recent events.
+This is not a hard cap. A volatile annotation may export more than the minimum
+when more events occur inside the complete recent window. There is no ranking,
+relevance score, family quota, or episode consolidation.
 
 Each group exports a selection summary with detected/recent/exported counts,
 selection status, oldest/newest detected and exported dates, and optional
@@ -264,7 +284,8 @@ do not alter global Compact/Standard/Full:
   adds bounded recent dated rows, Full exposes every dated row).
 
 These limits are semantic component contracts, not token-triggered truncation.
-They never change the complete technical Export Data payload.
+They do not change the Signal or Asset scope; Full retains every non-empty
+indicator bucket and the complete 30-day/minimum-20 event policy.
 
 ### 🧹 Public Empty Temporal Rows
 
@@ -295,8 +316,8 @@ the allowlist-filtered observation-level discrete events. Tie-breaks within a
 category are deterministic by `(date, annotation key, signal code)`, and
 categories with no eligible event are omitted rather than emitted as null rows.
 
-This is distinct from the complete/technical global event policy above, which
-keeps the 20-event minimum plus every recent event. The permanent density probe
+This is distinct from the technical event policy above, whose recent window and
+minimum count depend on detail. The permanent density probe
 therefore tracks these event families **separately**: `detailed_event_rows`
 (complete-policy events), `context_event_rows`, `latest_event_rows` with
 `latest_event_category_count`, and the Portfolio Description
@@ -323,6 +344,7 @@ sampled data:
 ```yaml
 technical_sampling:
   detail_level: standard
+  indicator_history_row_limit: 10
   price_policy:
     bucket_count: 46
   indicator_policies:
@@ -334,7 +356,8 @@ technical_sampling:
 
 `detail_level` appears once because every policy in one request shares it.
 `temporal_class` explains the indicator horizon, while `bucket_count` reports
-the density actually exported.
+the backend aggregation density. `indicator_history_row_limit` reports the
+additional non-empty rows retained per entity/instance in the public payload.
 
 `P`, `M`, and `K` remain normative internal policy parameters. They stay in the
 matrix, formula tests, mathematical probes, and engineering reports above, but
@@ -344,8 +367,8 @@ Top-level event policy audit:
 
 ```yaml
 event_selection:
-  minimum_latest_events_per_annotation: 20
-  complete_recent_window_days: 30
+  minimum_latest_events_per_annotation: 10
+  complete_recent_window_days: 21
   grouped_by:
     - entity_id
     - annotation_key
@@ -357,12 +380,12 @@ Per-group payload summary:
 entity_id: asset:42
 annotation_key: ema_50_ema_200
 detected_count: 37
-recent_30d_count: 6
-exported_count: 20
+recent_window_count: 6
+exported_count: 6
 selection_applied: true
 oldest_detected_event_date: 2024-02-01
 newest_detected_event_date: 2026-07-29
-oldest_exported_event_date: 2025-04-12
+oldest_exported_event_date: 2026-07-18
 newest_exported_event_date: 2026-07-29
 ```
 
@@ -381,8 +404,8 @@ When adding or changing an exportable indicator:
 8. test daily first seven days, monotonic widths, \(K\) bound, exact final boundary,
    no gap, and no overlap;
 9. test unavailable/failed omission without sibling loss;
-10. test event boundary inclusivity, 20-event minimum, unlimited recent events,
-    grouping, deduplication, and order;
+10. test detail-owned event boundary inclusivity/minimums, unlimited events inside
+    the complete recent window, grouping, deduplication, and order;
 11. inspect `technical_sampling`, `event_selection`, and selection summaries;
 12. run documentation validation.
 

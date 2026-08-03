@@ -6,6 +6,7 @@ import frJson from '../../../i18n/fr.json';
 import itJson from '../../../i18n/it.json';
 import {AI_EXPORT_DATASET_IDS} from '../catalog/shared';
 import {findAiExportResponseContract} from '../templates/responseContracts';
+import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {renderSnapshotDataText} from '../templates/snapshotDataRenderer';
 import {backendCatalogFixture} from './runtimeFixtures';
 
@@ -38,6 +39,8 @@ describe('AI Export adequacy remediation analysis mappings', () => {
 
     it.each([
         ['portfolio.income_review', 'portfolio.income_evidence', 'required'],
+        ['portfolio.market_events_review', 'portfolio.asset_comparison', 'required'],
+        ['portfolio.market_events_review', 'portfolio.performance_flows', 'optional'],
         ['broker.concentration_context', 'broker.concentration_evidence', 'required'],
         ['broker.cost_efficiency', 'broker.cost_efficiency_evidence', 'required'],
         ['fx.conversion_timing', 'fx.conversion_timing_context', 'required'],
@@ -117,6 +120,23 @@ describe('AI Export adequacy remediation response contracts', () => {
         expect(text).not.toContain('VaR');
     });
 
+    it('market events review requires cited dated research and qualified causality', () => {
+        const instruction = findAiExportAnalysisInstruction('portfolio.market_events_review');
+        const instructionText = [instruction.objective, ...instruction.steps].join(' ');
+        const responseText = contractText('portfolio.market_events_review');
+
+        for (const required of ['publisher', 'URL', 'publication date', 'access date', 'issuer-specific', 'sector', 'macro']) {
+            expect(`${instructionText} ${responseText}`).toContain(required);
+        }
+        for (const confidence of ['supported', 'inferred', 'speculative']) {
+            expect(responseText).toContain(confidence);
+        }
+        expect(instructionText).toContain('web access is unavailable');
+        expect(instructionText).toContain('Never invent a news driver');
+        expect(responseText).toContain('Unexplained or Weakly Explained Movements');
+        expect(responseText.toLowerCase()).toContain('never present temporal correlation as proven causation');
+    });
+
     it('asset position review acknowledges the portfolio-role weight basis and keeps drawdown context', () => {
         const contract = findAiExportResponseContract('asset.position_review');
         const text = contract.sections.flatMap((section) => [section.title, ...section.requirements]).join(' ');
@@ -132,6 +152,12 @@ describe('AI Export adequacy remediation i18n', () => {
             expect(lookup(bundle, `aiExport.dataset.${datasetId}.display`), `${locale} ${datasetId}.display`).toBeTruthy();
             expect(lookup(bundle, `aiExport.dataset.${datasetId}.description`), `${locale} ${datasetId}.description`).toBeTruthy();
         }
+    });
+
+    it.each(['en', 'it', 'fr', 'es'])('has market-events Analysis labels + descriptions in %s', (locale) => {
+        const bundle = LOCALES[locale];
+        expect(lookup(bundle, 'aiExport.analysis.portfolio.market_events_review.display')).toBeTruthy();
+        expect(lookup(bundle, 'aiExport.analysis.portfolio.market_events_review.description')).toBeTruthy();
     });
 });
 
