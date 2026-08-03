@@ -67,11 +67,15 @@
          *  broker-scoped page — still editable, still per-file overridable. */
         defaultBrokerId?: number | null;
         pendingCreateTransactions?: TransactionCreateItem[];
+        /** DB transaction ids marked for deletion in the parent bulk editor. DB-duplicate
+         *  matches against these ids are dropped, so a re-imported row matching only
+         *  to-be-deleted rows is no longer flagged as a duplicate. */
+        pendingDeleteTxIds?: number[];
         onClose: () => void;
         onImportBatch: (creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) => void;
     }
 
-    let {open, zIndex = 70, defaultBrokerId = null, pendingCreateTransactions = [], onClose, onImportBatch}: Props = $props();
+    let {open, zIndex = 70, defaultBrokerId = null, pendingCreateTransactions = [], pendingDeleteTxIds = [], onClose, onImportBatch}: Props = $props();
 
     // =========================================================================
     // Constants
@@ -700,6 +704,8 @@
         // fake ids to a globally-unique fake id (kept within the isFakeAssetId range) so a
         // resolution is never shared between two different instruments from different files.
         let nextFakeId = FAKE_ASSET_ID_BASE;
+        // DB ids the user marked for deletion in the bulk editor — excluded from DB dup matching.
+        const pendingDeleteSet = new Set<number>(pendingDeleteTxIds);
 
         for (const result of parseResults.filter((r) => r.status === 'done' && r.response)) {
             const resp = result.response!;
@@ -714,18 +720,33 @@
                 todosMap.set(idx, list);
             }
 
-            // Build duplicate sets (by tx_row_index) and match details map
+            // Build duplicate sets (by tx_row_index) and match details map.
+            // DB matches against transactions the user has marked for deletion in the bulk
+            // editor are dropped: a re-imported row whose only DB match is a to-be-deleted
+            // row is no longer a duplicate (status stays 'unique', auto-selectable). A row
+            // with some surviving matches keeps its tier with the reduced match list.
             const dups = resp.duplicates;
             const likelyEntries = (dups && !Array.isArray(dups) ? (dups.tx_likely_duplicates ?? []) : []) as any[];
             const possibleEntries = (dups && !Array.isArray(dups) ? (dups.tx_possible_duplicates ?? []) : []) as any[];
-            const likelySet = new Set<number>(likelyEntries.map((d) => d.tx_row_index as number));
-            const possibleSet = new Set<number>(possibleEntries.map((d) => d.tx_row_index as number));
+            const likelySet = new Set<number>();
+            const possibleSet = new Set<number>();
             const dupMatchesMap = new Map<number, BrimDuplicateMatch[]>();
+            const survivingMatches = (entry: any): {matches: BrimDuplicateMatch[]; hadMatches: boolean} => {
+                const raw = (entry.tx_existing_matches ?? []) as BrimDuplicateMatch[];
+                if (raw.length === 0) return {matches: raw, hadMatches: false};
+                return {matches: raw.filter((m) => !pendingDeleteSet.has(m.existing_tx_id)), hadMatches: true};
+            };
             for (const d of likelyEntries) {
-                dupMatchesMap.set(d.tx_row_index as number, (d.tx_existing_matches ?? []) as BrimDuplicateMatch[]);
+                const {matches, hadMatches} = survivingMatches(d);
+                if (hadMatches && matches.length === 0) continue; // all DB matches deleted → not a duplicate
+                likelySet.add(d.tx_row_index as number);
+                dupMatchesMap.set(d.tx_row_index as number, matches);
             }
             for (const d of possibleEntries) {
-                dupMatchesMap.set(d.tx_row_index as number, (d.tx_existing_matches ?? []) as BrimDuplicateMatch[]);
+                const {matches, hadMatches} = survivingMatches(d);
+                if (hadMatches && matches.length === 0) continue; // all DB matches deleted → not a duplicate
+                possibleSet.add(d.tx_row_index as number);
+                dupMatchesMap.set(d.tx_row_index as number, matches);
             }
 
             for (const [txIdx, tx] of (resp.transactions ?? []).entries()) {
