@@ -67,11 +67,12 @@
 
 | Page | Summary | Date | Tags |
 |------|---------|------|------|
-| [[decisions/ai-export-technical-series-and-density-contract]] | Homogeneous observed-only technical inputs now use beta-v1 plugin-owned temporal classes, central indicator density, and deterministic per-entity event selection without price changes or truncation | 2026-07-30 | ai-export, signals, timeseries, sampling, events, payload-size, risk |
+| [[decisions/ai-export-news-driver-analysis]] | Portfolio news-driver Analysis combines deterministic movements with cited dated research while qualifying causality and preserving unexplained moves | 2026-08-03 | ai-export, portfolio, news, citations, causality |
+| [[decisions/ai-export-technical-series-and-density-contract]] | Complete scope; indicator history 5/10/all non-empty rows and event windows 7d/min3, 21d/min10, 30d/min20, with warning rather than automatic cap | 2026-08-03 | ai-export, signals, timeseries, sampling, events, payload-size, risk |
 | [[decisions/risk-g6-application-contracts]] | Stable/pending-approval G6 contracts: proxy audit trail, lazy-panel cache identity, present-buckets + Show all UX, and optional inert YAML tags | 2026-07-29 | risk, frontend, scenarios, cache, yaml |
 | [[decisions/risk-quant-engine-process-boundary]] | QuantLib simulation and Riskfolio optimization run in separate lazy spawn pools with warm reuse, safe idle reap, and no in-process native math or silent fallback | 2026-07-28 | backend, risk, quantlib, riskfolio, multiprocessing |
-| [[decisions/ai-export-contextual-ui-memory]] | AI Export drafts persist in browser storage per client-session user and Portfolio/Broker/Asset/canonical-FX context; Snapshot remembers hidden notes but never exports them | 2026-07-27 | frontend, ai-export, ui-memory, auth, privacy |
-| [[decisions/ai-export-versioned-snapshot-boundary]] | Backend owns 54 versioned factual snapshots; frontend owns fail-closed prompt/clipboard UX, synthetic Snapshot, locale-derived language, and contextual memory | 2026-07-26 | ai-export, backend, frontend, snapshot, security, mcp |
+| [[decisions/ai-export-contextual-ui-memory]] | AI Export V2 drafts reactively hydrate per user/context; raw Analysis notes survive hidden Dataset state, while epoch/session/operation guards drop stale preparation | 2026-08-03 | frontend, ai-export, ui-memory, auth, privacy, async, e2e |
+| [[decisions/ai-export-versioned-snapshot-boundary]] | Backend owns versioned facts; frontend owns safe prompt/clipboard rendering, omits only truly empty temporal rows, and exposes explicit Broker universes | 2026-08-03 | ai-export, backend, frontend, snapshot, security, mcp |
 | [[decisions/credit-agricole-securities-only-cash-neutral-brim]] | Crédit Agricole securities-only BRIM imports trades cash-neutral; succession legs become faithful BUY+DEPOSIT pairs | 2026-07-25 | backend, brim, broker, credit-agricole, cash |
 | [[decisions/fifo-v4-income-eligibility-d1]] | FIFO v4 income eligibility uses D-1 open quantity, scoped to paying broker, transfer-aware | 2026-07-22 | backend, fifo, dividend, interest |
 | [[decisions/fifo-v4-cost-allocation-ladder]] | Distinct deterministic FEE/TAX matching ladders route asset-linked costs to lots | 2026-07-22 | backend, fifo, fee, tax |
@@ -179,6 +180,7 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
+| [[problems/transactions-without-asset-filter-nan-loop]] | `__null__` became `NaN`; `NaN !== NaN` defeated the no-op guard and caused an endless filter/URL navigation loop | resolved | frontend, transactions, datatable, filtering, nan |
 | [[problems/quantlib-sobol-seed-skipto]] | QuantLib Sobol constructor seed did not implement a stream offset; MC now uses `random_seed` and QMC uses `skipTo(sobol_start_index)` | resolved | backend, risk, quantlib, sobol, qmc |
 | [[problems/risk-spawn-worker-idle-residency]] | Lazy Risk workers stayed resident until app shutdown; generation-safe idle reap now releases all lanes and preserves lazy restart | resolved | backend, risk, multiprocessing, memory |
 | [[problems/spawn-worker-response-queue-semaphore-leak]] | Forced worker crashes leaked response-queue semaphores; one-way response pipes removed the leak | resolved | backend, multiprocessing, spawn, ipc |
@@ -252,7 +254,7 @@
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
 | [[sources/phase00-risk-analysis-backend]] | Completed and audited `Release_2/Phase_0/02_riskfolioIntegration/` backend G0-G5 chain; G6 reconciled but not executed | 2026-07-28 | phase0, backend, risk, quantlib, riskfolio |
-| [[sources/phase00-ai-export-backend-snapshot]] | Completed `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` chain: plan + frozen profile contract + equivalence report + approved final UI ✅ | 2026-07-27 | phase0, ai-export, snapshot, hard-cutover, ui-memory, mcp |
+| [[sources/phase00-ai-export-backend-snapshot]] | Completed AI Export chain plus approved empty-row/Broker hardening, Standard 21d/min10 policy, final evidence runs, and documentation closure | 2026-07-27 | phase0, ai-export, snapshot, hard-cutover, sampling, documentation, mcp |
 | [[sources/fifo-v4-fee-tax-integration]] | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/` | 2026-07-22 | backend, fifo, fee, tax, dividend, cost-basis |
 | [[sources/roadmap-v1-summary]] | `RoadMapV1/01-Riassunto_generale.md` | 2026-04-24 | roadmap, architecture, history |
 | [[sources/todos]] | `TODO_Completati.md` + `TODO_FUTURI.md` | 2026-05-10 | todo, planning, roadmap, features |

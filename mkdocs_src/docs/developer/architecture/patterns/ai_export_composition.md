@@ -213,6 +213,7 @@ reads only the aggregate `technical_summary` and recommends the complete
 | `portfolio.pac_planning` | `overview`, `performance_flows` | `asset_snapshot`, `drawdown_context` |
 | `portfolio.rebalancing` | `overview` | `performance_flows`, `asset_comparison`, `drawdown_context` |
 | `portfolio.performance_attribution` | `overview`, `performance_flows` | — |
+| `portfolio.market_events_review` | `overview`, `asset_comparison` | `performance_flows`; recommends `technical` (3m standard) as Additional Data |
 | `portfolio.income_review` | `overview`, `performance_flows`, `income_evidence` | — |
 | `portfolio.fifo_review` | `overview`, `fifo` | — |
 | `portfolio.technical_breadth` | `overview`, `technical_summary` | recommends `technical` (1y full) as Additional Data |

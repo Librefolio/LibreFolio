@@ -1,4 +1,4 @@
-"""Focused tests for the frozen 25-dataset / 16-analysis AI Export Semantic Composition V2 catalog.
+"""Focused tests for the 32-dataset / 17-analysis AI Export Semantic Composition V2 catalog.
 
 Covers exact dataset/analysis IDs and counts, the frozen analysis-to-dataset
 mapping (V2 remapped analyses, new public derived datasets), registry
@@ -84,6 +84,7 @@ EXPECTED_ANALYSIS_MAPPING = {
     "portfolio.pac_planning": (("portfolio.overview", "portfolio.performance_flows"), ("portfolio.asset_snapshot", "portfolio.drawdown_context")),
     "portfolio.rebalancing": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.asset_comparison", "portfolio.drawdown_context")),
     "portfolio.performance_attribution": (("portfolio.overview", "portfolio.performance_flows"), ()),
+    "portfolio.market_events_review": (("portfolio.overview", "portfolio.asset_comparison"), ("portfolio.performance_flows",)),
     "portfolio.income_review": (("portfolio.overview", "portfolio.performance_flows", "portfolio.income_evidence"), ()),
     "portfolio.fifo_review": (("portfolio.overview", "portfolio.fifo"), ()),
     "portfolio.technical_breadth": (("portfolio.overview", "portfolio.technical_summary"), ()),
@@ -178,12 +179,12 @@ class TestIntegratedComponentCatalog:
 
 
 class TestAnalysisCatalog:
-    def test_expected_analysis_count_is_16(self):
-        assert EXPECTED_ANALYSIS_COUNT == 16
-        assert len(ALL_ANALYSES) == 16
+    def test_expected_analysis_count_is_17(self):
+        assert EXPECTED_ANALYSIS_COUNT == 17
+        assert len(ALL_ANALYSES) == 17
 
-    def test_analysis_registry_has_exactly_16_entries(self, analysis_registry: AnalysisRegistry):
-        assert len(analysis_registry) == 16
+    def test_analysis_registry_has_exactly_17_entries(self, analysis_registry: AnalysisRegistry):
+        assert len(analysis_registry) == 17
 
     def test_analysis_ids_match_frozen_mapping_exactly(self, analysis_registry: AnalysisRegistry):
         actual_ids = {spec.analysis_id for spec in analysis_registry}

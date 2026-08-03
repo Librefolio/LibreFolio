@@ -50,6 +50,18 @@ describe('AI Export options', () => {
         expect(aiExportOptionsFingerprint(base)).not.toBe(aiExportOptionsFingerprint({...base, userNotes: 'note'}));
     });
 
+    it('excludes hidden Analysis notes from Dataset fingerprints', () => {
+        const dataset = {
+            selectionKind: 'dataset' as const,
+            selectionId: 'portfolio.overview' as const,
+            detailLevel: 'standard' as const,
+            period: {preset: '3m' as const, customAmount: 3, customUnit: 'months' as const},
+            responseLanguage: 'English' as const,
+        };
+
+        expect(aiExportOptionsFingerprint({...dataset, userNotes: 'hidden note'})).toBe(aiExportOptionsFingerprint(dataset));
+    });
+
     it('recognizes no-op draft feedback without hiding stored custom period changes', () => {
         const base = {
             selectionKind: 'analysis' as const,

@@ -342,29 +342,28 @@ Non eseguiti per vincolo esplicito:
 
 ---
 
-## 12. Problemi documentali fuori scope
+## 12. Follow-up documentali
 
-Non modificati:
+Risolti il 3 agosto 2026:
 
-1. `mkdocs_src/docs/developer/test-walkthrough/api.md` non elenca ancora i test
-   AI Export.
-2. Le pagine User Guide AI Export non hanno traduzioni IT/FR/ES; questa attività
-   autorizzava soltanto EN.
-3. `.github/copilot-instructions.md` non cita AI Export nella descrizione generale
-   del prodotto.
+1. `mkdocs_src/docs/developer/test-walkthrough/api.md` elenca ora API, service,
+   probe, frontend unit e Playwright AI Export;
+2. `.github/copilot-instructions.md` cita AI Export nella descrizione generale e
+   nel boundary architetturale.
 
-Questi punti non bloccano il runtime o la review corrente.
+Rinviato esplicitamente:
+
+- traduzione IT/FR/ES delle pagine User Guide AI Export; EN resta sorgente corrente.
 
 ---
 
-## 13. Decisione richiesta
+## 13. Decisione approvata
 
-Approvare:
+Approvati esplicitamente dall'utente il 3 agosto 2026:
 
 1. hardening empty temporal rows;
 2. nomenclatura Broker esplicita;
-3. run `20260801T085820.657238Z` come prova finale mirata;
-4. skill `ai-export-probe-tuning`;
-5. instruction `ai-development.instructions.md`;
-6. Developer Guide e User Guide EN aggiornate;
-7. mantenimento Task Adequacy a **96 OPTIMAL / 0 SUFFICIENT / 0 INSUFFICIENT**.
+3. run `20260801T085820.657238Z` come prova finale mirata.
+
+Skill, instruction, guide EN e stato Task Adequacy restano invariati rispetto alle
+evidenze gia documentate. Le traduzioni saranno eseguite in una fase successiva.
