@@ -718,7 +718,7 @@ def _event_measurements(
                 "signal_plugins": signal_codes,
                 "signal_categories": sorted({_signal_category(code) for code in signal_codes}),
                 "detected": detected_count,
-                "recent_30d": int(summary.get("recent_30d_count", 0)),
+                "recent_window": int(summary.get("recent_window_count", 0)),
                 "exported": exported_count,
                 "omitted": detected_count - exported_count,
                 "first_detected": summary.get("oldest_detected_event_date"),

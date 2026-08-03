@@ -2,7 +2,7 @@
 
 ## What is LibreFolio
 
-LibreFolio is a **self-hosted, open-source financial portfolio tracker** — alternative to Ghostfolio. It supports traditional assets (ETFs, stocks, bonds, crypto), multi-provider FX rates, technical analysis (EMA, MACD, RSI, Bollinger), and import from 11+ brokers.
+LibreFolio is a **self-hosted, open-source financial portfolio tracker** — alternative to Ghostfolio. It supports traditional assets (ETFs, stocks, bonds, crypto), multi-provider FX rates, technical analysis (EMA, MACD, RSI, Bollinger), import from 11+ brokers, and versioned AI Export for factual datasets and analysis-ready prompts.
 
 ## Tech Stack
 
@@ -36,6 +36,7 @@ LibreFolio/
 6. **Zodios API Client** — types from OpenAPI, Zod runtime validation
 7. **Data Separation prod/test** — completely isolated folders
 8. **Dual View** — card grid + DataTable for Assets and FX, toggle persisted in localStorage
+9. **AI Export Boundary** — backend owns deterministic versioned facts; frontend owns safe prompt rendering, localization, clipboard, and contextual draft memory
 
 ## Fundamental Rules
 
@@ -174,4 +175,3 @@ The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/gra
 | 6041 | Backend test mode |
 | 6042 | MkDocs serve |
 | 5173 | Frontend dev (Vite HMR) |
-

@@ -265,7 +265,7 @@ def build_portfolio_broker_dataset_registry(component_registry: ComponentRegistr
 
 
 def build_portfolio_broker_analysis_registry(dataset_registry: DatasetRegistry | None = None) -> AnalysisRegistry:
-    """Builds the frozen 16-analysis `AnalysisRegistry` over a real Portfolio/Broker `DatasetRegistry`.
+    """Builds the 17-analysis `AnalysisRegistry` over a real Portfolio/Broker `DatasetRegistry`.
 
     Defaults to `build_portfolio_broker_dataset_registry()` when no registry is
     supplied.

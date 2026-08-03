@@ -266,7 +266,7 @@ def build_asset_fx_dataset_registry(component_registry: ComponentRegistry | None
 
 
 def build_asset_fx_analysis_registry(dataset_registry: DatasetRegistry | None = None) -> AnalysisRegistry:
-    """Builds the frozen 16-analysis `AnalysisRegistry` over a real Asset/FX `DatasetRegistry`.
+    """Builds the 17-analysis `AnalysisRegistry` over a real Asset/FX `DatasetRegistry`.
 
     Defaults to `build_asset_fx_dataset_registry()` when no registry is
     supplied. Asset's 3 analyses and FX's 3 analyses now resolve against real

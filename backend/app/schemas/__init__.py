@@ -221,6 +221,12 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
+from backend.app.schemas.system import (
+    DependencyInfo,
+    PluginDiagnosticsResponse,
+    PluginDiscoveryFailureInfo,
+    SystemInfoResponse,
+)
 from backend.app.schemas.transactions import (
     TX_TYPE_METADATA,
     FieldMode,
@@ -414,6 +420,11 @@ __all__ = [
     "SignalAiOutputDescription",
     "SignalAiEventDescription",
     "SignalResult",
+    # System
+    "DependencyInfo",
+    "SystemInfoResponse",
+    "PluginDiscoveryFailureInfo",
+    "PluginDiagnosticsResponse",
     # FX
     "FXProviderInfo",
     "FXConversionRequest",

@@ -49,4 +49,19 @@ describe('ClientSessionState', () => {
         state.transition(7);
         expect(reset).toHaveBeenCalledOnce();
     });
+
+    it('publishes the user ID when async identity hydration resolves or changes', () => {
+        const state = new ClientSessionState();
+        const identities: Array<string | null> = [];
+        const unsubscribe = state.subscribe((userId) => identities.push(userId));
+
+        state.transition(7);
+        state.transition(7);
+        state.transition(null);
+        state.transition(8);
+        unsubscribe();
+        state.transition(9);
+
+        expect(identities).toEqual([null, '7', null, '8']);
+    });
 });

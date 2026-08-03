@@ -463,12 +463,12 @@
         "possibleDup": "A similar transaction was found in this broker (same date, type and amount, different description). Verify whether it has already been imported before proceeding.",
         "likelyDup": "An identical transaction already exists in this broker (same date, type, amount and description). It has likely already been imported — deselect it to avoid duplicates.",
         "beforeOpening": "Dated before this broker's opening date — not importable.",
-        "pendingDuplicate": "Matches another transaction in this import or an unsaved transaction already in the editor. It is deselected by default; reselect only if you want to keep both.",
-        "possiblePendingDuplicate": "Matches another transaction in this import, but the description differs. It stays selected for review.",
+        "pendingDuplicate": "This transaction fully matches (same data and description) another transaction still pending in the editor or in this import. Deselected by default; reselect only if you want to keep both.",
+        "possiblePendingDuplicate": "This transaction matches another transaction still pending in the editor or in this import, but the description differs. It stays selected for review.",
         "pendingDuplicateJump": "Duplicate of row kept from {file}. Click to view."
       },
-      "pendingDuplicate": "Duplicate in batch",
-      "possiblePendingDuplicate": "Possible batch dup"
+      "pendingDuplicate": "⧉ Duplicate in batch",
+      "possiblePendingDuplicate": "≈ Possible batch dup"
     },
     "addIdentifier": {
       "title": "Add identifier to asset?",
@@ -513,6 +513,23 @@
       "similarityTotal": "Total overlap",
       "similarityPartial": "Partial",
       "similarityTooltip": "Total: every row is matched across files. Partial: at least one row has no exact twin — review before importing."
+    },
+    "duplicatesSelectedTip": "Counts only duplicate rows that are still selected (they will be imported). Exact in-batch duplicates are already deselected and not counted here.",
+    "deselectReasons": {
+      "title": "Some rows are deselected:",
+      "beforeOpening": "{n} dated before the broker opening (not importable)",
+      "pendingDuplicate": "{n} exact duplicates of transactions already pending",
+      "dbDuplicate": "{n} duplicates of transactions already in the database"
+    },
+    "compareModal": {
+      "title": "Compare duplicates ({n})",
+      "field": "Field",
+      "keep": "Keep",
+      "keepAll": "All",
+      "dbColumn": "DB #{id}",
+      "hint": "Highlighted fields differ between the transactions.",
+      "openHint": "Click to compare side by side",
+      "openAction": "Compare"
     }
   },
   "brokers": {
@@ -1677,7 +1694,14 @@
     "deploymentModeLocal": "Local",
     "lock": "Lock",
     "selectLanguage": "Select language",
-    "unlock": "Unlock"
+    "unlock": "Unlock",
+    "pluginDiagnostics": "Plugin diagnostics",
+    "pluginDiagnosticsAllLoaded": "All loaded",
+    "installedSignals": "Installed signals",
+    "pluginSystemAsset": "Asset",
+    "pluginSystemFx": "FX",
+    "pluginSystemBrim": "BRIM",
+    "pluginSystemSignals": "Signals"
   },
   "sharedResource": {
     "syncAll": "Sync All",
@@ -2360,7 +2384,7 @@
     "preparing": "Preparing export…",
     "copyAnyway": "Copy Anyway",
     "useCompact": "Use Compact",
-    "copied": "AI export copied to clipboard ({tokens} · {bytes}; detail: {detail}).",
+    "copied": "AI export copied to clipboard:\n• {tokens} · {bytes}\n• detail: {detail}",
     "privacyNotice": "Detail level: {detail}. This export may contain sensitive financial data; review it before sharing.",
     "catalogUnavailable": "AI Export is currently unavailable. Refresh and try again.",
     "contractMismatch": "AI Export is out of sync with the server. Refresh and try again.",
@@ -2538,6 +2562,10 @@
         "description": {
           "display": "Portfolio Description",
           "description": "Create a concise neutral description from portfolio facts."
+        },
+        "market_events_review": {
+          "display": "Portfolio News & Price Drivers",
+          "description": "Relate material asset movements to dated current news while separating evidence from causality."
         }
       },
       "broker": {

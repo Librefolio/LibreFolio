@@ -463,12 +463,12 @@
         "possibleDup": "Se encontró una transacción similar en este bróker (misma fecha, tipo e importe, descripción diferente). Verifica si ya fue importada antes de continuar.",
         "likelyDup": "Ya existe una transacción idéntica en este bróker (misma fecha, tipo, importe y descripción). Probablemente ya fue importada — deselecciónala para evitar duplicados.",
         "beforeOpening": "Fechada antes de la fecha de apertura de este bróker — no importable.",
-        "pendingDuplicate": "Coincide con otra transacción de esta importación o con una transacción no guardada que ya está en el editor. Está deseleccionada por defecto; vuelve a seleccionarla solo si quieres conservar ambas.",
-        "possiblePendingDuplicate": "Coincide con otra transacción de esta importación, pero la descripción difiere. Permanece seleccionada para revisar.",
+        "pendingDuplicate": "Esta transacción coincide por completo (mismos datos y descripción) con otra transacción aún pendiente en el editor o en esta importación. Deseleccionada por defecto; vuelve a seleccionarla solo si quieres conservar ambas.",
+        "possiblePendingDuplicate": "Esta transacción coincide con otra transacción aún pendiente en el editor o en esta importación, pero la descripción difiere. Permanece seleccionada para revisar.",
         "pendingDuplicateJump": "Duplicado de la fila conservada de {file}. Haz clic para verla."
       },
-      "pendingDuplicate": "Duplicado en el lote",
-      "possiblePendingDuplicate": "Posible duplicado del lote"
+      "pendingDuplicate": "⧉ Duplicado en el lote",
+      "possiblePendingDuplicate": "≈ Posible duplicado del lote"
     },
     "addIdentifier": {
       "title": "¿Agregar el identificador al activo?",
@@ -513,6 +513,23 @@
       "similarityTotal": "Solapamiento total",
       "similarityPartial": "Parcial",
       "similarityTooltip": "Total: cada fila tiene coincidencia entre archivos. Parcial: al menos una fila no tiene gemelo exacto — revísalo antes de importar."
+    },
+    "duplicatesSelectedTip": "Cuenta solo las filas duplicadas que siguen seleccionadas (se importarán). Los duplicados exactos del lote ya están deseleccionados y no se cuentan aquí.",
+    "deselectReasons": {
+      "title": "Algunas filas están deseleccionadas:",
+      "beforeOpening": "{n} con fecha anterior a la apertura del bróker (no importables)",
+      "pendingDuplicate": "{n} duplicados exactos de transacciones ya pendientes",
+      "dbDuplicate": "{n} duplicados de transacciones ya en la base de datos"
+    },
+    "compareModal": {
+      "title": "Comparar duplicados ({n})",
+      "field": "Campo",
+      "keep": "Conservar",
+      "keepAll": "Todas",
+      "dbColumn": "BD #{id}",
+      "hint": "Los campos resaltados difieren entre las transacciones.",
+      "openHint": "Haz clic para comparar en paralelo",
+      "openAction": "Comparar"
     }
   },
   "brokers": {
@@ -1677,7 +1694,14 @@
     "deploymentModeLocal": "Local",
     "lock": "Bloquear",
     "selectLanguage": "Seleccionar idioma",
-    "unlock": "Desbloquear"
+    "unlock": "Desbloquear",
+    "pluginDiagnostics": "Diagnóstico de plugins",
+    "pluginDiagnosticsAllLoaded": "Todos cargados",
+    "installedSignals": "Señales instaladas",
+    "pluginSystemAsset": "Activos",
+    "pluginSystemFx": "FX",
+    "pluginSystemBrim": "BRIM",
+    "pluginSystemSignals": "Señales"
   },
   "sharedResource": {
     "syncAll": "Sinc. Todo",
@@ -2360,7 +2384,7 @@
     "preparing": "Preparando exportación…",
     "copyAnyway": "Copiar de todos modos",
     "useCompact": "Usar Compacto",
-    "copied": "Exportación IA copiada al portapapeles ({tokens} · {bytes}; detalle: {detail}).",
+    "copied": "Exportación IA copiada al portapapeles:\n• {tokens} · {bytes}\n• detalle: {detail}",
     "privacyNotice": "Nivel de detalle: {detail}. Esta exportación puede contener datos financieros sensibles; revísala antes de compartirla.",
     "catalogUnavailable": "La exportación IA no está disponible. Actualiza e inténtalo de nuevo.",
     "contractMismatch": "La exportación IA no está sincronizada con el servidor. Actualiza e inténtalo de nuevo.",
@@ -2538,6 +2562,10 @@
         "description": {
           "display": "Descripción de la cartera",
           "description": "Crea una descripción neutral y concisa a partir de los hechos de la cartera."
+        },
+        "market_events_review": {
+          "display": "Noticias y factores de precio de la cartera",
+          "description": "Relaciona movimientos relevantes de los activos con noticias fechadas, distinguiendo evidencia y causalidad."
         }
       },
       "broker": {

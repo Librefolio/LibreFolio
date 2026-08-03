@@ -463,12 +463,12 @@
         "possibleDup": "È stata trovata una transazione simile in questo broker (stessa data, tipo e importo, descrizione diversa). Verifica se è già stata importata prima di procedere.",
         "likelyDup": "Esiste già una transazione identica in questo broker (stessa data, tipo, importo e descrizione). Probabilmente è già stata importata — deselezionala per evitare duplicati.",
         "beforeOpening": "Datata prima della data di apertura di questo broker — non importabile.",
-        "pendingDuplicate": "Corrisponde a un'altra transazione in questa importazione o a una transazione non salvata già nell'editor. È deselezionata per impostazione predefinita; riselezionala solo se vuoi mantenerle entrambe.",
-        "possiblePendingDuplicate": "Corrisponde a un'altra transazione in questa importazione, ma la descrizione differisce. Resta selezionata per verifica.",
+        "pendingDuplicate": "Questa transazione corrisponde completamente (stessi dati e descrizione) a un'altra transazione già in sospeso nell'editor o in questa importazione. Deselezionata per default; riselezionala solo se vuoi mantenerle entrambe.",
+        "possiblePendingDuplicate": "Questa transazione corrisponde a un'altra transazione già in sospeso nell'editor o in questa importazione, ma la descrizione differisce. Resta selezionata per verifica.",
         "pendingDuplicateJump": "Duplicato della riga mantenuta da {file}. Clicca per vederla."
       },
-      "pendingDuplicate": "Duplicato nel lotto",
-      "possiblePendingDuplicate": "Possibile duplicato nel lotto"
+      "pendingDuplicate": "⧉ Duplicato nel lotto",
+      "possiblePendingDuplicate": "≈ Possibile duplicato nel lotto"
     },
     "addIdentifier": {
       "title": "Aggiungere l'identificativo all'asset?",
@@ -513,6 +513,23 @@
       "similarityTotal": "Sovrapposizione totale",
       "similarityPartial": "Parziale",
       "similarityTooltip": "Totale: ogni riga ha una corrispondenza tra i file. Parziale: almeno una riga non ha un gemello esatto — rivedi prima di importare."
+    },
+    "duplicatesSelectedTip": "Conta solo le righe duplicate ancora selezionate (verranno importate). I duplicati esatti nel lotto sono già deselezionati e non contati qui.",
+    "deselectReasons": {
+      "title": "Alcune righe sono deselezionate:",
+      "beforeOpening": "{n} datate prima dell'apertura del broker (non importabili)",
+      "pendingDuplicate": "{n} duplicati esatti di transazioni già in sospeso",
+      "dbDuplicate": "{n} duplicati di transazioni già nel database"
+    },
+    "compareModal": {
+      "title": "Confronto duplicati ({n})",
+      "field": "Campo",
+      "keep": "Tieni",
+      "keepAll": "Tutte",
+      "dbColumn": "DB #{id}",
+      "hint": "I campi evidenziati differiscono tra le transazioni.",
+      "openHint": "Clicca per confrontare affiancati",
+      "openAction": "Confronta"
     }
   },
   "brokers": {
@@ -1677,7 +1694,14 @@
     "deploymentModeLocal": "Locale",
     "lock": "Blocca",
     "selectLanguage": "Seleziona lingua",
-    "unlock": "Sblocca"
+    "unlock": "Sblocca",
+    "pluginDiagnostics": "Diagnostica plugin",
+    "pluginDiagnosticsAllLoaded": "Tutti caricati",
+    "installedSignals": "Segnali installati",
+    "pluginSystemAsset": "Asset",
+    "pluginSystemFx": "FX",
+    "pluginSystemBrim": "BRIM",
+    "pluginSystemSignals": "Segnali"
   },
   "sharedResource": {
     "syncAll": "Sinc. Tutto",
@@ -2360,7 +2384,7 @@
     "preparing": "Preparazione esportazione…",
     "copyAnyway": "Copia comunque",
     "useCompact": "Usa Compatto",
-    "copied": "AI Export copiato negli appunti ({tokens} · {bytes}; dettaglio: {detail}).",
+    "copied": "AI Export copiato negli appunti:\n• {tokens} · {bytes}\n• dettaglio: {detail}",
     "privacyNotice": "Livello di dettaglio: {detail}. L’esportazione può contenere dati finanziari sensibili: rivedila prima di condividerla.",
     "catalogUnavailable": "AI Export non è disponibile. Aggiorna e riprova.",
     "contractMismatch": "AI Export non è sincronizzato col server. Aggiorna e riprova.",
@@ -2538,6 +2562,10 @@
         "description": {
           "display": "Descrizione portafoglio",
           "description": "Crea una descrizione neutrale e concisa dai fatti del portafoglio."
+        },
+        "market_events_review": {
+          "display": "Notizie e driver di prezzo del portafoglio",
+          "description": "Collega i movimenti rilevanti degli asset alle notizie datate, distinguendo evidenze e causalità."
         }
       },
       "broker": {

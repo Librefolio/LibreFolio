@@ -154,6 +154,7 @@ function snapshotMetadataValue(snapshot: AiExportSnapshotResponse): Record<strin
         ? {
               detail_level: snapshot.technical_sampling.detail_level,
               ...(snapshot.technical_sampling.price_policy ? {price_bucket_count: snapshot.technical_sampling.price_policy.bucket_count} : {}),
+              indicator_history_row_limit: snapshot.technical_sampling.indicator_history_row_limit,
           }
         : undefined;
     const snapshotTarget = snapshot.target;

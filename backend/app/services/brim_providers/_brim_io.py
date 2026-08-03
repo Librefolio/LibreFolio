@@ -34,7 +34,10 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-import openpyxl
+try:
+    import openpyxl
+except ImportError as exc:
+    raise ImportError("openpyxl is required for XLSX broker imports — ensure it is in " "Pipfile [packages] and reinstall dependencies") from exc
 
 XLSX_EXTENSIONS = {".xlsx", ".xlsm"}
 CSV_EXTENSIONS = {".csv", ".txt"}

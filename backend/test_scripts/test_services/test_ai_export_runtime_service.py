@@ -222,12 +222,12 @@ def _portfolio_analysis_request() -> AiExportPortfolioSnapshotRequest:
     )
 
 
-def test_catalog_exposes_exact_25_datasets_and_16_analyses_without_prompts():
+def test_catalog_exposes_exact_32_datasets_and_17_analyses_without_prompts():
     catalog = AiExportSnapshotService.get_catalog()
     serialized = catalog.model_dump_json()
 
     assert len(catalog.datasets) == 32
-    assert len(catalog.analyses) == 16
+    assert len(catalog.analyses) == 17
     assert {entry.id for entry in catalog.datasets} >= {
         "portfolio.overview",
         "broker.overview",
@@ -236,6 +236,7 @@ def test_catalog_exposes_exact_25_datasets_and_16_analyses_without_prompts():
     }
     assert {entry.id for entry in catalog.analyses} >= {
         "portfolio.pac_planning",
+        "portfolio.market_events_review",
         "broker.review",
         "asset.position_review",
         "fx.exposure_impact",
@@ -349,8 +350,9 @@ async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
     assert '"m":' not in serialized_sampling
     assert '"k":' not in serialized_sampling
     assert response.event_selection is not None
-    assert response.event_selection.minimum_latest_events_per_annotation == 20
-    assert response.event_selection.complete_recent_window_days == 30
+    assert response.technical_sampling.indicator_history_row_limit == 10
+    assert response.event_selection.minimum_latest_events_per_annotation == 10
+    assert response.event_selection.complete_recent_window_days == 21
     assert response.event_selection.grouped_by == (
         "entity_id",
         "annotation_key",

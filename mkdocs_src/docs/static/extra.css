@@ -794,6 +794,18 @@
     background-color: rgba(30, 41, 59, 0.5);
 }
 
+/* Technical reference tables (e.g. admin/configuration env-var tables):
+   keep the variable-name and default-value columns (1st and 2nd) on a single
+   line. Their inline <code> otherwise wraps mid-token because Material sets
+   `word-break: break-word`. Forcing `nowrap` gives each column an automatic
+   minimum width equal to its widest token; the description column (3rd) stays
+   fully flexible and the table scrolls horizontally if space runs out. */
+.md-typeset table:not([class]) td:nth-child(1) code,
+.md-typeset table:not([class]) td:nth-child(2) code {
+    white-space: nowrap;
+    word-break: normal;
+}
+
 /* Icon styling */
 .card-icon {
     grid-area: icon;

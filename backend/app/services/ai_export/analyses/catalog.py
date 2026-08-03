@@ -1,4 +1,4 @@
-"""Public 16-analysis catalog for AI Export Semantic Composition V2.
+"""Public 17-analysis catalog for AI Export Semantic Composition V2.
 
 Analysis IDs and required/optional dataset mapping are frozen per the refinement
 plan (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 5):
@@ -8,6 +8,7 @@ plan (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 5):
 | portfolio.pac_planning | overview, performance_flows | - |
 | portfolio.rebalancing | overview | performance_flows, technical |
 | portfolio.performance_attribution | overview, performance_flows | - |
+| portfolio.market_events_review | overview, asset_comparison | performance_flows |
 | portfolio.income_review | overview, performance_flows, income_evidence | - |
 | portfolio.fifo_review | overview, fifo | - |
 | portfolio.technical_breadth | overview, technical_summary | - |
@@ -46,7 +47,7 @@ from backend.app.services.ai_export.components.types import DetailLevel, Domain
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry
 
-EXPECTED_ANALYSIS_COUNT = 16
+EXPECTED_ANALYSIS_COUNT = 17
 
 _DOMAIN_PAGES: dict[Domain, tuple[str, ...]] = {
     Domain.PORTFOLIO: ("dashboard",),
@@ -121,6 +122,14 @@ _PORTFOLIO_ANALYSES: tuple[AnalysisSpec, ...] = (
         icon="pie-chart",
         required=("portfolio.overview", "portfolio.performance_flows"),
         suggestions=(_suggest("portfolio.fifo", "fifoDetail", AdditionalExportPeriod.ONE_YEAR, DetailLevel.STANDARD),),
+    ),
+    _analysis(
+        Domain.PORTFOLIO,
+        "market_events_review",
+        icon="newspaper",
+        required=("portfolio.overview", "portfolio.asset_comparison"),
+        optional=("portfolio.performance_flows",),
+        suggestions=(_suggest("portfolio.technical", "deeperTechnical", AdditionalExportPeriod.THREE_MONTHS, DetailLevel.STANDARD),),
     ),
     _analysis(
         Domain.PORTFOLIO,
@@ -244,6 +253,6 @@ assert len(ALL_ANALYSES) == EXPECTED_ANALYSIS_COUNT
 
 
 def build_analysis_registry(dataset_registry: DatasetRegistry | None = None) -> AnalysisRegistry:
-    """Builds the `AnalysisRegistry` for the frozen 16-analysis catalog."""
+    """Builds the `AnalysisRegistry` for the 17-analysis catalog."""
     registry = dataset_registry or build_dataset_registry()
     return AnalysisRegistry(ALL_ANALYSES, dataset_registry=registry)

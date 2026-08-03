@@ -463,12 +463,12 @@
         "possibleDup": "Une transaction similaire a été trouvée dans ce courtier (même date, type et montant, description différente). Vérifiez si elle a déjà été importée avant de continuer.",
         "likelyDup": "Une transaction identique existe déjà dans ce courtier (même date, type, montant et description). Elle a probablement déjà été importée — désélectionnez-la pour éviter les doublons.",
         "beforeOpening": "Datée d'avant la date d'ouverture de ce courtier — non importable.",
-        "pendingDuplicate": "Correspond à une autre transaction dans cet import ou à une transaction non enregistrée déjà dans l'éditeur. Elle est désélectionnée par défaut ; resélectionnez-la seulement si vous voulez conserver les deux.",
-        "possiblePendingDuplicate": "Correspond à une autre transaction dans cet import, mais la description diffère. Elle reste sélectionnée pour vérification.",
+        "pendingDuplicate": "Cette transaction correspond entièrement (mêmes données et description) à une autre transaction encore en attente dans l'éditeur ou dans cet import. Désélectionnée par défaut ; resélectionnez-la seulement si vous voulez conserver les deux.",
+        "possiblePendingDuplicate": "Cette transaction correspond à une autre transaction encore en attente dans l'éditeur ou dans cet import, mais la description diffère. Elle reste sélectionnée pour vérification.",
         "pendingDuplicateJump": "Doublon de la ligne conservée depuis {file}. Cliquez pour la voir."
       },
-      "pendingDuplicate": "Doublon dans le lot",
-      "possiblePendingDuplicate": "Doublon possible du lot"
+      "pendingDuplicate": "⧉ Doublon dans le lot",
+      "possiblePendingDuplicate": "≈ Doublon possible du lot"
     },
     "addIdentifier": {
       "title": "Ajouter l'identifiant à l'actif ?",
@@ -513,6 +513,23 @@
       "similarityTotal": "Chevauchement total",
       "similarityPartial": "Partiel",
       "similarityTooltip": "Total : chaque ligne a une correspondance entre les fichiers. Partiel : au moins une ligne n'a pas de jumeau exact — vérifiez avant d'importer."
+    },
+    "duplicatesSelectedTip": "Compte uniquement les lignes en double encore sélectionnées (elles seront importées). Les doublons exacts du lot sont déjà désélectionnés et non comptés ici.",
+    "deselectReasons": {
+      "title": "Certaines lignes sont désélectionnées :",
+      "beforeOpening": "{n} datées avant l'ouverture du courtier (non importables)",
+      "pendingDuplicate": "{n} doublons exacts de transactions déjà en attente",
+      "dbDuplicate": "{n} doublons de transactions déjà dans la base de données"
+    },
+    "compareModal": {
+      "title": "Comparer les doublons ({n})",
+      "field": "Champ",
+      "keep": "Garder",
+      "keepAll": "Toutes",
+      "dbColumn": "BDD #{id}",
+      "hint": "Les champs surlignés diffèrent entre les transactions.",
+      "openHint": "Cliquez pour comparer côte à côte",
+      "openAction": "Comparer"
     }
   },
   "brokers": {
@@ -1677,7 +1694,14 @@
     "deploymentModeLocal": "Local",
     "lock": "Verrouiller",
     "selectLanguage": "Sélectionner la langue",
-    "unlock": "Déverrouiller"
+    "unlock": "Déverrouiller",
+    "pluginDiagnostics": "Diagnostics des plugins",
+    "pluginDiagnosticsAllLoaded": "Tous chargés",
+    "installedSignals": "Signaux installés",
+    "pluginSystemAsset": "Actifs",
+    "pluginSystemFx": "FX",
+    "pluginSystemBrim": "BRIM",
+    "pluginSystemSignals": "Signaux"
   },
   "sharedResource": {
     "syncAll": "Sync. Tout",
@@ -2360,7 +2384,7 @@
     "preparing": "Préparation de l’export…",
     "copyAnyway": "Copier quand même",
     "useCompact": "Utiliser Compact",
-    "copied": "Export IA copié dans le presse-papiers ({tokens} · {bytes} ; détail : {detail}).",
+    "copied": "Export IA copié dans le presse-papiers :\n• {tokens} · {bytes}\n• détail : {detail}",
     "privacyNotice": "Niveau de détail : {detail}. Cet export peut contenir des données financières sensibles ; vérifiez-le avant de le partager.",
     "catalogUnavailable": "L’export IA est indisponible. Actualisez puis réessayez.",
     "contractMismatch": "L’export IA n’est pas synchronisé avec le serveur. Actualisez puis réessayez.",
@@ -2538,6 +2562,10 @@
         "description": {
           "display": "Description du portefeuille",
           "description": "Crée une description neutre et concise à partir des faits du portefeuille."
+        },
+        "market_events_review": {
+          "display": "Actualités et facteurs de prix du portefeuille",
+          "description": "Relie les mouvements significatifs des actifs à des actualités datées, en distinguant les preuves de la causalité."
         }
       },
       "broker": {
