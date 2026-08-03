@@ -24,19 +24,41 @@ recuperarne lo **storico**, apri il pannello qui sotto **prima** di procedere.
     **troncata** così che finisca il giorno **prima** dell'inizio dei movimenti conto: i due
     file **non si sovrappongono** e la stessa operazione non viene contata due volte.
 
-    **Passo 1 — Apri il dossier titoli.** Dall'internet banking, apri la sezione del **Deposito
-    Titoli** e vai alla lista movimenti.
+    #### 📂 Passo 1 — Apri il dossier titoli
+
+    Dall'internet banking, apri la sezione del **Deposito Titoli** e vai alla lista movimenti.
 
     ![Crédit Agricole — home, selezione della sezione Deposito Titoli](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/01_CA_HOME_selezionePagina.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-    **Passo 2 — Seleziona il periodo.** Vai il più indietro possibile, poi tronca all'inizio dei
-    movimenti conto (vedi il suggerimento sopra).
+    #### 🗓️ Passo 2 — Seleziona il periodo
+
+    Vai il più indietro possibile, poi tronca all'inizio dei movimenti conto (vedi il
+    suggerimento sopra).
 
     ![Crédit Agricole — lista movimenti titoli con selettore del periodo](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/02_CA_ListaMobimentiPeriodo.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-    **Passo 3 — Esporta** e importa il file in LibreFolio senza aprirlo o modificarlo.
+    #### 💾 Passo 3 — Esporta
+
+    Esporta e importa il file in LibreFolio senza aprirlo o modificarlo.
 
     ![Crédit Agricole — area di esportazione dei movimenti titoli](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/03_CA_ExportZone.jpeg){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+
+    #### 💰 Passo 4 — Saldo iniziale (deposito manuale)
+
+    Serve per avere i **totali di liquidità corretti**: nessuno dei due export riporta la
+    giacenza di partenza come movimento, quindi senza questo passo la cassa assoluta parte da
+    zero all'inizio della finestra esportata e resta sfalsata.
+
+    **Come si ottiene.** Il **Saldo Iniziale** si legge in due punti equivalenti (è lo stesso
+    valore): in cima al **file Excel** della *Lista Movimenti Conto* e anche **all'inizio
+    dell'export sulla pagina web** — la stessa pagina da cui esporti i movimenti conto. È il
+    valore (es. `2984,99 EUR`) alla data **"Data dal"** (es. `01/07/2024`).
+
+    Il plugin **non** lo crea da solo: al momento dell'import **crea a mano una transazione di
+    deposito di liquidità** pari a quel **Saldo Iniziale**, con **data** uguale alla **"Data
+    dal"**. Così la cassa assoluta resta corretta anche se l'export copre solo una finestra.
+
+    ![Crédit Agricole — riga "Saldo Iniziale" e "Data dal" in cima all'export](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/04C_CA_SaldoInizialeExportMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
     **Come vengono mappate le operazioni titoli.** Il report riporta solo il **nome** del titolo
     (`Nome`), non l'ISIN: gli asset sono abbinati per nome — conferma l'asset nello **Step 4**
@@ -58,15 +80,6 @@ recuperarne lo **storico**, apri il pannello qui sotto **prima** di procedere.
     **deposito** di pari importo, ogni **vendita**/**cedola**/**interesse di scadenza** riceve un
     **prelievo** di pari importo. Così l'export titoli **non accumula liquidità fantasma** — la
     cassa vera arriva dalla Lista Movimenti Conto.
-
-    **💰 Saldo iniziale (deposito manuale).** Nessuno dei due export riporta la giacenza di
-    partenza come movimento. Prendi il valore dalla **Lista Movimenti Conto**: in cima al file
-    trovi il **"Saldo Iniziale"** (es. `2984,99 EUR`) alla data **"Data dal"** (es. `01/07/2024`).
-    Il plugin **non** lo crea da solo: al momento dell'import **crea a mano una transazione di
-    deposito di liquidità** pari a quel **Saldo Iniziale**, con **data** uguale alla **"Data
-    dal"**. Così la cassa assoluta resta corretta anche se l'export copre solo una finestra.
-
-    ![Crédit Agricole — riga "Saldo Iniziale" e "Data dal" in cima all'export](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/04C_CA_SaldoInizialeExportMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
 ## 💳 Come importare — Lista Movimenti Conto
 

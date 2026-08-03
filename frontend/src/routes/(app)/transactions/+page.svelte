@@ -182,6 +182,7 @@
         void filters.broker_ids;
         void filters.asset_id;
         void filters.asset_ids;
+        void filters.without_asset;
         void filters.types;
         void filters.date_start;
         void filters.date_end;
@@ -898,7 +899,7 @@
                     transactionsTableComponent?.resetFilters();
                     transactionsTableComponent?.getTableRef()?.clearSelection();
                     selectedRows = [];
-                    filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
+                    filters = {...filters, types: undefined, tags: undefined, broker_id: undefined, asset_id: undefined, without_asset: undefined, date_start: undefined, date_end: undefined, cash: undefined, page: 1};
                     void reload();
                 }}
             >

@@ -8,12 +8,13 @@ from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ens
 
 
 def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run Transaction unit tests (Vitest) — txPayloadHelpers + txCommitApi + promoteHelpers."""
+    """Run Transaction unit tests (Vitest), including URL/filter state."""
     print_section("Frontend TX Unit Tests (Vitest)")
     cmd = ["npx", "vitest", "run",
            "src/lib/utils/__tests__/txPayloadHelpers.test.ts",
            "src/lib/utils/__tests__/txCommitApi.test.ts",
-           "src/lib/utils/__tests__/promoteHelpers.test.ts"]
+           "src/lib/utils/__tests__/promoteHelpers.test.ts",
+           "src/routes/(app)/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:

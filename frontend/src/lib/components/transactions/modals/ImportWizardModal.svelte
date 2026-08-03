@@ -10,7 +10,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
@@ -44,9 +44,12 @@
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
+    import {scrollOnOverflow, attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import type {ColumnDef, RowAction, EnumOption} from '$lib/components/table/types';
     import type {BrimDuplicateMatch} from '$lib/types/files';
-    import TransactionFormModal from '$lib/components/transactions/modals/TransactionFormModal.svelte';
+    import TransactionCompareModal from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
+    import type {CompareColumn, CompareField, CompareCell} from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {TXReadItem} from '$lib/components/transactions';
     import {txStoreGet} from '$lib/stores/transactions/txStore.svelte';
     import type {ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
@@ -234,6 +237,8 @@
         dupKeeperIndex?: number;
         dupKeeperFileName?: string;
         isDupKeeper?: boolean;
+        /** For a bulk-modal pending duplicate: the matched unsaved transaction (for side-by-side compare). */
+        dupPendingMatch?: TransactionCreateItem;
     }
 
     interface DuplicateGroup {
@@ -524,6 +529,7 @@
             mt.isDupKeeper = false;
             mt.dupKeeperIndex = undefined;
             mt.dupKeeperFileName = $t('importWizard.resolver.pendingEditor');
+            mt.dupPendingMatch = match.tx;
         }
     }
 
@@ -534,6 +540,7 @@
     let duplicateResolverTouchedKeys = $state<Set<string>>(new Set());
     let duplicateResolverSelections = $state<Record<number, boolean>>({});
     let expandedDuplicateGroupKeys = $state<Set<string>>(new Set());
+    let duplicateResolverCollapsed = $state(false);
     let createAssetForFakeId = $state<number | null>(null);
     let createBrokerOpen = $state(false);
     /** Tracks which context opened the create-broker modal: 'global' or a pendingFile id */
@@ -561,12 +568,14 @@
     let editBrokerId = $state<number | null>(null);
     let editBrokerInitialData = $state<BrokerModalInitialData>({});
 
-    // Compare modal state — opens TransactionFormModal in view mode for duplicate inspection
-    let compareOpen = $state(false);
-    let compareItems = $state<[TXReadItem] | null>(null);
-    let compareHighlightFields = $state<string[]>([]);
-    let compareTitle = $state<string | undefined>(undefined);
-    let compareFetching = $state(false);
+    // N-way compare modal state — side-by-side comparison of lot-duplicate members or parsed-vs-DB rows
+    let nwCompareOpen = $state(false);
+    let nwCompareTitle = $state('');
+    let nwCompareHint = $state<string | undefined>(undefined);
+    let nwCompareFields = $state<CompareField[]>([]);
+    let nwCompareColumns = $state<CompareColumn[]>([]);
+    let nwCompareDefaultKeep = $state<string | undefined>(undefined);
+    let nwCompareOnKeep = $state<((choice: string) => void) | undefined>(undefined);
 
     // Add-identifier prompt state — shown when user manually resolves an asset that is missing the extracted identifier
     let identifierPromptOpen = $state(false);
@@ -634,6 +643,10 @@
     let step4CanImport = $derived(step4SelectedCount > 0 && !step4HasUnresolvedSelected);
     let step4SelectedDuplicateCount = $derived(mergedTransactions.filter((t) => t.selected && !beforeOpeningIndices.has(t.index) && duplicateStatusIsSelectedWarning(t.duplicateStatus)).length);
     let step4BeforeOpeningCount = $derived(beforeOpeningIndices.size);
+    // Reasons a visible step-4 row is pre-deselected (for the explanatory banner)
+    let step4DeselectPendingDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
+    let step4DeselectDbDup = $derived(step4Rows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && t.duplicateStatus === 'likely').length);
+    let step4HasDeselectReasons = $derived(step4BeforeOpeningCount > 0 || step4DeselectPendingDup > 0 || step4DeselectDbDup > 0);
 
     interface BrokerOpeningIssue {
         brokerId: number;
@@ -981,6 +994,17 @@
         expandedDuplicateGroupKeys = next;
     }
 
+    /**
+     * Svelte action: attach the auto-scrolling marquee to overflowing text cells (file name,
+     * description) rendered as raw HTML inside a member DataTable — mirrors the asset-name
+     * marquee used across the main tables. The container's MutationObserver re-attaches on
+     * every DataTable re-render (sort, resolver recompute).
+     */
+    function marqueeDescendants(node: HTMLElement) {
+        const dispose = attachOverflowMarqueeToDescendants(node);
+        return {destroy: dispose};
+    }
+
     /** Discrete overlap-similarity label for a group header (Totale / Parziale). */
     function duplicateSimilarityLabel(tier: DuplicateTier): string {
         return tier === 'sure' ? $t('importWizard.resolver.similarityTotal') : $t('importWizard.resolver.similarityPartial');
@@ -1006,8 +1030,45 @@
      * transactions page (type icon, cash formatting) plus a keeper checkbox and a File column.
      * A function (not a derived) so the keeper column can close over the specific group.
      */
+    /** Indices of members whose `keyOf` value is NOT the majority within the group (empty if all equal). */
+    function outlierIndexSet(members: MergedTx[], keyOf: (mt: MergedTx) => string): Set<number> {
+        const counts = new Map<string, number>();
+        for (const mt of members) {
+            const k = keyOf(mt);
+            counts.set(k, (counts.get(k) ?? 0) + 1);
+        }
+        if (counts.size <= 1) return new Set();
+        let majority = '';
+        let best = -1;
+        for (const [k, c] of counts) {
+            if (c > best) {
+                best = c;
+                majority = k;
+            }
+        }
+        const out = new Set<number>();
+        for (const mt of members) if (keyOf(mt) !== majority) out.add(mt.index);
+        return out;
+    }
+
     function resolverMemberColumns(group: DuplicateGroup): ColumnDef<MergedTx>[] {
         const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const cmpMembers = resolverGroupMembers(group);
+        const descOutliers = outlierIndexSet(cmpMembers, (mt) =>
+            String(mt.tx.description ?? '')
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, ''),
+        );
+        const cashOutliers = outlierIndexSet(cmpMembers, (mt) => {
+            const cash = mt.tx.cash;
+            if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
+                const c = cash as {code: string; amount: string};
+                return `${Number(c.amount).toFixed(2)}|${c.code}`;
+            }
+            return '';
+        });
+        const diffCls = ' rounded bg-amber-100/70 px-1 dark:bg-amber-900/40';
         return [
             {
                 id: 'keep',
@@ -1089,11 +1150,12 @@
                 },
                 cell: (mt) => {
                     const cash = mt.tx.cash;
+                    const hl = cashOutliers.has(mt.index) ? diffCls : '';
                     if (cash && typeof cash === 'object' && !Array.isArray(cash)) {
                         const c = cash as {code: string; amount: string};
-                        return {type: 'html', html: formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})};
+                        return {type: 'html', html: `<span class="inline-block${hl}">${formatCurrencyAmountHtml(Number(c.amount), c.code, {showSign: true})}</span>`};
                     }
-                    return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    return {type: 'html', html: `<span class="text-gray-400${hl}">—</span>`};
                 },
             },
             {
@@ -1106,7 +1168,7 @@
                 width: 170,
                 minWidth: 130,
                 getValue: (mt) => getSourceFileName(mt.sourceFileId),
-                cell: (mt) => ({type: 'html', html: `<span class="truncate text-xs text-gray-600 dark:text-gray-300" title="${esc(getSourceFileName(mt.sourceFileId))}">${esc(getSourceFileName(mt.sourceFileId))}</span>`}),
+                cell: (mt) => ({type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-600 dark:text-gray-300" title="${esc(getSourceFileName(mt.sourceFileId))}">${esc(getSourceFileName(mt.sourceFileId))}</span>`}),
             },
             {
                 id: 'description',
@@ -1116,14 +1178,13 @@
                 filterable: false,
                 minWidth: 200,
                 getValue: (mt) => String(mt.tx.description ?? ''),
-                cell: (mt) => ({type: 'html', html: `<span class="truncate text-xs text-gray-800 dark:text-gray-100" title="${esc(String(mt.tx.description ?? '').trim())}">${esc(String(mt.tx.description ?? '').trim() || '—')}</span>`}),
+                cell: (mt) => {
+                    const raw = String(mt.tx.description ?? '').trim();
+                    const hl = descOutliers.has(mt.index) ? diffCls : '';
+                    return {type: 'html', html: `<span class="${overflowScrollTextClass} text-xs text-gray-800 dark:text-gray-100${hl}" title="${esc(raw)}">${esc(raw || '—')}</span>`};
+                },
             },
         ];
-    }
-
-    function jumpToDuplicateKeeper(mt: MergedTx) {
-        if (mt.dupKeeperIndex == null) return;
-        step4TableRef?.navigateToRowId(String(mt.dupKeeperIndex));
     }
 
     function confidenceBadgeClass(conf: string): string {
@@ -1155,19 +1216,148 @@
         return `<div style="font-size:0.75rem"><p style="margin:0 0 8px">${baseText}</p><div style="border-top:1px solid rgba(128,128,128,0.2);padding-top:6px">${blocks}</div></div>`;
     }
 
+    // ── N-way compare: shared source/cell/column builders ───────────────────
+
+    interface CmpSource {
+        date: string;
+        type: string;
+        cashAmount: number | null;
+        cashCode: string | null;
+        brokerId: number | null;
+        assetId: number | null;
+        description: string;
+    }
+
+    function escHtml(s: string): string {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function compareTypeCellHtml(type: string): string {
+        const slug = type.toLowerCase().replace(/_/g, '-');
+        const label = $t(`transactions.types.${type}`) || type;
+        return `<span class="inline-flex items-center gap-1.5"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.15rem;height:1.15rem" class="shrink-0 object-contain" onerror="this.style.display='none'"/><span>${escHtml(label)}</span></span>`;
+    }
+
+    function cmpSourceFromTx(tx: TransactionCreateItem, fallbackBrokerId: number | null = null): CmpSource {
+        const rawCash = tx.cash ? (Array.isArray(tx.cash) ? tx.cash[0] : tx.cash) : null;
+        const cash = rawCash && typeof rawCash === 'object' ? (rawCash as {code: string; amount: string}) : null;
+        const assetIdRaw = Array.isArray(tx.asset_id) ? tx.asset_id[0] : tx.asset_id;
+        return {
+            date: tx.date ? String(tx.date) : '',
+            type: tx.type ? String(tx.type) : '',
+            cashAmount: cash && cash.amount != null ? Number(cash.amount) : null,
+            cashCode: cash ? cash.code : null,
+            brokerId: typeof tx.broker_id === 'number' ? tx.broker_id : fallbackBrokerId,
+            assetId: typeof assetIdRaw === 'number' ? assetIdRaw : null,
+            description: String(tx.description ?? ''),
+        };
+    }
+
+    function cmpSourceFromExisting(tx: TXReadItem): CmpSource {
+        return {
+            date: tx.date ? String(tx.date) : '',
+            type: tx.type ? String(tx.type) : '',
+            cashAmount: tx.cash && tx.cash.amount != null ? Number(tx.cash.amount) : null,
+            cashCode: tx.cash ? tx.cash.code : null,
+            brokerId: typeof tx.broker_id === 'number' ? tx.broker_id : null,
+            assetId: typeof tx.asset_id === 'number' ? tx.asset_id : null,
+            description: String(tx.description ?? ''),
+        };
+    }
+
+    /** Build the per-field comparison cells (display + normalized cmp token) for one column. */
+    function buildCompareCells(src: CmpSource): Record<string, CompareCell> {
+        const amountCell: CompareCell = src.cashAmount != null ? {display: formatCurrencyAmountHtml(src.cashAmount, src.cashCode ?? '', {showSign: true}), cmp: `${src.cashAmount.toFixed(2)}|${src.cashCode ?? ''}`, html: true} : {display: '—', cmp: ''};
+        const assetName = getAssetDisplayName(src.assetId);
+        return {
+            date: {display: src.date || '—', cmp: src.date},
+            type: src.type ? {display: compareTypeCellHtml(src.type), cmp: src.type, html: true} : {display: '—', cmp: ''},
+            amount: amountCell,
+            broker: src.brokerId != null ? {display: getBrokerName(src.brokerId), cmp: String(src.brokerId)} : {display: '—', cmp: ''},
+            asset: {display: assetName, cmp: `${src.assetId ?? ''}|${assetName.toLowerCase()}`},
+            description: {display: src.description.trim() || '—', cmp: src.description.trim().toLowerCase()},
+        };
+    }
+
+    function compareFieldDefs(): CompareField[] {
+        return [
+            {key: 'date', label: $t('common.date')},
+            {key: 'type', label: $t('common.type')},
+            {key: 'amount', label: $t('common.amount'), align: 'right'},
+            {key: 'broker', label: $t('common.broker')},
+            {key: 'asset', label: $t('common.asset')},
+            {key: 'description', label: $t('common.description')},
+            {key: 'file', label: $t('importWizard.sourceFile')},
+        ];
+    }
+
+    /** A non-diffing provenance cell (the file column never counts as a "difference"). */
+    function fileCell(label: string): CompareCell {
+        return {display: label, cmp: ''};
+    }
+
+    function columnFromMergedTx(mt: MergedTx): CompareColumn {
+        const fileName = getSourceFileName(mt.sourceFileId);
+        return {
+            id: String(mt.index),
+            title: fileName,
+            selectable: true,
+            cells: {...buildCompareCells(cmpSourceFromTx(mt.tx, getBrokerIdForTx(mt))), file: fileCell(fileName)},
+        };
+    }
+
+    /** Compare all members of an in-batch duplicate group (opened from step 3 or a step-4 badge). */
+    function openLotCompare(group: DuplicateGroup) {
+        const members = resolverGroupMembers(group);
+        if (members.length < 2) return;
+        nwCompareFields = compareFieldDefs();
+        nwCompareColumns = members.map(columnFromMergedTx);
+        const selected = members.filter((mt) => resolverSelectionFor(group, mt.index));
+        nwCompareDefaultKeep = selected.length === 1 ? String(selected[0].index) : 'all';
+        nwCompareOnKeep = (choice: string) => applyLotCompareKeep(group, choice);
+        nwCompareTitle = `🔍 ${$t('importWizard.compareModal.title', {values: {n: members.length}})}`;
+        nwCompareHint = $t('importWizard.compareModal.hint');
+        nwCompareOpen = true;
+    }
+
+    /** Apply a "keep which" choice from the compare modal back to the resolver selection. */
+    function applyLotCompareKeep(group: DuplicateGroup, choice: string) {
+        const next = {...duplicateResolverSelections};
+        for (const idx of group.memberIndices) {
+            next[idx] = choice === 'all' ? true : String(idx) === choice;
+        }
+        duplicateResolverSelections = next;
+        duplicateResolverTouchedKeys = new Set(duplicateResolverTouchedKeys).add(group.key);
+        reapplyResolverGroups();
+    }
+
+    /** Compare a bulk-modal pending duplicate against the matched unsaved transaction. */
+    function openPendingCompare(mt: MergedTx) {
+        const match = mt.dupPendingMatch;
+        if (!match) return;
+        const pendingLabel = $t('importWizard.resolver.pendingEditor');
+        const fileName = getSourceFileName(mt.sourceFileId);
+        nwCompareFields = compareFieldDefs();
+        nwCompareColumns = [
+            {id: String(mt.index), title: fileName, selectable: false, cells: {...buildCompareCells(cmpSourceFromTx(mt.tx, getBrokerIdForTx(mt))), file: fileCell(fileName)}},
+            {id: 'pending', title: pendingLabel, selectable: false, cells: {...buildCompareCells(cmpSourceFromTx(match)), file: fileCell(pendingLabel)}},
+        ];
+        nwCompareDefaultKeep = undefined;
+        nwCompareOnKeep = undefined;
+        nwCompareTitle = `🔍 ${$t('importWizard.compareModal.title', {values: {n: 2}})}`;
+        nwCompareHint = $t('importWizard.compareModal.hint');
+        nwCompareOpen = true;
+    }
+
     /**
-     * Open the compare modal for a ⚠/ℹ MergedTx.
-     * Fetches the existing transaction from the store or API and computes
-     * which fields match between the parsed TX and the existing one.
+     * Compare a parsed row against the existing transaction already in the database
+     * (⚠ likely / ℹ possible). Fetches the existing tx from the store or API.
      */
-    async function openCompare(mt: MergedTx) {
+    async function openDbCompare(mt: MergedTx) {
         if (!mt.dupMatches.length) return;
         const existingId = mt.dupMatches[0].existing_tx_id;
-
-        // Try store first (avoids extra round-trip if already loaded)
         let existing: TXReadItem | undefined = txStoreGet(existingId);
         if (!existing) {
-            compareFetching = true;
             try {
                 const results = (await zodiosApi.query_transactions_api_v1_transactions_get({
                     queries: {ids: [existingId], limit: 1},
@@ -1176,33 +1366,40 @@
             } catch {
                 toasts.error(`Could not load transaction #${existingId}`);
                 return;
-            } finally {
-                compareFetching = false;
             }
         }
         if (!existing) {
             toasts.error(`Transaction #${existingId} not found`);
             return;
         }
+        const fileName = getSourceFileName(mt.sourceFileId);
+        const dbLabel = $t('importWizard.compareModal.dbColumn', {values: {id: String(existingId)}});
+        nwCompareFields = compareFieldDefs();
+        nwCompareColumns = [
+            {id: String(mt.index), title: fileName, selectable: false, cells: {...buildCompareCells(cmpSourceFromTx(mt.tx, getBrokerIdForTx(mt))), file: fileCell(fileName)}},
+            {id: `db-${existingId}`, title: dbLabel, selectable: false, cells: {...buildCompareCells(cmpSourceFromExisting(existing)), file: fileCell('—')}},
+        ];
+        nwCompareDefaultKeep = undefined;
+        nwCompareOnKeep = undefined;
+        nwCompareTitle = `🔍 ${$t('importWizard.compareModal.title', {values: {n: 2}})}`;
+        nwCompareHint = $t('importWizard.compareModal.hint');
+        nwCompareOpen = true;
+    }
 
-        // Compute which fields match between parsed TX (mt.tx) and existing
-        const highlight: string[] = [];
-        const parsedDate = mt.tx.date ? String(mt.tx.date) : null;
-        const existingDate = existing.date ? String(existing.date) : null;
-        if (parsedDate && existingDate && parsedDate === existingDate) highlight.push('tx-form-date-wrap');
-        if (mt.tx.type && existing.type && String(mt.tx.type) === String(existing.type)) highlight.push('tx-form-type-wrap');
-        const rawCash = mt.tx.cash ? (Array.isArray(mt.tx.cash) ? mt.tx.cash[0] : mt.tx.cash) : null;
-        const parsedCash = rawCash?.amount ? parseFloat(String(rawCash.amount)).toFixed(2) : null;
-        const existingCash = existing.cash?.amount ? parseFloat(String(existing.cash.amount)).toFixed(2) : null;
-        if (parsedCash && existingCash && parsedCash === existingCash) highlight.push('tx-form-cash-wrap');
-        const parsedDesc = mt.tx.description ? String(mt.tx.description).trim() : null;
-        const existingDesc = existing.description ? String(existing.description).trim() : null;
-        if (parsedDesc && existingDesc && parsedDesc === existingDesc) highlight.push('tx-form-description');
-
-        compareItems = [existing];
-        compareHighlightFields = highlight;
-        compareTitle = `🔍 ${$t('importWizard.compareTitle', {values: {id: String(existingId)}})}`;
-        compareOpen = true;
+    /** Dispatch a step-4 status-badge click to the right comparison view. */
+    function openBadgeCompare(mt: MergedTx) {
+        if (mt.dupGroupKey != null) {
+            const group = duplicateGroups.find((g) => g.key === mt.dupGroupKey);
+            if (group) {
+                openLotCompare(group);
+                return;
+            }
+        }
+        if (mt.dupPendingMatch) {
+            openPendingCompare(mt);
+            return;
+        }
+        void openDbCompare(mt);
     }
 
     async function openBrokerOpeningEdit(mt: MergedTx) {
@@ -1352,34 +1549,36 @@
                         return {
                             type: 'html',
                             html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 cursor-pointer"><span class="sm:hidden">⚠</span><span class="hidden sm:inline">${$t('importWizard.status.likelyDup')}</span></span>`,
-                            onClick: () => openCompare(mt),
+                            tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
+                            onClick: () => openBadgeCompare(mt),
+                            testId: `import-wizard-compare-${mt.index}`,
                         };
                     }
                     if (mt.duplicateStatus === 'pending_duplicate') {
-                        const canJump = mt.dupKeeperIndex != null;
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-orange-100 text-orange-800 ring-1 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700 ${canJump ? 'cursor-pointer' : ''}"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
-                            tooltip: {text: canJump ? $t('importWizard.status.tooltip.pendingDuplicateJump', {values: {file: mt.dupKeeperFileName ?? '—'}}) : $t('importWizard.status.tooltip.pendingDuplicate'), position: 'top', maxWidth: '300px'},
-                            onClick: canJump ? () => jumpToDuplicateKeeper(mt) : undefined,
-                            testId: canJump ? `import-wizard-duplicate-jump-${mt.index}` : undefined,
+                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-orange-100 text-orange-800 ring-1 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700 cursor-pointer"><span class="sm:hidden">⧉</span><span class="hidden sm:inline">${$t('importWizard.status.pendingDuplicate')}</span></span>`,
+                            tooltip: {text: $t('importWizard.status.tooltip.pendingDuplicate'), position: 'top', maxWidth: '300px'},
+                            onClick: () => openBadgeCompare(mt),
+                            testId: `import-wizard-compare-${mt.index}`,
                         };
                     }
                     if (mt.duplicateStatus === 'pending_possible_duplicate') {
-                        const canJump = mt.dupKeeperIndex != null;
                         return {
                             type: 'html',
-                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700 ${canJump ? 'cursor-pointer' : ''}"><span class="sm:hidden">?</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
-                            tooltip: {text: canJump ? $t('importWizard.status.tooltip.pendingDuplicateJump', {values: {file: mt.dupKeeperFileName ?? '—'}}) : $t('importWizard.status.tooltip.possiblePendingDuplicate'), position: 'top', maxWidth: '300px'},
-                            onClick: canJump ? () => jumpToDuplicateKeeper(mt) : undefined,
-                            testId: canJump ? `import-wizard-possible-duplicate-jump-${mt.index}` : undefined,
+                            html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-yellow-100 text-yellow-800 ring-1 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700 cursor-pointer"><span class="sm:hidden">≈</span><span class="hidden sm:inline">${$t('importWizard.status.possiblePendingDuplicate')}</span></span>`,
+                            tooltip: {text: $t('importWizard.status.tooltip.possiblePendingDuplicate'), position: 'top', maxWidth: '300px'},
+                            onClick: () => openBadgeCompare(mt),
+                            testId: `import-wizard-compare-${mt.index}`,
                         };
                     }
                     if (mt.duplicateStatus === 'possible') {
                         return {
                             type: 'html',
                             html: `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 cursor-pointer"><span class="sm:hidden">ℹ</span><span class="hidden sm:inline">${$t('importWizard.status.possibleDup')}</span></span>`,
-                            onClick: () => openCompare(mt),
+                            tooltip: {text: $t('importWizard.compareModal.openHint'), position: 'top', maxWidth: '260px'},
+                            onClick: () => openBadgeCompare(mt),
+                            testId: `import-wizard-compare-${mt.index}`,
                         };
                     }
                     return {
@@ -2920,12 +3119,25 @@ ${arrow}<span>${label}</span></span>`,
 
                 {#if duplicateGroups.length > 0}
                     <section class="rounded-lg border border-amber-200 bg-amber-50/40 dark:border-amber-800/70 dark:bg-amber-900/10" data-testid="import-wizard-duplicate-resolver">
-                        <div class="border-b border-amber-200 px-3 py-2 dark:border-amber-800/70">
-                            <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-100">{$t('importWizard.resolver.title')}</h3>
-                            <p class="text-xs text-amber-700 dark:text-amber-300">{$t('importWizard.resolver.subtitle', {values: {n: duplicateGroups.length}})}</p>
-                        </div>
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-2 border-amber-200 px-3 py-2 text-left dark:border-amber-800/70"
+                            class:border-b={!duplicateResolverCollapsed}
+                            onclick={() => (duplicateResolverCollapsed = !duplicateResolverCollapsed)}
+                            data-testid="import-wizard-duplicate-resolver-toggle"
+                        >
+                            {#if duplicateResolverCollapsed}
+                                <ChevronRight size={16} class="shrink-0 text-amber-500" />
+                            {:else}
+                                <ChevronDown size={16} class="shrink-0 text-amber-500" />
+                            {/if}
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-100">{$t('importWizard.resolver.title')}</h3>
+                                <p class="text-xs text-amber-700 dark:text-amber-300">{$t('importWizard.resolver.subtitle', {values: {n: duplicateGroups.length}})}</p>
+                            </div>
+                        </button>
 
-                        <div class="grid min-w-0 gap-3 p-3 lg:grid-cols-[280px_minmax(0,1fr)]">
+                        <div class="min-w-0 gap-3 p-3 lg:grid-cols-[280px_minmax(0,1fr)] {duplicateResolverCollapsed ? 'hidden' : 'grid'}">
                             <div class="min-w-0 space-y-2 rounded-lg border border-amber-200 bg-white p-2 dark:border-amber-800 dark:bg-slate-900/60" data-testid="import-wizard-file-priority">
                                 <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.filePriority')}</div>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.priorityPanelHint')}</p>
@@ -2941,7 +3153,7 @@ ${arrow}<span>${label}</span></span>`,
                                     {#snippet children({item, index})}
                                         <div class="flex min-w-0 items-center gap-2" data-testid="import-wizard-priority-file-{item}">
                                             <span class="w-5 shrink-0 text-xs font-semibold text-gray-400">{index + 1}</span>
-                                            <span class="min-w-0 flex-1 truncate text-xs text-gray-700 dark:text-gray-200" title={getSourceFileName(item)}>{getSourceFileName(item)}</span>
+                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-xs text-gray-700 dark:text-gray-200" title={getSourceFileName(item)}>{getSourceFileName(item)}</span>
                                         </div>
                                     {/snippet}
                                 </OrderableList>
@@ -2965,7 +3177,7 @@ ${arrow}<span>${label}</span></span>`,
                                             {:else}
                                                 <ChevronRight size={14} class="shrink-0 text-gray-400" />
                                             {/if}
-                                            <span class="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-gray-100">{getDuplicateGroupTitle(group)}</span>
+                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-sm font-medium text-gray-800 dark:text-gray-100">{getDuplicateGroupTitle(group)}</span>
                                             <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300">{$t('importWizard.resolver.memberCount', {values: {n: group.memberIndices.length}})}</span>
                                             <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(group.tier)}" title={$t('importWizard.resolver.similarityTooltip')}>{duplicateSimilarityLabel(group.tier)}</span>
                                         </button>
@@ -2974,13 +3186,19 @@ ${arrow}<span>${label}</span></span>`,
                                             <div class="min-w-0 border-t border-amber-100 p-3 dark:border-amber-900/60">
                                                 <div class="mb-2 flex items-center justify-between gap-2">
                                                     <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.groupHelp')}</p>
-                                                    {#if resolverHasManualChoice(group)}
-                                                        <button type="button" class="shrink-0 text-xs text-libre-green hover:underline" onclick={() => resetDuplicateResolverChoice(group)} data-testid="import-wizard-resolver-reset">
-                                                            {$t('importWizard.resolver.resetDefault')}
+                                                    <div class="flex shrink-0 items-center gap-3">
+                                                        <button type="button" class="inline-flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={() => openLotCompare(group)} data-testid="import-wizard-resolver-compare-{group.key}">
+                                                            <Search size={13} />
+                                                            {$t('importWizard.compareModal.openAction')}
                                                         </button>
-                                                    {/if}
+                                                        {#if resolverHasManualChoice(group)}
+                                                            <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => resetDuplicateResolverChoice(group)} data-testid="import-wizard-resolver-reset">
+                                                                {$t('importWizard.resolver.resetDefault')}
+                                                            </button>
+                                                        {/if}
+                                                    </div>
                                                 </div>
-                                                <div class="min-w-0" data-testid="import-wizard-resolver-member-table-{group.key}">
+                                                <div use:marqueeDescendants class="min-w-0" data-testid="import-wizard-resolver-member-table-{group.key}">
                                                     <DataTable
                                                         data={resolverGroupMembers(group)}
                                                         columns={resolverMemberColumns(group)}
@@ -2995,7 +3213,7 @@ ${arrow}<span>${label}</span></span>`,
                                                         enableColumnResize={false}
                                                         enableContextMenu={false}
                                                         stickyHeader={false}
-                                                        tableLayout="auto"
+                                                        tableLayout="fixed"
                                                     />
                                                 </div>
                                             </div>
@@ -3211,7 +3429,9 @@ ${arrow}<span>${label}</span></span>`,
                             <span class="font-semibold">{$t('transactions.title')}</span>
                             <span class="text-gray-500">{step4SelectedCount} / {step4TotalCount}</span>
                             {#if step4SelectedDuplicateCount > 0}
-                                <span class="text-xs text-amber-600 dark:text-amber-400">⚠ {$t('importWizard.duplicatesSelected', {values: {n: step4SelectedDuplicateCount}})}</span>
+                                <Tooltip text={$t('importWizard.duplicatesSelectedTip')} position="top" maxWidth="320px" wrapperClass="inline-flex">
+                                    <span class="cursor-help text-xs text-amber-600 underline decoration-dotted dark:text-amber-400">⚠ {$t('importWizard.duplicatesSelected', {values: {n: step4SelectedDuplicateCount}})}</span>
+                                </Tooltip>
                             {/if}
                             {#if step4BeforeOpeningCount > 0}
                                 <span class="text-xs text-gray-500 dark:text-gray-400">⛔ {step4BeforeOpeningCount} {$t('importWizard.beforeOpeningCount')}</span>
@@ -3235,6 +3455,21 @@ ${arrow}<span>${label}</span></span>`,
                             <ColumnVisibilityToggle tableRef={step4TableRef} />
                         </div>
                     </div>
+
+                    {#if step4HasDeselectReasons}
+                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200" data-testid="import-wizard-deselect-banner">
+                            <span class="font-medium">{$t('importWizard.deselectReasons.title')}</span>
+                            {#if step4BeforeOpeningCount > 0}
+                                <span class="inline-flex items-center gap-1">⛔ {$t('importWizard.deselectReasons.beforeOpening', {values: {n: step4BeforeOpeningCount}})}</span>
+                            {/if}
+                            {#if step4DeselectPendingDup > 0}
+                                <span class="inline-flex items-center gap-1">⧉ {$t('importWizard.deselectReasons.pendingDuplicate', {values: {n: step4DeselectPendingDup}})}</span>
+                            {/if}
+                            {#if step4DeselectDbDup > 0}
+                                <span class="inline-flex items-center gap-1">⚠ {$t('importWizard.deselectReasons.dbDuplicate', {values: {n: step4DeselectDbDup}})}</span>
+                            {/if}
+                        </div>
+                    {/if}
 
                     <DataTable
                         bind:this={step4TableRef}
@@ -3517,24 +3752,23 @@ ${arrow}<span>${label}</span></span>`,
     />
 {/if}
 
-<!-- Compare modal — TransactionFormModal in view mode for duplicate inspection -->
-{#if compareItems}
-    <TransactionFormModal
-        open={compareOpen}
-        mode="view"
-        canEdit={false}
-        items={compareItems}
-        initialOptionalOpen={true}
-        highlightFields={compareHighlightFields}
-        titleOverride={compareTitle}
-        zIndex={zIndex + 25}
-        onClose={() => {
-            compareOpen = false;
-            compareItems = null;
-            compareTitle = undefined;
-        }}
-    />
-{/if}
+<!-- N-way duplicate compare modal — side-by-side field×transaction grid -->
+<TransactionCompareModal
+    open={nwCompareOpen}
+    title={nwCompareTitle}
+    hint={nwCompareHint}
+    fields={nwCompareFields}
+    columns={nwCompareColumns}
+    defaultKeep={nwCompareDefaultKeep}
+    onKeep={nwCompareOnKeep
+        ? (choice) => {
+              nwCompareOnKeep?.(choice);
+              nwCompareOpen = false;
+          }
+        : undefined}
+    zIndex={zIndex + 25}
+    onClose={() => (nwCompareOpen = false)}
+/>
 
 <!-- Add identifier prompt — 3 options: Cancel / Assign only / Assign + update -->
 <ModalBase open={identifierPromptOpen} maxWidth="lg" onRequestClose={() => (identifierPromptOpen = false)} zIndex={zIndex + 30}>

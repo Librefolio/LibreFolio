@@ -657,7 +657,7 @@ nav:
                   - Revolut: user/transactions/import/revolut.md
                   - Fineco: user/transactions/import/fineco.md
                   - Intesa Sanpaolo: user/transactions/import/intesa.md
-                  - Crédit Agricole Italia: user/transactions/import/credit_agricole.md
+                  - Crédit Agricole: user/transactions/import/credit_agricole.md
                   - BUX: user/transactions/import/bux.md
                   - Rabobank: user/transactions/import/rabobank.md
               - 🪙 Crypto:
@@ -931,6 +931,7 @@ nav:
                       - File Upload & Media: developer/frontend/components/core-ui/file-upload.md
                       - Select & Dropdowns: developer/frontend/components/core-ui/select.md
                   - Transaction Form: developer/frontend/components/features/transaction-form.md
+                  - Import Wizard: developer/frontend/components/features/import-wizard.md
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
                   - Live Ticker: developer/frontend/components/features/live-ticker.md
