@@ -434,6 +434,8 @@
     "beforeOpeningCount": "avant l'ouverture",
     "recheckOpenings": "Revérifier les ouvertures",
     "recheckOpeningsTip": "Revérifier les dates d'ouverture des courtiers et resélectionner les lignes devenues importables.",
+    "selectVisible": "Sélectionner visibles",
+    "selectVisibleTip": "Sélectionne les lignes sélectionnables de la page actuelle (n'affecte pas les autres pages).",
     "createAsset": {
       "identifiedNames": "Noms/identifiants détectés :"
     },

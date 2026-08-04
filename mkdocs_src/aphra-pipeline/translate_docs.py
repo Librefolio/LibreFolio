@@ -69,6 +69,13 @@ DOUBLEWORD_BASE_URL = "https://api.doubleword.ai/v1"
 # because the flex queue can hold requests for hours before processing.
 DEFAULT_DOUBLEWORD_QUEUE_TIMEOUT = 14400  # 4 hours
 
+# When a Doubleword batch is already completed server-side but the single HTTP GET that
+# fetches its output file hits a transient network error (e.g. a momentary DNS failure),
+# re-read the SAME completed output a few times before abandoning the request. This waits
+# on the already-produced result — it never resubmits — and heals one-off fetch blips.
+DEFAULT_DOUBLEWORD_FETCH_RETRIES = 4  # output-file re-fetch attempts before giving up
+DEFAULT_DOUBLEWORD_FETCH_RETRY_DELAY = 2.0  # seconds between re-fetch attempts
+
 
 # ---------------------------------------------------------------------------
 # Language detection from frontend
@@ -1310,6 +1317,106 @@ def _robust_refine(workflow, context, source_text: str, *,
     return ""
 
 
+def _install_doubleword_role_compat() -> None:
+    """Tolerate Doubleword batch responses that omit the assistant ``role`` field.
+
+    Doubleword returns each choice's message as ``{"content": "..."}`` without a
+    ``role``. autobatcher validates every batch result via
+    ``ChatCompletion.model_validate(response_body)`` (autobatcher/client.py:815),
+    and OpenAI's ``ChatCompletion`` model *requires* ``choices[].message.role`` — so
+    the otherwise-complete response is rejected with a Pydantic ``validation error``
+    and the request is dropped as "No result for request <id>". The failure is
+    deterministic, so retrying or waiting never recovers it.
+
+    Fix: wrap ``ChatCompletion.model_validate`` to inject ``role="assistant"`` into
+    any message missing it, before validation. Idempotent, and a no-op when the
+    field is already present (so normal non-batch responses are unaffected).
+    """
+    try:
+        from openai.types.chat import ChatCompletion  # noqa: PLC0415 — lazy import: patch only when Doubleword mode is active
+    except Exception:  # openai not importable — nothing to patch
+        return
+
+    if getattr(ChatCompletion, "_dw_role_compat", False):
+        return
+
+    _orig_model_validate = ChatCompletion.model_validate
+
+    def _model_validate_with_role(obj, *args, **kwargs):
+        try:
+            if isinstance(obj, dict):
+                for choice in obj.get("choices") or []:
+                    msg = choice.get("message") if isinstance(choice, dict) else None
+                    if isinstance(msg, dict) and not msg.get("role"):
+                        msg["role"] = "assistant"
+        except Exception:  # never let the shim break validation
+            pass
+        return _orig_model_validate(obj, *args, **kwargs)
+
+    ChatCompletion.model_validate = _model_validate_with_role
+    ChatCompletion._dw_role_compat = True
+
+
+def _install_doubleword_fetch_retry() -> None:
+    """Re-fetch a completed batch's result instead of abandoning it on a transient error.
+
+    A Doubleword batch that is already ``completed`` server-side still has its output file
+    fetched by autobatcher via a single HTTP GET in ``_fetch_partial_results``
+    (autobatcher/client.py). If that one GET hits a transient network error — e.g. a
+    momentary DNS failure (``[Errno 8] nodename nor servname provided, or not known``) —
+    autobatcher swallows it and ``_process_completed_batch`` immediately marks every
+    still-unresolved request as "No result for request <id>", permanently, even though the
+    result exists on the server and the batch is only ever processed once.
+
+    Fix: wrap ``_process_completed_batch`` to retry fetching the SAME completed output file
+    a few times (short async delay) before giving up. This waits on and re-reads the
+    already-produced result — it does NOT resubmit the request — and only falls through to
+    the original "No result" handling when the requests are genuinely unresolved after the
+    retries. Idempotent, installed only in Doubleword mode.
+    """
+    try:
+        import asyncio  # noqa: PLC0415 — lazy import: patch only when Doubleword mode is active
+
+        from autobatcher.client import BatchOpenAI  # noqa: PLC0415 — lazy import: patch only when Doubleword mode is active
+    except Exception:  # autobatcher not importable / internal layout changed — nothing to patch
+        return
+
+    if getattr(BatchOpenAI, "_dw_fetch_retry", False):
+        return
+
+    try:
+        retries = max(1, int(_load_env_var("DOUBLEWORD_FETCH_RETRIES", str(DEFAULT_DOUBLEWORD_FETCH_RETRIES))))
+    except ValueError:
+        retries = DEFAULT_DOUBLEWORD_FETCH_RETRIES
+    try:
+        delay = max(0.0, float(_load_env_var("DOUBLEWORD_FETCH_RETRY_DELAY", str(DEFAULT_DOUBLEWORD_FETCH_RETRY_DELAY))))
+    except ValueError:
+        delay = DEFAULT_DOUBLEWORD_FETCH_RETRY_DELAY
+
+    _orig_fetch = BatchOpenAI._fetch_partial_results
+    _orig_process = BatchOpenAI._process_completed_batch
+
+    async def _process_completed_batch_resilient(self, batch, output_file_id):
+        # Only the "completed with an output file but the fetch blipped" case is retried;
+        # everything else (no output file, genuinely-missing results) is left to the original.
+        if output_file_id:
+            for attempt in range(retries):
+                try:
+                    await _orig_fetch(self, batch, output_file_id)
+                except Exception:  # the original already swallows fetch errors; guard defensively
+                    pass
+                if all(req.future.done() for req in batch.requests.values()):
+                    return
+                if attempt < retries - 1:
+                    await asyncio.sleep(delay)
+        # No output file, or requests still unresolved after re-fetch retries: delegate to
+        # the original for its authoritative "no output" / "No result for request" handling.
+        await _orig_process(self, batch, output_file_id)
+
+    BatchOpenAI._process_completed_batch = _process_completed_batch_resilient
+    BatchOpenAI._dw_fetch_retry = True
+
+
 def _create_doubleword_client(api_key: str, models: dict):
     """Create a synchronous model client backed by autobatcher.AsyncOpenAI.
 
@@ -1339,6 +1446,15 @@ def _create_doubleword_client(api_key: str, models: dict):
         print("ERROR: 'autobatcher' package not found.", file=sys.stderr)
         print("   ➜  Install with: pipenv install --dev autobatcher", file=sys.stderr)
         sys.exit(1)
+
+    # Doubleword batch responses omit the assistant `role`, which autobatcher's
+    # ChatCompletion validation rejects — install the compatibility shim before
+    # any request is submitted so results are parsed instead of dropped.
+    _install_doubleword_role_compat()
+
+    # A completed batch whose output-file fetch hits a transient network error (e.g. DNS
+    # blip) is otherwise abandoned as "No result"; retry the fetch before giving up.
+    _install_doubleword_fetch_retry()
 
     # Generate config.toml even in Doubleword mode so Aphra's workflow.load_config()
     # picks up our model names (writer, critiquer, searcher) instead of its built-in
