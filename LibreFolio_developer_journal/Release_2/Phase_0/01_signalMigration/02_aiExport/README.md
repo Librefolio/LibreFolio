@@ -1,6 +1,6 @@
 # Phase 0 — AI Export
 
-**Stato**: 🟡 SIGNAL AGGREGATION + UI/CLIPBOARD — 29 luglio 2026
+**Stato**: 🟢 PUBLIC CATALOG V3 IMPLEMENTATO — 4 agosto 2026
 
 Questa cartella costituisce il secondo sottopiano della migrazione segnali di Phase 0.
 I file sono raccolti in `Release_2/Phase_0/01_signalMigration/02_aiExport`; non è
@@ -17,8 +17,23 @@ necessario spostarli nel diverso archivio `RoadmapV4_UI/phases/`.
 | [Migration Equivalence Report](report-phase00AiExportMigrationEquivalence.md) | Parità legacy, differenze deliberate e greenfield | ✅ |
 | [Riferimento funzionale compatto](report-phase00AiExportFunctionalReference.md) | Baseline pre-refinement; da aggiornare dopo il cutover | ⛔ |
 | [Contenuti selezionabili e composizione](report-phase00AiExportSelectableContentComposition.md) | Per ogni pagina: 18 export dati, 17 analisi, prompt, dataset e componenti espansi | ✅ |
+| [Guida ragionata al catalogo UI](report-phase00AiExportUiPromptCatalogExplainedV1.md) | Fotografia storica del catalogo V2 32 dataset/17 analisi | ✅ storico |
+| [Piano Public Catalog V3](plan-phase00AiExportPublicCatalogReduction.prompt.md) | Riduzione 8 Export Data + 13 Analysis, componenti, probe e review | ✅ |
+| [Public Catalog Reduction V1](report-phase00AiExportPublicCatalogReductionV1.md) | Architettura V3, composizione, misure, confronto e decisione | ✅ |
+| [Task Adequacy Review V2](report-phase00AiExportTaskAdequacyReviewV2.md) | Review 126 varianti sul run autorevole V3 | ✅ |
 
-## Stato al checkpoint
+## Stato corrente
+
+- snapshot wire V2, catalogo e selezioni pubbliche V3;
+- 67 componenti, 40 Dataset e 24 Analysis nel registry interno;
+- catalogo pubblico: 8 Export Data + 13 Analysis;
+- run autorevole: `real_prompt_probe/20260804T155305.988711Z`;
+- 126/126 prompt, 0 failure, 38 retained, secret scan passato;
+- 126 OPTIMAL nella Task Adequacy Review V2;
+- traduzioni UI EN/IT/FR/ES complete; traduzioni MkDocs da rigenerare dalla
+  sorgente inglese aggiornata.
+
+## Stato al checkpoint storico
 
 - fondazioni backend, temporal engine, cataloghi e componenti dominio implementati;
 - 18 dataset e 17 analisi congelati ma non ancora esposti dal contratto pubblico;

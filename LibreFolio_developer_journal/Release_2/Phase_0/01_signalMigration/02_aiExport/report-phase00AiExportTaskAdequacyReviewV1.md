@@ -13,6 +13,11 @@ Tutte le dimensioni sono `token-equivalenti stimati` (`caratteri renderizzati / 
 
 > **Addendum post-review del 1 agosto 2026.** La validazione mirata `report-phase00AiExportPacAndCostEfficiencyValidationV1.md`, run `real_prompt_probe/20260801T072616.671347Z`, corregge la rubrica per input disponibili soltanto dall'utente e prova Cost Efficiency su Directa con fee reali. `portfolio.pac_planning` e `broker.cost_efficiency` sono promossi a **OPTIMAL**. La classificazione pubblica corretta è quindi **96 OPTIMAL / 0 SUFFICIENT / 0 INSUFFICIENT**. Le tabelle V1 sottostanti restano la fotografia storica del run da 348 prompt e non vengono retroattivamente mescolate con il run mirato.
 
+> **Superseded per il catalogo pubblico V3.** La review corrente è
+> `report-phase00AiExportTaskAdequacyReviewV2.md`, basata sul run
+> `real_prompt_probe/20260804T155305.988711Z` e sul catalogo 8 Export Data +
+> 13 Analysis. Questa V1 resta la baseline storica V2.
+
 ---
 
 ## 1. Executive summary
