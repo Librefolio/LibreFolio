@@ -24,12 +24,13 @@
     import {zodiosApi} from '$lib/api';
     import {trySave} from '$lib/utils/trySave';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Search, Trash2, X} from 'lucide-svelte';
+    import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Trash2, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {ConfirmModal} from '$lib/components/table';
     import {getRoleIcon as _getRoleIcon, getRoleIconColor as _getRoleIconColor, getRoleShortLabel as _getRoleShortLabel} from '$lib/utils/broker/brokerRoleHelpers';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
+    import {UserSearchSelect} from '$lib/components/ui/select';
     import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';
 
     // =========================================================================
@@ -73,15 +74,12 @@
 
     // Add user state
     let showAddModal = false; // Add User as overlay modal
-    let searchQuery = '';
-    let searchResults: SearchUser[] = [];
-    let searching = false;
-    let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-    let selectedUser: SearchUser | null = null;
+    let availableUsers: SearchUser[] = [];
+    let loadingUsers = false;
+    let selectedUserId: number | null = null;
     let newRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
     let newSharePercent: number = 0;
     let showRoleDropdown = false;
-    let searchHighlightIndex = -1; // Arrow key navigation index
 
     // Edit state
     let showEditModal = false;
@@ -121,6 +119,9 @@
             })),
         );
     $: existingUserIds = new Set(accesses.map((a) => a.user_id));
+    // Users still addable: exclude anyone already granted access locally.
+    $: selectableUsers = availableUsers.filter((u) => !existingUserIds.has(u.id));
+    $: selectedUser = selectableUsers.find((u) => u.id === selectedUserId) ?? null;
 
     // For add form: max share available
     $: maxNewShare = newRole === 'OWNER' ? Math.max(0, Math.round((1 - totalAllocated) * 10000) / 100) : 0;
@@ -175,60 +176,25 @@
     }
 
     // =========================================================================
-    // User Search (debounced)
+    // User list (loaded up-front so the picker shows every candidate on open)
     // =========================================================================
-    function handleSearchInput() {
-        if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-        searchResults = [];
-        searchHighlightIndex = -1;
-
-        if (searchQuery.length < 2) {
-            searching = false;
-            return;
+    async function loadSelectableUsers() {
+        loadingUsers = true;
+        try {
+            const response = await zodiosApi.search_users_endpoint_api_v1_users_search_get({
+                queries: {q: '', exclude_broker_id: brokerId},
+            });
+            const items = (response as any).items || [];
+            availableUsers = items.map((u: any) => ({
+                id: u.id,
+                username: u.username,
+                avatar_url: typeof u.avatar_url === 'string' ? u.avatar_url : null,
+            }));
+        } catch {
+            availableUsers = [];
+        } finally {
+            loadingUsers = false;
         }
-
-        searching = true;
-        searchDebounceTimer = setTimeout(async () => {
-            try {
-                const response = await zodiosApi.search_users_endpoint_api_v1_users_search_get({
-                    queries: {q: searchQuery, exclude_broker_id: brokerId},
-                });
-                const items = (response as any).items || [];
-                // Also exclude users already in local accesses
-                searchResults = items
-                    .filter((u: any) => !existingUserIds.has(u.id))
-                    .map((u: any) => ({
-                        id: u.id,
-                        username: u.username,
-                        avatar_url: typeof u.avatar_url === 'string' ? u.avatar_url : null,
-                    }));
-                searchHighlightIndex = -1;
-            } catch {
-                searchResults = [];
-            } finally {
-                searching = false;
-            }
-        }, 300);
-    }
-
-    function handleSearchKeydown(e: KeyboardEvent) {
-        if (searchResults.length === 0) return;
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            searchHighlightIndex = Math.min(searchHighlightIndex + 1, searchResults.length - 1);
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            searchHighlightIndex = Math.max(searchHighlightIndex - 1, 0);
-        } else if (e.key === 'Enter' && searchHighlightIndex >= 0) {
-            e.preventDefault();
-            selectSearchUser(searchResults[searchHighlightIndex]);
-        }
-    }
-
-    function selectSearchUser(user: SearchUser) {
-        selectedUser = user;
-        searchQuery = user.username;
-        searchResults = [];
     }
 
     // =========================================================================
@@ -252,12 +218,10 @@
         ];
 
         // Reset form
-        selectedUser = null;
-        searchQuery = '';
+        selectedUserId = null;
         newRole = 'VIEWER';
         newSharePercent = 0;
         showAddModal = false;
-        searchHighlightIndex = -1;
     }
 
     // =========================================================================
@@ -425,11 +389,10 @@
                             class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-libre-green text-white hover:bg-libre-green/90 transition-colors shadow-sm"
                             on:click={() => {
                                 showAddModal = true;
-                                selectedUser = null;
-                                searchQuery = '';
+                                selectedUserId = null;
                                 newRole = 'VIEWER';
                                 newSharePercent = 0;
-                                searchHighlightIndex = -1;
+                                loadSelectableUsers();
                             }}
                             title={$_('brokers.sharing.addUser')}
                             data-testid="sharing-add-user-btn"
@@ -600,9 +563,7 @@
         maxWidth="md"
         onRequestClose={() => {
             showAddModal = false;
-            selectedUser = null;
-            searchQuery = '';
-            searchHighlightIndex = -1;
+            selectedUserId = null;
         }}
         open={showAddModal}
         testId="sharing-add-user-modal"
@@ -619,9 +580,7 @@
                     class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
                     on:click={() => {
                         showAddModal = false;
-                        selectedUser = null;
-                        searchQuery = '';
-                        searchHighlightIndex = -1;
+                        selectedUserId = null;
                     }}
                     type="button"
                 >
@@ -631,80 +590,14 @@
 
             <!-- Body -->
             <div class="p-4 space-y-4" data-testid="sharing-add-form">
-                <!-- Unified Search / Selected user -->
-                <div class="relative">
-                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1" for="sharing-search-input">
+                <!-- User picker: opens showing every candidate, narrows down as you type -->
+                <div>
+                    <span class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                         {$_('brokers.sharing.searchPlaceholder')}
-                    </label>
-                    <div class="flex items-center gap-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 px-3 py-2 {selectedUser ? 'border-libre-green/40 dark:border-libre-green/40 bg-libre-green/5 dark:bg-libre-green/10' : ''}">
-                        {#if selectedUser}
-                            <!-- Show selected user inline with clear button -->
-                            <div class="w-6 h-6 rounded-full overflow-hidden shrink-0">
-                                {#if selectedUser.avatar_url}
-                                    <LazyImage src="{selectedUser.avatar_url}?img_preview=48x48" alt={selectedUser.username} circle />
-                                {:else}
-                                    <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
-                                        <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(selectedUser.username)}</span>
-                                    </span>
-                                {/if}
-                            </div>
-                            <span class="flex-1 text-sm font-medium text-gray-700 dark:text-gray-200">{selectedUser.username}</span>
-                            <button
-                                type="button"
-                                on:click={() => {
-                                    selectedUser = null;
-                                    searchQuery = '';
-                                }}
-                                class="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                            >
-                                <X size={14} />
-                            </button>
-                        {:else}
-                            <!-- Search mode -->
-                            <Search size={16} class="text-gray-400 shrink-0" />
-                            <input
-                                id="sharing-search-input"
-                                type="text"
-                                bind:value={searchQuery}
-                                on:input={handleSearchInput}
-                                on:keydown={handleSearchKeydown}
-                                placeholder={$_('brokers.sharing.searchPlaceholder')}
-                                class="flex-1 bg-transparent text-sm text-gray-700 dark:text-gray-200 outline-none placeholder-gray-400"
-                                data-testid="sharing-search-input"
-                            />
-                            {#if searching}
-                                <Loader2 size={14} class="animate-spin text-gray-400" />
-                            {/if}
-                        {/if}
-                    </div>
-
-                    <!-- Search results dropdown (only when not selected) -->
-                    {#if !selectedUser && searchResults.length > 0}
-                        <div class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
-                            {#each searchResults as user, idx}
-                                <button
-                                    type="button"
-                                    class="w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors {idx === searchHighlightIndex ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
-                                    data-testid="user-search-result-{user.id}"
-                                    on:click={() => selectSearchUser(user)}
-                                >
-                                    <span class="w-6 h-6 rounded-full overflow-hidden shrink-0">
-                                        {#if user.avatar_url}
-                                            <LazyImage src="{user.avatar_url}?img_preview=48x48" alt={user.username} circle />
-                                        {:else}
-                                            <span class="w-full h-full bg-gray-200 dark:bg-slate-600 flex items-center justify-center rounded-full">
-                                                <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{getAvatarInitial(user.username)}</span>
-                                            </span>
-                                        {/if}
-                                    </span>
-                                    <span class="text-gray-700 dark:text-gray-200">{user.username}</span>
-                                </button>
-                            {/each}
-                        </div>
-                    {:else if !selectedUser && searchQuery.length >= 2 && !searching}
-                        <div class="absolute z-10 mt-1 w-full bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-3 text-center text-sm text-gray-400">
-                            {$_('brokers.sharing.noOtherUsers')}
-                        </div>
+                    </span>
+                    <UserSearchSelect bind:value={selectedUserId} dropdownPosition="bottom" loading={loadingUsers} maxVisibleItems={6} testId="sharing-user-select" users={selectableUsers} />
+                    {#if !loadingUsers && selectableUsers.length === 0}
+                        <p class="mt-1 text-xs text-gray-400" data-testid="sharing-no-other-users">{$_('brokers.sharing.noOtherUsers')}</p>
                     {/if}
                 </div>
 
@@ -775,9 +668,7 @@
                     class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
                     on:click={() => {
                         showAddModal = false;
-                        selectedUser = null;
-                        searchQuery = '';
-                        searchHighlightIndex = -1;
+                        selectedUserId = null;
                     }}
                     type="button"
                 >

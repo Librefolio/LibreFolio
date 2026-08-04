@@ -138,27 +138,33 @@ class TestUserSearch:
             print_success("✓ Search returns matching users with no email exposed")
 
     @pytest.mark.asyncio
-    async def test_search_min_query_length(self, test_server):
-        """USEARCH-002: Search requires minimum 2 characters."""
-        print_section("USEARCH-002: Search requires min 2 chars")
+    async def test_search_empty_query_lists_users(self, test_server):
+        """USEARCH-002: An empty/short query lists users so pickers can pre-populate."""
+        print_section("USEARCH-002: Empty query lists all users")
 
         async with httpx.AsyncClient() as client:
-            await create_user_and_login(client)
+            user_data = await create_user_and_login(client)
+            username = user_data["username"]
 
-            resp = await client.get(
-                f"{API_BASE}/users/search",
-                params={"q": "a"},
-                timeout=TIMEOUT,
-            )
-            assert resp.status_code == 422
-
+            # Omitting `q` entirely returns the full active-user list
             resp = await client.get(
                 f"{API_BASE}/users/search",
                 timeout=TIMEOUT,
             )
-            assert resp.status_code == 422
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            data = resp.json()
+            assert any(u["username"] == username for u in data["items"]), f"User {username} missing from full list"
 
-            print_success("✓ Short queries rejected with 422")
+            # A single-character query is accepted too (no minimum length anymore)
+            resp = await client.get(
+                f"{API_BASE}/users/search",
+                params={"q": username[0]},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            assert any(u["username"] == username for u in resp.json()["items"])
+
+            print_success("✓ Empty and short queries list users with 200")
 
     @pytest.mark.asyncio
     async def test_search_exclude_broker(self, test_server):
