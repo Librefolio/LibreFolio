@@ -6,6 +6,7 @@ import {
     AI_EXPORT_ANALYSIS_IDS,
     AI_EXPORT_CATALOG_VERSION,
     AI_EXPORT_DATASET_IDS,
+    AI_EXPORT_PUBLIC_CATALOG_CONFIG,
     AI_EXPORT_SCHEMA_VERSION,
     AI_EXPORT_SELECTION_VERSION,
     aiExportSelectionKey,
@@ -20,7 +21,7 @@ import {
     type AiExportSelectionKind,
 } from './shared';
 
-export type AiExportCompatibilityReasonCode = 'schema_version_mismatch' | 'catalog_version_mismatch' | 'dataset_catalog_mismatch' | 'analysis_catalog_mismatch' | 'selection_version_mismatch' | 'instruction_contract_mismatch' | 'response_contract_mismatch';
+export type AiExportCompatibilityReasonCode = 'schema_version_mismatch' | 'catalog_version_mismatch' | 'dataset_catalog_mismatch' | 'analysis_catalog_mismatch' | 'selection_version_mismatch' | 'selection_metadata_mismatch' | 'instruction_contract_mismatch' | 'response_contract_mismatch';
 
 export interface AiExportCatalogCompatibilityResult {
     readonly status: 'compatible' | 'disabled';
@@ -53,8 +54,13 @@ function analysisContractsMatch(entry: AiExportAnalysisCatalogEntry): boolean {
     return instruction?.id === entry.instruction_template_id && instruction.version === entry.instruction_template_version && responseContract?.id === entry.response_contract_id && responseContract.version === entry.response_contract_version;
 }
 
+function selectionMetadataMatches(entry: AiExportCatalogEntry): boolean {
+    const config = AI_EXPORT_PUBLIC_CATALOG_CONFIG.find((candidate) => candidate.group === entry.kind && candidate.id === entry.id);
+    return config !== undefined && config.domain === entry.domain && config.icon === entry.icon && config.displayI18nKey === entry.display_i18n_key && config.descriptionI18nKey === entry.description_i18n_key;
+}
+
 function compatibleSelection(entry: AiExportCatalogEntry): AiExportCompatibleSelection | undefined {
-    if (entry.version !== AI_EXPORT_SELECTION_VERSION) return undefined;
+    if (entry.version !== AI_EXPORT_SELECTION_VERSION || !selectionMetadataMatches(entry)) return undefined;
     if (entry.kind === 'dataset') {
         if (!isAiExportDatasetId(entry.id)) return undefined;
         return {
@@ -101,6 +107,7 @@ export function reconcileAiExportCatalog(catalog: AiExportBackendCatalogResponse
         const compatible = compatibleSelection(entry);
         if (compatible) selections.push(compatible);
         else if (entry.version !== AI_EXPORT_SELECTION_VERSION) reasons.push('selection_version_mismatch');
+        else if (!selectionMetadataMatches(entry)) reasons.push('selection_metadata_mismatch');
         else if (entry.kind === 'analysis') {
             const instruction = isAiExportAnalysisId(entry.id) ? findAiExportAnalysisInstruction(entry.id) : undefined;
             if (instruction?.id !== entry.instruction_template_id || instruction?.version !== entry.instruction_template_version) reasons.push('instruction_contract_mismatch');
@@ -145,7 +152,9 @@ export async function fetchBackendAiExportCatalog(fetcher: typeof fetch = fetch)
         headers: {Accept: 'application/json'},
     });
     if (!response.ok) throw new AiExportCatalogHttpError(response.status, response.statusText);
-    return schemas.AiExportCatalogResponse.parse(await response.json());
+    const raw = await response.json();
+    const normalized = raw && typeof raw === 'object' && !Array.isArray(raw) && !('catalog_version' in raw) ? {...raw, catalog_version: AI_EXPORT_CATALOG_VERSION} : raw;
+    return schemas.AiExportCatalogResponse.parse(normalized);
 }
 
 export class AiExportCatalogLoader {

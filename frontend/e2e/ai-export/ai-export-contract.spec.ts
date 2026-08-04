@@ -34,10 +34,10 @@ function expectDatasetRequest(payload: Record<string, unknown>, expected: Expect
     expect(payload.selection).toEqual({
         kind: 'dataset',
         id: expected.id,
-        version: 2,
+        version: 3,
     });
     expect(payload.detail_level).toBe('compact');
-    expect(payload.expected_catalog_version).toBe(2);
+    expect(payload.expected_catalog_version).toBe(3);
     expectUppercaseCurrency(payload.target_currency, 'target_currency');
     expectIsoPeriod(payload);
 
@@ -102,13 +102,13 @@ test.describe('AI Export request and clipboard contract', () => {
         await setupAiExportPage(page);
     });
 
-    test('sends V2 Dataset request shape and domain scope across all surfaces', async ({page}) => {
+    test('sends V3 Dataset request shape and domain scope across all surfaces', async ({page}) => {
         await test.step('Portfolio Dataset', async () => {
             await gotoDashboard(page);
-            const payload = await exportDataset(page, 'portfolio.overview');
+            const payload = await exportDataset(page, 'portfolio.overview_and_history');
             expectDatasetRequest(payload, {
                 domain: 'portfolio',
-                id: 'portfolio.overview',
+                id: 'portfolio.overview_and_history',
             });
 
             const clipboard = await waitForClipboard(page, ['Snapshot Metadata and Dataset Manifest', 'Snapshot Data'], 'Portfolio Dataset clipboard was not populated');
@@ -121,10 +121,10 @@ test.describe('AI Export request and clipboard contract', () => {
         await test.step('Broker Dataset', async () => {
             await gotoFirstBroker(page);
             const brokerId = numericScopeId(page, 'brokers');
-            const payload = await captureDatasetRequest(page, 'broker.overview');
+            const payload = await captureDatasetRequest(page, 'broker.overview_and_history');
             expectDatasetRequest(payload, {
                 domain: 'broker',
-                id: 'broker.overview',
+                id: 'broker.overview_and_history',
                 brokerId,
             });
         });
@@ -132,30 +132,30 @@ test.describe('AI Export request and clipboard contract', () => {
         await test.step('Asset Dataset', async () => {
             await gotoSeededAsset(page, ASSET_OVERVIEW_FIXTURE);
             const assetId = numericScopeId(page, 'assets');
-            const payload = await captureDatasetRequest(page, 'asset.overview');
+            const payload = await captureDatasetRequest(page, 'asset.position_and_history');
             expectDatasetRequest(payload, {
                 domain: 'asset',
-                id: 'asset.overview',
+                id: 'asset.position_and_history',
                 assetId,
             });
         });
 
         await test.step('FX Dataset', async () => {
             await gotoFx(page, 'EUR-USD');
-            const payload = await captureDatasetRequest(page, 'fx.overview');
+            const payload = await captureDatasetRequest(page, 'fx.market_and_exposure');
             expectDatasetRequest(payload, {
                 domain: 'fx',
-                id: 'fx.overview',
+                id: 'fx.market_and_exposure',
                 baseCurrency: 'EUR',
                 quoteCurrency: 'USD',
             });
         });
     });
 
-    test('exports real portfolio.market_events_review analysis with full prompt sections', async ({page}) => {
+    test('exports V3 performance-market-drivers analysis with dated research contract', async ({page}) => {
         await gotoDashboard(page);
         await openAiExportPanel(page);
-        await selectAiExportSelection(page, 'analysis', 'portfolio.market_events_review');
+        await selectAiExportSelection(page, 'analysis', 'portfolio.performance_market_drivers');
         await page.getByTestId('ai-export-detail-compact').click();
 
         const notes = 'Review dated drivers, conflicting evidence, and unexplained material moves.';
@@ -165,21 +165,23 @@ test.describe('AI Export request and clipboard contract', () => {
         expect(payload.domain).toBe('portfolio');
         expect(payload.selection).toEqual({
             kind: 'analysis',
-            id: 'portfolio.market_events_review',
-            version: 2,
-            instruction_template_id: 'portfolio.market_events_review.instructions',
-            instruction_template_version: 2,
-            response_contract_id: 'portfolio.market_events_review.response',
-            response_contract_version: 2,
+            id: 'portfolio.performance_market_drivers',
+            version: 3,
+            instruction_template_id: 'portfolio.performance_market_drivers.instructions',
+            instruction_template_version: 3,
+            response_contract_id: 'portfolio.performance_market_drivers.response',
+            response_contract_version: 3,
         });
         expect(payload.detail_level).toBe('compact');
-        expect(payload.expected_catalog_version).toBe(2);
+        expect(payload.expected_catalog_version).toBe(3);
         expect(payload).not.toHaveProperty('broker_ids');
         expectUppercaseCurrency(payload.target_currency, 'target_currency');
         expectIsoPeriod(payload);
 
-        const clipboard = await waitForClipboard(page, ['Analysis Objective', 'Response Contract', 'Snapshot Data', 'Response Language', 'User Notes', notes], 'Market-events Analysis clipboard was not populated');
-        expect(clipboard).toContain('Relate material portfolio asset movements to dated current news and public events without claiming unsupported causality.');
+        const clipboard = await waitForClipboard(page, ['Analysis Objective', 'Response Contract', 'Snapshot Data', 'Response Language', 'User Notes', notes], 'Performance-market-drivers Analysis clipboard was not populated');
+        expect(clipboard).toContain('assess dated market drivers for every held Asset without overstating causality');
+        expect(clipboard).toContain('supported, plausible, inferred, speculative, or unexplained');
+        expect(clipboard).toContain('Per-Asset Short- and Long-Horizon Thesis');
         expect(clipboard).toContain('Please provide your answer in: English.');
     });
 });

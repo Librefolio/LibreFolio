@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import hashlib
+import html
 import json
 import os
 import platform
@@ -48,6 +49,104 @@ DEFAULT_USERS = ("alfy", "marco")
 DEFAULT_REPRESENTATIVE_USER = "marco"
 DEFAULT_PERIODS = ("3M", "6M", "1Y")
 DEFAULT_DETAILS = ("compact", "standard", "full")
+PUBLIC_CATALOG_V3_PROFILE = "public-catalog-v3"
+PUBLIC_CATALOG_V3_PERIODS = ("3M", "1Y")
+PUBLIC_CATALOG_V3_DATASETS = (
+    "portfolio.overview_and_history",
+    "portfolio.asset_history",
+    "broker.overview_and_history",
+    "broker.asset_history",
+    "asset.position_and_history",
+    "asset.market_history",
+    "fx.market_and_exposure",
+    "fx.market_history",
+)
+PUBLIC_CATALOG_V3_ANALYSES = (
+    "portfolio.pac_planning",
+    "portfolio.rebalancing",
+    "portfolio.performance_market_drivers",
+    "portfolio.fiscal_lots",
+    "broker.review",
+    "broker.performance_market_drivers",
+    "broker.fiscal_lots",
+    "asset.position_review",
+    "asset.market_analysis",
+    "fx.pair_analysis",
+    "fx.exposure_impact",
+)
+PUBLIC_CATALOG_V3_SELECTIONS = PUBLIC_CATALOG_V3_DATASETS + PUBLIC_CATALOG_V3_ANALYSES
+PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT = len(PUBLIC_CATALOG_V3_SELECTIONS) * len(PUBLIC_CATALOG_V3_PERIODS) * len(DEFAULT_DETAILS)
+PROMPT_CATEGORY_CLASSES = (
+    "financial",
+    "financial_with_context",
+    "explicit_technical",
+    "fifo",
+    "fx",
+    "unavailable_partial",
+)
+COMPOSITION_COMPONENTS = (
+    "financial",
+    "technical",
+    "coverage/provenance",
+    "instructions/contracts",
+)
+DISTRIBUTION_PERCENTILES = (10, 25, 75, 90, 95, 99)
+NAMED_PROMPT_RETENTION: Mapping[tuple[str, str, str], tuple[str, ...]] = {
+    ("portfolio.overview_and_history", "3M", "compact"): ("named_portfolio_general_3m_compact",),
+    ("portfolio.overview_and_history", "3M", "standard"): ("named_portfolio_general_3m_standard",),
+    ("portfolio.overview_and_history", "3M", "full"): ("named_portfolio_general_3m_full",),
+    ("portfolio.overview_and_history", "1Y", "standard"): ("named_portfolio_general_1y_standard",),
+    ("portfolio.overview_and_history", "1Y", "full"): ("named_portfolio_general_1y_full",),
+    ("portfolio.asset_history", "3M", "standard"): ("named_portfolio_detailed_3m_standard",),
+    ("portfolio.asset_history", "1Y", "compact"): ("named_portfolio_detailed_1y_compact",),
+    ("portfolio.asset_history", "1Y", "standard"): ("named_portfolio_detailed_1y_standard",),
+    ("portfolio.pac_planning", "3M", "standard"): ("named_portfolio_pac_3m_standard",),
+    ("portfolio.rebalancing", "1Y", "standard"): ("named_portfolio_rebalancing_1y_standard",),
+    ("portfolio.performance_market_drivers", "3M", "standard"): ("named_portfolio_performance_drivers_3m_standard",),
+    ("portfolio.fiscal_lots", "1Y", "standard"): ("named_portfolio_fiscal_lots_1y_standard",),
+    ("broker.overview_and_history", "3M", "standard"): ("named_broker_general_3m_standard",),
+    ("broker.overview_and_history", "1Y", "standard"): ("named_broker_general_1y_standard",),
+    ("broker.asset_history", "3M", "standard"): ("named_broker_detailed_3m_standard",),
+    ("broker.review", "3M", "standard"): ("named_broker_review_3m_standard",),
+    ("broker.performance_market_drivers", "3M", "standard"): ("named_broker_performance_drivers_3m_standard",),
+    ("broker.fiscal_lots", "1Y", "standard"): ("named_broker_fiscal_lots_1y_standard",),
+    ("asset.position_and_history", "3M", "standard"): ("named_asset_general_3m_standard",),
+    ("asset.position_and_history", "1Y", "full"): ("named_asset_general_1y_full",),
+    ("asset.market_history", "3M", "standard"): ("named_asset_detailed_3m_standard",),
+    ("asset.position_review", "1Y", "standard"): ("named_asset_position_review_1y_standard",),
+    ("asset.market_analysis", "3M", "standard"): ("named_asset_market_analysis_3m_standard",),
+    ("fx.market_and_exposure", "3M", "standard"): ("named_fx_general_3m_standard",),
+    ("fx.market_and_exposure", "1Y", "full"): ("named_fx_general_1y_full",),
+    ("fx.market_history", "3M", "standard"): ("named_fx_detailed_3m_standard",),
+    ("fx.pair_analysis", "3M", "standard"): ("named_fx_pair_analysis_3m_standard",),
+    ("fx.exposure_impact", "3M", "standard"): ("named_fx_exposure_impact_3m_standard",),
+}
+EXPLICIT_TECHNICAL_SELECTIONS = frozenset(
+    {
+        "portfolio.asset_history",
+        "broker.asset_history",
+        "asset.market_history",
+        "portfolio.performance_market_drivers",
+        "broker.performance_market_drivers",
+        "asset.market_analysis",
+        "fx.market_history",
+        "fx.pair_analysis",
+    }
+)
+FINANCIAL_WITH_CONTEXT_SELECTIONS = frozenset(
+    {
+        "portfolio.overview_and_history",
+        "broker.overview_and_history",
+        "asset.position_and_history",
+        "fx.market_and_exposure",
+        "portfolio.pac_planning",
+        "portfolio.rebalancing",
+        "broker.review",
+        "asset.position_review",
+        "fx.exposure_impact",
+    }
+)
+FIFO_SELECTIONS = frozenset({"portfolio.fiscal_lots", "broker.fiscal_lots"})
 SEMANTIC_V2_NEW_DATASETS = frozenset(
     {
         "portfolio.technical_summary",
@@ -882,7 +981,7 @@ def audit_snapshot_semantics(
         "legacy_fx_ref": r"\bFX[1-9]\d*\b",
         "database_lot_id": r"\b(?:lot_id|opening_transaction_id)\b",
         "unmapped_entity_ref": r"\b(?:asset_unmapped|broker_unmapped):",
-        "raw_ratio_weight_name": r"\b(?:portfolio_weight_ratio|technical_normalized_weight_ratio|eligible_portfolio_weight_ratio|covered_portfolio_weight_ratio|covered_weight_ratio|coverage_ratio|return_1m_ratio|return_3m_ratio|return_period_ratio|daily_return_volatility_ratio)\b",
+        "raw_ratio_weight_name": r"\b(?:portfolio_weight_ratio|technical_normalized_weight_ratio|eligible_portfolio_weight_ratio|covered_portfolio_weight_ratio|covered_weight_ratio|eligible_current_scope_weight_ratio|covered_current_scope_weight_ratio|excluded_current_scope_weight_ratio|coverage_ratio|return_1m_ratio|return_3m_ratio|return_30d_ratio|return_91d_ratio|return_period_ratio|daily_return_volatility_ratio)\b",
         "deprecated_hhi_percent": r"\bherfindahl_index_percent\b",
     }
     prompt_pattern_counts = {name: len(re.findall(pattern, prompt)) for name, pattern in forbidden_prompt_patterns.items()}
@@ -1162,6 +1261,48 @@ def tuning_v2_cases(
     return build_period_detail_matrix(periods=periods, details=details)
 
 
+def public_catalog_v3_selections(
+    selections: Sequence[Mapping[str, object]],
+    *,
+    mode: str | None = None,
+    domain: str | None = None,
+) -> list[dict[str, object]]:
+    """Select the exact public V3 catalog, failing closed when an expected entry is absent."""
+    by_id = {str(selection.get("id")): dict(selection) for selection in selections}
+    expected = [selection_id for selection_id in PUBLIC_CATALOG_V3_SELECTIONS if (mode is None or ("data" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis") == mode) and (domain is None or selection_id.startswith(f"{domain}."))]
+    missing = [selection_id for selection_id in expected if selection_id not in by_id]
+    if missing:
+        raise ProbeError(f"Public catalog V3 selections absent from runtime catalog: {missing}")
+    selected = [by_id[selection_id] for selection_id in expected]
+    for selection in selected:
+        expected_kind = "dataset" if str(selection["id"]) in PUBLIC_CATALOG_V3_DATASETS else "analysis"
+        if selection.get("kind") != expected_kind:
+            raise ProbeError(f"Public catalog V3 selection has wrong kind: {selection.get('id')}")
+        if str(selection.get("domain")) != str(selection["id"]).partition(".")[0]:
+            raise ProbeError(f"Public catalog V3 selection has wrong domain: {selection.get('id')}")
+        supported_details = {str(detail) for detail in selection.get("supported_detail_levels", DEFAULT_DETAILS)}
+        if not set(DEFAULT_DETAILS) <= supported_details:
+            raise ProbeError(f"Public catalog V3 selection lacks compact/standard/full support: {selection.get('id')}")
+    return selected
+
+
+def public_catalog_v3_cases(
+    selection: Mapping[str, object],
+    *,
+    period_filter: str | None = None,
+    detail_filter: str | None = None,
+) -> list[dict[str, object]]:
+    """Return the exact 3M/1Y × compact/standard/full V3 matrix for one public selection."""
+    selection_id = str(selection.get("id") or "")
+    if selection_id not in PUBLIC_CATALOG_V3_SELECTIONS:
+        raise ProbeError(f"Selection is outside public catalog V3: {selection_id}")
+    periods = (period_filter,) if period_filter else PUBLIC_CATALOG_V3_PERIODS
+    if any(period not in PUBLIC_CATALOG_V3_PERIODS for period in periods):
+        raise ProbeError("Public catalog V3 supports only 3M and 1Y periods")
+    details = (detail_filter,) if detail_filter else DEFAULT_DETAILS
+    return build_period_detail_matrix(periods=periods, details=details)
+
+
 def representative_scopes(scopes: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
     selected: list[dict[str, object]] = []
     portfolio = next(
@@ -1189,6 +1330,34 @@ def representative_scopes(scopes: Sequence[Mapping[str, object]]) -> list[dict[s
         )
         if scope is not None:
             selected.append(scope)
+    return selected
+
+
+def public_catalog_v3_scope(scopes: Sequence[Mapping[str, object]], selection: Mapping[str, object]) -> dict[str, object] | None:
+    """Choose one deterministic scope per V3 selection without adding Cartesian scope cases."""
+    domain = str(selection.get("domain") or "")
+    if domain == "portfolio":
+        selected = next((dict(scope) for scope in scopes if scope.get("domain") == "portfolio" and scope.get("scope_alias") == "all"), None)
+        if selected is not None:
+            selected["profile_selection_reason"] = "portfolio_all_accessible_brokers"
+        return selected
+    if domain == "broker":
+        candidates = [dict(scope) for scope in scopes if scope.get("domain") == "broker"]
+        if not candidates:
+            return None
+        selected = min(
+            candidates,
+            key=lambda scope: (
+                -int(scope.get("inventory", {}).get("position_count", 0) if isinstance(scope.get("inventory"), Mapping) else 0),
+                str(scope.get("custom_start") or "9999-12-31"),
+                str(scope.get("scope_alias")),
+            ),
+        )
+        selected["profile_selection_reason"] = "most_positions_then_longest_history_then_scope_key"
+        return selected
+    selected = next((dict(scope) for scope in scopes if scope.get("domain") == domain), None)
+    if selected is not None:
+        selected["profile_selection_reason"] = "longest_history_at_least_configured_minimum_then_observations_key"
     return selected
 
 
@@ -1296,6 +1465,185 @@ def scan_generated_files(paths: Iterable[Path], actual_secrets: Iterable[str] = 
 
 def stable_metric_key(metric: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(str(metric.get(field, "")) for field in ("user_alias", "mode", "domain", "selection_id", "scope_alias", "period_label", "detail_level"))
+
+
+def stable_metric_key_text(metric: Mapping[str, object]) -> str:
+    return "|".join(stable_metric_key(metric))
+
+
+def _metric_is_unavailable_or_partial(metric: Mapping[str, object]) -> bool:
+    if metric.get("status") == "skipped":
+        return True
+    omitted = metric.get("optional_datasets_omitted")
+    if isinstance(omitted, list) and omitted:
+        return True
+    diagnostics = metric.get("technical_diagnostics")
+    if isinstance(diagnostics, Mapping):
+        coverage = diagnostics.get("history_coverage")
+        if isinstance(coverage, Mapping) and coverage.get("complete") is False:
+            return True
+        if any(int(diagnostics.get(field) or 0) > 0 for field in ("signal_partial_count", "signal_unavailable_count", "signal_failed_count")):
+            return True
+    adequacy = metric.get("targeted_adequacy_diagnostics")
+    if isinstance(adequacy, Mapping) and int(adequacy.get("unavailable_ratio_count") or 0) > 0:
+        return True
+    return False
+
+
+def classify_prompt_category(metric: Mapping[str, object]) -> tuple[str, list[str]]:
+    """Return one primary prompt class plus deterministic supporting tags."""
+    selection_id = str(metric.get("selection_id") or "")
+    domain = str(metric.get("domain") or selection_id.partition(".")[0])
+    tags: list[str] = []
+    if selection_id in FIFO_SELECTIONS:
+        tags.append("fifo")
+    if domain == "fx":
+        tags.append("fx")
+    if selection_id in EXPLICIT_TECHNICAL_SELECTIONS:
+        tags.append("explicit_technical")
+    if selection_id in FINANCIAL_WITH_CONTEXT_SELECTIONS:
+        tags.append("financial_with_context")
+    if not tags:
+        tags.append("financial")
+    if _metric_is_unavailable_or_partial(metric):
+        tags.append("unavailable_partial")
+    ordered_tags = [category for category in PROMPT_CATEGORY_CLASSES if category in tags]
+    primary = next(
+        (
+            category
+            for category in (
+                "unavailable_partial",
+                "fifo",
+                "fx",
+                "explicit_technical",
+                "financial_with_context",
+                "financial",
+            )
+            if category in ordered_tags
+        ),
+        "financial",
+    )
+    return primary, ordered_tags
+
+
+def apply_prompt_category(metric: dict[str, object]) -> None:
+    primary, tags = classify_prompt_category(metric)
+    metric["category"] = primary
+    metric["category_tags"] = tags
+
+
+def _breakdown_chars(value: object) -> int:
+    return int(value.get("unicode_characters") or 0) if isinstance(value, Mapping) else 0
+
+
+def measure_prompt_composition(breakdown: Mapping[str, object], rendered_chars: int) -> dict[str, object]:
+    """Classify official renderer diagnostic blocks without rendering a second prompt."""
+    sources: dict[str, list[dict[str, object]]] = {component: [] for component in COMPOSITION_COMPONENTS}
+
+    def add(component: str, source_id: str, chars: int) -> None:
+        if chars > 0:
+            sources[component].append({"source": source_id, "chars": chars})
+
+    sections = [row for row in breakdown.get("sections", []) if isinstance(row, Mapping)]
+    for section in sections:
+        section_id = str(section.get("id") or "")
+        if section_id in {"snapshot_metadata", "snapshot_data"}:
+            continue
+        add("instructions/contracts", f"section:{section_id}", _breakdown_chars(section))
+
+    component_rows = [row for row in breakdown.get("snapshot_data_components", []) if isinstance(row, Mapping)]
+    for row in component_rows:
+        component_id = str(row.get("id") or "")
+        renderer_category = str(row.get("category") or "")
+        if "coverage" in component_id or "provenance" in component_id or renderer_category == "technical_coverage":
+            composition_component = "coverage/provenance"
+        elif renderer_category.startswith("technical_"):
+            composition_component = "technical"
+        else:
+            composition_component = "financial"
+        add(composition_component, f"component:{component_id}", _breakdown_chars(row))
+
+    snapshot_metadata = next((row for row in sections if row.get("id") == "snapshot_metadata"), None)
+    add("coverage/provenance", "section:snapshot_metadata", _breakdown_chars(snapshot_metadata))
+    add("coverage/provenance", "wrapper:snapshot_data", _breakdown_chars(breakdown.get("snapshot_data_wrapper")))
+    add("instructions/contracts", "separators", _breakdown_chars(breakdown.get("separators")))
+
+    measured_total = sum(int(source["chars"]) for rows in sources.values() for source in rows)
+    residual = rendered_chars - measured_total
+    if residual:
+        add("instructions/contracts", "renderer_reconciliation_residual", residual)
+    measured_total = sum(int(source["chars"]) for rows in sources.values() for source in rows)
+
+    components: dict[str, dict[str, object]] = {}
+    for component in COMPOSITION_COMPONENTS:
+        rows = sorted(sources[component], key=lambda row: (-int(row["chars"]), str(row["source"])))
+        chars = sum(int(row["chars"]) for row in rows)
+        dominant = rows[0] if rows else None
+        components[component] = {
+            "chars": chars,
+            "percent": chars / rendered_chars * 100 if rendered_chars else 0.0,
+            "dominant_source": dominant["source"] if dominant else None,
+            "dominant_source_chars": dominant["chars"] if dominant else 0,
+        }
+    dominant_component = max(
+        COMPOSITION_COMPONENTS,
+        key=lambda component: (int(components[component]["chars"]), -COMPOSITION_COMPONENTS.index(component)),
+    )
+    return {
+        "method": "official_frontend_renderer_breakdown_v1",
+        "total_chars": rendered_chars,
+        "classified_chars": measured_total,
+        "reconciles": measured_total == rendered_chars,
+        "components": components,
+        "dominant_component": dominant_component,
+    }
+
+
+def nearest_rank_percentile(values: Sequence[float | int], percentile: int) -> float | None:
+    """Nearest-rank percentile: ceil(P/100*N), with sorted numeric values."""
+    if not 0 <= percentile <= 100:
+        raise ValueError("Percentile must be between 0 and 100")
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    index = max(0, (len(ordered) * percentile + 99) // 100 - 1)
+    return ordered[index]
+
+
+def nearest_metric_entry(entries: Sequence[Mapping[str, object]], target_chars: float) -> Mapping[str, object] | None:
+    """Choose nearest measured prompt; equal distance resolves by stable metric key."""
+    candidates = [entry for entry in entries if entry.get("status") == "ok" and isinstance(entry.get("rendered_prompt_chars"), int)]
+    return min(candidates, key=lambda entry: (abs(int(entry["rendered_prompt_chars"]) - target_chars), stable_metric_key(entry)), default=None)
+
+
+def select_prompt_retention_reasons(entries: Sequence[Mapping[str, object]]) -> dict[str, list[str]]:
+    """Return deduplicated named + global representative retention reasons."""
+    successful = [entry for entry in entries if entry.get("status") == "ok" and isinstance(entry.get("rendered_prompt_chars"), int)]
+    reasons: defaultdict[str, list[str]] = defaultdict(list)
+    for entry in sorted(successful, key=stable_metric_key):
+        named = NAMED_PROMPT_RETENTION.get(
+            (
+                str(entry.get("selection_id") or ""),
+                str(entry.get("period_label") or ""),
+                str(entry.get("detail_level") or ""),
+            ),
+            (),
+        )
+        reasons[stable_metric_key_text(entry)].extend(named)
+    if not successful:
+        return {}
+    chars = [int(entry["rendered_prompt_chars"]) for entry in successful]
+    targets: list[tuple[str, float]] = [
+        ("global_minimum", float(min(chars))),
+        ("global_maximum", float(max(chars))),
+        ("global_median", float(statistics.median(chars))),
+        *[(f"global_p{percentile}", float(nearest_rank_percentile(chars, percentile) or 0)) for percentile in DISTRIBUTION_PERCENTILES],
+    ]
+    for reason, target in targets:
+        selected = nearest_metric_entry(successful, target)
+        if selected is not None:
+            reasons[stable_metric_key_text(selected)].append(reason)
+    return {key: list(dict.fromkeys(values)) for key, values in sorted(reasons.items()) if values}
 
 
 def _id_set(metric: Mapping[str, object], field: str) -> set[str]:
@@ -1918,13 +2266,15 @@ def _scope_history(connection: sqlite3.Connection, broker_ids: Sequence[int]) ->
     return (str(earliest) if earliest else None, latest)
 
 
-def _scope_inventory(connection: sqlite3.Connection, broker_ids: Sequence[int]) -> dict[str, int]:
+def _scope_inventory(connection: sqlite3.Connection, broker_ids: Sequence[int], *, snapshot_as_of: str | None = None) -> dict[str, int]:
     if not broker_ids:
         return {
             "scoped_broker_count": 0,
             "position_count": 0,
             "unique_held_asset_count": 0,
             "duplicate_asset_legs": 0,
+            "recorded_cost_transaction_count": 0,
+            "recorded_cost_transaction_count_1y": 0,
         }
     placeholders = ",".join("?" for _ in broker_ids)
     rows = connection.execute(
@@ -1941,11 +2291,29 @@ def _scope_inventory(connection: sqlite3.Connection, broker_ids: Sequence[int]) 
     for row in rows:
         asset_id = int(row["asset_id"])
         per_asset[asset_id] = per_asset.get(asset_id, 0) + 1
+    recorded_cost_transaction_count = int(
+        connection.execute(
+            f"SELECT COUNT(*) FROM transactions WHERE broker_id IN ({placeholders}) AND type IN ('FEE', 'TAX')",
+            tuple(broker_ids),
+        ).fetchone()[0]
+    )
+    recorded_cost_transaction_count_1y = (
+        int(
+            connection.execute(
+                f"SELECT COUNT(*) FROM transactions WHERE broker_id IN ({placeholders}) AND type IN ('FEE', 'TAX') AND date >= date(?, '-1 year') AND date <= date(?)",
+                (*broker_ids, snapshot_as_of, snapshot_as_of),
+            ).fetchone()[0]
+        )
+        if snapshot_as_of
+        else recorded_cost_transaction_count
+    )
     return {
         "scoped_broker_count": len(broker_ids),
         "position_count": len(rows),
         "unique_held_asset_count": len(per_asset),
         "duplicate_asset_legs": sum(max(0, count - 1) for count in per_asset.values()),
+        "recorded_cost_transaction_count": recorded_cost_transaction_count,
+        "recorded_cost_transaction_count_1y": recorded_cost_transaction_count_1y,
     }
 
 
@@ -2015,8 +2383,8 @@ def collect_user_inventory(database_path: Path, username: str, *, minimum_fx_his
         )
         broker_histories = {broker_id: _scope_history(connection, [broker_id]) for broker_id in broker_ids}
         scope_inventories = {
-            "all": _scope_inventory(connection, broker_ids),
-            **{broker_id: _scope_inventory(connection, [broker_id]) for broker_id in broker_ids},
+            "all": _scope_inventory(connection, broker_ids, snapshot_as_of=all_end),
+            **{broker_id: _scope_inventory(connection, [broker_id], snapshot_as_of=all_end) for broker_id in broker_ids},
         }
     inventory = {
         "accessible_broker_count": len(broker_ids),
@@ -2185,7 +2553,7 @@ def _base_metric(
     case: Mapping[str, object],
 ) -> dict[str, object]:
     kind = str(selection["kind"])
-    return {
+    metric: dict[str, object] = {
         "run_id": run_id,
         "user_alias": user_alias,
         "mode": "data" if kind == "dataset" else "analysis",
@@ -2201,6 +2569,7 @@ def _base_metric(
         "scope_alias": scope["scope_alias"],
         "scope_id": scope["scope_alias"],
         "scope_inventory": dict(scope.get("inventory", {})) if isinstance(scope.get("inventory"), dict) else {},
+        "scope_selection_reason": scope.get("profile_selection_reason"),
         "period_label": case["period_label"],
         "period_start": None,
         "period_end": None,
@@ -2226,6 +2595,8 @@ def _base_metric(
         "canonical_dataset_attribution_policy": None,
         "canonical_file": None,
         "prompt_file": None,
+        "retained": False,
+        "retention_reasons": [],
         "rendered_prompt_chars": None,
         "rendered_prompt_bytes": None,
         "rendered_prompt_lines": None,
@@ -2243,6 +2614,9 @@ def _base_metric(
         "largest_dataset_chars": None,
         "technical_chars": None,
         "technical_percentage": None,
+        "category": None,
+        "category_tags": [],
+        "composition": None,
         "renderer_prompt_sha256": None,
         "section_breakdown": None,
         "metadata_field_breakdown": None,
@@ -2262,6 +2636,8 @@ def _base_metric(
         "manifest_impact": None,
         "manifest_shape_expectation": None,
     }
+    apply_prompt_category(metric)
+    return metric
 
 
 def _missing_scope_metrics(
@@ -2292,6 +2668,12 @@ def _missing_scope_metrics(
             period_filter=period_filter,
             detail_filter=detail_filter,
         )
+    elif profile == PUBLIC_CATALOG_V3_PROFILE:
+        cases = public_catalog_v3_cases(
+            selection,
+            period_filter=period_filter,
+            detail_filter=detail_filter,
+        )
     else:
         cases = build_period_detail_matrix(
             periods=((period_filter,) if period_filter else DEFAULT_PERIODS),
@@ -2309,6 +2691,7 @@ def _missing_scope_metrics(
                 "manifest_shape_expectation": manifest_shape,
             }
         )
+        apply_prompt_category(metric)
         metrics.append(metric)
     return metrics
 
@@ -2339,6 +2722,7 @@ def _run_case(
     response_language: str,
     actual_secrets: Iterable[str],
     manifest_shape: str,
+    stage_prompt: bool = False,
 ) -> tuple[dict[str, object], dict[str, object] | None]:
     metric = _base_metric(run_id, user_alias, selection, scope, case)
     metric["manifest_shape_expectation"] = manifest_shape
@@ -2371,6 +2755,7 @@ def _run_case(
             failure = classify_http_failure(response.status_code, payload, str(selection["domain"]))
             failure["failure_message_sanitized"] = sanitize_error(str(failure["failure_message_sanitized"]), actual_secrets)
             metric.update(failure)
+            apply_prompt_category(metric)
             return metric, dict(metric)
         snapshot = payload
         canonical = canonical_json(snapshot)
@@ -2466,6 +2851,9 @@ def _run_case(
             default={},
         )
         technical_chars = sum(int(row.get("unicode_characters") or 0) for row in component_rows if str(row.get("category") or "").startswith("technical_"))
+        composition = measure_prompt_composition(breakdown, rendered_chars)
+        if composition["reconciles"] is not True:
+            raise ProbeError("Frontend composition breakdown does not reconcile")
         public_output_checks = audit_snapshot_semantics(snapshot, prompt, rendered)
         if public_output_checks["violations"]:
             raise ProbeError("Public output checks failed: " + "; ".join(str(item) for item in public_output_checks["violations"]))
@@ -2478,7 +2866,7 @@ def _run_case(
                 "optional_datasets_included": sorted(optional & included),
                 "optional_datasets_omitted": sorted(optional - included),
                 "required_datasets_missing": [],
-                "prompt_file": str(prompt_path.relative_to(artifact_root)),
+                **({"_staged_prompt_file": str(prompt_path.relative_to(artifact_root))} if stage_prompt else {"prompt_file": str(prompt_path.relative_to(artifact_root))}),
                 "rendered_prompt_chars": rendered_chars,
                 "rendered_prompt_bytes": file_measurement["bytes"],
                 "rendered_prompt_lines": file_measurement["lines"],
@@ -2496,6 +2884,7 @@ def _run_case(
                 "largest_dataset_chars": largest_dataset.get("unicode_characters"),
                 "technical_chars": technical_chars,
                 "technical_percentage": (technical_chars / rendered_chars * 100 if rendered_chars else 0.0),
+                "composition": composition,
                 "renderer_prompt_sha256": file_measurement["renderer_sha256"],
                 "section_breakdown": breakdown.get("sections"),
                 "metadata_field_breakdown": breakdown.get("snapshot_metadata_fields"),
@@ -2522,11 +2911,13 @@ def _run_case(
                 "targeted_adequacy_diagnostics": measure_targeted_adequacy_diagnostics(str(selection["id"]), prompt),
             }
         )
+        apply_prompt_category(metric)
         return metric, None
     except Exception as error:
         metric["status"] = "failed"
         metric["failure_code"] = type(error).__name__
         metric["failure_message_sanitized"] = sanitize_error(error, actual_secrets)
+        apply_prompt_category(metric)
         return metric, dict(metric)
 
 
@@ -2567,14 +2958,6 @@ def _median(values: Iterable[int]) -> float | None:
     return statistics.median(materialized) if materialized else None
 
 
-def _nearest_rank_percentile(values: Sequence[float], percentile: int) -> float | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    index = max(0, (len(ordered) * percentile + 99) // 100 - 1)
-    return ordered[index]
-
-
 def _entry_tokens(entry: Mapping[str, object]) -> float:
     return float(entry.get("rendered_prompt_estimated_token_equivalent") or 0)
 
@@ -2592,19 +2975,57 @@ def _entry_descriptor(entry: Mapping[str, object]) -> dict[str, object]:
         "very_heavy": entry.get("very_heavy"),
         "largest_section": entry.get("largest_section_id"),
         "technical_percentage": entry.get("technical_percentage"),
+        "category": entry.get("category"),
+        "retained": entry.get("retained"),
         "prompt_file": entry.get("prompt_file"),
+    }
+
+
+def numeric_distribution_stats(values: Sequence[float | int]) -> dict[str, float | int | None]:
+    materialized = [float(value) for value in values]
+    if not materialized:
+        return {
+            "count": 0,
+            "minimum": None,
+            "maximum": None,
+            "mean": None,
+            "median": None,
+            "p10": None,
+            "p25": None,
+            "p75": None,
+            "p90": None,
+            "p95": None,
+            "p99": None,
+            "iqr": None,
+            "population_stdev": None,
+        }
+    p25 = nearest_rank_percentile(materialized, 25)
+    p75 = nearest_rank_percentile(materialized, 75)
+    return {
+        "count": len(materialized),
+        "minimum": min(materialized),
+        "maximum": max(materialized),
+        "mean": statistics.fmean(materialized),
+        "median": statistics.median(materialized),
+        "p10": nearest_rank_percentile(materialized, 10),
+        "p25": p25,
+        "p75": p75,
+        "p90": nearest_rank_percentile(materialized, 90),
+        "p95": nearest_rank_percentile(materialized, 95),
+        "p99": nearest_rank_percentile(materialized, 99),
+        "iqr": (p75 - p25) if p25 is not None and p75 is not None else None,
+        "population_stdev": statistics.pstdev(materialized),
     }
 
 
 def _distribution_stats(entries: Sequence[Mapping[str, object]]) -> dict[str, object]:
     tokens = [_entry_tokens(entry) for entry in entries]
+    characters = [int(entry.get("rendered_prompt_chars") or 0) for entry in entries]
     categories = {category: sum(1 for entry in entries if metric_size_category(entry) == category) for category in ("light", "medium", "heavy")}
     return {
-        "count": len(entries),
-        "minimum": min(tokens, default=None),
-        "median": statistics.median(tokens) if tokens else None,
-        "p90": _nearest_rank_percentile(tokens, 90),
-        "maximum": max(tokens, default=None),
+        **numeric_distribution_stats(tokens),
+        "value_metric": "rendered_prompt_estimated_token_equivalent_chars_div_4",
+        "rendered_characters": numeric_distribution_stats(characters),
         "light": categories["light"],
         "medium": categories["medium"],
         "heavy": categories["heavy"],
@@ -2717,13 +3138,58 @@ def build_dimension_summary(entries: Sequence[Mapping[str, object]]) -> dict[str
         "overall": _distribution_stats(successful),
         "category_distribution": category_distribution,
         "by_mode": _group_distributions(successful, "mode"),
+        "by_type": _group_distributions(successful, "selection_kind"),
         "by_domain": _group_distributions(successful, "domain"),
+        "by_category": _group_distributions(successful, "category"),
         "by_detail": _group_distributions(successful, "detail_level"),
         "by_period": _group_distributions(successful, "period_label"),
         "by_comparison_cohort": _group_distributions(successful, "comparison_cohort"),
         "representatives": representatives,
         "analyses": analyses,
         "datasets": datasets,
+    }
+
+
+def build_composition_summary(entries: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    successful = [entry for entry in entries if entry.get("status") == "ok" and isinstance(entry.get("composition"), Mapping)]
+    totals = dict.fromkeys(COMPOSITION_COMPONENTS, 0)
+    source_totals: dict[str, defaultdict[str, int]] = {component: defaultdict(int) for component in COMPOSITION_COMPONENTS}
+    total_chars = 0
+    for entry in successful:
+        composition = entry["composition"]
+        if not isinstance(composition, Mapping):
+            continue
+        total_chars += int(composition.get("total_chars") or 0)
+        components = composition.get("components")
+        if not isinstance(components, Mapping):
+            continue
+        for component in COMPOSITION_COMPONENTS:
+            row = components.get(component)
+            if not isinstance(row, Mapping):
+                continue
+            chars = int(row.get("chars") or 0)
+            totals[component] += chars
+            source = row.get("dominant_source")
+            if source is not None:
+                source_totals[component][str(source)] += int(row.get("dominant_source_chars") or 0)
+    components: dict[str, dict[str, object]] = {}
+    for component in COMPOSITION_COMPONENTS:
+        dominant_source = min(
+            source_totals[component],
+            key=lambda source: (-source_totals[component][source], source),
+            default=None,
+        )
+        components[component] = {
+            "chars": totals[component],
+            "percent": totals[component] / total_chars * 100 if total_chars else 0.0,
+            "dominant_source": dominant_source,
+            "dominant_source_chars": source_totals[component][dominant_source] if dominant_source is not None else 0,
+        }
+    return {
+        "prompt_count": len(successful),
+        "total_chars": total_chars,
+        "components": components,
+        "dominant_component": max(COMPOSITION_COMPONENTS, key=lambda component: (totals[component], -COMPOSITION_COMPONENTS.index(component))) if successful else None,
     }
 
 
@@ -2809,6 +3275,299 @@ def build_quality_summary(entries: Sequence[Mapping[str, object]]) -> dict[str, 
     }
 
 
+def mark_direct_prompt_retention(entries: Sequence[dict[str, object]], reason: str) -> None:
+    for entry in entries:
+        retained = entry.get("status") == "ok" and isinstance(entry.get("prompt_file"), str)
+        entry["retained"] = retained
+        entry["retention_reasons"] = [reason] if retained else []
+
+
+def collect_staged_prompt_paths(entries: Sequence[dict[str, object]], artifact_root: Path) -> dict[str, Path]:
+    staged: dict[str, Path] = {}
+    for entry in entries:
+        relative = entry.pop("_staged_prompt_file", None)
+        if not isinstance(relative, str):
+            continue
+        key = stable_metric_key_text(entry)
+        if key in staged:
+            raise ProbeError(f"Duplicate staged prompt stable key: {key}")
+        staged[key] = artifact_root / relative
+    return staged
+
+
+def finalize_public_catalog_prompt_retention(
+    entries: Sequence[dict[str, object]],
+    staged_paths: Mapping[str, Path],
+    *,
+    artifact_root: Path,
+    prompts_dir: Path,
+    allow_retention: bool,
+) -> dict[str, list[str]]:
+    retention_reasons = select_prompt_retention_reasons(entries)
+    for entry in entries:
+        key = stable_metric_key_text(entry)
+        reasons = retention_reasons.get(key, [])
+        entry["retained"] = False
+        entry["retention_reasons"] = reasons
+        entry["prompt_file"] = None
+        source = staged_paths.get(key)
+        if not allow_retention or not reasons or source is None or not source.is_file():
+            continue
+        mode_dir = "data" if entry.get("mode") == "data" else "analysis"
+        destination = prompts_dir / mode_dir / source.name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        source.replace(destination)
+        entry["retained"] = True
+        entry["prompt_file"] = str(destination.relative_to(artifact_root))
+    return retention_reasons
+
+
+def build_retained_prompt_manifest(
+    entries: Sequence[Mapping[str, object]],
+    *,
+    run_id: str,
+    retention_reasons: Mapping[str, Sequence[str]],
+    retention_blocked: bool = False,
+) -> dict[str, object]:
+    retained_entries = [
+        {
+            "stable_key": stable_metric_key_text(entry),
+            "prompt_path": entry.get("prompt_file"),
+            "reasons": list(entry.get("retention_reasons", [])) if isinstance(entry.get("retention_reasons"), list) else [],
+            "chars": entry.get("rendered_prompt_chars"),
+            "bytes": entry.get("rendered_prompt_bytes"),
+            "sha256": entry.get("rendered_prompt_sha256"),
+            "category": entry.get("category"),
+            "category_tags": entry.get("category_tags"),
+        }
+        for entry in sorted(entries, key=stable_metric_key)
+        if entry.get("retained") is True
+    ]
+    measured_count = sum(1 for entry in entries if entry.get("status") == "ok")
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "status": "blocked_by_secret_scan" if retention_blocked else "complete",
+        "stable_key_fields": ["user_alias", "mode", "domain", "selection_id", "scope_alias", "period_label", "detail_level"],
+        "selection_policy": {
+            "named_case_count": len(NAMED_PROMPT_RETENTION),
+            "global_representatives": ["minimum", "maximum", "median", "p10", "p25", "p75", "p90", "p95", "p99"],
+            "percentile_method": "nearest_rank_ceil_p_times_n_v1",
+            "nearest_prompt_tie_break": "absolute_character_distance_then_lexicographic_stable_key_v1",
+            "deduplication": "stable_key_with_ordered_unique_reasons_v1",
+        },
+        "measured_count": measured_count,
+        "planned_retention_count": len(retention_reasons),
+        "retained_count": len(retained_entries),
+        "entries": retained_entries,
+    }
+
+
+def build_manual_review_placeholder(run_id: str, review_kind: str) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "review_kind": review_kind,
+        "status": "not_performed",
+        "reviews": [],
+    }
+
+
+def build_comparison_baseline_manifest(
+    run_id: str,
+    baseline_path: Path | None,
+    comparisons: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    if baseline_path is None:
+        return {
+            "schema_version": 1,
+            "run_id": run_id,
+            "status": "not_provided",
+            "baseline_metrics_path": None,
+            "baseline_sha256": None,
+            "comparison_row_count": 0,
+        }
+    resolved = baseline_path.expanduser().resolve()
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "status": "compared",
+        "baseline_metrics_path": repository_path(resolved),
+        "baseline_sha256": hash_file(resolved),
+        "comparison_row_count": len(comparisons),
+    }
+
+
+def _svg_text(x: float, y: float, text: object, *, size: int = 13, anchor: str = "start", weight: str = "normal") -> str:
+    return f'<text x="{x:.2f}" y="{y:.2f}" font-family="sans-serif" font-size="{size}" text-anchor="{anchor}" font-weight="{weight}" fill="#111827">{html.escape(str(text))}</text>'
+
+
+def _svg_document(title: str, width: int, height: int, body: Sequence[str]) -> str:
+    return "\n".join(
+        [
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-label="{html.escape(title)}">',
+            '<rect width="100%" height="100%" fill="#ffffff"/>',
+            _svg_text(width / 2, 28, title, size=18, anchor="middle", weight="bold"),
+            *body,
+            "</svg>",
+            "",
+        ]
+    )
+
+
+def build_category_range_box_svg(entries: Sequence[Mapping[str, object]]) -> str:
+    successful = [entry for entry in entries if entry.get("status") == "ok"]
+    grouped: defaultdict[str, list[int]] = defaultdict(list)
+    for entry in successful:
+        grouped[str(entry.get("category") or "financial")].append(int(entry.get("rendered_prompt_chars") or 0))
+    categories = [category for category in PROMPT_CATEGORY_CLASSES if category in grouped]
+    width = 1000
+    height = max(150, 75 + len(categories) * 52)
+    max_chars = max(1, max((max(values) for values in grouped.values()), default=1))
+
+    def x(value: float) -> float:
+        return 230 + value / max_chars * 720
+
+    body: list[str] = []
+    for index, category in enumerate(categories):
+        stats = numeric_distribution_stats(grouped[category])
+        y = 70 + index * 52
+        minimum = float(stats["minimum"] or 0)
+        maximum = float(stats["maximum"] or 0)
+        p25 = float(stats["p25"] or 0)
+        median = float(stats["median"] or 0)
+        p75 = float(stats["p75"] or 0)
+        body.extend(
+            [
+                _svg_text(215, y + 5, category, anchor="end"),
+                f'<line x1="{x(minimum):.2f}" y1="{y:.2f}" x2="{x(maximum):.2f}" y2="{y:.2f}" stroke="#475569" stroke-width="2"/>',
+                f'<rect x="{x(p25):.2f}" y="{y - 11:.2f}" width="{max(1.0, x(p75) - x(p25)):.2f}" height="22" fill="#bfdbfe" stroke="#2563eb"/>',
+                f'<line x1="{x(median):.2f}" y1="{y - 13:.2f}" x2="{x(median):.2f}" y2="{y + 13:.2f}" stroke="#1d4ed8" stroke-width="3"/>',
+                _svg_text(960, y + 5, f"n={stats['count']}", size=11),
+            ]
+        )
+    return _svg_document("Prompt characters by category: range and quartile box", width, height, body)
+
+
+def build_period_detail_svg(entries: Sequence[Mapping[str, object]]) -> str:
+    successful = [entry for entry in entries if entry.get("status") == "ok"]
+    grouped: defaultdict[tuple[str, str], list[int]] = defaultdict(list)
+    for entry in successful:
+        grouped[(str(entry.get("period_label")), str(entry.get("detail_level")))].append(int(entry.get("rendered_prompt_chars") or 0))
+    keys = [(period, detail) for period in PUBLIC_CATALOG_V3_PERIODS for detail in DEFAULT_DETAILS if (period, detail) in grouped]
+    means = {key: statistics.fmean(grouped[key]) for key in keys}
+    maximum = max(1, max(means.values(), default=1))
+    width = 1000
+    height = 390
+    body: list[str] = []
+    for index, key in enumerate(keys):
+        value = means[key]
+        bar_width = 105
+        x = 95 + index * 145
+        bar_height = value / maximum * 245
+        y = 315 - bar_height
+        body.extend(
+            [
+                f'<rect x="{x:.2f}" y="{y:.2f}" width="{bar_width}" height="{bar_height:.2f}" fill="#60a5fa"/>',
+                _svg_text(x + bar_width / 2, 338, f"{key[0]} {key[1]}", size=11, anchor="middle"),
+                _svg_text(x + bar_width / 2, y - 7, f"{value:.0f}", size=11, anchor="middle"),
+            ]
+        )
+    return _svg_document("Mean prompt characters by period and detail", width, height, body)
+
+
+def build_composition_share_svg(entries: Sequence[Mapping[str, object]]) -> str:
+    summary = build_composition_summary(entries)
+    components = summary["components"]
+    width = 1000
+    height = 260
+    colors = {
+        "financial": "#16a34a",
+        "technical": "#2563eb",
+        "coverage/provenance": "#f59e0b",
+        "instructions/contracts": "#7c3aed",
+    }
+    body: list[str] = []
+    cursor = 80.0
+    usable = 840.0
+    for index, component in enumerate(COMPOSITION_COMPONENTS):
+        row = components[component] if isinstance(components, Mapping) else {}
+        percent = float(row.get("percent") or 0) if isinstance(row, Mapping) else 0.0
+        segment = usable * percent / 100
+        body.append(f'<rect x="{cursor:.2f}" y="75" width="{segment:.2f}" height="48" fill="{colors[component]}"/>')
+        if segment >= 55:
+            body.append(_svg_text(cursor + segment / 2, 105, f"{percent:.1f}%", size=12, anchor="middle", weight="bold"))
+        legend_y = 160 + index * 22
+        body.append(f'<rect x="190" y="{legend_y - 12}" width="14" height="14" fill="{colors[component]}"/>')
+        body.append(_svg_text(215, legend_y, f"{component}: {percent:.2f}%", size=12))
+        cursor += segment
+    return _svg_document("Corpus composition share", width, height, body)
+
+
+def build_before_after_svg(comparisons: Sequence[Mapping[str, object]]) -> str:
+    grouped_before: defaultdict[str, list[int]] = defaultdict(list)
+    grouped_after: defaultdict[str, list[int]] = defaultdict(list)
+    for row in comparisons:
+        before = row.get("previous_chars")
+        after = row.get("current_chars")
+        stable_key = str(row.get("stable_key") or "").split("|")
+        if isinstance(before, int) and isinstance(after, int) and len(stable_key) >= 3:
+            domain = stable_key[2]
+            grouped_before[domain].append(before)
+            grouped_after[domain].append(after)
+    domains = [domain for domain in ("portfolio", "broker", "asset", "fx") if grouped_before[domain]]
+    width = 1000
+    height = 390
+    maximum = max(
+        1,
+        max(
+            [
+                *(statistics.fmean(grouped_before[domain]) for domain in domains),
+                *(statistics.fmean(grouped_after[domain]) for domain in domains),
+            ],
+            default=1,
+        ),
+    )
+    body: list[str] = []
+    for index, domain in enumerate(domains):
+        before = statistics.fmean(grouped_before[domain])
+        after = statistics.fmean(grouped_after[domain])
+        x = 125 + index * 205
+        for offset, value, color, label in ((0, before, "#94a3b8", "before"), (58, after, "#2563eb", "after")):
+            bar_height = value / maximum * 245
+            y = 315 - bar_height
+            body.extend(
+                [
+                    f'<rect x="{x + offset:.2f}" y="{y:.2f}" width="48" height="{bar_height:.2f}" fill="{color}"/>',
+                    _svg_text(x + offset + 24, y - 7, f"{value:.0f}", size=10, anchor="middle"),
+                    _svg_text(x + offset + 24, 338, label, size=10, anchor="middle"),
+                ]
+            )
+        body.append(_svg_text(x + 53, 365, domain, size=12, anchor="middle", weight="bold"))
+    return _svg_document("Mean prompt characters before and after", width, height, body)
+
+
+def build_probe_svgs(entries: Sequence[Mapping[str, object]], comparisons: Sequence[Mapping[str, object]]) -> dict[str, str]:
+    charts = {
+        "category_range_box.svg": build_category_range_box_svg(entries),
+        "period_detail.svg": build_period_detail_svg(entries),
+        "composition_share.svg": build_composition_share_svg(entries),
+    }
+    if comparisons:
+        charts["before_after.svg"] = build_before_after_svg(comparisons)
+    return charts
+
+
+def write_probe_svgs(charts_dir: Path, entries: Sequence[Mapping[str, object]], comparisons: Sequence[Mapping[str, object]]) -> list[str]:
+    charts_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+    for filename, content in sorted(build_probe_svgs(entries, comparisons).items()):
+        path = charts_dir / filename
+        path.write_text(content, encoding="utf-8", newline="")
+        paths.append(str(path.name))
+    return paths
+
+
 def _summary_markdown(metrics_payload: Mapping[str, object], manifest: Mapping[str, object]) -> str:
     entries = _metric_entries(metrics_payload)
     successful = [entry for entry in entries if entry.get("status") == "ok"]
@@ -2816,6 +3575,7 @@ def _summary_markdown(metrics_payload: Mapping[str, object], manifest: Mapping[s
     analysis_entries = [entry for entry in successful if entry.get("mode") == "analysis"]
     failed = [entry for entry in entries if entry.get("status") == "failed"]
     skipped = [entry for entry in entries if entry.get("status") == "skipped"]
+    retained = [entry for entry in successful if entry.get("retained") is True]
     new_semantic_dataset_entries = [entry for entry in successful if entry.get("comparison_cohort") == "new_semantic_dataset"]
     heaviest_data = max(data_entries, key=lambda item: int(item.get("rendered_prompt_chars") or 0), default=None)
     heaviest_analysis = max(analysis_entries, key=lambda item: int(item.get("rendered_prompt_chars") or 0), default=None)
@@ -2848,13 +3608,16 @@ def _summary_markdown(metrics_payload: Mapping[str, object], manifest: Mapping[s
         f"- Successful users: {', '.join(str(item) for item in manifest.get('successful_users', [])) or 'none'}",
         f"- Discovered catalog: {catalog.get('dataset_count', 0)} datasets, {catalog.get('analysis_count', 0)} analyses",
         f"- Expected prompts: {len(entries)}",
-        f"- Generated prompts: {len(successful)}",
+        f"- Measured prompts: {len(successful)}",
+        f"- Retained prompt files: {len(retained)}",
         f"- Generated data prompts: {len(data_entries)}",
         f"- Generated analysis prompts: {len(analysis_entries)}",
         f"- New semantic-dataset prompts: {len(new_semantic_dataset_entries)}",
         f"- Failed prompts: {len(failed)}",
         f"- Skipped prompts: {len(skipped)}",
-        f"- Total rendered characters: {sum(int(entry.get('rendered_prompt_chars') or 0) for entry in successful)}",
+        f"- Diagnostic corpus rendered characters: {sum(int(entry.get('rendered_prompt_chars') or 0) for entry in successful)}",
+        f"- Diagnostic corpus rendered bytes: {sum(int(entry.get('rendered_prompt_bytes') or 0) for entry in successful)}",
+        f"- Diagnostic corpus estimated token-equivalents (chars/4): {sum(float(entry.get('rendered_prompt_estimated_token_equivalent') or 0) for entry in successful)}",
         f"- Heaviest data prompt: {describe(heaviest_data)}",
         f"- Heaviest analysis prompt: {describe(heaviest_analysis)}",
         f"- Median data prompt chars: {_median(int(entry.get('rendered_prompt_chars') or 0) for entry in data_entries)}",
@@ -2869,7 +3632,7 @@ def _summary_markdown(metrics_payload: Mapping[str, object], manifest: Mapping[s
         f"- Source DB read-only: {read_only.get('source_unchanged')}",
         f"- Excluded composed datasets: {len(manifest.get('excluded_datasets', []))}",
         "",
-        "Primary decision metric: final rendered prompt characters/token-equivalent. Canonical backend JSON measurements are diagnostic only.",
+        "Corpus totals and character/token-equivalent measurements are diagnostic only. Final prompt files are retained selectively; canonical backend JSON measurements are also diagnostic only.",
         "",
     ]
     return "\n".join(lines)
@@ -2893,6 +3656,15 @@ def _passwords_for_users(users: Sequence[str]) -> dict[str, str]:
     return passwords
 
 
+def build_artifact_aliases(users: Sequence[str], *, anonymize: bool) -> dict[str, str]:
+    """Map runtime login aliases to artifact-safe user labels."""
+
+    unique_users = tuple(dict.fromkeys(users))
+    if anonymize:
+        return {user: f"user_anon_{index:02d}" for index, user in enumerate(unique_users, start=1)}
+    return {user: user for user in unique_users}
+
+
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -2914,9 +3686,9 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("tuning-v2", "representative", "exhaustive"),
+        choices=("tuning-v2", "representative", PUBLIC_CATALOG_V3_PROFILE, "exhaustive"),
         default="tuning-v2",
-        help="tuning-v2 uses one representative scope, excludes all_data, and runs the approved matrices",
+        help="tuning-v2 keeps V2 tuning behavior; public-catalog-v3 runs 19 public selections × 3M/1Y × compact/standard/full",
     )
     parser.add_argument("--manifest-shape", choices=("legacy", "slim"), default="slim", help="Expected public technical manifest shape")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -2942,13 +3714,18 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def run_probe(args: argparse.Namespace) -> int:
     target_cases = tuple(parse_target_case(value) for value in args.target_case)
+    public_catalog_v3_run = args.profile == PUBLIC_CATALOG_V3_PROFILE and not target_cases
     if len(target_cases) != len(set(target_cases)):
         raise ProbeError("Duplicate --target-case entries are not allowed")
     if target_cases and any(value is not None for value in (args.mode, args.domain, args.period, args.detail)):
         raise ProbeError("--target-case cannot be combined with --mode/--domain/--period/--detail")
-    default_users = (DEFAULT_REPRESENTATIVE_USER,) if args.profile in {"tuning-v2", "representative"} else DEFAULT_USERS
+    if public_catalog_v3_run and any(value is not None for value in (args.mode, args.domain, args.period, args.detail)):
+        raise ProbeError(f"public-catalog-v3 is an exact {PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT}-case profile and cannot be filtered")
+    if public_catalog_v3_run and args.user and len(set(args.user)) != 1:
+        raise ProbeError("public-catalog-v3 requires exactly one deterministic user")
+    default_users = (DEFAULT_REPRESENTATIVE_USER,) if args.profile in {"tuning-v2", "representative", PUBLIC_CATALOG_V3_PROFILE} else DEFAULT_USERS
     users = tuple(dict.fromkeys(case.user_alias for case in target_cases)) if target_cases else tuple(dict.fromkeys(args.user or default_users))
-    artifact_aliases = {user: f"user_anon_{index:02d}" for index, user in enumerate(users, start=1)} if target_cases else {user: user for user in users}
+    artifact_aliases = build_artifact_aliases(users, anonymize=bool(target_cases) or public_catalog_v3_run)
     passwords = _passwords_for_users(users)
     actual_secrets = tuple(passwords.values())
     source_db = args.source_db.expanduser().resolve()
@@ -2959,11 +3736,17 @@ def run_probe(args: argparse.Namespace) -> int:
     prompts_dir = run_dir / "prompts"
     data_prompts_dir = prompts_dir / "data"
     analysis_prompts_dir = prompts_dir / "analysis"
+    prompt_staging_dir = run_dir / ".prompt_staging"
+    staging_data_prompts_dir = prompt_staging_dir / "data"
+    staging_analysis_prompts_dir = prompt_staging_dir / "analysis"
     canonical_dir = run_dir / "canonical"
     runtime_data_dir = run_dir / ".runtime_data"
     source_snapshot_dir = run_dir / ".source_snapshot"
     data_prompts_dir.mkdir(parents=True)
     analysis_prompts_dir.mkdir(parents=True)
+    if public_catalog_v3_run:
+        staging_data_prompts_dir.mkdir(parents=True)
+        staging_analysis_prompts_dir.mkdir(parents=True)
     canonical_dir.mkdir()
     source_snapshot_db = source_snapshot_dir / "sqlite" / "app.db"
     runtime_db = runtime_data_dir / "sqlite" / "app.db"
@@ -3053,7 +3836,15 @@ def run_probe(args: argparse.Namespace) -> int:
                             }
                         )
                         continue
-                    selections = discover_catalog(catalog_payload, mode=args.mode, domain=args.domain)
+                    selections = (
+                        public_catalog_v3_selections(
+                            discover_catalog(catalog_payload),
+                            mode=args.mode,
+                            domain=args.domain,
+                        )
+                        if public_catalog_v3_run
+                        else discover_catalog(catalog_payload, mode=args.mode, domain=args.domain)
+                    )
                     user_target_cases = tuple(case for case in target_cases if case.user_alias == user_alias)
                     if user_target_cases:
                         target_selection_ids = {case.selection_id for case in user_target_cases}
@@ -3131,7 +3922,11 @@ def run_probe(args: argparse.Namespace) -> int:
                                 if failure is not None:
                                     failures.append(failure)
                             continue
-                        matching_scopes = [scope for scope in scopes if scope["domain"] == selection["domain"]]
+                        if public_catalog_v3_run:
+                            selected_scope = public_catalog_v3_scope(scopes, selection)
+                            matching_scopes = [selected_scope] if selected_scope is not None else []
+                        else:
+                            matching_scopes = [scope for scope in scopes if scope["domain"] == selection["domain"]]
                         if not matching_scopes:
                             skipped_metrics = _missing_scope_metrics(
                                 run_id,
@@ -3156,17 +3951,25 @@ def run_probe(args: argparse.Namespace) -> int:
                                 )
                                 if args.profile == "tuning-v2"
                                 else (
-                                    representative_cases(
+                                    public_catalog_v3_cases(
                                         selection,
                                         period_filter=args.period,
                                         detail_filter=args.detail,
                                     )
-                                    if args.profile == "representative"
-                                    else build_period_detail_matrix(
-                                        periods=periods,
-                                        details=details,
-                                        custom_start=scope.get("custom_start"),
-                                        snapshot_as_of=user_data["snapshot_as_of"],
+                                    if public_catalog_v3_run
+                                    else (
+                                        representative_cases(
+                                            selection,
+                                            period_filter=args.period,
+                                            detail_filter=args.detail,
+                                        )
+                                        if args.profile == "representative"
+                                        else build_period_detail_matrix(
+                                            periods=periods,
+                                            details=details,
+                                            custom_start=scope.get("custom_start"),
+                                            snapshot_as_of=user_data["snapshot_as_of"],
+                                        )
                                     )
                                 )
                             )
@@ -3183,7 +3986,7 @@ def run_probe(args: argparse.Namespace) -> int:
                                     case=case,
                                     client=client,
                                     bridge=bridge,
-                                    prompts_dir=(data_prompts_dir if selection["kind"] == "dataset" else analysis_prompts_dir),
+                                    prompts_dir=(staging_data_prompts_dir if public_catalog_v3_run and selection["kind"] == "dataset" else (staging_analysis_prompts_dir if public_catalog_v3_run else (data_prompts_dir if selection["kind"] == "dataset" else analysis_prompts_dir))),
                                     canonical_dir=canonical_dir,
                                     artifact_root=run_dir,
                                     keep_canonical=args.keep_canonical,
@@ -3191,6 +3994,7 @@ def run_probe(args: argparse.Namespace) -> int:
                                     response_language=str(user_data["response_language"]),
                                     actual_secrets=actual_secrets,
                                     manifest_shape=args.manifest_shape,
+                                    stage_prompt=public_catalog_v3_run,
                                 )
                                 entries.append(metric)
                                 if failure is not None:
@@ -3247,12 +4051,22 @@ def run_probe(args: argparse.Namespace) -> int:
             previous,
             include_removed=not bool(target_cases),
         )
+    staged_prompt_paths = collect_staged_prompt_paths(entries, run_dir)
+    staged_prompt_file_count = sum(1 for path in prompt_staging_dir.rglob("*") if path.is_file()) if public_catalog_v3_run else 0
+    retention_reasons: dict[str, list[str]] = {}
+    if public_catalog_v3_run:
+        retention_reasons = select_prompt_retention_reasons(entries)
+        for entry in entries:
+            entry["retention_reasons"] = retention_reasons.get(stable_metric_key_text(entry), [])
+    else:
+        mark_direct_prompt_retention(entries, "target_case" if target_cases else f"{args.profile}_profile_full_retention")
     metrics_payload: dict[str, object] = {
         "run_id": run_id,
         "generated_at": utc_now_iso(),
         "entries": entries,
         "comparison": comparisons,
         "dimension_summary": build_dimension_summary(entries),
+        "composition_summary": build_composition_summary(entries),
         "quality_summary": build_quality_summary(entries),
     }
     manifest: dict[str, object] = {
@@ -3282,10 +4096,34 @@ def run_probe(args: argparse.Namespace) -> int:
         "excluded_datasets": excluded_datasets,
         "sampling_profile": {
             "representative_user_default": DEFAULT_REPRESENTATIVE_USER,
-            "representative_scope_policy": ("explicit target-case scopes" if target_cases else "portfolio all; broker with most positions then longest history; one deterministic longest-history asset; one deterministic longest-history FX pair"),
-            "case_policy": (
-                "exact explicit target cases only" if target_cases else ("base datasets: 3M/6M/1Y x compact/standard/full; analyses with temporal data: 3M/1Y x compact/standard/full; all_data excluded from tuning" if args.profile == "tuning-v2" else "representative or exhaustive legacy profile")
+            "representative_scope_policy": (
+                "explicit target-case scopes"
+                if target_cases
+                else (
+                    "one scope per public selection; cost efficiency prefers typed FEE/TAX rows; all other scopes use deterministic representative selectors"
+                    if public_catalog_v3_run
+                    else "portfolio all; broker with most positions then longest history; one deterministic longest-history asset; one deterministic longest-history FX pair"
+                )
             ),
+            "case_policy": (
+                "exact explicit target cases only"
+                if target_cases
+                else (
+                    "exact 19 selections x 3M/1Y x compact/standard/full; no 6M"
+                    if public_catalog_v3_run
+                    else ("base datasets: 3M/6M/1Y x compact/standard/full; analyses with temporal data: 3M/1Y x compact/standard/full; all_data excluded from tuning" if args.profile == "tuning-v2" else "representative or exhaustive legacy profile")
+                )
+            ),
+            "selection_reason_policy": (
+                {
+                    "asset": "longest history meeting minimum, then observations and stable asset key",
+                    "fx": "longest history meeting configured minimum, then observations and canonical pair key; partial/unavailable state is classified from measured output rather than extra Cartesian cases",
+                }
+                if public_catalog_v3_run
+                else {}
+            ),
+            "public_selection_ids": list(PUBLIC_CATALOG_V3_SELECTIONS) if public_catalog_v3_run else [],
+            "expected_case_count": len(PUBLIC_CATALOG_V3_SELECTIONS) * len(PUBLIC_CATALOG_V3_PERIODS) * len(DEFAULT_DETAILS) if public_catalog_v3_run else None,
         },
         "inventory": {artifact_aliases[alias]: data["inventory"] for alias, data in inventories.items()},
         "inventory_methods": {
@@ -3300,6 +4138,8 @@ def run_probe(args: argparse.Namespace) -> int:
             "runtime_period_contributor_asset_count": "PERIOD-SCOPED runtime: portfolio.technical_breadth.period_contributor_asset_count (unique assets across period legs before eligibility).",
             "runtime_period_eligible_asset_count": "PERIOD-SCOPED runtime: portfolio.technical_breadth.eligible_asset_count (currently-held nonzero-end-value eligible assets, broker-deduplicated).",
             "runtime_period_covered_asset_count": "PERIOD-SCOPED runtime: portfolio.technical_breadth.covered_asset_count (eligible assets with classifiable technical coverage).",
+            "recorded_cost_transaction_count": "ALL-TIME deterministic scope selector input: typed FEE/TAX rows for an accessible Broker. Period-specific recorded/unavailable status remains measured from rendered output.",
+            "recorded_cost_transaction_count_1y": "LATEST-1Y deterministic cost-efficiency selector input: typed FEE/TAX rows ending at snapshot_as_of. Rendered output remains authoritative for recorded/unavailable status.",
             "fifo_lot_count": "ALL-TIME raw SQL: positive-quantity asset transactions; diagnostic SQL count.",
         },
         "credential_check": {
@@ -3346,34 +4186,127 @@ def run_probe(args: argparse.Namespace) -> int:
             "copy_after_http": copy_hash_after,
             "copy_writes_expected": "optional credential normalization and successful login update the disposable copied DB only",
         },
+        "corpus": {
+            "expected_row_count": PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT if public_catalog_v3_run else len(entries),
+            "actual_row_count": len(entries),
+            "matrix_complete": len(entries) == PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT if public_catalog_v3_run else True,
+            "measured_row_count": sum(1 for entry in entries if entry.get("status") == "ok"),
+            "retained_prompt_count": sum(1 for entry in entries if entry.get("retained") is True),
+            "rendered_chars_diagnostic_total": sum(int(entry.get("rendered_prompt_chars") or 0) for entry in entries if entry.get("status") == "ok"),
+            "rendered_bytes_diagnostic_total": sum(int(entry.get("rendered_prompt_bytes") or 0) for entry in entries if entry.get("status") == "ok"),
+        },
+        "review_artifacts": {},
+        "charts": [],
+        "retention": {
+            "mode": "selective_named_and_global_representatives" if public_catalog_v3_run else "profile_full_retention",
+            "staged_prompt_count": staged_prompt_file_count,
+            "planned_retention_count": len(retention_reasons),
+            "retained_prompt_count": sum(1 for entry in entries if entry.get("retained") is True),
+        },
         "secret_scan": {"status": "pending", "findings": []},
     }
     failures_payload: dict[str, object] = {"run_id": run_id, "failures": failures}
-    _write_json(run_dir / "metrics.json", metrics_payload)
-    _write_json(run_dir / "run_manifest.json", manifest)
-    _write_json(run_dir / "failures.json", failures_payload)
-    (run_dir / "summary.md").write_text(_summary_markdown(metrics_payload, manifest), encoding="utf-8", newline="")
-    scan_paths = (
-        list(prompts_dir.rglob("*"))
-        + list(canonical_dir.rglob("*"))
-        + [
-            run_dir / "metrics.json",
-            run_dir / "summary.md",
-            run_dir / "run_manifest.json",
-            run_dir / "failures.json",
-        ]
-    )
-    secret_findings = scan_generated_files(scan_paths, actual_secrets)
-    manifest["secret_scan"] = {"status": "failed" if secret_findings else "passed", "findings": secret_findings}
-    metrics_payload["secret_scan"] = manifest["secret_scan"]
-    failures_payload["secret_scan"] = manifest["secret_scan"]
-    _write_json(run_dir / "metrics.json", metrics_payload)
-    _write_json(run_dir / "run_manifest.json", manifest)
-    _write_json(run_dir / "failures.json", failures_payload)
-    (run_dir / "summary.md").write_text(_summary_markdown(metrics_payload, manifest), encoding="utf-8", newline="")
-    final_findings = scan_generated_files(scan_paths, actual_secrets)
+    retained_manifest_path = run_dir / "retained_prompt_manifest.json"
+    if public_catalog_v3_run:
+        task_reviews_path = run_dir / "task_adequacy_reviews.json"
+        export_reviews_path = run_dir / "export_data_reviews.json"
+        comparison_manifest_path = run_dir / "comparison_baseline_manifest.json"
+        _write_json(task_reviews_path, build_manual_review_placeholder(run_id, "task_adequacy"))
+        _write_json(export_reviews_path, build_manual_review_placeholder(run_id, "export_data"))
+        _write_json(comparison_manifest_path, build_comparison_baseline_manifest(run_id, args.compare_with, comparisons))
+        chart_names = write_probe_svgs(run_dir / "charts", entries, comparisons)
+        manifest["review_artifacts"] = {
+            "task_adequacy": task_reviews_path.name,
+            "export_data": export_reviews_path.name,
+            "comparison_baseline": comparison_manifest_path.name,
+        }
+        manifest["charts"] = [f"charts/{name}" for name in chart_names]
+
+    def write_core_artifacts() -> None:
+        _write_json(run_dir / "metrics.json", metrics_payload)
+        _write_json(run_dir / "run_manifest.json", manifest)
+        _write_json(run_dir / "failures.json", failures_payload)
+        (run_dir / "summary.md").write_text(_summary_markdown(metrics_payload, manifest), encoding="utf-8", newline="")
+
+    write_core_artifacts()
+    staged_scan_paths = list(run_dir.rglob("*"))
+    pre_retention_findings = scan_generated_files(staged_scan_paths, actual_secrets)
+
+    if public_catalog_v3_run:
+        retention_reasons = finalize_public_catalog_prompt_retention(
+            entries,
+            staged_prompt_paths,
+            artifact_root=run_dir,
+            prompts_dir=prompts_dir,
+            allow_retention=not pre_retention_findings,
+        )
+        shutil.rmtree(prompt_staging_dir, ignore_errors=True)
+        retained_manifest = build_retained_prompt_manifest(
+            entries,
+            run_id=run_id,
+            retention_reasons=retention_reasons,
+            retention_blocked=bool(pre_retention_findings),
+        )
+        _write_json(retained_manifest_path, retained_manifest)
+
+    manifest["corpus"]["retained_prompt_count"] = sum(1 for entry in entries if entry.get("retained") is True)
+    manifest["retention"]["retained_prompt_count"] = manifest["corpus"]["retained_prompt_count"]
+    provisional_secret_scan = {
+        "status": "failed" if pre_retention_findings else "passed",
+        "findings": pre_retention_findings,
+        "staged_prompt_files_scanned": staged_prompt_file_count,
+    }
+    manifest["secret_scan"] = provisional_secret_scan
+    metrics_payload["secret_scan"] = provisional_secret_scan
+    failures_payload["secret_scan"] = provisional_secret_scan
+    write_core_artifacts()
+
+    post_retention_findings = scan_generated_files(list(run_dir.rglob("*")), actual_secrets)
+
+    def deduplicate_findings(*groups: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
+        return [json.loads(serialized) for serialized in sorted({canonical_json(dict(finding)) for group in groups for finding in group})]
+
+    combined_findings = deduplicate_findings(pre_retention_findings, post_retention_findings)
+    if public_catalog_v3_run and post_retention_findings:
+        for entry in entries:
+            prompt_file = entry.get("prompt_file")
+            if entry.get("retained") is True and isinstance(prompt_file, str):
+                (run_dir / prompt_file).unlink(missing_ok=True)
+                entry["retained"] = False
+                entry["prompt_file"] = None
+        retained_manifest = build_retained_prompt_manifest(
+            entries,
+            run_id=run_id,
+            retention_reasons=retention_reasons,
+            retention_blocked=True,
+        )
+        _write_json(retained_manifest_path, retained_manifest)
+        manifest["corpus"]["retained_prompt_count"] = 0
+        manifest["retention"]["retained_prompt_count"] = 0
+
+    final_secret_scan = {
+        "status": "failed" if combined_findings else "passed",
+        "findings": combined_findings,
+        "staged_prompt_files_scanned": staged_prompt_file_count,
+    }
+    manifest["secret_scan"] = final_secret_scan
+    metrics_payload["secret_scan"] = final_secret_scan
+    failures_payload["secret_scan"] = final_secret_scan
+    write_core_artifacts()
+    verification_findings = scan_generated_files(list(run_dir.rglob("*")), actual_secrets)
+    final_findings = deduplicate_findings(combined_findings, verification_findings)
+    if final_findings != combined_findings:
+        final_secret_scan = {
+            "status": "failed",
+            "findings": final_findings,
+            "staged_prompt_files_scanned": staged_prompt_file_count,
+        }
+        manifest["secret_scan"] = final_secret_scan
+        metrics_payload["secret_scan"] = final_secret_scan
+        failures_payload["secret_scan"] = final_secret_scan
+        write_core_artifacts()
     print(f"Run: {run_dir}")
-    print(f"Prompts: {sum(1 for entry in entries if entry.get('status') == 'ok')}/{len(entries)}")
+    print(f"Prompts measured: {sum(1 for entry in entries if entry.get('status') == 'ok')}/{len(entries)}; " f"retained: {sum(1 for entry in entries if entry.get('retained') is True)}")
     print(f"Failures: {sum(1 for entry in entries if entry.get('status') == 'failed')}; skipped: {sum(1 for entry in entries if entry.get('status') == 'skipped')}")
     print(
         "Probe source unchanged: "
@@ -3383,7 +4316,8 @@ def run_probe(args: argparse.Namespace) -> int:
         f"secret scan: {'passed' if not final_findings else 'failed'}"
     )
     regression_failure = args.fail_on_regression and any(item.get("regression") for item in comparisons)
-    return 2 if final_findings or not sqlite_primary_unchanged(source_snapshot_hash_before, source_snapshot_hash_after) or regression_failure else 0
+    matrix_failure = public_catalog_v3_run and len(entries) != PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT
+    return 2 if final_findings or not sqlite_primary_unchanged(source_snapshot_hash_before, source_snapshot_hash_after) or regression_failure or matrix_failure else 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:

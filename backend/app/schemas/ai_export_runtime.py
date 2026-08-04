@@ -275,7 +275,7 @@ class AiExportAnalysisCatalogEntry(AiExportModel):
 
 class AiExportCatalogResponse(AiExportModel):
     schema_version: Literal[2] = 2
-    catalog_version: Literal[2] = 2
+    catalog_version: Literal[3] = 3
     datasets: tuple[AiExportDatasetCatalogEntry, ...]
     analyses: tuple[AiExportAnalysisCatalogEntry, ...]
 
@@ -406,7 +406,7 @@ class AiExportHistoryCoverage(AiExportModel):
 
 class AiExportSnapshotMeta(AiExportModel):
     schema_version: Literal[2] = 2
-    catalog_version: Literal[2] = 2
+    catalog_version: Literal[3] = 3
     request_id: str = Field(..., min_length=1)
     generated_at: datetime
     snapshot_as_of: date

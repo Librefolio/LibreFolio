@@ -3,7 +3,7 @@ title: "AiExportSnapshotService and AI Export Snapshot Platform"
 category: entity
 type: service
 date: 2026-07-26
-updated: 2026-07-27
+updated: 2026-08-04
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
 tags: [backend, frontend, ai-export, snapshot, service, profiles, assemblers, mcp, security]
 related:
@@ -21,6 +21,7 @@ related:
   - domains/auth
   - domains/brokers
   - features/F-010
+  - concepts/ai-export-catalog-granularity-and-composition
 ---
 
 # AiExportSnapshotService and AI Export Snapshot Platform
@@ -61,8 +62,8 @@ Strict request
   → Clipboard API
 ```
 
-- `profiles/` defines the 18 task specs and their compact selectors, applicability, technical bundles, event limits, and response-contract identity.
-- `models.py` composes each task with three detail overlays into 54 immutable resolved profiles.
+- The current semantic-composition layer exposes 32 `DatasetSpec` entries and 17 `AnalysisSpec` entries over 65 reviewed `ComponentSpec` builders. A request-scoped `BuildContext` memoizes components and raw typed resources so analyses can reuse facts without duplicate I/O or signal calculation.
+- Analyses compose ordered required and optional datasets; required failures fail closed and optional failures degrade to omission. The complete `*.all_data` entries are computed unions of canonical complete datasets, not special builders and not unions of every focused public choice.
 - `assemblers/` map authoritative domain services; they do not own independent portfolio, FIFO, FX, or signal mathematics.
 - `technical.py` adapts profile-owned bundles to the shared [[decisions/signal-backend-plugin-architecture]].
 - `normalization.py`, `sampling.py`, `coverage.py`, and `telemetry.py` provide deterministic shared policies.
@@ -96,6 +97,9 @@ The service does not return prompt text, labels, translations, or user notes. `f
 ## Design Notes
 
 - Portfolio and Broker share authoritative report data but have separate request/response domains and task catalogs.
+- PAC Planning and Rebalancing both receive `portfolio.overview`, so their prompts already include per-position Asset/Broker rows with quantity, unit price, value, WAC, P&L, and weight. Their optional Asset Snapshot/Comparison datasets add per-Asset observed market context when available; they are not aggregate-only.
+- Position unit price, observed Asset market price, and bucketed price history are distinct data contracts. See [[concepts/ai-export-catalog-granularity-and-composition]].
+- `broker.technical` currently includes coverage, indicator history, events, and breadth but no raw technical-price/OHLC component. `asset.trend_analysis` currently composes Overview + Market Technical without `asset.drawdown_context`, despite the Italian UI description mentioning Drawdown. These are recorded gaps, not service changes.
 - Asset and FX can assemble independently while sharing technical and normalized-return utilities.
 - FIFO is queried at runtime through [[entities/lots-analysis-service]]; no AI-specific FIFO persistence is introduced.
 - Portfolio cash decomposition remains engine-owned. Currency exposure uses factual native balances converted at snapshot time and declares a separate denominator; see [[problems/ai-export-cash-fx-valuation-basis-mismatch]].
@@ -117,16 +121,20 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | 2026-07-26 | Final review fixed selected-history drawdown fallback, made non-modern clipboard transport reachable without legacy logic, and registered the complete AI Export/current-signal test set in canonical suites. |
 | 2026-07-27 | Final UX replaced exposed mode/language/web/compatibility controls with the custom analysis select and locale-owned defaults; added per-user/per-context persistent draft memory, Snapshot note non-export, body portal, and domain manual links. |
 | 2026-07-27 | Project owner approved the desktop/mobile review; the completed plan chain was indexed by `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` in its nested migration location. |
+| 2026-08-04 | A 49/49 catalog explanation documented the 32-dataset/17-analysis/65-component composition model, confirmed per-position/per-Asset facts in PAC and Rebalancing, clarified price and `all_data` semantics, and recorded two potential gaps. Real Portfolio probe `20260804T085052.052297Z` passed 5/5 with unchanged databases and a passed secret scan. |
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | Completed chain index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
+| UI catalog explanation and prompt verification | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
 | Service orchestration | `backend/app/services/ai_export/service.py` |
 | Exact resolver/catalog | `backend/app/services/ai_export/resolver.py` |
 | Profile composition models | `backend/app/services/ai_export/models.py` |
 | Task and detail profiles | `backend/app/services/ai_export/profiles/` |
+| Dataset/analysis composition | `backend/app/services/ai_export/datasets/`, `backend/app/services/ai_export/analyses/` |
+| Component composition | `backend/app/services/ai_export/components/`, `backend/app/services/ai_export/dependencies.py`, `backend/app/services/ai_export/composer.py` |
 | Domain assemblers | `backend/app/services/ai_export/assemblers/` |
 | Shared technical runner | `backend/app/services/ai_export/technical.py` |
 | Normalization/sampling/coverage/telemetry | `backend/app/services/ai_export/normalization.py`, `sampling.py`, `coverage.py`, `telemetry.py` |
@@ -148,3 +156,4 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | Canonical test registration | `scripts/test_runner/_backend_services.py`, `scripts/test_runner/_backend_schemas.py`, `scripts/test_runner/_backend_api.py`, `scripts/test_runner/_frontend_ai_export.py`, `scripts/test_runner/_registry.py`, `scripts/test_runner/_suites.py` |
 | Browser E2E | `frontend/e2e/ai-export.spec.ts` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |
+| Composition architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |

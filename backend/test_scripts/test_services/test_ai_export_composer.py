@@ -334,14 +334,14 @@ class TestFoundationCatalogComposition:
         foundation_dataset_registry: DatasetRegistry,
         foundation_analysis_registry,
     ):
-        assert len(foundation_dataset_registry) == 32
-        assert len(foundation_analysis_registry) == 17
+        assert len(foundation_dataset_registry) == 40
+        assert len(foundation_analysis_registry) == 22
 
 
 def test_production_component_registry_contains_only_real_specs():
     registry = build_component_registry()
 
-    assert len(registry) == 65
+    assert len(registry) == 67
     assert registry.canonical_order == tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
     assert all(registry.get(component_id).output_model is not FoundationComponentPayload for component_id in registry.canonical_order)
 

@@ -4714,7 +4714,7 @@
     }
   },
   "user/transactions/import/directa.en.md": {
-    "md5": "b8f78a26c26f6ef71c06412ad6423dec",
+    "md5": "b4eaa87af03385eda912808c3ec978e6",
     "langs_done": [
       "es",
       "fr",
@@ -4734,7 +4734,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 107.3,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-08-04T09:00:48.509141+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4747,7 +4747,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 90.8,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-08-04T09:00:48.509141+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4760,7 +4760,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 90.8,
-        "stamped_at": "2026-06-30T15:11:29.707567+00:00",
+        "stamped_at": "2026-08-04T09:00:48.509141+00:00",
         "stamped_by": "translate-stamp"
       }
     }

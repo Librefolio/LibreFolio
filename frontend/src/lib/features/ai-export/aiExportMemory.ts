@@ -8,7 +8,7 @@ import {isAiExportAnalysisId, isAiExportDatasetId, type AiExportDomain, type AiE
 import {AI_EXPORT_DEFAULT_PERIOD, AI_EXPORT_PERIOD_PRESETS, AI_EXPORT_PERIOD_UNITS, normalizeAiExportPeriod, normalizeAiExportUserNotes, type AiExportOptionsSelection} from './aiExportOptions';
 import type {AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
-export const AI_EXPORT_MEMORY_VERSION = 2 as const;
+export const AI_EXPORT_MEMORY_TTL_MS = 10 * 60 * 1_000;
 
 export type AiExportMemoryKey = 'portfolio' | `broker:${number}` | `asset:${number}` | `fx:${string}`;
 export type AiExportMemoryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -25,6 +25,7 @@ interface LoadAiExportMemoryInput {
     readonly compatibility: AiExportCatalogCompatibilityResult;
     readonly responseLanguage: AiExportResponseLanguageDisplayName;
     readonly defaultSelectionId: AiExportSelectionId;
+    readonly now?: number;
     readonly storage?: AiExportMemoryStorage;
 }
 
@@ -33,12 +34,12 @@ interface SaveAiExportMemoryInput {
     readonly options: AiExportOptionsSelection;
     readonly userNotesDraft?: string;
     readonly copyAnywayFingerprint?: string;
+    readonly now?: number;
     readonly storage?: AiExportMemoryStorage;
 }
 
 const storedMemorySchema = z
     .object({
-        version: z.literal(AI_EXPORT_MEMORY_VERSION),
         selectionKind: z.enum(['dataset', 'analysis']),
         selectionId: z.string(),
         detailLevel: schemas.AiExportDetailLevel,
@@ -51,23 +52,70 @@ const storedMemorySchema = z
             .strict(),
         notes: z.string(),
         copyAnywayFingerprint: z.string().optional(),
+        savedAt: z.number().finite().nonnegative(),
     })
     .strict();
 
 type StoredAiExportMemory = z.infer<typeof storedMemorySchema>;
+type ApplicableStoredAiExportMemory = StoredAiExportMemory & {selectionId: AiExportSelectionId};
+
 const memoryCache = new Map<string, StoredAiExportMemory>();
 
-export function buildAiExportMemoryStorageKey(userId: string, memoryKey: AiExportMemoryKey): string {
-    return `lf_${userId}_ai_export_v${AI_EXPORT_MEMORY_VERSION}_${encodeURIComponent(memoryKey)}`;
+function buildCacheKey(userId: string, memoryKey: AiExportMemoryKey): string {
+    return `lf_${userId}_ai_export_session_${encodeURIComponent(memoryKey)}`;
 }
 
 export function clearAiExportMemoryCache(): void {
     memoryCache.clear();
 }
 
+function clearAiExportMemoryState(): void {
+    memoryCache.clear();
+    if (!browser) return;
+    try {
+        for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+            const key = sessionStorage.key(index);
+            if (key?.includes('_ai_export_session_')) sessionStorage.removeItem(key);
+        }
+        for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+            const key = localStorage.key(index);
+            if (key?.includes('_ai_export_v2_') || key?.includes('_ai_export_v3_')) localStorage.removeItem(key);
+        }
+    } catch {
+        // Restricted browser storage cannot retain a usable AI Export draft anyway.
+    }
+}
+
 function storageFor(storage: AiExportMemoryStorage | undefined): AiExportMemoryStorage | undefined {
     if (storage) return storage;
-    return browser ? localStorage : undefined;
+    return browser ? sessionStorage : undefined;
+}
+
+function discard(key: string, storage: AiExportMemoryStorage | undefined): void {
+    memoryCache.delete(key);
+    try {
+        storage?.removeItem(key);
+    } catch {
+        // In-memory removal still enforces expiry and session reset.
+    }
+}
+
+function readStored(key: string, storage: AiExportMemoryStorage | undefined): StoredAiExportMemory | undefined {
+    let raw: string | null;
+    try {
+        raw = storage?.getItem(key) ?? null;
+    } catch {
+        return undefined;
+    }
+    if (raw === null) return undefined;
+    try {
+        const parsed = storedMemorySchema.safeParse(JSON.parse(raw));
+        if (parsed.success) return parsed.data;
+    } catch {
+        // Invalid JSON is discarded below.
+    }
+    discard(key, storage);
+    return undefined;
 }
 
 function kindForId(id: AiExportSelectionId): AiExportSelectionKind {
@@ -106,13 +154,17 @@ function fallbackState(input: LoadAiExportMemoryInput): AiExportMemoryState {
     };
 }
 
-function isStoredApplicable(stored: StoredAiExportMemory, input: LoadAiExportMemoryInput): stored is StoredAiExportMemory & {selectionId: AiExportSelectionId} {
+function isStoredApplicable(stored: StoredAiExportMemory, input: LoadAiExportMemoryInput): stored is ApplicableStoredAiExportMemory {
     if (!isSelectionId(stored.selectionId)) return false;
     const selection = findCompatibleAiExportSelection(input.compatibility, stored.selectionKind, stored.selectionId);
     return selection?.domain === input.domain && selection.supportedDetailLevels.includes(stored.detailLevel);
 }
 
-function hydrate(stored: StoredAiExportMemory & {selectionId: AiExportSelectionId}, responseLanguage: AiExportResponseLanguageDisplayName): AiExportMemoryState {
+function isExpired(stored: StoredAiExportMemory, now: number): boolean {
+    return now - stored.savedAt >= AI_EXPORT_MEMORY_TTL_MS;
+}
+
+function hydrate(stored: ApplicableStoredAiExportMemory, responseLanguage: AiExportResponseLanguageDisplayName): AiExportMemoryState {
     return {
         options: {
             selectionKind: stored.selectionKind,
@@ -127,81 +179,51 @@ function hydrate(stored: StoredAiExportMemory & {selectionId: AiExportSelectionI
     };
 }
 
-function discard(key: string, storage: AiExportMemoryStorage | undefined): void {
-    memoryCache.delete(key);
-    try {
-        storage?.removeItem(key);
-    } catch {
-        // Restricted storage: cache removal is still effective for this SPA session.
-    }
-}
-
 export function loadAiExportMemory(input: LoadAiExportMemoryInput): AiExportMemoryState {
     const fallback = fallbackState(input);
     if (input.compatibility.selections.length === 0) return fallback;
     const userId = getClientSessionUserId();
     if (!userId) return fallback;
-    const key = buildAiExportMemoryStorageKey(userId, input.memoryKey);
-    const storage = storageFor(input.storage);
-    const cached = memoryCache.get(key);
-    if (cached) return isStoredApplicable(cached, input) ? hydrate(cached, input.responseLanguage) : fallback;
 
-    let raw: string | null;
-    try {
-        raw = storage?.getItem(key) ?? null;
-    } catch {
-        return fallback;
-    }
-    if (raw === null) return fallback;
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(raw);
-    } catch {
+    const key = buildCacheKey(userId, input.memoryKey);
+    const storage = storageFor(input.storage);
+    const stored = memoryCache.get(key) ?? readStored(key, storage);
+    if (!stored) return fallback;
+    if (isExpired(stored, input.now ?? Date.now()) || !isStoredApplicable(stored, input)) {
         discard(key, storage);
         return fallback;
     }
-    const validated = storedMemorySchema.safeParse(parsed);
-    if (!validated.success || !isStoredApplicable(validated.data, input)) {
-        discard(key, storage);
-        return fallback;
-    }
-    memoryCache.set(key, validated.data);
-    return hydrate(validated.data, input.responseLanguage);
+    memoryCache.set(key, stored);
+    return hydrate(stored, input.responseLanguage);
 }
 
 export function saveAiExportMemory(input: SaveAiExportMemoryInput): void {
     const userId = getClientSessionUserId();
     if (!userId) return;
-    const key = buildAiExportMemoryStorageKey(userId, input.memoryKey);
+
+    const key = buildCacheKey(userId, input.memoryKey);
     const storage = storageFor(input.storage);
-    let previous = memoryCache.get(key);
-    if (!previous) {
-        try {
-            const raw = storage?.getItem(key);
-            if (raw) {
-                const parsed = storedMemorySchema.safeParse(JSON.parse(raw));
-                if (parsed.success) previous = parsed.data;
-            }
-        } catch {
-            // Invalid or restricted storage is replaced by the current valid draft.
-        }
-    }
+    const now = input.now ?? Date.now();
+    const cached = memoryCache.get(key) ?? readStored(key, storage);
+    const previous = cached && !isExpired(cached, now) ? cached : undefined;
+    if (cached && !previous) discard(key, storage);
     const notes = input.userNotesDraft !== undefined ? input.userNotesDraft : input.options.selectionKind === 'analysis' ? (normalizeAiExportUserNotes(input.options.selectionKind, input.options.userNotes) ?? '') : (previous?.notes ?? '');
+
     const stored = storedMemorySchema.parse({
-        version: AI_EXPORT_MEMORY_VERSION,
         selectionKind: input.options.selectionKind,
         selectionId: input.options.selectionId,
         detailLevel: input.options.detailLevel,
         period: normalizeAiExportPeriod(input.options.period),
         notes,
         copyAnywayFingerprint: input.copyAnywayFingerprint,
+        savedAt: now,
     });
     memoryCache.set(key, stored);
     try {
         storage?.setItem(key, JSON.stringify(stored));
     } catch {
-        // In-memory state remains available for this SPA session.
+        // The in-memory cache still works for this SPA lifetime.
     }
 }
 
-registerClientSessionReset('aiExportMemory', clearAiExportMemoryCache);
+registerClientSessionReset('aiExportMemory', clearAiExportMemoryState);

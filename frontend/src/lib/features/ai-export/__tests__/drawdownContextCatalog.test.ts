@@ -1,29 +1,15 @@
 import {describe, expect, it} from 'vitest';
 
-import enJson from '../../../i18n/en.json';
-import esJson from '../../../i18n/es.json';
-import frJson from '../../../i18n/fr.json';
-import itJson from '../../../i18n/it.json';
 import {AI_EXPORT_DATASET_IDS} from '../catalog/shared';
 import {findAiExportResponseContract} from '../templates/responseContracts';
 import {renderSnapshotDataText} from '../templates/snapshotDataRenderer';
 
-const LOCALES = {en: enJson, es: esJson, fr: frJson, it: itJson} as Record<string, Record<string, unknown>>;
-const DRAWDOWN_DATASET_IDS = ['portfolio.drawdown_context', 'broker.drawdown_context', 'asset.drawdown_context'] as const;
-
-function lookup(bundle: Record<string, unknown>, dottedKey: string): unknown {
-    return dottedKey.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), bundle);
-}
-
 describe('AI Export drawdown context catalog', () => {
-    it('registers the three drawdown context datasets and keeps 32 total', () => {
-        expect(AI_EXPORT_DATASET_IDS).toHaveLength(32);
-        for (const id of DRAWDOWN_DATASET_IDS) {
-            expect(AI_EXPORT_DATASET_IDS).toContain(id);
-        }
-        // The deferred FX drawdown dataset and asset.drawdown_recovery stay absent.
-        expect(AI_EXPORT_DATASET_IDS).not.toContain('fx.drawdown_context');
-        expect(AI_EXPORT_DATASET_IDS).not.toContain('asset.drawdown_recovery');
+    it('keeps drawdown context inside the 8 autonomous public datasets instead of exposing internal cards', () => {
+        expect(AI_EXPORT_DATASET_IDS).toHaveLength(8);
+        expect(AI_EXPORT_DATASET_IDS).not.toContain('portfolio.drawdown_context');
+        expect(AI_EXPORT_DATASET_IDS).not.toContain('broker.drawdown_context');
+        expect(AI_EXPORT_DATASET_IDS).not.toContain('asset.drawdown_context');
     });
 });
 
@@ -40,21 +26,9 @@ describe('AI Export drawdown response contracts', () => {
         expect(text).toContain('Risk metric');
     });
 
-    it.each(['portfolio.technical_breadth', 'fx.trend_review', 'asset.trend_analysis'] as const)('does not add a drawdown section to unrelated analysis %s', (analysisId) => {
+    it.each(['portfolio.performance_market_drivers', 'fx.pair_analysis'] as const)('does not add a dedicated drawdown section to unrelated analysis %s', (analysisId) => {
         const contract = findAiExportResponseContract(analysisId);
         expect(contract.sections.some((section) => section.title === 'Drawdown Context')).toBe(false);
-    });
-});
-
-describe('AI Export drawdown i18n', () => {
-    it.each(['en', 'it', 'fr', 'es'])('has dataset labels + risk analytic labels in %s', (locale) => {
-        const bundle = LOCALES[locale];
-        for (const datasetId of DRAWDOWN_DATASET_IDS) {
-            expect(lookup(bundle, `aiExport.dataset.${datasetId}.display`), `${locale} ${datasetId}.display`).toBeTruthy();
-            expect(lookup(bundle, `aiExport.dataset.${datasetId}.description`), `${locale} ${datasetId}.description`).toBeTruthy();
-        }
-        expect(lookup(bundle, 'risk.analytics.drawdownSummary.name'), `${locale} drawdownSummary.name`).toBeTruthy();
-        expect(lookup(bundle, 'risk.analytics.drawdownSummary.description'), `${locale} drawdownSummary.description`).toBeTruthy();
     });
 });
 

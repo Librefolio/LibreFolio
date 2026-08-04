@@ -1,4 +1,4 @@
-"""Contracts for the component-based public AI Export V2 API."""
+"""Contracts for the component-based public AI Export V3 catalog API."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def _request_payload(domain: str) -> dict[str, object]:
         "detail_level": "standard",
         "period": {"start": START.isoformat(), "end": END.isoformat()},
         "target_currency": "EUR",
-        "expected_catalog_version": 2,
+        "expected_catalog_version": 3,
     }
     if domain == "broker":
         payload["broker_id"] = 3
@@ -159,7 +159,7 @@ def test_catalog_separates_datasets_and_analyses_without_prompt_text():
     serialized = catalog.model_dump_json()
 
     assert catalog.schema_version == 2
-    assert catalog.catalog_version == 2
+    assert catalog.catalog_version == 3
     assert "prompt" not in serialized.lower()
     assert "web_research" not in serialized.lower()
 

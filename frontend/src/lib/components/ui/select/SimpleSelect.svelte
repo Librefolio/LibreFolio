@@ -42,9 +42,11 @@
         compact?: boolean;
         /** Show chevron icon in trigger button (default: true) */
         showChevron?: boolean;
+        /** Keep dropdown width equal to the trigger instead of sizing to content */
+        matchTriggerWidth?: boolean;
     }
 
-    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', class: className = '', testId, ariaLabel, optionTestId, item, selectedItem, onchange, compact = false, showChevron = true}: Props = $props();
+    let {value = $bindable(''), options, placeholder = '', disabled = false, loading = false, dropdownPosition = 'bottom', class: className = '', testId, ariaLabel, optionTestId, item, selectedItem, onchange, compact = false, showChevron = true, matchTriggerWidth = false}: Props = $props();
 
     // Internal state
     let isOpen = $state(false);
@@ -67,6 +69,7 @@
     let listboxAccessibleLabel = $derived(ariaLabel?.trim() || defaultAccessibleLabel);
     let triggerAccessibleName = $derived(buildAccessibleName([listboxAccessibleLabel, selectedOption?.label ?? defaultAccessibleLabel, selectedOption?.searchText]));
     let activeDescendantId = $derived(isOpen && highlightedIndex >= 0 && options[highlightedIndex] ? getOptionId(options[highlightedIndex]) : undefined);
+    let dropdownWidth = $derived(matchTriggerWidth ? `${fixedWidth}px` : 'max-content');
 
     function buildAccessibleName(parts: readonly (string | undefined)[]): string {
         const uniqueParts = parts
@@ -313,9 +316,10 @@
             role="listbox"
             aria-label={listboxAccessibleLabel}
             data-simpleselect-dropdown={listboxId}
+            data-testid={testId ? `${testId}-dropdown` : undefined}
             class="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
                    rounded-lg shadow-lg overflow-y-auto"
-            style="top: {fixedTop}px; left: {fixedLeft}px; min-width: {fixedWidth}px; width: max-content; max-height: {dropdownMaxHeight};"
+            style="top: {fixedTop}px; left: {fixedLeft}px; min-width: {fixedWidth}px; width: {dropdownWidth}; max-width: calc(100vw - 40px); max-height: {dropdownMaxHeight};"
             onwheel={(e) => e.stopPropagation()}
             ontouchmove={(e) => e.stopPropagation()}
             use:adjustFixedPositionAction

@@ -37,6 +37,10 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
                 dataset: t('aiExport.exportData'),
                 analysis: t('aiExport.requestAnalysis'),
             },
+            categoryHelp: {
+                dataset: t('aiExport.exportDataHelp'),
+                analysis: t('aiExport.requestAnalysisHelp'),
+            },
             selectionLabel: t('aiExport.selection'),
             selectionLabels,
             selectionDescriptions,
@@ -74,8 +78,7 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
             userNotesLabel: t('aiExport.userNotes'),
             userNotesPlaceholder: t('aiExport.userNotesPlaceholder'),
             payloadStatsLabel: t('aiExport.payloadStats'),
-            backendEstimatedTokensLabel: t('aiExport.backendEstimatedTokens'),
-            finalEstimatedTokensLabel: t('aiExport.finalEstimatedTokens'),
+            payloadStatsHelp: t('aiExport.payloadStatsHelp'),
             tokenUnitLabel: t('aiExport.tokenUnit'),
             tokenSeverityLabels: {
                 normal: t('aiExport.tokenSeverity.normal'),

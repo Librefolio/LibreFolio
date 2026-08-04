@@ -410,12 +410,12 @@ class TestDrawdownCatalogWiring:
             assert spec.version == 1
             assert spec.dependencies == deps
 
-    def test_counts_are_65_32_16(self):
-        assert len(ALL_COMPONENTS) == 65
-        assert EXPECTED_DATASET_COUNT == 32
-        assert len(build_dataset_registry()) == 32
-        assert EXPECTED_ANALYSIS_COUNT == 17
-        assert len(build_analysis_registry()) == 17
+    def test_counts_are_67_40_24(self):
+        assert len(ALL_COMPONENTS) == 67
+        assert EXPECTED_DATASET_COUNT == 40
+        assert len(build_dataset_registry()) == 40
+        assert EXPECTED_ANALYSIS_COUNT == 24
+        assert len(build_analysis_registry()) == 24
 
     def test_drawdown_datasets_excluded_from_all_data(self):
         registry = build_dataset_registry()
@@ -429,11 +429,13 @@ class TestDrawdownCatalogWiring:
             assert drawdown_id not in all_data.required_component_ids
             assert drawdown_id not in all_data.optional_component_ids
 
-    def test_optional_analysis_mappings(self):
-        registry = build_analysis_registry()
-        assert "portfolio.drawdown_context" in registry.get("portfolio.pac_planning").optional_dataset_ids
-        assert "portfolio.drawdown_context" in registry.get("portfolio.rebalancing").optional_dataset_ids
-        assert "broker.drawdown_context" in registry.get("broker.review").optional_dataset_ids
-        assert "asset.drawdown_context" in registry.get("asset.position_review").optional_dataset_ids
-        # Deliberately NOT added to unrelated analyses.
-        assert "portfolio.drawdown_context" not in registry.get("portfolio.technical_breadth").optional_dataset_ids
+    def test_public_general_datasets_include_optional_drawdown_context(self):
+        datasets = build_dataset_registry()
+        assert "portfolio.drawdown_summary" in datasets.get("portfolio.overview_and_history").optional_component_ids
+        assert "broker.drawdown_summary" in datasets.get("broker.overview_and_history").optional_component_ids
+        assert "asset.drawdown_summary" in datasets.get("asset.position_and_history").optional_component_ids
+
+        analyses = build_analysis_registry(datasets)
+        assert analyses.get("portfolio.pac_planning").required_dataset_ids == ("portfolio.overview_and_history",)
+        assert analyses.get("broker.review").required_dataset_ids == ("broker.overview_and_history",)
+        assert analyses.get("asset.position_review").required_dataset_ids == ("asset.position_and_history",)

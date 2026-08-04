@@ -47,6 +47,7 @@ export interface AiExportStatsContextFingerprintInput {
 export interface AiExportOptionsPanelLabels {
     readonly categoryLabel: string;
     readonly categoryLabels: Readonly<Record<AiExportSelectionKind, string>>;
+    readonly categoryHelp: Readonly<Record<AiExportSelectionKind, string>>;
     readonly selectionLabel: string;
     readonly selectionLabels: Readonly<Record<string, string>>;
     readonly selectionDescriptions: Readonly<Record<string, string>>;
@@ -61,8 +62,7 @@ export interface AiExportOptionsPanelLabels {
     readonly userNotesLabel: string;
     readonly userNotesPlaceholder: string;
     readonly payloadStatsLabel: string;
-    readonly backendEstimatedTokensLabel: string;
-    readonly finalEstimatedTokensLabel: string;
+    readonly payloadStatsHelp: string;
     readonly tokenUnitLabel: string;
     readonly tokenSeverityLabels: Readonly<Record<AiExportTokenSeverity, string>>;
     readonly prepareLabel: string;
@@ -198,7 +198,7 @@ export function reconcileAiExportOptions(compatibility: AiExportCatalogCompatibi
 }
 
 export function aiExportStatsContextFingerprint(context: AiExportStatsContextFingerprintInput): string {
-    return JSON.stringify(['ai-export-stats-context-v2', context.contextKey, context.snapshotAsOf, context.targetCurrency]);
+    return JSON.stringify(['ai-export-stats-context-v3', context.contextKey, context.snapshotAsOf, context.targetCurrency]);
 }
 
 export function isAiExportStatsRequestCurrent(requestGeneration: number, requestContextFingerprint: string, currentGeneration: number, currentContextFingerprint: string): boolean {

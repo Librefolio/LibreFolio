@@ -59,6 +59,7 @@ from backend.app.services.ai_export.analyses.spec import (
     AnalysisSpec,
     UnknownAnalysisError,
 )
+from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.registry import ComponentRegistry
@@ -89,7 +90,7 @@ from backend.app.services.ai_export.temporal.policy import (
 )
 
 SCHEMA_VERSION = 2
-CATALOG_VERSION = 2
+CATALOG_VERSION = 3
 
 _DETAIL_ORDER = {
     DetailLevel.COMPACT: 0,
@@ -104,6 +105,8 @@ _FX_HISTORY_COVERAGE_DATASET_IDS = frozenset(
         "fx.market_context",
         "fx.conversion_timing_context",
         "fx.all_data",
+        "fx.market_and_exposure",
+        "fx.market_history",
     }
 )
 
@@ -320,10 +323,10 @@ class AiExportSnapshotService:
                 required_component_ids=dataset.required_component_ids,
                 optional_component_ids=dataset.optional_component_ids,
             )
-            for dataset in dataset_registry
+            for dataset in dataset_registry.for_visibility(CatalogVisibility.PUBLIC)
         )
         analyses = []
-        for analysis in analysis_registry:
+        for analysis in analysis_registry.for_visibility(CatalogVisibility.PUBLIC):
             required_datasets = tuple(dataset_registry.get(dataset_id) for dataset_id in analysis.required_dataset_ids)
             supported = set(DetailLevel)
             for dataset in required_datasets:
@@ -381,7 +384,7 @@ class AiExportSnapshotService:
                 dataset = self.dataset_registry.get(selection.id)
             except UnknownDatasetError as exc:
                 raise AiExportUnsupportedSelectionError(selection.id) from exc
-            if dataset.domain != expected_domain:
+            if dataset.domain != expected_domain or dataset.visibility is not CatalogVisibility.PUBLIC:
                 raise AiExportUnsupportedSelectionError(selection.id)
             if selection.version != dataset.version:
                 raise AiExportVersionMismatchError(
@@ -396,7 +399,7 @@ class AiExportSnapshotService:
                 analysis = self.analysis_registry.get(selection.id)
             except UnknownAnalysisError as exc:
                 raise AiExportUnsupportedSelectionError(selection.id) from exc
-            if analysis.domain != expected_domain:
+            if analysis.domain != expected_domain or analysis.visibility is not CatalogVisibility.PUBLIC:
                 raise AiExportUnsupportedSelectionError(selection.id)
             expected_fields = {
                 "selection.version": analysis.version,

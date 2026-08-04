@@ -441,10 +441,10 @@ async def _build_performance(context: BuildContext, dependencies: Mapping[str, S
             end_value=c.end_value,
             period_pnl=c.period_pnl,
             period_pnl_percent=c.period_pnl_percent,
-            period_realized_gain_loss=c.period_realized_gain_loss,
+            period_realized_gain_loss=c.period_realized_gain_loss if c.period_realized_gain_loss is not None else Decimal("0"),
             period_unrealized_delta=c.period_unrealized_delta,
-            period_income=c.period_income,
-            period_fees_taxes=c.period_fees_taxes,
+            period_income=c.period_income if c.period_income is not None else Decimal("0"),
+            period_fees_taxes=c.period_fees_taxes if c.period_fees_taxes is not None else Decimal("0"),
             is_fully_sold=c.is_fully_sold,
         )
         for c in contributions
@@ -483,6 +483,7 @@ async def _build_performance(context: BuildContext, dependencies: Mapping[str, S
         asset_id=scope.asset_id,  # type: ignore[arg-type]
         period=DateRangeModel(start=scope.period_start, end=scope.period_end),
         target_currency=scope.target_currency,
+        zero_semantics="The Portfolio Engine omits zero-valued realized P&L, income, and fees/taxes on contribution rows; this component renders those omitted zero values explicitly as recorded zero.",
         brokers=brokers,
         coverage=coverage,
         total_start_value=total_start_value,
@@ -548,7 +549,21 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
                 opening_date=lot.opening_date,
                 opening_unit_price=lot.opening_unit_price,
                 original_quantity=lot.original_quantity,
+                original_cost=lot.original_cost,
                 open_quantity=lot.open_quantity,
+                realized_quantity=lot.realized_quantity,
+                cumulative_proceeds=lot.cumulative_proceeds,
+                realized_pnl=lot.realized_pnl,
+                open_value=lot.open_value,
+                unrealized_pnl=lot.market_pnl,
+                total_pnl=lot.total_pnl,
+                net_total_pnl=lot.net_total_pnl,
+                income=lot.asset_income,
+                allocated_fees=lot.allocated_fees,
+                allocated_taxes=lot.allocated_taxes,
+                value_source=lot.value_source,
+                net_metrics_status=lot.net_metrics_status,
+                states=tuple(lot.states),
                 closing_date=lot.closing_date,
                 current_custody=custody,
             )
@@ -558,6 +573,7 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         asset_id=scope.asset_id,  # type: ignore[arg-type]
         period=DateRangeModel(start=scope.period_start, end=scope.period_end),
         target_currency=lots_response.target_currency,
+        cost_allocation_semantics="Lot fees and taxes include only costs deterministically allocated to this Asset's lots. Broker-level unallocated costs are not included and must not be interpreted as zero.",
         lots=tuple(rows),
         omitted_degraded_lot_count=omitted_degraded_lot_count,
     )

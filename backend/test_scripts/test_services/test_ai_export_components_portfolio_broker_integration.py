@@ -510,11 +510,11 @@ def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, b
 
 class TestPortfolioBrokerFragmentSanity:
     def test_exact_component_counts(self):
-        assert len(PORTFOLIO_BROKER_COMPONENTS) == 39
+        assert len(PORTFOLIO_BROKER_COMPONENTS) == 41
         assert PORTFOLIO_REAL_COMPONENT_COUNT == 21
-        assert BROKER_REAL_COMPONENT_COUNT == 18
+        assert BROKER_REAL_COMPONENT_COUNT == 20
         assert len(PORTFOLIO_REAL_COMPONENT_IDS) == 21
-        assert len(BROKER_REAL_COMPONENT_IDS) == 18
+        assert len(BROKER_REAL_COMPONENT_IDS) == 20
 
     def test_no_duplicate_component_ids(self):
         ids = [spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS]
@@ -558,9 +558,11 @@ class TestPortfolioBrokerFragmentSanity:
             "broker.performance",
             "broker.flows_income_costs",
             "broker.reconciliation",
+            "broker.technical_prices",
             "broker.technical_indicators",
             "broker.technical_breadth",
             "broker.technical_events",
+            "broker.fifo_summary",
             "broker.fifo_lots",
             # V2 context components
             "broker.technical_coverage",
@@ -596,6 +598,8 @@ class TestPortfolioBrokerFragmentSanity:
             ("portfolio.summary", "dependencies", ("portfolio.positions",)),
             ("portfolio.summary", "period_behavior", PeriodBehavior.WINDOWED),
             ("portfolio.technical_prices", "aggregator", TemporalAggregatorSpec(kind="different_kind")),
+            ("broker.technical_indicators", "dependencies", ()),
+            ("broker.technical_prices", "aggregator", TemporalAggregatorSpec(kind="different_kind")),
         ],
     )
     def test_validation_rejects_metadata_drift(self, component_id, field, override):
@@ -612,9 +616,9 @@ class TestPortfolioBrokerFragmentSanity:
 
 
 class TestComponentRegistryConstruction:
-    def test_merged_registry_has_65_components(self):
+    def test_merged_registry_has_67_components(self):
         registry = build_portfolio_broker_component_registry()
-        assert len(registry) == 65
+        assert len(registry) == 67
 
     def test_pb_component_ids_resolve_to_real_specs(self):
         registry = build_portfolio_broker_component_registry()
@@ -640,6 +644,21 @@ class TestComponentRegistryConstruction:
         expected_order = tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
         assert registry.canonical_order == expected_order
 
+    def test_broker_technical_prices_precede_and_feed_indicators_like_portfolio(self):
+        registry = build_portfolio_broker_component_registry()
+        order = registry.canonical_order
+        broker_prices = registry.get("broker.technical_prices")
+        broker_indicators = registry.get("broker.technical_indicators")
+        portfolio_prices = registry.get("portfolio.technical_prices")
+        portfolio_indicators = registry.get("portfolio.technical_indicators")
+
+        assert broker_prices.domains == frozenset({Domain.BROKER})
+        assert broker_prices.period_behavior == portfolio_prices.period_behavior == PeriodBehavior.AGGREGATED
+        assert broker_prices.aggregator == portfolio_prices.aggregator
+        assert broker_indicators.dependencies == ("broker.technical_prices",)
+        assert portfolio_indicators.dependencies == ("portfolio.technical_prices",)
+        assert order.index("broker.technical_prices") + 1 == order.index("broker.technical_indicators")
+
     def test_catalog_module_is_not_mutated(self):
         """`ALL_FOUNDATION_COMPONENTS` itself must remain the exact frozen placeholder tuple after building the fragment registry."""
         before = tuple(ALL_FOUNDATION_COMPONENTS)
@@ -657,14 +676,14 @@ def registry_placeholder(component_id: str):
 
 
 class TestDatasetAndAnalysisRegistryConstruction:
-    def test_dataset_registry_has_25_datasets(self):
+    def test_dataset_registry_has_40_datasets(self):
         registry = build_portfolio_broker_dataset_registry()
-        assert len(registry) == EXPECTED_DATASET_COUNT == 32
+        assert len(registry) == EXPECTED_DATASET_COUNT == 40
 
-    def test_analysis_registry_has_17_analyses(self):
+    def test_analysis_registry_has_22_analyses(self):
         dataset_registry = build_portfolio_broker_dataset_registry()
         analysis_registry = build_portfolio_broker_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 17
+        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 22
 
     def test_portfolio_and_broker_datasets_present(self):
         registry = build_portfolio_broker_dataset_registry()
@@ -682,6 +701,8 @@ class TestDatasetAndAnalysisRegistryConstruction:
             "portfolio.asset_comparison",
             "portfolio.drawdown_context",
             "portfolio.income_evidence",
+            "portfolio.overview_and_history",
+            "portfolio.asset_history",
         }
         assert broker_ids == {
             "broker.overview",
@@ -695,14 +716,16 @@ class TestDatasetAndAnalysisRegistryConstruction:
             "broker.drawdown_context",
             "broker.concentration_evidence",
             "broker.cost_efficiency_evidence",
+            "broker.overview_and_history",
+            "broker.asset_history",
         }
 
     def test_portfolio_and_broker_analyses_present(self):
         analysis_registry = build_portfolio_broker_analysis_registry()
         portfolio_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.PORTFOLIO}
         broker_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.BROKER}
-        assert len(portfolio_analysis_ids) == 8
-        assert len(broker_analysis_ids) == 4
+        assert len(portfolio_analysis_ids) == 10
+        assert len(broker_analysis_ids) == 5
 
 
 # =============================================================================
@@ -916,13 +939,13 @@ class TestBrokerDatasetComposition:
 
 
 # =============================================================================
-# 7. End-to-end analysis composition: all 7 Portfolio + 4 Broker analyses
+# 7. End-to-end analysis composition: all Portfolio/Broker registry analyses
 # =============================================================================
 
 
 class TestAnalysisComposition:
     @pytest.mark.asyncio
-    async def test_all_seven_portfolio_analyses_compose(self, monkeypatch):
+    async def test_all_ten_portfolio_analyses_compose(self, monkeypatch):
         scope = _portfolio_scope()
         _setup_portfolio_scenario(monkeypatch, scope)
         dataset_registry = build_portfolio_broker_dataset_registry()
@@ -931,14 +954,14 @@ class TestAnalysisComposition:
         composer = Composer()
 
         portfolio_analyses = [spec for spec in analysis_registry if spec.domain == Domain.PORTFOLIO]
-        assert len(portfolio_analyses) == 8
+        assert len(portfolio_analyses) == 10
         for analysis in portfolio_analyses:
             composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
             assert set(analysis.required_dataset_ids).issubset(set(composition.dataset_ids))
             assert composition.sections  # real payloads, never empty given the fixture scenario
 
     @pytest.mark.asyncio
-    async def test_all_four_broker_analyses_compose(self, monkeypatch):
+    async def test_all_five_broker_analyses_compose(self, monkeypatch):
         scope = _broker_scope()
         _setup_broker_scenario(monkeypatch, scope)
         dataset_registry = build_portfolio_broker_dataset_registry()
@@ -947,7 +970,7 @@ class TestAnalysisComposition:
         composer = Composer()
 
         broker_analyses = [spec for spec in analysis_registry if spec.domain == Domain.BROKER]
-        assert len(broker_analyses) == 4
+        assert len(broker_analyses) == 5
         for analysis in broker_analyses:
             composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
             assert set(analysis.required_dataset_ids).issubset(set(composition.dataset_ids))
@@ -994,8 +1017,7 @@ class TestOptionalDatasetSemantics:
         rebalancing = next(spec for spec in analysis_registry if spec.analysis_id == "portfolio.rebalancing")
         composition = await composer.compose_analysis(rebalancing, dataset_registry, context, detail_level=DetailLevel.STANDARD)
 
-        assert "portfolio.overview" in composition.dataset_ids  # required dataset still succeeds
-        assert "portfolio.asset_comparison" not in composition.dataset_ids  # optional dataset silently omitted, not partially included
+        assert composition.dataset_ids == ("portfolio.overview_and_history",)
         assert not any(section.component_id.startswith("portfolio.technical_") for section in composition.sections)
 
     @pytest.mark.asyncio
@@ -1016,10 +1038,9 @@ class TestOptionalDatasetSemantics:
         review = next(spec for spec in analysis_registry if spec.analysis_id == "broker.review")
         composition = await composer.compose_analysis(review, dataset_registry, context, detail_level=DetailLevel.STANDARD)
 
-        assert "broker.overview" in composition.dataset_ids
-        assert "broker.performance_flows" in composition.dataset_ids
-        assert "broker.fifo" not in composition.dataset_ids  # optional, source failed -> omitted
-        assert "broker.asset_comparison" in composition.dataset_ids  # sibling optional dataset unaffected
+        assert composition.dataset_ids == ("broker.overview_and_history",)
+        assert "broker.fifo_summary" not in {section.component_id for section in composition.sections}
+        assert "broker.asset_market_context" in {section.component_id for section in composition.sections}
 
 
 # =============================================================================
@@ -1100,9 +1121,9 @@ class TestRequiredSourceFailurePropagation:
         context = _full_context(scope, _make_async_session())
         composer = Composer()
 
-        cost_efficiency = next(spec for spec in analysis_registry if spec.analysis_id == "broker.cost_efficiency")
+        broker_review = next(spec for spec in analysis_registry if spec.analysis_id == "broker.review")
         with pytest.raises(RequiredComponentBuildError):
-            await composer.compose_analysis(cost_efficiency, dataset_registry, context, detail_level=DetailLevel.STANDARD)
+            await composer.compose_analysis(broker_review, dataset_registry, context, detail_level=DetailLevel.STANDARD)
 
 
 # =============================================================================
@@ -1310,4 +1331,4 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        assert result.stdout.strip() == "65 32 17"
+        assert result.stdout.strip() == "67 40 22"

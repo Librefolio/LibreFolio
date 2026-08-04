@@ -148,28 +148,31 @@ test.describe('Broker Sharing', () => {
             await openSharingModal(page);
         });
 
-        test('S11: add user form has search input', async ({page}) => {
+        test('S11: add user form has a user picker', async ({page}) => {
             await page.getByTestId('sharing-add-user-btn').click();
             await expect(page.getByTestId('sharing-add-form')).toBeVisible();
-            await expect(page.getByTestId('sharing-search-input')).toBeVisible();
+            await expect(page.getByTestId('sharing-user-select-trigger')).toBeVisible();
         });
 
-        test('S12: search for users returns results', async ({page}) => {
+        test('S12: user picker lists users up-front and narrows down while typing', async ({page}) => {
             await page.getByTestId('sharing-add-user-btn').click();
             await expect(page.getByTestId('sharing-add-form')).toBeVisible({timeout: 3000});
-            const searchInput = page.getByTestId('sharing-search-input');
+
+            // Opening the picker must already show the candidate list — no typing required
+            await page.getByTestId('sharing-user-select-trigger').click();
+            const options = page.locator('[data-testid^="search-select-option-"]');
+            await expect(options.first()).toBeVisible({timeout: 5000});
+
+            // Typing narrows the list client-side ('frank' is a free user on no broker)
+            const searchInput = page.getByTestId('sharing-user-select-search');
             await expect(searchInput).toBeVisible();
-
-            // Type a search query using pressSequentially to trigger Svelte on:input
-            // 'frank' is a free user NOT assigned to any broker
-            await searchInput.click();
             await searchInput.pressSequentially('frank', {delay: 50});
-            // Wait for debounce (300ms) + API call
-            await page.waitForTimeout(2000);
 
-            // Should see at least one search result item (e2e_user_frank)
-            const results = page.locator('[data-testid^="user-search-result-"]');
-            await expect(results.first()).toBeVisible({timeout: 5000});
+            await expect(options.first()).toBeVisible({timeout: 5000});
+            const remaining = await options.count();
+            for (let i = 0; i < remaining; i++) {
+                await expect(options.nth(i)).toContainText(/frank/i);
+            }
         });
     });
 

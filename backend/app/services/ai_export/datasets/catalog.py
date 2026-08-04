@@ -1,4 +1,4 @@
-"""Public 32-dataset catalog for AI Export Semantic Composition V2.
+"""Internal granular datasets plus the compact public AI Export V3 catalog.
 
 Dataset IDs and domains are frozen per the refinement plan
 (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 4):
@@ -33,12 +33,14 @@ performance).
 
 from __future__ import annotations
 
+from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, Domain, PeriodBehavior
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry, DatasetSpec, build_all_data_dataset
 
-EXPECTED_DATASET_COUNT = 32
+EXPECTED_DATASET_COUNT = 40
+EXPECTED_PUBLIC_DATASET_COUNT = 8
 
 # -- Portfolio ------------------------------------------------------------------
 
@@ -257,9 +259,9 @@ BROKER_FIFO = DatasetSpec(
     icon="list-ordered",
     applicability_code="always_applicable",
     applicable_pages=("broker",),
-    required_component_ids=("broker.fifo_lots",),
+    required_component_ids=("broker.fifo_summary", "broker.fifo_lots"),
     optional_component_ids=(),
-    section_order=("broker.fifo_lots",),
+    section_order=("broker.fifo_summary", "broker.fifo_lots"),
     technical_requirements=("requires_lots_analysis_service",),
     period_semantics=PeriodBehavior.WINDOWED,
     supported_detail_levels=ALL_DETAIL_LEVELS,
@@ -535,6 +537,335 @@ FX_CONVERSION_TIMING_CONTEXT = DatasetSpec(
 )
 
 
+# -- Public Catalog V3 -----------------------------------------------------------
+
+PORTFOLIO_OVERVIEW_AND_HISTORY = DatasetSpec(
+    dataset_id="portfolio.overview_and_history",
+    version=3,
+    domain=Domain.PORTFOLIO,
+    display_i18n_key="aiExport.dataset.portfolio.overview_and_history.display",
+    description_i18n_key="aiExport.dataset.portfolio.overview_and_history.description",
+    icon="layout-dashboard",
+    applicability_code="always_applicable",
+    applicable_pages=("dashboard",),
+    required_component_ids=(
+        "portfolio.summary",
+        "portfolio.positions",
+        "portfolio.allocations_cash",
+        "portfolio.performance",
+        "portfolio.flows_income",
+        "portfolio.fees_taxes",
+        "portfolio.reconciliation",
+        "portfolio.provenance",
+    ),
+    optional_component_ids=(
+        "portfolio.income_timeline",
+        "portfolio.fifo_summary",
+        "portfolio.technical_coverage",
+        "portfolio.asset_market_context",
+        "portfolio.asset_drawdown_snapshot",
+        "portfolio.drawdown_summary",
+    ),
+    section_order=(
+        "portfolio.summary",
+        "portfolio.positions",
+        "portfolio.allocations_cash",
+        "portfolio.performance",
+        "portfolio.flows_income",
+        "portfolio.fees_taxes",
+        "portfolio.reconciliation",
+        "portfolio.income_timeline",
+        "portfolio.fifo_summary",
+        "portfolio.technical_coverage",
+        "portfolio.asset_market_context",
+        "portfolio.asset_drawdown_snapshot",
+        "portfolio.drawdown_summary",
+        "portfolio.provenance",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins", "requires_lots_analysis_service"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+PORTFOLIO_ASSET_HISTORY = DatasetSpec(
+    dataset_id="portfolio.asset_history",
+    version=3,
+    domain=Domain.PORTFOLIO,
+    display_i18n_key="aiExport.dataset.portfolio.asset_history.display",
+    description_i18n_key="aiExport.dataset.portfolio.asset_history.description",
+    icon="activity",
+    applicability_code="always_applicable",
+    applicable_pages=("dashboard",),
+    required_component_ids=(
+        "portfolio.technical_coverage",
+        "portfolio.technical_prices",
+        "portfolio.technical_indicators",
+        "portfolio.technical_events",
+        "portfolio.technical_breadth",
+        "portfolio.provenance",
+    ),
+    optional_component_ids=(),
+    section_order=(
+        "portfolio.technical_coverage",
+        "portfolio.technical_prices",
+        "portfolio.technical_indicators",
+        "portfolio.technical_events",
+        "portfolio.technical_breadth",
+        "portfolio.provenance",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+BROKER_OVERVIEW_AND_HISTORY = DatasetSpec(
+    dataset_id="broker.overview_and_history",
+    version=3,
+    domain=Domain.BROKER,
+    display_i18n_key="aiExport.dataset.broker.overview_and_history.display",
+    description_i18n_key="aiExport.dataset.broker.overview_and_history.description",
+    icon="landmark",
+    applicability_code="always_applicable",
+    applicable_pages=("broker",),
+    required_component_ids=(
+        "broker.summary",
+        "broker.positions",
+        "broker.allocation_concentration",
+        "broker.performance",
+        "broker.flows_income_costs",
+        "broker.reconciliation",
+        "broker.concentration_context",
+        "broker.cost_efficiency",
+        "broker.provenance",
+    ),
+    optional_component_ids=(
+        "broker.concentration_comparison",
+        "broker.fifo_summary",
+        "broker.technical_coverage",
+        "broker.asset_market_context",
+        "broker.drawdown_summary",
+    ),
+    section_order=(
+        "broker.summary",
+        "broker.positions",
+        "broker.allocation_concentration",
+        "broker.performance",
+        "broker.flows_income_costs",
+        "broker.reconciliation",
+        "broker.concentration_context",
+        "broker.concentration_comparison",
+        "broker.cost_efficiency",
+        "broker.fifo_summary",
+        "broker.technical_coverage",
+        "broker.asset_market_context",
+        "broker.drawdown_summary",
+        "broker.provenance",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins", "requires_lots_analysis_service"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+BROKER_ASSET_HISTORY = DatasetSpec(
+    dataset_id="broker.asset_history",
+    version=3,
+    domain=Domain.BROKER,
+    display_i18n_key="aiExport.dataset.broker.asset_history.display",
+    description_i18n_key="aiExport.dataset.broker.asset_history.description",
+    icon="activity",
+    applicability_code="always_applicable",
+    applicable_pages=("broker",),
+    required_component_ids=(
+        "broker.technical_coverage",
+        "broker.technical_prices",
+        "broker.technical_indicators",
+        "broker.technical_events",
+        "broker.technical_breadth",
+        "broker.provenance",
+    ),
+    optional_component_ids=(),
+    section_order=(
+        "broker.technical_coverage",
+        "broker.technical_prices",
+        "broker.technical_indicators",
+        "broker.technical_events",
+        "broker.technical_breadth",
+        "broker.provenance",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+ASSET_POSITION_AND_HISTORY = DatasetSpec(
+    dataset_id="asset.position_and_history",
+    version=3,
+    domain=Domain.ASSET,
+    display_i18n_key="aiExport.dataset.asset.position_and_history.display",
+    description_i18n_key="aiExport.dataset.asset.position_and_history.description",
+    icon="wallet",
+    applicability_code="always_applicable",
+    applicable_pages=("asset",),
+    required_component_ids=(
+        "asset.identity",
+        "asset.market_snapshot",
+        "asset.position_scope",
+        "asset.positions_by_broker",
+        "asset.cost_value_pl",
+        "asset.performance",
+        "asset.provenance",
+    ),
+    optional_component_ids=(
+        "asset.technical_coverage",
+        "asset.position_market_context",
+        "asset.drawdown_summary",
+        "asset.lot_detail",
+    ),
+    section_order=(
+        "asset.identity",
+        "asset.market_snapshot",
+        "asset.position_scope",
+        "asset.positions_by_broker",
+        "asset.cost_value_pl",
+        "asset.performance",
+        "asset.lot_detail",
+        "asset.technical_coverage",
+        "asset.position_market_context",
+        "asset.drawdown_summary",
+        "asset.provenance",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins", "requires_lots_analysis_service"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+ASSET_MARKET_HISTORY = DatasetSpec(
+    dataset_id="asset.market_history",
+    version=3,
+    domain=Domain.ASSET,
+    display_i18n_key="aiExport.dataset.asset.market_history.display",
+    description_i18n_key="aiExport.dataset.asset.market_history.description",
+    icon="activity",
+    applicability_code="always_applicable",
+    applicable_pages=("asset",),
+    required_component_ids=(
+        "asset.identity",
+        "asset.market_snapshot",
+        "asset.technical_coverage",
+        "asset.ohlc_returns",
+        "asset.indicators",
+        "asset.states_events",
+        "asset.drawdown_summary",
+        "asset.provenance",
+    ),
+    optional_component_ids=(),
+    section_order=(
+        "asset.identity",
+        "asset.market_snapshot",
+        "asset.technical_coverage",
+        "asset.ohlc_returns",
+        "asset.indicators",
+        "asset.states_events",
+        "asset.drawdown_summary",
+        "asset.provenance",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+FX_MARKET_AND_EXPOSURE = DatasetSpec(
+    dataset_id="fx.market_and_exposure",
+    version=3,
+    domain=Domain.FX,
+    display_i18n_key="aiExport.dataset.fx.market_and_exposure.display",
+    description_i18n_key="aiExport.dataset.fx.market_and_exposure.description",
+    icon="arrow-left-right",
+    applicability_code="always_applicable",
+    applicable_pages=("fx",),
+    required_component_ids=(
+        "fx.pair_identity",
+        "fx.current_rate",
+        "fx.conversion_provenance",
+        "fx.technical_coverage",
+        "fx.market_summary",
+        "fx.timing_context",
+        "fx.exposure_base_quote",
+        "fx.exposure_provenance",
+    ),
+    optional_component_ids=(),
+    section_order=(
+        "fx.pair_identity",
+        "fx.current_rate",
+        "fx.conversion_provenance",
+        "fx.technical_coverage",
+        "fx.market_summary",
+        "fx.timing_context",
+        "fx.exposure_base_quote",
+        "fx.exposure_provenance",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins", "requires_fx_conversions"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+FX_MARKET_HISTORY = DatasetSpec(
+    dataset_id="fx.market_history",
+    version=3,
+    domain=Domain.FX,
+    display_i18n_key="aiExport.dataset.fx.market_history.display",
+    description_i18n_key="aiExport.dataset.fx.market_history.description",
+    icon="activity",
+    applicability_code="always_applicable",
+    applicable_pages=("fx",),
+    required_component_ids=(
+        "fx.pair_identity",
+        "fx.current_rate",
+        "fx.conversion_provenance",
+        "fx.technical_coverage",
+        "fx.rate_ohlc",
+        "fx.returns_volatility",
+        "fx.indicators",
+        "fx.states_events",
+    ),
+    optional_component_ids=(),
+    section_order=(
+        "fx.pair_identity",
+        "fx.current_rate",
+        "fx.conversion_provenance",
+        "fx.technical_coverage",
+        "fx.rate_ohlc",
+        "fx.returns_volatility",
+        "fx.indicators",
+        "fx.states_events",
+    ),
+    technical_requirements=("requires_price_history", "requires_signal_plugins"),
+    period_semantics=PeriodBehavior.AGGREGATED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+    visibility=CatalogVisibility.PUBLIC,
+)
+
+PUBLIC_DATASETS: tuple[DatasetSpec, ...] = (
+    PORTFOLIO_OVERVIEW_AND_HISTORY,
+    PORTFOLIO_ASSET_HISTORY,
+    BROKER_OVERVIEW_AND_HISTORY,
+    BROKER_ASSET_HISTORY,
+    ASSET_POSITION_AND_HISTORY,
+    ASSET_MARKET_HISTORY,
+    FX_MARKET_AND_EXPOSURE,
+    FX_MARKET_HISTORY,
+)
+
+assert len(PUBLIC_DATASETS) == EXPECTED_PUBLIC_DATASET_COUNT
+
+
 def _build_all_data_specs(component_registry: ComponentRegistry) -> tuple[DatasetSpec, DatasetSpec, DatasetSpec, DatasetSpec]:
     portfolio_all_data = build_all_data_dataset(
         dataset_id="portfolio.all_data",
@@ -604,6 +935,7 @@ def build_dataset_registry(component_registry: ComponentRegistry | None = None) 
     registry = component_registry or build_component_registry()
     portfolio_all_data, broker_all_data, asset_all_data, fx_all_data = _build_all_data_specs(registry)
     specs = (
+        *PUBLIC_DATASETS,
         PORTFOLIO_OVERVIEW,
         PORTFOLIO_PERFORMANCE_FLOWS,
         PORTFOLIO_TECHNICAL_SUMMARY,

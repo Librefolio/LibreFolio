@@ -125,9 +125,9 @@
                 CROWDFUND: '🤝',
                 INDEX: '📉',
                 OTHER: '📦',
-                Liquidity: '💰',
+                LIQUIDITY: '💰',
             };
-            return typeEmojis[rawName] ?? '📊';
+            return typeEmojis[rawName.toUpperCase()] ?? '📊';
         }
         return '';
     }
@@ -229,7 +229,12 @@
             return localized !== key ? localized : rawName;
         }
         if (dimension === 'type') {
-            return $t(`assets.types.${rawName}`) || rawName;
+            // The engine injects the cash slice as "Liquidity" (capitalized) while every
+            // other type is an uppercase enum — normalize so `assets.types.LIQUIDITY`
+            // resolves instead of leaking the raw i18n path into the chart.
+            const key = `assets.types.${rawName.toUpperCase()}`;
+            const localized = $t(key);
+            return localized !== key ? localized : rawName;
         }
         return rawName;
     }

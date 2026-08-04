@@ -1,4 +1,4 @@
-"""Focused ASGI tests for the component-based AI Export v1 API."""
+"""Focused ASGI tests for the component-based AI Export V3 catalog API."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def _payload(domain: str) -> dict[str, object]:
         "detail_level": "standard",
         "period": {"start": START.isoformat(), "end": END.isoformat()},
         "target_currency": "EUR",
-        "expected_catalog_version": 2,
+        "expected_catalog_version": 3,
     }
     if domain == "broker":
         payload["broker_id"] = 1
@@ -160,7 +160,7 @@ def _typed_problem(response: httpx.Response) -> AiExportProblem:
 
 
 @pytest.mark.asyncio
-async def test_catalog_returns_32_datasets_and_17_analyses():
+async def test_catalog_returns_8_datasets_and_11_analyses():
     app = _app()
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -171,13 +171,23 @@ async def test_catalog_returns_32_datasets_and_17_analyses():
     assert response.status_code == 200
     payload = response.json()
     assert payload["schema_version"] == 2
-    assert payload["catalog_version"] == 2
-    assert len(payload["datasets"]) == 32
-    assert len(payload["analyses"]) == 17
+    assert payload["catalog_version"] == 3
+    assert {entry["id"] for entry in payload["datasets"]} == {
+        "portfolio.overview_and_history",
+        "portfolio.asset_history",
+        "broker.overview_and_history",
+        "broker.asset_history",
+        "asset.position_and_history",
+        "asset.market_history",
+        "fx.market_and_exposure",
+        "fx.market_history",
+    }
+    assert len(payload["analyses"]) == 11
     assert "asset.drawdown_recovery" not in {entry["id"] for entry in payload["analyses"]}
-    assert {"portfolio.drawdown_context", "broker.drawdown_context", "asset.drawdown_context"} <= {entry["id"] for entry in payload["datasets"]}
-    assert "fx.drawdown_context" not in {entry["id"] for entry in payload["datasets"]}
-    assert {"portfolio.income_evidence", "broker.concentration_evidence", "broker.cost_efficiency_evidence", "fx.conversion_timing_context"} <= {entry["id"] for entry in payload["datasets"]}
+    assert "portfolio.market_events_review" not in {entry["id"] for entry in payload["analyses"]}
+    assert "broker.concentration_context" not in {entry["id"] for entry in payload["analyses"]}
+    assert "broker.cost_efficiency" not in {entry["id"] for entry in payload["analyses"]}
+    assert "fx.conversion_planning" not in {entry["id"] for entry in payload["analyses"]}
     serialized = json.dumps(payload).lower()
     assert "prompt" not in serialized
     assert "web_research" not in serialized

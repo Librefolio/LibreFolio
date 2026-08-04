@@ -65,13 +65,13 @@ def test_never_shown_blocked_before_one_week_even_with_many_logins():
 def test_never_shown_blocked_below_login_threshold():
     now = utcnow()
     created_at = now - timedelta(days=10)
-    assert should_show_donation_popup(49, None, created_at, now) is False
+    assert should_show_donation_popup(9, None, created_at, now) is False
 
 
 def test_never_shown_shows_at_threshold_after_cooldown():
     now = utcnow()
     created_at = now - timedelta(days=10)
-    assert should_show_donation_popup(50, None, created_at, now) is True
+    assert should_show_donation_popup(10, None, created_at, now) is True
 
 
 def test_never_shown_forced_after_two_months_since_registration():
@@ -98,14 +98,14 @@ def test_previously_shown_triggers_after_cooldown_and_threshold():
     now = utcnow()
     created_at = now - timedelta(days=400)
     last_shown_at = now - timedelta(days=8)
-    assert should_show_donation_popup(50, last_shown_at, created_at, now) is True
+    assert should_show_donation_popup(10, last_shown_at, created_at, now) is True
 
 
 def test_previously_shown_not_enough_logins_yet():
     now = utcnow()
     created_at = now - timedelta(days=400)
     last_shown_at = now - timedelta(days=8)
-    assert should_show_donation_popup(49, last_shown_at, created_at, now) is False
+    assert should_show_donation_popup(9, last_shown_at, created_at, now) is False
 
 
 def test_previously_shown_forced_after_two_months_regardless_of_logins():
@@ -115,11 +115,11 @@ def test_previously_shown_forced_after_two_months_regardless_of_logins():
     assert should_show_donation_popup(0, last_shown_at, created_at, now) is True
 
 
-def test_boundary_exactly_seven_days_and_fifty_logins():
+def test_boundary_exactly_seven_days_and_ten_logins():
     now = utcnow()
     created_at = now - timedelta(days=400)
     last_shown_at = now - timedelta(days=7)
-    assert should_show_donation_popup(50, last_shown_at, created_at, now) is True
+    assert should_show_donation_popup(10, last_shown_at, created_at, now) is True
 
 
 def test_boundary_exactly_sixty_days_forces_regardless_of_logins():
@@ -139,8 +139,8 @@ def test_handles_naive_datetimes_from_sqlite():
     naive_created_at = (now - timedelta(days=400)).replace(tzinfo=None)
     naive_last_shown_at = (now - timedelta(days=8)).replace(tzinfo=None)
 
-    assert should_show_donation_popup(50, naive_last_shown_at, naive_created_at, now) is True
-    assert should_show_donation_popup(10, naive_last_shown_at, naive_created_at, now) is False
+    assert should_show_donation_popup(10, naive_last_shown_at, naive_created_at, now) is True
+    assert should_show_donation_popup(9, naive_last_shown_at, naive_created_at, now) is False
 
 
 # =============================================================================
@@ -163,7 +163,7 @@ def test_record_login_resets_counters_when_popup_shown():
     user = make_user(
         created_at=now - timedelta(days=400),
         donation_popup_last_shown_at=now - timedelta(days=8),
-        donation_popup_logins_since_shown=49,
+        donation_popup_logins_since_shown=9,
     )
 
     show_popup = record_login_and_maybe_show_popup(user, now=now)
@@ -178,14 +178,14 @@ def test_record_login_keeps_counting_when_not_yet_due():
     user = make_user(
         created_at=now - timedelta(days=400),
         donation_popup_last_shown_at=now - timedelta(days=8),
-        donation_popup_logins_since_shown=10,
+        donation_popup_logins_since_shown=8,
     )
 
     show_popup = record_login_and_maybe_show_popup(user, now=now)
 
     assert show_popup is False
     # Not reset — keeps accumulating towards the next threshold.
-    assert user.donation_popup_logins_since_shown == 11
+    assert user.donation_popup_logins_since_shown == 9
     assert user.donation_popup_last_shown_at == now - timedelta(days=8)
 
 

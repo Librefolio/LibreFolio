@@ -14,7 +14,7 @@ function rangeCell(first: number, last: number, min: number, max: number, start:
     };
 }
 
-function emaIndicator(latest: number, entityOffset: number, rows = 1) {
+function emaIndicator(latest: number, entityOffset: number, rows = 1, resultStatus: string = 'ok', partialReasonCode: string | null = null) {
     return {
         instance_id: 'ema_20',
         signal_code: 'EMA',
@@ -22,6 +22,8 @@ function emaIndicator(latest: number, entityOffset: number, rows = 1) {
         semantic_id: 'ema.signal',
         semantic_description: 'Signal semantic appears once.',
         category: 'trend',
+        result_status: resultStatus,
+        partial_reason_code: partialReasonCode,
         columns: [
             {
                 column_key: 'ema',
@@ -73,7 +75,7 @@ function indicatorSection(rows = 1) {
                 {
                     asset_id: 2,
                     portfolio_weight_ratio: 0.4,
-                    indicators: [{...emaIndicator(22, 10, rows), portfolio_weight_ratio: 0.4, technical_normalized_weight_ratio: 0.4}],
+                    indicators: [{...emaIndicator(22, 10, rows, 'partial', 'partial_input_coverage'), portfolio_weight_ratio: 0.4, technical_normalized_weight_ratio: 0.4}],
                 },
             ],
         },
@@ -97,11 +99,58 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content.match(/Output semantic appears once\./g)).toHaveLength(1);
         expect(rendered.content).toContain('|instance_id|temporal_class|bucket_count|rendered_history_limit|history_selection|entity_count|');
         expect(rendered.content).toContain('|ema_20|medium|32|all|all_nonempty_buckets|2|');
+        expect(rendered.content).toContain('indicator_entity_status=only non-ok entity-instance results are listed; omitted entity-instance statuses are ok');
+        expect(rendered.content).toContain('ENTITY STATUS');
+        expect(rendered.content).not.toContain('|A1|ok|null|');
+        expect(rendered.content).toContain('|A2|partial|partial_input_coverage|');
         expect(rendered.content).toContain('|A1|60%|60%|ema|12@2026/03/31|');
         expect(rendered.content).toContain('|A2|40%|40%|ema|22@2026/03/31|');
         expect(rendered.content).toContain("portfolio_weight_percent and *_portfolio_weight_percent use gross absolute open-position market value. technical_normalized_weight_percent sums to 100% across each signal instance's covered technical universe.");
         expect(rendered.content).toContain('|A1|2026/03/01|2026/03/02|2|2|f:10@s;l:11@e;n:9@s;x:12@e;c:2|');
         expect(rendered.content).not.toContain('semantic_description:');
+    });
+
+    it('declares observed-close basis for Portfolio and Broker price buckets', () => {
+        const section = {
+            component_id: 'broker.technical_prices',
+            component_version: 1,
+            schema_id: 'broker.technical_prices',
+            schema_version: 1,
+            payload: {
+                price_basis: 'observed_close',
+                eligible_asset_count: 1,
+                covered_asset_count: 1,
+                assets: [
+                    {
+                        asset_id: 1,
+                        portfolio_weight_ratio: 1,
+                        currency: 'EUR',
+                        latest_close: 101,
+                        latest_date: '2026/03/31',
+                        buckets: [
+                            {
+                                start_date: '2026/03/01',
+                                end_date: '2026/03/31',
+                                calendar_days: 31,
+                                observation_count: 2,
+                                first: {value: 100, date: '2026/03/01'},
+                                last: {value: 101, date: '2026/03/31'},
+                                minimum: {value: 99, date: '2026/03/15'},
+                                maximum: {value: 102, date: '2026/03/20'},
+                                minimum_date: '2026/03/15',
+                                maximum_date: '2026/03/20',
+                                return_start_date: '2026/03/01',
+                                simple_return: 0.01,
+                            },
+                        ],
+                    },
+                ],
+            },
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'broker', broker_id: 1});
+
+        expect(rendered.content).toContain('|price_basis|observed_close|');
     });
 
     it('samples indicator history by detail while preserving the full-period summary and endpoints', () => {
@@ -608,6 +657,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
             payload: {
                 herfindahl_index_points: '944.233500000000',
                 covered_weight_ratio: '0.75',
+                eligible_current_scope_weight_ratio: '0.90',
+                covered_current_scope_weight_ratio: '0.75',
+                excluded_current_scope_weight_ratio: '0.10',
                 classifications: [
                     {name: 'Italy', weight: '0.1704'},
                     {name: 'Other', weight: '0.8296'},
@@ -620,6 +672,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
 
         expect(rendered.content).toContain('|herfindahl_index_points|944.2335|');
         expect(rendered.content).toContain('|covered_weight_ratio_percent|75%|');
+        expect(rendered.content).toContain('|eligible_current_scope_weight_percent|90%|');
+        expect(rendered.content).toContain('|covered_current_scope_weight_percent|75%|');
+        expect(rendered.content).toContain('|excluded_current_scope_weight_percent|10%|');
         expect(rendered.content).not.toContain('944.2335%');
         expect(rendered.content).toContain('|row|name|weight_percent|');
         expect(rendered.content).toContain('|1|Italy|17.04%|');
@@ -884,6 +939,28 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content).toContain('|F1|USD/EUR|USD|EUR|');
         expect(rendered.content).toContain('|1|F1|EUR_per_USD|64|0.92|1.25%|0.42%|1.5%|');
         expect(rendered.content).not.toContain('FX1');
+    });
+
+    it('names fixed-day FX timing returns explicitly', () => {
+        const section = {
+            component_id: 'fx.timing_context',
+            component_version: 1,
+            schema_id: 'fx.timing_context',
+            schema_version: 1,
+            payload: {
+                observed_returns: {
+                    return_30d_ratio: 0.0125,
+                    return_91d_ratio: -0.025,
+                    return_period_ratio: 0.05,
+                },
+            },
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'fx_pair', base_currency: 'USD', quote_currency: 'EUR'});
+
+        expect(rendered.content).toContain('|observed_returns.return_30d_percent|1.25%|');
+        expect(rendered.content).toContain('|observed_returns.return_91d_percent|-2.5%|');
+        expect(rendered.content).not.toContain('return_3m');
     });
 
     it('renders latest_events as a clean category table with public refs and no null rows', () => {

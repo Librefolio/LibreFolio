@@ -24,6 +24,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import CODE_PATTERN, PAGE_PATTERN, DetailLevel, Domain, PeriodBehavior
 
@@ -87,6 +88,8 @@ class DatasetSpec:
     - `scope_requirement_codes`: optional, stable codes describing additional
       scope requirements a future selection engine may filter on (e.g.
       `"requires_multi_currency"`); empty by default - populate only if useful.
+    - `visibility`: direct public selection boundary. Internal datasets remain
+      composable by analyses but are not catalog entries or accepted direct requests.
     """
 
     dataset_id: str
@@ -104,6 +107,7 @@ class DatasetSpec:
     period_semantics: PeriodBehavior
     supported_detail_levels: frozenset[DetailLevel]
     scope_requirement_codes: tuple[str, ...] = ()
+    visibility: CatalogVisibility = CatalogVisibility.INTERNAL
 
     def __post_init__(self) -> None:
         if not _DATASET_ID_PATTERN.fullmatch(self.dataset_id):
@@ -167,6 +171,8 @@ class DatasetSpec:
             if not isinstance(level, DetailLevel):
                 raise DatasetSpecError(f"{self.dataset_id}: supported_detail_levels must contain only DetailLevel members, got {level!r}")
         object.__setattr__(self, "supported_detail_levels", detail_levels)
+        if not isinstance(self.visibility, CatalogVisibility):
+            raise DatasetSpecError(f"{self.dataset_id}: visibility must be a CatalogVisibility member, got {self.visibility!r}")
 
 
 class DatasetRegistryError(ValueError):
@@ -228,6 +234,11 @@ class DatasetRegistry:
     def for_domain(self, domain: Domain) -> tuple[DatasetSpec, ...]:
         return tuple(spec for spec in self._specs.values() if spec.domain == domain)
 
+    def for_visibility(self, visibility: CatalogVisibility) -> tuple[DatasetSpec, ...]:
+        if not isinstance(visibility, CatalogVisibility):
+            raise TypeError("visibility must be a CatalogVisibility member")
+        return tuple(spec for spec in self._specs.values() if spec.visibility is visibility)
+
 
 def build_all_data_dataset(
     *,
@@ -244,6 +255,7 @@ def build_all_data_dataset(
     supported_detail_levels: frozenset[DetailLevel],
     source_specs: Sequence[DatasetSpec],
     component_registry: ComponentRegistry,
+    visibility: CatalogVisibility = CatalogVisibility.INTERNAL,
 ) -> DatasetSpec:
     """Builds a declarative, computed `*.all_data` `DatasetSpec`.
 
@@ -296,4 +308,5 @@ def build_all_data_dataset(
         technical_requirements=technical_requirements,
         period_semantics=period_semantics,
         supported_detail_levels=supported_detail_levels,
+        visibility=visibility,
     )

@@ -4,16 +4,16 @@ import {findCompatibleAiExportSelection, reconcileAiExportCatalog, selectionsFor
 import {backendCatalogFixture} from './runtimeFixtures';
 
 describe('AI Export catalog compatibility', () => {
-    it('accepts the exact 32 dataset / 17 analysis V2 catalog', () => {
+    it('accepts the exact 8 Dataset / 11 Analysis V3 catalog', () => {
         const compatibility = reconcileAiExportCatalog(backendCatalogFixture());
 
         expect(compatibility.status).toBe('compatible');
-        expect(compatibility.selections).toHaveLength(49);
-        expect(selectionsForDomain(compatibility, 'portfolio', 'dataset')).toHaveLength(10);
-        expect(selectionsForDomain(compatibility, 'broker', 'analysis')).toHaveLength(4);
-        expect(selectionsForDomain(compatibility, 'asset')).toHaveLength(8);
-        expect(selectionsForDomain(compatibility, 'fx')).toHaveLength(9);
-        expect(findCompatibleAiExportSelection(compatibility, 'analysis', 'asset.trend_analysis')).toBeDefined();
+        expect(compatibility.selections).toHaveLength(19);
+        expect(selectionsForDomain(compatibility, 'portfolio', 'dataset')).toHaveLength(2);
+        expect(selectionsForDomain(compatibility, 'broker', 'analysis')).toHaveLength(3);
+        expect(selectionsForDomain(compatibility, 'asset')).toHaveLength(4);
+        expect(selectionsForDomain(compatibility, 'fx')).toHaveLength(4);
+        expect(findCompatibleAiExportSelection(compatibility, 'analysis', 'asset.market_analysis')).toBeDefined();
     });
 
     it('fails closed on catalog count or contract identity drift', () => {
@@ -27,6 +27,17 @@ describe('AI Export catalog compatibility', () => {
         expect(compatibility.status).toBe('disabled');
         expect(compatibility.reasonCodes).toContain('response_contract_mismatch');
         expect(compatibility.byKey.has(`analysis:${contractDrift.analyses[0].id}`)).toBe(false);
+    });
+
+    it('fails closed on group, domain, i18n key, or icon drift', () => {
+        const catalog = backendCatalogFixture();
+        catalog.datasets[0].icon = 'database';
+
+        const compatibility = reconcileAiExportCatalog(catalog);
+
+        expect(compatibility.status).toBe('disabled');
+        expect(compatibility.reasonCodes).toContain('selection_metadata_mismatch');
+        expect(compatibility.byKey.has(`dataset:${catalog.datasets[0].id}`)).toBe(false);
     });
 
     it('fails closed on schema and catalog version drift', () => {

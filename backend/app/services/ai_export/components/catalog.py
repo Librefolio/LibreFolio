@@ -3,7 +3,7 @@
 `ALL_FOUNDATION_COMPONENTS` retains the frozen fail-closed placeholder tuple as
 the metadata validation baseline used by domain-fragment tests. Production
 `build_component_registry()` returns `ALL_COMPONENTS`: the same canonical order
-with all 65 IDs replaced by the reviewed Portfolio/Broker/Asset/FX builders.
+with all 67 IDs replaced by the reviewed Portfolio/Broker/Asset/FX builders.
 
 Both replacement fragments validate exact version/domain/dependency/period/
 aggregator parity against the placeholders before the central tuple is created.
@@ -136,13 +136,15 @@ _BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.BROKER, "performance", "Broker performance and contributors", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "flows_income_costs", "Flows, income and costs", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "reconciliation", "Reconciliation", dependencies=("broker.flows_income_costs",), period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.BROKER, "technical_indicators", "Indicators and states (broker-scoped)", period_behavior=PeriodBehavior.AGGREGATED, aggregator=_SIGNAL_PROFILE_BUCKET_AGGREGATOR),
+    _component(Domain.BROKER, "technical_prices", "Prices and returns (broker-scoped)", period_behavior=PeriodBehavior.AGGREGATED, aggregator=_OHLC_BUCKET_AGGREGATOR),
+    _component(Domain.BROKER, "technical_indicators", "Indicators and states (broker-scoped)", dependencies=("broker.technical_prices",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_SIGNAL_PROFILE_BUCKET_AGGREGATOR),
     _component(Domain.BROKER, "technical_breadth", "Breadth metrics (broker-scoped)", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "technical_events", "Technical state-change events (broker-scoped)", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "technical_coverage", "Broker-scoped technical coverage", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "asset_market_context", "Broker-scoped per-asset market context", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "context_events", "Broker-scoped structural events", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.BROKER, "fifo_lots", "All applicable FIFO lots (broker-scoped)", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.BROKER, "fifo_summary", "Broker-scoped FIFO summary", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.BROKER, "fifo_lots", "All applicable FIFO lots (broker-scoped)", dependencies=("broker.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "drawdown_summary", "Broker drawdown context", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "concentration_context", "Broker concentration context", dependencies=("broker.allocation_concentration",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.BROKER, "concentration_comparison", "Broker vs portfolio concentration comparison", period_behavior=PeriodBehavior.AS_OF),
@@ -216,12 +218,12 @@ def _build_integrated_components() -> tuple[ComponentSpec, ...]:
 
 ALL_COMPONENTS: tuple[ComponentSpec, ...] = _build_integrated_components()
 
-assert len(ALL_FOUNDATION_COMPONENTS) == 65
-assert len(ALL_REAL_COMPONENTS) == 65
-assert len(ALL_COMPONENTS) == 65
+assert len(ALL_FOUNDATION_COMPONENTS) == 67
+assert len(ALL_REAL_COMPONENTS) == 67
+assert len(ALL_COMPONENTS) == 67
 
 
 def build_component_registry() -> ComponentRegistry:
-    """Build the production registry containing all 65 real component specs."""
+    """Build the production registry containing all 67 real component specs."""
 
     return ComponentRegistry(ALL_COMPONENTS)

@@ -3,7 +3,7 @@ title: "Phase 0 — AI Export Backend Snapshot and Hard Cutover"
 category: source
 source_type: plan
 date_ingested: 2026-07-26
-date_updated: 2026-08-03
+date_updated: 2026-08-04
 original_path: LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
 tags: [phase0, ai-export, backend, frontend, snapshot, hard-cutover, mcp, security, ui-memory, accessibility, sampling, documentation]
@@ -20,13 +20,14 @@ related:
   - entities/portfolio-engine
   - decisions/fifo-runtime-decision
   - features/F-010
+  - concepts/ai-export-catalog-granularity-and-composition
 ---
 
 # Source: Phase 0 — AI Export Backend Snapshot and Hard Cutover
 
 ## Summary
 
-The completed Phase 0 chain replaces the frontend-built AI Export with a typed, versioned backend snapshot platform spanning Portfolio, Asset, FX, and Broker. A frozen catalog composes 18 task specifications with three detail overlays into exactly 54 allow-listed profiles, while the frontend retains trusted prompt presentation, locale-derived response language, user notes, safe serialization, contextual draft memory, and clipboard UX. The four production surfaces made a hard cutover with no feature flag or runtime fallback, and the standalone service boundary is reusable by a future MCP transport without depending on FastAPI or browser state. Migration evidence distinguishes true legacy parity, deliberate semantic corrections, and greenfield contract conformance. After the 27 July desktop/mobile approval, the project owner closed the final hardening on 3 August: truly empty temporal rows are omitted without losing zero/economic state, Broker universes are named explicitly, Standard events use 21 calendar days plus minimum latest 10, and the final targeted/applied-policy evidence runs are recorded.
+The completed Phase 0 chain replaces the frontend-built AI Export with a typed, versioned backend snapshot platform spanning Portfolio, Asset, FX, and Broker. The current semantic-composition catalog exposes 32 datasets and 17 analyses over 65 reusable components, while the frontend retains trusted prompt presentation, locale-derived response language, user notes, safe serialization, contextual draft memory, and clipboard UX. The four production surfaces made a hard cutover with no feature flag or runtime fallback, and the standalone service boundary is reusable by a future MCP transport without depending on FastAPI or browser state. Migration evidence distinguishes true legacy parity, deliberate semantic corrections, and greenfield contract conformance. After the 27 July desktop/mobile approval, the project owner closed the final hardening on 3 August; the 4 August UI catalog review then documented all 49 public choices, clarified per-position/per-Asset composition and `all_data` semantics, and recorded two potential catalog/UI gaps without changing application code.
 
 ## Key Takeaways
 
@@ -70,6 +71,25 @@ The completed Phase 0 chain replaces the frontend-built AI Export with a typed, 
   `.github/copilot-instructions.md` now states the AI Export product and
   backend/frontend boundary. User Guide translations for IT/FR/ES are explicitly
   deferred; English remains the current source.
+- The 4 August catalog explanation confirms that PAC and Rebalancing already receive
+  per-position Asset rows from Overview (unit price, value, WAC, P&L, weight) and,
+  when optional datasets build, per-Asset observed market context. They are not
+  aggregate-only analyses.
+- [[concepts/ai-export-catalog-granularity-and-composition]] distinguishes position
+  unit price, observed market price, and price history; records that `all_data`
+  means the union of canonical complete datasets rather than every visible menu
+  choice; and explains why focused projections/evidence are excluded to prevent
+  duplication.
+- The same review identifies the main UX ambiguity: Technical Summary vs Asset
+  Snapshot vs Asset Comparison vs Technical, Context datasets vs similarly named
+  Analyses, and no visible granularity badges. It also preserves two unimplemented
+  follow-ups: Broker Technical has no raw price-history component, and Asset Trend's
+  Italian UI description promises Drawdown although `asset.drawdown_context` is not
+  composed.
+- Real Portfolio verification `20260804T085052.052297Z` passed 5/5 prompts with
+  zero failures/public-output violations, UI/probe equivalence, a passed secret
+  scan, and unchanged source/production databases. The report covers all 49/49
+  choices against current runtime definitions.
 
 ## Source Chain
 
@@ -79,6 +99,7 @@ The completed Phase 0 chain replaces the frontend-built AI Export with a typed, 
 4. `report-phase00AiExportMigrationEquivalence.md` — legacy parity, deliberate differences, greenfield conformance, and cutover evidence.
 5. `report-phase00AiExportFinalHardeningAndDocumentationV1.md` — approved empty-row/Broker hardening, final targeted run, and documentation closure.
 6. `report-phase00AiExportCrossDomainDensityAuditV1.md` — approved 21-day/minimum-10 Standard policy, counterfactuals, and applied-policy validation.
+7. `report-phase00AiExportUiPromptCatalogExplainedV1.md` — choice-by-choice UI/catalog explanation, composition audit, UX-fragmentation findings, and five-prompt real verification.
 
 The original four journal files were untracked at final closure, so the registry records `untracked` rather than a git commit hash. The two follow-up reports are linked here as the current working-tree evidence for the 3 August closure.
 
@@ -92,6 +113,7 @@ The original four journal files were untracked at final closure, so the registry
 - [[problems/ai-export-drawdown-selected-history-fallback]] — preserves the false 409 caused by coupling selected-period drawdown to trailing technical observations.
 - [[problems/ai-export-clipboard-fallback-unreachable]] — preserves the unreachable non-modern clipboard transport and the activation-safe V2 fix.
 - [[decisions/ai-export-prompt-catalog]] — marked as the historical frontend-only predecessor superseded by the Phase 0 snapshot platform.
+- [[concepts/ai-export-catalog-granularity-and-composition]] — records the current 32+17 catalog, per-position/per-Asset analysis composition, price taxonomy, canonical `all_data` semantics, UI ambiguity, potential gaps, and 49/49 verification.
 
 ## Related Architecture
 
@@ -111,7 +133,9 @@ The original four journal files were untracked at final closure, so the registry
 | Migration equivalence report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` |
 | Final hardening and documentation report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalHardeningAndDocumentationV1.md` |
 | Cross-domain density audit | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportCrossDomainDensityAuditV1.md` |
+| UI catalog explanation and prompt verification | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |
+| Composition architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | API contract | `backend/app/schemas/ai_export.py` |
 | Snapshot platform | `backend/app/services/ai_export/` |
 | API endpoints | `backend/app/api/v1/ai_export.py` |
