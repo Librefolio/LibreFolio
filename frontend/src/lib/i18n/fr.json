@@ -590,6 +590,8 @@
     "loadFailed": "Échec du chargement du courtier",
     "importFiles": "Fichiers d'Importation",
     "showImportHistory": "Rapports Téléchargés",
+    "viewInTransactions": "Voir dans les Transactions",
+    "viewInTransactionsHint": "Ouvrir la page Transactions filtrée par ce courtier et les filtres actuels",
     "noImportFiles": "Aucun fichier d'importation",
     "uploadHint": "Téléchargez des rapports de courtier pour importer des transactions",
     "manageFiles": "Gérer tous les fichiers",

@@ -590,6 +590,8 @@
     "loadFailed": "Error al cargar el broker",
     "importFiles": "Archivos de Importación",
     "showImportHistory": "Informes Cargados",
+    "viewInTransactions": "Ver en Transacciones",
+    "viewInTransactionsHint": "Abrir la página Transacciones filtrada por este bróker y los filtros actuales",
     "noImportFiles": "Sin archivos de importación",
     "uploadHint": "Sube reportes del bróker para importar transacciones",
     "manageFiles": "Gestionar todos los archivos",

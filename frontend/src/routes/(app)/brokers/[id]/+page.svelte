@@ -28,6 +28,8 @@
     import {TransactionFormModal, TransactionsTable, TransactionBulkModal, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import type {FilterValue} from '$lib/components/table/types';
+    import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
     import {fetchReport, invalidate, type AllocationHistoryDimensions, type PortfolioHistoryPoint, type PortfolioSummary, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getBrokerRole, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
@@ -95,6 +97,15 @@
     let txCurrentPage = 1;
     let txPageSize = 50;
     let txTableComponent: TransactionsTable | undefined;
+    let txColumnFilters: Record<string, FilterValue> = {};
+
+    /** Deep-link to the full Transactions page pre-filtered by this broker plus
+     *  whatever header column filters are currently active in the embedded table.
+     *  The broker-detail transactions tab loads by broker only (it ignores the
+     *  toolbar date range), so only broker + column filters are carried over.
+     *  Navigating via a plain link registers on the nav stack, so browser Back
+     *  returns to this exact broker view (see navigationStore.goBack). */
+    $: transactionsPageUrl = broker ? buildTransactionsFiltersUrl({...(applyTransactionColumnFilters({}, txColumnFilters) ?? {}), broker_id: broker.id}) : '/transactions';
 
     const BROKER_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni', 'info'] as const;
     type BrokerTabId = (typeof BROKER_TAB_IDS)[number];
@@ -585,14 +596,25 @@
         {:else if activeTab === 'transazioni'}
             <div class="space-y-4" data-testid="broker-transactions-tab">
                 <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
-                    <button
-                        class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                        on:click={() => (importFilesModalOpen = true)}
-                        data-testid="broker-show-import-history"
-                    >
-                        <FileText size={15} />
-                        <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button
+                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                            on:click={() => (importFilesModalOpen = true)}
+                            data-testid="broker-show-import-history"
+                        >
+                            <FileText size={15} />
+                            <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
+                        </button>
+                        <a
+                            href={transactionsPageUrl}
+                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                            title={$_('brokers.viewInTransactionsHint')}
+                            data-testid="broker-view-in-transactions"
+                        >
+                            <ArrowRightLeft size={15} />
+                            <span class="hidden sm:inline">{$_('brokers.viewInTransactions')}</span>
+                        </a>
+                    </div>
                     <div class="flex items-center gap-2">
                         <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
                         {#if canEdit}
@@ -627,6 +649,7 @@
                             currentPage={txCurrentPage}
                             pageSize={txPageSize}
                             hideActions={true}
+                            onFiltersChange={(f) => (txColumnFilters = f)}
                             onPageChange={(page) => (txCurrentPage = page)}
                             onPageSizeChange={(size) => {
                                 txPageSize = size;
