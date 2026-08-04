@@ -371,7 +371,7 @@ async def search_users(
 
     Args:
         session: Database session
-        query: Search string (min 2 chars, searches username)
+        query: Search string matched against username; empty string matches every active user
         exclude_broker_id: If provided, exclude users already on this broker
 
     Returns:
