@@ -7,7 +7,7 @@ export interface AiExportResponseContractSection {
 
 export interface AiExportResponseContractTemplate {
     readonly id: string;
-    readonly version: 2;
+    readonly version: 3;
     readonly analysisId: AiExportAnalysisId;
     readonly sections: readonly AiExportResponseContractSection[];
 }
@@ -17,186 +17,182 @@ function section(title: string, ...requirements: readonly string[]): AiExportRes
 }
 
 function contract(analysisId: AiExportAnalysisId, sections: readonly AiExportResponseContractSection[]): AiExportResponseContractTemplate {
-    return {id: `${analysisId}.response`, version: 2, analysisId, sections};
+    return {id: `${analysisId}.response`, version: 3, analysisId, sections};
 }
 
-const facts = section('LibreFolio Facts', 'State the relevant supplied facts, units, currencies, signs, periods, and scope.');
-const evidence = section('Evidence and Interpretation', 'Connect conclusions to supplied data and dated technical buckets without inventing missing evidence.');
-const external = section('External Context', 'When web access was used, cite source and dates and keep external facts separate from LibreFolio facts.');
-const limits = section('Assumptions, Limits, and Questions', 'List data gaps, assumptions, unresolved user inputs, and interpretation limits.');
+const facts = section('LibreFolio Facts', 'State the relevant supplied facts, units, currencies, signs, dates, periods, scope, methodologies, coverage, and data-quality status before interpreting them.');
+const evidence = section('Evidence and Interpretation', 'Connect conclusions to supplied evidence. Separate observation, calculation, interpretation, assumption, and uncertainty; never invent missing evidence.');
+const limits = section('Assumptions, Limits, and Questions', 'List material data gaps, assumptions, unresolved user inputs, and interpretation limits. Ask only questions that could change the result.');
+const scenarioThesis = section(
+    'Scenario Thesis',
+    'This section is mandatory for this task. Give every material scenario an explicit conditional thesis with horizon, supplied evidence, assumptions, expected mechanism, trade-offs, trigger conditions, invalidation conditions, and missing user decisions.',
+    'Keep theses conditional. Do not present a forecast, promise, recommendation, legal conclusion, or automatic action.',
+);
+const externalContext = section(
+    'External Context',
+    'When external research is used, keep it separate from LibreFolio facts and provide publisher, title, URL, publication date, access date, source type, and source-quality assessment.',
+    'If web access is unavailable, state that clearly and never fabricate a citation, date, URL, or current event.',
+);
 const drawdownContext = section(
     'Drawdown Context',
-    'Only when a drawdown context section is supplied, use its deterministic current and maximum peak-relative drawdown ratios, episode peak/trough/recovery dates, recovery status, recovered/remaining-to-peak percentages, duration, calculation basis, data-quality status, and coverage exactly as given.',
-    'Never infer volatility, Sharpe, VaR, or any broader Risk metric it does not contain, and treat an unavailable or failed drawdown status as simply missing rather than approximating it.',
-    'Drawdown is historical, not predictive, and is never by itself a buy/sell signal.',
+    'Use only supplied current and maximum peak-relative drawdown, episode dates, recovery status, recovered or remaining-to-peak percentages, duration, calculation basis, coverage, and data-quality status.',
+    'Never infer a missing Risk metric from Drawdown. Drawdown is historical and not by itself a forecast, buy/sell signal, volatility measure, Sharpe ratio, VaR, or broader Risk metric.',
 );
+
+const performanceResearch = [
+    section(
+        'Held Asset Movement Inventory',
+        'Cover every held Asset by display name. State supplied movement and date window, extrema, weight or value relevance, performance contribution when available, technical context, coverage, and missing-history limits.',
+        'Do not silently drop an Asset, treat partial history as flat, or infer an intraperiod path that the supplied observations do not show.',
+    ),
+    section(
+        'Dated Web Research and Source Quality',
+        'For every held Asset, research the matching date windows and provide publisher, title, URL, publication date, access date, source type, and the Asset or period the source may explain.',
+        'Prefer primary issuer, exchange, regulator, central-bank, government, and official-statistical sources, then established financial reporting. Identify lower-quality secondary commentary and conflicting evidence.',
+        'If research cannot be completed, mark that Asset research-incomplete and do not fabricate a driver.',
+    ),
+    section(
+        'Per-Asset Short- and Long-Horizon Thesis',
+        'For every held Asset, provide one short-horizon thesis and one long-horizon thesis, even when the correct conclusion is that evidence is insufficient.',
+        'Each thesis must identify evidence, chronology, candidate mechanism, counter-evidence, uncertainty, and invalidation conditions. Keep it explanatory, not a price forecast or recommendation.',
+    ),
+    section(
+        'Movement-to-Driver Assessment',
+        'Separate issuer-specific, sector or industry, macro, rates, currency, commodity, policy, and broad-market candidate drivers.',
+        'Label every proposed link exactly as supported, plausible, inferred, speculative, or unexplained. Explain the source quality, timing fit, directional fit, and counter-evidence behind the label.',
+        'Use supported only for strong dated evidence of the link; plausible for a credible mechanism without direct causal proof; inferred for a synthesis of indirect evidence; speculative for weak or uncorroborated links; unexplained when evidence remains insufficient or conflicting.',
+    ),
+    section(
+        'Chronology, Correlation, and Causality',
+        'State the event and movement chronology explicitly. Distinguish temporal sequence and correlation from causal evidence; coincidence or co-movement alone never proves causation.',
+        'Identify shared cross-Asset drivers only when dated evidence supports a common link.',
+    ),
+    section('Unexplained Movements', 'List every material movement whose dated evidence is absent, conflicting, too broad, temporally mismatched, or otherwise insufficient. Never invent a completing narrative.'),
+] as const;
+
+const fiscalSections = [
+    section(
+        'User Tax-Loss Inventory',
+        'Before proposing any strategy, ask for country of tax residence or jurisdiction when absent, tax regime, account or wrapper type, and the official tax-loss inventory or equivalent statement, such as the Italian "cassetto fiscale".',
+        'For each legal category or bucket, request original amount, remaining usable amount, amount already used or reserved, recognition or origin date, expiry date, eligible gain categories, offset order and limits, source document, and document date.',
+        'Ask whether balances span multiple brokers or accounts and whether they can legally be pooled or transferred. Mark these answers indispensable; treat execution preferences as optional refinements.',
+    ),
+    section(
+        'Economic FIFO Candidate Map',
+        'Present supplied acquisition and closure chronology, open and partial lots, residual quantity and cost, current value, realized and unrealized economic gain or loss, income, recorded fees and taxes, age, currency, valuation source, shorts or transfers, and coverage.',
+        'Group candidate lots by economic gain or loss and relevant date, but never label a lot legally offsettable until the user-supplied jurisdiction and tax rules support that conclusion.',
+    ),
+    section(
+        'Legal Offset Eligibility Boundary',
+        'Separate LibreFolio economic FIFO evidence from legal basis rules, eligible gain/loss categories, matching elections, wash-sale or anti-avoidance rules, exemptions, withholding, reporting, and timing.',
+        'Identify every eligibility question that remains unresolved. Do not state a definitive tax liability, deductible loss, optimized sale, or legal compliance conclusion.',
+    ),
+    section(
+        'Expiry and Decision Timeline',
+        'Order user-supplied tax-loss buckets by expiry and show which dates create genuine decision windows.',
+        'Estimate gains needed for an offset only when amount, legal category, eligibility, and remaining usable balance are supplied. Otherwise present formulas and conditional examples without inventing values.',
+    ),
+    scenarioThesis,
+    section(
+        'Conditional Offset Strategies',
+        'Compare taking no tax-driven action, realizing legally eligible gains before expiry, staged realization aligned with rebalancing, and loss harvesting only when relevant to the stated objective and applicable rules.',
+        'For each path show economic amount, expiry window, fees, market exposure changed or preserved, concentration, liquidity, replacement risk, holding-period constraints, wash-sale or anti-abuse uncertainty, and user decisions.',
+        'Never recommend a transaction solely for tax reasons and never issue an automatic trade instruction.',
+    ),
+] as const;
 
 export const AI_EXPORT_RESPONSE_CONTRACTS: Readonly<Record<AiExportAnalysisId, AiExportResponseContractTemplate>> = {
     'portfolio.pac_planning': contract('portfolio.pac_planning', [
         facts,
         section(
             'Decision Inputs Still Needed',
-            'Use Snapshot Data and User Notes first. Ask only about missing inputs that materially distinguish plausible PAC scenarios; never ask for facts already supplied and never invent an answer.',
-            'Group only the questions actually needed under capital and cadence, goals and horizon, risk preferences, and operational constraints. Mark each asked question as indispensable or optional refinement; if no indispensable question remains, do not manufacture a questionnaire.',
-            'Capital and cadence — REQUIRED WHEN MISSING: new capital available immediately; periodically investable amount; expected monthly, quarterly, or occasional frequency; minimum liquidity or emergency reserve not to use; priority between investing and rebuilding liquidity.',
-            'Capital and cadence — OPTIONAL WHEN MATERIAL: additional capital usable only under favourable conditions.',
-            'Goals and horizon — REQUIRED WHEN MISSING: investment horizon; PAC objective (maintain current allocation, approach targets, reduce concentration, or increase specified exposures).',
-            'Goals and horizon — OPTIONAL WHEN MATERIAL: intermediate deadlines; target allocation and tolerance ranges; limits by asset, asset type, sector, geography, currency, or declared risk level.',
-            'Risk preferences — REQUIRED WHEN MISSING: user tolerance for volatility and temporary loss/maximum acceptable Drawdown; need to preserve capital; preference for stability, growth, income, or balance.',
-            'Risk preferences — OPTIONAL WHEN MATERIAL: maximum high-risk percentage; assets or categories the user does not want to increase. These are user preferences, not metrics deducible from the portfolio.',
-            'Operational constraints — REQUIRED WHEN MISSING AND MATERIAL: whether sales are allowed or the PAC must use only new purchases; usable brokers; minimum tradable amount or whole-share constraint when they change feasibility.',
-            'Operational constraints — OPTIONAL WHEN MATERIAL: minimum commissions; distribution across multiple brokers; excluded assets; user-declared tax or liquidity constraints.',
+            'Ask only for missing inputs that materially distinguish plausible PAC scenarios: immediate and recurring capital, cadence, liquidity reserve, objective, horizon, targets or tolerances, risk and drawdown tolerance, exclusions, usable brokers, tradable minimums, whether sales are allowed, and tax or cost constraints.',
+            'Separate indispensable answers from optional refinements. Never ask for facts already supplied or infer user preferences from portfolio measurements.',
         ),
-        drawdownContext,
         section(
-            'Asset Drawdown Comparison',
-            'When supplied, compare only the compact observed-price fields current drawdown, maximum drawdown, maximum-episode recovery status, and remaining-to-peak percentage.',
-            'Use observation count, available dates, coverage, and data-quality status to qualify sparse or partial Asset series. Do not request or reconstruct Asset Drawdown history.',
-            'Use Asset Drawdown together with allocation, concentration, objectives, horizon, user tolerance, trend, and volatility; never treat being below a peak as a standalone reason to buy.',
+            'PAC Timing Gate',
+            'Compare immediate and staged deployment.',
+            'Include conditional waiting only when supplied evidence shows a broad, persistent decline across the portfolio, not isolated Asset weakness or a single indicator. State the evidence, horizon, trigger, and invalidation conditions.',
+            'Ask which timing preference the user wants before choosing a concrete path: immediate, staged, or—only when the gate is met—conditional waiting.',
         ),
-        section('Subordinate Market Context', 'Use only the supplied small per-asset trend, momentum, volatility, recent-event, and Drawdown context; keep user objectives and constraints primary.'),
-        section('PAC Scenarios', 'Present two or three conditional recurring-contribution scenarios with rationale and trade-offs when possible.', 'State which indispensable unanswered inputs prevent a concrete allocation and which optional answers would only refine it.'),
+        scenarioThesis,
+        section('PAC Scenarios', 'Present two or three conditional recurring-contribution scenarios when feasible, including allocation logic, cadence, liquidity protection, concentration effects, operational feasibility, and trade-offs.'),
+        drawdownContext,
         evidence,
-        external,
         limits,
     ]),
     'portfolio.rebalancing': contract('portfolio.rebalancing', [
         facts,
-        section('Measured Allocation Gaps', 'Quantify only against supplied targets or tolerances.'),
-        section('Uniform Asset Comparison', 'Compare every supplied asset on the same financial, trend, momentum, volatility, and coverage fields without inventing missing Risk metrics.'),
-        section('Rebalancing Pathways', 'Compare cash-flow-only, one-time, and mixed pathways without transaction commands.'),
+        section('Targets and Measured Gaps', 'Quantify drift only against user-supplied targets, tolerance bands, exclusions, or priorities. Identify missing targets rather than inventing them.'),
+        section('Uniform Asset Comparison', 'Compare supplied Assets on consistent allocation, performance, trend, momentum, volatility, drawdown, event, and coverage fields. Do not turn one indicator into a standalone trade signal.'),
+        section('Economic Lots, Costs, and Tax Boundary', 'Keep measured economic FIFO and recorded costs separate from execution assumptions and jurisdiction-specific legal tax treatment.'),
+        scenarioThesis,
+        section('Rebalancing Pathways', 'Compare cash-flow-only, one-time trade, and mixed pathways. State expected allocation effect, turnover, concentration, liquidity, economic lot implications, assumptions, and user decisions without issuing orders.'),
         drawdownContext,
-        external,
-        limits,
-    ]),
-    'portfolio.performance_attribution': contract('portfolio.performance_attribution', [
-        facts,
-        section('Positive and Negative Contributors', 'Keep the complete supplied universe and residual effects visible.'),
-        section('Result Reconciliation', 'Separate realized, unrealized, income, costs, taxes, flows, and return metrics.'),
-        limits,
-    ]),
-    'portfolio.market_events_review': contract('portfolio.market_events_review', [
-        section(
-            'Observed Portfolio Movements',
-            'List every materially researched Asset movement using the supplied display name, exact period or dated extrema, movement magnitude, portfolio weight when available, coverage, and relevant LibreFolio trend/volatility context.',
-            'Do not treat missing or partial history as a flat movement, and do not infer intraperiod paths that the supplied buckets do not show.',
-        ),
-        section(
-            'Dated News Research',
-            'For each external source provide publisher, title, URL, publication date, access date, source type, and the Asset/date window it may explain.',
-            'Prefer primary issuer, exchange, regulator, central-bank, and government sources; distinguish established reporting from lower-quality secondary commentary.',
-            'If web access is unavailable, state that clearly and do not fabricate citations, URLs, publication dates, or current events.',
-        ),
-        section(
-            'Movement-to-Driver Assessment',
-            'For each proposed link separate the observed LibreFolio movement from issuer-specific, sector/industry, and macro/market candidate drivers.',
-            'Label confidence exactly as supported, inferred, or speculative. Explain timing and directional fit, cite corroborating or conflicting evidence, and never present temporal correlation as proven causation.',
-        ),
-        section('Cross-Portfolio Patterns', 'Identify shared dated drivers across multiple Assets only when evidence supports the common link; keep unrelated coincident moves separate.'),
-        section('Unexplained or Weakly Explained Movements', 'List every material movement for which reliable dated evidence is absent, conflicting, too broad, or temporally mismatched. Never invent a driver.'),
-        section('Limits and Follow-up Data', 'State source, timing, coverage, identity, and interpretation limits. Treat technical context as historical and subordinate, never as a forecast or recommendation.'),
-    ]),
-    'portfolio.income_review': contract('portfolio.income_review', [
-        facts,
-        section('Recorded Income Timeline', 'Use only the supplied dated recorded income entries and their per-currency conversion coverage.', 'Do not project, accrue, or forecast future coupons, dividends, or interest that the supplied timeline does not contain.'),
-        section('Income Contributors and Concentration', 'Describe contributors and available concentration dimensions.'),
-        section('Costs and Net Context', 'Keep gross income, fees, taxes, and net effects distinct.'),
-        limits,
-    ]),
-    'portfolio.fifo_review': contract('portfolio.fifo_review', [
-        facts,
-        section('Open and Partial Lots', 'Present supplied current lots.'),
-        section('Period Closures', 'Present lots closed inside the exported period.'),
-        section('FIFO Results and Concentration', 'Keep cost, value, result, income, fee, tax, age, and valuation semantics distinct.'),
-        limits,
-    ]),
-    'portfolio.technical_breadth': contract('portfolio.technical_breadth', [
-        facts,
-        section(
-            'Aggregate Coverage and Event Digest',
-            'Ground the breadth read in the supplied aggregate technical coverage, weighted and unweighted breadth, and recent-event digest.',
-            'Do not require or reconstruct raw per-asset history in the response; deeper full technical detail is optional Additional Data.',
-        ),
-        section(
-            'Breadth by Signal Family',
-            'Separate the supplied weighted and unweighted trend, momentum, volatility, event, and other explicitly available signal families.',
-            'Do not invent or reclassify missing risk metrics. If a family is unavailable, state that and do not infer it from another family.',
-        ),
         evidence,
         limits,
     ]),
-    'portfolio.description': contract('portfolio.description', [
+    'portfolio.performance_market_drivers': contract('portfolio.performance_market_drivers', [
         facts,
-        section('Composition and Concentration', 'Describe available allocation dimensions and cash.'),
-        section('Performance and Aggregate Technical Context', 'Keep performance and flows separate from supplied aggregate coverage, breadth, and recent-event digest.'),
+        section('Portfolio Result Reconciliation', 'Separate realized and unrealized P&L, income, fees, taxes, external flows, TWRR, MWRR, ROI, residuals, and coverage using their supplied semantics.'),
+        ...performanceResearch,
         limits,
     ]),
+    'portfolio.fiscal_lots': contract('portfolio.fiscal_lots', [facts, ...fiscalSections, limits]),
     'broker.review': contract('broker.review', [
         facts,
-        section('Holdings, Cash, and Concentration', 'Describe only the selected broker scope.'),
-        section('Performance, Costs, Income, and FIFO', 'Keep methodologies and components distinct.'),
-        section('Secondary Market Context', 'Use the supplied uniform asset comparison without turning the review into a complete Technical Export.'),
+        section('Holdings, Cash, and Concentration', 'Describe only the selected broker scope. Separate position, asset type, sector, geography, currency, and cash dimensions and disclose coverage gaps.'),
+        section('Performance, Flows, Income, and Costs', 'Keep performance methodologies, external flows, income, fees, taxes, ratios, and reconciliation distinct.'),
+        section('Economic FIFO and Market Context', 'Present FIFO as economic evidence and compact per-Asset market context as secondary historical evidence. Do not infer full histories or legal tax treatment.'),
+        evidence,
         drawdownContext,
+        limits,
+    ]),
+    'broker.performance_market_drivers': contract('broker.performance_market_drivers', [
+        facts,
+        section('Broker Result Reconciliation', 'Separate realized and unrealized P&L, income, fees, taxes, external flows, return measures, residuals, and coverage inside the selected broker scope.'),
+        ...performanceResearch,
+        limits,
+    ]),
+    'broker.fiscal_lots': contract('broker.fiscal_lots', [facts, ...fiscalSections, limits]),
+    'asset.position_review': contract('asset.position_review', [
+        facts,
+        section(
+            'Cost, Value, and P&L',
+            'Keep quantity, broker distribution, valuation source, current value, cost basis, realized and unrealized P&L, income, combined period fees/taxes, cumulative lot-allocated fees and taxes, and performance distinct.',
+            'Respect supplied zero semantics. Do not interpret excluded Broker-level unallocated costs as zero or as allocated to this Asset.',
+        ),
+        section('Economic Lots and Legal Boundary', 'Use supplied lots only as economic FIFO evidence. Distinguish lot-allocated costs from Broker-level unallocated costs. Do not infer jurisdiction-specific legal tax treatment or a definitive taxable result.'),
+        section('Portfolio Role and Concentration', 'Use the supplied portfolio-role weight basis and broker scope; do not recompute another denominator or infer missing look-through exposure.'),
+        section('Focused Market Context', 'Use supplied trend, momentum, volatility, drawdown, limited history, and recent events without reconstructing a complete Asset Market Analysis.'),
+        drawdownContext,
+        section('Conditional Position Considerations', 'If alternatives are compared, apply the shared Scenario Thesis rule and keep goals, horizon, liquidity, risk tolerance, tax treatment, and execution constraints explicit.'),
+        limits,
+    ]),
+    'asset.market_analysis': contract('asset.market_analysis', [
+        facts,
+        section('Price, Return, and Coverage', 'State current observation, requested and available periods, OHLC or return evidence, extrema and dates, coverage, source, staleness, and data-quality status.'),
+        section('Trend, Momentum, Volatility, and Drawdown', 'Separate short-, medium-, and long-horizon evidence and preserve dated states, transitions, extrema, and drawdown semantics.'),
+        section('Technical and Market Events', 'List material dated transitions and distinguish observed events from interpretation. Technical evidence is historical, not predictive.'),
+        externalContext,
         evidence,
         limits,
     ]),
-    'broker.cost_efficiency': contract('broker.cost_efficiency', [
+    'fx.pair_analysis': contract('fx.pair_analysis', [
         facts,
-        section(
-            'Recorded Costs and Activity Coverage',
-            'Report recorded fees, taxes, recorded total costs, typed cost contributors, source coverage, share-adjusted gross traded amount, trade/transaction counts, period, and currency exactly as supplied.',
-            'Keep trading, FX, and other cost subcategories unavailable when the source does not classify them separately; never infer a subtype from free text or asset linkage.',
-            'Distinguish recorded zero from unavailable source data and from not applicable. Unavailable is never zero; not applicable means inputs exist but the ratio has no meaningful denominator.',
-        ),
-        section(
-            'Denominators and Ratios',
-            'For every ratio, preserve the supplied status, formula, numerator, denominator, public unit, period, and coverage.',
-            'Present a ratio value only when status is recorded. Explain unavailable and not-applicable reason codes without recomputing a different ratio.',
-            'Keep fees, taxes, and total recorded costs distinct; do not substitute fees-plus-taxes for fees-only ratios.',
-        ),
-        section('Neutral Efficiency Considerations', 'Present conditional considerations, not instructions.'),
-        limits,
-    ]),
-    'broker.concentration_context': contract('broker.concentration_context', [
-        facts,
-        section(
-            'Concentration Dimensions',
-            'Separate position, asset type, sector, geography, currency, and cash concentration.',
-            'When the optional whole-portfolio comparator is supplied, contrast broker-scoped concentration against it; otherwise keep the analysis broker-scoped.',
-            'Explicitly disclose any dimension whose coverage or liquidity is unknown rather than assuming full coverage or presence.',
-        ),
-        section('Aggregate Technical Context', 'Use only supplied aggregate coverage and breadth as secondary context.'),
-        limits,
-    ]),
-    'broker.fifo_review': contract('broker.fifo_review', [facts, section('Open and Partial Lots', 'Present supplied current lots.'), section('Period Closures', 'Present supplied closures.'), section('Lot Results, Age, and Concentration', 'Keep valuation and result components distinct.'), limits]),
-    'asset.trend_analysis': contract('asset.trend_analysis', [facts, section('Trend, Momentum, and Volatility', 'Separate horizons and preserve extrema dates.'), section('Technical Events', 'List material dated transitions without action language.'), external, limits]),
-    'asset.position_review': contract('asset.position_review', [
-        facts,
-        section('Cost, Value, and P&L', 'Keep cost basis, valuation, realized, unrealized, income, fees, and taxes separate.'),
-        section('Focused Market Context', 'Use supplied trend, momentum, volatility, limited history, and recent events without reconstructing a complete Trend Analysis.'),
-        section('FIFO and Portfolio Role', 'Use only supplied lot and concentration context.', 'Acknowledge the supplied portfolio-role weight basis for this position and do not recompute or substitute a different weighting.'),
-        drawdownContext,
-        limits,
-    ]),
-    'fx.trend_review': contract('fx.trend_review', [facts, section('Direction, Trend, Momentum, and Volatility', 'Use quote-per-base semantics and preserve extrema dates.'), section('Technical Events', 'List material dated transitions.'), external, limits]),
-    'fx.conversion_timing': contract('fx.conversion_timing', [
-        facts,
-        section(
-            'Observed Conversion Timing Context',
-            'Describe the observed range position as a location within the observed min-max range, never as a percentile or distributional rank.',
-            'Use only the supplied observed returns, realized volatility, and source coverage or staleness.',
-            'State that amount, deadline, spread, and fees are not supplied and must not be assumed or forecast.',
-        ),
-        section('Rate and Technical Context', 'Describe trend, momentum, volatility, and events.'),
-        section('Neutral Timing Scenarios', 'Present multiple conditional approaches without point forecasts.'),
-        external,
+        section('Rate Direction and Coverage', 'Use quote currency per one unit of base currency. State current rate, source, conversion provenance, requested and available periods, extrema dates, returns, volatility, coverage, and staleness.'),
+        section('Trend, Momentum, Volatility, and Events', 'Separate short-, medium-, and long-horizon evidence and preserve quote-per-base direction. Never invert the pair silently.'),
+        externalContext,
+        evidence,
         limits,
     ]),
     'fx.exposure_impact': contract('fx.exposure_impact', [
         facts,
-        section('Direct Exposure Links', 'Separate cash, trading-currency, and valuation-currency rows.'),
-        section('Conditional Directional Impact', 'Use the supplied focused rate, return, volatility, trend, event, and coverage context without forecasting or look-through inference.'),
-        external,
+        section('Direct Exposure Links', 'Separate cash, trading-currency, and valuation-currency links and preserve supplied valuation and conversion provenance.'),
+        section('Conditional Directional Impact', 'Describe how base appreciation or depreciation could affect the supplied direct links. Keep rate, return, volatility, trend, event, and coverage evidence distinct from scenario assumptions.'),
+        section('No Look-Through Inference', 'Do not infer issuer revenue, supply-chain, domicile, hedging, or other economic exposure that the snapshot does not contain.'),
+        section('Exposure Scenarios', 'If multiple future FX paths are compared, apply the shared Scenario Thesis rule and state horizon, triggers, invalidation conditions, concentration, and missing links.'),
+        externalContext,
         limits,
     ]),
 };

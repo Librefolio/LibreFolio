@@ -1,22 +1,10 @@
 import {describe, expect, it} from 'vitest';
 
-import enJson from '../../../i18n/en.json';
-import esJson from '../../../i18n/es.json';
-import frJson from '../../../i18n/fr.json';
-import itJson from '../../../i18n/it.json';
-import {AI_EXPORT_DATASET_IDS} from '../catalog/shared';
+import {AI_EXPORT_ANALYSIS_IDS, AI_EXPORT_DATASET_IDS, AI_EXPORT_PUBLIC_CATALOG_CONFIG} from '../catalog/shared';
 import {findAiExportResponseContract} from '../templates/responseContracts';
-import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {renderSnapshotDataText} from '../templates/snapshotDataRenderer';
+import {AI_EXPORT_SCENARIO_THESIS_RULE, findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {backendCatalogFixture} from './runtimeFixtures';
-
-const LOCALES = {en: enJson, es: esJson, fr: frJson, it: itJson} as Record<string, Record<string, unknown>>;
-
-const REMEDIATION_DATASET_IDS = ['portfolio.income_evidence', 'broker.concentration_evidence', 'broker.cost_efficiency_evidence', 'fx.conversion_timing_context'] as const;
-
-function lookup(bundle: Record<string, unknown>, dottedKey: string): unknown {
-    return dottedKey.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), bundle);
-}
 
 function contractText(analysisId: Parameters<typeof findAiExportResponseContract>[0]): string {
     return findAiExportResponseContract(analysisId)
@@ -24,144 +12,177 @@ function contractText(analysisId: Parameters<typeof findAiExportResponseContract
         .join(' ');
 }
 
-describe('AI Export adequacy remediation datasets', () => {
-    it('registers the four evidence/context datasets and keeps 32 total', () => {
-        expect(AI_EXPORT_DATASET_IDS).toHaveLength(32);
-        for (const id of REMEDIATION_DATASET_IDS) {
-            expect(AI_EXPORT_DATASET_IDS).toContain(id);
+function instructionText(analysisId: Parameters<typeof findAiExportAnalysisInstruction>[0]): string {
+    const instruction = findAiExportAnalysisInstruction(analysisId);
+    return [instruction.objective, ...instruction.steps].join(' ');
+}
+
+describe('AI Export V3 public catalog', () => {
+    it('registers exactly 8 Dataset and 11 Analysis entries with approved group, domain, and icon config', () => {
+        expect(AI_EXPORT_DATASET_IDS).toEqual(['portfolio.overview_and_history', 'portfolio.asset_history', 'broker.overview_and_history', 'broker.asset_history', 'asset.position_and_history', 'asset.market_history', 'fx.market_and_exposure', 'fx.market_history']);
+        expect(AI_EXPORT_ANALYSIS_IDS).toEqual([
+            'portfolio.pac_planning',
+            'portfolio.rebalancing',
+            'portfolio.performance_market_drivers',
+            'portfolio.fiscal_lots',
+            'broker.review',
+            'broker.performance_market_drivers',
+            'broker.fiscal_lots',
+            'asset.position_review',
+            'asset.market_analysis',
+            'fx.pair_analysis',
+            'fx.exposure_impact',
+        ]);
+        expect(AI_EXPORT_PUBLIC_CATALOG_CONFIG).toHaveLength(19);
+        expect(AI_EXPORT_PUBLIC_CATALOG_CONFIG.map(({group, id, domain, icon}) => ({group, id, domain, icon}))).toEqual([
+            {group: 'dataset', id: 'portfolio.overview_and_history', domain: 'portfolio', icon: 'layout-dashboard'},
+            {group: 'dataset', id: 'portfolio.asset_history', domain: 'portfolio', icon: 'activity'},
+            {group: 'dataset', id: 'broker.overview_and_history', domain: 'broker', icon: 'landmark'},
+            {group: 'dataset', id: 'broker.asset_history', domain: 'broker', icon: 'activity'},
+            {group: 'dataset', id: 'asset.position_and_history', domain: 'asset', icon: 'wallet'},
+            {group: 'dataset', id: 'asset.market_history', domain: 'asset', icon: 'activity'},
+            {group: 'dataset', id: 'fx.market_and_exposure', domain: 'fx', icon: 'arrow-left-right'},
+            {group: 'dataset', id: 'fx.market_history', domain: 'fx', icon: 'activity'},
+            {group: 'analysis', id: 'portfolio.pac_planning', domain: 'portfolio', icon: 'calendar-clock'},
+            {group: 'analysis', id: 'portfolio.rebalancing', domain: 'portfolio', icon: 'scale'},
+            {group: 'analysis', id: 'portfolio.performance_market_drivers', domain: 'portfolio', icon: 'newspaper'},
+            {group: 'analysis', id: 'portfolio.fiscal_lots', domain: 'portfolio', icon: 'list-ordered'},
+            {group: 'analysis', id: 'broker.review', domain: 'broker', icon: 'landmark'},
+            {group: 'analysis', id: 'broker.performance_market_drivers', domain: 'broker', icon: 'newspaper'},
+            {group: 'analysis', id: 'broker.fiscal_lots', domain: 'broker', icon: 'list-ordered'},
+            {group: 'analysis', id: 'asset.position_review', domain: 'asset', icon: 'wallet'},
+            {group: 'analysis', id: 'asset.market_analysis', domain: 'asset', icon: 'trending-up'},
+            {group: 'analysis', id: 'fx.pair_analysis', domain: 'fx', icon: 'trending-up'},
+            {group: 'analysis', id: 'fx.exposure_impact', domain: 'fx', icon: 'scale'},
+        ]);
+    });
+
+    it('uses backend-owned V3 composition and Additional Data suggestions', () => {
+        const catalog = backendCatalogFixture();
+        const analysisById = new Map(catalog.analyses.map((entry) => [entry.id, entry]));
+
+        expect(analysisById.get('portfolio.pac_planning')?.required_dataset_ids).toEqual(['portfolio.overview_and_history']);
+        expect(analysisById.get('portfolio.fiscal_lots')?.required_dataset_ids).toEqual(['portfolio.overview_and_history', 'portfolio.fifo']);
+        expect(analysisById.get('broker.fiscal_lots')?.required_dataset_ids).toEqual(['broker.overview_and_history', 'broker.fifo']);
+        expect(analysisById.get('asset.market_analysis')?.required_dataset_ids).toEqual(['asset.market_history']);
+        expect(analysisById.get('portfolio.performance_market_drivers')?.additional_export_suggestions).toEqual([
+            {
+                dataset_id: 'portfolio.asset_history',
+                reason_i18n_key: 'aiExport.additionalData.reason.deeperTechnical',
+                recommended_period: '3m',
+                recommended_detail: 'standard',
+                necessity: 'optional',
+            },
+        ]);
+    });
+});
+
+describe('AI Export V3 prompt contracts', () => {
+    it('defines canonical V3 objective and response identities for all 11 analyses', () => {
+        for (const analysisId of AI_EXPORT_ANALYSIS_IDS) {
+            const instruction = findAiExportAnalysisInstruction(analysisId);
+            const response = findAiExportResponseContract(analysisId);
+            expect(instruction).toMatchObject({
+                id: `${analysisId}.instructions`,
+                version: 3,
+                analysisId,
+            });
+            expect(instruction.objective.length).toBeGreaterThan(40);
+            expect(instruction.steps.length).toBeGreaterThan(2);
+            expect(response).toMatchObject({
+                id: `${analysisId}.response`,
+                version: 3,
+                analysisId,
+            });
+            expect(response.sections.length).toBeGreaterThan(3);
+        }
+    });
+
+    it('shares one conditional Scenario Thesis rule and makes it mandatory for approved tasks', () => {
+        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('horizon');
+        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('trigger conditions');
+        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('invalidation conditions');
+        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('conditional');
+
+        const mandatory = ['portfolio.pac_planning', 'portfolio.rebalancing', 'portfolio.fiscal_lots', 'broker.fiscal_lots'] as const;
+        for (const analysisId of mandatory) {
+            const scenario = findAiExportResponseContract(analysisId).sections.find((entry) => entry.title === 'Scenario Thesis');
+            expect(scenario, `${analysisId} requires Scenario Thesis`).toBeDefined();
+            expect(scenario!.requirements.join(' ')).toContain('mandatory');
+        }
+    });
+
+    it('enforces the PAC immediate/staged/conditional-waiting gate and user timing preference', () => {
+        const text = `${instructionText('portfolio.pac_planning')} ${contractText('portfolio.pac_planning')}`;
+        expect(text).toContain('immediate');
+        expect(text).toContain('staged');
+        expect(text).toContain('conditional waiting');
+        expect(text).toContain('broad, persistent decline');
+        expect(text).toContain('isolated Asset weakness');
+        expect(text).toContain('single indicator');
+        expect(text).toContain('Ask the user');
+        expect(text).toContain('timing preference');
+    });
+
+    it.each(['portfolio.performance_market_drivers', 'broker.performance_market_drivers'] as const)('requires dated research, per-Asset short/long theses, source quality, and qualified causality for %s', (analysisId) => {
+        const text = `${instructionText(analysisId)} ${contractText(analysisId)}`;
+        for (const required of ['every held Asset', 'short-horizon thesis', 'long-horizon thesis', 'publisher', 'URL', 'publication date', 'access date', 'source quality', 'chronology', 'correlation', 'causality']) {
+            expect(text).toContain(required);
+        }
+        for (const confidence of ['supported', 'plausible', 'inferred', 'speculative', 'unexplained']) {
+            expect(text).toContain(confidence);
+        }
+        expect(text).toContain('primary issuer');
+        expect(text).toContain('lower-quality secondary');
+        expect(text).toContain('never proves causation');
+    });
+
+    it.each(['portfolio.fiscal_lots', 'broker.fiscal_lots'] as const)('centers tax-loss offsets, official inventory, expiries, and conditional strategies for %s', (analysisId) => {
+        const text = `${instructionText(analysisId)} ${contractText(analysisId)}`.toLowerCase();
+        for (const required of [
+            'tax-loss carryforwards',
+            'country of tax residence',
+            'jurisdiction',
+            'tax regime',
+            'cassetto fiscale',
+            'original amount',
+            'remaining usable amount',
+            'already used or reserved',
+            'origin date',
+            'expiry date',
+            'eligible gain categories',
+            'multiple brokers',
+            'legally be pooled or transferred',
+            'expected or planned realizable gains',
+            'taking no tax-driven action',
+            'realizing legally eligible gains before expiry',
+            'staged realization',
+            'loss harvesting',
+            'never recommend a trade solely for tax reasons',
+        ]) {
+            expect(text).toContain(required);
+        }
+        expect(text).toContain('do not state a definitive tax liability');
+        expect(text).toContain('scenario thesis');
+    });
+
+    it('keeps remaining analyses aligned with their approved scope', () => {
+        const expectations = {
+            'broker.review': ['selected broker scope', 'whole portfolio', 'economic FIFO'],
+            'asset.position_review': ['broker distribution', 'portfolio-role weight basis', 'focused market context'],
+            'asset.market_analysis': ['OHLC', 'drawdown', 'dated state transitions'],
+            'fx.pair_analysis': ['quote currency per one unit of base currency', 'Never invert the pair silently'],
+            'fx.exposure_impact': ['cash, trading-currency, and valuation-currency links', 'No Look-Through Inference'],
+        } as const;
+
+        for (const [analysisId, fragments] of Object.entries(expectations) as [keyof typeof expectations, readonly string[]][]) {
+            const text = `${instructionText(analysisId)} ${contractText(analysisId)}`;
+            for (const fragment of fragments) expect(text).toContain(fragment);
         }
     });
 });
 
-describe('AI Export adequacy remediation analysis mappings', () => {
-    const catalog = backendCatalogFixture();
-    const analysisById = new Map(catalog.analyses.map((entry) => [entry.id, entry]));
-
-    it.each([
-        ['portfolio.income_review', 'portfolio.income_evidence', 'required'],
-        ['portfolio.market_events_review', 'portfolio.asset_comparison', 'required'],
-        ['portfolio.market_events_review', 'portfolio.performance_flows', 'optional'],
-        ['broker.concentration_context', 'broker.concentration_evidence', 'required'],
-        ['broker.cost_efficiency', 'broker.cost_efficiency_evidence', 'required'],
-        ['fx.conversion_timing', 'fx.conversion_timing_context', 'required'],
-        ['portfolio.technical_breadth', 'portfolio.technical_summary', 'required'],
-        ['broker.review', 'broker.concentration_evidence', 'optional'],
-    ] as const)('maps %s to %s as %s', (analysisId, datasetId, role) => {
-        const entry = analysisById.get(analysisId);
-        expect(entry, `${analysisId} must be present`).toBeDefined();
-        const bucket = role === 'required' ? entry!.required_dataset_ids : entry!.optional_dataset_ids;
-        expect(bucket).toContain(datasetId);
-    });
-
-    it('keeps full technical out of technical breadth requirements and offers it as Additional Data', () => {
-        const entry = analysisById.get('portfolio.technical_breadth');
-        expect(entry!.required_dataset_ids).not.toContain('portfolio.technical');
-        expect((entry!.additional_export_suggestions ?? []).map((suggestion) => suggestion.dataset_id)).toContain('portfolio.technical');
-    });
-});
-
-describe('AI Export adequacy remediation response contracts', () => {
-    it('income review requires a dated recorded income timeline without forecasts', () => {
-        const text = contractText('portfolio.income_review');
-        expect(text).toContain('Recorded Income Timeline');
-        expect(text).toContain('conversion coverage');
-        expect(text.toLowerCase()).toContain('forecast');
-        expect(text).toContain('coupons');
-    });
-
-    it('broker concentration exposes dimensions, an optional comparator, and discloses unknown coverage', () => {
-        const text = contractText('broker.concentration_context');
-        for (const dimension of ['position', 'asset type', 'sector', 'geography', 'currency']) {
-            expect(text).toContain(dimension);
-        }
-        expect(text).toContain('whole-portfolio comparator');
-        expect(text.toLowerCase()).toContain('liquidity');
-        expect(text.toLowerCase()).toContain('coverage');
-    });
-
-    it('cost efficiency keeps missing distinct from zero and gates ratios on denominators', () => {
-        const text = contractText('broker.cost_efficiency');
-        expect(text).toContain('share-adjusted gross traded amount');
-        expect(text).toContain('recorded zero');
-        expect(text).toContain('not applicable');
-        expect(text).toContain('formula');
-        expect(text.toLowerCase()).toContain('denominator');
-    });
-
-    it('PAC asks only material missing user inputs, grouped and typed as indispensable or optional', () => {
-        const text = contractText('portfolio.pac_planning');
-        for (const category of ['Capital and cadence', 'Goals and horizon', 'Risk preferences', 'Operational constraints']) {
-            expect(text).toContain(category);
-        }
-        expect(text).toContain('REQUIRED WHEN MISSING');
-        expect(text).toContain('OPTIONAL WHEN MATERIAL');
-        expect(text).toContain('indispensable');
-        expect(text).toContain('conditional');
-        expect(text).toContain('never invent');
-        expect(text).toContain('Drawdown is historical');
-        expect(text).toContain('standalone reason to buy');
-    });
-
-    it('fx conversion timing uses observed range position, not percentiles, and lists missing inputs', () => {
-        const text = contractText('fx.conversion_timing');
-        expect(text).toContain('observed range position');
-        expect(text.toLowerCase()).toContain('never as a percentile');
-        expect(text).toContain('realized volatility');
-        expect(text).toContain('amount, deadline, spread, and fees');
-        expect(text.toLowerCase()).toContain('forecast');
-    });
-
-    it('technical breadth stays aggregate and defers raw per-asset history to Additional Data', () => {
-        const text = contractText('portfolio.technical_breadth');
-        expect(text).toContain('Aggregate Coverage and Event Digest');
-        expect(text).toContain('raw per-asset history');
-        expect(text).toContain('Additional Data');
-        expect(text).not.toContain('drawdown');
-        expect(text).not.toContain('VaR');
-    });
-
-    it('market events review requires cited dated research and qualified causality', () => {
-        const instruction = findAiExportAnalysisInstruction('portfolio.market_events_review');
-        const instructionText = [instruction.objective, ...instruction.steps].join(' ');
-        const responseText = contractText('portfolio.market_events_review');
-
-        for (const required of ['publisher', 'URL', 'publication date', 'access date', 'issuer-specific', 'sector', 'macro']) {
-            expect(`${instructionText} ${responseText}`).toContain(required);
-        }
-        for (const confidence of ['supported', 'inferred', 'speculative']) {
-            expect(responseText).toContain(confidence);
-        }
-        expect(instructionText).toContain('web access is unavailable');
-        expect(instructionText).toContain('Never invent a news driver');
-        expect(responseText).toContain('Unexplained or Weakly Explained Movements');
-        expect(responseText.toLowerCase()).toContain('never present temporal correlation as proven causation');
-    });
-
-    it('asset position review acknowledges the portfolio-role weight basis and keeps drawdown context', () => {
-        const contract = findAiExportResponseContract('asset.position_review');
-        const text = contract.sections.flatMap((section) => [section.title, ...section.requirements]).join(' ');
-        expect(text).toContain('portfolio-role weight basis');
-        expect(contract.sections.some((section) => section.title === 'Drawdown Context')).toBe(true);
-    });
-});
-
-describe('AI Export adequacy remediation i18n', () => {
-    it.each(['en', 'it', 'fr', 'es'])('has dataset labels + descriptions in %s', (locale) => {
-        const bundle = LOCALES[locale];
-        for (const datasetId of REMEDIATION_DATASET_IDS) {
-            expect(lookup(bundle, `aiExport.dataset.${datasetId}.display`), `${locale} ${datasetId}.display`).toBeTruthy();
-            expect(lookup(bundle, `aiExport.dataset.${datasetId}.description`), `${locale} ${datasetId}.description`).toBeTruthy();
-        }
-    });
-
-    it.each(['en', 'it', 'fr', 'es'])('has market-events Analysis labels + descriptions in %s', (locale) => {
-        const bundle = LOCALES[locale];
-        expect(lookup(bundle, 'aiExport.analysis.portfolio.market_events_review.display')).toBeTruthy();
-        expect(lookup(bundle, 'aiExport.analysis.portfolio.market_events_review.description')).toBeTruthy();
-    });
-});
-
-describe('AI Export adequacy remediation public rendering', () => {
+describe('AI Export V3 public rendering', () => {
     it('renders FX conversion timing ratios as bounded and unbounded percentages', () => {
         const rendered = renderSnapshotDataText(
             [

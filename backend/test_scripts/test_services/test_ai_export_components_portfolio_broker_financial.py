@@ -195,6 +195,17 @@ def _lot(
     realized_quantity: object = 0,
     original_quantity: object = 10,
     current_custody: list[LotCustodySummarySchema] | None = None,
+    open_value: object | None = None,
+    market_pnl: object | None = None,
+    realized_pnl: object = 0,
+    cumulative_proceeds: object = 0,
+    total_pnl: object | None = None,
+    net_total_pnl: object | None = None,
+    asset_income: object = 0,
+    allocated_fees: object = 0,
+    allocated_taxes: object = 0,
+    states: list[str] | None = None,
+    net_metrics_status: str = "AVAILABLE",
 ) -> LotSummarySchema:
     return LotSummarySchema(
         lot_id=lot_id,
@@ -209,9 +220,18 @@ def _lot(
         original_cost=Decimal("1000"),
         open_quantity=Decimal(str(open_quantity)),
         realized_quantity=Decimal(str(realized_quantity)),
-        realized_pnl=Decimal("0"),
-        cumulative_proceeds=Decimal("0"),
+        realized_pnl=Decimal(str(realized_pnl)),
+        cumulative_proceeds=Decimal(str(cumulative_proceeds)),
         current_custody=current_custody or [],
+        open_value=(Decimal(str(open_value)) if open_value is not None else None),
+        market_pnl=(Decimal(str(market_pnl)) if market_pnl is not None else None),
+        total_pnl=(Decimal(str(total_pnl)) if total_pnl is not None else None),
+        net_total_pnl=(Decimal(str(net_total_pnl)) if net_total_pnl is not None else None),
+        asset_income=Decimal(str(asset_income)),
+        allocated_fees=Decimal(str(allocated_fees)),
+        allocated_taxes=Decimal(str(allocated_taxes)),
+        states=states or [],
+        net_metrics_status=net_metrics_status,
     )
 
 
@@ -519,6 +539,104 @@ class TestEmptyPortfolioIsValidSuccess:
 # =============================================================================
 
 
+class TestAutonomousGeneralEvidence:
+    @pytest.mark.asyncio
+    async def test_portfolio_allocations_include_currency_hhi_and_largest_position(self, monkeypatch):
+        scope = _scope()
+        first = _holding(1, 1, current_value=600).model_copy(
+            update={
+                "nav_weight_percent": Decimal("60"),
+                "valuation_effective_currency": "USD",
+            }
+        )
+        second = _holding(2, 2, current_value=400).model_copy(
+            update={
+                "nav_weight_percent": Decimal("40"),
+                "valuation_effective_currency": "EUR",
+            }
+        )
+        report = _report(scope, summary=_summary(holdings=[first, second], market_value=_money(1000)))
+        _patch_report(monkeypatch, report)
+        _patch_metadata(monkeypatch)
+        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        envelope = await context.resolve("portfolio.allocations_cash", required=True)
+
+        assert envelope.payload["position_count"] == 2
+        assert Decimal(envelope.payload["largest_position_weight_percent"]) == Decimal("60")
+        assert Decimal(envelope.payload["herfindahl_index_points"]) == Decimal("5200")
+        assert envelope.payload["currency_allocation_semantics"].startswith("Currency allocation groups current position market value")
+        assert envelope.payload["concentration_semantics"].endswith("Cash is included in the denominator but is not itself an HHI term.")
+        assert [(row["currency"], Decimal(row["amount"]["amount"])) for row in envelope.payload["by_currency"]] == [
+            ("USD", Decimal("600")),
+            ("EUR", Decimal("400")),
+        ]
+        assert envelope.payload["currency_coverage"]["unknown_position_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_fifo_summary_exports_per_asset_economics_and_coverage(self, monkeypatch):
+        scope = _scope(broker_scope=(1, 2))
+        open_lot = _lot(
+            1,
+            701,
+            opening_broker_id=1,
+            open_quantity=10,
+            open_value=1300,
+            market_pnl=300,
+            total_pnl=320,
+            net_total_pnl=305,
+            asset_income=20,
+            allocated_fees=10,
+            allocated_taxes=5,
+            states=["OPEN"],
+            current_custody=[
+                LotCustodySummarySchema(custody_type="BROKER", broker_id=2, quantity=Decimal("8")),
+                LotCustodySummarySchema(custody_type="IN_TRANSIT", broker_id=None, quantity=Decimal("2")),
+            ],
+        )
+        closed_lot = _lot(
+            1,
+            702,
+            opening_broker_id=2,
+            closing_date=date(2026, 1, 5),
+            open_quantity=0,
+            realized_quantity=10,
+            realized_pnl=100,
+            cumulative_proceeds=1100,
+            total_pnl=110,
+            net_total_pnl=100,
+            asset_income=10,
+            allocated_fees=5,
+            allocated_taxes=5,
+            states=["CLOSED"],
+        )
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {1: _lots_response(1, [closed_lot, open_lot])})
+        _patch_metadata(monkeypatch, asset_ids=[1], broker_ids=[1, 2])
+        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        envelope = await context.resolve("portfolio.fifo_summary", required=True)
+        row = envelope.payload["assets"][0]
+
+        assert envelope.payload["asset_count"] == 1
+        assert envelope.payload["cost_allocation_semantics"].startswith("Fees and taxes are amounts deterministically allocated")
+        assert row["open_lot_count"] == 1
+        assert row["closed_lot_count"] == 1
+        assert Decimal(row["open_value"]["amount"]) == Decimal("1300")
+        assert Decimal(row["unrealized_pnl"]["amount"]) == Decimal("300")
+        assert Decimal(row["potential_gain"]["amount"]) == Decimal("300")
+        assert Decimal(row["potential_loss"]["amount"]) == Decimal("0")
+        assert Decimal(row["realized_pnl"]["amount"]) == Decimal("100")
+        assert Decimal(row["income"]["amount"]) == Decimal("30")
+        assert Decimal(row["fees"]["amount"]) == Decimal("15")
+        assert Decimal(row["taxes"]["amount"]) == Decimal("10")
+        assert row["value_coverage_status"] == "complete"
+        assert row["broker_ids"] == [1, 2]
+        assert row["has_in_transit_custody"] is True
+
+
 class TestAllContributorsRetained:
     @pytest.mark.asyncio
     async def test_every_contributor_and_unallocated_and_effect_row_retained(self, monkeypatch):
@@ -619,6 +737,62 @@ class TestEngineReconciliation:
 
 
 class TestPerformanceBuckets:
+    @pytest.mark.parametrize(
+        ("detail_level", "expected_count"),
+        (
+            (DetailLevel.COMPACT, 8),
+            (DetailLevel.STANDARD, 16),
+            (DetailLevel.FULL, 30),
+        ),
+    )
+    @pytest.mark.parametrize(
+        ("domain", "component_id", "components"),
+        (
+            (Domain.PORTFOLIO, "portfolio.performance", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS),
+            (Domain.BROKER, "broker.performance", broker_financial.BROKER_FINANCIAL_COMPONENTS),
+        ),
+    )
+    @pytest.mark.asyncio
+    async def test_performance_path_uses_detail_owned_uniform_density(self, monkeypatch, detail_level, expected_count, domain, component_id, components):
+        period_start = date(2026, 1, 1)
+        period_end = date(2026, 3, 31)
+        scope_kwargs = {
+            "domain": domain,
+            "detail_level": detail_level,
+            "period_start": period_start,
+            "period_end": period_end,
+        }
+        if domain is Domain.BROKER:
+            scope_kwargs.update({"broker_id": 7, "broker_scope": (7,)})
+        scope = _scope(**scope_kwargs)
+        history = [
+            _history_point(
+                period_start + timedelta(days=index),
+                nav=1000 + index,
+                capital_baseline=1000,
+                total_pnl=index,
+                twrr=Decimal(index) / Decimal("1000"),
+            )
+            for index in range((period_end - period_start).days + 1)
+        ]
+        _patch_report(monkeypatch, _report(scope, summary=_summary(), history=history))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        context = _make_context(scope, _registry(components), _make_async_session())
+
+        payload = (await context.resolve(component_id, required=True)).payload
+
+        assert payload["path_policy_code"] == "uniform_calendar_path_v1"
+        assert payload["path_value_basis"] == "nav_value_including_external_flows"
+        assert payload["path_return_basis"] == "historical_twrr"
+        assert payload["target_bucket_count"] == expected_count
+        assert payload["bucket_count"] == expected_count
+        assert payload["buckets"][0]["start_date"] == period_start.isoformat()
+        assert payload["buckets"][-1]["end_date"] == period_end.isoformat()
+        assert Decimal(payload["buckets"][0]["normalized_index_base_100"]) >= Decimal("100")
+        assert Decimal(payload["buckets"][-1]["normalized_index_base_100"]) == Decimal("1089") / Decimal("1000") * Decimal("100")
+        assert Decimal(payload["buckets"][-1]["return_from_first_ratio"]) == Decimal("0.089")
+
     @pytest.mark.asyncio
     async def test_bucket_plan_edges_match_scope_period_and_gaps_are_explicit_empty(self, monkeypatch):
         scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 10))
@@ -719,6 +893,8 @@ class TestPerformanceBuckets:
         assert first["period_pnl"] is None
         assert first["net_external_flow"] is None
         assert first["variation_start_date"] is None
+        assert Decimal(first["normalized_index_base_100"]) == Decimal("100")
+        assert Decimal(first["return_from_first_ratio"]) == Decimal("0")
 
         assert second["variation_start_date"] == "2026-01-01"
         assert Decimal(second["variation_start_value"]["amount"]) == Decimal("1000")
@@ -733,6 +909,8 @@ class TestPerformanceBuckets:
         assert Decimal(third["period_pnl"]["amount"]) == Decimal("10")
         assert Decimal(third["reconciliation_diff"]["amount"]) == Decimal("0")
         assert Decimal(third["return_percent"]) == (Decimal("1.02") / Decimal("1.01") - Decimal(1))
+        assert Decimal(third["normalized_index_base_100"]) == Decimal("102")
+        assert Decimal(third["return_from_first_ratio"]) == Decimal("0.02")
 
 
 # =============================================================================
@@ -919,6 +1097,32 @@ class TestBrokerScope:
 
         assert envelope.payload["broker_id"] == 5
         assert all(row["opening_broker_id"] == 5 for row in envelope.payload["lots"])
+
+    @pytest.mark.asyncio
+    async def test_broker_fifo_summary_is_compact_and_economic(self, monkeypatch):
+        scope = _scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))
+        lots = [
+            _lot(1, 611, opening_broker_id=5, open_quantity=10, open_value=1250, market_pnl=250, total_pnl=250, net_total_pnl=235, allocated_fees=10, allocated_taxes=5),
+            _lot(1, 612, opening_broker_id=5, closing_date=date(2026, 1, 5), open_quantity=0, realized_quantity=10, realized_pnl=75, total_pnl=75, net_total_pnl=70, allocated_fees=5),
+        ]
+        _patch_report(monkeypatch, _report(scope))
+        _patch_lots(monkeypatch, {1: _lots_response(1, lots)})
+        _patch_metadata(monkeypatch, asset_ids=[1], broker_ids=[5])
+        registry = _registry(broker_financial.BROKER_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        envelope = await context.resolve("broker.fifo_summary", required=True)
+        row = envelope.payload["assets"][0]
+
+        assert envelope.payload["broker_id"] == 5
+        assert envelope.payload["asset_count"] == 1
+        assert envelope.payload["cost_allocation_semantics"].startswith("Fees and taxes are amounts deterministically allocated")
+        assert "lots" not in envelope.payload
+        assert row["open_lot_count"] == 1
+        assert row["closed_lot_count"] == 1
+        assert Decimal(row["unrealized_pnl"]["amount"]) == Decimal("250")
+        assert Decimal(row["realized_pnl"]["amount"]) == Decimal("75")
+        assert Decimal(row["fees"]["amount"]) == Decimal("15")
 
 
 # =============================================================================

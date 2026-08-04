@@ -87,7 +87,7 @@ def _require_broker_scope(context: BuildContext) -> BuildScope:
 # =============================================================================
 
 
-def _concentration_metrics(summary: PortfolioSummary | None) -> tuple[Decimal | None, Decimal | None, int]:
+def concentration_metrics(summary: PortfolioSummary | None) -> tuple[Decimal | None, Decimal | None, int]:
     """Largest position weight and Herfindahl points over the *entire* holding set.
 
     Mirrors `broker_financial._concentration_metrics` exactly (no top-N
@@ -172,6 +172,9 @@ class BrokerConcentrationContextPayload(BaseModel):
     allocation_by_geography: list[AllocationSlice] = Field(default_factory=list)
     allocation_by_currency: list[CurrencyAllocationSlice] = Field(default_factory=list)
     currency_coverage: ConcentrationCoverage
+    allocation_dimension_semantics: str
+    currency_allocation_semantics: str
+    concentration_semantics: str
 
 
 def _map_slices(items: Sequence, *, currency_code: str) -> list[AllocationSlice]:
@@ -180,7 +183,7 @@ def _map_slices(items: Sequence, *, currency_code: str) -> list[AllocationSlice]
     return sorted(slices, key=lambda slice_: (-slice_.percent, slice_.name))
 
 
-def _build_currency_allocation(summary: PortfolioSummary | None, *, currency_code: str) -> tuple[list[CurrencyAllocationSlice], ConcentrationCoverage]:
+def build_currency_allocation(summary: PortfolioSummary | None, *, currency_code: str) -> tuple[list[CurrencyAllocationSlice], ConcentrationCoverage]:
     """Backend-owned native-currency allocation with an explicit unknown bucket.
 
     Groups every holding's snapshot ``current_value`` (already in
@@ -258,8 +261,8 @@ async def _build_broker_concentration_context(context: BuildContext, dependencie
     report = await load_portfolio_report(context, scope, BROKER_REPORT_RESOURCE)
     summary = report.summary
     currency_code = scope.target_currency
-    largest, herfindahl, position_count = _concentration_metrics(summary)
-    currency_slices, coverage = _build_currency_allocation(summary, currency_code=currency_code)
+    largest, herfindahl, position_count = concentration_metrics(summary)
+    currency_slices, coverage = build_currency_allocation(summary, currency_code=currency_code)
     return BrokerConcentrationContextPayload(
         broker_id=scope.broker_id,
         as_of=scope.snapshot_as_of,
@@ -273,6 +276,9 @@ async def _build_broker_concentration_context(context: BuildContext, dependencie
         allocation_by_geography=_map_slices(summary.allocation_by_geography if summary else (), currency_code=currency_code),
         allocation_by_currency=currency_slices,
         currency_coverage=coverage,
+        allocation_dimension_semantics="Asset type, sector, and geography are engine allocation slices; an explicit Liquidity slice may include cash.",
+        currency_allocation_semantics="Currency allocation groups current position market value by native valuation currency. Cash is excluded and remains in broker cash fields.",
+        concentration_semantics="Largest-position weight and HHI use position nav_weight_percent: current position value / total NAV. Cash is included in the denominator but is not itself an HHI term.",
     )
 
 
@@ -403,8 +409,8 @@ async def _build_broker_concentration_comparison(context: BuildContext, dependen
     if portfolio_summary is None or not portfolio_summary.holdings:
         return _unavailable_comparison(scope, reason_code=REASON_PORTFOLIO_EMPTY, message="The whole portfolio has no valued positions in the selected period, so the concentration comparison is unavailable.")
 
-    broker_largest, broker_hhi, broker_count = _concentration_metrics(broker_summary)
-    portfolio_largest, portfolio_hhi, portfolio_count = _concentration_metrics(portfolio_summary)
+    broker_largest, broker_hhi, broker_count = concentration_metrics(broker_summary)
+    portfolio_largest, portfolio_hhi, portfolio_count = concentration_metrics(portfolio_summary)
     currency_code = scope.target_currency
     broker_market_value = broker_summary.market_value
     portfolio_market_value = portfolio_summary.market_value
@@ -473,4 +479,6 @@ __all__ = [
     "ConcentrationComparisonStatus",
     "ConcentrationCoverage",
     "CurrencyAllocationSlice",
+    "build_currency_allocation",
+    "concentration_metrics",
 ]

@@ -6,7 +6,7 @@ import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtime
 
 const options = {
     selectionKind: 'analysis' as const,
-    selectionId: 'asset.trend_analysis' as const,
+    selectionId: 'asset.market_analysis' as const,
     detailLevel: 'standard' as const,
     period: {preset: '3m' as const, customAmount: 3, customUnit: 'months' as const},
     responseLanguage: 'English' as const,
@@ -15,19 +15,19 @@ const options = {
 
 describe('AI Export clipboard orchestration', () => {
     it('builds the new selection/period request contract', () => {
-        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const selection = selectionFixture('analysis', 'asset.market_analysis');
         const request = buildAiExportSnapshotRequest({domain: 'asset', assetId: 7, snapshotAsOf: '2026-03-31', targetCurrency: 'eur'}, options, selection);
 
         expect(request).toMatchObject({
             domain: 'asset',
             asset_id: 7,
             period: {start: '2025-12-31', end: '2026-03-31'},
-            selection: {kind: 'analysis', id: 'asset.trend_analysis'},
+            selection: {kind: 'analysis', id: 'asset.market_analysis'},
         });
     });
 
     it('prepares once and writes the already-prepared prompt without another request', async () => {
-        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const selection = selectionFixture('analysis', 'asset.market_analysis');
         const transport = vi.fn(async (request) => snapshotFixture(selection, request.detail_level, request.period));
         const prepared = await prepareAiExport(
             {
@@ -46,10 +46,10 @@ describe('AI Export clipboard orchestration', () => {
 
     it('strips hidden Analysis notes from Dataset requests, prompts, and fingerprints', async () => {
         const hiddenNote = 'ANALYSIS_ONLY_NOTE';
-        const selection = selectionFixture('dataset', 'portfolio.overview');
+        const selection = selectionFixture('dataset', 'portfolio.overview_and_history');
         const datasetOptions = {
             selectionKind: 'dataset' as const,
-            selectionId: 'portfolio.overview' as const,
+            selectionId: 'portfolio.overview_and_history' as const,
             detailLevel: 'standard' as const,
             period: {preset: '3m' as const, customAmount: 3, customUnit: 'months' as const},
             responseLanguage: 'English' as const,
@@ -73,7 +73,7 @@ describe('AI Export clipboard orchestration', () => {
     });
 
     it('copyAiExport prepares and copies in one call for normal-size payloads', async () => {
-        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const selection = selectionFixture('analysis', 'asset.market_analysis');
         const writer = vi.fn();
         const result = await copyAiExport(
             {

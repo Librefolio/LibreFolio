@@ -5,6 +5,7 @@ import {
     AI_EXPORT_ANALYSIS_IDS,
     AI_EXPORT_CATALOG_VERSION,
     AI_EXPORT_DATASET_IDS,
+    AI_EXPORT_PUBLIC_CATALOG_CONFIG,
     AI_EXPORT_SCHEMA_VERSION,
     AI_EXPORT_SELECTION_VERSION,
     normalizeAiExportSnapshotResponse,
@@ -17,10 +18,6 @@ import {
 } from '../catalog/shared';
 import {findAiExportResponseContract} from '../templates/responseContracts';
 import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
-
-function domainOf(id: string): AiExportDomain {
-    return id.split('.')[0] as AiExportDomain;
-}
 
 function pageOf(domain: AiExportDomain): string {
     return domain === 'portfolio' ? 'dashboard' : domain;
@@ -35,81 +32,77 @@ function additionalSuggestions(id: AiExportAnalysisId) {
         necessity: 'optional' as const,
     });
     const values: Partial<Record<AiExportAnalysisId, ReturnType<typeof suggestion>[]>> = {
-        'portfolio.pac_planning': [suggestion('portfolio.technical', 'deeperTechnical', '3m', 'standard')],
-        'portfolio.rebalancing': [suggestion('portfolio.technical', 'deeperTechnical', '1y', 'compact'), suggestion('portfolio.fifo', 'fifoDetail', '1y', 'standard')],
-        'portfolio.performance_attribution': [suggestion('portfolio.fifo', 'fifoDetail', '1y', 'standard')],
-        'portfolio.market_events_review': [suggestion('portfolio.technical', 'deeperTechnical', '3m', 'standard')],
-        'portfolio.fifo_review': [suggestion('portfolio.performance_flows', 'performanceContext', '1y', 'standard')],
-        'portfolio.technical_breadth': [suggestion('portfolio.technical', 'deeperTechnical', '3m', 'standard'), suggestion('portfolio.performance_flows', 'performanceContext', '1y', 'standard')],
-        'portfolio.description': [suggestion('portfolio.technical', 'deeperTechnical', '3m', 'standard'), suggestion('portfolio.fifo', 'fifoDetail', '1y', 'compact')],
-        'broker.review': [suggestion('broker.technical', 'deeperTechnical', '3m', 'standard')],
-        'broker.cost_efficiency': [suggestion('broker.fifo', 'fifoDetail', '1y', 'standard')],
-        'broker.concentration_context': [suggestion('broker.asset_comparison', 'deeperTechnical', '3m', 'standard')],
-        'broker.fifo_review': [suggestion('broker.performance_flows', 'performanceContext', '1y', 'standard')],
-        'asset.trend_analysis': [suggestion('asset.position_performance', 'positionContext', '1y', 'standard')],
-        'asset.position_review': [suggestion('asset.market_technical', 'deeperTechnical', '1y', 'standard')],
-        'fx.trend_review': [suggestion('fx.direct_exposure', 'directExposure', '3m', 'standard')],
-        'fx.conversion_timing': [suggestion('fx.direct_exposure', 'directExposure', '3m', 'standard')],
-        'fx.exposure_impact': [suggestion('fx.market_technical', 'deeperTechnical', '1y', 'compact')],
+        'portfolio.pac_planning': [suggestion('portfolio.asset_history', 'deeperTechnical', '3m', 'standard')],
+        'portfolio.rebalancing': [suggestion('portfolio.asset_history', 'deeperTechnical', '1y', 'compact')],
+        'portfolio.performance_market_drivers': [suggestion('portfolio.asset_history', 'deeperTechnical', '3m', 'standard')],
+        'portfolio.fiscal_lots': [suggestion('portfolio.asset_history', 'deeperTechnical', '1y', 'compact')],
+        'broker.review': [suggestion('broker.asset_history', 'deeperTechnical', '3m', 'standard')],
+        'broker.performance_market_drivers': [suggestion('broker.asset_history', 'deeperTechnical', '3m', 'standard')],
+        'broker.fiscal_lots': [suggestion('broker.asset_history', 'deeperTechnical', '1y', 'compact')],
+        'asset.position_review': [suggestion('asset.market_history', 'deeperTechnical', '1y', 'standard')],
+        'asset.market_analysis': [suggestion('asset.position_and_history', 'positionContext', '1y', 'standard')],
+        'fx.pair_analysis': [suggestion('fx.market_and_exposure', 'directExposure', '3m', 'compact')],
+        'fx.exposure_impact': [suggestion('fx.market_history', 'deeperTechnical', '1y', 'compact')],
     };
     return values[id] ?? [];
 }
 
-function analysisDatasetIds(id: AiExportAnalysisId): {required: readonly AiExportDatasetId[]; optional: readonly AiExportDatasetId[]} {
-    const mapping: Record<AiExportAnalysisId, {required: readonly AiExportDatasetId[]; optional: readonly AiExportDatasetId[]}> = {
-        'portfolio.pac_planning': {required: ['portfolio.overview', 'portfolio.performance_flows'], optional: ['portfolio.asset_snapshot', 'portfolio.drawdown_context']},
-        'portfolio.rebalancing': {required: ['portfolio.overview'], optional: ['portfolio.performance_flows', 'portfolio.asset_comparison', 'portfolio.drawdown_context']},
-        'portfolio.performance_attribution': {required: ['portfolio.overview', 'portfolio.performance_flows'], optional: []},
-        'portfolio.market_events_review': {required: ['portfolio.overview', 'portfolio.asset_comparison'], optional: ['portfolio.performance_flows']},
-        'portfolio.income_review': {required: ['portfolio.overview', 'portfolio.performance_flows', 'portfolio.income_evidence'], optional: []},
-        'portfolio.fifo_review': {required: ['portfolio.overview', 'portfolio.fifo'], optional: []},
-        'portfolio.technical_breadth': {required: ['portfolio.overview', 'portfolio.technical_summary'], optional: []},
-        'portfolio.description': {required: ['portfolio.overview'], optional: ['portfolio.performance_flows', 'portfolio.technical_summary']},
-        'broker.review': {required: ['broker.overview', 'broker.performance_flows'], optional: ['broker.asset_comparison', 'broker.fifo', 'broker.drawdown_context', 'broker.concentration_evidence']},
-        'broker.cost_efficiency': {required: ['broker.overview', 'broker.performance_flows', 'broker.cost_efficiency_evidence'], optional: []},
-        'broker.concentration_context': {required: ['broker.overview', 'broker.concentration_evidence'], optional: ['broker.technical_summary']},
-        'broker.fifo_review': {required: ['broker.overview', 'broker.fifo'], optional: []},
-        'asset.trend_analysis': {required: ['asset.overview', 'asset.market_technical'], optional: []},
-        'asset.position_review': {required: ['asset.overview', 'asset.position_performance'], optional: ['asset.position_context', 'asset.drawdown_context']},
-        'fx.trend_review': {required: ['fx.overview', 'fx.market_technical'], optional: []},
-        'fx.conversion_timing': {required: ['fx.overview', 'fx.market_technical', 'fx.conversion_timing_context'], optional: ['fx.direct_exposure']},
-        'fx.exposure_impact': {required: ['fx.overview', 'fx.direct_exposure'], optional: ['fx.market_context']},
+function analysisDatasetIds(id: AiExportAnalysisId): {required: readonly string[]; optional: readonly string[]} {
+    const mapping: Record<AiExportAnalysisId, {required: readonly string[]; optional: readonly string[]}> = {
+        'portfolio.pac_planning': {required: ['portfolio.overview_and_history'], optional: []},
+        'portfolio.rebalancing': {required: ['portfolio.overview_and_history'], optional: []},
+        'portfolio.performance_market_drivers': {required: ['portfolio.overview_and_history'], optional: []},
+        'portfolio.fiscal_lots': {required: ['portfolio.overview_and_history', 'portfolio.fifo'], optional: []},
+        'broker.review': {required: ['broker.overview_and_history'], optional: []},
+        'broker.performance_market_drivers': {required: ['broker.overview_and_history'], optional: []},
+        'broker.fiscal_lots': {required: ['broker.overview_and_history', 'broker.fifo'], optional: []},
+        'asset.position_review': {required: ['asset.position_and_history'], optional: []},
+        'asset.market_analysis': {required: ['asset.market_history'], optional: []},
+        'fx.pair_analysis': {required: ['fx.market_history'], optional: []},
+        'fx.exposure_impact': {required: ['fx.market_and_exposure'], optional: []},
     };
     return mapping[id];
 }
 
 export function backendCatalogFixture(): AiExportBackendCatalogResponse {
+    const configById = new Map(AI_EXPORT_PUBLIC_CATALOG_CONFIG.map((entry) => [entry.id, entry]));
     return schemas.AiExportCatalogResponse.parse({
         schema_version: AI_EXPORT_SCHEMA_VERSION,
         catalog_version: AI_EXPORT_CATALOG_VERSION,
-        datasets: AI_EXPORT_DATASET_IDS.map((id) => ({
-            kind: 'dataset',
-            id,
-            version: AI_EXPORT_SELECTION_VERSION,
-            domain: domainOf(id),
-            display_i18n_key: `aiExport.dataset.${id}.display`,
-            description_i18n_key: `aiExport.dataset.${id}.description`,
-            icon: 'database',
-            applicability_code: 'always_applicable',
-            applicable_pages: [pageOf(domainOf(id))],
-            supported_detail_levels: ['compact', 'standard', 'full'],
-            period_semantics: id.endsWith('.overview') ? 'as_of' : 'aggregated',
-            required_component_ids: [`${domainOf(id)}.summary`],
-            optional_component_ids: [],
-        })),
+        datasets: AI_EXPORT_DATASET_IDS.map((id) => {
+            const config = configById.get(id);
+            if (!config || config.group !== 'dataset') throw new Error(`Missing Dataset config for ${id}`);
+            return {
+                kind: 'dataset',
+                id,
+                version: AI_EXPORT_SELECTION_VERSION,
+                domain: config.domain,
+                display_i18n_key: config.displayI18nKey,
+                description_i18n_key: config.descriptionI18nKey,
+                icon: config.icon,
+                applicability_code: 'always_applicable',
+                applicable_pages: [pageOf(config.domain)],
+                supported_detail_levels: ['compact', 'standard', 'full'],
+                period_semantics: 'aggregated',
+                required_component_ids: [`${config.domain}.summary`],
+                optional_component_ids: [],
+            };
+        }),
         analyses: AI_EXPORT_ANALYSIS_IDS.map((id) => {
+            const config = configById.get(id);
+            if (!config || config.group !== 'analysis') throw new Error(`Missing Analysis config for ${id}`);
             const instruction = findAiExportAnalysisInstruction(id);
             const response = findAiExportResponseContract(id);
             return {
                 kind: 'analysis',
                 id,
                 version: AI_EXPORT_SELECTION_VERSION,
-                domain: domainOf(id),
-                display_i18n_key: `aiExport.analysis.${id}.display`,
-                description_i18n_key: `aiExport.analysis.${id}.description`,
-                icon: 'activity',
+                domain: config.domain,
+                display_i18n_key: config.displayI18nKey,
+                description_i18n_key: config.descriptionI18nKey,
+                icon: config.icon,
                 applicability_code: 'always_applicable',
-                applicable_pages: [pageOf(domainOf(id))],
+                applicable_pages: [pageOf(config.domain)],
                 supported_detail_levels: ['compact', 'standard', 'full'],
                 required_dataset_ids: analysisDatasetIds(id).required,
                 optional_dataset_ids: analysisDatasetIds(id).optional,
@@ -203,7 +196,7 @@ export function snapshotFixture(selection: AiExportCompatibleSelection, detailLe
             },
             dataset_manifest: [
                 {
-                    dataset_id: `${selection.domain}.overview`,
+                    dataset_id: selection.kind === 'dataset' ? selection.id : analysis!.required_dataset_ids[0],
                     dataset_version: AI_EXPORT_SELECTION_VERSION,
                     role: selection.kind === 'dataset' ? 'selected' : 'required',
                 },

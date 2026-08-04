@@ -2,43 +2,18 @@ import {beforeEach, describe, expect, it} from 'vitest';
 
 import {transitionClientSession} from '$lib/stores/app/clientSession';
 
-import {AI_EXPORT_MEMORY_VERSION, buildAiExportMemoryStorageKey, clearAiExportMemoryCache, loadAiExportMemory, saveAiExportMemory} from '../aiExportMemory';
+import {AI_EXPORT_MEMORY_TTL_MS, clearAiExportMemoryCache, loadAiExportMemory, saveAiExportMemory} from '../aiExportMemory';
 import {emptyAiExportCompatibility} from '../catalog/compatibility';
 import {compatibilityFixture} from './runtimeFixtures';
 
-class MemoryStorage implements Storage {
-    private readonly values = new Map<string, string>();
-    get length() {
-        return this.values.size;
-    }
-    clear() {
-        this.values.clear();
-    }
-    getItem(key: string) {
-        return this.values.get(key) ?? null;
-    }
-    key(index: number) {
-        return [...this.values.keys()][index] ?? null;
-    }
-    removeItem(key: string) {
-        this.values.delete(key);
-    }
-    setItem(key: string, value: string) {
-        this.values.set(key, value);
-    }
-}
-
-let storage: MemoryStorage;
-
 beforeEach(() => {
-    storage = new MemoryStorage();
-    clearAiExportMemoryCache();
     transitionClientSession(null);
+    clearAiExportMemoryCache();
     transitionClientSession('user-1');
 });
 
 describe('AI Export memory', () => {
-    it('stores selection, detail, period, notes, and warning override per entity', () => {
+    it('stores selection, detail, period, notes, and warning override inside the TTL', () => {
         const options = {
             selectionKind: 'analysis' as const,
             selectionId: 'asset.position_review' as const,
@@ -47,15 +22,15 @@ describe('AI Export memory', () => {
             responseLanguage: 'Italian' as const,
             userNotes: 'Recovery focus',
         };
-        saveAiExportMemory({memoryKey: 'asset:7', options, copyAnywayFingerprint: 'fp-1', storage});
+        saveAiExportMemory({memoryKey: 'asset:7', options, copyAnywayFingerprint: 'fp-1', now: 1_000});
 
         const loaded = loadAiExportMemory({
             memoryKey: 'asset:7',
             domain: 'asset',
             compatibility: compatibilityFixture(),
             responseLanguage: 'French',
-            defaultSelectionId: 'asset.trend_analysis',
-            storage,
+            defaultSelectionId: 'asset.market_analysis',
+            now: 1_000 + AI_EXPORT_MEMORY_TTL_MS - 1,
         });
 
         expect(loaded.options).toMatchObject({...options, responseLanguage: 'French'});
@@ -63,7 +38,73 @@ describe('AI Export memory', () => {
         expect(loaded.copyAnywayFingerprint).toBe('fp-1');
     });
 
-    it('keeps hidden Analysis notes while Dataset memory stays note-free', () => {
+    it('expires every draft parameter after ten minutes and reopens with defaults', () => {
+        saveAiExportMemory({
+            memoryKey: 'portfolio',
+            options: {
+                selectionKind: 'analysis',
+                selectionId: 'portfolio.rebalancing',
+                detailLevel: 'full',
+                period: {preset: '1y', customAmount: 3, customUnit: 'months'},
+                responseLanguage: 'English',
+                userNotes: 'Do not survive expiry',
+            },
+            copyAnywayFingerprint: 'expired-fingerprint',
+            now: 5_000,
+        });
+
+        const loaded = loadAiExportMemory({
+            memoryKey: 'portfolio',
+            domain: 'portfolio',
+            compatibility: compatibilityFixture(),
+            responseLanguage: 'Italian',
+            defaultSelectionId: 'portfolio.pac_planning',
+            now: 5_000 + AI_EXPORT_MEMORY_TTL_MS,
+        });
+
+        expect(loaded.options).toMatchObject({
+            selectionKind: 'analysis',
+            selectionId: 'portfolio.pac_planning',
+            detailLevel: 'standard',
+            period: {preset: '3m'},
+            responseLanguage: 'Italian',
+        });
+        expect(loaded.userNotesDraft).toBe('');
+        expect(loaded.copyAnywayFingerprint).toBeUndefined();
+    });
+
+    it('clears all drafts across logout and the next login, including the same account', () => {
+        saveAiExportMemory({
+            memoryKey: 'portfolio',
+            options: {
+                selectionKind: 'analysis',
+                selectionId: 'portfolio.rebalancing',
+                detailLevel: 'full',
+                period: {preset: '1y', customAmount: 3, customUnit: 'months'},
+                responseLanguage: 'English',
+                userNotes: 'Previous login',
+            },
+            now: 2_000,
+        });
+
+        transitionClientSession(null);
+        transitionClientSession('user-1');
+
+        const loaded = loadAiExportMemory({
+            memoryKey: 'portfolio',
+            domain: 'portfolio',
+            compatibility: compatibilityFixture(),
+            responseLanguage: 'English',
+            defaultSelectionId: 'portfolio.pac_planning',
+            now: 2_001,
+        });
+
+        expect(loaded.options.selectionId).toBe('portfolio.pac_planning');
+        expect(loaded.options.detailLevel).toBe('standard');
+        expect(loaded.userNotesDraft).toBe('');
+    });
+
+    it('keeps contexts isolated and preserves hidden Analysis notes only within the active login', () => {
         const hiddenNote = 'Analysis-only allocation constraints';
         saveAiExportMemory({
             memoryKey: 'portfolio',
@@ -75,40 +116,61 @@ describe('AI Export memory', () => {
                 responseLanguage: 'English',
                 userNotes: hiddenNote,
             },
-            storage,
+            now: 3_000,
         });
         saveAiExportMemory({
             memoryKey: 'portfolio',
             options: {
                 selectionKind: 'dataset',
-                selectionId: 'portfolio.overview',
+                selectionId: 'portfolio.overview_and_history',
                 detailLevel: 'compact',
                 period: {preset: '3m', customAmount: 3, customUnit: 'months'},
                 responseLanguage: 'English',
             },
-            storage,
+            now: 3_001,
         });
-        clearAiExportMemoryCache();
+        saveAiExportMemory({
+            memoryKey: 'asset:7',
+            options: {
+                selectionKind: 'analysis',
+                selectionId: 'asset.position_review',
+                detailLevel: 'full',
+                period: {preset: '1y', customAmount: 3, customUnit: 'months'},
+                responseLanguage: 'English',
+                userNotes: 'Asset-only note',
+            },
+            now: 3_001,
+        });
 
-        const loaded = loadAiExportMemory({
+        const portfolio = loadAiExportMemory({
             memoryKey: 'portfolio',
             domain: 'portfolio',
             compatibility: compatibilityFixture(),
             responseLanguage: 'English',
             defaultSelectionId: 'portfolio.pac_planning',
-            storage,
+            now: 3_002,
+        });
+        const asset = loadAiExportMemory({
+            memoryKey: 'asset:7',
+            domain: 'asset',
+            compatibility: compatibilityFixture(),
+            responseLanguage: 'English',
+            defaultSelectionId: 'asset.market_analysis',
+            now: 3_002,
         });
 
-        expect(loaded.options).toMatchObject({
+        expect(portfolio.options).toMatchObject({
             selectionKind: 'dataset',
-            selectionId: 'portfolio.overview',
+            selectionId: 'portfolio.overview_and_history',
             detailLevel: 'compact',
         });
-        expect(loaded.options.userNotes).toBeUndefined();
-        expect(loaded.userNotesDraft).toBe(hiddenNote);
+        expect(portfolio.options.userNotes).toBeUndefined();
+        expect(portfolio.userNotesDraft).toBe(hiddenNote);
+        expect(asset.options.selectionId).toBe('asset.position_review');
+        expect(asset.userNotesDraft).toBe('Asset-only note');
     });
 
-    it('waits for async catalog hydration without discarding persisted memory', () => {
+    it('waits for async catalog hydration without discarding an unexpired in-memory draft', () => {
         saveAiExportMemory({
             memoryKey: 'portfolio',
             options: {
@@ -119,10 +181,8 @@ describe('AI Export memory', () => {
                 responseLanguage: 'English',
                 userNotes: 'Keep until the catalog resolves',
             },
-            storage,
+            now: 4_000,
         });
-        clearAiExportMemoryCache();
-        const key = buildAiExportMemoryStorageKey('user-1', 'portfolio');
 
         const pendingCatalog = loadAiExportMemory({
             memoryKey: 'portfolio',
@@ -130,7 +190,7 @@ describe('AI Export memory', () => {
             compatibility: emptyAiExportCompatibility(),
             responseLanguage: 'English',
             defaultSelectionId: 'portfolio.pac_planning',
-            storage,
+            now: 4_001,
         });
         const hydratedCatalog = loadAiExportMemory({
             memoryKey: 'portfolio',
@@ -138,56 +198,11 @@ describe('AI Export memory', () => {
             compatibility: compatibilityFixture(),
             responseLanguage: 'English',
             defaultSelectionId: 'portfolio.pac_planning',
-            storage,
+            now: 4_002,
         });
 
         expect(pendingCatalog.options.selectionId).toBe('portfolio.pac_planning');
-        expect(storage.getItem(key)).not.toBeNull();
         expect(hydratedCatalog.options.selectionId).toBe('portfolio.rebalancing');
         expect(hydratedCatalog.userNotesDraft).toBe('Keep until the catalog resolves');
-    });
-
-    it('ignores old memory schema versions', () => {
-        const key = buildAiExportMemoryStorageKey('user-1', 'portfolio');
-        storage.setItem(key, JSON.stringify({version: 1, task: 'pac_planning'}));
-
-        const loaded = loadAiExportMemory({
-            memoryKey: 'portfolio',
-            domain: 'portfolio',
-            compatibility: compatibilityFixture(),
-            responseLanguage: 'English',
-            defaultSelectionId: 'portfolio.pac_planning',
-            storage,
-        });
-
-        expect(loaded.options.selectionId).toBe('portfolio.pac_planning');
-        expect(storage.getItem(key)).toBeNull();
-    });
-
-    it('discards stale Drawdown Recovery selections and falls back', () => {
-        const key = buildAiExportMemoryStorageKey('user-1', 'asset:7');
-        storage.setItem(
-            key,
-            JSON.stringify({
-                version: AI_EXPORT_MEMORY_VERSION,
-                selectionKind: 'analysis',
-                selectionId: 'asset.drawdown_recovery',
-                detailLevel: 'full',
-                period: {preset: '3m', customAmount: 3, customUnit: 'months'},
-                notes: 'stale',
-            }),
-        );
-
-        const loaded = loadAiExportMemory({
-            memoryKey: 'asset:7',
-            domain: 'asset',
-            compatibility: compatibilityFixture(),
-            responseLanguage: 'English',
-            defaultSelectionId: 'asset.trend_analysis',
-            storage,
-        });
-
-        expect(loaded.options.selectionId).toBe('asset.trend_analysis');
-        expect(storage.getItem(key)).toBeNull();
     });
 });

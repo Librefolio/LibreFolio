@@ -433,6 +433,7 @@ class AssetPerformancePayload(AssetComponentModel):
     asset_id: int
     period: DateRangeModel
     target_currency: str
+    zero_semantics: str
     brokers: tuple[AssetBrokerPeriodPerformance, ...] = ()
     coverage: AssetAggregateCoverage
     total_start_value: SafeDecimal | None = None
@@ -467,7 +468,21 @@ class AssetLotDetailRow(AssetComponentModel):
     opening_date: Date
     opening_unit_price: SafeDecimal
     original_quantity: SafeDecimal
+    original_cost: SafeDecimal
     open_quantity: SafeDecimal
+    realized_quantity: SafeDecimal
+    cumulative_proceeds: SafeDecimal
+    realized_pnl: SafeDecimal
+    open_value: SafeDecimal | None = None
+    unrealized_pnl: SafeDecimal | None = None
+    total_pnl: SafeDecimal | None = None
+    net_total_pnl: SafeDecimal | None = None
+    income: SafeDecimal
+    allocated_fees: SafeDecimal
+    allocated_taxes: SafeDecimal
+    value_source: str | None = None
+    net_metrics_status: str
+    states: tuple[str, ...] = ()
     closing_date: Date | None = None
     current_custody: tuple[AssetLotCustodyRow, ...] = ()
 
@@ -493,6 +508,7 @@ class AssetLotDetailPayload(AssetComponentModel):
     asset_id: int
     period: DateRangeModel
     target_currency: str
+    cost_allocation_semantics: str
     lots: tuple[AssetLotDetailRow, ...] = ()
     omitted_degraded_lot_count: int = 0
 

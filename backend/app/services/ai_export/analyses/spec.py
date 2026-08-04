@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.types import CODE_PATTERN, PAGE_PATTERN, DetailLevel, Domain
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry
 
@@ -109,6 +110,7 @@ class AnalysisSpec:
     - `response_contract_id`/`response_contract_version`: frontend-owned response
       contract reference used for the fail-closed handshake.
     - `supports_notes`: whether user-provided notes are accepted for this analysis.
+    - `visibility`: direct public selection boundary; defaults internal/fail-closed.
     """
 
     analysis_id: str
@@ -127,6 +129,7 @@ class AnalysisSpec:
     response_contract_version: int
     supports_notes: bool = True
     additional_export_suggestions: tuple[AdditionalExportSuggestion, ...] = ()
+    visibility: CatalogVisibility = CatalogVisibility.INTERNAL
 
     def __post_init__(self) -> None:
         if not _ANALYSIS_ID_PATTERN.fullmatch(self.analysis_id):
@@ -170,6 +173,8 @@ class AnalysisSpec:
         if len(suggestion_ids) != len(set(suggestion_ids)):
             raise AnalysisSpecError(f"{self.analysis_id}: additional export dataset IDs must be unique")
         object.__setattr__(self, "additional_export_suggestions", suggestions)
+        if not isinstance(self.visibility, CatalogVisibility):
+            raise AnalysisSpecError(f"{self.analysis_id}: visibility must be a CatalogVisibility member, got {self.visibility!r}")
 
     @property
     def dataset_order(self) -> tuple[str, ...]:
@@ -197,6 +202,10 @@ class AnalysisDatasetDomainMismatchError(AnalysisRegistryError):
     """Raised when an `AnalysisSpec` references a dataset belonging to a different domain."""
 
 
+class AnalysisSuggestionVisibilityError(AnalysisRegistryError):
+    """Raised when a public analysis suggests a non-public dataset."""
+
+
 class AnalysisRegistry:
     """Immutable collection of `AnalysisSpec`, validated against a `DatasetRegistry`."""
 
@@ -221,6 +230,8 @@ class AnalysisRegistry:
                 dataset_spec = dataset_registry.get(suggestion.dataset_id)
                 if dataset_spec.domain != spec.domain:
                     raise AnalysisDatasetDomainMismatchError(f"{spec.analysis_id}: suggested dataset {suggestion.dataset_id!r} belongs to domain {dataset_spec.domain.value!r}, expected {spec.domain.value!r}")
+                if spec.visibility is CatalogVisibility.PUBLIC and dataset_spec.visibility is not CatalogVisibility.PUBLIC:
+                    raise AnalysisSuggestionVisibilityError(f"{spec.analysis_id}: public additional export suggestion {suggestion.dataset_id!r} must reference a public dataset")
         self._specs: MappingProxyType[str, AnalysisSpec] = MappingProxyType(ordered)
         self._dataset_registry = dataset_registry
 
@@ -241,3 +252,8 @@ class AnalysisRegistry:
 
     def for_domain(self, domain: Domain) -> tuple[AnalysisSpec, ...]:
         return tuple(spec for spec in self._specs.values() if spec.domain == domain)
+
+    def for_visibility(self, visibility: CatalogVisibility) -> tuple[AnalysisSpec, ...]:
+        if not isinstance(visibility, CatalogVisibility):
+            raise TypeError("visibility must be a CatalogVisibility member")
+        return tuple(spec for spec in self._specs.values() if spec.visibility is visibility)

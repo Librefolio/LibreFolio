@@ -1783,7 +1783,7 @@
                 domain="asset"
                 compatibility={assetAiExportCompatibility}
                 memoryKey={`asset:${data.assetId}`}
-                defaultSelectionId="asset.trend_analysis"
+                defaultSelectionId="asset.market_analysis"
                 disabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
                 labels={assetAiExportLabels}
                 showLabel={showActionLabels}

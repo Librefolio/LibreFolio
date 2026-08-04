@@ -1,10 +1,7 @@
-"""Focused tests for the 32-dataset / 17-analysis AI Export Semantic Composition V2 catalog.
+"""Focused tests for the internal registry and public AI Export V3 catalog.
 
-Covers exact dataset/analysis IDs and counts, the frozen analysis-to-dataset
-mapping (V2 remapped analyses, new public derived datasets), registry
-uniqueness/reference/domain validation, and the declarative `*.all_data`
-expansion/dedup/canonical-order behaviour (context/summary datasets excluded
-from *.all_data source unions per V2 architecture).
+Covers exact public/internal IDs and counts, analysis-to-dataset mapping,
+registry validation, and declarative ``*.all_data`` expansion.
 """
 
 from __future__ import annotations
@@ -12,16 +9,20 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from backend.app.services.ai_export.analyses.catalog import ALL_ANALYSES, EXPECTED_ANALYSIS_COUNT, build_analysis_registry
+from backend.app.services.ai_export.analyses.catalog import ALL_ANALYSES, EXPECTED_ANALYSIS_COUNT, EXPECTED_PUBLIC_ANALYSIS_COUNT, PUBLIC_ANALYSES, build_analysis_registry
 from backend.app.services.ai_export.analyses.spec import (
+    AdditionalExportPeriod,
+    AdditionalExportSuggestion,
     AnalysisDatasetDomainMismatchError,
     AnalysisRegistry,
     AnalysisSpec,
     AnalysisSpecError,
+    AnalysisSuggestionVisibilityError,
     DuplicateAnalysisIdError,
     UnknownAnalysisDatasetError,
     UnknownAnalysisError,
 )
+from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.catalog import (
     ALL_COMPONENTS,
     ALL_FOUNDATION_COMPONENTS,
@@ -31,8 +32,8 @@ from backend.app.services.ai_export.components.catalog import (
 )
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
-from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, Domain, PeriodBehavior
-from backend.app.services.ai_export.datasets.catalog import EXPECTED_DATASET_COUNT, build_dataset_registry
+from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, DetailLevel, Domain, PeriodBehavior
+from backend.app.services.ai_export.datasets.catalog import EXPECTED_DATASET_COUNT, EXPECTED_PUBLIC_DATASET_COUNT, PUBLIC_DATASETS, build_dataset_registry
 from backend.app.services.ai_export.datasets.spec import (
     DatasetComponentDomainMismatchError,
     DatasetRegistry,
@@ -45,7 +46,7 @@ from backend.app.services.ai_export.datasets.spec import (
 )
 from backend.app.services.ai_export.runtime_service import AiExportSnapshotService
 
-EXPECTED_DATASET_IDS = (
+EXPECTED_INTERNAL_DATASET_IDS = (
     "portfolio.overview",
     "portfolio.performance_flows",
     "portfolio.technical_summary",
@@ -80,24 +81,43 @@ EXPECTED_DATASET_IDS = (
     "fx.all_data",
 )
 
-EXPECTED_ANALYSIS_MAPPING = {
-    "portfolio.pac_planning": (("portfolio.overview", "portfolio.performance_flows"), ("portfolio.asset_snapshot", "portfolio.drawdown_context")),
-    "portfolio.rebalancing": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.asset_comparison", "portfolio.drawdown_context")),
+EXPECTED_PUBLIC_DATASET_IDS = (
+    "portfolio.overview_and_history",
+    "portfolio.asset_history",
+    "broker.overview_and_history",
+    "broker.asset_history",
+    "asset.position_and_history",
+    "asset.market_history",
+    "fx.market_and_exposure",
+    "fx.market_history",
+)
+
+EXPECTED_LEGACY_ANALYSIS_MAPPING = {
     "portfolio.performance_attribution": (("portfolio.overview", "portfolio.performance_flows"), ()),
     "portfolio.market_events_review": (("portfolio.overview", "portfolio.asset_comparison"), ("portfolio.performance_flows",)),
     "portfolio.income_review": (("portfolio.overview", "portfolio.performance_flows", "portfolio.income_evidence"), ()),
     "portfolio.fifo_review": (("portfolio.overview", "portfolio.fifo"), ()),
     "portfolio.technical_breadth": (("portfolio.overview", "portfolio.technical_summary"), ()),
     "portfolio.description": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.technical_summary")),
-    "broker.review": (("broker.overview", "broker.performance_flows"), ("broker.asset_comparison", "broker.fifo", "broker.drawdown_context", "broker.concentration_evidence")),
-    "broker.cost_efficiency": (("broker.overview", "broker.performance_flows", "broker.cost_efficiency_evidence"), ()),
     "broker.concentration_context": (("broker.overview", "broker.concentration_evidence"), ("broker.technical_summary",)),
     "broker.fifo_review": (("broker.overview", "broker.fifo"), ()),
     "asset.trend_analysis": (("asset.overview", "asset.market_technical"), ()),
-    "asset.position_review": (("asset.overview", "asset.position_performance"), ("asset.position_context", "asset.drawdown_context")),
     "fx.trend_review": (("fx.overview", "fx.market_technical"), ()),
     "fx.conversion_timing": (("fx.overview", "fx.market_technical", "fx.conversion_timing_context"), ("fx.direct_exposure",)),
-    "fx.exposure_impact": (("fx.overview", "fx.direct_exposure"), ("fx.market_context",)),
+}
+
+EXPECTED_PUBLIC_ANALYSIS_MAPPING = {
+    "portfolio.pac_planning": (("portfolio.overview_and_history",), ()),
+    "portfolio.rebalancing": (("portfolio.overview_and_history",), ()),
+    "portfolio.performance_market_drivers": (("portfolio.overview_and_history",), ()),
+    "portfolio.fiscal_lots": (("portfolio.overview_and_history", "portfolio.fifo"), ()),
+    "broker.review": (("broker.overview_and_history",), ()),
+    "broker.performance_market_drivers": (("broker.overview_and_history",), ()),
+    "broker.fiscal_lots": (("broker.overview_and_history", "broker.fifo"), ()),
+    "asset.position_review": (("asset.position_and_history",), ()),
+    "asset.market_analysis": (("asset.market_history",), ()),
+    "fx.pair_analysis": (("fx.market_history",), ()),
+    "fx.exposure_impact": (("fx.market_and_exposure",), ()),
 }
 
 
@@ -124,16 +144,21 @@ def analysis_registry(dataset_registry: DatasetRegistry) -> AnalysisRegistry:
 
 
 class TestDatasetCatalog:
-    def test_expected_dataset_count_is_32(self):
-        assert EXPECTED_DATASET_COUNT == 32
+    def test_expected_dataset_counts(self):
+        assert EXPECTED_DATASET_COUNT == 40
+        assert EXPECTED_PUBLIC_DATASET_COUNT == 8
+        assert len(PUBLIC_DATASETS) == 8
 
-    def test_dataset_registry_has_exactly_32_entries(self, dataset_registry: DatasetRegistry):
-        assert len(dataset_registry) == 32
+    def test_dataset_registry_has_public_and_internal_entries(self, dataset_registry: DatasetRegistry):
+        assert len(dataset_registry) == 40
+        assert len(dataset_registry.for_visibility(CatalogVisibility.PUBLIC)) == 8
+        assert len(dataset_registry.for_visibility(CatalogVisibility.INTERNAL)) == 32
 
-    def test_dataset_ids_match_frozen_catalog_exactly(self, dataset_registry: DatasetRegistry):
+    def test_dataset_ids_and_visibility_match_v3_contract(self, dataset_registry: DatasetRegistry):
         actual_ids = {spec.dataset_id for spec in dataset_registry}
-        assert actual_ids == set(EXPECTED_DATASET_IDS)
-        assert len(EXPECTED_DATASET_IDS) == len(set(EXPECTED_DATASET_IDS))
+        assert actual_ids == set(EXPECTED_INTERNAL_DATASET_IDS) | set(EXPECTED_PUBLIC_DATASET_IDS)
+        assert {spec.dataset_id for spec in dataset_registry.for_visibility(CatalogVisibility.PUBLIC)} == set(EXPECTED_PUBLIC_DATASET_IDS)
+        assert {spec.dataset_id for spec in dataset_registry.for_visibility(CatalogVisibility.INTERNAL)} == set(EXPECTED_INTERNAL_DATASET_IDS)
 
     def test_every_dataset_supports_all_three_detail_levels(self, dataset_registry: DatasetRegistry):
         for spec in dataset_registry:
@@ -143,21 +168,21 @@ class TestDatasetCatalog:
         for domain in Domain:
             assert f"{domain.value}.all_data" in dataset_registry
 
-    def test_schema_and_selection_versions_are_2(self, dataset_registry: DatasetRegistry):
-        for spec in dataset_registry:
-            assert spec.version == 2
+    def test_selection_versions_follow_visibility(self, dataset_registry: DatasetRegistry):
+        assert all(spec.version == 3 for spec in dataset_registry.for_visibility(CatalogVisibility.PUBLIC))
+        assert all(spec.version == 2 for spec in dataset_registry.for_visibility(CatalogVisibility.INTERNAL))
 
 
 class TestIntegratedComponentCatalog:
-    def test_production_registry_has_all_56_real_components_in_frozen_order(
+    def test_production_registry_has_all_67_real_components_in_frozen_order(
         self,
         component_registry: ComponentRegistry,
     ):
         expected_order = tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
 
-        assert len(ALL_FOUNDATION_COMPONENTS) == 65
-        assert len(ALL_REAL_COMPONENTS) == 65
-        assert len(ALL_COMPONENTS) == 65
+        assert len(ALL_FOUNDATION_COMPONENTS) == 67
+        assert len(ALL_REAL_COMPONENTS) == 67
+        assert len(ALL_COMPONENTS) == 67
         assert component_registry.canonical_order == expected_order
         assert tuple(spec.component_id for spec in ALL_COMPONENTS) == expected_order
         assert all(spec.output_model is not FoundationComponentPayload for spec in component_registry)
@@ -179,25 +204,34 @@ class TestIntegratedComponentCatalog:
 
 
 class TestAnalysisCatalog:
-    def test_expected_analysis_count_is_17(self):
-        assert EXPECTED_ANALYSIS_COUNT == 17
-        assert len(ALL_ANALYSES) == 17
+    def test_expected_analysis_counts(self):
+        assert EXPECTED_ANALYSIS_COUNT == 22
+        assert EXPECTED_PUBLIC_ANALYSIS_COUNT == 11
+        assert len(ALL_ANALYSES) == 22
+        assert len(PUBLIC_ANALYSES) == 11
 
-    def test_analysis_registry_has_exactly_17_entries(self, analysis_registry: AnalysisRegistry):
-        assert len(analysis_registry) == 17
+    def test_analysis_registry_has_public_and_internal_entries(self, analysis_registry: AnalysisRegistry):
+        assert len(analysis_registry) == 22
+        assert len(analysis_registry.for_visibility(CatalogVisibility.PUBLIC)) == 11
+        assert len(analysis_registry.for_visibility(CatalogVisibility.INTERNAL)) == 11
 
-    def test_analysis_ids_match_frozen_mapping_exactly(self, analysis_registry: AnalysisRegistry):
-        actual_ids = {spec.analysis_id for spec in analysis_registry}
-        assert actual_ids == set(EXPECTED_ANALYSIS_MAPPING)
+    def test_analysis_ids_match_public_and_legacy_mappings(self, analysis_registry: AnalysisRegistry):
+        assert {spec.analysis_id for spec in analysis_registry.for_visibility(CatalogVisibility.PUBLIC)} == set(EXPECTED_PUBLIC_ANALYSIS_MAPPING)
+        assert {spec.analysis_id for spec in analysis_registry.for_visibility(CatalogVisibility.INTERNAL)} == set(EXPECTED_LEGACY_ANALYSIS_MAPPING)
 
-    def test_required_optional_mapping_matches_frozen_catalog(self, analysis_registry: AnalysisRegistry):
-        for analysis_id, (expected_required, expected_optional) in EXPECTED_ANALYSIS_MAPPING.items():
+    @pytest.mark.parametrize("mapping", [EXPECTED_PUBLIC_ANALYSIS_MAPPING, EXPECTED_LEGACY_ANALYSIS_MAPPING])
+    def test_required_optional_mapping_matches_catalog(self, analysis_registry: AnalysisRegistry, mapping):
+        for analysis_id, (expected_required, expected_optional) in mapping.items():
             spec = analysis_registry.get(analysis_id)
             assert spec.required_dataset_ids == expected_required, analysis_id
             assert spec.optional_dataset_ids == expected_optional, analysis_id
 
-    def test_all_versions_are_2(self, analysis_registry: AnalysisRegistry):
-        for spec in analysis_registry:
+    def test_analysis_versions_follow_visibility(self, analysis_registry: AnalysisRegistry):
+        for spec in analysis_registry.for_visibility(CatalogVisibility.PUBLIC):
+            assert spec.version == 3
+            assert spec.instruction_template_version == 3
+            assert spec.response_contract_version == 3
+        for spec in analysis_registry.for_visibility(CatalogVisibility.INTERNAL):
             assert spec.version == 2
             assert spec.instruction_template_version == 2
             assert spec.response_contract_version == 2
@@ -207,12 +241,10 @@ class TestAnalysisCatalog:
             assert not (set(spec.required_dataset_ids) & set(spec.optional_dataset_ids))
 
     def test_dataset_order_is_deterministic_required_then_optional(self, analysis_registry: AnalysisRegistry):
-        spec = analysis_registry.get("broker.review")
-        assert spec.dataset_order == ("broker.overview", "broker.performance_flows", "broker.asset_comparison", "broker.fifo", "broker.drawdown_context", "broker.concentration_evidence")
+        assert analysis_registry.get("broker.review").dataset_order == ("broker.overview_and_history",)
+        assert analysis_registry.get("portfolio.fiscal_lots").dataset_order == ("portfolio.overview_and_history", "portfolio.fifo")
 
-    def test_v2_analyses_with_suggestions_have_valid_same_domain_dataset_ids(self, analysis_registry: AnalysisRegistry, dataset_registry: DatasetRegistry):
-        """V2: analyses that carry additional_export_suggestions must reference
-        existing dataset IDs from the same domain and use unique IDs per analysis."""
+    def test_analyses_with_suggestions_have_valid_same_domain_dataset_ids(self, analysis_registry: AnalysisRegistry, dataset_registry: DatasetRegistry):
         for spec in analysis_registry:
             suggestions = spec.additional_export_suggestions
             if not suggestions:
@@ -222,23 +254,27 @@ class TestAnalysisCatalog:
                 assert suggestion.dataset_id in dataset_registry, f"{spec.analysis_id} suggestion {suggestion.dataset_id!r} not in dataset registry"
                 suggested = dataset_registry.get(suggestion.dataset_id)
                 assert suggested.domain == spec.domain, f"{spec.analysis_id} suggestion {suggestion.dataset_id!r} domain mismatch"
+                if spec.visibility is CatalogVisibility.PUBLIC:
+                    assert suggested.visibility is CatalogVisibility.PUBLIC
                 assert suggestion.dataset_id not in seen_ids, f"{spec.analysis_id} duplicate suggestion dataset_id {suggestion.dataset_id!r}"
                 seen_ids.add(suggestion.dataset_id)
                 assert "." in suggestion.reason_i18n_key, f"{spec.analysis_id} reason_i18n_key {suggestion.reason_i18n_key!r} must be a dotted key"
 
-    def test_v2_analyses_catalog_serializes_suggestions_at_version_2(self, analysis_registry: AnalysisRegistry):
-        """Serialized catalog entries carry version=2 and include suggestion fields."""
+    def test_public_catalog_serializes_only_v3_entries(self, analysis_registry: AnalysisRegistry):
         catalog = AiExportSnapshotService.get_catalog()
+        assert catalog.catalog_version == 3
+        assert len(catalog.datasets) == 8
+        assert len(catalog.analyses) == 11
+        assert {entry.id for entry in catalog.datasets} == set(EXPECTED_PUBLIC_DATASET_IDS)
+        assert {entry.id for entry in catalog.analyses} == set(EXPECTED_PUBLIC_ANALYSIS_MAPPING)
         for entry in catalog.analyses:
-            assert entry.version == 2
-            assert entry.instruction_template_version == 2
-            assert entry.response_contract_version == 2
-        # At least one analysis should carry additional_export_suggestions
-        assert any(entry.additional_export_suggestions for entry in catalog.analyses), "V2 catalog must have at least one analysis with additional_export_suggestions"
+            assert entry.version == 3
+            assert entry.instruction_template_version == 3
+            assert entry.response_contract_version == 3
+        assert any(entry.additional_export_suggestions for entry in catalog.analyses)
 
-    def test_v2_new_optional_datasets_exist_in_registry(self, dataset_registry: DatasetRegistry):
-        """V2 derived public datasets must each appear in the registry."""
-        new_public_derived = {
+    def test_legacy_derived_datasets_remain_internal(self, dataset_registry: DatasetRegistry):
+        legacy_derived = {
             "portfolio.technical_summary",
             "portfolio.asset_snapshot",
             "portfolio.asset_comparison",
@@ -251,8 +287,8 @@ class TestAnalysisCatalog:
             "broker.cost_efficiency_evidence",
             "fx.conversion_timing_context",
         }
-        for dataset_id in new_public_derived:
-            assert dataset_id in dataset_registry, f"{dataset_id!r} missing from V2 registry"
+        for dataset_id in legacy_derived:
+            assert dataset_registry.get(dataset_id).visibility is CatalogVisibility.INTERNAL
 
     def test_v2_new_public_datasets_excluded_from_all_data_source_unions(self, dataset_registry: DatasetRegistry):
         """The 11 new derived datasets must NOT appear as source inputs to *.all_data.
@@ -425,8 +461,7 @@ class TestRegistryValidationErrors:
             )
 
     def test_real_catalog_i18n_keys_are_dotted_keys_not_literal_text(self, dataset_registry: DatasetRegistry):
-        # Binding clarification: the catalog must expose i18n keys only, never literal
-        # human-readable text, for every one of the 32 frozen datasets.
+        # Catalog specs carry keys only, never literal localized text.
         for dataset in dataset_registry:
             assert " " not in dataset.display_i18n_key, dataset.dataset_id
             assert " " not in dataset.description_i18n_key, dataset.dataset_id
@@ -436,6 +471,36 @@ class TestRegistryValidationErrors:
     def test_get_unknown_dataset_raises(self, dataset_registry: DatasetRegistry):
         with pytest.raises(UnknownDatasetError):
             dataset_registry.get("portfolio.does_not_exist")
+
+    def test_public_analysis_cannot_suggest_internal_dataset(self, dataset_registry: DatasetRegistry):
+        spec = AnalysisSpec(
+            analysis_id="portfolio.public_analysis",
+            version=3,
+            domain=Domain.PORTFOLIO,
+            display_i18n_key="test.analysis.display",
+            description_i18n_key="test.analysis.description",
+            icon="icon",
+            applicability_code="test.always_applicable",
+            applicable_pages=("dashboard",),
+            required_dataset_ids=("portfolio.overview_and_history",),
+            optional_dataset_ids=(),
+            instruction_template_id="portfolio.public_analysis.instructions",
+            instruction_template_version=3,
+            response_contract_id="portfolio.public_analysis.response",
+            response_contract_version=3,
+            additional_export_suggestions=(
+                AdditionalExportSuggestion(
+                    dataset_id="portfolio.overview",
+                    reason_i18n_key="aiExport.additionalData.reason.test",
+                    recommended_period=AdditionalExportPeriod.THREE_MONTHS,
+                    recommended_detail=DetailLevel.COMPACT,
+                ),
+            ),
+            visibility=CatalogVisibility.PUBLIC,
+        )
+
+        with pytest.raises(AnalysisSuggestionVisibilityError):
+            AnalysisRegistry([spec], dataset_registry=dataset_registry)
 
     def test_duplicate_analysis_id_raises(self, dataset_registry: DatasetRegistry):
         spec = AnalysisSpec(
@@ -779,19 +844,29 @@ class TestAllDataExpansion:
             section_order_positions = [component_registry.canonical_order.index(cid) for cid in all_data.section_order]
             assert section_order_positions == sorted(section_order_positions)
 
-    def test_real_catalog_optional_components_are_lot_detail_and_concentration_comparison(self, dataset_registry: DatasetRegistry):
-        # Architecture review: after flipping provenance/reconciliation/technical
-        # breadth/states_events/exposure_provenance to required, asset.lot_detail is
-        # the only deliberately-optional component in the core catalog. The AI
-        # adequacy remediation adds one more deliberately-optional evidence
-        # component: broker.concentration_comparison (the peer/portfolio comparison
-        # on top of the required broker.concentration_context).
+    def test_optional_components_match_v3_auxiliary_degradation_contract(self, dataset_registry: DatasetRegistry):
         all_optional_ids: set[str] = set()
         for spec in dataset_registry:
             if spec.dataset_id.endswith(".all_data"):
                 continue
             all_optional_ids.update(spec.optional_component_ids)
-        assert all_optional_ids == {"asset.lot_detail", "broker.concentration_comparison"}
+        assert all_optional_ids == {
+            "asset.drawdown_summary",
+            "asset.lot_detail",
+            "asset.position_market_context",
+            "asset.technical_coverage",
+            "broker.asset_market_context",
+            "broker.concentration_comparison",
+            "broker.drawdown_summary",
+            "broker.fifo_summary",
+            "broker.technical_coverage",
+            "portfolio.asset_drawdown_snapshot",
+            "portfolio.asset_market_context",
+            "portfolio.drawdown_summary",
+            "portfolio.fifo_summary",
+            "portfolio.income_timeline",
+            "portfolio.technical_coverage",
+        }
 
 
 class TestCatalogPresentationFields:

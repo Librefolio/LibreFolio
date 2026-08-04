@@ -651,6 +651,7 @@ function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory,
         }
     }
     const globalRows = [
+        ['price_basis', payload.price_basis],
         ['period_position_leg_count', payload.period_position_leg_count],
         ['period_contributor_asset_count', payload.period_contributor_asset_count],
         ['eligible_asset_count', payload.eligible_asset_count],
@@ -820,6 +821,7 @@ function renderIndicators(
         historyLimit === undefined
             ? 'indicator_history=all nonempty source buckets; period_summary=full exported period'
             : `indicator_history=uniform sample across nonempty source buckets; rendered_limit_per_entity_instance=${historyLimit}; period_summary=full exported period; use Full for every source bucket`,
+        'indicator_entity_status=only non-ok entity-instance results are listed; omitted entity-instance statuses are ok',
     );
     if (payload.covered_asset_count !== undefined) {
         blocks.push('WEIGHT SEMANTICS', "portfolio_weight_percent and *_portfolio_weight_percent use gross absolute open-position market value. technical_normalized_weight_percent sums to 100% across each signal instance's covered technical universe.");
@@ -884,6 +886,9 @@ function renderIndicators(
             const columns = records(instance.definition.columns);
             if (!columns) return undefined;
             const columnKeys = columns.map((column) => scalar(column.column_key));
+            const statusRows = instance.entities
+                .filter((entity) => entity.indicator.result_status !== undefined && (entity.indicator.result_status !== 'ok' || entity.indicator.partial_reason_code !== null))
+                .map((entity) => [entity.entity, entity.indicator.result_status, entity.indicator.partial_reason_code]);
             const summaryRows: unknown[][] = [];
             const historyRows: unknown[][] = [];
             for (const entity of instance.entities) {
@@ -926,7 +931,12 @@ function renderIndicators(
                     historyRows.push([entity.entity, row.start_date, row.end_date, row.calendar_days, row.observation_count, ...columnKeys.map((columnKey) => indicatorCell(cells[columnKey], outputNumberSemantics(columnByKey.get(columnKey) ?? {}), diagnostics, dateContext))]);
                 }
             }
-            const summaryBlock = [`INSTANCE ${instanceId}`, 'PERIOD SUMMARY', pipeTable(['entity', 'portfolio_weight_percent', 'technical_normalized_weight_percent', 'column_key', 'latest', 'period_summary'], summaryRows, diagnostics)].join('\n');
+            const summaryBlock = [
+                `INSTANCE ${instanceId}`,
+                ...(statusRows.length ? ['ENTITY STATUS', pipeTable(['entity', 'result_status', 'partial_reason_code'], statusRows, diagnostics)] : []),
+                'PERIOD SUMMARY',
+                pipeTable(['entity', 'portfolio_weight_percent', 'technical_normalized_weight_percent', 'column_key', 'latest', 'period_summary'], summaryRows, diagnostics),
+            ].join('\n');
             const historyBlock = ['HISTORY', pipeTable(['entity', 'start', 'end', 'days', 'obs', ...columnKeys], historyRows, diagnostics)].join('\n');
             summaryChars += summaryBlock.length;
             historyChars += historyBlock.length;
@@ -1128,9 +1138,14 @@ const NORMALIZED_RATIO_FIELDS = new Set([
     'eligible_portfolio_weight_ratio',
     'covered_portfolio_weight_ratio',
     'covered_weight_ratio',
+    'eligible_current_scope_weight_ratio',
+    'covered_current_scope_weight_ratio',
+    'excluded_current_scope_weight_ratio',
     'coverage_ratio',
     'return_1m_ratio',
     'return_3m_ratio',
+    'return_30d_ratio',
+    'return_91d_ratio',
     'return_period_ratio',
     'daily_return_volatility_ratio',
     'current_drawdown_ratio',
@@ -1151,9 +1166,14 @@ const PUBLIC_RATIO_FIELD_NAMES: Readonly<Record<string, string>> = {
     eligible_portfolio_weight_ratio: 'eligible_portfolio_weight_percent',
     covered_portfolio_weight_ratio: 'covered_portfolio_weight_percent',
     covered_weight_ratio: 'covered_weight_ratio_percent',
+    eligible_current_scope_weight_ratio: 'eligible_current_scope_weight_percent',
+    covered_current_scope_weight_ratio: 'covered_current_scope_weight_percent',
+    excluded_current_scope_weight_ratio: 'excluded_current_scope_weight_percent',
     coverage_ratio: 'coverage_percent',
     return_1m_ratio: 'return_1m_percent',
     return_3m_ratio: 'return_3m_percent',
+    return_30d_ratio: 'return_30d_percent',
+    return_91d_ratio: 'return_91d_percent',
     return_period_ratio: 'return_period_percent',
     daily_return_volatility_ratio: 'daily_return_volatility_percent',
     current_drawdown_ratio: 'current_drawdown_percent',

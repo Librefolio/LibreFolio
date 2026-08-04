@@ -1,13 +1,12 @@
 """Real `ComponentSpec` implementations for the Portfolio/Broker technical wave.
 
-Owns exactly the seven `portfolio.technical_*`/`broker.technical_*` component
+Owns exactly the eight `portfolio.technical_*`/`broker.technical_*` component
 IDs (matching the placeholders declared verbatim in `backend.app.services.
 ai_export.components.catalog`, so a future catalog wiring can swap the
 placeholder builders for these without touching any `component_id`/`domains`/
 `dependencies` metadata):
 
-- `portfolio.technical_prices` / (no Broker equivalent - Broker starts at
-  `technical_indicators`, per the frozen catalog wiring).
+- `portfolio.technical_prices` / `broker.technical_prices`.
 - `portfolio.technical_indicators` / `broker.technical_indicators`.
 - `portfolio.technical_breadth` / `broker.technical_breadth`.
 - `portfolio.technical_events` / `broker.technical_events`.
@@ -62,14 +61,14 @@ from backend.app.services.ai_export.components.types import Domain, PeriodBehavi
 from backend.app.services.ai_export.dependencies import BuildContext
 
 # =============================================================================
-# portfolio.technical_prices (Portfolio only - no Broker equivalent)
+# {portfolio,broker}.technical_prices
 # =============================================================================
 
 
-async def _build_portfolio_technical_prices(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioTechnicalPricesPayload:
+async def _build_universe_technical_prices(context: BuildContext, *, universe_kwargs: Mapping[str, object]) -> PortfolioTechnicalPricesPayload:
     scope = context.scope
     assert scope is not None
-    universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
+    universe: TechnicalUniverseBundle = await load_technical_universe_bundle(context, **universe_kwargs)
 
     context.register_price_sampling()
     assets: list[AssetPriceSeriesPayload] = []
@@ -103,12 +102,31 @@ async def _build_portfolio_technical_prices(context: BuildContext, dependencies:
     )
 
 
+async def _build_portfolio_technical_prices(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioTechnicalPricesPayload:
+    return await _build_universe_technical_prices(context, universe_kwargs=PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS)
+
+
+async def _build_broker_technical_prices(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioTechnicalPricesPayload:
+    return await _build_universe_technical_prices(context, universe_kwargs=BROKER_TECHNICAL_UNIVERSE_KWARGS)
+
+
 PORTFOLIO_TECHNICAL_PRICES_SPEC = ComponentSpec(
     component_id="portfolio.technical_prices",
     version=1,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioTechnicalPricesPayload,
     builder=_build_portfolio_technical_prices,
+    period_behavior=PeriodBehavior.AGGREGATED,
+    aggregator=OHLC_BUCKET_AGGREGATOR,
+)
+
+
+BROKER_TECHNICAL_PRICES_SPEC = ComponentSpec(
+    component_id="broker.technical_prices",
+    version=1,
+    domains=frozenset({Domain.BROKER}),
+    output_model=PortfolioTechnicalPricesPayload,
+    builder=_build_broker_technical_prices,
     period_behavior=PeriodBehavior.AGGREGATED,
     aggregator=OHLC_BUCKET_AGGREGATOR,
 )
@@ -199,6 +217,7 @@ BROKER_TECHNICAL_INDICATORS_SPEC = ComponentSpec(
     domains=frozenset({Domain.BROKER}),
     output_model=UniverseIndicatorsPayload,
     builder=_build_broker_technical_indicators,
+    dependencies=("broker.technical_prices",),
     period_behavior=PeriodBehavior.AGGREGATED,
     aggregator=SIGNAL_PROFILE_BUCKET_AGGREGATOR,
 )
@@ -294,6 +313,7 @@ PORTFOLIO_BROKER_TECHNICAL_COMPONENTS: tuple[ComponentSpec, ...] = (
     PORTFOLIO_TECHNICAL_INDICATORS_SPEC,
     PORTFOLIO_TECHNICAL_BREADTH_SPEC,
     PORTFOLIO_TECHNICAL_EVENTS_SPEC,
+    BROKER_TECHNICAL_PRICES_SPEC,
     BROKER_TECHNICAL_INDICATORS_SPEC,
     BROKER_TECHNICAL_BREADTH_SPEC,
     BROKER_TECHNICAL_EVENTS_SPEC,
@@ -304,6 +324,7 @@ __all__ = [
     "BROKER_TECHNICAL_BREADTH_SPEC",
     "BROKER_TECHNICAL_EVENTS_SPEC",
     "BROKER_TECHNICAL_INDICATORS_SPEC",
+    "BROKER_TECHNICAL_PRICES_SPEC",
     "PORTFOLIO_BROKER_TECHNICAL_COMPONENTS",
     "PORTFOLIO_TECHNICAL_BREADTH_SPEC",
     "PORTFOLIO_TECHNICAL_EVENTS_SPEC",

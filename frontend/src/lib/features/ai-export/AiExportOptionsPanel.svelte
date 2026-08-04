@@ -1,6 +1,6 @@
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {Activity, ArrowLeftRight, Banknote, CalendarClock, CircleHelp, Clock, Coins, Database, FileText, Landmark, LayoutDashboard, ListOrdered, Newspaper, PieChart, Receipt, Scale, Target, TrendingDown, TrendingUp, Wallet} from 'lucide-svelte';
+    import {Activity, ArrowLeftRight, CalendarClock, CircleHelp, FileText, Landmark, LayoutDashboard, ListOrdered, Newspaper, Scale, TrendingUp, Wallet} from 'lucide-svelte';
 
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
@@ -51,21 +51,12 @@
     const iconComponents = {
         activity: Activity,
         'arrow-left-right': ArrowLeftRight,
-        banknote: Banknote,
         'calendar-clock': CalendarClock,
-        clock: Clock,
-        coins: Coins,
-        database: Database,
-        'file-text': FileText,
         landmark: Landmark,
         'layout-dashboard': LayoutDashboard,
         'list-ordered': ListOrdered,
         newspaper: Newspaper,
-        'pie-chart': PieChart,
-        receipt: Receipt,
         scale: Scale,
-        target: Target,
-        'trending-down': TrendingDown,
         'trending-up': TrendingUp,
         wallet: Wallet,
     } as const;
@@ -183,11 +174,22 @@
                 </button>
             {/each}
         </div>
+        <p class="text-[11px] leading-4 text-gray-500 dark:text-gray-400" data-testid="ai-export-category-help">{labels.categoryHelp[selectionKind]}</p>
     </fieldset>
 
     <div class="flex flex-col gap-1.5">
         <span class="text-xs font-semibold text-gray-700 dark:text-gray-200">{labels.selectionLabel}</span>
-        <SimpleSelect value={selectionId} options={selectionOptions} disabled={controlsDisabled} dropdownPosition="auto" testId="ai-export-selection" ariaLabel={labels.selectionLabel} optionTestId={(option) => `ai-export-selection-option-${option.value}`} onchange={handleSelection}>
+        <SimpleSelect
+            value={selectionId}
+            options={selectionOptions}
+            disabled={controlsDisabled}
+            dropdownPosition="auto"
+            testId="ai-export-selection"
+            ariaLabel={labels.selectionLabel}
+            optionTestId={(option) => `ai-export-selection-option-${option.value}`}
+            onchange={handleSelection}
+            matchTriggerWidth
+        >
             {#snippet selectedItem(option)}
                 {@const SelectionIcon = getSelectionIcon(option.icon)}
                 <span class="flex min-w-0 flex-1 items-center gap-2.5">
@@ -204,7 +206,7 @@
                     <SelectionIcon class="mt-0.5 shrink-0 text-purple-600 dark:text-purple-300" size={18} aria-hidden="true" data-testid={`ai-export-selection-option-${option.value}-icon`} />
                     <span class="min-w-0 flex-1">
                         <span class="block font-medium">{option.label}</span>
-                        <span class="block text-xs text-gray-500 dark:text-gray-400">{option.searchText}</span>
+                        <span class="block whitespace-normal break-words text-xs leading-4 text-gray-500 dark:text-gray-400" data-testid={`ai-export-selection-option-${option.value}-description`}>{option.searchText}</span>
                     </span>
                 </span>
             {/snippet}
@@ -287,18 +289,11 @@
     {#if pending && severity}
         <section class="rounded-lg border border-gray-200 p-3 dark:border-slate-700" aria-live="polite" data-testid="ai-export-payload-stats">
             <h3 class="text-xs font-semibold">{labels.payloadStatsLabel}</h3>
-            <dl class="mt-2 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
-                <dt>{labels.backendEstimatedTokensLabel}</dt>
-                <dd>
-                    {formatAiExportTokenCount(pending.stats.snapshotBackendStats.estimated_tokens, locale, labels.tokenUnitLabel)}
-                    · {formatAiExportByteSize(pending.stats.snapshotBackendStats.serialized_bytes, locale)}
-                </dd>
-                <dt>{labels.finalEstimatedTokensLabel}</dt>
-                <dd>
-                    {formatAiExportTokenCount(pending.stats.finalPrompt.estimatedTokens, locale, labels.tokenUnitLabel)}
-                    · {formatAiExportByteSize(pending.stats.finalPrompt.byteCountUtf8, locale)}
-                </dd>
-            </dl>
+            <p class="mt-1 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{labels.payloadStatsHelp}</p>
+            <p class="mt-2 text-sm font-semibold" data-testid="ai-export-final-size">
+                {formatAiExportTokenCount(pending.stats.finalPrompt.estimatedTokens, locale, labels.tokenUnitLabel)}
+                <span class="whitespace-nowrap">(<span aria-hidden="true">💾</span> {formatAiExportByteSize(pending.stats.finalPrompt.byteCountUtf8, locale)})</span>
+            </p>
             <p class="mt-2 rounded-md px-2 py-1 text-xs font-medium {severityClasses(severity)}" data-testid="ai-export-token-severity">{labels.tokenSeverityLabels[severity]}</p>
             {#if warningVisible}
                 <div class="mt-2 flex gap-2">
