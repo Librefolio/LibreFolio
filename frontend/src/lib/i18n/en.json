@@ -590,6 +590,8 @@
     "loadFailed": "Failed to load broker",
     "importFiles": "Import Files",
     "showImportHistory": "Uploaded Reports",
+    "viewInTransactions": "View in Transactions",
+    "viewInTransactionsHint": "Open the Transactions page filtered by this broker and the current filters",
     "noImportFiles": "No import files yet",
     "uploadHint": "Upload broker reports to import transactions",
     "manageFiles": "Manage all files",
