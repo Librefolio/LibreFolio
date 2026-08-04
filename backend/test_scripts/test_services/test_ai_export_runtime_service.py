@@ -24,6 +24,7 @@ from backend.app.schemas.ai_export_runtime import (
 )
 from backend.app.schemas.signals import SignalTemporalClass
 from backend.app.services.ai_export.analyses.spec import AnalysisRegistry, AnalysisSpec
+from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import FxRateObservation, FxRateSeriesResource
@@ -121,6 +122,8 @@ def _dataset(
     dataset_id: str,
     domain: Domain,
     component_ids: tuple[str, ...],
+    *,
+    visibility: CatalogVisibility = CatalogVisibility.PUBLIC,
 ) -> DatasetSpec:
     return DatasetSpec(
         dataset_id=dataset_id,
@@ -137,6 +140,7 @@ def _dataset(
         technical_requirements=(),
         period_semantics=PeriodBehavior.WINDOWED,
         supported_detail_levels=ALL_DETAIL_LEVELS,
+        visibility=visibility,
     )
 
 
@@ -146,6 +150,7 @@ def _analysis(
     dataset_ids: tuple[str, ...],
     *,
     applicability_code: str = "always_applicable",
+    visibility: CatalogVisibility = CatalogVisibility.PUBLIC,
 ) -> AnalysisSpec:
     return AnalysisSpec(
         analysis_id=analysis_id,
@@ -162,6 +167,7 @@ def _analysis(
         instruction_template_version=1,
         response_contract_id=f"{analysis_id}.response",
         response_contract_version=1,
+        visibility=visibility,
     )
 
 
@@ -199,7 +205,7 @@ def _portfolio_dataset_request() -> AiExportPortfolioSnapshotRequest:
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=2,
+        expected_catalog_version=3,
     )
 
 
@@ -218,29 +224,36 @@ def _portfolio_analysis_request() -> AiExportPortfolioSnapshotRequest:
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=2,
+        expected_catalog_version=3,
     )
 
 
-def test_catalog_exposes_exact_32_datasets_and_17_analyses_without_prompts():
+def test_catalog_exposes_exact_public_v3_catalog_without_prompts():
     catalog = AiExportSnapshotService.get_catalog()
     serialized = catalog.model_dump_json()
 
-    assert len(catalog.datasets) == 32
-    assert len(catalog.analyses) == 17
-    assert {entry.id for entry in catalog.datasets} >= {
-        "portfolio.overview",
-        "broker.overview",
-        "asset.overview",
-        "fx.overview",
+    assert catalog.catalog_version == 3
+    assert len(catalog.datasets) == 8
+    assert len(catalog.analyses) == 11
+    assert {entry.id for entry in catalog.datasets} == {
+        "portfolio.overview_and_history",
+        "portfolio.asset_history",
+        "broker.overview_and_history",
+        "broker.asset_history",
+        "asset.position_and_history",
+        "asset.market_history",
+        "fx.market_and_exposure",
+        "fx.market_history",
     }
     assert {entry.id for entry in catalog.analyses} >= {
         "portfolio.pac_planning",
-        "portfolio.market_events_review",
+        "portfolio.performance_market_drivers",
         "broker.review",
         "asset.position_review",
         "fx.exposure_impact",
     }
+    assert "broker.cost_efficiency" not in {entry.id for entry in catalog.analyses}
+    assert "fx.conversion_planning" not in {entry.id for entry in catalog.analyses}
     assert "prompt" not in serialized.lower()
     assert "web_research" not in serialized.lower()
 
@@ -329,7 +342,7 @@ async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
     response = await service.build_snapshot(41, request)
 
     assert response.meta.schema_version == 2
-    assert response.meta.catalog_version == 2
+    assert response.meta.catalog_version == 3
     assert response.technical_sampling is not None
     assert response.technical_sampling.detail_level == "standard"
     assert response.technical_sampling.price_policy is not None
@@ -522,7 +535,7 @@ async def test_prepare_request_rejects_catalog_selection_and_contract_mismatches
     )
     service = _service(session, (component,), (dataset,), (analysis,))
 
-    catalog_mismatch = _portfolio_dataset_request().model_copy(update={"expected_catalog_version": 3})
+    catalog_mismatch = _portfolio_dataset_request().model_copy(update={"expected_catalog_version": 2})
     with pytest.raises(AiExportVersionMismatchError):
         await service.prepare_request(41, catalog_mismatch)
 
@@ -537,6 +550,48 @@ async def test_prepare_request_rejects_catalog_selection_and_contract_mismatches
     )
     with pytest.raises(AiExportUnsupportedSelectionError):
         await service.prepare_request(41, unsupported)
+
+    internal_dataset = _dataset(
+        "portfolio.internal",
+        Domain.PORTFOLIO,
+        ("portfolio.summary",),
+        visibility=CatalogVisibility.INTERNAL,
+    )
+    internal_service = _service(session, (component,), (internal_dataset,))
+    internal_request = _portfolio_dataset_request().model_copy(
+        update={
+            "selection": AiExportDatasetSelection(
+                kind="dataset",
+                id="portfolio.internal",
+                version=1,
+            )
+        }
+    )
+    with pytest.raises(AiExportUnsupportedSelectionError):
+        await internal_service.prepare_request(41, internal_request)
+
+    internal_analysis = _analysis(
+        "portfolio.internal_review",
+        Domain.PORTFOLIO,
+        ("portfolio.overview",),
+        visibility=CatalogVisibility.INTERNAL,
+    )
+    internal_analysis_service = _service(session, (component,), (dataset,), (internal_analysis,))
+    internal_analysis_request = _portfolio_analysis_request().model_copy(
+        update={
+            "selection": AiExportAnalysisSelection(
+                kind="analysis",
+                id="portfolio.internal_review",
+                version=1,
+                instruction_template_id="portfolio.internal_review.instructions",
+                instruction_template_version=1,
+                response_contract_id="portfolio.internal_review.response",
+                response_contract_version=1,
+            )
+        }
+    )
+    with pytest.raises(AiExportUnsupportedSelectionError):
+        await internal_analysis_service.prepare_request(41, internal_analysis_request)
 
     analysis_request = _portfolio_analysis_request()
     bad_selection = analysis_request.selection.model_copy(update={"response_contract_version": 2})
@@ -595,7 +650,7 @@ async def test_required_component_failure_and_missing_asset_are_typed():
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=2,
+        expected_catalog_version=3,
         asset_id=7,
     )
 
@@ -649,7 +704,7 @@ async def test_fx_exposure_analysis_with_empty_rows_is_not_applicable():
         "detail_level": "standard",
         "period": {"start": START, "end": END},
         "target_currency": "EUR",
-        "expected_catalog_version": 2,
+        "expected_catalog_version": 3,
         "base_currency": "USD",
         "quote_currency": "EUR",
     }
@@ -719,7 +774,7 @@ async def test_asset_analysis_applicability_uses_real_component_payloads(
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=2,
+        expected_catalog_version=3,
         asset_id=7,
     )
 
@@ -745,7 +800,7 @@ def _fx_request_with_catalog_v2(*, start: date, end: date) -> AiExportFxSnapshot
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": start, "end": end},
         target_currency="EUR",
-        expected_catalog_version=2,
+        expected_catalog_version=3,
         base_currency="USD",
         quote_currency="EUR",
     )
@@ -765,7 +820,7 @@ async def test_fx_direct_exposure_does_not_force_rate_history_coverage():
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": period_start, "end": period_end},
         target_currency="EUR",
-        expected_catalog_version=2,
+        expected_catalog_version=3,
         base_currency="USD",
         quote_currency="EUR",
     )

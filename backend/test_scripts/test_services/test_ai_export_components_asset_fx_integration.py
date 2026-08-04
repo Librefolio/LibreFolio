@@ -447,29 +447,47 @@ class TestComponentRegistryConstruction:
 class TestDatasetAnalysisRegistryConstruction:
     def test_dataset_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_dataset_registry()
-        assert len(registry) == EXPECTED_DATASET_COUNT == 32
+        assert len(registry) == EXPECTED_DATASET_COUNT == 40
         asset_datasets = {d.dataset_id for d in registry.for_domain(Domain.ASSET)}
         fx_datasets = {d.dataset_id for d in registry.for_domain(Domain.FX)}
-        assert asset_datasets == {"asset.overview", "asset.position_performance", "asset.market_technical", "asset.all_data", "asset.position_context", "asset.drawdown_context"}
-        assert fx_datasets == {"fx.overview", "fx.market_technical", "fx.direct_exposure", "fx.all_data", "fx.market_context", "fx.conversion_timing_context"}
+        assert asset_datasets == {
+            "asset.overview",
+            "asset.position_performance",
+            "asset.market_technical",
+            "asset.all_data",
+            "asset.position_context",
+            "asset.drawdown_context",
+            "asset.position_and_history",
+            "asset.market_history",
+        }
+        assert fx_datasets == {
+            "fx.overview",
+            "fx.market_technical",
+            "fx.direct_exposure",
+            "fx.all_data",
+            "fx.market_context",
+            "fx.conversion_timing_context",
+            "fx.market_and_exposure",
+            "fx.market_history",
+        }
 
     def test_analysis_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_analysis_registry()
-        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 17
+        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 22
         asset_analyses = {a.analysis_id for a in registry.for_domain(Domain.ASSET)}
         fx_analyses = {a.analysis_id for a in registry.for_domain(Domain.FX)}
-        assert asset_analyses == {"asset.trend_analysis", "asset.position_review"}
-        assert fx_analyses == {"fx.trend_review", "fx.conversion_timing", "fx.exposure_impact"}
+        assert asset_analyses == {"asset.trend_analysis", "asset.position_review", "asset.market_analysis"}
+        assert fx_analyses == {"fx.trend_review", "fx.conversion_timing", "fx.exposure_impact", "fx.pair_analysis"}
 
     def test_dataset_registry_builds_over_supplied_component_registry(self):
         component_registry = build_asset_fx_component_registry()
         dataset_registry = build_asset_fx_dataset_registry(component_registry)
-        assert len(dataset_registry) == 32
+        assert len(dataset_registry) == 40
 
     def test_analysis_registry_builds_over_supplied_dataset_registry(self):
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == 17
+        assert len(analysis_registry) == 22
 
 
 # =============================================================================
@@ -839,7 +857,10 @@ class TestAnalysisComposition:
         assert set(trend.dataset_ids) == {"asset.overview", "asset.market_technical"}
 
         review = await composer.compose_analysis(analysis_registry.get("asset.position_review"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
-        assert {"asset.overview", "asset.position_performance"} <= set(review.dataset_ids)
+        assert review.dataset_ids == ("asset.position_and_history",)
+
+        market = await composer.compose_analysis(analysis_registry.get("asset.market_analysis"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
+        assert market.dataset_ids == ("asset.market_history",)
 
     @pytest.mark.asyncio
     async def test_fx_analyses_compose_with_expected_datasets(self, session, test_user, scenario):
@@ -855,7 +876,10 @@ class TestAnalysisComposition:
         assert {"fx.overview", "fx.market_technical"} <= set(conversion_timing.dataset_ids)
 
         exposure_impact = await composer.compose_analysis(analysis_registry.get("fx.exposure_impact"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
-        assert {"fx.overview", "fx.direct_exposure"} <= set(exposure_impact.dataset_ids)
+        assert exposure_impact.dataset_ids == ("fx.market_and_exposure",)
+
+        pair_analysis = await composer.compose_analysis(analysis_registry.get("fx.pair_analysis"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
+        assert pair_analysis.dataset_ids == ("fx.market_history",)
 
     @pytest.mark.asyncio
     async def test_asset_indicators_and_events_cardinality_identical_across_detail_levels_only_buckets_differ(self, session, test_user, scenario):
@@ -1186,13 +1210,13 @@ class TestRequiredOptionalFailurePropagation:
             context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
             dataset_registry = build_asset_fx_dataset_registry()
             analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
-            # asset.position_review requires overview+position_performance, optional market_technical;
-            # lot_detail failing (optional WITHIN position_performance) must not fail the dataset itself,
+            # asset.position_review requires the autonomous position_and_history dataset;
+            # lot_detail failing (optional within that dataset) must not fail the dataset itself,
             # nor the analysis - it must simply omit that one section.
             composition = await Composer().compose_analysis(analysis_registry.get("asset.position_review"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
         finally:
             LotsAnalysisService.get_lots_analysis = real_get_lots
-        assert "asset.position_performance" in composition.dataset_ids
+        assert composition.dataset_ids == ("asset.position_and_history",)
         assert "asset.lot_detail" not in {e.component_id for e in composition.sections}
 
 

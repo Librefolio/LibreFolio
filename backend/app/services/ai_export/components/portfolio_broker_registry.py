@@ -6,7 +6,7 @@ This module is a **domain integration gate**, not the central catalog wiring: it
 deliberately does **not** edit `backend.app.services.ai_export.components.catalog`
 (that file is owned by the later serial "component-registry-integration" gate that
 cuts over every domain at once). Instead it builds a *local* real
-`ComponentRegistry` fragment - substituting only the 39 Portfolio/Broker
+`ComponentRegistry` fragment - substituting only the 41 Portfolio/Broker
 `component_id`s with their real implementations from `portfolio_financial`,
 `broker_financial` and `portfolio_broker_technical`, while every other
 `component_id` (Asset/FX and anything else the frozen catalog declares) keeps its
@@ -134,14 +134,14 @@ PORTFOLIO_BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
 )
 
 # 10 Portfolio financial + 4 full technical + 4 context + 2 drawdown + 1 income
-# timeline = 21; 8 Broker financial + 3 full technical + 3 context + 1 drawdown +
-# 2 concentration + 1 cost efficiency = 18; combined = 39. Asserted at import time
+# timeline = 21; 9 Broker financial + 4 full technical + 3 context + 1 drawdown +
+# 2 concentration + 1 cost efficiency = 20; combined = 41. Asserted at import time
 # so any future drift in the source waves' tuples fails immediately, not deep
 # inside a test.
 PORTFOLIO_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.PORTFOLIO in spec.domains)
 BROKER_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.BROKER in spec.domains)
 PORTFOLIO_REAL_COMPONENT_COUNT = 21
-BROKER_REAL_COMPONENT_COUNT = 18
+BROKER_REAL_COMPONENT_COUNT = 20
 
 assert len(PORTFOLIO_BROKER_COMPONENTS) == PORTFOLIO_REAL_COMPONENT_COUNT + BROKER_REAL_COMPONENT_COUNT, f"PORTFOLIO_BROKER_COMPONENTS must contain exactly {PORTFOLIO_REAL_COMPONENT_COUNT + BROKER_REAL_COMPONENT_COUNT} real component_ids, got {len(PORTFOLIO_BROKER_COMPONENTS)}"
 assert len(PORTFOLIO_REAL_COMPONENT_IDS) == PORTFOLIO_REAL_COMPONENT_COUNT, f"expected {PORTFOLIO_REAL_COMPONENT_COUNT} Portfolio component_ids, got {len(PORTFOLIO_REAL_COMPONENT_IDS)}"

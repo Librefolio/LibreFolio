@@ -37,12 +37,14 @@ from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     ContributionRow,
     EffectRow,
+    FifoAssetSummaryRow,
     FifoLotRow,
     PerformanceBucketRow,
     PositionRow,
     UnallocatedRow,
     build_fifo_lot_refs,
     build_performance_bucket_rows,
+    build_uniform_performance_buckets,
     load_lots_results,
     load_portfolio_report,
     lot_is_eligible,
@@ -51,11 +53,13 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     map_fifo_lot_row,
     map_position_row,
     map_unallocated_row,
+    performance_path_bucket_count,
     sort_contributions,
     sort_effects,
     sort_fifo_lots,
     sort_positions,
     sort_unallocated,
+    summarize_fifo_asset_rows,
 )
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata as _load_asset_metadata,
@@ -298,20 +302,21 @@ class BrokerPerformancePayload(BaseModel):
     period_pnl: Currency | None = None
     gross_gains: Currency
     gross_losses: Currency
+    path_policy_code: str
+    path_value_basis: str
+    path_return_basis: str
+    target_bucket_count: int
     bucket_count: int
     buckets: list[PerformanceBucketRow] = Field(default_factory=list)
     contributor_count: int
     contributors: list[ContributionRow] = Field(default_factory=list)
 
 
-def _build_performance_buckets(context: BuildContext, scope: BuildScope, history: Sequence[PortfolioHistoryPoint]) -> list[PerformanceBucketRow]:
-    bucket_plan = context.bucket_plan
-    if bucket_plan is None:
-        raise BrokerComponentScopeError("broker.performance requires BuildContext.bucket_plan")
+def _build_performance_buckets(scope: BuildScope, history: Sequence[PortfolioHistoryPoint]) -> list[PerformanceBucketRow]:
     return list(
         build_performance_bucket_rows(
             history,
-            bucket_plan,
+            build_uniform_performance_buckets(scope),
             currency_code=scope.target_currency,
         )
     )
@@ -322,7 +327,7 @@ async def _build_broker_performance(context: BuildContext, dependencies: Mapping
     report = await load_portfolio_report(context, scope, BROKER_REPORT_RESOURCE)
     summary = report.summary
     contribution = report.positions_contribution
-    buckets = _build_performance_buckets(context, scope, report.history or [])
+    buckets = _build_performance_buckets(scope, report.history or [])
     contributors = sort_contributions([map_contribution_row(item, currency_code=scope.target_currency) for item in contribution.positions]) if contribution is not None else []
     currency_code = scope.target_currency
     return BrokerPerformancePayload(
@@ -337,6 +342,10 @@ async def _build_broker_performance(context: BuildContext, dependencies: Mapping
         period_pnl=summary.period_pnl if summary else None,
         gross_gains=Currency(code=currency_code, amount=contribution.gross_gains if contribution else Decimal("0")),
         gross_losses=Currency(code=currency_code, amount=contribution.gross_losses if contribution else Decimal("0")),
+        path_policy_code="uniform_calendar_path_v1",
+        path_value_basis="nav_value_including_external_flows",
+        path_return_basis="historical_twrr",
+        target_bucket_count=performance_path_bucket_count(scope.detail_level),
         bucket_count=len(buckets),
         buckets=buckets,
         contributor_count=len(contributors),
@@ -455,40 +464,18 @@ async def _build_broker_reconciliation(context: BuildContext, dependencies: Mapp
 
 
 # =============================================================================
-# broker.fifo_lots
+# broker.fifo_summary / broker.fifo_lots
 # =============================================================================
 
 
-class BrokerFifoLotsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    broker_id: int
-    period_start: Date
-    period_end: Date
-    target_currency: str
-    lot_count: int
-    lots: list[FifoLotRow] = Field(default_factory=list)
-
-
-async def _build_broker_fifo_lots(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerFifoLotsPayload:
-    scope = _require_broker_scope(context)
+async def _broker_fifo_rows(context: BuildContext, scope: BuildScope) -> list[FifoLotRow]:
     currency_code = scope.target_currency
     lots_resource = await load_lots_results(context, scope, BROKER_LOTS_RESULTS_RESOURCE)
     asset_ids = sorted(lots_resource.by_asset_id)
     assets_meta = await _load_broker_asset_metadata(context, asset_ids)
     cutoff = scope.period_start
-
-    # `load_lots_results` already scopes transaction/lot discovery and the
-    # LotsAnalysisService query to `scope.broker_scope == (scope.broker_id,)`,
-    # so every lot returned here opened at this broker by construction - no
-    # additional broker filtering is required.
-    eligible_by_asset: dict[int, list] = {}
-    for asset_id in asset_ids:
-        response = lots_resource.by_asset_id[asset_id]
-        lots = [lot for lot in (response.lots or []) if lot_is_eligible(lot, cutoff=cutoff)]
-        eligible_by_asset[asset_id] = lots
+    eligible_by_asset = {asset_id: [lot for lot in (lots_resource.by_asset_id[asset_id].lots or []) if lot_is_eligible(lot, cutoff=cutoff)] for asset_id in asset_ids}
     lot_refs = build_fifo_lot_refs(eligible_by_asset)
-
     candidate_pairs: list[tuple[int, FifoLotRow]] = []
     for asset_id in asset_ids:
         asset = assets_meta.get(asset_id)
@@ -504,8 +491,74 @@ async def _build_broker_fifo_lots(context: BuildContext, dependencies: Mapping[s
                 asset_ticker=asset_ticker,
             )
             candidate_pairs.append((lot.lot_id, row))
-    rows = sort_fifo_lots(candidate_pairs)
-    return BrokerFifoLotsPayload(broker_id=scope.broker_id, period_start=scope.period_start, period_end=scope.period_end, target_currency=currency_code, lot_count=len(rows), lots=rows)
+    return sort_fifo_lots(candidate_pairs)
+
+
+class BrokerFifoSummaryPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    broker_id: int
+    period_start: Date
+    period_end: Date
+    target_currency: str
+    cost_allocation_semantics: str
+    asset_count: int
+    total_open_lots: int
+    total_partial_lots: int
+    total_closed_lots: int
+    total_residual_cost_basis: Currency
+    assets: list[FifoAssetSummaryRow] = Field(default_factory=list)
+
+
+async def _build_broker_fifo_summary(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerFifoSummaryPayload:
+    scope = _require_broker_scope(context)
+    lot_rows = await _broker_fifo_rows(context, scope)
+    grouped: dict[int, list[FifoLotRow]] = {}
+    for row in lot_rows:
+        grouped.setdefault(row.asset_id, []).append(row)
+    rows = [summarize_fifo_asset_rows(grouped[asset_id]) for asset_id in sorted(grouped)]
+    return BrokerFifoSummaryPayload(
+        broker_id=scope.broker_id,
+        period_start=scope.period_start,
+        period_end=scope.period_end,
+        target_currency=scope.target_currency,
+        cost_allocation_semantics="Fees and taxes are amounts deterministically allocated to FIFO lots. Broker-level unallocated costs are excluded and must be read from broker flows/cost-efficiency evidence.",
+        asset_count=len(rows),
+        total_open_lots=sum(row.open_lot_count for row in rows),
+        total_partial_lots=sum(row.partial_lot_count for row in rows),
+        total_closed_lots=sum(row.closed_lot_count for row in rows),
+        total_residual_cost_basis=Currency(
+            code=scope.target_currency,
+            amount=sum((row.residual_cost_basis.amount for row in rows), Decimal("0")),
+        ),
+        assets=rows,
+    )
+
+
+class BrokerFifoLotsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    broker_id: int
+    period_start: Date
+    period_end: Date
+    target_currency: str
+    cost_allocation_semantics: str
+    lot_count: int
+    lots: list[FifoLotRow] = Field(default_factory=list)
+
+
+async def _build_broker_fifo_lots(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerFifoLotsPayload:
+    scope = _require_broker_scope(context)
+    rows = await _broker_fifo_rows(context, scope)
+    return BrokerFifoLotsPayload(
+        broker_id=scope.broker_id,
+        period_start=scope.period_start,
+        period_end=scope.period_end,
+        target_currency=scope.target_currency,
+        cost_allocation_semantics="Lot fees and taxes include only deterministically allocated costs. Broker-level unallocated costs are excluded and must not be interpreted as recorded zero.",
+        lot_count=len(rows),
+        lots=rows,
+    )
 
 
 # =============================================================================
@@ -577,12 +630,22 @@ BROKER_RECONCILIATION_COMPONENT = ComponentSpec(
     period_behavior=PeriodBehavior.WINDOWED,
 )
 
+BROKER_FIFO_SUMMARY_COMPONENT = ComponentSpec(
+    component_id="broker.fifo_summary",
+    version=1,
+    domains=frozenset({Domain.BROKER}),
+    output_model=BrokerFifoSummaryPayload,
+    builder=_build_broker_fifo_summary,
+    period_behavior=PeriodBehavior.WINDOWED,
+)
+
 BROKER_FIFO_LOTS_COMPONENT = ComponentSpec(
     component_id="broker.fifo_lots",
     version=1,
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerFifoLotsPayload,
     builder=_build_broker_fifo_lots,
+    dependencies=("broker.fifo_summary",),
     period_behavior=PeriodBehavior.WINDOWED,
 )
 
@@ -594,12 +657,14 @@ BROKER_FINANCIAL_COMPONENTS: tuple[ComponentSpec, ...] = (
     BROKER_PERFORMANCE_COMPONENT,
     BROKER_FLOWS_INCOME_COSTS_COMPONENT,
     BROKER_RECONCILIATION_COMPONENT,
+    BROKER_FIFO_SUMMARY_COMPONENT,
     BROKER_FIFO_LOTS_COMPONENT,
 )
 
 __all__ = [
     "BROKER_ALLOCATION_CONCENTRATION_COMPONENT",
     "BROKER_FIFO_LOTS_COMPONENT",
+    "BROKER_FIFO_SUMMARY_COMPONENT",
     "BROKER_FINANCIAL_COMPONENTS",
     "BROKER_FLOWS_INCOME_COSTS_COMPONENT",
     "BROKER_PERFORMANCE_COMPONENT",
@@ -610,6 +675,7 @@ __all__ = [
     "BrokerAllocationConcentrationPayload",
     "BrokerComponentScopeError",
     "BrokerFifoLotsPayload",
+    "BrokerFifoSummaryPayload",
     "BrokerFlowsIncomeCostsPayload",
     "BrokerPerformancePayload",
     "BrokerPositionsPayload",

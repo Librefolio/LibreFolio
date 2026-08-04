@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -64,6 +65,7 @@ from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import (
     FxRateObservation,
     FxRateSeriesResource,
+    PriceResultsResource,
 )
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_context import (
@@ -491,6 +493,8 @@ class TestCuratedBundleAcrossDetailLevels:
         assert compact_keys == standard_keys == full_keys
         assert compact_keys  # non-empty: curated bundle actually produced output series
         assert len(compact_ind["indicators"]) == 20
+        assert all(entry["result_status"] in {"ok", "partial"} for entry in compact_ind["indicators"])
+        assert all((entry["partial_reason_code"] is not None) == (entry["result_status"] == "partial") for entry in compact_ind["indicators"])
 
         assert compact_events["detected_event_count"] == standard_events["detected_event_count"] == full_events["detected_event_count"]
         assert compact_events["exported_event_count"] <= standard_events["exported_event_count"] <= full_events["exported_event_count"]
@@ -716,6 +720,24 @@ class TestExactBundleComposition:
         assert instance_ids == ASSET_BUNDLE_INSTANCE_IDS
 
 
+class TestBrokerTechnicalPriceRegistry:
+    def test_prices_match_portfolio_metadata_and_precede_indicators(self):
+        specs = portfolio_broker_technical.PORTFOLIO_BROKER_TECHNICAL_COMPONENTS
+        by_id = {spec.component_id: spec for spec in specs}
+        order = tuple(spec.component_id for spec in specs)
+        portfolio_prices = by_id["portfolio.technical_prices"]
+        broker_prices = by_id["broker.technical_prices"]
+        broker_indicators = by_id["broker.technical_indicators"]
+
+        assert len(specs) == 8
+        assert broker_prices.domains == frozenset({Domain.BROKER})
+        assert broker_prices.output_model is portfolio_prices.output_model
+        assert broker_prices.period_behavior == portfolio_prices.period_behavior == PeriodBehavior.AGGREGATED
+        assert broker_prices.aggregator == portfolio_prices.aggregator
+        assert broker_indicators.dependencies == ("broker.technical_prices",)
+        assert order.index("broker.technical_prices") + 1 == order.index("broker.technical_indicators")
+
+
 # =============================================================================
 # 2. Warm-up exclusion (requirement 2, 3)
 # =============================================================================
@@ -730,6 +752,7 @@ class TestWarmupExclusion:
         envelope = await context.resolve("asset.ohlc_returns", required=True)
         payload = _envelope_payload(envelope)
 
+        assert payload["price_basis"] == "observed_close"
         assert payload["buckets"][0]["start_date"] == scope.period_start.isoformat()
         assert payload["buckets"][-1]["end_date"] == scope.period_end.isoformat()
         for bucket in payload["buckets"]:
@@ -1756,6 +1779,7 @@ class TestPortfolioUniverseAndBreadth:
         breadth = _envelope_payload(await context.resolve("portfolio.technical_breadth", required=True))
         events = _envelope_payload(await context.resolve("portfolio.technical_events", required=True))
 
+        assert prices["price_basis"] == "observed_close"
         assert price_calls == [2]
         assert prices["period_position_leg_count"] == 3
         assert prices["period_contributor_asset_count"] == 2
@@ -1994,17 +2018,56 @@ class TestPortfolioUniverseAndBreadth:
         assert any(s["technical_normalized_weight_ratio"] != pytest.approx(s["unweighted_ratio"]) for s in roc_states)
 
     @pytest.mark.asyncio
-    async def test_broker_domain_scopes_to_broker_report_resource(self, monkeypatch):
-        positions = [_contribution(1, end_value=1000, broker_id=7)]
-        _patch_get_prices_bulk(monkeypatch)
-        scope = _broker_scope(broker_id=7)
+    async def test_broker_raw_prices_preserve_scope_universe_observations_currency_and_weights(self, monkeypatch):
+        positions = [
+            _contribution(2, end_value=300, broker_id=7),
+            _contribution(1, end_value=900, broker_id=7),
+            _contribution(3, end_value=0, is_fully_sold=True, broker_id=7),
+        ]
+        fake_get_prices_bulk, price_calls = _make_fake_get_prices_bulk()
+        price_requests = []
+
+        async def _capturing_get_prices_bulk(requests, session):
+            price_requests.extend(requests)
+            return await fake_get_prices_bulk(requests, session)
+
+        monkeypatch.setattr(AssetSourceManager, "get_prices_bulk", staticmethod(_capturing_get_prices_bulk))
+        scope = _broker_scope(broker_id=7, detail_level=DetailLevel.COMPACT, target_currency="EUR")
         report = _report(scope, positions)
-        _patch_get_report(monkeypatch, report)
+        report_queries = []
+
+        async def _capturing_get_report(self, user_id, query):  # noqa: ARG001
+            report_queries.append(query)
+            return report
+
+        monkeypatch.setattr(PortfolioService, "get_report", _capturing_get_report)
         context = _make_context(scope)
 
-        payload = _envelope_payload(await context.resolve("broker.technical_indicators", required=True))
-        assert payload["eligible_asset_count"] == 1
-        assert len(payload["assets"]) == 1
+        envelope = await context.resolve("broker.technical_prices", required=True)
+        payload = _envelope_payload(envelope)
+
+        assert envelope is not None
+        assert envelope.component_id == "broker.technical_prices"
+        assert len(report_queries) == 1
+        assert report_queries[0].broker_ids == [7]
+        assert report_queries[0].target_currency == "EUR"
+        assert price_calls == [2]
+        assert [request.asset_id for request in price_requests] == [1, 2]
+        assert all(request.target_currency is None for request in price_requests)
+
+        assert payload["eligible_asset_count"] == 2
+        assert payload["period_position_leg_count"] == 3
+        assert payload["period_contributor_asset_count"] == 3
+        assert payload["covered_asset_count"] == 2
+        assert [asset["asset_id"] for asset in payload["assets"]] == [1, 2]
+        assert [asset["portfolio_weight_ratio"] for asset in payload["assets"]] == pytest.approx([0.75, 0.25])
+        assert [asset["currency"] for asset in payload["assets"]] == [CURRENCY, CURRENCY]
+
+        for asset in payload["assets"]:
+            expected_close = float(_synthetic_close(asset["asset_id"], scope.period_end))
+            assert asset["latest_close"] == pytest.approx(expected_close)
+            assert asset["latest_date"] == scope.period_end.isoformat()
+            assert asset["buckets"][-1]["last"]["close"] == pytest.approx(expected_close)
 
 
 # =============================================================================
@@ -2090,13 +2153,13 @@ class TestDeterministicOutput:
 
 
 # =============================================================================
-# 12. Technical context components (V2): coverage aggregates, market context rows,
-#     restricted events, history limits, build memoization (requirements 3 & 6)
+# 12. Technical context components: coverage aggregates, market context rows,
+#     compact V3 mini-history, restricted events and build memoization
 # =============================================================================
 
 
 def _context_registry() -> ComponentRegistry:
-    """Registry with full technical wave + V2 context components for TestTechnicalContextComponents."""
+    """Registry with full technical wave + context components for TestTechnicalContextComponents."""
     return ComponentRegistry(
         (
             *portfolio_broker_technical.PORTFOLIO_BROKER_TECHNICAL_COMPONENTS,
@@ -2117,8 +2180,105 @@ def _context_make_context(scope: BuildScope, session: AsyncSession | None = None
     return BuildContext(_context_registry(), request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=(session if session is not None else _make_async_session()))
 
 
+def _context_price_resource(
+    asset_ids: tuple[int, ...],
+    *,
+    start: date,
+    end: date,
+    sparse_asset_id: int | None = None,
+) -> PriceResultsResource:
+    results = []
+    for asset_id in asset_ids:
+        observed_dates = tuple(_daterange(start, end))
+        if asset_id == sparse_asset_id:
+            observed_dates = (start, end)
+        results.append(
+            FAPriceQueryResult(
+                asset_id=asset_id,
+                prices=[_fa_price_point(asset_id, day) for day in observed_dates],
+                events=[],
+                errors=[],
+                signals=[],
+            )
+        )
+    return PriceResultsResource.from_results(results)
+
+
+def _context_universe_bundle(
+    asset_ids: tuple[int, ...],
+    *,
+    start: date,
+    end: date,
+    sparse_asset_id: int | None = None,
+) -> technical_shared.TechnicalUniverseBundle:
+    weight = Decimal(1) / Decimal(len(asset_ids))
+    return technical_shared.TechnicalUniverseBundle(
+        positions=tuple(_contribution(asset_id) for asset_id in asset_ids),
+        asset_ids=asset_ids,
+        current_position_asset_ids=asset_ids,
+        excluded_current_assets={},
+        current_scope_weights=dict.fromkeys(asset_ids, weight),
+        current_unvalued_asset_ids=(),
+        period_position_leg_count=len(asset_ids),
+        period_contributor_asset_count=len(asset_ids),
+        weights=dict.fromkeys(asset_ids, weight),
+        price_results=_context_price_resource(
+            asset_ids,
+            start=start,
+            end=end,
+            sparse_asset_id=sparse_asset_id,
+        ),
+    )
+
+
+def _patch_context_universe_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    bundle: technical_shared.TechnicalUniverseBundle,
+) -> None:
+    async def _fake_load(context, **kwargs):  # noqa: ARG001
+        return bundle
+
+    monkeypatch.setattr(technical_context, "load_technical_universe_bundle", _fake_load)
+
+
+def _patch_context_asset_prices(
+    monkeypatch: pytest.MonkeyPatch,
+    resource: PriceResultsResource,
+) -> None:
+    async def _fake_load(context):  # noqa: ARG001
+        return resource
+
+    monkeypatch.setattr(technical_context, "load_asset_price_results", _fake_load)
+
+
+def _patch_context_fx_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    start: date,
+    end: date,
+) -> None:
+    observations = tuple(
+        FxRateObservation(
+            requested_date=day,
+            actual_date=day,
+            rate=Decimal("1") + Decimal((day - start).days) / Decimal("100"),
+            backward_filled=False,
+        )
+        for day in _daterange(start, end)
+    )
+    bundle = technical_shared.FxTechnicalBundle(
+        rate_series=FxRateSeriesResource.from_observations(observations),
+        signal_results=(),
+    )
+
+    async def _fake_load(context):  # noqa: ARG001
+        return bundle
+
+    monkeypatch.setattr(technical_context, "load_fx_technical_bundle", _fake_load)
+
+
 class TestTechnicalContextComponents:
-    """Focused tests for the V2 technical_context component builders.
+    """Focused tests for the technical_context component builders.
 
     Uses the same lightweight monkeypatching pattern as the other test
     classes in this file: synthetic deterministic prices via _patch_get_prices_bulk,
@@ -2142,6 +2302,37 @@ class TestTechnicalContextComponents:
         instance_ids = [sig["instance_id"] for sig in payload["signals"]]
         assert len(instance_ids) == len(set(instance_ids))
         assert payload["covered_asset_count"] <= payload["eligible_asset_count"] <= payload["period_contributor_asset_count"] <= payload["period_position_leg_count"]
+
+    @pytest.mark.asyncio
+    async def test_portfolio_coverage_names_current_assets_excluded_from_technical_eligibility(self, monkeypatch):
+        scope = _scope()
+        base = _context_universe_bundle((1,), start=scope.period_start, end=scope.period_end)
+        bundle = technical_shared.TechnicalUniverseBundle(
+            positions=base.positions,
+            asset_ids=base.asset_ids,
+            current_position_asset_ids=(1, 2),
+            excluded_current_assets={2: "end_value_unavailable"},
+            current_scope_weights={1: Decimal("0.75"), 2: Decimal("0.25")},
+            current_unvalued_asset_ids=(),
+            period_position_leg_count=2,
+            period_contributor_asset_count=2,
+            weights=base.weights,
+            price_results=base.price_results,
+        )
+        _patch_context_universe_bundle(monkeypatch, bundle)
+        context = _context_make_context(scope)
+
+        payload = _envelope_payload(await context.resolve("portfolio.technical_coverage", required=True))
+
+        assert payload["current_position_asset_count"] == 2
+        assert payload["current_scope_valued_asset_count"] == 2
+        assert payload["current_scope_unvalued_asset_count"] == 0
+        assert payload["eligible_asset_count"] == 1
+        assert payload["eligible_current_scope_weight_ratio"] == pytest.approx(0.75)
+        assert payload["covered_current_scope_weight_ratio"] == pytest.approx(0.0)
+        assert payload["excluded_current_scope_weight_ratio"] == pytest.approx(0.25)
+        assert payload["excluded_current_asset_count"] == 1
+        assert payload["excluded_current_entities"] == [{"entity_id": "asset:2", "reason_code": "end_value_unavailable"}]
 
     @pytest.mark.asyncio
     async def test_asset_market_context_row_has_ema_and_rsi_fields(self, monkeypatch):
@@ -2176,43 +2367,215 @@ class TestTechnicalContextComponents:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("detail_level", "expected_max_history"),
+        ("detail_level", "expected_history"),
         [
-            (DetailLevel.COMPACT, 3),
-            (DetailLevel.STANDARD, 6),
-            (DetailLevel.FULL, 12),
+            (DetailLevel.COMPACT, 8),
+            (DetailLevel.STANDARD, 16),
+            (DetailLevel.FULL, 30),
         ],
     )
-    async def test_asset_position_context_history_limits_by_detail_level(self, monkeypatch, detail_level, expected_max_history):
-        """COMPACT=3, STANDARD=6, FULL=12 history rows for asset position context."""
+    async def test_asset_position_context_history_density_by_detail_level(self, monkeypatch, detail_level, expected_history):
+        """Single-Asset context emits exact 8/16/30 observed-only mini-history rows."""
         scope = _asset_scope(asset_id=1, detail_level=detail_level)
-        _patch_get_prices_bulk(monkeypatch)
+        _patch_context_asset_prices(
+            monkeypatch,
+            _context_price_resource(
+                (1,),
+                start=scope.period_start,
+                end=scope.period_end,
+            ),
+        )
         context = _context_make_context(scope)
 
         envelope = await context.resolve("asset.position_market_context", required=True)
         payload = _envelope_payload(envelope)
-        history = payload.get("history", [])
-        assert len(history) <= expected_max_history
+        assert payload["policy_code"] == "asset_position_context_v2"
+        assert len(payload["history"]) == expected_history
+        assert {row["entity_id"] for row in payload["history"]} == {"asset:1"}
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("detail_level", "expected_max_history"),
+        ("detail_level", "expected_history"),
         [
-            (DetailLevel.COMPACT, 0),
-            (DetailLevel.STANDARD, 4),
-            (DetailLevel.FULL, 8),
+            (DetailLevel.COMPACT, 8),
+            (DetailLevel.STANDARD, 16),
+            (DetailLevel.FULL, 30),
         ],
     )
-    async def test_fx_market_summary_history_limits_by_detail_level(self, monkeypatch, detail_level, expected_max_history):
-        """COMPACT=0, STANDARD=4, FULL=8 rows for FX market summary."""
+    async def test_fx_market_summary_history_density_by_detail_level(self, monkeypatch, detail_level, expected_history):
+        """Single-FX context emits exact 8/16/30 observed-only mini-history rows."""
         scope = _fx_scope(detail_level=detail_level)
-        _patch_convert_bulk(monkeypatch)
+        _patch_context_fx_bundle(
+            monkeypatch,
+            start=scope.period_start,
+            end=scope.period_end,
+        )
         context = _context_make_context(scope)
 
         envelope = await context.resolve("fx.market_summary", required=True)
         payload = _envelope_payload(envelope)
-        history = payload.get("history", [])
-        assert len(history) <= expected_max_history
+        assert payload["policy_code"] == "fx_market_context_v2"
+        assert len(payload["history"]) == expected_history
+        assert {row["entity_id"] for row in payload["history"]} == {"fx:USD/EUR"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("detail_level", "expected_history"),
+        [
+            (DetailLevel.COMPACT, 6),
+            (DetailLevel.STANDARD, 12),
+            (DetailLevel.FULL, 24),
+        ],
+    )
+    @pytest.mark.parametrize("domain", [Domain.PORTFOLIO, Domain.BROKER])
+    async def test_portfolio_and_broker_market_context_keep_all_assets_at_requested_density(
+        self,
+        monkeypatch,
+        domain,
+        detail_level,
+        expected_history,
+    ):
+        """Portfolio/Broker never sample entities; each dense Asset gets 6/12/24 rows."""
+        scope = _scope(detail_level=detail_level) if domain is Domain.PORTFOLIO else _broker_scope(detail_level=detail_level)
+        asset_ids = (1, 2, 3, 4, 5)
+        _patch_context_universe_bundle(
+            monkeypatch,
+            _context_universe_bundle(
+                asset_ids,
+                start=scope.period_start,
+                end=scope.period_end,
+            ),
+        )
+        context = _context_make_context(scope)
+        component_id = "portfolio.asset_market_context" if domain is Domain.PORTFOLIO else "broker.asset_market_context"
+
+        payload = _envelope_payload(await context.resolve(component_id, required=True))
+        history_counts = Counter(row["entity_id"] for row in payload["history"])
+
+        assert payload["policy_code"] == ("portfolio_asset_snapshot_v2" if domain is Domain.PORTFOLIO else "broker_asset_comparison_v2")
+        assert [row["entity_id"] for row in payload["entities"]] == [f"asset:{asset_id}" for asset_id in asset_ids]
+        assert history_counts == Counter({f"asset:{asset_id}": expected_history for asset_id in asset_ids})
+
+    @pytest.mark.asyncio
+    async def test_portfolio_market_context_retains_sparse_asset_without_fabricating_rows(self, monkeypatch):
+        """Sparse source shortens only that Asset's history; entity is still retained."""
+        scope = _scope(detail_level=DetailLevel.COMPACT)
+        asset_ids = (1, 2, 3, 4, 5)
+        _patch_context_universe_bundle(
+            monkeypatch,
+            _context_universe_bundle(
+                asset_ids,
+                start=scope.period_start,
+                end=scope.period_end,
+                sparse_asset_id=5,
+            ),
+        )
+        context = _context_make_context(scope)
+
+        payload = _envelope_payload(await context.resolve("portfolio.asset_market_context", required=True))
+        history_counts = Counter(row["entity_id"] for row in payload["history"])
+
+        assert [row["entity_id"] for row in payload["entities"]] == [f"asset:{asset_id}" for asset_id in asset_ids]
+        assert history_counts == Counter(
+            {
+                "asset:1": 6,
+                "asset:2": 6,
+                "asset:3": 6,
+                "asset:4": 6,
+                "asset:5": 2,
+            }
+        )
+
+    def test_uniform_history_spans_observed_range_and_preserves_path_facts(self):
+        """Rows cover uniform calendar spans and retain the simple observed path."""
+        start = date(2026, 1, 1)
+        values = (100.0, 120.0, 90.0, 110.0, 80.0, 125.0)
+        points = tuple((start + timedelta(days=index), value) for index, value in enumerate(values))
+        rows = technical_context._history_rows(
+            entity_id="asset:1",
+            points=points,
+            bucket_count=3,
+        )
+        reversed_rows = technical_context._history_rows(
+            entity_id="asset:1",
+            points=tuple(reversed(points)),
+            bucket_count=3,
+        )
+
+        assert len(rows) == 3
+        assert reversed_rows == rows
+        assert rows[0].bucket_start == start
+        assert rows[-1].bucket_end == start + timedelta(days=5)
+        assert all(current.bucket_start == previous.bucket_end + timedelta(days=1) for previous, current in zip(rows, rows[1:], strict=False))
+        assert {row.bucket_end - row.bucket_start for row in rows} == {timedelta(days=1)}
+        assert (rows[0].observed_date, rows[0].current_value) == (start, 100.0)
+        assert (rows[-1].observed_date, rows[-1].current_value) == (start + timedelta(days=5), 125.0)
+        assert rows[0].normalized_index_base_100 == pytest.approx(100.0)
+        assert rows[0].return_from_first_ratio == pytest.approx(0.0)
+        assert rows[1].normalized_index_base_100 == pytest.approx(110.0)
+        assert rows[1].return_from_first_ratio == pytest.approx(0.1)
+        assert rows[-1].normalized_index_base_100 == pytest.approx(125.0)
+        assert rows[-1].return_from_first_ratio == pytest.approx(0.25)
+        assert set(rows[0].model_dump()) == {
+            "entity_id",
+            "bucket_start",
+            "bucket_end",
+            "observation_count",
+            "observed_date",
+            "current_value",
+            "normalized_index_base_100",
+            "return_from_first_ratio",
+        }
+
+    def test_partial_observed_range_excludes_backfill_and_future_without_fill(self):
+        """History anchors to actual observations, never requested/future/fill dates."""
+        period_start = date(2026, 1, 2)
+        period_end = date(2026, 1, 8)
+        result = FAPriceQueryResult(
+            asset_id=1,
+            prices=[
+                _fa_price_point(1, period_start - timedelta(days=1)).model_copy(update={"close": Decimal("80")}),
+                _fa_price_point(1, period_start).model_copy(update={"close": Decimal("100")}),
+                _fa_price_point(1, period_start + timedelta(days=1)).model_copy(
+                    update={
+                        "close": Decimal("101"),
+                        "backward_fill_info": BackwardFillInfo(
+                            actual_rate_date=period_start,
+                            days_back=1,
+                        ),
+                    }
+                ),
+                _fa_price_point(1, period_start + timedelta(days=4)).model_copy(update={"close": Decimal("130")}),
+                _fa_price_point(1, period_end + timedelta(days=1)).model_copy(update={"close": Decimal("140")}),
+            ],
+            events=[],
+            errors=[],
+            signals=[],
+        )
+
+        points = technical_context._observed_asset_points(
+            result,
+            start=period_start,
+            end=period_end,
+        )
+        rows = technical_context._history_rows(
+            entity_id="asset:1",
+            points=points,
+            bucket_count=8,
+        )
+
+        assert points == (
+            (period_start, 100.0),
+            (period_start + timedelta(days=4), 130.0),
+        )
+        assert len(rows) == 2
+        assert sum(row.observation_count for row in rows) == 2
+        assert rows[0].bucket_start == rows[0].bucket_end == period_start
+        assert rows[-1].bucket_start == rows[-1].bucket_end == period_start + timedelta(days=4)
+        assert [row.observed_date for row in rows] == [period_start, period_start + timedelta(days=4)]
+        assert rows[-1].bucket_end < period_end
+        assert rows[-1].normalized_index_base_100 == pytest.approx(130.0)
+        assert rows[-1].return_from_first_ratio == pytest.approx(0.3)
 
     @pytest.mark.asyncio
     async def test_coverage_and_market_context_share_one_price_load(self, monkeypatch):

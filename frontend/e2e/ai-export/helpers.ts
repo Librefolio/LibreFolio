@@ -65,7 +65,7 @@ export async function readVisibleSelectionIds(page: Page): Promise<string[]> {
     const ids = await page.getByTestId(/^ai-export-selection-option-/).evaluateAll((elements) =>
         elements
             .map((element) => element.getAttribute('data-testid') ?? '')
-            .filter((testId) => testId && !testId.endsWith('-icon'))
+            .filter((testId) => testId && !testId.endsWith('-icon') && !testId.endsWith('-description'))
             .map((testId) => testId.replace('ai-export-selection-option-', '')),
     );
 

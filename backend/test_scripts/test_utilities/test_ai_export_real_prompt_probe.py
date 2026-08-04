@@ -10,47 +10,80 @@ import pytest
 
 from backend.app.services.auth_service import hash_password, verify_password
 from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
+    COMPOSITION_COMPONENTS,
+    NAMED_PROMPT_RETENTION,
+    PUBLIC_CATALOG_V3_ANALYSES,
+    PUBLIC_CATALOG_V3_DATASETS,
+    PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT,
+    PUBLIC_CATALOG_V3_PROFILE,
     AssetCandidate,
     FxCandidate,
     ProbeError,
     TargetProbeCase,
+    _parse_args,
     audit_public_tables,
     audit_snapshot_semantics,
+    build_artifact_aliases,
+    build_comparison_baseline_manifest,
     build_dimension_summary,
+    build_manual_review_placeholder,
     build_period_detail_matrix,
+    build_probe_svgs,
     build_prompt_filename,
+    build_retained_prompt_manifest,
     build_user_scopes,
     classify_http_failure,
+    classify_prompt_category,
     compare_metric_runs,
     discover_catalog,
+    finalize_public_catalog_prompt_retention,
+    hash_file,
     hash_sqlite_family,
     is_technical_dataset,
     legacy_sampling_manifest,
     measure_broker_scope_diagnostics,
     measure_canonical_breakdown,
+    measure_prompt_composition,
     measure_targeted_adequacy_diagnostics,
     measure_technical_diagnostics,
     metric_change_reasons,
+    nearest_metric_entry,
+    nearest_rank_percentile,
+    numeric_distribution_stats,
     parse_target_case,
     prepare_runtime_credentials,
     prompt_size_category,
+    public_catalog_v3_cases,
+    public_catalog_v3_scope,
+    public_catalog_v3_selections,
     rank_asset_candidates,
     rank_fx_candidates,
     representative_cases,
     representative_scopes,
+    run_probe,
     sanitize_filename_part,
     save_and_reread_prompt,
     scan_text_for_secrets,
+    select_prompt_retention_reasons,
     select_target_scope,
     should_continue_after_failure,
     signal_metric_summary,
     sqlite_backup,
     sqlite_primary_unchanged,
+    stable_metric_key_text,
     tuning_v2_cases,
     tuning_v2_exclusions,
     validate_manifest_checks,
     validate_reconciled_breakdown,
 )
+
+
+def test_public_catalog_artifact_aliases_are_anonymized_and_deterministic():
+    assert build_artifact_aliases(("marco", "alfy", "marco"), anonymize=True) == {
+        "marco": "user_anon_01",
+        "alfy": "user_anon_02",
+    }
+    assert build_artifact_aliases(("marco",), anonymize=False) == {"marco": "marco"}
 
 
 def _metric(
@@ -73,6 +106,39 @@ def _metric(
         "rendered_prompt_chars": chars,
         "datasets_included": datasets or [],
         "components_included": components or [],
+    }
+
+
+def _public_metric(
+    selection_id: str,
+    period: str,
+    detail: str,
+    chars: int,
+    *,
+    index: int = 0,
+    status: str = "ok",
+) -> dict[str, object]:
+    domain = selection_id.partition(".")[0]
+    mode = "data" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis"
+    return {
+        "user_alias": "marco",
+        "mode": mode,
+        "selection_kind": "dataset" if mode == "data" else "analysis",
+        "domain": domain,
+        "selection_id": selection_id,
+        "scope_alias": f"{domain}_scope_{index:02d}",
+        "period_label": period,
+        "detail_level": detail,
+        "status": status,
+        "rendered_prompt_chars": chars,
+        "rendered_prompt_bytes": chars + 5,
+        "rendered_prompt_sha256": f"{index:064x}",
+        "rendered_prompt_estimated_token_equivalent": chars / 4,
+        "category": "financial",
+        "category_tags": ["financial"],
+        "prompt_file": None,
+        "retained": False,
+        "retention_reasons": [],
     }
 
 
@@ -122,10 +188,10 @@ def test_filename_sanitation_and_deterministic_prompt_name():
 
 
 def test_target_case_parser_and_scope_selection_are_exact():
-    target = parse_target_case("alfy|broker.cost_efficiency|1Y|standard|broker=Directa")
+    target = parse_target_case("alfy|broker.fiscal_lots|1Y|standard|broker=Directa")
     assert target == TargetProbeCase(
         user_alias="alfy",
-        selection_id="broker.cost_efficiency",
+        selection_id="broker.fiscal_lots",
         period_label="1Y",
         detail_level="standard",
         scope_selector="broker=Directa",
@@ -143,8 +209,8 @@ def test_target_case_parser_and_scope_selection_are_exact():
 
 def test_target_case_parser_rejects_invalid_or_ambiguous_inputs():
     with pytest.raises(ProbeError, match="target-case"):
-        parse_target_case("alfy|broker.cost_efficiency|1Y")
-    target = TargetProbeCase("alfy", "broker.cost_efficiency", "1Y", "standard", "broker=Directa")
+        parse_target_case("alfy|broker.fiscal_lots|1Y")
+    target = TargetProbeCase("alfy", "broker.fiscal_lots", "1Y", "standard", "broker=Directa")
     with pytest.raises(ProbeError, match="resolved to 2 scopes"):
         select_target_scope(
             [
@@ -426,6 +492,58 @@ def test_tuning_v2_excludes_only_all_data_and_builds_approved_matrices():
     assert [(case["period_label"], case["detail_level"]) for case in as_of_analysis_cases] == [("1Y", "standard")]
 
 
+def test_public_catalog_v3_profile_is_exact_19_by_6_without_6m():
+    selections = [
+        {
+            "kind": "dataset" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis",
+            "id": selection_id,
+            "domain": selection_id.partition(".")[0],
+            "supported_detail_levels": ["compact", "standard", "full"],
+        }
+        for selection_id in reversed((*PUBLIC_CATALOG_V3_DATASETS, *PUBLIC_CATALOG_V3_ANALYSES))
+    ]
+
+    selected = public_catalog_v3_selections(selections)
+    cases = [case for selection in selected for case in public_catalog_v3_cases(selection)]
+
+    assert _parse_args(["--profile", PUBLIC_CATALOG_V3_PROFILE]).profile == PUBLIC_CATALOG_V3_PROFILE
+    assert [selection["id"] for selection in selected] == [*PUBLIC_CATALOG_V3_DATASETS, *PUBLIC_CATALOG_V3_ANALYSES]
+    assert len(selected) == 19
+    assert len(cases) == PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT == 114
+    assert {case["period_label"] for case in cases} == {"3M", "1Y"}
+    assert {case["detail_level"] for case in cases} == {"compact", "standard", "full"}
+    assert all(case["period_label"] != "6M" for case in cases)
+    with pytest.raises(ProbeError, match="only 3M and 1Y"):
+        public_catalog_v3_cases(selected[0], period_filter="6M")
+    with pytest.raises(ProbeError, match="exact 114-case"):
+        run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V3_PROFILE, "--period", "3M"]))
+    with pytest.raises(ProbeError, match="exactly one deterministic user"):
+        run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V3_PROFILE, "--user", "alfy", "--user", "marco"]))
+    assert parse_target_case("marco|portfolio.pac_planning|6M|standard|all").period_label == "6M"
+
+
+def test_public_catalog_v3_selection_fails_closed_and_filters_exactly():
+    selections = [
+        {
+            "kind": "dataset" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis",
+            "id": selection_id,
+            "domain": selection_id.partition(".")[0],
+        }
+        for selection_id in (*PUBLIC_CATALOG_V3_DATASETS, *PUBLIC_CATALOG_V3_ANALYSES)
+    ]
+    selections.append({"kind": "dataset", "id": "portfolio.internal", "domain": "portfolio"})
+
+    broker_analyses = public_catalog_v3_selections(selections, mode="analysis", domain="broker")
+
+    assert [selection["id"] for selection in broker_analyses] == [
+        "broker.review",
+        "broker.performance_market_drivers",
+        "broker.fiscal_lots",
+    ]
+    with pytest.raises(ProbeError, match="absent"):
+        public_catalog_v3_selections(selections[:-2])
+
+
 def test_representative_scopes_keep_dashboard_one_rich_broker_asset_and_fx():
     scopes = [
         {"domain": "portfolio", "scope_alias": "all", "inventory": {"position_count": 20}},
@@ -454,6 +572,33 @@ def test_representative_scopes_keep_dashboard_one_rich_broker_asset_and_fx():
         ("asset", "asset_anon_01"),
         ("fx", "fx_pair_anon_01"),
     ]
+
+
+def test_public_catalog_v3_scope_uses_broker_and_history_reasons_without_extra_cases():
+    scopes = [
+        {"domain": "portfolio", "scope_alias": "all", "inventory": {"position_count": 20}},
+        {
+            "domain": "broker",
+            "scope_alias": "broker_anon_01",
+            "custom_start": "2018-01-01",
+            "inventory": {"position_count": 15, "recorded_cost_transaction_count": 99, "recorded_cost_transaction_count_1y": 0},
+        },
+        {
+            "domain": "broker",
+            "scope_alias": "broker_anon_02",
+            "custom_start": "2020-01-01",
+            "inventory": {"position_count": 8, "recorded_cost_transaction_count": 12, "recorded_cost_transaction_count_1y": 4},
+        },
+        {"domain": "asset", "scope_alias": "asset_anon_01"},
+        {"domain": "fx", "scope_alias": "fx_pair_anon_01"},
+    ]
+
+    ordinary = public_catalog_v3_scope(scopes, {"id": "broker.review", "domain": "broker"})
+    fx = public_catalog_v3_scope(scopes, {"id": "fx.pair_analysis", "domain": "fx"})
+
+    assert ordinary is not None and ordinary["scope_alias"] == "broker_anon_01"
+    assert fx is not None
+    assert fx["profile_selection_reason"] == "longest_history_at_least_configured_minimum_then_observations_key"
 
 
 def test_legacy_sampling_counterfactual_uses_backend_policy_source_of_truth():
@@ -579,6 +724,62 @@ def test_reconciled_breakdown_validation_accepts_exact_totals_and_rejects_mismat
     invalid["breakdown"]["reconciliation"]["unicode_characters_match"] = False
     with pytest.raises(ProbeError, match="does not reconcile"):
         validate_reconciled_breakdown(invalid)
+
+
+def test_prompt_composition_reuses_official_breakdown_and_reconciles():
+    breakdown = {
+        "sections": [
+            {"id": "analysis_objective", "unicode_characters": 100},
+            {"id": "snapshot_metadata", "unicode_characters": 50},
+            {"id": "snapshot_data", "unicode_characters": 300},
+        ],
+        "separators": {"unicode_characters": 10},
+        "snapshot_data_wrapper": {"unicode_characters": 100},
+        "snapshot_data_components": [
+            {"id": "portfolio.positions", "category": "holdings_allocation", "unicode_characters": 100},
+            {"id": "portfolio.technical_indicators", "category": "technical_indicators", "unicode_characters": 80},
+            {"id": "portfolio.technical_coverage", "category": "technical_coverage", "unicode_characters": 20},
+        ],
+    }
+
+    composition = measure_prompt_composition(breakdown, 460)
+
+    assert tuple(composition["components"]) == COMPOSITION_COMPONENTS
+    assert composition["reconciles"] is True
+    assert composition["components"]["financial"]["chars"] == 100
+    assert composition["components"]["technical"]["chars"] == 80
+    assert composition["components"]["coverage/provenance"]["chars"] == 170
+    assert composition["components"]["instructions/contracts"]["chars"] == 110
+    assert composition["components"]["coverage/provenance"]["dominant_source"] == "wrapper:snapshot_data"
+    assert sum(component["percent"] for component in composition["components"].values()) == pytest.approx(100)
+
+
+@pytest.mark.parametrize(
+    ("metric", "expected_primary", "expected_tag"),
+    [
+        ({"selection_id": "portfolio.performance_attribution", "domain": "portfolio", "status": "ok"}, "financial", "financial"),
+        ({"selection_id": "portfolio.overview_and_history", "domain": "portfolio", "status": "ok"}, "financial_with_context", "financial_with_context"),
+        ({"selection_id": "asset.market_analysis", "domain": "asset", "status": "ok"}, "explicit_technical", "explicit_technical"),
+        ({"selection_id": "portfolio.fiscal_lots", "domain": "portfolio", "status": "ok"}, "fifo", "fifo"),
+        ({"selection_id": "fx.pair_analysis", "domain": "fx", "status": "ok"}, "fx", "fx"),
+        (
+            {
+                "selection_id": "fx.pair_analysis",
+                "domain": "fx",
+                "status": "ok",
+                "technical_diagnostics": {"history_coverage": {"complete": False}},
+            },
+            "unavailable_partial",
+            "fx",
+        ),
+    ],
+)
+def test_prompt_category_classes_have_one_primary_and_supporting_tags(metric, expected_primary, expected_tag):
+    primary, tags = classify_prompt_category(metric)
+
+    assert primary == expected_primary
+    assert expected_tag in tags
+    assert primary in tags
 
 
 def test_manifest_validation_rejects_pmk_and_requires_interpretive_technical_fields():
@@ -1227,6 +1428,80 @@ def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
     assert "forbidden public prompt pattern raw_scope_numeric_value: 1" in raw_scope_audit["violations"]
 
 
+def test_nearest_rank_distribution_and_nearest_key_are_deterministic():
+    values = list(range(1, 11))
+    stats = numeric_distribution_stats(values)
+    tie_a = _public_metric("portfolio.pac_planning", "3M", "compact", 90, index=1)
+    tie_b = _public_metric("portfolio.pac_planning", "3M", "full", 110, index=2)
+
+    assert nearest_rank_percentile(values, 10) == 1
+    assert nearest_rank_percentile(values, 25) == 3
+    assert nearest_rank_percentile(values, 50) == 5
+    assert nearest_rank_percentile(values, 99) == 10
+    assert stats == {
+        "count": 10,
+        "minimum": 1.0,
+        "maximum": 10.0,
+        "mean": 5.5,
+        "median": 5.5,
+        "p10": 1.0,
+        "p25": 3.0,
+        "p75": 8.0,
+        "p90": 9.0,
+        "p95": 10.0,
+        "p99": 10.0,
+        "iqr": 5.0,
+        "population_stdev": pytest.approx(2.8722813232690143),
+    }
+    selected = nearest_metric_entry([tie_b, tie_a], 100)
+    assert selected is not None
+    assert stable_metric_key_text(selected) == min(stable_metric_key_text(tie_a), stable_metric_key_text(tie_b))
+    with pytest.raises(ValueError, match="between 0 and 100"):
+        nearest_rank_percentile(values, 101)
+
+
+def test_named_and_global_retention_deduplicates_by_stable_key():
+    entries = [_public_metric(selection_id, period, detail, 1_000 + index * 100, index=index) for index, (selection_id, period, detail) in enumerate(NAMED_PROMPT_RETENTION, start=1)]
+    entries.extend(_public_metric("portfolio.pac_planning", "1Y", detail, 10_000 + index * 250, index=100 + index) for index, detail in enumerate(("compact", "full"), start=1))
+
+    reasons = select_prompt_retention_reasons(entries)
+
+    for entry in entries[: len(NAMED_PROMPT_RETENTION)]:
+        key = stable_metric_key_text(entry)
+        assert set(NAMED_PROMPT_RETENTION[(entry["selection_id"], entry["period_label"], entry["detail_level"])]) <= set(reasons[key])
+    assert sum(reason.startswith("global_") for selected_reasons in reasons.values() for reason in selected_reasons) == 9
+    assert all(len(selected_reasons) == len(set(selected_reasons)) for selected_reasons in reasons.values())
+
+
+def test_selective_retention_promotes_only_selected_and_manifest_is_complete(tmp_path: Path):
+    entries = [_public_metric("portfolio.pac_planning", "3M", "standard" if index == 0 else "compact", 1_000 + index * 73, index=index) for index in range(20)]
+    staged: dict[str, Path] = {}
+    for entry in entries:
+        path = tmp_path / ".prompt_staging" / f"{entry['scope_alias']}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"prompt {entry['scope_alias']}", encoding="utf-8")
+        staged[stable_metric_key_text(entry)] = path
+
+    reasons = finalize_public_catalog_prompt_retention(
+        entries,
+        staged,
+        artifact_root=tmp_path,
+        prompts_dir=tmp_path / "prompts",
+        allow_retention=True,
+    )
+    manifest = build_retained_prompt_manifest(entries, run_id="run", retention_reasons=reasons)
+
+    retained = [entry for entry in entries if entry["retained"] is True]
+    dropped = [entry for entry in entries if entry["retained"] is False]
+    assert retained
+    assert dropped
+    assert all(entry["prompt_file"] is not None for entry in retained)
+    assert all(entry["prompt_file"] is None for entry in dropped)
+    assert manifest["retained_count"] == len(retained)
+    assert manifest["planned_retention_count"] == len(reasons)
+    assert set(manifest["entries"][0]) >= {"stable_key", "prompt_path", "reasons", "chars", "bytes", "sha256", "category"}
+
+
 def test_dimension_summary_classifies_and_selects_representatives():
     entries = []
     for index, token_equivalent in enumerate((1_000, 10_000, 10_001, 50_000, 50_001, 100_001), start=1):
@@ -1253,6 +1528,16 @@ def test_dimension_summary_classifies_and_selects_representatives():
     assert summary["overall"]["medium"] == 2
     assert summary["overall"]["heavy"] == 2
     assert summary["overall"]["very_heavy"] == 1
+    assert summary["overall"]["mean"] == pytest.approx(36_833.833333333336)
+    assert summary["overall"]["p10"] == 1_000
+    assert summary["overall"]["p25"] == 10_000
+    assert summary["overall"]["p75"] == 50_001
+    assert summary["overall"]["p99"] == 100_001
+    assert summary["overall"]["iqr"] == 40_001
+    assert summary["overall"]["population_stdev"] > 0
+    assert summary["overall"]["rendered_characters"]["maximum"] == 400_004
+    assert summary["by_type"]["None"]["count"] == 6
+    assert summary["by_category"]["None"]["count"] == 6
     assert summary["representatives"]["heavy"]["smallest"]["selection_id"] == "selection.5"
     assert summary["representatives"]["heavy"]["largest"]["selection_id"] == "selection.6"
 
@@ -1287,6 +1572,80 @@ def test_change_reasons_are_derived_from_public_format_diagnostics():
 
 def test_secret_scan_ignores_redacted_authorization_placeholder():
     assert scan_text_for_secrets("Authorization: [REDACTED]") == []
+
+
+def test_svg_charts_are_deterministic_and_comparison_chart_is_conditional():
+    entries = [
+        {
+            **_public_metric("portfolio.overview_and_history", "3M", "compact", 1_000, index=1),
+            "category": "financial_with_context",
+            "composition": {
+                "total_chars": 1_000,
+                "components": {
+                    "financial": {"chars": 500, "percent": 50, "dominant_source": "component:a", "dominant_source_chars": 500},
+                    "technical": {"chars": 200, "percent": 20, "dominant_source": "component:b", "dominant_source_chars": 200},
+                    "coverage/provenance": {"chars": 200, "percent": 20, "dominant_source": "section:snapshot_metadata", "dominant_source_chars": 200},
+                    "instructions/contracts": {"chars": 100, "percent": 10, "dominant_source": "separators", "dominant_source_chars": 100},
+                },
+            },
+        },
+        {
+            **_public_metric("asset.market_analysis", "1Y", "full", 2_000, index=2),
+            "category": "explicit_technical",
+            "composition": {
+                "total_chars": 2_000,
+                "components": {
+                    "financial": {"chars": 400, "percent": 20, "dominant_source": "component:a", "dominant_source_chars": 400},
+                    "technical": {"chars": 1_000, "percent": 50, "dominant_source": "component:b", "dominant_source_chars": 1_000},
+                    "coverage/provenance": {"chars": 200, "percent": 10, "dominant_source": "section:snapshot_metadata", "dominant_source_chars": 200},
+                    "instructions/contracts": {"chars": 400, "percent": 20, "dominant_source": "section:response_contract", "dominant_source_chars": 400},
+                },
+            },
+        },
+    ]
+    comparisons = [
+        {
+            "stable_key": stable_metric_key_text(entries[0]),
+            "previous_chars": 900,
+            "current_chars": 1_000,
+        }
+    ]
+
+    without_comparison = build_probe_svgs(entries, [])
+    first = build_probe_svgs(entries, comparisons)
+    second = build_probe_svgs(entries, comparisons)
+
+    assert set(without_comparison) == {"category_range_box.svg", "period_detail.svg", "composition_share.svg"}
+    assert set(first) == {*without_comparison, "before_after.svg"}
+    assert first == second
+    assert all(content.startswith("<svg") and content.endswith("</svg>\n") for content in first.values())
+    assert "financial_with_context" in first["category_range_box.svg"]
+    assert "coverage/provenance" in first["composition_share.svg"]
+
+
+def test_manual_review_and_comparison_manifests_are_structured_without_ratings(tmp_path: Path):
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text('{"entries":[]}\n', encoding="utf-8")
+
+    task_reviews = build_manual_review_placeholder("run", "task_adequacy")
+    export_reviews = build_manual_review_placeholder("run", "export_data")
+    absent = build_comparison_baseline_manifest("run", None, [])
+    compared = build_comparison_baseline_manifest("run", baseline, [{"status": "unchanged"}])
+
+    assert task_reviews == {
+        "schema_version": 1,
+        "run_id": "run",
+        "review_kind": "task_adequacy",
+        "status": "not_performed",
+        "reviews": [],
+    }
+    assert export_reviews["reviews"] == []
+    assert "ratings" not in task_reviews
+    assert absent["status"] == "not_provided"
+    assert absent["baseline_metrics_path"] is None
+    assert compared["status"] == "compared"
+    assert compared["baseline_sha256"] == hash_file(baseline)
+    assert compared["comparison_row_count"] == 1
 
 
 def test_sqlite_backup_preserves_source_hash_and_creates_independent_copy(tmp_path: Path):

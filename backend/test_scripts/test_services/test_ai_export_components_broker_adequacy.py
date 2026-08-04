@@ -219,6 +219,9 @@ class TestConcentrationContext:
         assert [slice_["name"] for slice_ in payload["allocation_by_type"]] == ["ETF", "Stock"]
         assert payload["allocation_by_sector"][0]["name"] == "Tech"
         assert payload["allocation_by_geography"][0]["name"] == "US"
+        assert payload["allocation_dimension_semantics"].startswith("Asset type, sector, and geography")
+        assert payload["currency_allocation_semantics"].endswith("broker cash fields.")
+        assert payload["concentration_semantics"].endswith("Cash is included in the denominator but is not itself an HHI term.")
         # HHI = 60^2 + 40^2 = 5200; largest = 60 - reconciles with broker.allocation_concentration.
         assert Decimal(payload["herfindahl_index_points"]) == Decimal("5200")
         assert Decimal(payload["largest_position_weight_percent"]) == Decimal("60")

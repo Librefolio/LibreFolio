@@ -981,7 +981,7 @@
                 domain="fx"
                 compatibility={fxAiExportCompatibility}
                 memoryKey={`fx:${data.canonicalSlug}`}
-                defaultSelectionId="fx.trend_review"
+                defaultSelectionId="fx.pair_analysis"
                 disabled={fxAiExportCatalogLoading || fxAiExportCatalogFailed}
                 labels={fxAiExportLabels}
                 showLabel={showActionLabels}

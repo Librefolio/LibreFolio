@@ -1118,10 +1118,19 @@ class TestTimingContextObservedOnly:
 
         assert set(payload.missing_user_inputs) == {
             FxNeutralScenarioInput.CONVERSION_AMOUNT,
+            FxNeutralScenarioInput.CONVERSION_DIRECTION,
             FxNeutralScenarioInput.CONVERSION_DEADLINE,
+            FxNeutralScenarioInput.URGENCY,
+            FxNeutralScenarioInput.EXECUTION_PROVIDER,
             FxNeutralScenarioInput.EXECUTION_SPREAD,
             FxNeutralScenarioInput.TRANSACTION_FEES,
+            FxNeutralScenarioInput.MINIMUM_TRADE_AMOUNT,
+            FxNeutralScenarioInput.SETTLEMENT_CONSTRAINTS,
+            FxNeutralScenarioInput.ACCEPTABLE_SLIPPAGE,
+            FxNeutralScenarioInput.LIQUIDITY_REQUIREMENT,
+            FxNeutralScenarioInput.STAGED_EXECUTION_FEASIBILITY,
         }
+        assert payload.missing_user_inputs == payload.indispensable_user_inputs + payload.refinement_user_inputs
         # no forecast/predictive band fields exist on the payload
         assert "forecast" not in payload.model_dump()
         assert not any("forecast" in key or "predicted" in key or "band" in key for key in payload.model_dump())
@@ -1169,8 +1178,8 @@ class TestTimingContextPartialHistory:
         assert sh.covered_calendar_days == (period_end - available_start).days + 1
         assert 0 < sh.coverage_ratio < 1
         returns = payload.observed_returns
-        assert (returns.return_1m_ratio is not None) is expect_1m
-        assert (returns.return_3m_ratio is not None) is expect_3m
+        assert (returns.return_30d_ratio is not None) is expect_1m
+        assert (returns.return_91d_ratio is not None) is expect_3m
         # period return is always available when >= 2 observations exist
         assert returns.return_period_ratio is not None
 
@@ -1258,8 +1267,8 @@ class TestSignalCoveragePartialReasons:
 
     @pytest.mark.asyncio
     async def test_full_history_has_no_partial_reasons(self, session, test_user):
-        """With ample history every included signal is complete OK: no partial reasons at all."""
-        start = date(2033, 1, 1)
+        """With enough history for EMA(200)'s 6x stabilization every included signal is complete."""
+        start = date(2031, 1, 1)
         end = date(2034, 6, 1)
         await _seed_linear_series(session, base="EUR", quote="USD", start=start, end=end, first="1.10", step="0.0002")
         scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2034, 5, 1), end=end)

@@ -67,8 +67,9 @@ from backend.app.services.ai_export.assemblers.fifo import (  # noqa: E402  _LEG
     lot_status,
 )
 from backend.app.services.ai_export.components.resources import LotsResultsResource
-from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
-from backend.app.services.ai_export.temporal.plan import BucketPlan
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
+from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
+from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -88,6 +89,8 @@ __all__ = [
     "discover_transacted_asset_ids",
     "build_fifo_lot_refs",
     "build_performance_bucket_rows",
+    "build_uniform_performance_buckets",
+    "performance_path_bucket_count",
     "has_nonzero_open_lot",
     "load_lots_results",
     "load_portfolio_report",
@@ -101,6 +104,7 @@ __all__ = [
     "map_position_row",
     "map_unallocated_row",
     "resolve_accessible_broker_ids",
+    "summarize_fifo_asset_rows",
 ]
 
 
@@ -233,12 +237,29 @@ class PerformanceBucketRow(BaseModel):
     net_external_flow: Currency | None = None
     period_pnl: Currency | None = None
     return_percent: SafeDecimal | None = None
+    normalized_index_base_100: SafeDecimal | None = None
+    return_from_first_ratio: SafeDecimal | None = None
     reconciliation_diff: Currency | None = None
+
+
+_PERFORMANCE_PATH_BUCKET_COUNTS = {
+    DetailLevel.COMPACT: 8,
+    DetailLevel.STANDARD: 16,
+    DetailLevel.FULL: 30,
+}
+
+
+def performance_path_bucket_count(detail_level: DetailLevel) -> int:
+    return _PERFORMANCE_PATH_BUCKET_COUNTS[detail_level]
+
+
+def build_uniform_performance_buckets(scope: BuildScope) -> tuple[Bucket, ...]:
+    return uniform_calendar_buckets(scope.period_start, scope.period_end, performance_path_bucket_count(scope.detail_level))
 
 
 def build_performance_bucket_rows(
     history: Sequence[PortfolioHistoryPoint],
-    bucket_plan: BucketPlan,
+    bucket_plan: BucketPlan | Sequence[Bucket],
     *,
     currency_code: str,
 ) -> tuple[PerformanceBucketRow, ...]:
@@ -247,7 +268,9 @@ def build_performance_bucket_rows(
     previous_close: PortfolioHistoryPoint | None = None
     rows: list[PerformanceBucketRow] = []
 
-    for bucket in bucket_plan.buckets:
+    buckets = bucket_plan.buckets if isinstance(bucket_plan, BucketPlan) else tuple(bucket_plan)
+    first_twrr_observation = next((point for point in ordered_history if point.twrr is not None), None)
+    for bucket in buckets:
         bucket_points = tuple(point for point in ordered_history if bucket.start_date <= point.date <= bucket.end_date)
         if not bucket_points:
             rows.append(
@@ -304,6 +327,16 @@ def build_performance_bucket_rows(
                 net_external_flow=net_external_flow,
                 period_pnl=period_pnl,
                 return_percent=return_percent,
+                normalized_index_base_100=(
+                    (Decimal(1) + Decimal(end_point.twrr)) / (Decimal(1) + Decimal(first_twrr_observation.twrr)) * Decimal("100")
+                    if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
+                    else None
+                ),
+                return_from_first_ratio=(
+                    (Decimal(1) + Decimal(end_point.twrr)) / (Decimal(1) + Decimal(first_twrr_observation.twrr)) - Decimal("1")
+                    if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
+                    else None
+                ),
                 reconciliation_diff=reconciliation_diff,
             )
         )
@@ -313,7 +346,7 @@ def build_performance_bucket_rows(
 
 
 class FifoAssetSummaryRow(BaseModel):
-    """Per-asset FIFO lot counts/cost-basis summary."""
+    """Per-asset economic FIFO summary derived from authoritative lot rows."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -324,7 +357,30 @@ class FifoAssetSummaryRow(BaseModel):
     partial_lot_count: int
     closed_lot_count: int
     has_open_position: bool
+    original_quantity: SafeDecimal
+    open_quantity: SafeDecimal
+    realized_quantity: SafeDecimal
+    original_cost: Currency
     residual_cost_basis: Currency
+    cumulative_proceeds: Currency
+    realized_pnl: Currency
+    open_value: Currency | None = None
+    unrealized_pnl: Currency | None = None
+    potential_gain: Currency | None = None
+    potential_loss: Currency | None = None
+    total_pnl: Currency | None = None
+    net_total_pnl: Currency | None = None
+    income: Currency
+    fees: Currency
+    taxes: Currency
+    valued_open_lot_count: int = Field(..., ge=0)
+    unavailable_open_lot_count: int = Field(..., ge=0)
+    value_coverage_status: str
+    net_metrics_status: str
+    broker_ids: list[int] = Field(default_factory=list)
+    custody_types: list[str] = Field(default_factory=list)
+    states: list[str] = Field(default_factory=list)
+    has_in_transit_custody: bool = False
 
 
 class FifoCustodyRow(BaseModel):
@@ -370,6 +426,101 @@ class FifoLotRow(BaseModel):
     net_metrics_status: str
     states: list[str] = Field(default_factory=list)
     current_custody: list[FifoCustodyRow] = Field(default_factory=list)
+
+
+def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow:
+    """Aggregate one Asset's public lot rows without re-deriving lot economics."""
+
+    rows = tuple(rows)
+    if not rows:
+        raise ValueError("FIFO Asset summary requires at least one lot row")
+    asset_ids = {row.asset_id for row in rows}
+    if len(asset_ids) != 1:
+        raise ValueError("FIFO Asset summary rows must belong to one asset")
+    currency_codes = {
+        value.code
+        for row in rows
+        for value in (
+            row.original_cost,
+            row.residual_cost_basis,
+            row.cumulative_proceeds,
+            row.realized_pnl,
+            row.income,
+            row.fees,
+            row.taxes,
+        )
+    }
+    if len(currency_codes) != 1:
+        raise ValueError("FIFO Asset summary rows must use one target currency")
+    currency_code = next(iter(currency_codes))
+    open_rows = tuple(row for row in rows if row.open_quantity != 0)
+    valued_open_rows = tuple(row for row in open_rows if row.open_value is not None and row.unrealized_pnl is not None)
+    if not open_rows:
+        value_coverage_status = "not_applicable"
+    elif not valued_open_rows:
+        value_coverage_status = "unavailable"
+    elif len(valued_open_rows) == len(open_rows):
+        value_coverage_status = "complete"
+    else:
+        value_coverage_status = "partial"
+
+    def _sum_required(field_name: str) -> Currency:
+        return Currency(code=currency_code, amount=sum((getattr(row, field_name).amount for row in rows), Decimal("0")))
+
+    def _sum_optional(field_name: str, selected_rows: Sequence[FifoLotRow] = rows) -> Currency | None:
+        available = [value for row in selected_rows if (value := getattr(row, field_name)) is not None]
+        if not available:
+            return None
+        return Currency(code=currency_code, amount=sum((value.amount for value in available), Decimal("0")))
+
+    unrealized_amounts = [row.unrealized_pnl.amount for row in valued_open_rows if row.unrealized_pnl is not None]
+    potential_gain = Currency(code=currency_code, amount=sum((max(amount, Decimal("0")) for amount in unrealized_amounts), Decimal("0"))) if unrealized_amounts else None
+    potential_loss = Currency(code=currency_code, amount=sum((max(-amount, Decimal("0")) for amount in unrealized_amounts), Decimal("0"))) if unrealized_amounts else None
+    net_statuses = {row.net_metrics_status for row in rows}
+    net_metrics_status = next(iter(net_statuses)) if len(net_statuses) == 1 else "PARTIAL"
+    broker_ids = {
+        broker_id
+        for row in rows
+        for broker_id in (
+            row.opening_broker_id,
+            *(custody.broker_id for custody in row.current_custody if custody.broker_id is not None),
+        )
+    }
+    custody_types = {custody.custody_type for row in rows for custody in row.current_custody}
+    first = rows[0]
+    return FifoAssetSummaryRow(
+        asset_id=first.asset_id,
+        asset_name=first.asset_name,
+        asset_ticker=first.asset_ticker,
+        open_lot_count=sum(row.status == "OPEN" for row in rows),
+        partial_lot_count=sum(row.status == "PARTIAL" for row in rows),
+        closed_lot_count=sum(row.status == "CLOSED" for row in rows),
+        has_open_position=bool(open_rows),
+        original_quantity=sum((row.original_quantity for row in rows), Decimal("0")),
+        open_quantity=sum((row.open_quantity for row in rows), Decimal("0")),
+        realized_quantity=sum((row.realized_quantity for row in rows), Decimal("0")),
+        original_cost=_sum_required("original_cost"),
+        residual_cost_basis=_sum_required("residual_cost_basis"),
+        cumulative_proceeds=_sum_required("cumulative_proceeds"),
+        realized_pnl=_sum_required("realized_pnl"),
+        open_value=_sum_optional("open_value", open_rows),
+        unrealized_pnl=_sum_optional("unrealized_pnl", open_rows),
+        potential_gain=potential_gain,
+        potential_loss=potential_loss,
+        total_pnl=_sum_optional("total_pnl"),
+        net_total_pnl=_sum_optional("net_total_pnl"),
+        income=_sum_required("income"),
+        fees=_sum_required("fees"),
+        taxes=_sum_required("taxes"),
+        valued_open_lot_count=len(valued_open_rows),
+        unavailable_open_lot_count=len(open_rows) - len(valued_open_rows),
+        value_coverage_status=value_coverage_status,
+        net_metrics_status=net_metrics_status,
+        broker_ids=sorted(broker_ids),
+        custody_types=sorted(custody_types),
+        states=sorted({state for row in rows for state in row.states}),
+        has_in_transit_custody="IN_TRANSIT" in custody_types,
+    )
 
 
 # =============================================================================

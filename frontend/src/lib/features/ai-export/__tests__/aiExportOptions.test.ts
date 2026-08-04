@@ -53,7 +53,7 @@ describe('AI Export options', () => {
     it('excludes hidden Analysis notes from Dataset fingerprints', () => {
         const dataset = {
             selectionKind: 'dataset' as const,
-            selectionId: 'portfolio.overview' as const,
+            selectionId: 'portfolio.overview_and_history' as const,
             detailLevel: 'standard' as const,
             period: {preset: '3m' as const, customAmount: 3, customUnit: 'months' as const},
             responseLanguage: 'English' as const,

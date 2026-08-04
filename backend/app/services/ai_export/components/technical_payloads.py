@@ -34,6 +34,7 @@ from backend.app.schemas.signals import (
     SignalAggregationProfile,
     SignalBandComponent,
     SignalSeriesKind,
+    SignalStatus,
     SignalTemporalClass,
 )
 
@@ -103,22 +104,24 @@ class AssetPriceSeriesPayload(BaseModel):
 
 
 class AssetOhlcReturnsPayload(BaseModel):
-    """`asset.ohlc_returns`: single-target price/return OHLC-bucketed series."""
+    """`asset.ohlc_returns`: single-target observed-close bucket series."""
 
     model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     currency: str
+    price_basis: Literal["observed_close"] = "observed_close"
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None
     latest_date: date | None = None
 
 
 class PortfolioTechnicalPricesPayload(BaseModel):
-    """`portfolio.technical_prices`: per-asset price/return series over the full eligible universe."""
+    """`portfolio.technical_prices` / `broker.technical_prices`: per-asset price/return series over the full eligible universe."""
 
     model_config = ConfigDict(extra="forbid")
 
+    price_basis: Literal["observed_close"] = "observed_close"
     assets: tuple[AssetPriceSeriesPayload, ...]
     eligible_asset_count: int = Field(
         ...,
@@ -259,6 +262,8 @@ class IndicatorTablePayload(BaseModel):
     semantic_id: str
     semantic_description: str
     category: str
+    result_status: SignalStatus
+    partial_reason_code: str | None = None
     portfolio_weight_ratio: float | None = Field(
         None,
         description="Gross absolute open-position value per unique asset / gross eligible exposure. Fraction in [0,1]; None if weightless.",
