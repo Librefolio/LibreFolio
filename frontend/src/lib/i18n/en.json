@@ -434,6 +434,8 @@
     "beforeOpeningCount": "before opening",
     "recheckOpenings": "Recheck openings",
     "recheckOpeningsTip": "Re-check broker opening dates and re-select rows that just became importable.",
+    "selectVisible": "Select visible",
+    "selectVisibleTip": "Select the selectable rows on the current page (leaves other pages unchanged).",
     "createAsset": {
       "identifiedNames": "Identified names/identifiers:"
     },

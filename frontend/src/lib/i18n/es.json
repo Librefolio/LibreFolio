@@ -434,6 +434,8 @@
     "beforeOpeningCount": "antes de la apertura",
     "recheckOpenings": "Volver a comprobar aperturas",
     "recheckOpeningsTip": "Vuelve a comprobar las fechas de apertura de los brókeres y reselecciona las filas que ya se pueden importar.",
+    "selectVisible": "Seleccionar visibles",
+    "selectVisibleTip": "Selecciona las filas seleccionables de la página actual (no afecta a otras páginas).",
     "createAsset": {
       "identifiedNames": "Nombres/identificadores detectados:"
     },

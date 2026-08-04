@@ -434,6 +434,8 @@
     "beforeOpeningCount": "prima dell'apertura",
     "recheckOpenings": "Ricontrolla aperture",
     "recheckOpeningsTip": "Ricontrolla le date di apertura dei broker e riseleziona le righe diventate importabili.",
+    "selectVisible": "Seleziona in vista",
+    "selectVisibleTip": "Seleziona le righe selezionabili nella pagina corrente (non tocca le altre pagine).",
     "createAsset": {
       "identifiedNames": "Nomi/identificatori individuati:"
     },

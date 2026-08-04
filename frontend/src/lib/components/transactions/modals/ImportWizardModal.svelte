@@ -10,7 +10,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, ListChecks, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
@@ -1914,6 +1914,21 @@ ${arrow}<span>${label}</span></span>`,
     function step4DeselectAll() {
         mergedTransactions = mergedTransactions.map((t) => ({...t, selected: false}));
     }
+    /**
+     * Select every selectable row on the current DataTable page (respecting active filters,
+     * sort, and pagination) without touching selections on other pages. Skips before-opening
+     * rows and resolved-away in-batch duplicate members, mirroring step4SelectAll's selectability.
+     */
+    function step4SelectVisible() {
+        const ids = new Set(step4TableRef?.getPageRowIds() ?? []);
+        if (ids.size === 0) return;
+        mergedTransactions = mergedTransactions.map((t) => {
+            if (!ids.has(String(t.index))) return t;
+            if (beforeOpeningIndices.has(t.index)) return t;
+            if (t.dupGroupKey != null && t.isDupKeeper === false) return t;
+            return {...t, selected: true};
+        });
+    }
 
     // =========================================================================
     // Shared State
@@ -3467,6 +3482,10 @@ ${arrow}<span>${label}</span></span>`,
                             {/if}
                             <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectAll}>
                                 <CheckSquare size={12} /><span class="hidden sm:inline">{$t('common.selectAll')}</span>
+                            </button>
+                            <span class="text-gray-300 dark:text-gray-600">|</span>
+                            <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectVisible} data-testid="import-wizard-select-visible" title={$t('importWizard.selectVisibleTip')}>
+                                <ListChecks size={12} /><span class="hidden sm:inline">{$t('importWizard.selectVisible')}</span>
                             </button>
                             <span class="text-gray-300 dark:text-gray-600">|</span>
                             <button type="button" class="text-xs text-gray-500 hover:underline flex items-center gap-1" onclick={step4DeselectAll}>

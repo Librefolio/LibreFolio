@@ -1128,6 +1128,11 @@
     export function toggleRowSelectionById(rowId: string) {
         toggleRowSelection(rowId);
     }
+
+    /** Row IDs currently rendered on the active page (after filters, sort, and pagination). */
+    export function getPageRowIds(): string[] {
+        return paginatedData.map((row) => getRowId(row));
+    }
 </script>
 
 <div class="datatable-container" bind:this={containerEl}>
