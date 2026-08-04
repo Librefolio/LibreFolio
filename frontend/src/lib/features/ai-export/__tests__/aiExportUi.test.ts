@@ -12,8 +12,10 @@ describe('AI Export UI helpers', () => {
     it('builds labels for every real catalog selection', () => {
         const labels = buildAiExportMenuLabels(t, compatibilityFixture(), 'AI Export');
 
-        expect(Object.keys(labels.options.selectionLabels)).toHaveLength(49);
+        expect(Object.keys(labels.options.selectionLabels)).toHaveLength(19);
         expect(labels.options.categoryLabels).toEqual({dataset: 'aiExport.exportData', analysis: 'aiExport.requestAnalysis'});
+        expect(labels.options.categoryHelp).toEqual({dataset: 'aiExport.exportDataHelp', analysis: 'aiExport.requestAnalysisHelp'});
+        expect(labels.options.payloadStatsHelp).toBe('aiExport.payloadStatsHelp');
         expect(labels.options.tokenUnitLabel).toBe('aiExport.tokenUnit');
     });
 
@@ -44,11 +46,11 @@ describe('AI Export UI helpers', () => {
         const translate = (key: string, translationOptions?: {values?: Record<string, string | number | boolean | null | undefined>}) => {
             if (key === 'aiExport.details.standard') return 'Standard';
             if (key === 'aiExport.tokenUnit') return 'token';
-            if (key === 'aiExport.copied') return `AI Export copiato:\n• ${translationOptions?.values?.tokens} · ${translationOptions?.values?.bytes}\n• dettaglio: ${translationOptions?.values?.detail}`;
+            if (key === 'aiExport.copied') return `AI Export copiato:\n• ${translationOptions?.values?.tokens} (💾 ${translationOptions?.values?.bytes})\n• dettaglio: ${translationOptions?.values?.detail}`;
             return key;
         };
 
-        expect(getAiExportSuccessMessages(translate, {options, stats}).copied).toBe('AI Export copiato:\n• 11,93 k token · 47,68 KB\n• dettaglio: Standard');
+        expect(getAiExportSuccessMessages(translate, {options, stats}).copied).toBe('AI Export copiato:\n• 11,93 k token (💾 47,68 KB)\n• dettaglio: Standard');
     });
 
     it('maps new typed problem codes', () => {

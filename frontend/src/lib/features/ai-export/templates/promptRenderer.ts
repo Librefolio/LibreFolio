@@ -315,7 +315,6 @@ function renderAdditionalData(input: RenderAiExportPromptInput): string {
             `  6. ${translate('aiExport.additionalData.steps.period')}: "${period}"`,
             `  7. ${translate('aiExport.additionalData.steps.detail')}: "${detail}"`,
             `- **${translate('aiExport.additionalData.recommended')}**: ${period}; ${detail}`,
-            `- **${translate('aiExport.additionalData.technicalReference')}**: \`${dataset.id}\``,
         );
     }
     return lines.join('\n');

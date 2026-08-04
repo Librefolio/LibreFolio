@@ -31,9 +31,8 @@ Design rules (task ``ai-adequacy-v1-remediate-fx``, goal A):
   observed/backfilled counts, calendar coverage and an explicit
   ``is_partial_history`` flag + reason whenever the first genuine observation
   starts after ``period_start`` (or no genuine observation exists at all).
-- **Neutral-scenario inputs are honestly missing.** Framing a *neutral*
-  conversion scenario (amount, deadline, execution spread, fees) requires user
-  inputs the export runtime never has; all four are always reported through
+- **Neutral-scenario inputs are honestly missing.** Decision-critical inputs and
+  execution refinements are reported separately and together through
   ``missing_user_inputs`` rather than silently defaulted.
 
 This module is intentionally NOT wired into
@@ -62,9 +61,9 @@ from backend.app.services.ai_export.components.types import BuildScope, Domain, 
 from backend.app.services.ai_export.dependencies import BuildContext, BuildContextScopeError
 
 # Trailing calendar windows for the observed short-horizon returns. Kept as plain
-# day counts (not "months") so the window is deterministic and calendar-exact.
-_RETURN_1M_DAYS = 30
-_RETURN_3M_DAYS = 91
+# Fixed day counts are named as days in the public payload, never as months.
+_RETURN_30D_DAYS = 30
+_RETURN_91D_DAYS = 91
 
 
 class FxNeutralScenarioInput(StrEnum):
@@ -78,18 +77,36 @@ class FxNeutralScenarioInput(StrEnum):
     """
 
     CONVERSION_AMOUNT = "conversion_amount"
+    CONVERSION_DIRECTION = "conversion_direction"
     CONVERSION_DEADLINE = "conversion_deadline"
+    URGENCY = "urgency"
+    EXECUTION_PROVIDER = "execution_provider"
     EXECUTION_SPREAD = "execution_spread"
     TRANSACTION_FEES = "transaction_fees"
+    MINIMUM_TRADE_AMOUNT = "minimum_trade_amount"
+    SETTLEMENT_CONSTRAINTS = "settlement_constraints"
+    ACCEPTABLE_SLIPPAGE = "acceptable_slippage"
+    LIQUIDITY_REQUIREMENT = "liquidity_requirement"
+    STAGED_EXECUTION_FEASIBILITY = "staged_execution_feasibility"
 
 
-# The complete, ordered set surfaced on every successful payload (deterministic).
-ALL_NEUTRAL_SCENARIO_INPUTS: tuple[FxNeutralScenarioInput, ...] = (
+INDISPENSABLE_SCENARIO_INPUTS: tuple[FxNeutralScenarioInput, ...] = (
     FxNeutralScenarioInput.CONVERSION_AMOUNT,
+    FxNeutralScenarioInput.CONVERSION_DIRECTION,
     FxNeutralScenarioInput.CONVERSION_DEADLINE,
+)
+REFINEMENT_SCENARIO_INPUTS: tuple[FxNeutralScenarioInput, ...] = (
+    FxNeutralScenarioInput.URGENCY,
+    FxNeutralScenarioInput.EXECUTION_PROVIDER,
     FxNeutralScenarioInput.EXECUTION_SPREAD,
     FxNeutralScenarioInput.TRANSACTION_FEES,
+    FxNeutralScenarioInput.MINIMUM_TRADE_AMOUNT,
+    FxNeutralScenarioInput.SETTLEMENT_CONSTRAINTS,
+    FxNeutralScenarioInput.ACCEPTABLE_SLIPPAGE,
+    FxNeutralScenarioInput.LIQUIDITY_REQUIREMENT,
+    FxNeutralScenarioInput.STAGED_EXECUTION_FEASIBILITY,
 )
+ALL_NEUTRAL_SCENARIO_INPUTS = INDISPENSABLE_SCENARIO_INPUTS + REFINEMENT_SCENARIO_INPUTS
 
 # Machine-readable reason the observed range position could not be computed.
 REASON_FLAT_RANGE = "flat_observed_range"
@@ -176,8 +193,8 @@ class FxObservedReturns(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    return_1m_ratio: float | None = None
-    return_3m_ratio: float | None = None
+    return_30d_ratio: float | None = None
+    return_91d_ratio: float | None = None
     return_period_ratio: float | None = None
     daily_return_volatility_ratio: float | None = Field(default=None, ge=0)
 
@@ -249,6 +266,8 @@ class FxTimingContextPayload(BaseModel):
     observed_range: FxObservedRangePosition
     observed_returns: FxObservedReturns
     source_history: FxSourceHistoryCoverage
+    indispensable_user_inputs: tuple[FxNeutralScenarioInput, ...]
+    refinement_user_inputs: tuple[FxNeutralScenarioInput, ...]
     missing_user_inputs: tuple[FxNeutralScenarioInput, ...]
 
     @field_validator("base_currency", "quote_currency")
@@ -273,6 +292,8 @@ class FxTimingContextPayload(BaseModel):
             raise ValueError("is_backward_filled must match staleness_days > 0")
         if len(set(self.missing_user_inputs)) != len(self.missing_user_inputs):
             raise ValueError("missing_user_inputs must be unique")
+        if self.missing_user_inputs != self.indispensable_user_inputs + self.refinement_user_inputs:
+            raise ValueError("missing_user_inputs must concatenate indispensable_user_inputs and refinement_user_inputs")
         if self.source_history.requested_period_end != self.as_of:
             raise ValueError("source_history.requested_period_end must equal as_of")
         return self
@@ -417,8 +438,8 @@ async def _build_fx_timing_context(context: BuildContext, dependencies: Mapping[
 
     observed_range = _build_observed_range(points, current_rate=current.rate)
     observed_returns = FxObservedReturns(
-        return_1m_ratio=_trailing_return(points, as_of=scope.snapshot_as_of, days=_RETURN_1M_DAYS),
-        return_3m_ratio=_trailing_return(points, as_of=scope.snapshot_as_of, days=_RETURN_3M_DAYS),
+        return_30d_ratio=_trailing_return(points, as_of=scope.snapshot_as_of, days=_RETURN_30D_DAYS),
+        return_91d_ratio=_trailing_return(points, as_of=scope.snapshot_as_of, days=_RETURN_91D_DAYS),
         return_period_ratio=_period_return(points),
         daily_return_volatility_ratio=_daily_return_volatility(points),
     )
@@ -436,6 +457,8 @@ async def _build_fx_timing_context(context: BuildContext, dependencies: Mapping[
         observed_range=observed_range,
         observed_returns=observed_returns,
         source_history=source_history,
+        indispensable_user_inputs=INDISPENSABLE_SCENARIO_INPUTS,
+        refinement_user_inputs=REFINEMENT_SCENARIO_INPUTS,
         missing_user_inputs=ALL_NEUTRAL_SCENARIO_INPUTS,
     )
 
@@ -473,6 +496,8 @@ __all__ = [
     "ALL_NEUTRAL_SCENARIO_INPUTS",
     "FX_TIMING_CONTEXT_COMPONENTS",
     "FX_TIMING_CONTEXT_SPEC",
+    "INDISPENSABLE_SCENARIO_INPUTS",
+    "REFINEMENT_SCENARIO_INPUTS",
     "REASON_FLAT_RANGE",
     "REASON_HISTORY_STARTS_LATE",
     "REASON_NO_GENUINE_OBSERVATIONS",

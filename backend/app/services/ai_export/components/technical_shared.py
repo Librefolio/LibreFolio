@@ -491,6 +491,10 @@ class TechnicalUniverseBundle:
 
     positions: tuple[AssetPeriodContribution, ...]
     asset_ids: tuple[int, ...]
+    current_position_asset_ids: tuple[int, ...]
+    excluded_current_assets: Mapping[int, str]
+    current_scope_weights: Mapping[int, Decimal]
+    current_unvalued_asset_ids: tuple[int, ...]
     period_position_leg_count: int
     period_contributor_asset_count: int
     weights: Mapping[int, Decimal]
@@ -510,7 +514,7 @@ async def load_technical_universe_bundle(
     Portfolio/Broker financial workstream can also reuse; `bundle_key` is this
     technical wave's own memoized combination of the two, so every one of
     `portfolio.technical_{prices,indicators,breadth,events}` /
-    `broker.technical_{indicators,breadth,events}` shares one identical
+    `broker.technical_{prices,indicators,breadth,events}` shares one identical
     universe/price/signal computation per request (requirement 5).
     """
     scope = context.scope
@@ -520,6 +524,36 @@ async def load_technical_universe_bundle(
         report = await load_portfolio_or_broker_report(context, report_key=report_key)
         positions = eligible_positions(report)
         asset_ids = tuple(sorted({position.asset_id for position in positions}))
+        current_position_asset_ids = tuple(sorted({holding.asset_id for holding in report.summary.holdings})) if report.summary is not None else ()
+        current_values_by_asset: dict[int, Decimal] = {}
+        valued_asset_ids: set[int] = set()
+        if report.summary is not None:
+            for holding in report.summary.holdings:
+                if holding.current_value is None:
+                    continue
+                valued_asset_ids.add(holding.asset_id)
+                current_values_by_asset[holding.asset_id] = current_values_by_asset.get(holding.asset_id, Decimal("0")) + abs(holding.current_value)
+        current_total = sum(current_values_by_asset.values(), Decimal("0"))
+        current_scope_weights = MappingProxyType({asset_id: value / current_total for asset_id, value in sorted(current_values_by_asset.items())}) if current_total > 0 else MappingProxyType({})
+        current_unvalued_asset_ids = tuple(sorted(set(current_position_asset_ids) - valued_asset_ids))
+        contributions_by_asset: dict[int, list[AssetPeriodContribution]] = {}
+        if report.positions_contribution is not None:
+            for contribution in report.positions_contribution.positions:
+                contributions_by_asset.setdefault(contribution.asset_id, []).append(contribution)
+        excluded_current_assets: dict[int, str] = {}
+        for asset_id in sorted(set(current_position_asset_ids) - set(asset_ids)):
+            contributions = contributions_by_asset.get(asset_id, [])
+            if not contributions:
+                reason = "no_period_contribution"
+            elif all(contribution.is_fully_sold for contribution in contributions):
+                reason = "fully_sold_by_period_end"
+            elif all(contribution.end_value is None for contribution in contributions):
+                reason = "end_value_unavailable"
+            elif all(contribution.end_value is None or contribution.end_value == 0 for contribution in contributions):
+                reason = "zero_end_value"
+            else:
+                reason = "technical_eligibility_unavailable"
+            excluded_current_assets[asset_id] = reason
         leg_count = period_position_leg_count(report)
         contributor_asset_count = period_contributor_asset_count(report)
         weights = compute_nav_weights(positions)
@@ -548,6 +582,10 @@ async def load_technical_universe_bundle(
         return TechnicalUniverseBundle(
             positions=positions,
             asset_ids=asset_ids,
+            current_position_asset_ids=current_position_asset_ids,
+            excluded_current_assets=MappingProxyType(excluded_current_assets),
+            current_scope_weights=current_scope_weights,
+            current_unvalued_asset_ids=current_unvalued_asset_ids,
             period_position_leg_count=leg_count,
             period_contributor_asset_count=contributor_asset_count,
             weights=weights,
@@ -1029,6 +1067,8 @@ def build_indicator_table_payloads(
                 semantic_id=ai_description.semantic_id,
                 semantic_description=ai_description.semantic_description,
                 category=ai_description.category.value,
+                result_status=result.status,
+                partial_reason_code=(result.availability.reason_code.value if result.status == SignalStatus.PARTIAL and result.availability is not None and result.availability.reason_code is not None else None),
                 columns=tuple(columns),
                 period_summary=period_summary,
                 source_bucket_count=len(source_rows),

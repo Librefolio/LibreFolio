@@ -9,7 +9,7 @@ import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotF
 describe('AI Export prompt renderer', () => {
     it('renders analysis sections in the exact deterministic order', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const selection = selectionFixture('analysis', 'asset.market_analysis');
         const rendered = renderAiExportPrompt({
             selection,
             compatibility,
@@ -29,24 +29,20 @@ describe('AI Export prompt renderer', () => {
         expect(rendered.mode).toBe('full_prompt');
         expect(rendered.prompt).toContain('2026/03/04');
         expect(rendered.prompt).toContain('calculation sandbox');
-        expect(rendered.prompt).toContain('web access is available');
+        expect(rendered.prompt).toContain('web access is unavailable');
         expect(rendered.prompt).toContain('Never use those codes as user-facing names.');
         expect(rendered.prompt).toContain('A1, B1, F1, L1');
-        expect(rendered.prompt).toContain('asset.position_performance');
+        expect(rendered.prompt).toContain('Explain the selected Asset market history');
         expect(rendered.prompt).toContain('Please provide your answer in: Italian.');
     });
 
-    it('does not require unavailable Risk Assessment metrics in Technical Breadth', () => {
-        const instruction = findAiExportAnalysisInstruction('portfolio.technical_breadth');
-        const contract = findAiExportResponseContract('portfolio.technical_breadth');
+    it('includes the shared conditional Scenario Thesis rule and mandatory planning section', () => {
+        const instruction = findAiExportAnalysisInstruction('portfolio.rebalancing');
+        const contract = findAiExportResponseContract('portfolio.rebalancing');
         const text = [...instruction.steps, ...contract.sections.flatMap((section) => section.requirements)].join(' ');
 
-        expect(text).toContain('Do not invent or reclassify missing risk metrics.');
-        expect(text).toContain('do not infer it from another family');
-        expect(text).not.toContain('volatility, risk');
-        expect(text).not.toContain('drawdown');
-        expect(text).not.toContain('VaR');
-        expect(text).not.toContain('CVaR');
+        expect(text).toContain('mandatory Scenario Thesis');
+        expect(contract.sections.map((section) => section.title)).toContain('Scenario Thesis');
     });
 
     it('renders localized catalog-driven additional export guidance', () => {
@@ -57,26 +53,50 @@ describe('AI Export prompt renderer', () => {
             compatibility,
             snapshot: snapshotFixture(selection),
             responseLanguage: 'Italian',
-            translate: probeTranslation('it'),
+            translate: (key) =>
+                ({
+                    'aiExport.additionalData.heading': 'Additional LibreFolio Data',
+                    'aiExport.additionalData.intro': 'Use only if material.',
+                    'aiExport.dataset.portfolio.asset_history.display': 'Portfolio Asset History',
+                    'aiExport.dataset.portfolio.asset_history.description': 'Detailed per-Asset market history.',
+                    'aiExport.additionalData.reason.deeperTechnical': 'Deeper technical evidence.',
+                    'aiExport.additionalData.period.1y': '1 year',
+                    'aiExport.details.compact': 'Compact',
+                    'aiExport.additionalData.necessity.optional': 'Optional',
+                    'aiExport.additionalData.what': 'What',
+                    'aiExport.additionalData.why': 'Why',
+                    'aiExport.additionalData.necessityLabel': 'Necessity',
+                    'aiExport.additionalData.path': 'Path',
+                    'aiExport.additionalData.steps.openLibreFolio': 'Open LibreFolio',
+                    'aiExport.additionalData.steps.page': 'Page',
+                    'aiExport.additionalData.steps.feature': 'Feature',
+                    'aiExport.additionalData.steps.exportType': 'Export type',
+                    'aiExport.additionalData.steps.dataset': 'Dataset',
+                    'aiExport.additionalData.steps.period': 'Period',
+                    'aiExport.additionalData.steps.detail': 'Detail',
+                    'aiExport.additionalData.recommended': 'Recommended',
+                    'nav.dashboard': 'Dashboard',
+                    'dashboard.aiExport': 'AI Export',
+                    'aiExport.exportData': 'Export Data',
+                })[key] ?? key,
         });
 
-        expect(rendered.prompt).toContain('## Altri dati LibreFolio');
-        expect(rendered.prompt).toContain('Dati tecnici portafoglio');
-        expect(rendered.prompt).toContain('Percorso LibreFolio');
+        expect(rendered.prompt).toContain('## Additional LibreFolio Data');
+        expect(rendered.prompt).toContain('Portfolio Asset History');
+        expect(rendered.prompt).toContain('Path');
         expect(rendered.prompt).toContain('"Dashboard"');
-        expect(rendered.prompt).toContain('"Export AI"');
+        expect(rendered.prompt).toContain('"AI Export"');
         expect(rendered.prompt).not.toContain('common.aiExport');
-        expect(rendered.prompt).toContain('"Esporta dati"');
-        expect(rendered.prompt).toContain('"1 anno"');
-        expect(rendered.prompt).toContain('"Compatto"');
-        expect(rendered.prompt).toContain('Facoltativo');
-        expect(rendered.prompt).toContain('Riferimento tecnico secondario');
-        expect(rendered.prompt).toContain('`portfolio.technical`');
+        expect(rendered.prompt).toContain('"Export Data"');
+        expect(rendered.prompt).toContain('"1 year"');
+        expect(rendered.prompt).toContain('"Compact"');
+        expect(rendered.prompt).toContain('Optional');
+        expect(rendered.prompt).not.toContain('portfolio.asset_history');
     });
 
     it('renders partial FX history coverage as an explicit percentage', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('analysis', 'fx.trend_review');
+        const selection = selectionFixture('analysis', 'fx.pair_analysis');
         const snapshot = snapshotFixture(selection);
         const rendered = renderAiExportPrompt({
             selection,
@@ -111,7 +131,7 @@ describe('AI Export prompt renderer', () => {
 
     it('renders dataset selection as data-only metadata plus snapshot', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('dataset', 'portfolio.overview');
+        const selection = selectionFixture('dataset', 'portfolio.overview_and_history');
         const rendered = renderAiExportPrompt({
             selection,
             compatibility,
@@ -128,7 +148,7 @@ describe('AI Export prompt renderer', () => {
 
     it('exposes exact diagnostic blocks without changing the official prompt', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('dataset', 'portfolio.overview');
+        const selection = selectionFixture('dataset', 'portfolio.overview_and_history');
         const snapshot = snapshotFixture(selection, 'full');
         const input = {
             selection,
@@ -153,7 +173,7 @@ describe('AI Export prompt renderer', () => {
 
     it('includes technical and event policy manifests in snapshot metadata', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const selection = selectionFixture('analysis', 'asset.market_analysis');
         const snapshot = {
             ...snapshotFixture(selection),
             technical_sampling: {
@@ -199,7 +219,7 @@ describe('AI Export prompt renderer', () => {
 
     it('keeps instruction-like user content inside a dynamic fenced data block', () => {
         const compatibility = compatibilityFixture();
-        const selection = selectionFixture('analysis', 'portfolio.description');
+        const selection = selectionFixture('analysis', 'portfolio.rebalancing');
         const rendered = renderAiExportPrompt({
             selection,
             compatibility,
@@ -216,7 +236,7 @@ describe('AI Export prompt renderer', () => {
     it('fails closed when snapshot identity differs from selection', () => {
         const compatibility = compatibilityFixture();
         const selection = selectionFixture('analysis', 'asset.position_review');
-        const other = selectionFixture('analysis', 'asset.trend_analysis');
+        const other = selectionFixture('analysis', 'asset.market_analysis');
 
         expect(() =>
             renderAiExportPrompt({
@@ -234,7 +254,7 @@ describe('AI Export prompt renderer', () => {
             action: 'prepare',
             catalog: backendCatalogFixture(),
             selection_kind: 'analysis',
-            selection_id: 'asset.trend_analysis',
+            selection_id: 'asset.market_analysis',
             context: {
                 domain: 'asset',
                 assetId: 7,
@@ -263,7 +283,7 @@ describe('AI Export prompt renderer', () => {
     });
 
     it('renders probe output and reconciles the exact final prompt', async () => {
-        const selection = selectionFixture('analysis', 'asset.trend_analysis');
+        const selection = selectionFixture('analysis', 'asset.market_analysis');
         const snapshot = {
             ...snapshotFixture(selection),
             technical_sampling: {
@@ -327,7 +347,6 @@ describe('AI Export prompt renderer', () => {
             utf8_bytes_match: true,
         });
         expect(result.prompt).toContain('## Analysis Objective');
-        expect(result.prompt).toContain('Performance posizione asset');
         expect(result.breakdown).toMatchObject({
             format_diagnostics: {
                 empty_columns_removed: expect.any(Number),
@@ -348,7 +367,7 @@ describe('AI Export prompt renderer', () => {
     });
 
     it('keeps Export Data probe output byte-identical to the UI renderer', async () => {
-        const selection = selectionFixture('dataset', 'portfolio.overview');
+        const selection = selectionFixture('dataset', 'portfolio.overview_and_history');
         const snapshot = snapshotFixture(selection);
         const direct = renderAiExportPrompt({
             selection,

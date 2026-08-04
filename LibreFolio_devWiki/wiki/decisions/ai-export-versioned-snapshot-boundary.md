@@ -3,7 +3,7 @@ title: "Backend-owned versioned AI snapshots with a frontend-owned safe prompt a
 category: decision
 status: resolved
 date: 2026-07-26
-updated: 2026-08-03
+updated: 2026-08-04
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
 tags: [ai-export, backend, frontend, architecture, snapshot, versioning, security, mcp, hard-cutover]
 related:
@@ -21,6 +21,7 @@ related:
   - domains/auth
   - domains/brokers
   - features/F-010
+  - concepts/ai-export-catalog-granularity-and-composition
 ---
 
 # Decision: Backend-owned versioned AI snapshots with a frontend-owned safe prompt and clipboard boundary
@@ -46,6 +47,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - **Server-owned security scope:** requests never accept `user_id`. Authentication supplies it, accessible broker IDs are loaded server-side, and any explicitly denied broker fails the whole request rather than being silently filtered.
 - **Frontend presentation ownership:** task labels, local instruction templates, response contracts, locale-derived response language, user notes, safe rendering, and final prompt statistics stay in the browser. Web research is normalized off; response-language, render-mode, web, and compatibility-status controls are not exposed.
 - **Final analysis model:** one custom select presents icon, localized name, and localized description. A synthetic **Data Snapshot** maps the domain's factual snapshot task to `data_only`; every real analysis maps to `full_prompt`.
+- **Semantic composition remains modular:** the current public catalog contains 32 datasets and 17 analyses over 65 reusable components. Analyses compose the minimum required/optional datasets rather than routing through monolithic profiles, and `*.all_data` unions only canonical complete datasets while excluding focused projections/evidence that would duplicate them. See [[concepts/ai-export-catalog-granularity-and-composition]].
 - **Contextual UI memory:** task, detail, mode, and raw notes draft persist under a client-session user ID plus `portfolio`, `broker:{id}`, `asset:{id}`, or `fx:{canonical_slug}`. Response language is always refreshed from the current locale. Snapshot may preserve hidden notes in memory, but normalization removes them from the exported prompt and clipboard. See [[decisions/ai-export-contextual-ui-memory]].
 - **Portal and documentation boundary:** the panel is appended to `document.body`, fixed and viewport-positioned above chart controls, while the book link targets the current domain's English manual or the localized shared fallback.
 - **Safe rendering boundary:** snapshot values and user notes are normalized to JSON-safe data, deterministically serialized as YAML, and placed in dynamically sized Markdown fences. Untrusted values are never interpolated as raw instructions.
@@ -68,6 +70,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - Required source failures produce typed non-success responses; a missing optional indicator is omitted or marked unavailable without fabricating data.
 - Dense Portfolio/Broker output remains explicit rather than silently truncated: the 20k/60k frontend warning stays in place and no automatic token cap or detail downgrade is introduced.
 - The old [[decisions/ai-export-prompt-catalog]] remains historical context but is superseded as the production architecture.
+- The composition boundary is technically sound but the current UI exposes many internal distinctions without visible granularity badges. In particular, Technical Summary, Asset Snapshot, Asset Comparison, and Technical differ materially in aggregate/per-Asset/history shape; “price” can mean position unit price, observed market price, or price history. These are documented interpretation findings, not an approved redesign. See [[concepts/ai-export-catalog-granularity-and-composition]].
 - The live-E2E cash valuation-basis error established an explicit rule: never assert equality between metrics evaluated on different dates or denominators. See [[problems/ai-export-cash-fx-valuation-basis-mismatch]].
 - Final review established two further boundary rules: presentation context cannot tighten task applicability ([[problems/ai-export-drawdown-selected-history-fallback]]), and transport compatibility cannot revive product-level legacy behavior ([[problems/ai-export-clipboard-fallback-unreachable]]).
 
@@ -83,6 +86,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - Manual desktop/mobile approval on 27 July 2026 covering Dashboard layout, custom task selection, chart-layer stacking, per-context memory, domain manual links, clipboard behavior, and representative prompts.
 - On 3 August 2026 the project owner explicitly approved empty-temporal-row hardening, explicit Broker nomenclature, and `20260801T085820.657238Z` as final targeted evidence. The run passed 4/4 prompts with no failures, skips, or regressions; UI/probe matched 4/4, the secret scan passed, and source/production databases were unchanged.
 - Applied Standard-policy run `20260803T164514.504966Z` passed 7/7 prompts with zero failures/public violations, UI/probe equivalence, a passed secret scan, and unchanged source/production databases.
+- Catalog explanation run `20260804T085052.052297Z` generated and read five representative Portfolio prompts (Overview, Asset Snapshot, Asset Comparison, PAC, and Rebalancing): 5/5 passed with zero failures/public-output violations, UI/probe equivalence, a passed secret scan, and unchanged source/production databases. The accompanying report verified all 49 public choices against the current runtime declarations.
 - Documentation closure is explicit: `mkdocs_src/docs/developer/test-walkthrough/api.md` lists AI Export API, service, probe, frontend-unit, and Playwright commands; `.github/copilot-instructions.md` states the AI Export product and backend/frontend boundary. User Guide IT/FR/ES translations remain deliberately deferred.
 
 ## Participants
@@ -102,6 +106,7 @@ The completed Phase 0 plan records approval by the project owner and implementat
 - [[domains/auth]]
 - [[domains/brokers]]
 - [[features/F-010]]
+- [[concepts/ai-export-catalog-granularity-and-composition]]
 
 ## Source files
 
@@ -113,7 +118,9 @@ The completed Phase 0 plan records approval by the project owner and implementat
 | Migration evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` |
 | Final hardening approval and targeted evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalHardeningAndDocumentationV1.md` |
 | Applied density policy and validation evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportCrossDomainDensityAuditV1.md` |
+| UI catalog explanation and prompt verification | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |
+| Composition and `all_data` semantics | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | Strict API schemas | `backend/app/schemas/ai_export.py` |
 | Exact profile resolver | `backend/app/services/ai_export/resolver.py` |
 | Standalone service | `backend/app/services/ai_export/service.py` |

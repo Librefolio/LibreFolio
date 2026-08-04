@@ -29,6 +29,7 @@ from backend.app.services.ai_export.components.technical_shared import (
 )
 from backend.app.services.ai_export.components.types import DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
+from backend.app.services.ai_export.temporal import ObservedPoint, uniform_observed_buckets
 from backend.app.services.provider_registry import SignalPluginRegistry
 
 _ASSET_CONTEXT_EVENT_KEYS = frozenset(
@@ -53,6 +54,16 @@ _FX_CONTEXT_EVENT_KEYS = frozenset(
         "roc_20_zero",
     }
 )
+_UNIVERSE_HISTORY_BUCKET_COUNTS = {
+    DetailLevel.COMPACT: 6,
+    DetailLevel.STANDARD: 12,
+    DetailLevel.FULL: 24,
+}
+_SINGLE_ENTITY_HISTORY_BUCKET_COUNTS = {
+    DetailLevel.COMPACT: 8,
+    DetailLevel.STANDARD: 16,
+    DetailLevel.FULL: 30,
+}
 
 
 class SignalCoverageAggregate(BaseModel):
@@ -94,6 +105,13 @@ class TechnicalEntityCoverage(BaseModel):
     )
 
 
+class TechnicalExcludedEntity(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_id: str
+    reason_code: str
+
+
 class TechnicalUniverseCoveragePayload(BaseModel):
     """`portfolio.technical_coverage` / `broker.technical_coverage`: multi-asset universe coverage.
 
@@ -126,17 +144,25 @@ class TechnicalUniverseCoveragePayload(BaseModel):
     )
     eligible_portfolio_weight_ratio: float | None = Field(
         None,
-        description="Sum of gross absolute open-position weight ratios across all eligible assets. Fraction in [0,1].",
+        description="Sum of weights normalized inside the technically eligible universe; normally 1 when that universe has value. Fraction in [0,1].",
     )
     covered_portfolio_weight_ratio: float | None = Field(
         None,
-        description="Sum of gross absolute open-position weight ratios across covered assets only. Fraction in [0,1].",
+        description="Covered weight normalized inside the technically eligible universe. Fraction in [0,1].",
     )
     covered_weight_ratio: float | None = Field(
         None,
         description="covered_portfolio_weight_ratio / eligible_portfolio_weight_ratio. Fraction in [0,1].",
     )
     entities: tuple[TechnicalEntityCoverage, ...]
+    current_position_asset_count: int = Field(..., ge=0)
+    current_scope_valued_asset_count: int = Field(..., ge=0)
+    current_scope_unvalued_asset_count: int = Field(..., ge=0)
+    eligible_current_scope_weight_ratio: float | None = Field(None, description="Technically eligible current-position value / all valued current-position value. Fraction in [0,1].")
+    covered_current_scope_weight_ratio: float | None = Field(None, description="Signal-covered current-position value / all valued current-position value. Fraction in [0,1].")
+    excluded_current_scope_weight_ratio: float | None = Field(None, description="Technically excluded current-position value / all valued current-position value. Fraction in [0,1].")
+    excluded_current_asset_count: int = Field(..., ge=0)
+    excluded_current_entities: tuple[TechnicalExcludedEntity, ...] = ()
     signals: tuple[SignalCoverageAggregate, ...]
 
 
@@ -222,14 +248,13 @@ class TechnicalContextHistoryRow(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     entity_id: str
-    date: date
-    current_value: float | None = None
-    ema_20: float | None = None
-    ema_50: float | None = None
-    ema_200: float | None = None
-    kama_20: float | None = None
-    rsi_14: float | None = None
-    natr_14_percent: float | None = None
+    bucket_start: date
+    bucket_end: date
+    observation_count: int = Field(..., ge=1)
+    observed_date: date
+    current_value: float
+    normalized_index_base_100: float | None = None
+    return_from_first_ratio: float | None = None
 
 
 class TechnicalContextEvent(BaseModel):
@@ -356,13 +381,6 @@ def _latest_band(result: SignalResult | None, key: str) -> tuple[date, float | N
         if any(value is not None for value in (point.lower, point.middle, point.upper)):
             return point.date, point.lower, point.middle, point.upper
     return None
-
-
-def _point_map(result: SignalResult | None, key: str) -> dict[date, float]:
-    series = _scalar_series(result, key)
-    if series is None:
-        return {}
-    return {point.date: float(point.value) for point in series.points if point.value is not None}
 
 
 def _reason_for_result(result: SignalResult) -> str | None:
@@ -603,35 +621,25 @@ def _history_rows(
     *,
     entity_id: str,
     points: Sequence[tuple[date, float]],
-    results: Sequence[SignalResult],
-    limit: int,
+    bucket_count: int,
 ) -> tuple[TechnicalContextHistoryRow, ...]:
-    if limit <= 0:
+    if not points:
         return ()
-    signal_by_instance = _signal_map(results)
-    maps = {
-        "ema_20": _point_map(signal_by_instance.get("ema_20"), "ema"),
-        "ema_50": _point_map(signal_by_instance.get("ema_50"), "ema"),
-        "ema_200": _point_map(signal_by_instance.get("ema_200"), "ema"),
-        "kama_20": _point_map(signal_by_instance.get("kama_20"), "kama"),
-        "rsi_14": _point_map(signal_by_instance.get("rsi_14"), "rsi"),
-        "natr_14": _point_map(signal_by_instance.get("natr_14"), "natr"),
-    }
-    value_by_date = dict(points)
-    dates = sorted(value_by_date)[-limit:]
+    observed = tuple(ObservedPoint(date=day, value=Decimal(str(value))) for day, value in points)
+    buckets = uniform_observed_buckets(observed, bucket_count)
+    first_value = buckets[0].first.value
     return tuple(
         TechnicalContextHistoryRow(
             entity_id=entity_id,
-            date=day,
-            current_value=value_by_date.get(day),
-            ema_20=maps["ema_20"].get(day),
-            ema_50=maps["ema_50"].get(day),
-            ema_200=maps["ema_200"].get(day),
-            kama_20=maps["kama_20"].get(day),
-            rsi_14=maps["rsi_14"].get(day),
-            natr_14_percent=maps["natr_14"].get(day),
+            bucket_start=bucket.bucket.start_date,
+            bucket_end=bucket.bucket.end_date,
+            observation_count=bucket.observation_count,
+            observed_date=bucket.representative.date,
+            current_value=float(bucket.representative.value),
+            normalized_index_base_100=(float(bucket.representative.value / first_value * Decimal(100)) if first_value else None),
+            return_from_first_ratio=(float(bucket.representative.value / first_value - Decimal(1)) if first_value else None),
         )
-        for day in dates
+        for bucket in buckets
     )
 
 
@@ -650,6 +658,10 @@ def _universe_coverage(universe: TechnicalUniverseBundle, *, period_start: date,
             covered_ids.add(asset_id)
     eligible_weight = float(sum(universe.weights.values(), Decimal(0)))
     covered_weight = float(sum((universe.weights.get(asset_id, Decimal(0)) for asset_id in covered_ids), Decimal(0)))
+    eligible_scope_weight = float(sum((universe.current_scope_weights.get(asset_id, Decimal(0)) for asset_id in universe.asset_ids), Decimal(0)))
+    covered_scope_weight = float(sum((universe.current_scope_weights.get(asset_id, Decimal(0)) for asset_id in covered_ids), Decimal(0)))
+    excluded_scope_weight = float(sum((universe.current_scope_weights.get(asset_id, Decimal(0)) for asset_id in universe.excluded_current_assets), Decimal(0)))
+    has_scope_weights = bool(universe.current_scope_weights)
     return TechnicalUniverseCoveragePayload(
         period_position_leg_count=universe.period_position_leg_count,
         period_contributor_asset_count=universe.period_contributor_asset_count,
@@ -659,6 +671,14 @@ def _universe_coverage(universe: TechnicalUniverseBundle, *, period_start: date,
         covered_portfolio_weight_ratio=covered_weight,
         covered_weight_ratio=(covered_weight / eligible_weight if eligible_weight else 0.0),
         entities=tuple(entities),
+        current_position_asset_count=len(universe.current_position_asset_ids),
+        current_scope_valued_asset_count=len(universe.current_scope_weights),
+        current_scope_unvalued_asset_count=len(universe.current_unvalued_asset_ids),
+        eligible_current_scope_weight_ratio=eligible_scope_weight if has_scope_weights else None,
+        covered_current_scope_weight_ratio=covered_scope_weight if has_scope_weights else None,
+        excluded_current_scope_weight_ratio=excluded_scope_weight if has_scope_weights else None,
+        excluded_current_asset_count=len(universe.excluded_current_assets),
+        excluded_current_entities=tuple(TechnicalExcludedEntity(entity_id=f"asset:{asset_id}", reason_code=reason) for asset_id, reason in sorted(universe.excluded_current_assets.items())),
         signals=_signal_coverage(results_by_entity),
     )
 
@@ -675,6 +695,7 @@ async def _build_universe_market_context(context: BuildContext, *, universe_kwar
     assert scope is not None
     universe = await load_technical_universe_bundle(context, **universe_kwargs)
     rows = []
+    history = []
     detected = []
     for asset_id in universe.asset_ids:
         result = universe.price_results.by_asset_id.get(asset_id)
@@ -692,8 +713,20 @@ async def _build_universe_market_context(context: BuildContext, *, universe_kwar
                 portfolio_weight_ratio=float(universe.weights.get(asset_id, Decimal(0))),
             )
         )
+        history.extend(
+            _history_rows(
+                entity_id=f"asset:{asset_id}",
+                points=points,
+                bucket_count=_UNIVERSE_HISTORY_BUCKET_COUNTS[scope.detail_level],
+            )
+        )
     latest_events = _latest_category_events(detected, allowed_keys=_ASSET_CONTEXT_EVENT_KEYS)
-    return TechnicalMarketContextPayload(policy_code=policy_code, entities=tuple(rows), latest_events=latest_events)
+    return TechnicalMarketContextPayload(
+        policy_code=policy_code,
+        entities=tuple(rows),
+        history=tuple(history),
+        latest_events=latest_events,
+    )
 
 
 async def _build_universe_context_events(context: BuildContext, *, universe_kwargs: Mapping[str, object], policy_code: str) -> TechnicalContextEventsPayload:
@@ -780,11 +813,6 @@ async def _build_asset_position_context(context: BuildContext, dependencies: Map
         max_per_entity=12,
     )
     latest_events = _latest_category_events(discrete, allowed_keys=_ASSET_CONTEXT_EVENT_KEYS)
-    history_limit = {
-        DetailLevel.COMPACT: 3,
-        DetailLevel.STANDARD: 6,
-        DetailLevel.FULL: 12,
-    }[scope.detail_level]
     row = _market_context_row(
         entity_id=f"asset:{scope.asset_id}",
         value_unit=coherent_price_currency(result) or "unavailable",
@@ -796,9 +824,13 @@ async def _build_asset_position_context(context: BuildContext, dependencies: Map
         include_position_volatility=True,
     )
     return TechnicalMarketContextPayload(
-        policy_code="asset_position_context_v1",
+        policy_code="asset_position_context_v2",
         entities=(row,),
-        history=_history_rows(entity_id=f"asset:{scope.asset_id}", points=points, results=signals, limit=history_limit),
+        history=_history_rows(
+            entity_id=f"asset:{scope.asset_id}",
+            points=points,
+            bucket_count=_SINGLE_ENTITY_HISTORY_BUCKET_COUNTS[scope.detail_level],
+        ),
         events=events,
         latest_events=latest_events,
     )
@@ -845,15 +877,14 @@ async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[
         include_short_trend=True,
         include_fx_momentum=True,
     )
-    history_limit = {
-        DetailLevel.COMPACT: 0,
-        DetailLevel.STANDARD: 4,
-        DetailLevel.FULL: 8,
-    }[scope.detail_level]
     return TechnicalMarketContextPayload(
-        policy_code="fx_market_context_v1",
+        policy_code="fx_market_context_v2",
         entities=(row,),
-        history=_history_rows(entity_id=entity_id, points=points, results=bundle.signal_results, limit=history_limit),
+        history=_history_rows(
+            entity_id=entity_id,
+            points=points,
+            bucket_count=_SINGLE_ENTITY_HISTORY_BUCKET_COUNTS[scope.detail_level],
+        ),
         events=events,
         latest_events=latest_events,
     )
@@ -868,11 +899,11 @@ async def _build_broker_coverage(context: BuildContext, dependencies: Mapping[st
 
 
 async def _build_portfolio_market_context(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalMarketContextPayload:
-    return await _build_universe_market_context(context, universe_kwargs=PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS, policy_code="portfolio_asset_snapshot_v1")
+    return await _build_universe_market_context(context, universe_kwargs=PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS, policy_code="portfolio_asset_snapshot_v2")
 
 
 async def _build_broker_market_context(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalMarketContextPayload:
-    return await _build_universe_market_context(context, universe_kwargs=BROKER_TECHNICAL_UNIVERSE_KWARGS, policy_code="broker_asset_comparison_v1")
+    return await _build_universe_market_context(context, universe_kwargs=BROKER_TECHNICAL_UNIVERSE_KWARGS, policy_code="broker_asset_comparison_v2")
 
 
 async def _build_portfolio_context_events(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalContextEventsPayload:

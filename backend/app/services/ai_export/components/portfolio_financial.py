@@ -41,6 +41,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.app.db.models import Asset
 from backend.app.schemas.common import Currency, SafeDecimal
 from backend.app.schemas.portfolio import PortfolioHistoryPoint
+from backend.app.services.ai_export.components.broker_concentration_context import (
+    ConcentrationCoverage,
+    CurrencyAllocationSlice,
+    build_currency_allocation,
+    concentration_metrics,
+)
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     AllocationSlice,
@@ -53,23 +59,23 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     UnallocatedRow,
     build_fifo_lot_refs,
     build_performance_bucket_rows,
-    has_nonzero_open_lot,
+    build_uniform_performance_buckets,
     load_lots_results,
     load_portfolio_report,
     lot_is_eligible,
-    lot_residual_cost_basis,
-    lot_status,
     map_allocation_slice,
     map_contribution_row,
     map_effect_row,
     map_fifo_lot_row,
     map_position_row,
     map_unallocated_row,
+    performance_path_bucket_count,
     sort_contributions,
     sort_effects,
     sort_fifo_lots,
     sort_positions,
     sort_unallocated,
+    summarize_fifo_asset_rows,
 )
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata as _load_asset_metadata,
@@ -200,6 +206,17 @@ class PortfolioAllocationsCashPayload(BaseModel):
     by_type: list[AllocationSlice] = Field(default_factory=list)
     by_sector: list[AllocationSlice] = Field(default_factory=list)
     by_geography: list[AllocationSlice] = Field(default_factory=list)
+    by_currency: list[CurrencyAllocationSlice] = Field(default_factory=list)
+    currency_coverage: ConcentrationCoverage
+    position_count: int = Field(..., ge=0)
+    largest_position_weight_percent: SafeDecimal | None = None
+    herfindahl_index_points: SafeDecimal | None = Field(
+        None,
+        description="Sum of squared nav_weight_percent across all positions. 10000 is fully concentrated in one position.",
+    )
+    allocation_dimension_semantics: str
+    currency_allocation_semantics: str
+    concentration_semantics: str
     cash_total: Currency
     cash_balances: list[Currency] = Field(default_factory=list)
     market_value: Currency | None = None
@@ -214,13 +231,34 @@ async def _build_portfolio_allocations_cash(context: BuildContext, dependencies:
     summary = report.summary
     currency_code = scope.target_currency
     if summary is None:
-        return PortfolioAllocationsCashPayload(as_of=scope.snapshot_as_of, target_currency=currency_code, cash_total=Currency(code=currency_code, amount=Decimal("0")))
+        by_currency, coverage = build_currency_allocation(None, currency_code=currency_code)
+        return PortfolioAllocationsCashPayload(
+            as_of=scope.snapshot_as_of,
+            target_currency=currency_code,
+            by_currency=by_currency,
+            currency_coverage=coverage,
+            position_count=0,
+            allocation_dimension_semantics="Asset type, sector, and geography are engine allocation slices; an explicit Liquidity slice may include cash.",
+            currency_allocation_semantics="Currency allocation groups current position market value by native valuation currency. Cash balances are excluded and listed separately.",
+            concentration_semantics="Largest-position weight and HHI use position nav_weight_percent: current position value / total NAV. Cash is included in the denominator but is not itself an HHI term.",
+            cash_total=Currency(code=currency_code, amount=Decimal("0")),
+        )
+    largest, herfindahl, position_count = concentration_metrics(summary)
+    by_currency, coverage = build_currency_allocation(summary, currency_code=currency_code)
     return PortfolioAllocationsCashPayload(
         as_of=scope.snapshot_as_of,
         target_currency=currency_code,
         by_type=[map_allocation_slice(item, currency_code=currency_code) for item in summary.allocation_by_type],
         by_sector=[map_allocation_slice(item, currency_code=currency_code) for item in summary.allocation_by_sector],
         by_geography=[map_allocation_slice(item, currency_code=currency_code) for item in summary.allocation_by_geography],
+        by_currency=by_currency,
+        currency_coverage=coverage,
+        position_count=position_count,
+        largest_position_weight_percent=largest,
+        herfindahl_index_points=herfindahl,
+        allocation_dimension_semantics="Asset type, sector, and geography are engine allocation slices; an explicit Liquidity slice may include cash.",
+        currency_allocation_semantics="Currency allocation groups current position market value by native valuation currency. Cash balances are excluded and listed separately.",
+        concentration_semantics="Largest-position weight and HHI use position nav_weight_percent: current position value / total NAV. Cash is included in the denominator but is not itself an HHI term.",
         cash_total=summary.cash_total,
         cash_balances=list(summary.cash_balances),
         market_value=summary.market_value,
@@ -292,6 +330,10 @@ class PortfolioPerformancePayload(BaseModel):
     period_pnl: Currency | None = None
     gross_gains: Currency
     gross_losses: Currency
+    path_policy_code: str
+    path_value_basis: str
+    path_return_basis: str
+    target_bucket_count: int
     bucket_count: int
     buckets: list[PerformanceBucketRow] = Field(default_factory=list)
     contributor_count: int
@@ -299,14 +341,11 @@ class PortfolioPerformancePayload(BaseModel):
     contributors: list[ContributionRow] = Field(default_factory=list)
 
 
-def _build_performance_buckets(context: BuildContext, scope: BuildScope, history: Sequence[PortfolioHistoryPoint]) -> list[PerformanceBucketRow]:
-    bucket_plan = context.bucket_plan
-    if bucket_plan is None:
-        raise PortfolioComponentScopeError("portfolio.performance requires BuildContext.bucket_plan")
+def _build_performance_buckets(scope: BuildScope, history: Sequence[PortfolioHistoryPoint]) -> list[PerformanceBucketRow]:
     return list(
         build_performance_bucket_rows(
             history,
-            bucket_plan,
+            build_uniform_performance_buckets(scope),
             currency_code=scope.target_currency,
         )
     )
@@ -317,7 +356,7 @@ async def _build_portfolio_performance(context: BuildContext, dependencies: Mapp
     report = await load_portfolio_report(context, scope, PORTFOLIO_REPORT_RESOURCE)
     summary = report.summary
     contribution = report.positions_contribution
-    buckets = _build_performance_buckets(context, scope, report.history or [])
+    buckets = _build_performance_buckets(scope, report.history or [])
     contributors = sort_contributions([map_contribution_row(item, currency_code=scope.target_currency) for item in contribution.positions]) if contribution is not None else []
     currency_code = scope.target_currency
     return PortfolioPerformancePayload(
@@ -331,6 +370,10 @@ async def _build_portfolio_performance(context: BuildContext, dependencies: Mapp
         period_pnl=summary.period_pnl if summary else None,
         gross_gains=Currency(code=currency_code, amount=contribution.gross_gains if contribution else Decimal("0")),
         gross_losses=Currency(code=currency_code, amount=contribution.gross_losses if contribution else Decimal("0")),
+        path_policy_code="uniform_calendar_path_v1",
+        path_value_basis="nav_value_including_external_flows",
+        path_return_basis="historical_twrr",
+        target_bucket_count=performance_path_bucket_count(scope.detail_level),
         bucket_count=len(buckets),
         buckets=buckets,
         contributor_count=len(contributors),
@@ -488,6 +531,7 @@ class PortfolioFifoSummaryPayload(BaseModel):
     period_start: Date
     period_end: Date
     target_currency: str
+    cost_allocation_semantics: str
     asset_count: int
     total_open_lots: int
     total_partial_lots: int
@@ -504,37 +548,35 @@ async def _build_portfolio_fifo_summary(context: BuildContext, dependencies: Map
     assets_meta = await _load_portfolio_asset_metadata(context, asset_ids)
     cutoff = scope.period_start
 
+    eligible_by_asset = {asset_id: [lot for lot in (lots_resource.by_asset_id[asset_id].lots or []) if lot_is_eligible(lot, cutoff=cutoff)] for asset_id in asset_ids}
+    lot_refs = build_fifo_lot_refs(eligible_by_asset)
     rows: list[FifoAssetSummaryRow] = []
-    total_open = total_partial = total_closed = 0
-    total_residual = Decimal("0")
     for asset_id in asset_ids:
-        response = lots_resource.by_asset_id[asset_id]
-        lots = [lot for lot in (response.lots or []) if lot_is_eligible(lot, cutoff=cutoff)]
-        open_count = sum(1 for lot in lots if lot_status(lot).value == "open")
-        partial_count = sum(1 for lot in lots if lot_status(lot).value == "partial")
-        closed_count = sum(1 for lot in lots if lot_status(lot).value == "closed")
-        residual = sum((lot_residual_cost_basis(lot) for lot in lots), start=Decimal("0"))
-        total_open += open_count
-        total_partial += partial_count
-        total_closed += closed_count
-        total_residual += residual
         asset = assets_meta.get(asset_id)
-        rows.append(
-            FifoAssetSummaryRow(
+        asset_name = str(getattr(asset, "display_name", None) or f"Asset {asset_id}")
+        asset_ticker = getattr(asset, "identifier_ticker", None)
+        lot_rows = [
+            map_fifo_lot_row(
+                lot,
+                lot_ref=lot_refs[lot.lot_id],
                 asset_id=asset_id,
-                asset_name=str(getattr(asset, "display_name", None) or f"Asset {asset_id}"),
-                asset_ticker=getattr(asset, "identifier_ticker", None),
-                open_lot_count=open_count,
-                partial_lot_count=partial_count,
-                closed_lot_count=closed_count,
-                has_open_position=has_nonzero_open_lot(lots),
-                residual_cost_basis=Currency(code=currency_code, amount=residual),
+                currency_code=currency_code,
+                asset_name=asset_name,
+                asset_ticker=asset_ticker,
             )
-        )
+            for lot in eligible_by_asset[asset_id]
+        ]
+        if lot_rows:
+            rows.append(summarize_fifo_asset_rows(lot_rows))
+    total_open = sum(row.open_lot_count for row in rows)
+    total_partial = sum(row.partial_lot_count for row in rows)
+    total_closed = sum(row.closed_lot_count for row in rows)
+    total_residual = sum((row.residual_cost_basis.amount for row in rows), Decimal("0"))
     return PortfolioFifoSummaryPayload(
         period_start=scope.period_start,
         period_end=scope.period_end,
         target_currency=currency_code,
+        cost_allocation_semantics="Fees and taxes are amounts deterministically allocated to FIFO lots. Broker-level unallocated costs are excluded and must be read from the portfolio fee/tax sections.",
         asset_count=len(rows),
         total_open_lots=total_open,
         total_partial_lots=total_partial,
@@ -555,6 +597,7 @@ class PortfolioFifoLotsPayload(BaseModel):
     period_start: Date
     period_end: Date
     target_currency: str
+    cost_allocation_semantics: str
     lot_count: int
     lots: list[FifoLotRow] = Field(default_factory=list)
 
@@ -593,7 +636,14 @@ async def _build_portfolio_fifo_lots(context: BuildContext, dependencies: Mappin
             )
             candidate_pairs.append((lot.lot_id, row))
     rows = sort_fifo_lots(candidate_pairs)
-    return PortfolioFifoLotsPayload(period_start=scope.period_start, period_end=scope.period_end, target_currency=currency_code, lot_count=len(rows), lots=rows)
+    return PortfolioFifoLotsPayload(
+        period_start=scope.period_start,
+        period_end=scope.period_end,
+        target_currency=currency_code,
+        cost_allocation_semantics="Lot fees and taxes include only deterministically allocated costs. Portfolio or Broker unallocated costs are excluded and must not be interpreted as recorded zero.",
+        lot_count=len(rows),
+        lots=rows,
+    )
 
 
 # =============================================================================

@@ -39,7 +39,7 @@ test.describe('AI Export panel', () => {
 
     test('keeps outer trigger label stable while preparing', async ({page}) => {
         const panel = await openAiExportPanel(page);
-        await selectAiExportSelection(page, 'dataset', 'portfolio.overview');
+        await selectAiExportSelection(page, 'dataset', 'portfolio.overview_and_history');
         await page.getByTestId('ai-export-detail-compact').click();
 
         const stableLabel = await panel.trigger.getAttribute('aria-label');
@@ -83,7 +83,7 @@ test.describe('AI Export panel', () => {
 
     test('drops an in-flight export after its panel context closes', async ({page}) => {
         const panel = await openAiExportPanel(page);
-        await selectAiExportSelection(page, 'dataset', 'portfolio.overview');
+        await selectAiExportSelection(page, 'dataset', 'portfolio.overview_and_history');
         await page.getByTestId('ai-export-detail-compact').click();
         await page.evaluate(() => navigator.clipboard.writeText(''));
 
@@ -121,6 +121,8 @@ test.describe('AI Export panel', () => {
 
     test('shows current inline help and catalog guidance', async ({page}) => {
         await openAiExportPanel(page);
+        await page.getByTestId('ai-export-category-dataset').click();
+        await expect(page.getByTestId('ai-export-category-help')).toContainText('Copies only the selected LibreFolio facts', {timeout: 2_000});
 
         const compactHelp = page.getByTestId('ai-export-detail-help-compact');
         await compactHelp.click();
@@ -135,16 +137,30 @@ test.describe('AI Export panel', () => {
         await expect(page.getByTestId('tooltip-content')).toBeHidden({timeout: 2_000});
 
         await page.getByTestId('ai-export-category-analysis').click();
-        await page.getByTestId('ai-export-selection-button').click();
-        const option = page.getByTestId('ai-export-selection-option-portfolio.market_events_review');
-        await expect(option).toContainText('Portfolio News & Price Drivers', {timeout: 2_000});
-        await expect(option).toContainText('Relate material asset movements to dated current news while separating evidence from causality.', {timeout: 2_000});
+        await expect(page.getByTestId('ai-export-category-help')).toContainText('Copies the required facts plus a focused question', {timeout: 2_000});
+        const selectionButton = page.getByTestId('ai-export-selection-button');
+        await selectionButton.click();
+        const selectionDropdown = page.getByTestId('ai-export-selection-dropdown');
+        const [buttonBox, dropdownBox] = await Promise.all([selectionButton.boundingBox(), selectionDropdown.boundingBox()]);
+        if (!buttonBox || !dropdownBox) throw new Error('AI Export selection requires trigger and dropdown layout boxes');
+        expect(Math.abs(buttonBox.width - dropdownBox.width)).toBeLessThan(1);
+        const option = page.getByTestId('ai-export-selection-option-portfolio.performance_market_drivers');
+        await expect(option).toContainText('Portfolio Performance & Market Drivers', {timeout: 2_000});
+        await expect(option).toContainText('Explain portfolio performance and research dated market drivers for every held Asset.', {timeout: 2_000});
+        const optionDescription = page.getByTestId('ai-export-selection-option-portfolio.performance_market_drivers-description');
+        await expect(optionDescription).toHaveCSS('white-space', 'normal', {timeout: 2_000});
+        expect(
+            await optionDescription.evaluate((element) => {
+                const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight);
+                return element.scrollHeight > lineHeight * 1.5;
+            }),
+        ).toBe(true);
         await option.click();
     });
 
     test('shows deterministic size warning and Copy Anyway flow', async ({page}) => {
         const panel = await openAiExportPanel(page);
-        await selectAiExportSelection(page, 'analysis', 'portfolio.description');
+        await selectAiExportSelection(page, 'analysis', 'portfolio.performance_market_drivers');
         await page.getByTestId('ai-export-detail-full').click();
 
         const oversizedNotes = `E2E_SIZE_WARNING_${'x'.repeat(90_000)}`;
@@ -164,6 +180,10 @@ test.describe('AI Export panel', () => {
         expect(response.status(), failureBody).toBe(200);
 
         await expect(page.getByTestId('ai-export-payload-stats')).toBeVisible({timeout: 3_000});
+        await expect(page.getByTestId('ai-export-payload-stats')).toContainText('Final prompt size', {timeout: 2_000});
+        await expect(page.getByTestId('ai-export-payload-stats')).toContainText('text that will actually be copied', {timeout: 2_000});
+        await expect(page.getByTestId('ai-export-backend-size')).toHaveCount(0);
+        await expect(page.getByTestId('ai-export-final-size')).toContainText('💾', {timeout: 2_000});
         await expect(page.getByTestId('ai-export-token-severity')).toBeVisible({timeout: 3_000});
         await expect(page.getByTestId('ai-export-use-compact')).toBeVisible({timeout: 3_000});
         await expect(page.getByTestId('ai-export-copy-anyway')).toBeVisible({timeout: 3_000});

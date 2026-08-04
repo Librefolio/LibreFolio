@@ -17,40 +17,6 @@ interface DraftExpectation {
     };
 }
 
-async function waitForStoredDraft(page: Page, draft: DraftExpectation): Promise<void> {
-    await expect
-        .poll(
-            () =>
-                page.evaluate((expected) => {
-                    for (let index = 0; index < localStorage.length; index += 1) {
-                        const key = localStorage.key(index);
-                        if (!key?.includes('_ai_export_v2_')) continue;
-                        const value = localStorage.getItem(key);
-                        if (!value) continue;
-                        try {
-                            const stored = JSON.parse(value) as {
-                                selectionKind?: string;
-                                selectionId?: string;
-                                detailLevel?: string;
-                                notes?: string;
-                                period?: {preset?: string; customAmount?: number; customUnit?: string};
-                            };
-                            if (stored.selectionKind !== expected.kind || stored.selectionId !== expected.id || stored.detailLevel !== expected.detail) continue;
-                            if (expected.notes !== undefined && stored.notes !== expected.notes) continue;
-                            if (expected.period !== undefined && stored.period?.preset !== expected.period) continue;
-                            if (expected.customPeriod && (stored.period?.preset !== 'custom' || stored.period.customAmount !== expected.customPeriod.amount || stored.period.customUnit !== expected.customPeriod.unit)) continue;
-                            return true;
-                        } catch {
-                            continue;
-                        }
-                    }
-                    return false;
-                }, draft),
-            {timeout: 2_000, intervals: [50, 100, 250], message: `AI Export did not persist ${draft.id}`},
-        )
-        .toBe(true);
-}
-
 async function saveDraft(page: Page, draft: DraftExpectation): Promise<void> {
     const panel = await openAiExportPanel(page);
     await selectAiExportSelection(page, draft.kind, draft.id);
@@ -58,7 +24,9 @@ async function saveDraft(page: Page, draft: DraftExpectation): Promise<void> {
     if (draft.customPeriod) await configureCustomPeriod(page, draft.customPeriod.amount, draft.customPeriod.unit);
     else if (draft.period) await page.getByTestId(`ai-export-period-${draft.period}`).click();
     if (draft.notes !== undefined) await page.getByTestId('ai-export-user-notes').fill(draft.notes);
-    await waitForStoredDraft(page, draft);
+    await expect(page.getByTestId('ai-export-selection-button')).toContainText(draft.label, {timeout: 2_000});
+    await expect(page.getByTestId(`ai-export-detail-${draft.detail}`)).toHaveAttribute('aria-pressed', 'true', {timeout: 2_000});
+    if (draft.notes !== undefined) await expect(page.getByTestId('ai-export-user-notes')).toHaveValue(draft.notes, {timeout: 2_000});
     await page.keyboard.press('Escape');
     await expect(panel.menu).toBeHidden({timeout: 2_000});
 }
@@ -100,10 +68,10 @@ test.describe('AI Export contextual memory', () => {
         };
         const brokerDraft: DraftExpectation = {
             kind: 'analysis',
-            id: 'broker.cost_efficiency',
-            label: 'Broker Cost Efficiency',
+            id: 'broker.fiscal_lots',
+            label: 'Capital-Loss Offset Strategies',
             detail: 'compact',
-            notes: 'Broker-only fee review.',
+            notes: 'Broker-only tax-loss constraints.',
             period: '6m',
         };
         const assetDraft: DraftExpectation = {
@@ -132,7 +100,7 @@ test.describe('AI Export contextual memory', () => {
         await expectDraft(page, assetDraft);
     });
 
-    test('namespaces Portfolio memory by authenticated user', async ({page}) => {
+    test('resets Portfolio memory on every new login session', async ({page}) => {
         const userOneDraft: DraftExpectation = {
             kind: 'analysis',
             id: 'portfolio.rebalancing',
@@ -143,8 +111,8 @@ test.describe('AI Export contextual memory', () => {
         };
         const userTwoDraft: DraftExpectation = {
             kind: 'analysis',
-            id: 'portfolio.description',
-            label: 'Portfolio Description',
+            id: 'portfolio.performance_market_drivers',
+            label: 'Portfolio Performance & Market Drivers',
             detail: 'compact',
             notes: 'USER_TWO_AI_EXPORT_MEMORY',
             period: '6m',
@@ -164,14 +132,20 @@ test.describe('AI Export contextual memory', () => {
 
         await switchUser(page, TEST_USER);
         await gotoDashboard(page);
-        await expectDraft(page, userOneDraft);
+        const userOneDefault = await openAiExportPanel(page);
+        await expect(page.getByTestId('ai-export-selection-button')).toContainText('Recurring Investment Plan', {timeout: 2_000});
+        await expect(page.getByTestId('ai-export-detail-standard')).toHaveAttribute('aria-pressed', 'true', {timeout: 2_000});
+        await expect(page.getByTestId('ai-export-period-3m')).toHaveAttribute('aria-pressed', 'true', {timeout: 2_000});
+        await expect(page.getByTestId('ai-export-user-notes')).toHaveValue('');
+        await page.keyboard.press('Escape');
+        await expect(userOneDefault.menu).toBeHidden({timeout: 2_000});
     });
 
     test('shares memory across canonical FX routes but not other FX pairs', async ({page}) => {
         const canonicalDraft: DraftExpectation = {
             kind: 'analysis',
-            id: 'fx.conversion_timing',
-            label: 'FX Conversion Timing',
+            id: 'fx.exposure_impact',
+            label: 'FX Exposure Impact',
             detail: 'full',
             notes: 'EUR-USD canonical draft.',
             customPeriod: {amount: 9, unit: 'weeks'},
@@ -182,7 +156,7 @@ test.describe('AI Export contextual memory', () => {
 
         await gotoFx(page, 'EUR-GBP');
         const otherPair = await openAiExportPanel(page);
-        await expect(page.getByTestId('ai-export-selection-button')).toContainText('FX Trend Review', {timeout: 2_000});
+        await expect(page.getByTestId('ai-export-selection-button')).toContainText('FX Pair Analysis', {timeout: 2_000});
         await expect(page.getByTestId('ai-export-user-notes')).toHaveValue('');
         await page.keyboard.press('Escape');
         await expect(otherPair.menu).toBeHidden({timeout: 2_000});
@@ -197,16 +171,9 @@ test.describe('AI Export contextual memory', () => {
         await openAiExportPanel(page);
         await selectAiExportSelection(page, 'analysis', 'portfolio.rebalancing');
         await page.getByTestId('ai-export-user-notes').fill(hiddenNote);
-        await waitForStoredDraft(page, {
-            kind: 'analysis',
-            id: 'portfolio.rebalancing',
-            label: 'Portfolio Rebalancing',
-            detail: 'standard',
-            notes: hiddenNote,
-            period: '3m',
-        });
+        await expect(page.getByTestId('ai-export-user-notes')).toHaveValue(hiddenNote, {timeout: 2_000});
 
-        await selectAiExportSelection(page, 'dataset', 'portfolio.overview');
+        await selectAiExportSelection(page, 'dataset', 'portfolio.overview_and_history');
         await expect(page.getByTestId('ai-export-user-notes')).toHaveCount(0);
         await page.getByTestId('ai-export-detail-compact').click();
         await exportCurrentSelection(page);

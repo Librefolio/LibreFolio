@@ -599,9 +599,30 @@ class TestPerformance:
         assert envelope.payload["total_start_value"] == "1500"
         assert envelope.payload["total_end_value"] == "1700"
         assert envelope.payload["total_period_pnl"] == "200"
+        assert envelope.payload["zero_semantics"].startswith("The Portfolio Engine omits zero-valued")
         # Same ratio formula the engine already uses per-broker (period_pnl / |start_value|), applied once at the aggregate level.
         assert Decimal(envelope.payload["total_period_pnl_percent"]) == Decimal("200") / Decimal("1500")
         assert envelope.payload["coverage"] == {"total_broker_count": 2, "valued_broker_count": 2, "omitted": [], "is_complete": True}
+
+    @pytest.mark.asyncio
+    async def test_engine_omitted_zero_contribution_fields_render_as_recorded_zero(self, monkeypatch):
+        scope = _scope(period_start=date(2026, 2, 1), period_end=date(2026, 2, 28))
+        contribution = _contribution(1).model_copy(
+            update={
+                "period_realized_gain_loss": None,
+                "period_income": None,
+                "period_fees_taxes": None,
+            }
+        )
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=[_holding(1)], contribution=PositionsContribution(positions=[contribution])))
+        context = _make_context(scope, _make_async_session())
+
+        row = (await context.resolve("asset.performance", required=True)).payload["brokers"][0]
+
+        assert row["period_realized_gain_loss"] == "0"
+        assert row["period_income"] == "0"
+        assert row["period_fees_taxes"] == "0"
 
 
 # =============================================================================
@@ -680,8 +701,12 @@ class TestLotDetail:
         envelope = await context.resolve("asset.lot_detail", required=True)
 
         assert len(envelope.payload["lots"]) == 2
+        assert envelope.payload["cost_allocation_semantics"].startswith("Lot fees and taxes include only costs deterministically allocated")
         open_quantities = sorted(row["open_quantity"] for row in envelope.payload["lots"])
         assert open_quantities == ["0", "10"]  # lot 1 (open) and lot 2 (closed in-period) retained, lot 3 excluded
+        assert all(row["original_cost"] == "1000" for row in envelope.payload["lots"])
+        assert all(row["allocated_fees"] == "0" for row in envelope.payload["lots"])
+        assert all(row["allocated_taxes"] == "0" for row in envelope.payload["lots"])
         assert all(row["closing_date"] is None or row["closing_date"] >= "2026-01-01" for row in envelope.payload["lots"])
         assert [row["lot_ref"] for row in envelope.payload["lots"]] == ["L1", "L2"]
 

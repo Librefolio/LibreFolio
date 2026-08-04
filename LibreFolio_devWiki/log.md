@@ -4,6 +4,48 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-08-04] update | AI Export short-lived session memory and fiscal catalog refinement
+
+Updated [[decisions/ai-export-contextual-ui-memory]] after manual multi-login
+testing: durable `localStorage` drafts were replaced by validated
+user/context-scoped `sessionStorage` with a sliding ten-minute TTL; logout,
+account changes, and every new login reset selection, detail, period, notes, and
+Copy Anyway state. The public catalog was reduced from 13 to 11 Analyses by
+removing Broker Cost Efficiency and FX Conversion Planning. Portfolio/Broker
+fiscal-lot prompts became Capital-Loss Offset Strategies centered on official
+tax-loss inventory (`cassetto fiscale`), jurisdiction/regime, category,
+origin/expiry, used/remaining balances, legal eligibility, and conditional
+no-action/gain-realization/staged/loss-harvesting paths. Targeted run
+`20260804T190403.680108Z` rendered 2/2 prompts with source/production DB unchanged
+and a passed secret scan. Final frontend cutover passed 32/32 Playwright tests
+across desktop/mobile.
+
+## [2026-08-04] file | AI Export catalog granularity and composition
+
+Filed [[concepts/ai-export-catalog-granularity-and-composition]] from
+`report-phase00AiExportUiPromptCatalogExplainedV1.md` and updated
+[[decisions/ai-export-versioned-snapshot-boundary]],
+[[entities/ai-export-snapshot-service]], and
+[[sources/phase00-ai-export-backend-snapshot]]. Preserved the 32-dataset /
+17-analysis / 65-component catalog shape; confirmed that PAC and Rebalancing
+receive per-position unit price, value, WAC, P&L, and weight plus optional
+per-Asset market context; distinguished position price, observed market price,
+and price history; and recorded canonical `all_data` union semantics.
+Documented the principal UX ambiguity (Technical Summary vs Asset Snapshot vs
+Asset Comparison vs Technical, Context vs Analysis, and no granularity badges)
+plus two unimplemented gaps: Broker Technical lacks a raw price-history
+component, and Asset Trend promises Drawdown without composing
+`asset.drawdown_context`. Verification covers 49/49 choices; real Portfolio run
+`20260804T085052.052297Z` passed 5/5, UI/probe equivalence, secret scan, and
+database immutability.
+Graph: scoped semantic refresh replaced the four changed AI Export page
+fragments, preserved external links, and regenerated `graph.json`,
+`GRAPH_REPORT.md`, and `graph.html`: 1,524→1,533 nodes, 2,214→2,255 edges,
+144 communities. The semantic incremental queue fell from 242 to 238
+pre-existing changes, and queries now resolve the catalog taxonomy, PAC /
+Rebalancing composition, three price meanings, `all_data` union, both gaps, and
+run `20260804T085052.052297Z`.
+
 ## [2026-08-03] update | AI Export applied density policy and final hardening closure
 
 Updated [[decisions/ai-export-technical-series-and-density-contract]],
@@ -1496,3 +1538,34 @@ wiki cleanup).
 Next recommended: (a) re-ingest/refresh the 3 genuinely-stale backend/frontend sources above; (b) a dedicated
 orphan-linking pass for the 7 problem + 3 decision pages listed above; (c) hand-relabel the ~225 auto-labeled
 communities from this update if/when the graph is used for browsing rather than query.
+
+## [2026-08-04] update | graphify scoped semantic refresh (1 wiki decision page)
+
+Scoped graph refresh for the three files changed by the ai-export-contextual-ui-memory wiki-file operation
+(`wiki/decisions/ai-export-contextual-ui-memory.md`, `index.md`, `log.md`). Only one of the three is tracked
+by graphify (`wiki/decisions/ai-export-contextual-ui-memory.md`; the wiki-root `index.md`/`log.md` are outside
+`corpus/` and are not graphify-tracked files).
+
+**Context**: `detect_incremental(Path('corpus/'))` reported 246 pending files (214 code + 32 documents) — an
+accumulation of unrelated changes. Running `graphify --update` over all 246 would process unrelated pending
+files; instead, this entry documents the minimum scoped patch to clear only the three task-relevant files.
+
+**Semantic change in `wiki/decisions/ai-export-contextual-ui-memory.md`**: The decision title was updated from
+"AI Export drafts persist per authenticated user and UI context" to "AI Export drafts use short-lived session
+memory", reflecting the 2026-08-04 cutover from durable `localStorage` to a ten-minute sliding TTL in
+tab-scoped `sessionStorage`. The four sub-decision sections (Reactive Identity-Bound Memory, Raw-Note /
+Effective-Option Separation, Context-Bound In-Flight Preparation, Concern-Based E2E Cutover) retain their
+headings. Source-location line ranges for all four sub-nodes were re-anchored to the new file layout
+(L40-L59, L60-L65, L66-L71, L72-L76). All 7 external edges from the root node were preserved unmodified
+(references to auth domain, AI Export snapshot service, AI Export versioned snapshot boundary, prompt catalog,
+phase-00 source, clipboard fallback problem; INFERRED link to mkdocs Contextual AI Export Draft Memory).
+
+**GRAPH_REPORT.md** updated: one label occurrence ("…persist per authenticated user…" → "…use short-lived
+session memory…") in the Surprising Connections section.
+
+**Manifest**: `wiki/decisions/ai-export-contextual-ui-memory.md` hash updated
+(old semantic_hash `8061c1eb3e63976909956a705ec7d837` → new `26a4af3fc31511790a2ffdf0bd61a348`,
+mtime 1785774139.88 → 1785870347.51).
+
+Graph: **1533→1533 nodes** (±0), **2255→2255 edges** (±0), **144→144 communities** (±0).
+Remaining pending after this refresh: **245** (unrelated; will be processed in a future full `--update` pass).

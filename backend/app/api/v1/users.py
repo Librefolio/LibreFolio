@@ -21,13 +21,13 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 @router.get("/search", response_model=UserSearchResponse, summary="Search users by username")
 async def search_users_endpoint(
-    q: str = Query(..., min_length=2, description="Search query (min 2 chars)"),
+    q: str = Query("", description="Search query; empty lists all active users (used to pre-populate selects)"),
     exclude_broker_id: int | None = Query(None, description="Exclude users already on this broker"),
     current_user=Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ):
     """
-    Search for users by username (ILIKE match). Does NOT expose email for privacy. Optionally excludes users already having access to a specific broker.
+    Search for users by username (ILIKE match). Does NOT expose email for privacy. An empty query returns every active user so pickers can show the full list up-front. Optionally excludes users already having access to a specific broker.
     """
     results = await search_users(
         session=session,

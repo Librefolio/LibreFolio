@@ -25,6 +25,14 @@ describe('AI Export backend catalog loading', () => {
         await expect(fetchBackendAiExportCatalog(fetcher)).rejects.toBeInstanceOf(AiExportCatalogHttpError);
     });
 
+    it('normalizes an omitted generated default to the frontend V3 catalog constant', async () => {
+        const catalog = backendCatalogFixture();
+        const {catalog_version: _catalogVersion, ...withoutCatalogVersion} = catalog;
+        const fetcher = vi.fn(async () => new Response(JSON.stringify(withoutCatalogVersion), {status: 200, headers: {'content-type': 'application/json'}}));
+
+        await expect(fetchBackendAiExportCatalog(fetcher)).resolves.toMatchObject({catalog_version: 3});
+    });
+
     it('rejects untyped catalog payloads', async () => {
         const fetcher = vi.fn(async () => new Response(JSON.stringify({schema_version: 1}), {status: 200, headers: {'content-type': 'application/json'}}));
 

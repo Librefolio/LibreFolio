@@ -32,8 +32,8 @@ export type AiExportSelectionKind = 'dataset' | 'analysis';
 export type AiExportCatalogEntry = AiExportDatasetCatalogEntry | AiExportAnalysisCatalogEntry;
 
 export const AI_EXPORT_SCHEMA_VERSION = 2;
-export const AI_EXPORT_CATALOG_VERSION = 2;
-export const AI_EXPORT_SELECTION_VERSION = 2;
+export const AI_EXPORT_CATALOG_VERSION = 3;
+export const AI_EXPORT_SELECTION_VERSION = 3;
 export const AI_EXPORT_DETAIL_LEVELS = ['compact', 'standard', 'full'] as const satisfies readonly AiExportDetailLevel[];
 export const AI_EXPORT_DEFAULT_DETAIL_LEVEL = 'standard' satisfies AiExportDetailLevel;
 export const AI_EXPORT_DOMAIN_ORDER = ['portfolio', 'broker', 'asset', 'fx'] as const satisfies readonly AiExportDomain[];
@@ -50,70 +50,173 @@ export const AI_EXPORT_PAGE_FEATURE_LABEL_KEYS: Readonly<Record<string, string>>
     fx: 'fxDetail.aiExport',
 };
 
-export const AI_EXPORT_DATASET_IDS = [
-    'portfolio.overview',
-    'portfolio.performance_flows',
-    'portfolio.technical_summary',
-    'portfolio.asset_snapshot',
-    'portfolio.asset_comparison',
-    'portfolio.drawdown_context',
-    'portfolio.income_evidence',
-    'portfolio.technical',
-    'portfolio.fifo',
-    'portfolio.all_data',
-    'broker.overview',
-    'broker.performance_flows',
-    'broker.technical_summary',
-    'broker.asset_comparison',
-    'broker.drawdown_context',
-    'broker.concentration_evidence',
-    'broker.cost_efficiency_evidence',
-    'broker.technical',
-    'broker.fifo',
-    'broker.all_data',
-    'asset.overview',
-    'asset.position_performance',
-    'asset.position_context',
-    'asset.drawdown_context',
-    'asset.market_technical',
-    'asset.all_data',
-    'fx.overview',
-    'fx.market_context',
-    'fx.conversion_timing_context',
-    'fx.market_technical',
-    'fx.direct_exposure',
-    'fx.all_data',
+export const AI_EXPORT_PUBLIC_CATALOG_CONFIG = [
+    {
+        group: 'dataset',
+        id: 'portfolio.overview_and_history',
+        domain: 'portfolio',
+        icon: 'layout-dashboard',
+        displayI18nKey: 'aiExport.dataset.portfolio.overview_and_history.display',
+        descriptionI18nKey: 'aiExport.dataset.portfolio.overview_and_history.description',
+    },
+    {
+        group: 'dataset',
+        id: 'portfolio.asset_history',
+        domain: 'portfolio',
+        icon: 'activity',
+        displayI18nKey: 'aiExport.dataset.portfolio.asset_history.display',
+        descriptionI18nKey: 'aiExport.dataset.portfolio.asset_history.description',
+    },
+    {
+        group: 'dataset',
+        id: 'broker.overview_and_history',
+        domain: 'broker',
+        icon: 'landmark',
+        displayI18nKey: 'aiExport.dataset.broker.overview_and_history.display',
+        descriptionI18nKey: 'aiExport.dataset.broker.overview_and_history.description',
+    },
+    {
+        group: 'dataset',
+        id: 'broker.asset_history',
+        domain: 'broker',
+        icon: 'activity',
+        displayI18nKey: 'aiExport.dataset.broker.asset_history.display',
+        descriptionI18nKey: 'aiExport.dataset.broker.asset_history.description',
+    },
+    {
+        group: 'dataset',
+        id: 'asset.position_and_history',
+        domain: 'asset',
+        icon: 'wallet',
+        displayI18nKey: 'aiExport.dataset.asset.position_and_history.display',
+        descriptionI18nKey: 'aiExport.dataset.asset.position_and_history.description',
+    },
+    {
+        group: 'dataset',
+        id: 'asset.market_history',
+        domain: 'asset',
+        icon: 'activity',
+        displayI18nKey: 'aiExport.dataset.asset.market_history.display',
+        descriptionI18nKey: 'aiExport.dataset.asset.market_history.description',
+    },
+    {
+        group: 'dataset',
+        id: 'fx.market_and_exposure',
+        domain: 'fx',
+        icon: 'arrow-left-right',
+        displayI18nKey: 'aiExport.dataset.fx.market_and_exposure.display',
+        descriptionI18nKey: 'aiExport.dataset.fx.market_and_exposure.description',
+    },
+    {
+        group: 'dataset',
+        id: 'fx.market_history',
+        domain: 'fx',
+        icon: 'activity',
+        displayI18nKey: 'aiExport.dataset.fx.market_history.display',
+        descriptionI18nKey: 'aiExport.dataset.fx.market_history.description',
+    },
+    {
+        group: 'analysis',
+        id: 'portfolio.pac_planning',
+        domain: 'portfolio',
+        icon: 'calendar-clock',
+        displayI18nKey: 'aiExport.analysis.portfolio.pac_planning.display',
+        descriptionI18nKey: 'aiExport.analysis.portfolio.pac_planning.description',
+    },
+    {
+        group: 'analysis',
+        id: 'portfolio.rebalancing',
+        domain: 'portfolio',
+        icon: 'scale',
+        displayI18nKey: 'aiExport.analysis.portfolio.rebalancing.display',
+        descriptionI18nKey: 'aiExport.analysis.portfolio.rebalancing.description',
+    },
+    {
+        group: 'analysis',
+        id: 'portfolio.performance_market_drivers',
+        domain: 'portfolio',
+        icon: 'newspaper',
+        displayI18nKey: 'aiExport.analysis.portfolio.performance_market_drivers.display',
+        descriptionI18nKey: 'aiExport.analysis.portfolio.performance_market_drivers.description',
+    },
+    {
+        group: 'analysis',
+        id: 'portfolio.fiscal_lots',
+        domain: 'portfolio',
+        icon: 'list-ordered',
+        displayI18nKey: 'aiExport.analysis.portfolio.fiscal_lots.display',
+        descriptionI18nKey: 'aiExport.analysis.portfolio.fiscal_lots.description',
+    },
+    {
+        group: 'analysis',
+        id: 'broker.review',
+        domain: 'broker',
+        icon: 'landmark',
+        displayI18nKey: 'aiExport.analysis.broker.review.display',
+        descriptionI18nKey: 'aiExport.analysis.broker.review.description',
+    },
+    {
+        group: 'analysis',
+        id: 'broker.performance_market_drivers',
+        domain: 'broker',
+        icon: 'newspaper',
+        displayI18nKey: 'aiExport.analysis.broker.performance_market_drivers.display',
+        descriptionI18nKey: 'aiExport.analysis.broker.performance_market_drivers.description',
+    },
+    {
+        group: 'analysis',
+        id: 'broker.fiscal_lots',
+        domain: 'broker',
+        icon: 'list-ordered',
+        displayI18nKey: 'aiExport.analysis.broker.fiscal_lots.display',
+        descriptionI18nKey: 'aiExport.analysis.broker.fiscal_lots.description',
+    },
+    {
+        group: 'analysis',
+        id: 'asset.position_review',
+        domain: 'asset',
+        icon: 'wallet',
+        displayI18nKey: 'aiExport.analysis.asset.position_review.display',
+        descriptionI18nKey: 'aiExport.analysis.asset.position_review.description',
+    },
+    {
+        group: 'analysis',
+        id: 'asset.market_analysis',
+        domain: 'asset',
+        icon: 'trending-up',
+        displayI18nKey: 'aiExport.analysis.asset.market_analysis.display',
+        descriptionI18nKey: 'aiExport.analysis.asset.market_analysis.description',
+    },
+    {
+        group: 'analysis',
+        id: 'fx.pair_analysis',
+        domain: 'fx',
+        icon: 'trending-up',
+        displayI18nKey: 'aiExport.analysis.fx.pair_analysis.display',
+        descriptionI18nKey: 'aiExport.analysis.fx.pair_analysis.description',
+    },
+    {
+        group: 'analysis',
+        id: 'fx.exposure_impact',
+        domain: 'fx',
+        icon: 'scale',
+        displayI18nKey: 'aiExport.analysis.fx.exposure_impact.display',
+        descriptionI18nKey: 'aiExport.analysis.fx.exposure_impact.description',
+    },
 ] as const;
 
-export const AI_EXPORT_ANALYSIS_IDS = [
-    'portfolio.pac_planning',
-    'portfolio.rebalancing',
-    'portfolio.performance_attribution',
-    'portfolio.market_events_review',
-    'portfolio.income_review',
-    'portfolio.fifo_review',
-    'portfolio.technical_breadth',
-    'portfolio.description',
-    'broker.review',
-    'broker.cost_efficiency',
-    'broker.concentration_context',
-    'broker.fifo_review',
-    'asset.trend_analysis',
-    'asset.position_review',
-    'fx.trend_review',
-    'fx.conversion_timing',
-    'fx.exposure_impact',
-] as const;
-
-export type AiExportDatasetId = (typeof AI_EXPORT_DATASET_IDS)[number];
-export type AiExportAnalysisId = (typeof AI_EXPORT_ANALYSIS_IDS)[number];
+type AiExportPublicCatalogConfigEntry = (typeof AI_EXPORT_PUBLIC_CATALOG_CONFIG)[number];
+export type AiExportDatasetId = Extract<AiExportPublicCatalogConfigEntry, {group: 'dataset'}>['id'];
+export type AiExportAnalysisId = Extract<AiExportPublicCatalogConfigEntry, {group: 'analysis'}>['id'];
+export const AI_EXPORT_DATASET_IDS = AI_EXPORT_PUBLIC_CATALOG_CONFIG.filter((entry) => entry.group === 'dataset').map((entry) => entry.id) as readonly AiExportDatasetId[];
+export const AI_EXPORT_ANALYSIS_IDS = AI_EXPORT_PUBLIC_CATALOG_CONFIG.filter((entry) => entry.group === 'analysis').map((entry) => entry.id) as readonly AiExportAnalysisId[];
 export type AiExportSelectionId = AiExportDatasetId | AiExportAnalysisId;
 
 export interface AiExportCompatibleSelection {
     readonly kind: AiExportSelectionKind;
     readonly id: AiExportSelectionId;
     readonly domain: AiExportDomain;
-    readonly version: 2;
+    readonly version: 3;
     readonly supportedDetailLevels: readonly AiExportDetailLevel[];
     readonly entry: AiExportCatalogEntry;
 }

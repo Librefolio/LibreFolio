@@ -15,6 +15,18 @@ description: "Use this skill when the user needs to build, serve, or deploy MkDo
 ./dev.py mkdocs check-links           # Validate cross-boundary links (frontend/backend → docs)
 ```
 
+## Promotional Video
+
+Manage the Remotion promo-video project (`mkdocs_src/videoClipPrject/video_promo`):
+
+```bash
+./dev.py mkdocs video sync                       # Sync AI assets for the promo video (npm run sync)
+./dev.py mkdocs video start                      # Start Remotion studio (interactive preview/editor)
+./dev.py mkdocs video build                      # Build all promo videos (npm run build:all)
+./dev.py mkdocs video build --locale it          # Build a single locale (en|it|es|fr|all)
+./dev.py mkdocs video review                     # Generate review assets (npm run review:assets --clean)
+```
+
 ## Gallery Screenshots
 
 Generate automatic screenshots for documentation (light/dark × desktop/mobile × 4 languages):
@@ -58,13 +70,31 @@ Failed tests:
 ./dev.py mkdocs translate --dry-run              # Preview without writing
 ./dev.py mkdocs translate --force                # Force re-translate (ignore cache)
 
+./dev.py mkdocs translate-stamp --file "user/.../page.en.md"   # Mark EN source as already translated (no LLM) — see below
+./dev.py mkdocs translate-stamp --file "..." --lang it,fr      # Stamp only specific languages (default: all detected)
+./dev.py mkdocs translate-stamp --file "..." --dry-run         # Preview stamp without touching the cache
+
 ./dev.py mkdocs translate-check                  # Verify Aphra pipeline setup
 ./dev.py mkdocs translate-validate               # Offline structural validation
 ./dev.py mkdocs translate-validate --lang it     # Validate single language
 ./dev.py mkdocs translate-diff                   # Structural diff EN vs translations
 ./dev.py mkdocs translate-diff --issues-only     # Only show problems
 ./dev.py mkdocs translate-inspect                # Inspect translation cache artifacts
+./dev.py mkdocs translate-inspect --critique --file directa   # Filter artifacts (--analysis/--critique/--diff, --file, --lang)
 ```
+
+### Manual Edits → Stamp (avoid re-translation)
+
+The pipeline skips a file only while its `.en.md` **MD5 is unchanged** (cache: `.translate-hashes.json`). If you hand-edit a translation (`.it/.fr/.es.md`) for a **small targeted change** — instead of running `translate` — you also touch the `.en.md` source, changing its MD5. Without a stamp, the next `translate` run detects the change and **re-translates all languages, overwriting your manual edits**.
+
+**Fix**: after manual translation edits, stamp the EN source so the cache records the current MD5 as done:
+
+```bash
+./dev.py mkdocs translate-stamp --file "user/transactions/import/directa.en.md"
+./dev.py mkdocs translate --dry-run --file "user/transactions/import/directa.en.md"   # → "up-to-date. Nothing to translate."
+```
+
+The stamp updates only `.translate-hashes.json` (tracked in git) — it never rewrites the translation files. Commit it alongside the edited docs.
 
 ### Translation Architecture
 - Strategy: `mkdocs-static-i18n` with suffix (`index.en.md`, `index.it.md`)

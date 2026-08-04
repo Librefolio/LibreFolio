@@ -1,11 +1,11 @@
 ---
-title: "AI Export drafts persist per authenticated user and UI context"
+title: "AI Export drafts use short-lived session memory"
 category: decision
 status: resolved
 date: 2026-07-27
-updated: 2026-08-03
+updated: 2026-08-04
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
-tags: [frontend, ai-export, ui-memory, local-storage, auth, privacy, ux, async, e2e]
+tags: [frontend, ai-export, ui-memory, session-storage, ttl, auth, privacy, ux, async, e2e]
 related:
   - sources/phase00-ai-export-backend-snapshot
   - decisions/ai-export-versioned-snapshot-boundary
@@ -14,34 +14,47 @@ related:
   - domains/auth
 ---
 
-# Decision: AI Export drafts persist per authenticated user and UI context
+# Decision: AI Export drafts use short-lived session memory
 
 ## Context
 
 The first Phase 0 options panel treated closing a modified draft as a discard event and asked for confirmation. Manual desktop/mobile review found that behavior disruptive: selection, detail, period, and notes are working context that users expect to recover when they reopen AI Export. A single browser-global draft was unsafe because the four surfaces represent different entities and the SPA can survive logout/login transitions between users.
 
-The V2 cutover exposed two additional races. Client-session identity and the catalog resolve asynchronously, so a one-shot load during component creation could see an anonymous/empty state and fail to hydrate a valid `localStorage` draft after a fresh page load or navigation. Snapshot preparation also outlives its initiating UI context unless late results are explicitly invalidated: navigation, logout, selection changes, panel close, or component destruction could otherwise persist or copy stale output. Dataset selections hide Analysis notes, so visual hiding also had to remain separate from the effective request and prompt contract.
+The V2 cutover exposed two additional races. Client-session identity and the catalog resolve asynchronously, so a one-shot load during component creation could see an anonymous/empty state and fail to hydrate a valid draft after navigation. Snapshot preparation also outlives its initiating UI context unless late results are explicitly invalidated: navigation, logout, selection changes, panel close, or component destruction could otherwise persist or copy stale output. Dataset selections hide Analysis notes, so visual hiding also had to remain separate from the effective request and prompt contract.
+
+On 2026-08-04, manual multi-login testing showed that durable `localStorage`
+memory was inappropriate for prompt notes and options. The owner replaced it with
+a ten-minute sliding TTL in tab-scoped `sessionStorage`; every logout/account
+transition/new login clears all AI Export drafts and reopens every panel with
+defaults.
 
 ## Options Considered
 
 1. **Keep drafts only while the panel is open and confirm discard on close** — explicit, but interrupts normal navigation and loses useful context.
 2. **Use one browser-global AI Export draft** — simple, but leaks choices between Portfolio, Broker, Asset, and FX contexts and risks cross-account reuse.
 3. **Persist drafts in backend user settings** — portable across devices, but turns transient prompt composition into a server contract, adds synchronization/privacy scope, and was unnecessary for Phase 0.
-4. **Persist browser-local drafts by authenticated user and concrete UI context, rehydrate reactively, and bind async work to an invalidatable preparation context** — preserves continuity while preventing cross-user/context reuse and stale side effects. **Chosen.**
+4. **Keep drafts in validated, user/context-scoped session storage with a short TTL, clear them at every authentication transition, and bind async work to an invalidatable preparation context** — preserves brief navigation continuity without carrying notes into another login. **Chosen.**
 
 ## Decision
 
 ### Reactive identity-bound memory
 
-- AI Export stores a versioned, strictly validated V2 draft containing selection kind/ID, detail level, period, the raw Analysis note draft, and the accepted Copy Anyway fingerprint.
+- AI Export stores a strictly validated draft containing selection kind/ID, detail level, period, the raw Analysis note draft, the accepted Copy Anyway fingerprint, and `savedAt`.
 - Storage keys are namespaced with the resolved client-session user ID and one context key:
   - `portfolio`;
   - `broker:{broker_id}`;
   - `asset:{asset_id}`;
   - `fx:{canonical_slug}`.
-- The persistent key shape is `lf_{userId}_ai_export_v2_{encodedContext}`. An in-memory cache mirrors valid entries; account transitions clear it through the shared client-session reset boundary.
+- The tab-scoped key shape is `lf_{userId}_ai_export_session_{encodedContext}`.
+  An in-memory cache mirrors valid entries.
+- Every write refreshes a ten-minute TTL. Reopening after expiry discards the
+  entire draft and uses default selection, Standard detail, 3M period, and empty
+  notes.
+- Logout, account changes, and every subsequent login clear both cache and
+  session storage through the shared client-session reset boundary. Obsolete V2/V3
+  `localStorage` drafts are also removed at that boundary.
 - The menu subscribes to the client-session user store. When async identity first resolves or later changes, it reloads the active memory key instead of treating the initial anonymous fallback as final. Catalog resolution/reload also rehydrates without deleting a valid draft merely because compatibility is temporarily empty.
-- If the user is unauthenticated, storage is unavailable, JSON/schema validation fails, or a stored selection/detail is no longer applicable, the panel uses safe defaults. Malformed or obsolete entries are removed. If `localStorage` rejects writes, valid state can still survive for the current SPA session in memory.
+- If the user is unauthenticated, storage is unavailable, JSON/schema validation fails, the TTL expired, or a stored selection/detail is no longer applicable, the panel uses safe defaults. Malformed or obsolete entries are removed. If `sessionStorage` rejects writes, valid state can still survive for the current SPA lifetime in memory.
 - Draft changes persist immediately; closing the panel has no destructive confirmation. Response language is never trusted from memory and is re-derived from the active UI locale.
 
 ### Raw notes are memory, not always export options
@@ -63,10 +76,10 @@ The V2 cutover exposed two additional races. Client-session identity and the cat
 
 ## Consequences
 
-- Portfolio and each Broker, Asset, and canonical FX pair reopen with their own last selection, detail, period, and notes after fresh loads and navigation, even when identity resolves after the component's first render.
+- Portfolio and each Broker, Asset, and canonical FX pair reopen with their own last selection, detail, period, and notes only within the same login/tab and ten-minute TTL.
 - Users can close by trigger, Escape, outside click, or navigation without a destructive confirmation.
-- Drafts are device/browser-local rather than a cross-device account preference.
-- Authentication changes cannot reuse another user's in-memory draft, and persistent entries are separated by user ID.
+- Drafts are deliberately ephemeral session state, not a durable browser or cross-device preference.
+- Authentication changes and new logins always reopen defaults; user IDs still namespace entries as defense in depth.
 - Catalog/version drift fails closed to defaults instead of reviving an unsupported selection.
 - Dataset and non-note-capable Analysis privacy is stronger than visual hiding alone: hidden notes remain useful UI memory but are structurally absent from export inputs and outputs.
 - Slow snapshot or clipboard work cannot leak across routes, accounts, selections, closed panels, or destroyed components.
@@ -74,9 +87,10 @@ The V2 cutover exposed two additional races. Client-session identity and the cat
 
 ## Validation / Success Criteria
 
-- Unit coverage exercises V2 storage, hidden-note preservation with note-free Dataset fingerprints, delayed catalog hydration, stale schema/selection removal, async client-session publication, and session-generation invalidation.
-- Browser E2E verifies per-user and Portfolio/Broker/Asset/canonical-FX isolation, navigation restoration, Dataset note exclusion, current request/clipboard contracts, and dropping a preparation after its panel context closes.
-- Final canonical gate on 3 August 2026: **214 unit tests passed** and **32 Playwright E2E tests passed across desktop/mobile**.
+- Unit coverage exercises ten-minute expiry, full login reset, hidden-note preservation with note-free Dataset fingerprints, delayed catalog hydration, and context isolation.
+- Browser E2E verifies Portfolio/Broker/Asset/canonical-FX navigation restoration within one session, reset after login, Dataset note exclusion, and current request/clipboard contracts.
+- Applied 2026-08-04 gate: **197 unit tests passed** and the complete AI Export
+  cutover passed **32/32 Playwright tests** across desktop/mobile.
 
 ## Links
 
@@ -92,7 +106,7 @@ The V2 cutover exposed two additional races. Client-session identity and the cat
 |------|------|
 | Final plan and approval record | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
 | Completed chain index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
-| Versioned contextual storage | `frontend/src/lib/features/ai-export/aiExportMemory.ts` |
+| TTL session memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts` |
 | Reactive hydration and stale-operation guards | `frontend/src/lib/features/ai-export/AiExportMenu.svelte` |
 | Raw note draft / effective option separation | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte` |
 | Dataset/Analysis normalization and fingerprint exclusion | `frontend/src/lib/features/ai-export/aiExportOptions.ts` |

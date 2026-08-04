@@ -1710,14 +1710,14 @@
     "semantic_hash": "b6b55f1d08fc27eedeb6b73337ef0de3"
   },
   "wiki/decisions/ai-export-contextual-ui-memory.md": {
-    "mtime": 1785774139.876653,
-    "ast_hash": "8061c1eb3e63976909956a705ec7d837",
-    "semantic_hash": "8061c1eb3e63976909956a705ec7d837"
+    "mtime": 1785870347.5140073,
+    "ast_hash": "26a4af3fc31511790a2ffdf0bd61a348",
+    "semantic_hash": "26a4af3fc31511790a2ffdf0bd61a348"
   },
   "wiki/decisions/ai-export-versioned-snapshot-boundary.md": {
-    "mtime": 1785778573.775248,
+    "mtime": 1785835542.6205432,
     "ast_hash": "1c59dd5f45a8c7703871598720ee7de7",
-    "semantic_hash": "febada3ec30d80e468617dc30fd7b89e"
+    "semantic_hash": "7d86b7ff05a6f1d272ce4c3d74227b37"
   },
   "wiki/decisions/credit-agricole-securities-only-cash-neutral-brim.md": {
     "mtime": 1785016078.4394042,
@@ -1730,9 +1730,9 @@
     "semantic_hash": "1e6014732079b543e398db4ceecd6d33"
   },
   "wiki/entities/ai-export-snapshot-service.md": {
-    "mtime": 1785159054.245218,
+    "mtime": 1785835543.2313278,
     "ast_hash": "a90a16bb42425469fe37815b0fd8c0f2",
-    "semantic_hash": "a90a16bb42425469fe37815b0fd8c0f2"
+    "semantic_hash": "57462fa426175c543ecb5a1c4873e4fd"
   },
   "wiki/problems/ai-export-cash-fx-valuation-basis-mismatch.md": {
     "mtime": 1785159054.2566378,
@@ -1750,9 +1750,9 @@
     "semantic_hash": "2c583a25ff6e1dde4e58132a56f11fe3"
   },
   "wiki/sources/phase00-ai-export-backend-snapshot.md": {
-    "mtime": 1785778573.7775946,
+    "mtime": 1785835542.8995366,
     "ast_hash": "1bcf56d18721df60b926c1d0e693a4cd",
-    "semantic_hash": "471fdbd7d019043f92812a83417d28be"
+    "semantic_hash": "8159e8288728d01f3c6b9650894dc673"
   },
   "wiki/concepts/cancellation-safe-inflight-deduplication.md": {
     "mtime": 1785246139.4125497,
@@ -7193,5 +7193,16 @@
     "mtime": 1785754593.927548,
     "ast_hash": "",
     "semantic_hash": "883580c4d5f2e79ab86b442394d6e646"
+  },
+  "wiki/concepts/ai-export-catalog-granularity-and-composition.md": {
+    "mtime": 1785835542.2269764,
+    "ast_hash": "",
+    "semantic_hash": "c133a45636bcdd079cf5b6d026079447"
+  },
+  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/wiki/decisions/ai-export-contextual-ui-memory.md": {
+    "mtime": 1785871021.0444555,
+    "ast_hash": "4721e6938ff7d66a6a3260d2e4997822",
+    "semantic_hash": "4721e6938ff7d66a6a3260d2e4997822",
+    "size": 10262
   }
 }
