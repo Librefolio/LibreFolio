@@ -688,6 +688,66 @@ class TestBrokerParserCoverageHelpers:
         assert generic_tax is not None, "sample must contain the generic 'Ritenuta su plusvalenza' row"
         assert generic_tax.asset_id is None
 
+    def test_directa_number_helper_handles_dot_comma_and_native_cells(self):
+        """Directa exports are inconsistent: some rows use dot decimals ("20.95"),
+        others comma ("-16,95"); XLSX cells arrive as native ``float``/``int``.
+        All variants must parse. Guards a regression where an Italian-style
+        (thousands=".") parser turned "20.95" into 2095.
+        """
+        assert _parse_directa_number("20.95") == Decimal("20.95")
+        assert _parse_directa_number("-16,95") == Decimal("-16.95")
+        assert _parse_directa_number(20.95) == Decimal("20.95")
+        assert _parse_directa_number(2) == Decimal("2")
+        assert _parse_directa_number(None) is None
+
+    def test_directa_csv_and_xlsx_parse_identically(self, tmp_path):
+        """The XLSX reader must yield the same transactions as the CSV reader.
+        The generated XLSX stores amounts/quantities as native numbers (dot
+        decimals), so this also guards the dot-decimal regression on the native
+        cell path.
+        """
+        openpyxl = pytest.importorskip("openpyxl")
+
+        rows = read_rows(DIRECTA_SAMPLE)
+        numeric_cols = {7, 8, 9}  # Quantità, Importo euro, Importo Divisa
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        header_seen = False
+        for row in rows:
+            if not header_seen:
+                header_seen = any("data operazione" in str(c).lower() for c in row)
+                ws.append(row)
+                continue
+            out_row: List[object] = []
+            for idx, cell in enumerate(row):
+                text = "" if cell is None else str(cell).strip()
+                num = _parse_directa_number(text) if (idx in numeric_cols and text) else None
+                out_row.append(float(num) if num is not None else cell)
+            ws.append(out_row)
+        xlsx_path = tmp_path / "directa-export.xlsx"
+        wb.save(xlsx_path)
+
+        csv_out = DirectaBrokerProvider().parse(DIRECTA_SAMPLE, broker_id=1)
+        xlsx_out = DirectaBrokerProvider().parse(xlsx_path, broker_id=1)
+
+        def isin_of(result, tx):
+            if tx.asset_id is None:
+                return None
+            asset = result.extracted_assets.get(tx.asset_id)
+            return asset.extracted_isin if asset else None
+
+        assert len(xlsx_out.transactions) == len(csv_out.transactions)
+        assert xlsx_out.warnings == csv_out.warnings
+        for csv_tx, xlsx_tx in zip(csv_out.transactions, xlsx_out.transactions, strict=True):
+            assert xlsx_tx.date == csv_tx.date
+            assert xlsx_tx.type == csv_tx.type
+            assert xlsx_tx.quantity == csv_tx.quantity
+            assert (xlsx_tx.cash is None) == (csv_tx.cash is None)
+            if csv_tx.cash is not None:
+                assert xlsx_tx.cash.amount == csv_tx.cash.amount
+                assert xlsx_tx.cash.code == csv_tx.cash.code
+            assert isin_of(xlsx_out, xlsx_tx) == isin_of(csv_out, csv_tx)
+
     def test_credit_agricole_imports_succession_as_cashless_adjustment(self):
         out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
 
