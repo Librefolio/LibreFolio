@@ -58,6 +58,11 @@ COPY mkdocs_src/site/ ./mkdocs_src/site/
 # Copy environment config
 COPY .env.example ./.env
 
+# Copy license + third-party attributions. Required by the BSD/MIT/NCSA/Apache
+# clauses of the bundled Python packages, which mandate that their copyright
+# notices travel with any binary redistribution — this image is one.
+COPY LICENSE THIRD_PARTY_LICENSES.md ./
+
 # Create non-root user (default UID/GID 1000:1000).
 # Override at build time: docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) .
 ARG UID=1000

@@ -163,7 +163,7 @@ Sin este escalado, los retornos y valoraciones de bonos pueden desviarse por ór
 
 ---
 
-## 🛟 Estimado al Costo
+## 🛟 Estimado al Costo {: #estimated-at-cost }
 
 Si no hay un precio de mercado en tiempo real disponible para un activo, LibreFolio **no** interrumpe el análisis. En su lugar, valora temporalmente la porción aún abierta del lote al costo:
 

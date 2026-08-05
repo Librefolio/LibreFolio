@@ -164,7 +164,7 @@ Senza questo ridimensionamento, i rendimenti e le valutazioni delle obbligazioni
 
 ---
 
-## 🛟 Stimato al Costo
+## 🛟 Stimato al Costo {: #estimated-at-cost }
 
 Se non è disponibile un prezzo di mercato in tempo reale per un asset, LibreFolio **non** interrompe l'analisi. Invece, valuta temporaneamente la parte ancora aperta del lotto al costo:
 

@@ -163,7 +163,7 @@ Without this scaling, bond returns and valuations can be off by orders of magnit
 
 ---
 
-## 🛟 Estimated-at-Cost
+## 🛟 Estimated-at-Cost {: #estimated-at-cost }
 
 If no live market price is available for an asset, LibreFolio does **not** fail the analysis. Instead, it temporarily values the still-open portion of the lot at cost:
 
