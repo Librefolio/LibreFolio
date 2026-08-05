@@ -72,7 +72,7 @@ Una directory in **bind mount** creata accanto a `docker-compose.yml`. Contiene 
 
 Il container di LibreFolio viene eseguito come **utente non root** per motivi di sicurezza. L'UID/GID predefinito è `1000:1000`. I file creati dall'applicazione in `LibreFolio-data/` apparterranno a questo UID/GID sull'host.
 
-#### Scegliere l'UID e il GID corretti
+#### Choosing l'UID e il GID corretti
 
 Imposta `UID` e `GID` nel tuo file `.env` per farli corrispondere all'**utente dell'host** (o a un utente dedicato) che deve possedere i file dei dati:
 
@@ -196,7 +196,7 @@ La configurazione Docker Compose espone **due porte**:
 | `6040` | Server di produzione (avviato dal CMD del container) | `prod-docker/sqlite/app.db` (volume persistente) |
 | `6041` | Server di test (avviato manualmente via `docker exec`) | `test/sqlite/app.db` (effimero) |
 
-### Avvio del server di test
+### Starting del server di test
 
 1. **Avvia il container** (il server di produzione parte automaticamente su `:6040`):
 

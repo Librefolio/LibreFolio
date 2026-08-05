@@ -14,11 +14,11 @@ Un **gráfico de sectores** que muestra el desglose por sector industrial (por e
 
 ## 🌍 Distribución Geográfica
 
-### Mapa Mundial
+### World Mundial
 
 Un **mapa mundial interactivo** con los países coloreados según el peso de la asignación. Pase el cursor sobre un país para ver su porcentaje.
 
-### Desglose por País
+### Country por País
 
 Un **gráfico de sectores** que muestra el desglose porcentual por país o región (por ejemplo, Estados Unidos 60%, Europa 25%, Asia 15%...).
 

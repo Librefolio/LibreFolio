@@ -123,7 +123,7 @@ pipenv run ./dev.py server
 
 El servidor estará disponible en `http://localhost:6040`.
 
-#### Opciones del Comando del Servidor
+#### Server del Comando del Servidor
 
 | Bandera | Descripción |
 |------|-------------|

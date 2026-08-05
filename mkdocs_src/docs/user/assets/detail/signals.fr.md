@@ -66,8 +66,7 @@ de l'actif, de l'historique de prix normalisé, du contexte de la position dans 
 portefeuille et des résultats techniques du service de signaux partagé. Le
 navigateur ne recalcule pas les indicateurs. Les tâches apparaissent uniquement
 si elles s'appliquent à l'actif et aux données disponibles : par exemple, le
-contexte de position ou de plan récurrent doit exister pour l'analyse associée.
-Consultez le [guide de l'Export IA](../../ai-export/index.md).
+contexte de position ou de plan récurrent doit exister pour l'analyse associée. Consultez l'[Exportation AI d'Actif](../../ai-export/asset.md) ou le [guide d'exportation AI](../../ai-export/index.md).
 
 ---
 

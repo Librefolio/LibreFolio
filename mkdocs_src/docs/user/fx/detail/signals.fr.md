@@ -61,8 +61,7 @@ techniques du service de signaux partagé. Pour Impact de l'exposition de change
 l'exposition se limite aux devises de trésorerie et aux devises de négociation
 ou de valorisation des positions directement rattachables à la paire ; aucun
 **look-through** des fonds ou des émetteurs n'est effectué pour déduire une
-exposition cachée. Consultez le
-[guide de l'Export IA](../../ai-export/index.md).
+exposition cachée. Consultez l'[Exportation AI FX](../../ai-export/fx.md) ou le [guide d'exportation AI](../../ai-export/index.md).
 
 ---
 

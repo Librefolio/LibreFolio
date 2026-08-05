@@ -19,7 +19,7 @@ Il grafico della crescita mostra come il valore del tuo portafoglio è evoluto n
  </div>
 </div>
 
-### Modalità ASS — valori assoluti
+### ABS ASS — valori assoluti
 
 Il grafico utilizza un design **ad area impilata + linee sovrapposte**:
 
@@ -33,7 +33,7 @@ Il grafico utilizza un design **ad area impilata + linee sovrapposte**:
 
 **La differenza tra la linea NAV e la linea Capitale Depositato = P&L Totale** — tutti i profitti mai generati, incluse plusvalenze non realizzate, plusvalenze realizzate, interessi e dividendi, meno commissioni e imposte.
 
-#### Dettaglio del suggerimento
+#### Tooltip del suggerimento
 
 Quando passi il mouse sul grafico, il suggerimento mostra:
 
@@ -93,7 +93,7 @@ Il pannello di allocazione mostra come il tuo portafoglio è distribuito nel mom
  </div>
 </div>
 
-### Tre dimensioni
+### Three dimensioni
 
 | Dimensione | Cosa mostra |
 |-----------|-------------|
@@ -101,12 +101,12 @@ Il pannello di allocazione mostra come il tuo portafoglio è distribuito nel mom
 | **Settore** | Settore industriale: 💻 Tecnologia, 🏦 Finanziario, 💊 Sanità, ecc. |
 | **Geografia** | Paese o regione della quotazione principale di ogni asset |
 
-### Schede Ora vs. Storico
+### Now Ora vs. Storico
 
 - **Ora** — Grafico a ciambella dell'allocazione corrente a `date_to`. Passa il mouse su una fetta per vedere la percentuale esatta e il valore assoluto.
 - **Storico** — Grafico ad area impilata al 100% che mostra come l'allocazione è cambiata nel tempo. Utile per visualizzare il ribilanciamento del portafoglio tra mesi o anni.
 
-### Contanti come Liquidità
+### Cash come Liquidità
 
 **I contanti** (il saldo del tuo broker) appaiono sempre come la fetta **Liquidità** sia nella vista Tipo che Settore. Nella mappa geografica, i contanti non sono assegnati a nessun paese e non appaiono.
 

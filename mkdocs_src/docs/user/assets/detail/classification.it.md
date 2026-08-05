@@ -14,11 +14,11 @@ Un **grafico a torta** che mostra la suddivisione per settore industriale (es. T
 
 ## 🌍 Distribuzione Geografica
 
-### Mappa del Mondo
+### World del Mondo
 
 Una **mappa del mondo interattiva** con i paesi colorati in base al peso dell'allocazione. Passa il mouse sopra un paese per vederne la percentuale.
 
-### Suddivisione per Paese
+### Country per Paese
 
 Un **grafico a torta** che mostra la suddivisione percentuale per paese o regione (es. Stati Uniti 60%, Europa 25%, Asia 15%...).
 

@@ -7,15 +7,15 @@ service.
 ## 📍 Location
 
 Open an FX detail page. In the **Signals** header, select **AI Export**. Your
-draft is remembered separately for this user and canonical pair.
+draft remains available for 10 minutes in the current login session and resets
+after logout or a new login.
 
 ## 🎯 FX Analyses
 
-| Task | Focus |
-|---|---|
-| **FX Trend Review** | Pair direction, returns, volatility, and technical context. |
-| **FX Conversion Timing Context** | Trend, volatility, and rate context for a possible conversion. |
-| **FX Exposure Impact** | Direct cash, trading-currency, and valuation-currency links to the pair. |
+| Task                   | Focus                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| **FX Pair Analysis**   | Pair direction, returns, volatility, technical evidence, coverage, and dated macro context. |
+| **FX Exposure Impact** | Direct cash, trading-currency, and valuation-currency links to the pair.                    |
 
 ## 🗂️ Scope and Data
 
@@ -31,8 +31,13 @@ rate history, provider context, and backend-computed technical results.
   language.
 - Optional notes are included only when supported by the selected Analysis.
 
-Available exports include FX Overview, Market Context, Conversion Timing Context,
-Market & Technical Data, Direct Exposure, and All FX Data.
+Two public data exports are available:
+
+- **FX Market & Exposure** — current quote-per-base rate, 8/16/30 observed path
+  points, focused trend/momentum/volatility, 30-day and 91-day returns, range
+  position, source coverage, missing user inputs, and direct exposure;
+- **FX Market History** — denser rate buckets, returns, indicators, states, events,
+  and coverage.
 
 ## 📉 Partial History
 
@@ -51,11 +56,11 @@ history.
 
 ## 📏 Detail and Sampling
 
-| Detail | Exact sampling |
-|---|---|
-| **Compact** | Same data universe with the sparsest supported temporal buckets (up to 30 days). |
-| **Standard** | Same data universe with temporal buckets up to 14 days. |
-| **Full** | Same data universe with temporal buckets up to 7 days. |
+| Detail       | Exact sampling                                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **Compact**  | General export: up to 8 uniform observed rate points. Detailed export: up to 5 non-empty indicator rows per Signal. |
+| **Standard** | General export: up to 16 points. Detailed export: up to 10 indicator rows.                                          |
+| **Full**     | General export: up to 30 points. Detailed export: every non-empty indicator bucket and can be large.                |
 
 A dataset or Analysis can omit unavailable or non-applicable optional sections.
 The **AI period** ends on the snapshot date.

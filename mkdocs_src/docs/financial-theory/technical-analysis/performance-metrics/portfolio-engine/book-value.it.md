@@ -4,7 +4,7 @@
 
 ## 💡 Cos'è il Book Value?
 
-Il **Book Value** rappresenta il costo contabile storico del tuo portafoglio — quanto capitale hai investito al costo, più le riserve di liquidità. Non fluttua in base ai prezzi di mercato.
+Il **Book Value** rappresenta il costo contabile storico del tuo portafoglio — quanto capitale hai investito al costo, più le riserve di liquidità. Non fluttua in base ai prezzi di mercato e distinto da [Risoluzione Prezzi](price-resolution.md).
 
 ---
 
@@ -19,6 +19,9 @@ Dove l'Open Cost Basis è:
 $$
 \mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w(a,b,t) \cdot \mathrm{fx}(\mathrm{ccy}_w, C^*, t)
 $$
+
+Dove $w(a,b,t)$ è il PMC nella sua valuta di costo. Il costo di acquisizione è fissato al tasso FX della data di transazione all'interno del PMC; il book value aperto viene poi riportato nella valuta richiesta per la data di valutazione.
+
 
 🔗 Vedi **[Portfolio Engine — §3 Stato della Posizione](index.md#3-position-state)** per la derivazione completa.
 
@@ -56,4 +59,5 @@ $$
 
 - 📊 [PMC](../weighted-average-cost.md) — metodo del costo unitario per OCB
 - 💼 [NAV](nav.md) — corrispettivo basato sul valore di mercato
+- 🧭 [Risoluzione Prezzi](price-resolution.md) — quotazioni di mercato/trade usate dal NAV, non dal book value
 - 📈 [Period PnL](period-pnl.md) — combinazione di realizzato + non realizzato

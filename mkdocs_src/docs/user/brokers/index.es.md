@@ -32,7 +32,7 @@ Una vez que seleccionas un bróker de la lista, la interfaz se divide en cuatro 
 1. **Descripción general**: Visualización del patrimonio neto, métricas de rendimiento, historial de crecimiento y gráficos de asignación limitados exclusivamente a esta cuenta de corretaje (ver **[Descripción general del panel de control](../dashboard/index.md)**).
 2. **Posiciones**: Lista de posiciones abiertas, ponderaciones de activos y métricas de rendimiento dentro de este bróker, con acceso al panel en línea de Análisis de Lotes FIFO (ver **[Posiciones del panel de control](../dashboard/positions.md)**).
 3. **Transacciones**: El registro de todas las actividades financieras, incluyendo entradas manuales, importaciones de estados de cuenta e historiales (ver **[Importar transacciones](import.md)**).
-4. **Información**: Metadatos del bróker, configuraciones de sobregiro/venta en corto, Exportación de IA y controles de uso compartido en línea (ver **[Configuración e información](info.md)**).
+4. **Información**: Metadatos del bróker, configuraciones de sobregiro/venta en corto, Exportación de IA y controles de uso compartido en línea (ver **[Configuración e información](info.md)** y **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
 
@@ -68,3 +68,5 @@ La pestaña **Posiciones** enumera todos los activos activos actualmente manteni
 - 📥 **[Importar transacciones (BRIM)](import.md)** — Cómo registrar transacciones manualmente, ejecutar el asistente de importación BRIM CSV/Excel y ver registros de importación.
 - ⚙️ **[Configuración e información](info.md)** — Ajustes de metadatos (sobregiros, ventas en corto), generador de indicaciones de Exportación de IA limitadas y el panel de uso compartido de bróker en línea.
 - 🤝 **[Uso compartido del bróker](sharing.md)** — Guía detallada sobre permisos de roles (Propietario, Editor, Visor) y configuraciones de porcentaje de activos.
+- 🧠 **[Broker AI Export](../ai-export/broker.md)** — Tareas con alcance de broker, cobertura de datos, muestreo exacto, disponibilidad y privacidad.
+

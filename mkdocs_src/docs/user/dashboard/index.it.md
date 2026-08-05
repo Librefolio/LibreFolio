@@ -50,7 +50,7 @@ Nella parte superiore destra della dashboard, hai diversi controlli per personal
   seleziona il **livello di dettaglio** (Compatto, Standard o Completo).
   L'istantanea del backend segue filtro broker attivo, intervallo di date e
   valuta di destinazione; LibreFolio non contatta servizi AI. Consulta la
-  [guida Esportazione AI](../ai-export/index.md).
+  [Esportazione AI Portafoglio](../ai-export/portfolio.md) o la [guida Esportazione AI](../ai-export/index.md).
 
 !!! tip "L'ambito è importante"
 
@@ -69,6 +69,7 @@ Se mancano prezzi o tassi di cambio alla data di fine, appare un banner nella pa
 - 💰 **[Schede KPI](kpi-cards.md)** — Spiegazione di Patrimonio Netto, P&L di periodo e Rendimenti
 - 📊 **[Grafici](charts.md)** — Spiegazione del Grafico di Crescita e del Pannello di Allocazione
 - 🔍 **[Posizioni e Analisi](positions.md)** — Posizioni aperte, viste tabella vs. mappa e analisi dettagliata dei lotti fiscali FIFO.
+
 
 ## 🔗 Teoria correlata
 

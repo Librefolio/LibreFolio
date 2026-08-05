@@ -14,7 +14,15 @@ $$
 \boxed{\mathrm{NAV}(t) = \mathrm{MV}(t) + \mathrm{Cash}(t) + \mathrm{InTransit}(t)}
 $$
 
-Dove $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx}(\mathrm{ccy}_p, C^*, t)$
+Dove:
+
+$$
+\mathrm{MV}(t)=
+\sum_{(a,b)\in S}
+\frac{q(a,b,t)}{qbq(a)}
+\cdot \operatorname{mark}(a,t)
+\cdot \mathrm{fx}(\mathrm{ccy}_{mark}, C^*, t)
+$$
 
 🔗 Vedi **[Portfolio Engine — §5 Aggregation](index.md#5-portfolio-aggregation)** per la derivazione completa.
 
@@ -22,13 +30,14 @@ Dove $\mathrm{MV}(t) = \sum_{(a,b) \in S} q(a,b,t) \cdot p(a,t) \cdot \mathrm{fx
 
 ## 🔗 Catena del Prezzo di Valutazione {: #valuation-price-chain }
 
-Il prezzo $p(a,t)$ segue una priorità rigorosa:
+La quotazione $\operatorname{mark}(a,t)$ proviene dal resolver unificato:
 
-1. **Prezzo di mercato** — riempimento all'indietro di PriceHistory (ultimo $\leq t$)
-2. **Ultimo prezzo di acquisto** — prezzo unitario BUY più recente da $V(u)$ (tutti i broker visibili)
-3. **Mancante** — posizione esclusa dal NAV
+1. **MARKET** — quotazione di chiusura di mercato del giorno stesso.
+2. **TRADE_AVG** — osservazione media BUY/SELL/ADJUSTMENT del giorno stesso.
+3. **CARRIED** — ultima osservazione antecedente a $t$, riportata in avanti (LOCF).
+4. **MISSING** — nessuna osservazione il giorno $t$ o in precedenza.
 
-Il **PMC** non viene mai utilizzato per la valutazione. Vedi **[Portfolio Engine — §2](index.md#2-valuation-price)**.
+I mark restano in valuta nativa fino alla valutazione; la conversione FX avviene a $t$. Il PMC **non** viene mai utilizzato per la valutazione. Vedi [Risoluzione Prezzi](price-resolution.md).
 
 ---
 
@@ -57,6 +66,10 @@ $$
 
 | Fonte di Valutazione | Affidabilità |
 |----------------------|--------------|
-| `MARKET_PRICE` | Piena — PriceHistory disponibile |
-| `LAST_BUY_PRICE` | Parziale — utilizza il prezzo di transazione |
+| `MARKET_PRICE` | Piena — quotazione reale, esatta o riportata |
+| `LAST_TRADE_PRICE` | Parziale — mark del resolver da transazione |
 | `MISSING` | Nessuna — escluso dal NAV |
+
+`estimated=True` si applica solo ai mark di origine TRADE. Una quotazione MARKET obsoleta è stale ma non estimated.
+
+Le valutazioni di origine TRADE più vecchie del periodo di grazia di 14 giorni generano l'avviso "asset valutati al costo / nessun prezzo di mercato da più di due settimane" alla data di valutazione.

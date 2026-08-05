@@ -33,7 +33,7 @@ Una volta selezionato un broker dall'elenco, l'interfaccia è suddivisa in quatt
 1. **Panoramica**: Visualizzazione del patrimonio netto, metriche di rendimento, storico della crescita e grafici di allocazione limitati esclusivamente a questo conto broker (vedi **[Panoramica Dashboard](../dashboard/index.md)**).
 2. **Posizioni**: Elenco delle posizioni aperte, pesi degli asset e metriche di performance all'interno di questo broker, con accesso al pannello in linea di Analisi Lotti FIFO (vedi **[Posizioni Dashboard](../dashboard/positions.md)**).
 3. **Transazioni**: Il registro di tutte le attività finanziarie, incluse voci manuali, importazioni di estratti conto e cronologie (vedi **[Importazione Transazioni](import.md)**).
-4. **Info**: Metadati del broker, configurazioni di scoperto di cassa/vendita allo scoperto, Esportazione AI e controlli di condivisione in linea (vedi **[Configurazione & Info](info.md)**).
+4. **Info**: Metadati del broker, configurazioni di scoperto di cassa/vendita allo scoperto, Esportazione AI e controlli di condivisione in linea (vedi **[Configurazione & Info](info.md)** e **[Broker AI Export](../ai-export/broker.md)**).
 
 ---
 
@@ -68,4 +68,7 @@ La scheda **Posizioni** elenca tutti gli asset attivi attualmente detenuti press
 
 - 📥 **[Importazione Transazioni (BRIM)](import.md)** — Come registrare manualmente le transazioni, eseguire la procedura guidata di importazione BRIM CSV/Excel e visualizzare i log di importazione.
 - ⚙️ **[Configurazione & Info](info.md)** — Impostazioni dei metadati (scoperti, vendite allo scoperto), generatore di prompt per Esportazione AI con ambito limitato e pannello di condivisione del broker in linea.
+- 🧠 **[Broker AI Export](../ai-export/broker.md)** — Task con ambito broker, copertura dati, campionamento esatto, disponibilità e privacy.
 - 🤝 **[Condivisione del Broker](sharing.md)** — Guida dettagliata sui permessi dei ruoli (Proprietario, Editor, Visualizzatore) e sulle impostazioni di percentuale degli asset.
+
+

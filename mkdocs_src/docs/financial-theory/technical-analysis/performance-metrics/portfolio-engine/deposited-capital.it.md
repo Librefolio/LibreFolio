@@ -7,7 +7,9 @@
 **Capitale Depositato** = capitale esterno netto cumulativo versato dall'inizio:
 
 $$
-\mathrm{DepCap}(t) = \sum_{\tau \leq t} D(\tau) - \sum_{\tau \leq t} W(\tau)
+\mathrm{CapitalBaseline}(t) =
+\sum_{\tau \leq t}\mathrm{ExternalCashFlow}(\tau)
+  + \sum_{\tau \leq t}\mathrm{InKindCapital}(\tau)
 $$
 
 **PnL Totale** = tutto il valore generato oltre i contributi esterni:
@@ -25,6 +27,8 @@ $$
 | DEPOSITO / PRELIEVO (non collegati) | ✅ Sì |
 | TRASFERIMENTO DI LIQUIDITÀ collegato-esterno | ✅ Sì |
 | TRASFERIMENTO DI LIQUIDITÀ collegato-interno | ❌ No |
+| RETTIFICA / TRASFERIMENTO con `cost_basis_override`, senza `asset_id` | ✅ Sì, rettifica del capitale esterno |
+| RETTIFICA collegata a FRAZIONAMENTO | ❌ No, solo ridimensionamento quantità |
 | ACQUISTO, VENDITA, DIVIDENDO, INTERESSE, COMMISSIONE, IMPOSTA | ❌ No |
 
 ---
@@ -55,7 +59,7 @@ $$
 
 ## 📝 Esempi Svolti
 
-### A — Deposito → Acquisto → Vendita in Gain
+### 🧾 — Deposito → Acquisto → Vendita in Gain
 
 | Passaggio | Tx | $K$ | $R$ | Liquidità |
 |------|----|-----|-----|------|
@@ -65,7 +69,7 @@ $$
 
 TotalPnL = 1.200 − 1.000 = **+€200** ✓
 
-### B — Dividendo e poi Prelievo
+### 💸 — Dividendo e poi Prelievo
 
 | Passaggio | Tx | $K$ | $R$ | $W$ | Liquidità |
 |------|----|-----|-----|-----|------|
@@ -77,7 +81,7 @@ TotalPnL = 1.200 − 1.000 = **+€200** ✓
 
 Dopo il passaggio 5: Liquidità=30, K=0, R=30 ✓ (rendimenti ripristinati da W)
 
-### C — Scenario di Vendita Completa
+### 🧪 — Scenario di Vendita Completa
 
 | Passaggio | Tx | $K$ | $R$ | Liquidità |
 |------|----|-----|-----|------|
@@ -95,6 +99,9 @@ Il modello a 3 pool gira in un **unico loop per transazione** (event-driven, non
 1. Lettura del PMC prima della modifica della pool
 2. Aggiornamento di K/R/W secondo le regole del tipo di transazione
 3. Riduzione del pool PMC (per le VENDITE)
+
+
+La serie di input ROI/TWRR/MWRR è derivata dalle variazioni giorno per giorno del `cumulative_external_cash_flow`, il capital baseline. Non è derivata dal campo `external_cash_flow` (solo liquidità).
 
 🔗 Vedi **[Portfolio Engine — §6](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)** per tutte le regole formali.
 

@@ -10,7 +10,7 @@ Gli adeguamenti del prezzo catturano variazioni di valore che **non sono causate
 
 Questi eventi sono particolarmente rilevanti per gli asset che non hanno una quotazione di mercato continua — come il debito privato, gli strumenti illiquidi o gli asset tracciati tramite il provider Scheduled Investment.
 
-### Scenari Comuni
+### Common Comuni
 
 | Scenario | Importo | Descrizione |
 |----------|--------|-------------|

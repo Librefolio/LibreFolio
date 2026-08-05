@@ -71,7 +71,7 @@ In LibreFolio, un evento `DIVIDEND` (e la corrispondente transazione di portafog
 - **Amount**: L'importo del pagamento in contanti per azione
 - **Currency**: La valuta del pagamento (es. USD, EUR)
 
-### La Differenza Contabile: Dividendo vs Interesse
+### The Differenza Contabile: Dividendo vs Interesse
 È fondamentale distinguere tra una transazione di **Dividendo** e una di **Interesse** a livello di database:
 
 1. **Dividendo (basato su Equity)**: Nel tracciamento di portafoglio a partita doppia, un dividendo rappresenta un ingresso di cassa (`cash.amount > 0`) generato dal possesso di azioni di un asset azionario specifico. Il numero di azioni possedute alla data ex rimane costante — non vengono aggiunte o rimosse nuove azioni durante questo pagamento in contanti. Pertanto, la transazione nel database richiede `quantity = 0` per evitare doppi conteggi o il gonfiamento del saldo delle azioni. Qualsiasi informazione sul numero di azioni che hanno generato il pagamento è trattata come *informativa* e viene solitamente memorizzata nel campo della descrizione.

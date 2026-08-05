@@ -1,61 +1,69 @@
-# <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" alt=""> Borsa Italiana
+# 🇮🇹 Borsa Italiana
 
-**Borsa Italiana** es la bolsa de valores italiana, operada por Euronext. LibreFolio incluye un **proveedor de activo** dedicado que obtiene precios, series históricas y metadatos de instrumentos directamente desde el sitio web de Borsa Italiana.
+**Borsa Italiana** es la bolsa de valores italiana, operada por Euronext. LibreFolio incluye un **proveedor de datos de activos** dedicado que obtiene precios, series históricas y metadatos de instrumentos directamente desde el sitio web de Borsa Italiana.
 
 ---
 
 ## 🔍 Qué Proporciona
 
 | Datos | Descripción |
-|------|-------------|
-| **Precio actual** | Último precio oficial de mercado |
-| **OHLCV Histórico** | Series diarias de apertura/máximo/mínimo/cierre/volumen |
-| **Metadatos del instrumento** | ISIN, segmento de mercado, moneda |
+|-------|-------------|
+| **Precio actual** | Último precio oficial de mercado para instrumentos cotizados; NAV de fondos solo si está fechado hoy |
+| **Precios históricos** | OHLCV diario para instrumentos cotizados; un punto NAV en la fecha real del NAV para fondos |
+| **Metadatos del instrumento** | ISIN, segmento de mercado, divisa e identificadores alternativos cuando están disponibles |
 
-Los activos negociados en Borsa Italiana incluyen acciones italianas (segmento MTA/MIL), ETFs (ETFplus), bonos (MOT) y fondos.
+Los activos negociados en Borsa Italiana incluyen acciones italianas (segmento MTA/MIL), ETF (ETFplus), bonos (MOT) y fondos de inversión/SICAV.
 
 ---
 
 ## ⚙️ Configuración
 
-No se requiere clave de API ni registro; el proveedor extrae datos públicos del sitio web de Borsa Italiana. La configuración está disponible por activo en el panel **Provider Config** de la página de detalles del activo.
+No se requiere clave de API ni registro: el proveedor extrae datos públicos del sitio web de Borsa Italiana. La configuración está disponible por activo en el panel **Provider Config** en la página de detalle del activo.
 
-1. Navegue hasta el activo que desea rastrear.
-2. Abra el panel **⚙️ Provider Config**.
-3. Seleccione **Borsa Italiana** de la lista de proveedores.
-4. Ingrese el **ISIN** o el código de ticker de Borsa Italiana.
-5. Guarde — LibreFolio obtendrá la primera serie histórica en la siguiente sincronización.
+1. Navega hasta el activo que deseas rastrear.
+2. Abre el panel **⚙️ Provider Config**.
+3. Selecciona **Borsa Italiana** en la lista de proveedores.
+4. Introduce el **ISIN** para instrumentos cotizados. Para fondos, usa la Búsqueda Inteligente para que LibreFolio pueda capturar automáticamente el código interno del fondo en Borsa.
+5. Guarda — LibreFolio obtendrá la primera serie histórica en la siguiente sincronización.
 
-!!! tip "Búsqueda del ISIN"
+!!! tip "Encontrar el ISIN"
 
-    Puede buscar el ISIN en [borsaitaliana.it](https://www.borsaitaliana.it) buscando el nombre del instrumento. El ISIN se muestra en cada página de detalles del instrumento.
+    Puedes buscar el ISIN en [borsaitaliana.it](https://www.borsaitaliana.it) buscando el nombre del instrumento. El ISIN se muestra en cada página de detalle del instrumento.
+
+!!! tip "La Búsqueda Inteligente puede usar enlaces de Borsa"
+
+    Si la búsqueda normal no encuentra un fondo, pega o busca con la URL de la página del fondo/detalle de Borsa Italiana. La búsqueda inteligente de LibreFolio puede resolver las páginas Borsa compatibles, adjuntar los `provider_params` correctos y hacer que el fondo sea cotizable por su código interno.
 
 ---
 
 ## 🔄 Sincronización
 
-El proveedor de Borsa Italiana participa en el ciclo estándar de **asset sync**. Actívelo manualmente desde la página de detalles del activo con el botón **🔄 Sync**, o deje que la tarea programada en segundo plano se ejecute durante la noche.
+El proveedor Borsa Italiana participa en el ciclo estándar de **sincronización de activos**. Actívalo manualmente desde la página de detalle del activo con el botón **🔄 Sync**, o deja que la tarea programada en segundo plano se ejecute por la noche.
 
-!!! note "Rate limiting"
+!!! note "Límite de velocidad"
 
-    El proveedor aplica un control de flujo automático para evitar ser bloqueado por Borsa Italiana. Si tiene muchos activos de esta bolsa, la sincronización completa puede tardar unos minutos.
+    El proveedor aplica una limitación automática para evitar ser bloqueado por Borsa Italiana. Si tienes muchos activos de este mercado, la sincronización completa puede tardar unos minutos.
 
 !!! note "Fondos de inversión (NAV)"
 
-    Los fondos de inversión y las SICAV se valoran por su **NAV** (valor liquidativo) diario, publicado una vez al día con un retraso. LibreFolio identifica cada fondo por su código de fondo de Borsa, por lo que el historial de precios muestra el NAV en su fecha real, y el valor actual solo se actualiza cuando el NAV publicado tiene fecha de hoy (de lo contrario, se usa como estimación el precio de su última compra).
+    Los fondos de inversión y las SICAV se valoran según su **NAV** diario, publicado una vez al día con retraso. LibreFolio valora cada fondo por su código interno de Borsa, no por ISIN. El historial de precios muestra un punto NAV en su fecha real, y el valor actual se actualiza solo cuando el NAV publicado está fechado hoy (de lo contrario se utiliza tu último precio de compra como estimación).
+
+!!! note "Identificadores alternativos"
+
+    Algunos identificadores importados o descubiertos por el proveedor se almacenan como una lista editable de identificadores alternativos. Para los fondos de Borsa Italiana, esta lista puede incluir el código interno del fondo mientras que el ISIN real sigue siendo el identificador principal cuando está disponible.
 
 ---
 
 ## 🔗 Documentación para Desarrolladores
 
-Para detalles de implementación (formato de solicitud, estrategia de análisis de HTML, mapeo de campos), consulte:
+Para obtener detalles de implementación (formato de solicitudes, estrategia de extracción HTML, mapeo de campos), consulta:
 
-→ [Manual del Desarrollador — Proveedor de Borsa Italiana](../../../developer/backend/assets/provider_borsa_italiana.md)
+→ [Manual para desarrolladores — Proveedor Borsa Italiana](../../../developer/backend/assets/provider_borsa_italiana.md)
 
 ---
 
 ## 🔗 Relacionados
 
-- 📋 **[Descripción general de activos](../index.md)** — Gestione su biblioteca de activos
-- 🏦 **[Proveedores de activos](./index.md)** — Otras fuentes de datos
+- 📋 **[Visión General de Activos](../index.md)** — Gestiona tu biblioteca de activos
+- 🏦 **[Proveedores de Activos](./index.md)** — Otras fuentes de datos
 - 📡 **[justETF](./justetf.md)** — Fuente alternativa para datos de ETF

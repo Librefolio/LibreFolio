@@ -19,7 +19,7 @@ El gráfico de crecimiento muestra cómo evolucionó el valor de tu cartera dura
  </div>
 </div>
 
-### Modo ABS — valores absolutos
+### ABS ABS — valores absolutos
 
 El gráfico utiliza un diseño de **área apilada + líneas superpuestas**:
 
@@ -33,7 +33,7 @@ El gráfico utiliza un diseño de **área apilada + líneas superpuestas**:
 
 **La brecha entre la línea de NAV y la línea de Capital Depositado = PyG Total** — todas las ganancias generadas, incluyendo plusvalías no realizadas, plusvalías realizadas, intereses y dividendos, menos comisiones e impuestos.
 
-#### Desglose de la información emergente
+#### Tooltip de la información emergente
 
 Al pasar el cursor sobre el gráfico, la información emergente muestra:
 
@@ -93,7 +93,7 @@ El panel de asignación muestra cómo está distribuida tu cartera en el momento
  </div>
 </div>
 
-### Tres dimensiones
+### Three dimensiones
 
 | Dimensión | Qué muestra |
 |-----------|-------------|
@@ -101,12 +101,12 @@ El panel de asignación muestra cómo está distribuida tu cartera en el momento
 | **Sector** | Sector industrial: 💻 Tecnología, 🏦 Financiero, 💊 Salud, etc. |
 | **Geografía** | País o región de la cotización principal de cada activo |
 
-### Pestañas Ahora vs. Historial
+### Now Ahora vs. Historial
 
 - **Ahora** — Gráfico de donut de la asignación actual en `date_to`. Pasa el cursor sobre cualquier porción para ver el porcentaje exacto y el valor absoluto.
 - **Historial** — Gráfico de área apilada al 100% que muestra cómo cambió la asignación con el tiempo. Útil para visualizar el reequilibrio de la cartera a lo largo de meses o años.
 
-### Efectivo como Liquidez
+### Cash como Liquidez
 
 **Efectivo** (tu saldo del bróker) siempre aparece como la porción de **Liquidez** tanto en las vistas de Tipo como de Sector. En el mapa geográfico, el efectivo no está asignado a ningún país y no aparece.
 

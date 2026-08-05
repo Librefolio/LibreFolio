@@ -66,7 +66,7 @@ normalizzato, contesto della posizione nel portafoglio e risultati tecnici del
 servizio segnali condiviso. Il browser non ricalcola gli indicatori. I task
 compaiono solo quando sono applicabili all'asset e ai dati disponibili: per
 esempio, il contesto della posizione o del piano ricorrente deve esistere per la
-relativa analisi. Consulta la [guida Esportazione AI](../../ai-export/index.md).
+relativa analisi. Vedi [Esportazione AI Asset](../../ai-export/asset.md) o la [guida Esportazione AI](../../ai-export/index.md).
 
 ---
 

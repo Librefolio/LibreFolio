@@ -91,14 +91,19 @@ def _extract_headings(text: str) -> list[tuple[int, int, str]]:
     Returns list of (line_number, level, text).
     """
     headings = []
+    in_code = False
     for i, line in enumerate(text.splitlines(), 1):
+        if line.strip().startswith('```'):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
         m = re.match(r'^(#{1,6})\s+(.*)', line)
         if m:
             level = len(m.group(1))
             heading_text = m.group(2).strip()
             headings.append((i, level, heading_text))
     return headings
-
 
 def _extract_links(text: str) -> list[tuple[str, str]]:
     """
@@ -600,8 +605,10 @@ def check_list_structure(
     issues = []
 
     # Bullet lists
-    src_bullets = re.findall(r'^\s*[-*+]\s', source, re.MULTILINE)
-    tr_bullets = re.findall(r'^\s*[-*+]\s', translated, re.MULTILINE)
+    src_clean = _strip_code_blocks(source)
+    tr_clean = _strip_code_blocks(translated)
+    src_bullets = re.findall(r'^\s*[-*+]\s', src_clean, re.MULTILINE)
+    tr_bullets = re.findall(r'^\s*[-*+]\s', tr_clean, re.MULTILINE)
     if len(src_bullets) != len(tr_bullets):
         issues.append(Issue(
             severity=Severity.WARN,
@@ -1283,6 +1290,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 

@@ -33,9 +33,14 @@ p_{\text{buy}}(a, t) & \text{si existe la última compra (BUY) de } V(u) \\
 \end{cases}
 $$
 
-- $p_{\text{mkt}}$ = relleno hacia atrás (backward-fill) desde PriceHistory (último cierre con fecha $\leq t$)
-- $p_{\text{buy}}$ = precio unitario de la compra (BUY) más reciente de $a$ en todos los brókers de $V(u)$, con fecha $\leq t$
-- El PMP **nunca** se utiliza como precio de valoración
+- El resolver unificado es el único cerebro de valoración: `MARKET → TRADE_AVG → CARRIED → MISSING`.
+- `CARRIED` es la última observación proyectada hacia adelante (LOCF). Lleva los metadatos de obsolescencia `days_back`.
+- `estimated=True` indica origen TRADE. Una cotización MARKET obsoleta es stale, no estimated.
+- Las marcas permanecen en moneda nativa; cada consumidor convierte a $C^*$ en la fecha de valoración $t$.
+- El FX del coste base permanece fijado a la fecha de transacción.
+- El PMC **nunca** se utiliza como precio de valoración.
+
+Ver [Resolución de Precios](price-resolution.md) para el contrato del resolver y la semántica de calidad de datos.
 
 ---
 
@@ -119,7 +124,7 @@ Tres pools acumuladores rastrean la procedencia del efectivo. $K$ y $R$ se manti
 
     Una compra (BUY) en el bróker $b_1$ solo puede consumir $R_{b_1}$, nunca $R_{b_2}$. El efectivo no se teletransporta entre brókers; solo las transferencias explícitas mueven los saldos de los pools.
 
-### Reglas de actualización (por transacción en el bróker $b$, cronológicas)
+### 🔁 de actualización (por transacción en el bróker $b$, cronológicas)
 
 | Icono y Tipo | Fórmulas de Actualización | Lógica y Descripción |
 |:---:|---|---|
@@ -133,7 +138,7 @@ Tres pools acumuladores rastrean la procedencia del efectivo. $K$ y $R$ se manti
 
 Si las fechas de salida y llegada difieren, la transferencia está en tránsito: se resta de $s$ el día de salida y se suma a $d$ el día de llegada. Entre esas fechas, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ por el monto en tránsito, lo cual se maneja mediante una conciliación proporcional.
 
-### Agregación para salida
+### 🧮 para salida
 
 $$
 \mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
@@ -143,7 +148,7 @@ $$
 \mathrm{CashFromReturns}(t) = \sum_{b \in S} R_b(t)
 $$
 
-### Invariante de conciliación
+### ⚖️ de conciliación
 
 $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
@@ -153,25 +158,32 @@ Se aplica un escalado proporcional por bróker si la deriva es $> 0.01$ (debido 
 
 ---
 
-## 📐 7. Contribución del Periodo {: #7-period-contribution }
+## 📐 7. Contribución de Período {: #7-period-contribution }
 
-Para el periodo $[t_0, t_1]$, por posición $(a,b)$:
+Para el período $[t_0, t_1]$, por posición $(a,b)$:
 
 $$
 \Delta\mathrm{UGL}(a,b) = \mathrm{UGL}(a,b,t_1) - \mathrm{UGL}(a,b,t_0)
 $$
 
 $$
-\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{Fees}(a,b)
+\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{FeesTaxes}(a,b)
 $$
 
-Conjunto de posiciones de contribución:
+Conjunto de posiciones contributivas:
 
 $$
-\mathcal{P} = \mathcal{P}(t_0) \cup \mathcal{P}(t_1) \cup \mathrm{keys}(\text{Realized}) \cup \mathrm{keys}(\text{Income}) \cup \mathrm{keys}(\text{Fees})
+\mathcal{P} = \text{posiciones con actividad COMPRA/VENTA/AJUSTE/TRANSFERENCIA o cantidad límite}
 $$
 
-Lo no asignado (comisiones/ingresos sin `asset_id`) se agrupa por bróker.
+El P&L de período a nivel de cartera también expone un residuo:
+
+$$
+\mathrm{Other} = \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
+$$
+
+Las comisiones/ingresos no asignados sin `asset_id` se agrupan por bróker como otros efectos de período.
+
 
 ---
 
@@ -214,13 +226,17 @@ Computadas **después** de los estados diarios, como una pasada separada:
 | MWRR | XIRR resolviendo $\sum \frac{CF_i}{(1+r)^{d_i/365}} = 0$ | [MWRR](mwrr.md) |
 | ROI Simple | $(\mathrm{NAV} - \text{NetInvested}) / \text{NetInvested}$ | [ROI](roi.md) |
 | Efecto de Tiempo | $\text{MWRR}_{\text{cum}} - \text{TWRR}_{\text{cum}}$ | [Timing Effect](timing-effect.md) |
+| Net Annualized Return | $(1+r_{\mathrm{net}})^{365/d}-1$ | [Net Annualized Return](net-annualized-return.md) |
 
 ---
 
+
 ## 🔗 Relacionado
 
-- 💼 [NAV](nav.md) — valoración de instantánea
-- 📖 [Book Value](book-value.md) — agregado de la base de costo
-- 📊 [Period P&L](period-pnl.md) — ganancia/pérdida en ventana con contribución
-- 💸 [Deposited Capital](deposited-capital.md) — detalles de los 3 pools y ejemplos resueltos
-- 📈 [PMP](../weighted-average-cost.md) — método de costo iterativo
+- 💼 [NAV](nav.md) — valoración instantánea (snapshot)
+- 🧭 [Resolución de Precios](price-resolution.md) — resolver unificado de valoración
+- 📈 [Net Annualized Return](net-annualized-return.md) — definiciones CAGR para posiciones, período y FIFO
+- 📖 [Book Value](book-value.md) — agregado del coste base
+- 📊 [Period P&L](period-pnl.md) — ganancias/pérdidas en una ventana temporal con contribución
+- 💸 [Deposited Capital](deposited-capital.md) — detalles sobre los 3 pools y ejemplos prácticos
+- 📈 [PMC](../weighted-average-cost.md) — método de coste iterativo

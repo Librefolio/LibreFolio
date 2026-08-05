@@ -87,6 +87,14 @@ Se l'estratto conto contiene simboli ticker o ISIN che non sono nella tua librer
  <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Procedura Guidata Passo 4: Risoluzione Asset" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
+#### ⛔ Data di Apertura Broker
+
+Se il broker di destinazione ha una data di apertura impostata, la procedura guidata contrassegna le righe la cui data è **strettamente antecedente** con lo stato `Prima dell'apertura`. Quelle righe vengono deselezionate e non possono essere importate; una riga il giorno dell'apertura rimane valida. Usa **Modifica data broker** e poi ricontrolla/aggiorna se la data è errata.
+
+#### ⚠️ Avvisi Asset
+
+Alcuni plugin collegano avvisi informativi agli asset estratti. Ad esempio, Intesa Sanpaolo e Crédit Agricole possono avvisare che un titolo potrebbe essere scaduto o rimborsato. Questi avvisi appaiono come banner arancioni quando crei/mappi l'asset; non bloccano l'importazione.
+
 #### ⚠️ Rilevamento Duplicati
 
 Il sistema confronta le voci analizzate con il tuo database per trovare potenziali duplicati in base a tipo, data, importo, quantità e descrizione.

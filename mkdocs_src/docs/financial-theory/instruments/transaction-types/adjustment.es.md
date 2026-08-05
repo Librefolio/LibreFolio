@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Ajuste
+# 🧮 ![](../../../static/icons/transactions/adjustment.png){: width="32" style="vertical-align: middle;" } Ajuste
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="transactions" data-name="form-modal-adjustment" alt="Transaction Form — Adjustment">
@@ -26,6 +26,7 @@ Los ajustes se utilizan cuando ningún otro tipo de transacción encaja:
 - **Corrección de errores de importación** — p. ej., una importación de un bróker omitió una acción corporativa
 - **Divisiones / divisiones inversas de acciones** — ajustar la cantidad sin movimiento de efectivo
 - **Regalos** — recibir o dar acciones
+- **Adquisición gratuita** — airdrops, recompensas de staking, promociones
 - **Configuración de saldo inicial** — arranque de una cartera a partir de una instantánea
 - **Acciones corporativas** no cubiertas por otros tipos (spinoffs, fusiones, etc.)
 
@@ -52,6 +53,8 @@ Los ajustes con cantidad positiva **incrementan** el recuento de lotes (FIFO). L
 ### 🏦 Base de Costo Automática en Transferencias
 
 Al transferir activos entre brókeres, LibreFolio **calcula automáticamente** la Anulación de la Base de Costo en el lado receptor utilizando el **Precio Medio Ponderado (PMP)** de la posición del bróker de origen.
+
+$$\text{Cost Basis Override} = \frac{C}{q}$$
 
 !!! tip "Más información"
 

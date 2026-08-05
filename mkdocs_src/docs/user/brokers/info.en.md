@@ -23,12 +23,11 @@ The left column of the Info tab displays key properties and validation rules for
 ## 🧠 Scoped AI Export
 
 At the top right of the broker toolbar, **AI Export** (:material-brain:) opens
-four dedicated Broker tasks—not filtered Portfolio prompts:
+three dedicated Broker tasks—not filtered Portfolio prompts:
 
 - **Broker Review**
-- **Broker Cost Efficiency**
-- **Broker Concentration Context**
-- **FIFO Lot Review**
+- **Broker Performance & Market Drivers**
+- **Capital-Loss Offset Strategies**
 
 The backend snapshot is limited to the selected broker and can include its cash,
 holdings, activity, performance, costs, concentration, and FIFO lots according

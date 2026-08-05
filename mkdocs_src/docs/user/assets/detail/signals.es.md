@@ -66,8 +66,7 @@ el historial de precios normalizado, el contexto de la posición en la cartera y
 los resultados técnicos del servicio de señales compartido. El navegador no
 recalcula los indicadores. Las tareas aparecen solo cuando son aplicables al
 activo y a los datos disponibles; por ejemplo, debe existir un contexto de
-posición o de plan periódico para el análisis correspondiente. Consulta la
-[guía de Exportación de IA](../../ai-export/index.md).
+posición o de plan periódico para el análisis correspondiente. Consulta la [Exportación AI de Activo](../../ai-export/asset.md) o la [guía de exportación AI](../../ai-export/index.md).
 
 ---
 

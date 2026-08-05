@@ -24,7 +24,7 @@ El número principal se calcula utilizando la siguiente fórmula:
 
 Un número positivo significa que ganaste dinero gracias a la actividad de inversión. Un número negativo significa que perdiste dinero, neto de los movimientos de capital.
 
-### El número debajo del valor principal
+### The número debajo del valor principal
 
 Justo debajo del valor de P&L del Período, una línea más pequeña muestra algo como `+45.20 (+3.10%)`.
 
@@ -35,7 +35,7 @@ Justo debajo del valor de P&L del Período, una línea más pequeña muestra alg
 
 Esta línea solo aparece una vez que el historial tiene al menos dos puntos diarios.
 
-### Las filas de desglose
+### The filas de desglose
 
 | Fila | Qué mide |
 |-----|-----------------|
@@ -60,7 +60,7 @@ Esta línea solo aparece una vez que el historial tiene al menos dos puntos diar
 
 La tarjeta **Rendimientos** muestra métricas de *tasa de rendimiento* — porcentajes que te permiten comparar el rendimiento independientemente del tamaño de la cartera.
 
-### Efecto de la Oportunidad
+### Timing de la Oportunidad
 
 El **Efecto de la Oportunidad** en la parte superior de la tarjeta mide si tus decisiones de depósito/retiro *añadieron* o *restaron* valor en comparación con una estrategia pasiva de comprar y mantener:
 
@@ -69,7 +69,7 @@ El **Efecto de la Oportunidad** en la parte superior de la tarjeta mide si tus d
 - **Favorable (positivo)** ✅: tendiste a depositar cuando los precios estaban bajos, aumentando tu rendimiento personal por encima de lo que ganaron los activos por sí solos.
 - **Desfavorable (negativo)** ❌: tendiste a depositar en picos o te perdiste las caídas, reduciendo tu rendimiento por debajo del rendimiento puro de los activos.
 
-### El número debajo del Efecto de la Oportunidad
+### The número debajo del Efecto de la Oportunidad
 
 Debajo del Efecto de la Oportunidad verás un pequeño porcentaje (ej. `+0.35%`) — es el cambio en tu **P&L Total** de **ayer a hoy**, expresado como una proporción del patrimonio neto de ayer:
 
@@ -77,7 +77,7 @@ Debajo del Efecto de la Oportunidad verás un pequeño porcentaje (ej. `+0.35%`)
 
 Es una estimación aproximada del rendimiento de **hoy** — una comprobación rápida del estado. No es el ROI, TWRR o MWRR que se muestran en las filas siguientes, que permanecen ancladas al período completo seleccionado.
 
-### Las cuatro métricas de rendimiento
+### The cuatro métricas de rendimiento
 
 | Métrica | Pregunta que responde |
 |--------|---------------------|
@@ -102,7 +102,7 @@ Es una estimación aproximada del rendimiento de **hoy** — una comprobación r
 
 La tarjeta **Patrimonio Neto** muestra el valor absoluto de tu cartera al final del período seleccionado.
 
-### El número debajo del Patrimonio Neto
+### The número debajo del Patrimonio Neto
 
 Debajo del valor del Patrimonio Neto encontrarás tu **P&L Total**, con su cambio porcentual entre paréntesis — ej. `+12,450.30 (+0.35%)`.
 
@@ -115,7 +115,7 @@ Nota: "Capital Neto Invertido Desde el Inicio" aquí es la suma de **todos** los
 
 🔗 **Teoría**: [Capital Depositado, P&L Total y Fondos de Efectivo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
-### Qué significan las filas
+### What significan las filas
 
 | Fila | Definición |
 |-----|-----------|
@@ -124,7 +124,7 @@ Nota: "Capital Neto Invertido Desde el Inicio" aquí es la suma de **todos** los
 | **Efectivo** | Saldo líquido mantenido en cuentas de bróker |
 | **[Capital Depositado](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Capital externo neto aportado a este ámbito |
 
-### La barra de Capital Depositado
+### The barra de Capital Depositado
 
 La barra horizontal debajo de las filas visualiza:
 

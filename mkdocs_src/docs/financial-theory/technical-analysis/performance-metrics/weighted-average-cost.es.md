@@ -153,7 +153,7 @@ Cuando una cartera contiene adquisiciones en diferentes monedas, LibreFolio:
 
 !!! warning "El PMP nunca se utiliza para la valoración de activos"
 
-    El PMP es una construcción contable para la base de coste. La cadena de valoración para el valor de mercado utiliza: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. Ver [NAV](portfolio-engine/nav.md).
+    El PMP es una construcción contable para la base de coste. La cadena de valoración para el valor de mercado utiliza: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. Consulta [Resolución de Precios](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implementación: Alcance a Nivel de Posición
 
@@ -165,7 +165,7 @@ $$
 
 El motor calcula el PMP en línea durante el bucle diario de transacciones — no se necesitan consultas separadas a la base de datos. Esto logra un coste amortizado O(1) por transacción en lugar del coste O(N) de volver a consultar todo el historial.
 
-### Ordenamiento de transacciones del mismo día
+### 📅 de transacciones del mismo día
 
 Dentro de la misma fecha, **las adiciones se procesan antes que las reducciones**:
 

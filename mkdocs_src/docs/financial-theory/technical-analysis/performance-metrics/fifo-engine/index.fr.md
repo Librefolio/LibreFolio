@@ -8,6 +8,8 @@ Alors que le [Prix Moyen Pondéré (PMP)](../weighted-average-cost.md) fusionne 
 
 Cette page décrit le **fonctionnement** de ce moteur : comment les lots sont créés, appariés et clôturés. Pour les **métriques** dérivées de ce moteur (Rendement Ouvert/Total, mise à l'échelle qbq, allocation des revenus, un exemple pratique), voir [Analyse des Lots FIFO](fifo-lot-analysis.md).
 
+Le moteur FIFO est indépendant du flux de prix. Il rejoue les quantités, lots, fragments, transferts et fermetures réalisées. Les niveaux de valorisation courants résident à l'extérieur : [Résolution des Prix](../portfolio-engine/price-resolution.md) et `LotsAnalysisService` fournissent les cours de référence/courants et le comportement au coût estimé.
+
 !!! info "Deux moteurs, deux questions"
 
     Le [Moteur de Portefeuille](../index.md) (basé sur le PMP) répond à la question : _"Quel est mon coût de base consolidé pour cette position ?"_
@@ -27,6 +29,7 @@ Un **lot** est un lot d'acquisition économique pour un actif : un seul ACHAT, l
 | Quantité et coût d'origine | Fixés à l'ouverture, ensuite modifiés uniquement par les divisions — jamais par les transferts |
 | Quantité ouverte | Quelle partie du lot n'a **pas** encore été appariée par une transaction opposée |
 | Conservation | Quel courtier (ou courtiers, dans le temps) détient actuellement la quantité ouverte |
+| Prix de référence | `reference_unit_price` plus `reference_price_source` (`exact`, `fallback`, `none`) |
 
 ---
 
@@ -120,6 +123,8 @@ Si l'historique des transactions contient quelque chose que le moteur ne peut pa
 Le résultat global est ensuite marqué **complet** ou **dégradé** dans son ensemble, mais les graphiques et tableaux construits sur un résultat dégradé s'affichent toujours normalement pour chaque lot qui **n'a pas** été affecté. Vous pouvez voir cela reflété comme une bannière de qualité de données dans le [panneau d'Analyse des Lots FIFO](../../../../user/dashboard/positions.md#fifo-lots-analysis).
 
 ---
+
+- 🧭 **[Résolution des Prix](../portfolio-engine/price-resolution.md)**
 
 ## 🔗 Liens connexes
 
