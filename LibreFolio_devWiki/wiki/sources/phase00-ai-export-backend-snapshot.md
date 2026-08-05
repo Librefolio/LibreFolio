@@ -29,9 +29,9 @@ related:
 
 The completed Phase 0 chain replaces frontend-built AI Export with a typed,
 versioned backend snapshot platform spanning Portfolio, Asset, FX and Broker.
-The final V3 architecture has one `AiExportRuntimeService`, 67 components, 40
+The final released V1 architecture has one `AiExportRuntimeService`, 67 components, 40
 internal datasets, 8 public data exports and 11 public analyses; the intermediate
-profile/assembler runtime and V1 schema were removed. The frontend retains
+profile/assembler runtime and legacy schema were removed. The frontend retains
 trusted prompt presentation, locale-derived response language, short-lived
 contextual notes, safe serialization and clipboard UX. Final candidate
 `20260804T224056.073291Z` proved 114/114 public prompt variants unchanged
@@ -55,7 +55,7 @@ against baseline after the cleanup.
 - The cutover removed the legacy frontend builders, custom serializer, duplicated technical-event calculations, and local EMA/RSI/MACD/Bollinger engines while preserving comparison, benchmark, Measure, and generic backend rendering.
 - Live E2E exposed a false cash equality invariant: Portfolio Engine cash uses transaction-date FX, whereas native-currency exposure uses snapshot-date FX. The resolution is filed in [[problems/ai-export-cash-fx-valuation-basis-mismatch]] and deliberately leaves Portfolio Engine math unchanged.
 - Final review decoupled Asset `drawdown_recovery` from a non-empty trailing technical window: market context prefers technical observations but falls back to selected observed history, while applicability remains two selected observations. See [[problems/ai-export-drawdown-selected-history-fallback]].
-- Clipboard fallback is transport-only: retain the immediate `ClipboardItem(Promise<Blob>)` path when available; otherwise prepare V2 exactly once and write the same prompt through `writeText`/`execCommand`, never through legacy export logic. See [[problems/ai-export-clipboard-fallback-unreachable]].
+- Clipboard fallback is transport-only: retain the immediate `ClipboardItem(Promise<Blob>)` path when available; otherwise prepare V1 exactly once and write the same prompt through `writeText`/`execCommand`, never through legacy export logic. See [[problems/ai-export-clipboard-fallback-unreachable]].
 - Canonical test-runner registration covers service, schema, API, probe,
   frontend unit and cross-domain E2E tests. The final backend/frontend orphan
   audit is zero.
@@ -104,7 +104,7 @@ against baseline after the cleanup.
   zero failures/public-output violations, UI/probe equivalence, a passed secret
   scan, and unchanged source/production databases. The report covers all 49/49
   choices against current runtime definitions.
-- Public Catalog V3 reduced the UI to one general and one detailed data export
+- Public Catalog V1 exposes one general and one detailed data export
   per domain plus 11 focused analyses. Granular datasets remain internal
   composition blocks and cannot be requested directly.
 - Final audit removed 21,901 source/test/runner lines while adding 890, shared
@@ -115,6 +115,9 @@ against baseline after the cleanup.
   `20260804T224056.073291Z` both passed 114/114. Comparison found zero
   character, byte, composition, event or state deltas; 66/66 Analysis variants
   are `OPTIMAL`.
+- Before first release, public wire/catalog/selection/template/response versions
+  were normalized to V1. The normal test runner keeps fast probe-helper tests
+  but never executes a real copied-DB prompt corpus or semantic review.
 
 ## Source Chain
 

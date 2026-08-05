@@ -3,7 +3,8 @@
 AI Export composes small factual units instead of routing tasks through monolithic
 profiles or domain assemblers.
 
-The profile/assembler implementation was retired after Public Catalog V3.
+The profile/assembler implementation was retired before the first Public
+Catalog V1 release.
 `runtime_service.py`, `Composer`, `BuildContext`, and the component/dataset/
 analysis registries are the only executable snapshot pipeline.
 
@@ -466,7 +467,7 @@ component, or unrelated datasets.
 Frontend flow:
 
 1. load and validate catalog compatibility;
-2. submit selected V3 IDs and versions;
+2. submit selected V1 IDs and versions;
 3. validate snapshot identity and analysis contract;
 4. render safe deterministic text;
 5. write through Clipboard API, with textarea fallback where required.

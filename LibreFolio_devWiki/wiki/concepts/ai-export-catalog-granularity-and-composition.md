@@ -17,7 +17,7 @@ related:
 
 ## Definition
 
-The final AI Export V3 catalog is a modular composition system with **67 reusable
+The released AI Export V1 catalog is a modular composition system with **67 reusable
 components**, **40 internal datasets**, **8 public Export Data choices**, and
 **11 public Request Analysis choices** across Portfolio, Broker, Asset, and FX.
 Analyses request only facts material to the task, components build once per
@@ -103,7 +103,7 @@ the UI.”
 
 ## UX Interpretation
 
-The V3 reduction removes the old menu collision between Overview, Performance,
+The V1 public reduction removes the old menu collision between Overview, Performance,
 Technical Summary, Asset Snapshot, Asset Comparison and Technical. Users choose
 only:
 

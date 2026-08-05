@@ -45,8 +45,8 @@ AI Export spans API, service, probe, frontend unit, and live Playwright layers:
 # Strict request/response/catalog schemas
 ./dev.py test schemas ai-export
 
-# Real-prompt probe orchestration and metrics
-./dev.py test utils ai-export-probe
+# Fast unit tests for probe helpers; does not run a real prompt probe
+./dev.py test utils ai-export-probe-helpers
 
 # Frontend runtime, renderer, clipboard, memory, and Signal unit tests
 ./dev.py test front-ai-export unit
@@ -70,7 +70,7 @@ AI Export spans API, service, probe, frontend unit, and live Playwright layers:
 ./dev.py test --cov-clean-backend --coverage services ai-export
 ./dev.py test --coverage schemas ai-export
 ./dev.py test --coverage api ai-export
-./dev.py test --coverage utils ai-export-probe
+./dev.py test --coverage utils ai-export-probe-helpers
 ```
 
 ## 🚀 Running

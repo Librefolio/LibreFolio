@@ -5,14 +5,18 @@
 **Baseline probe**: `20260804T214400.268752Z`  
 **Candidate autorevole**: `20260804T224056.073291Z`
 
+> **Nota release 2026-08-05**: V2/V3 erano iterazioni interne mai rilasciate.
+> Il primo contratto pubblico usa V1 per snapshot, catalogo, selezioni, template
+> istruzioni e contratti di risposta. I run storici conservano i nomi originari.
+
 ## 1. Decisione
 
-AI Export V3 è chiuso con un solo runtime component-based.
+AI Export V1 è chiuso con un solo runtime component-based.
 
 Il catalogo pubblico resta invariato:
 
-- Snapshot wire schema V2;
-- Catalog/selection V3;
+- Snapshot wire schema V1;
+- Catalog/selection V1;
 - 8 Dataset pubblici;
 - 11 Analysis pubbliche;
 - 67 componenti e 40 dataset nel registry interno;
@@ -56,10 +60,10 @@ API V1
      -> dataset registry
      -> public analysis registry
      -> ComponentComposer
-     -> Snapshot V2
+     -> Snapshot V1
 ```
 
-Gli helper FIFO usati dal runtime V3 sono stati spostati in
+Gli helper FIFO usati dal component runtime sono stati spostati in
 `components/payloads/portfolio_broker.py`. `telemetry.py` conserva solo
 serializzazione JSON canonica e stima token chars/4. Il package
 `ai_export/__init__.py` non importa più moduli legacy.
@@ -243,3 +247,9 @@ chiudere questo task.
 Lo staging finale contiene solo 64 file sorgenti/test/runner
 (`+890/-21.901`). MkDocs, journal, devWiki, traduzioni e probe restano
 intenzionalmente unstaged.
+
+La successiva normalizzazione pre-release a V1 mantiene separate le verifiche
+funzionali dalla qualità semantica: il test runner esegue soltanto i 57 test
+veloci degli helper del probe; copied DB, corpus reale e Task Adequacy restano
+workflow espliciti della skill. Gli hash cross-run sono diagnostici e non
+bloccano miglioramenti intenzionali del prompt.

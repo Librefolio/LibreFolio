@@ -1,4 +1,4 @@
-"""Public v2 contracts for component-based AI Export datasets and analyses."""
+"""Public V1 contracts for component-based AI Export datasets and analyses."""
 
 from __future__ import annotations
 
@@ -23,6 +23,12 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.signals import SignalTemporalClass
 
 _ID_PATTERN = r"^[a-z][a-z0-9_.-]*$"
+
+AI_EXPORT_SCHEMA_VERSION = 1
+AI_EXPORT_CATALOG_VERSION = 1
+AI_EXPORT_SELECTION_VERSION = 1
+AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION = 1
+AI_EXPORT_RESPONSE_CONTRACT_VERSION = 1
 
 
 def _normalize_broker_ids(values: list[int]) -> list[int]:
@@ -274,8 +280,8 @@ class AiExportAnalysisCatalogEntry(AiExportModel):
 
 
 class AiExportCatalogResponse(AiExportModel):
-    schema_version: Literal[2] = 2
-    catalog_version: Literal[3] = 3
+    schema_version: Literal[AI_EXPORT_SCHEMA_VERSION] = AI_EXPORT_SCHEMA_VERSION
+    catalog_version: Literal[AI_EXPORT_CATALOG_VERSION] = AI_EXPORT_CATALOG_VERSION
     datasets: tuple[AiExportDatasetCatalogEntry, ...]
     analyses: tuple[AiExportAnalysisCatalogEntry, ...]
 
@@ -405,8 +411,8 @@ class AiExportHistoryCoverage(AiExportModel):
 
 
 class AiExportSnapshotMeta(AiExportModel):
-    schema_version: Literal[2] = 2
-    catalog_version: Literal[3] = 3
+    schema_version: Literal[AI_EXPORT_SCHEMA_VERSION] = AI_EXPORT_SCHEMA_VERSION
+    catalog_version: Literal[AI_EXPORT_CATALOG_VERSION] = AI_EXPORT_CATALOG_VERSION
     request_id: str = Field(..., min_length=1)
     generated_at: datetime
     snapshot_as_of: date

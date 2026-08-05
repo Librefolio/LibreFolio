@@ -71,6 +71,18 @@ modify pages outside the authorized scope.
 Always choose the smallest probe that proves the behavior. Escalate only when the
 targeted evidence is insufficient.
 
+## Functional Test Boundary
+
+- A real prompt probe is never part of the normal test runner.
+- `./dev.py test utils ai-export-probe-helpers` runs fast unit tests for probe
+  parsing, metrics, security, retention, and comparison helpers only.
+- Functional backend/frontend tests verify contracts, composition, safety,
+  rendering structure, and clipboard behavior. They must not freeze prompt
+  wording or treat a changed cross-run prompt hash as a failure.
+- UI and probe rendering of the same current input must remain byte-identical.
+- Cross-run prompt SHA-256 changes are review signals for the separate
+  qualitative/Task Adequacy workflow, not functional regressions by themselves.
+
 ## Renderer Source of Truth
 
 - The final prompt copied by the UI is authoritative.

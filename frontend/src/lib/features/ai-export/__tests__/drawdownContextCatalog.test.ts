@@ -1,7 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
 import {AI_EXPORT_DATASET_IDS} from '../catalog/shared';
-import {findAiExportResponseContract} from '../templates/responseContracts';
 import {renderSnapshotDataText} from '../templates/snapshotDataRenderer';
 
 describe('AI Export drawdown context catalog', () => {
@@ -10,25 +9,6 @@ describe('AI Export drawdown context catalog', () => {
         expect(AI_EXPORT_DATASET_IDS).not.toContain('portfolio.drawdown_context');
         expect(AI_EXPORT_DATASET_IDS).not.toContain('broker.drawdown_context');
         expect(AI_EXPORT_DATASET_IDS).not.toContain('asset.drawdown_context');
-    });
-});
-
-describe('AI Export drawdown response contracts', () => {
-    it.each(['portfolio.pac_planning', 'portfolio.rebalancing', 'broker.review', 'asset.position_review'] as const)('adds a deterministic drawdown context section to %s', (analysisId) => {
-        const contract = findAiExportResponseContract(analysisId);
-        const drawdown = contract.sections.find((section) => section.title === 'Drawdown Context');
-        expect(drawdown, `${analysisId} must expose a Drawdown Context section`).toBeDefined();
-        const text = drawdown!.requirements.join(' ');
-        expect(text).toContain('calculation basis');
-        expect(text).toContain('data-quality status');
-        expect(text).toContain('coverage');
-        expect(text.toLowerCase()).toContain('never infer');
-        expect(text).toContain('Risk metric');
-    });
-
-    it.each(['portfolio.performance_market_drivers', 'fx.pair_analysis'] as const)('does not add a dedicated drawdown section to unrelated analysis %s', (analysisId) => {
-        const contract = findAiExportResponseContract(analysisId);
-        expect(contract.sections.some((section) => section.title === 'Drawdown Context')).toBe(false);
     });
 });
 

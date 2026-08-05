@@ -4,6 +4,24 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-08-05] update | AI Export first public V1 and probe/test boundary
+
+Updated [[decisions/ai-export-versioned-snapshot-boundary]],
+[[entities/ai-export-snapshot-service]],
+[[concepts/ai-export-catalog-granularity-and-composition]], and
+[[sources/phase00-ai-export-backend-snapshot]]. Recorded that internal V2/V3
+iterations were never released: snapshot, catalog, selection, instruction and
+response contracts start publicly at V1, while component/internal dataset
+versions retain their technical history. Functional suites keep 57 fast probe
+helper tests but never launch copied-DB prompt generation or Task Adequacy.
+Cross-run prompt hashes are diagnostic; same-input UI/probe equivalence remains
+byte-exact.
+Graph: code-only refresh incorporated the V1 source contracts, then a scoped
+semantic refresh replaced the four AI Export wiki pages and regenerated
+`graph.json`, `GRAPH_REPORT.md`, and `graph.html`: 1,614 nodes, 2,274 edges,
+160 communities. BFS resolves First Public AI Export V1, Functional Test
+Boundary, Probe Helpers separation, and diagnostic-only cross-run SHA.
+
 ## [2026-08-05] update | AI Export single-runtime V3 final closure
 
 Updated [[decisions/ai-export-versioned-snapshot-boundary]],

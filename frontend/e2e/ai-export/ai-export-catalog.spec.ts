@@ -37,7 +37,7 @@ async function expectDomainCatalog(page: Page, datasetIds: readonly string[], an
 
 test.setTimeout(90_000);
 
-test.describe('AI Export V3 catalog', () => {
+test.describe('AI Export V1 catalog', () => {
     test.beforeEach(async ({context, page}) => {
         await context.grantPermissions(['clipboard-read', 'clipboard-write']);
         await setupAiExportPage(page);
@@ -65,17 +65,17 @@ test.describe('AI Export V3 catalog', () => {
         await expect(panel.menu).toBeHidden({timeout: 2_000});
     });
 
-    test('shows only Broker V3 selections on Broker Detail', async ({page}) => {
+    test('shows only Broker V1 selections on Broker Detail', async ({page}) => {
         await gotoFirstBroker(page);
         await expectDomainCatalog(page, DATASETS.broker, ANALYSES.broker);
     });
 
-    test('shows only Asset V3 selections on Asset Detail', async ({page}) => {
+    test('shows only Asset V1 selections on Asset Detail', async ({page}) => {
         await gotoFirstAsset(page);
         await expectDomainCatalog(page, DATASETS.asset, ANALYSES.asset);
     });
 
-    test('shows only FX V3 selections on FX Detail', async ({page}) => {
+    test('shows only FX V1 selections on FX Detail', async ({page}) => {
         await gotoFx(page, 'EUR-USD');
         await expectDomainCatalog(page, DATASETS.fx, ANALYSES.fx);
     });

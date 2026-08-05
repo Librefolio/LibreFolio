@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess
 from backend.app.schemas.ai_export_runtime import (
+    AI_EXPORT_CATALOG_VERSION,
+    AI_EXPORT_SCHEMA_VERSION,
     AiExportAdditionalExportNecessity,
     AiExportAdditionalExportPeriod,
     AiExportAdditionalExportSuggestion,
@@ -94,8 +96,8 @@ from backend.app.services.ai_export.temporal.policy import (
     indicator_history_row_limit,
 )
 
-SCHEMA_VERSION = 2
-CATALOG_VERSION = 3
+SCHEMA_VERSION = AI_EXPORT_SCHEMA_VERSION
+CATALOG_VERSION = AI_EXPORT_CATALOG_VERSION
 
 _DETAIL_ORDER = {
     DetailLevel.COMPACT: 0,

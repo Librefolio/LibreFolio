@@ -1,4 +1,4 @@
-"""Public AI Export V3 analysis catalog.
+"""Public AI Export V1 analysis catalog.
 
 The component runtime exposes eleven task-oriented analyses. Granular datasets
 remain internal composition blocks, but analyses themselves are public-only:
@@ -7,6 +7,11 @@ there is no second legacy analysis registry or profile catalog.
 
 from __future__ import annotations
 
+from backend.app.schemas.ai_export_runtime import (
+    AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION,
+    AI_EXPORT_RESPONSE_CONTRACT_VERSION,
+    AI_EXPORT_SELECTION_VERSION,
+)
 from backend.app.services.ai_export.analyses.spec import (
     AdditionalExportPeriod,
     AdditionalExportSuggestion,
@@ -42,7 +47,7 @@ def _analysis(
     analysis_id = f"{domain.value}.{suffix}"
     return AnalysisSpec(
         analysis_id=analysis_id,
-        version=3,
+        version=AI_EXPORT_SELECTION_VERSION,
         domain=domain,
         display_i18n_key=f"aiExport.analysis.{analysis_id}.display",
         description_i18n_key=f"aiExport.analysis.{analysis_id}.description",
@@ -52,9 +57,9 @@ def _analysis(
         required_dataset_ids=required,
         optional_dataset_ids=optional,
         instruction_template_id=f"{analysis_id}.instructions",
-        instruction_template_version=3,
+        instruction_template_version=AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION,
         response_contract_id=f"{analysis_id}.response",
-        response_contract_version=3,
+        response_contract_version=AI_EXPORT_RESPONSE_CONTRACT_VERSION,
         additional_export_suggestions=suggestions,
         visibility=CatalogVisibility.PUBLIC,
     )
@@ -239,7 +244,7 @@ assert len(PUBLIC_ANALYSES) == EXPECTED_ANALYSIS_COUNT
 def build_analysis_registry(
     dataset_registry: DatasetRegistry | None = None,
 ) -> AnalysisRegistry:
-    """Build the eleven-entry public V3 analysis registry."""
+    """Build the eleven-entry public V1 analysis registry."""
 
     registry = dataset_registry or build_dataset_registry()
     return AnalysisRegistry(PUBLIC_ANALYSES, dataset_registry=registry)

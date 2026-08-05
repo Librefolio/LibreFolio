@@ -1,4 +1,4 @@
-"""Internal granular datasets plus the compact public AI Export V3 catalog.
+"""Internal granular datasets plus the compact public AI Export V1 catalog.
 
 Dataset IDs and domains are frozen per the refinement plan
 (`plan-phase00AiExportRefinementImplementation.prompt.md`, section 4):
@@ -33,6 +33,7 @@ performance).
 
 from __future__ import annotations
 
+from backend.app.schemas.ai_export_runtime import AI_EXPORT_SELECTION_VERSION
 from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.registry import ComponentRegistry
@@ -537,11 +538,11 @@ FX_CONVERSION_TIMING_CONTEXT = DatasetSpec(
 )
 
 
-# -- Public Catalog V3 -----------------------------------------------------------
+# -- Public Catalog V1 -----------------------------------------------------------
 
 PORTFOLIO_OVERVIEW_AND_HISTORY = DatasetSpec(
     dataset_id="portfolio.overview_and_history",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.PORTFOLIO,
     display_i18n_key="aiExport.dataset.portfolio.overview_and_history.display",
     description_i18n_key="aiExport.dataset.portfolio.overview_and_history.description",
@@ -590,7 +591,7 @@ PORTFOLIO_OVERVIEW_AND_HISTORY = DatasetSpec(
 
 PORTFOLIO_ASSET_HISTORY = DatasetSpec(
     dataset_id="portfolio.asset_history",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.PORTFOLIO,
     display_i18n_key="aiExport.dataset.portfolio.asset_history.display",
     description_i18n_key="aiExport.dataset.portfolio.asset_history.description",
@@ -622,7 +623,7 @@ PORTFOLIO_ASSET_HISTORY = DatasetSpec(
 
 BROKER_OVERVIEW_AND_HISTORY = DatasetSpec(
     dataset_id="broker.overview_and_history",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.BROKER,
     display_i18n_key="aiExport.dataset.broker.overview_and_history.display",
     description_i18n_key="aiExport.dataset.broker.overview_and_history.description",
@@ -671,7 +672,7 @@ BROKER_OVERVIEW_AND_HISTORY = DatasetSpec(
 
 BROKER_ASSET_HISTORY = DatasetSpec(
     dataset_id="broker.asset_history",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.BROKER,
     display_i18n_key="aiExport.dataset.broker.asset_history.display",
     description_i18n_key="aiExport.dataset.broker.asset_history.description",
@@ -703,7 +704,7 @@ BROKER_ASSET_HISTORY = DatasetSpec(
 
 ASSET_POSITION_AND_HISTORY = DatasetSpec(
     dataset_id="asset.position_and_history",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.ASSET,
     display_i18n_key="aiExport.dataset.asset.position_and_history.display",
     description_i18n_key="aiExport.dataset.asset.position_and_history.description",
@@ -746,7 +747,7 @@ ASSET_POSITION_AND_HISTORY = DatasetSpec(
 
 ASSET_MARKET_HISTORY = DatasetSpec(
     dataset_id="asset.market_history",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.ASSET,
     display_i18n_key="aiExport.dataset.asset.market_history.display",
     description_i18n_key="aiExport.dataset.asset.market_history.description",
@@ -782,7 +783,7 @@ ASSET_MARKET_HISTORY = DatasetSpec(
 
 FX_MARKET_AND_EXPOSURE = DatasetSpec(
     dataset_id="fx.market_and_exposure",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.FX,
     display_i18n_key="aiExport.dataset.fx.market_and_exposure.display",
     description_i18n_key="aiExport.dataset.fx.market_and_exposure.description",
@@ -818,7 +819,7 @@ FX_MARKET_AND_EXPOSURE = DatasetSpec(
 
 FX_MARKET_HISTORY = DatasetSpec(
     dataset_id="fx.market_history",
-    version=3,
+    version=AI_EXPORT_SELECTION_VERSION,
     domain=Domain.FX,
     display_i18n_key="aiExport.dataset.fx.market_history.display",
     description_i18n_key="aiExport.dataset.fx.market_history.description",
@@ -931,7 +932,7 @@ def _build_all_data_specs(component_registry: ComponentRegistry) -> tuple[Datase
 
 
 def build_dataset_registry(component_registry: ComponentRegistry | None = None) -> DatasetRegistry:
-    """Builds the public V2 `DatasetRegistry` with complete and focused datasets."""
+    """Build the V1 public and internal AI Export dataset registry."""
     registry = component_registry or build_component_registry()
     portfolio_all_data, broker_all_data, asset_all_data, fx_all_data = _build_all_data_specs(registry)
     specs = (

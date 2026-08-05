@@ -1,6 +1,6 @@
 # Phase 0 — AI Export
 
-**Stato**: 🟢 PUBLIC CATALOG V3 IMPLEMENTATO — 4 agosto 2026
+**Stato**: 🟢 AI EXPORT PUBLIC V1 PRONTO AL RILASCIO — 5 agosto 2026
 
 Questa cartella costituisce il secondo sottopiano della migrazione segnali di Phase 0.
 I file sono raccolti in `Release_2/Phase_0/01_signalMigration/02_aiExport`; non è
@@ -26,12 +26,13 @@ necessario spostarli nel diverso archivio `RoadmapV4_UI/phases/`.
 
 ## Stato corrente
 
-- snapshot wire V2, catalogo e selezioni pubbliche V3;
-- 67 componenti, 40 Dataset e 24 Analysis nel registry interno;
-- catalogo pubblico: 8 Export Data + 13 Analysis;
-- run autorevole: `real_prompt_probe/20260804T155305.988711Z`;
-- 126/126 prompt, 0 failure, 38 retained, secret scan passato;
-- 126 OPTIMAL nella Task Adequacy Review V2;
+- primo contratto pubblico: snapshot, catalogo, selezioni e prompt contract V1;
+- 67 componenti, 40 Dataset e 11 Analysis nel registry interno;
+- catalogo pubblico: 8 Export Data + 11 Analysis;
+- run autorevole pre-release: `real_prompt_probe/20260804T224056.073291Z`;
+- 114/114 prompt, 0 failure/skip, 36 retained, secret scan passato;
+- 66/66 varianti Analysis `OPTIMAL`;
+- probe reale e Task Adequacy separati dal test runner funzionale;
 - traduzioni UI EN/IT/FR/ES complete; traduzioni MkDocs da rigenerare dalla
   sorgente inglese aggiornata.
 

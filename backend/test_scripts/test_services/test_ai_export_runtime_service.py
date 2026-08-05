@@ -1,4 +1,4 @@
-"""Service tests for the component-based public AI Export V2 runtime."""
+"""Service tests for the component-based public AI Export V1 runtime."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.services.ai_export.runtime_service as rs_module
 from backend.app.db.models import Asset, Broker, BrokerUserAccess
 from backend.app.schemas.ai_export_runtime import (
+    AI_EXPORT_CATALOG_VERSION,
+    AI_EXPORT_SCHEMA_VERSION,
     AiExportAnalysisSelection,
     AiExportAssetSnapshotRequest,
     AiExportDatasetSelection,
@@ -215,7 +217,7 @@ def _portfolio_dataset_request() -> AiExportPortfolioSnapshotRequest:
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=3,
+        expected_catalog_version=AI_EXPORT_CATALOG_VERSION,
     )
 
 
@@ -234,15 +236,15 @@ def _portfolio_analysis_request() -> AiExportPortfolioSnapshotRequest:
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=3,
+        expected_catalog_version=AI_EXPORT_CATALOG_VERSION,
     )
 
 
-def test_catalog_exposes_exact_public_v3_catalog_without_prompts():
+def test_catalog_exposes_exact_public_v1_catalog_without_prompts():
     catalog = AiExportSnapshotService.get_catalog()
     serialized = catalog.model_dump_json()
 
-    assert catalog.catalog_version == 3
+    assert catalog.catalog_version == AI_EXPORT_CATALOG_VERSION
     assert len(catalog.datasets) == 8
     assert len(catalog.analyses) == 11
     assert {entry.id for entry in catalog.datasets} == {
@@ -448,8 +450,8 @@ async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
 
     response = await service.build_snapshot(41, request)
 
-    assert response.meta.schema_version == 2
-    assert response.meta.catalog_version == 3
+    assert response.meta.schema_version == AI_EXPORT_SCHEMA_VERSION
+    assert response.meta.catalog_version == AI_EXPORT_CATALOG_VERSION
     assert response.technical_sampling is not None
     assert response.technical_sampling.detail_level == "standard"
     assert response.technical_sampling.price_policy is not None
@@ -757,7 +759,7 @@ async def test_required_component_failure_and_missing_asset_are_typed():
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=3,
+        expected_catalog_version=AI_EXPORT_CATALOG_VERSION,
         asset_id=7,
     )
 
@@ -811,7 +813,7 @@ async def test_fx_exposure_analysis_with_empty_rows_is_not_applicable():
         "detail_level": "standard",
         "period": {"start": START, "end": END},
         "target_currency": "EUR",
-        "expected_catalog_version": 3,
+        "expected_catalog_version": AI_EXPORT_CATALOG_VERSION,
         "base_currency": "USD",
         "quote_currency": "EUR",
     }
@@ -881,7 +883,7 @@ async def test_asset_analysis_applicability_uses_real_component_payloads(
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": START, "end": END},
         target_currency="EUR",
-        expected_catalog_version=3,
+        expected_catalog_version=AI_EXPORT_CATALOG_VERSION,
         asset_id=7,
     )
 
@@ -907,7 +909,7 @@ def _fx_request_with_catalog_v2(*, start: date, end: date) -> AiExportFxSnapshot
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": start, "end": end},
         target_currency="EUR",
-        expected_catalog_version=3,
+        expected_catalog_version=AI_EXPORT_CATALOG_VERSION,
         base_currency="USD",
         quote_currency="EUR",
     )
@@ -927,7 +929,7 @@ async def test_fx_direct_exposure_does_not_force_rate_history_coverage():
         detail_level=AiExportDetailLevel.STANDARD,
         period={"start": period_start, "end": period_end},
         target_currency="EUR",
-        expected_catalog_version=3,
+        expected_catalog_version=AI_EXPORT_CATALOG_VERSION,
         base_currency="USD",
         quote_currency="EUR",
     )

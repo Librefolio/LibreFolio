@@ -1,6 +1,7 @@
 import {describe, expect, it, vi} from 'vitest';
 
 import {AiExportCatalogHttpError, AiExportCatalogLoader, fetchBackendAiExportCatalog} from '../catalog/compatibility';
+import {AI_EXPORT_CATALOG_VERSION} from '../catalog/shared';
 import {backendCatalogFixture} from './runtimeFixtures';
 
 describe('AI Export backend catalog loading', () => {
@@ -25,12 +26,12 @@ describe('AI Export backend catalog loading', () => {
         await expect(fetchBackendAiExportCatalog(fetcher)).rejects.toBeInstanceOf(AiExportCatalogHttpError);
     });
 
-    it('normalizes an omitted generated default to the frontend V3 catalog constant', async () => {
+    it('normalizes an omitted generated default to the frontend V1 catalog constant', async () => {
         const catalog = backendCatalogFixture();
         const {catalog_version: _catalogVersion, ...withoutCatalogVersion} = catalog;
         const fetcher = vi.fn(async () => new Response(JSON.stringify(withoutCatalogVersion), {status: 200, headers: {'content-type': 'application/json'}}));
 
-        await expect(fetchBackendAiExportCatalog(fetcher)).resolves.toMatchObject({catalog_version: 3});
+        await expect(fetchBackendAiExportCatalog(fetcher)).resolves.toMatchObject({catalog_version: AI_EXPORT_CATALOG_VERSION});
     });
 
     it('rejects untyped catalog payloads', async () => {

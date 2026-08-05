@@ -40,9 +40,10 @@ The original AI Export assembled financial facts, technical indicators, compacti
 
 LibreFolio exposes a backend-owned AI Export snapshot platform with these invariants:
 
-- **Exact finite V3 catalog:** 8 public datasets and 11 public analyses over 67
-  components and 40 internal datasets. Snapshot schema remains V2 and catalog
-  schema remains V3.
+- **Exact finite V1 catalog:** the first released contract exposes 8 public
+  datasets and 11 public analyses over 67 components and 40 internal datasets.
+  Snapshot, catalog, selection, instruction-template and response-contract
+  versions start at V1; prior V2/V3 labels were unreleased iterations.
 - **Single runtime:** `AiExportRuntimeService` + registries +
   `ComponentComposer` are the only production path. The intermediate
   profile/assembler runtime, V1 schema and internal legacy analyses were removed.
@@ -74,7 +75,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
   frontend state. HTTP is one adapter; a future authenticated transport can
   invoke the same typed snapshot path.
 - **Hard cutover and cleanup:** Dashboard, Broker Detail, Asset Detail and FX
-  Detail use only the V3 catalog/Snapshot V2 path. Frontend legacy builders,
+  Detail use only the public V1 path. Frontend legacy builders,
   local technical engines, backend profile/assembler runtime and parity fixtures
   are removed.
 - **No Portfolio Engine rewrite:** AI Export consumes engine-owned accounting and decomposition as-is. Snapshot-specific exposure views may use their own explicitly declared valuation basis and denominator.
@@ -93,7 +94,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - Required source failures produce typed non-success responses; a missing optional indicator is omitted or marked unavailable without fabricating data.
 - Dense Portfolio/Broker output remains explicit rather than silently truncated: the 20k/60k frontend warning stays in place and no automatic token cap or detail downgrade is introduced.
 - The old [[decisions/ai-export-prompt-catalog]] remains historical context but is superseded as the production architecture.
-- The V3 public reduction hides internal dataset distinctions behind one general
+- The V1 public catalog hides internal dataset distinctions behind one general
   and one detailed export per domain while preserving granular composition
   internally. Position price, observed market price and price history remain
   distinct facts. See [[concepts/ai-export-catalog-granularity-and-composition]].
@@ -101,6 +102,11 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - Final review established two further boundary rules: presentation context cannot tighten task applicability ([[problems/ai-export-drawdown-selected-history-fallback]]), and transport compatibility cannot revive product-level legacy behavior ([[problems/ai-export-clipboard-fallback-unreachable]]).
 - Shared immutable registries, cached catalog, one canonical stats dump and an
   integer fixed point reduce overhead without changing serialized output.
+- Functional tests verify contracts, composition, safety and rendering
+  structure; they do not freeze prompt wording. Real copied-DB probes,
+  cross-run content review and Task Adequacy remain explicit skill workflows.
+  UI/probe equivalence for the same current input is still byte-exact, while a
+  cross-run SHA change is diagnostic rather than a functional failure.
 
 ## Validation / Success Criteria
 

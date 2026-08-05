@@ -53,9 +53,10 @@ Aggiunta di un nuovo strumento visivo per analizzare la persistenza del rendimen
     *   Supporto per il sistema di aggregazione nel grafico già sviluppato per gli altri grafici 2d
 
 
-## 5. Aggiunta calendario dei dividendi registrati in dashboard, broker detail e analisi per lotto di un asset.
+## 5. Aggiunta calendario dei dividendi registrati in dashboard, broker detail e analisi per lotto di un asset e magari contestualmente, un calendario degli investimenti mensili.
     In dashboard e broker detail, aggiungere un nuovo grafico a barre che mostri i dividendi registrati cumulativi per ogni asset, magari colorando le barre in base al tipo dell'asset (ETF, azioni, crypto, ecc.).
     Nell'analisi del lotto, magari nel 3° grafico, o nel primo, da studiare, aggiungere con un pulsante di switch un grafico ulteriore che mostri i dividendi registrati per quel lotto.
+    O anche in dashboard oltre ad abs e %, un grafico/calendario che mostri sia i dividendi ricevuti e quelli reinvestiti, o magari direttamente l'investimento mensile, con una barra orizontale tratteggiata a mostrare l'investimento medio nel periodo considerato.
     
 ---
 

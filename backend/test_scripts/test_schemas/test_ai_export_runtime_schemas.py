@@ -1,4 +1,4 @@
-"""Contracts for the component-based public AI Export V3 catalog API."""
+"""Contracts for the component-based public AI Export V1 catalog API."""
 
 from __future__ import annotations
 
@@ -8,6 +8,9 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from backend.app.schemas.ai_export_runtime import (
+    AI_EXPORT_CATALOG_VERSION,
+    AI_EXPORT_SCHEMA_VERSION,
+    AI_EXPORT_SELECTION_VERSION,
     AiExportAssetDirectoryEntry,
     AiExportBrokerDirectoryEntry,
     AiExportCatalogResponse,
@@ -44,7 +47,7 @@ def _dataset_selection(domain: str = "portfolio") -> dict[str, object]:
     return {
         "kind": "dataset",
         "id": f"{domain}.overview",
-        "version": 2,
+        "version": AI_EXPORT_SELECTION_VERSION,
     }
 
 
@@ -52,11 +55,11 @@ def _analysis_selection(domain: str = "asset") -> dict[str, object]:
     return {
         "kind": "analysis",
         "id": f"{domain}.trend_analysis",
-        "version": 2,
+        "version": AI_EXPORT_SELECTION_VERSION,
         "instruction_template_id": f"{domain}.trend_analysis.instructions",
-        "instruction_template_version": 2,
+        "instruction_template_version": AI_EXPORT_SELECTION_VERSION,
         "response_contract_id": f"{domain}.trend_analysis.response",
-        "response_contract_version": 2,
+        "response_contract_version": AI_EXPORT_SELECTION_VERSION,
     }
 
 
@@ -67,7 +70,7 @@ def _request_payload(domain: str) -> dict[str, object]:
         "detail_level": "standard",
         "period": {"start": START.isoformat(), "end": END.isoformat()},
         "target_currency": "EUR",
-        "expected_catalog_version": 3,
+        "expected_catalog_version": AI_EXPORT_CATALOG_VERSION,
     }
     if domain == "broker":
         payload["broker_id"] = 3
@@ -140,7 +143,7 @@ def test_catalog_separates_datasets_and_analyses_without_prompt_text():
     dataset = AiExportDatasetCatalogEntry(
         kind="dataset",
         id="portfolio.overview",
-        version=2,
+        version=AI_EXPORT_SELECTION_VERSION,
         domain=AiExportDomain.PORTFOLIO,
         display_i18n_key="aiExport.dataset.portfolio.overview.display",
         description_i18n_key="aiExport.dataset.portfolio.overview.description",
@@ -158,8 +161,8 @@ def test_catalog_separates_datasets_and_analyses_without_prompt_text():
     )
     serialized = catalog.model_dump_json()
 
-    assert catalog.schema_version == 2
-    assert catalog.catalog_version == 3
+    assert catalog.schema_version == AI_EXPORT_SCHEMA_VERSION
+    assert catalog.catalog_version == AI_EXPORT_CATALOG_VERSION
     assert "prompt" not in serialized.lower()
     assert "web_research" not in serialized.lower()
 
@@ -168,7 +171,7 @@ def test_snapshot_response_accepts_json_sections_and_enforces_stats():
     selection = AiExportDatasetSelection(
         kind="dataset",
         id="portfolio.overview",
-        version=2,
+        version=AI_EXPORT_SELECTION_VERSION,
     )
     section = AiExportSectionEnvelope(
         component_id="portfolio.summary",
@@ -193,7 +196,7 @@ def test_snapshot_response_accepts_json_sections_and_enforces_stats():
         dataset_manifest=(
             AiExportDatasetManifestEntry(
                 dataset_id="portfolio.overview",
-                dataset_version=2,
+                dataset_version=AI_EXPORT_SELECTION_VERSION,
                 role=AiExportManifestRole.SELECTED,
             ),
         ),

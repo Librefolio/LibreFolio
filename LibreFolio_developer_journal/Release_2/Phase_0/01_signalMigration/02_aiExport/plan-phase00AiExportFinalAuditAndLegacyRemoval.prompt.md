@@ -4,6 +4,10 @@
 **Avvio**: 2026-08-04  
 **Baseline sorgenti**: commit `54a15b42`
 
+> **Nota release 2026-08-05**: il piano usa i nomi interni V2/V3 con cui è
+> stato eseguito. Prima del primo rilascio, tutti i contratti pubblici sono
+> stati normalizzati a V1; le versioni tecniche interne restano invariate.
+
 ## Obiettivo
 
 Chiudere AI Export mantenendo invariato il contratto pubblico V3 e rimuovendo il

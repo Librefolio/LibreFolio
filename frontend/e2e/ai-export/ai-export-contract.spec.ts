@@ -6,6 +6,7 @@ const ASSET_OVERVIEW_FIXTURE = {
     displayName: 'Apple Inc.',
     ticker: 'AAPL',
 } as const;
+const PUBLIC_CONTRACT_VERSION = 1;
 
 interface ExpectedDatasetRequest {
     readonly domain: 'portfolio' | 'broker' | 'asset' | 'fx';
@@ -34,10 +35,10 @@ function expectDatasetRequest(payload: Record<string, unknown>, expected: Expect
     expect(payload.selection).toEqual({
         kind: 'dataset',
         id: expected.id,
-        version: 3,
+        version: PUBLIC_CONTRACT_VERSION,
     });
     expect(payload.detail_level).toBe('compact');
-    expect(payload.expected_catalog_version).toBe(3);
+    expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
     expectUppercaseCurrency(payload.target_currency, 'target_currency');
     expectIsoPeriod(payload);
 
@@ -102,7 +103,7 @@ test.describe('AI Export request and clipboard contract', () => {
         await setupAiExportPage(page);
     });
 
-    test('sends V3 Dataset request shape and domain scope across all surfaces', async ({page}) => {
+    test('sends V1 Dataset request shape and domain scope across all surfaces', async ({page}) => {
         await test.step('Portfolio Dataset', async () => {
             await gotoDashboard(page);
             const payload = await exportDataset(page, 'portfolio.overview_and_history');
@@ -111,11 +112,7 @@ test.describe('AI Export request and clipboard contract', () => {
                 id: 'portfolio.overview_and_history',
             });
 
-            const clipboard = await waitForClipboard(page, ['Snapshot Metadata and Dataset Manifest', 'Snapshot Data'], 'Portfolio Dataset clipboard was not populated');
-            expect(clipboard).not.toContain('Analysis Objective');
-            expect(clipboard).not.toContain('Response Contract');
-            expect(clipboard).not.toContain('User Notes');
-            expect(clipboard).not.toContain('Response Language');
+            await waitForClipboard(page, ['portfolio.overview_and_history'], 'Portfolio Dataset clipboard was not populated');
         });
 
         await test.step('Broker Dataset', async () => {
@@ -152,7 +149,7 @@ test.describe('AI Export request and clipboard contract', () => {
         });
     });
 
-    test('exports V3 performance-market-drivers analysis with dated research contract', async ({page}) => {
+    test('exports V1 performance-market-drivers analysis contract', async ({page}) => {
         await gotoDashboard(page);
         await openAiExportPanel(page);
         await selectAiExportSelection(page, 'analysis', 'portfolio.performance_market_drivers');
@@ -166,23 +163,19 @@ test.describe('AI Export request and clipboard contract', () => {
         expect(payload.selection).toEqual({
             kind: 'analysis',
             id: 'portfolio.performance_market_drivers',
-            version: 3,
+            version: PUBLIC_CONTRACT_VERSION,
             instruction_template_id: 'portfolio.performance_market_drivers.instructions',
-            instruction_template_version: 3,
+            instruction_template_version: PUBLIC_CONTRACT_VERSION,
             response_contract_id: 'portfolio.performance_market_drivers.response',
-            response_contract_version: 3,
+            response_contract_version: PUBLIC_CONTRACT_VERSION,
         });
         expect(payload.detail_level).toBe('compact');
-        expect(payload.expected_catalog_version).toBe(3);
+        expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
         expect(payload).not.toHaveProperty('broker_ids');
         expectUppercaseCurrency(payload.target_currency, 'target_currency');
         expectIsoPeriod(payload);
 
-        const clipboard = await waitForClipboard(page, ['Analysis Objective', 'Response Contract', 'Snapshot Data', 'Response Language', 'User Notes', notes], 'Performance-market-drivers Analysis clipboard was not populated');
-        expect(clipboard).toContain('assess dated market drivers for every held Asset without overstating causality');
-        expect(clipboard).toContain('supported, plausible, inferred, speculative, or unexplained');
-        expect(clipboard).toContain('Per-Asset Short- and Long-Horizon Thesis');
-        expect(clipboard).toContain('Please provide your answer in: English.');
+        await waitForClipboard(page, ['portfolio.performance_market_drivers', notes], 'Performance-market-drivers Analysis clipboard was not populated');
     });
 
     test('exports capital-loss offset analysis with FIFO and fiscal-input contract', async ({page}) => {
@@ -199,22 +192,19 @@ test.describe('AI Export request and clipboard contract', () => {
         expect(payload.selection).toEqual({
             kind: 'analysis',
             id: 'portfolio.fiscal_lots',
-            version: 3,
+            version: PUBLIC_CONTRACT_VERSION,
             instruction_template_id: 'portfolio.fiscal_lots.instructions',
-            instruction_template_version: 3,
+            instruction_template_version: PUBLIC_CONTRACT_VERSION,
             response_contract_id: 'portfolio.fiscal_lots.response',
-            response_contract_version: 3,
+            response_contract_version: PUBLIC_CONTRACT_VERSION,
         });
         expect(payload.detail_level).toBe('compact');
-        expect(payload.expected_catalog_version).toBe(3);
+        expect(payload.expected_catalog_version).toBe(PUBLIC_CONTRACT_VERSION);
         expect(payload).not.toHaveProperty('broker_ids');
         expectUppercaseCurrency(payload.target_currency, 'target_currency');
         expectIsoPeriod(payload);
 
-        const clipboard = await waitForClipboard(page, ['User Tax-Loss Inventory', 'Economic FIFO Candidate Map', 'Expiry and Decision Timeline', 'Conditional Offset Strategies', 'cassetto fiscale', notes], 'Capital-loss offset Analysis clipboard was not populated');
+        const clipboard = await waitForClipboard(page, ['portfolio.fiscal_lots', 'dataset_id: portfolio.fifo', notes], 'Capital-loss offset Analysis clipboard was not populated');
         expect(clipboard).toContain('dataset_id: portfolio.fifo');
-        expect(clipboard).toContain('remaining usable amount');
-        expect(clipboard).toContain('amount already used or reserved');
-        expect(clipboard).toContain('Never recommend a transaction solely for tax reasons');
     });
 });

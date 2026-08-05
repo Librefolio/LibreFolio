@@ -1,4 +1,4 @@
-"""Focused tests for the component registry and public AI Export V3 catalog.
+"""Focused tests for the component registry and public AI Export V1 catalog.
 
 Covers exact dataset visibility, the public-only analysis registry,
 analysis-to-dataset mapping, registry validation, and declarative
@@ -10,6 +10,12 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
+from backend.app.schemas.ai_export_runtime import (
+    AI_EXPORT_CATALOG_VERSION,
+    AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION,
+    AI_EXPORT_RESPONSE_CONTRACT_VERSION,
+    AI_EXPORT_SELECTION_VERSION,
+)
 from backend.app.services.ai_export.analyses.catalog import (
     EXPECTED_ANALYSIS_COUNT,
     EXPECTED_PUBLIC_ANALYSIS_COUNT,
@@ -146,7 +152,7 @@ class TestDatasetCatalog:
         assert len(dataset_registry.for_visibility(CatalogVisibility.PUBLIC)) == 8
         assert len(dataset_registry.for_visibility(CatalogVisibility.INTERNAL)) == 32
 
-    def test_dataset_ids_and_visibility_match_v3_contract(self, dataset_registry: DatasetRegistry):
+    def test_dataset_ids_and_visibility_match_v1_contract(self, dataset_registry: DatasetRegistry):
         actual_ids = {spec.dataset_id for spec in dataset_registry}
         assert actual_ids == set(EXPECTED_INTERNAL_DATASET_IDS) | set(EXPECTED_PUBLIC_DATASET_IDS)
         assert {spec.dataset_id for spec in dataset_registry.for_visibility(CatalogVisibility.PUBLIC)} == set(EXPECTED_PUBLIC_DATASET_IDS)
@@ -161,7 +167,7 @@ class TestDatasetCatalog:
             assert f"{domain.value}.all_data" in dataset_registry
 
     def test_selection_versions_follow_visibility(self, dataset_registry: DatasetRegistry):
-        assert all(spec.version == 3 for spec in dataset_registry.for_visibility(CatalogVisibility.PUBLIC))
+        assert all(spec.version == AI_EXPORT_SELECTION_VERSION for spec in dataset_registry.for_visibility(CatalogVisibility.PUBLIC))
         assert all(spec.version == 2 for spec in dataset_registry.for_visibility(CatalogVisibility.INTERNAL))
 
 
@@ -215,11 +221,11 @@ class TestAnalysisCatalog:
             assert spec.required_dataset_ids == expected_required, analysis_id
             assert spec.optional_dataset_ids == expected_optional, analysis_id
 
-    def test_analysis_versions_are_v3(self, analysis_registry: AnalysisRegistry):
+    def test_analysis_versions_are_v1(self, analysis_registry: AnalysisRegistry):
         for spec in analysis_registry:
-            assert spec.version == 3
-            assert spec.instruction_template_version == 3
-            assert spec.response_contract_version == 3
+            assert spec.version == AI_EXPORT_SELECTION_VERSION
+            assert spec.instruction_template_version == AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION
+            assert spec.response_contract_version == AI_EXPORT_RESPONSE_CONTRACT_VERSION
 
     def test_no_required_optional_overlap_in_any_analysis(self, analysis_registry: AnalysisRegistry):
         for spec in analysis_registry:
@@ -245,17 +251,17 @@ class TestAnalysisCatalog:
                 seen_ids.add(suggestion.dataset_id)
                 assert "." in suggestion.reason_i18n_key, f"{spec.analysis_id} reason_i18n_key {suggestion.reason_i18n_key!r} must be a dotted key"
 
-    def test_public_catalog_serializes_only_v3_entries(self, analysis_registry: AnalysisRegistry):
+    def test_public_catalog_serializes_only_v1_entries(self, analysis_registry: AnalysisRegistry):
         catalog = AiExportSnapshotService.get_catalog()
-        assert catalog.catalog_version == 3
+        assert catalog.catalog_version == AI_EXPORT_CATALOG_VERSION
         assert len(catalog.datasets) == 8
         assert len(catalog.analyses) == 11
         assert {entry.id for entry in catalog.datasets} == set(EXPECTED_PUBLIC_DATASET_IDS)
         assert {entry.id for entry in catalog.analyses} == set(EXPECTED_PUBLIC_ANALYSIS_MAPPING)
         for entry in catalog.analyses:
-            assert entry.version == 3
-            assert entry.instruction_template_version == 3
-            assert entry.response_contract_version == 3
+            assert entry.version == AI_EXPORT_SELECTION_VERSION
+            assert entry.instruction_template_version == AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION
+            assert entry.response_contract_version == AI_EXPORT_RESPONSE_CONTRACT_VERSION
         assert any(entry.additional_export_suggestions for entry in catalog.analyses)
 
     def test_legacy_derived_datasets_remain_internal(self, dataset_registry: DatasetRegistry):
@@ -460,7 +466,7 @@ class TestRegistryValidationErrors:
     def test_public_analysis_cannot_suggest_internal_dataset(self, dataset_registry: DatasetRegistry):
         spec = AnalysisSpec(
             analysis_id="portfolio.public_analysis",
-            version=3,
+            version=AI_EXPORT_SELECTION_VERSION,
             domain=Domain.PORTFOLIO,
             display_i18n_key="test.analysis.display",
             description_i18n_key="test.analysis.description",
@@ -470,9 +476,9 @@ class TestRegistryValidationErrors:
             required_dataset_ids=("portfolio.overview_and_history",),
             optional_dataset_ids=(),
             instruction_template_id="portfolio.public_analysis.instructions",
-            instruction_template_version=3,
+            instruction_template_version=AI_EXPORT_INSTRUCTION_TEMPLATE_VERSION,
             response_contract_id="portfolio.public_analysis.response",
-            response_contract_version=3,
+            response_contract_version=AI_EXPORT_RESPONSE_CONTRACT_VERSION,
             additional_export_suggestions=(
                 AdditionalExportSuggestion(
                     dataset_id="portfolio.overview",
@@ -829,7 +835,7 @@ class TestAllDataExpansion:
             section_order_positions = [component_registry.canonical_order.index(cid) for cid in all_data.section_order]
             assert section_order_positions == sorted(section_order_positions)
 
-    def test_optional_components_match_v3_auxiliary_degradation_contract(self, dataset_registry: DatasetRegistry):
+    def test_optional_components_match_v1_auxiliary_degradation_contract(self, dataset_registry: DatasetRegistry):
         all_optional_ids: set[str] = set()
         for spec in dataset_registry:
             if spec.dataset_id.endswith(".all_data"):

@@ -29,7 +29,7 @@ related:
 ## Role
 
 `AiExportRuntimeService` is the sole backend orchestration boundary for AI Export.
-It turns an authenticated V3 selection into a typed Snapshot V2 by validating
+It turns an authenticated V1 selection into a typed Snapshot V1 by validating
 the public catalog choice, deriving broker scope, composing required/optional
 datasets from reusable components, and returning deterministic facts and
 metadata. The frontend owns trusted prompt rendering, localization, contextual
@@ -44,7 +44,7 @@ notes and clipboard transport.
 | Interface | Responsibility |
 |---|---|
 | `AiExportRuntimeService.get_catalog()` | Returns the cached static public catalog: 8 datasets and 11 analyses. |
-| `AiExportRuntimeService.build_snapshot()` | Validates selection/scope and composes a Snapshot V2 through the V3 registries. |
+| `AiExportRuntimeService.build_snapshot()` | Validates selection/scope and composes a Snapshot V1 through the component registries. |
 | `ComponentComposer.compose()` | Builds each component once per request and enforces required/optional failure behavior. |
 | Component/Dataset/Analysis registries | Define the finite 67/40/11 composition graph. |
 | `GET /api/v1/ai-export/catalog` | HTTP catalog adapter. |
@@ -102,7 +102,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 - deterministic JSON-safe YAML and dynamic Markdown fences;
 - strict removal of hidden notes from every Snapshot export while retaining the draft for a later analysis;
 - Clipboard API orchestration that starts within the originating user gesture;
-- an activation-preserving `ClipboardItem(Promise<Blob>)` path when supported, otherwise one V2 preparation followed by the generic `writeText`/`execCommand` transport;
+- an activation-preserving `ClipboardItem(Promise<Blob>)` path when supported, otherwise one V1 preparation followed by the generic `writeText`/`execCommand` transport;
 - a body-level fixed panel above chart controls and domain-aware book links to English manuals with a localized shared fallback.
 
 ## Design Notes
@@ -119,7 +119,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 - FIFO is queried at runtime through [[entities/lots-analysis-service]]; no AI-specific FIFO persistence is introduced.
 - Portfolio cash decomposition remains engine-owned. Currency exposure uses factual native balances converted at snapshot time and declares a separate denominator; see [[problems/ai-export-cash-fx-valuation-basis-mismatch]].
 - Asset drawdown market context uses technical-window observations when present, otherwise selected observed history. `drawdown_recovery` applicability remains based on two selected observations and a measurable prior maximum; see [[problems/ai-export-drawdown-selected-history-fallback]].
-- Clipboard capability fallback never changes the export architecture: it transports the same prepared V2 prompt and never revives legacy builders; see [[problems/ai-export-clipboard-fallback-unreachable]].
+- Clipboard capability fallback never changes the export architecture: it transports the same prepared V1 prompt and never revives legacy builders; see [[problems/ai-export-clipboard-fallback-unreachable]].
 - New tasks or plugins require explicit backend and frontend contract changes plus versioned tests; registry auto-enrolment is intentionally forbidden.
 - AI Export service/schema/API/probe and frontend unit/E2E tests are explicitly
   registered in the canonical runner; the final orphan audit is zero.
@@ -143,6 +143,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | 2026-07-27 | Project owner approved the desktop/mobile review; the completed plan chain was indexed by `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` in its nested migration location. |
 | 2026-08-04 | A 49/49 catalog explanation documented the 32-dataset/17-analysis/65-component composition model, confirmed per-position/per-Asset facts in PAC and Rebalancing, clarified price and `all_data` semantics, and recorded two potential gaps. Real Portfolio probe `20260804T085052.052297Z` passed 5/5 with unchanged databases and a passed secret scan. |
 | 2026-08-05 | Final V3 closure reduced the public catalog to 8 datasets/11 analyses over 67 components and 40 internal datasets, removed the entire profile/assembler runtime and proved 114/114 prompt equivalence in candidate `20260804T224056.073291Z`. |
+| 2026-08-05 | Before first release, public snapshot/catalog/selection/instruction/response versions were reset to V1. Probe helper tests stayed in the runner under an explicit helper-only action; real prompt and Task Adequacy runs remained separate. |
 
 ## Source files
 

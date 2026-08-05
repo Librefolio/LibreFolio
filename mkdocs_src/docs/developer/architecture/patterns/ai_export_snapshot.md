@@ -4,11 +4,11 @@ AI Export builds an authenticated, factual backend snapshot and lets the fronten
 compose a clipboard-ready prompt. LibreFolio does **not** call an LLM, upload the
 snapshot, or choose where the user pastes it.
 
-!!! important "Public Catalog V3 over the V2 snapshot wire"
+!!! important "First public contract: V1"
 
-    The snapshot wire schema remains V2. Public catalog and selection identities
-    are V3. Frontend and backend reject stale catalog or selection identities;
-    there is no compatibility fallback.
+    Snapshot schema, public catalog, public Dataset/Analysis selections,
+    instruction templates, and response contracts start at V1. Frontend and
+    backend reject stale identities; there is no compatibility fallback.
 
 ## 🧱 Runtime Catalog
 
@@ -52,14 +52,14 @@ sequenceDiagram
     participant C as Clipboard
 
     F->>A: GET /catalog
-    A-->>F: 8 datasets + 11 analyses, V3 identities
+    A-->>F: 8 datasets + 11 analyses, V1 identities
     U->>F: Export Data or Request Analysis
-    F->>A: POST /snapshot with selected V3 contract
+    F->>A: POST /snapshot with selected V1 contract
     A->>R: Authenticated request + accessible broker scope
     R->>S: Load authoritative resources
     S-->>R: Financial and technical facts
     R-->>A: Ordered component envelopes + manifests
-    A-->>F: Strict V2 snapshot response
+    A-->>F: Strict V1 snapshot response
     F->>F: Validate, serialize, add trusted local prompt text
     F->>C: Write final text
     C-->>U: Clipboard updated

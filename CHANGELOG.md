@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.0] - 2026-08-07
 
-The first feature release after 1.0. It introduces the **Risk Analysis** subsystem (beta), rebuilds technical analysis as a backend plugin platform, ships the **V3 AI Export** catalog, adds 18 new broker importers, and replaces the legacy valuation cascade with a single unified price resolver.
+The first feature release after 1.0. It introduces the **Risk Analysis** subsystem (beta), rebuilds technical analysis as a backend plugin platform, ships the first public **AI Export V1** catalog, adds 19 new broker importers, and replaces the legacy valuation cascade with a single unified price resolver.
 
 ### 🧪 Beta
 
@@ -39,21 +39,21 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 
 #### 🧠 Technical Analysis — backend Signals platform
 - **Indicators are now backend Python plugins**: a single validated implementation is shared by charts, the REST API and AI consumers, replacing the previous browser-side calculations.
-- **22 indicator plugins** exposing **17 Asset** and **9 FX** schema-driven indicators — SMA, EMA, MACD, RSI, Bollinger, ADX, Aroon, ATR/NATR, CCI, Donchian, KAMA, MFI, OBV, PPO, ROC, Stochastic RSI, plus risk-oriented overlays (Drawdown, Rolling Beta, Rolling Return, Rolling Sharpe, Rolling Volatility).
+- **22 indicator plugins**, all available for **Asset** data and **9** also compatible with **FX** — SMA, EMA, MACD, RSI, Bollinger, ADX, Aroon, ATR/NATR, CCI, Donchian, KAMA, MFI, OBV, PPO, ROC, Stochastic RSI, plus risk-oriented overlays (Drawdown, Rolling Beta, Rolling Return, Rolling Sharpe, Rolling Volatility).
 - Fail-fast plugin runtime, registry, `SignalService`, and chart annotations with independent components, zones, warnings and styles.
 - **Live preview in global chart settings** via `POST /signals/preview`: indicators are computed on a caller-supplied synthetic curve with no DB or I/O, so the global "asset"/"forex" settings modal renders a real overlay instead of an "unavailable" banner.
 - Grouped indicator search, KaTeX formula labels, responsive cards and per-signal diagnostics.
 - Incomplete OHLCV inputs render as honest partial contiguous segments instead of interpolated fiction.
 
 #### 🤖 AI Export — rebuilt catalog
-- Reworked, versioned export catalog: **8 autonomous public datasets** and **11 task-oriented analyses**, composed from 40 internal dataset blocks.
+- First public **V1** export contract: **8 autonomous public datasets** and **11 task-oriented analyses**, composed from **67 components** and 40 internal dataset blocks.
 - **Task-aware prompt composition** — drawdown, income, concentration, cost and FX contexts are selected per analysis, so financial prompts stay focused without weakening full technical exports.
 - Snapshots render as compact, auditable tables with local entity references; weights, HHI, FIFO, numeric and missing-price semantics are stated explicitly in the prompt.
 - Adaptive temporal buckets, plugin-owned signal aggregation, sampling manifests, and coverage/broker-scope/partial-history disclosure embedded in the export.
 - Focused financial context, capital-loss offset prompts, and 10-minute login-bound panel memory for draft continuity.
 
 #### 📥 Broker imports (BRIM)
-- **18 new broker plugins** (29 supported importers in total): Avanza, Bitvavo, BUX, CoinTracking, Crédit Agricole, Crypto.com, Delta, Disnat, Fineco, Intesa Sanpaolo, InvestEngine, Investimental, Parqet, Rabobank, Relai, Saxo, Swissquote, Trade Republic and XTB.
+- **19 new broker plugins** (30 supported importers in total): Avanza, Bitvavo, BUX, CoinTracking, Crédit Agricole, Crypto.com, Delta, Disnat, Fineco, Intesa Sanpaolo, InvestEngine, Investimental, Parqet, Rabobank, Relai, Saxo, Swissquote, Trade Republic and XTB.
 - **Crédit Agricole** reads both the account-movements and the securities-dossier exports, in CSV or XLSX, auto-detecting which one was loaded — including bond maturities, automatic cash counter-entries and succession transfers as cashless in-kind adjustments.
 - **Directa** exports are now accepted as XLSX as well as CSV.
 - **Duplicate resolver (wizard step 3)** — a reorderable file-priority list plus one collapsible group per duplicate cluster, letting you choose exactly which leg to keep across a multi-file import.
@@ -85,7 +85,7 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 ### Changed
 
 - **Legacy valuation engine removed** — the unified resolver is the only valuation path. The `LIBREFOLIO_RESOLVER_VALUATION` transition flag, the `LAST_BUY_PRICE` / `LAST_SEED_COST` fallback tiers and the duplicate per-path price maps are gone.
-- **Legacy AI Export runtime removed** — the unreachable profile/assembler stack was deleted so the catalog, prompts and tests cannot drift apart. All public prompt variants are preserved.
+- **Legacy AI Export runtime removed** — the unreachable profile/assembler stack was deleted so the catalog, prompts and tests cannot drift apart. The final V1 prompt outputs were preserved during the cleanup.
 - Technical analysis moved from the frontend to the backend (see Signals platform above); frontend controls, rendering, axes and batching now consume backend results.
 - Asset and FX domains were folded into the existing APIs rather than kept as parallel surfaces.
 - The 500-item cap on bulk import validation was removed, so large multi-file merges import in one pass.
@@ -110,9 +110,8 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 
 ### ⚠️ Breaking changes
 
-These affect beta and internal surfaces only — the stable REST API and the database schema are unchanged.
+These affect newly introduced analytics or local UI persistence only — the stable REST API and the database schema are unchanged.
 
-- **AI Export**: the granular public dataset IDs, `broker.cost_efficiency`, `fx.conversion_planning` and `asset.drawdown_recovery` are no longer part of the public catalog. Use the new datasets and analyses instead.
 - **Signals**: `gain_loss_change_1d_percent` is now computed on the previous position *market value* rather than the previous unrealized P&L.
 - **DataTable**: the column-visibility persistence key changed (`columnVisibility` → `columnVisibilityOverrides`). Saved show/hide preferences are not migrated and each table resets to its default once; column order and widths are preserved.
 

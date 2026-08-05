@@ -1,10 +1,11 @@
 import {describe, expect, it} from 'vitest';
 
 import {findCompatibleAiExportSelection, reconcileAiExportCatalog, selectionsForDomain} from '../catalog/compatibility';
+import {AI_EXPORT_CATALOG_VERSION, AI_EXPORT_SCHEMA_VERSION, AI_EXPORT_SELECTION_VERSION} from '../catalog/shared';
 import {backendCatalogFixture} from './runtimeFixtures';
 
 describe('AI Export catalog compatibility', () => {
-    it('accepts the exact 8 Dataset / 11 Analysis V3 catalog', () => {
+    it('accepts the exact 8 Dataset / 11 Analysis V1 catalog', () => {
         const compatibility = reconcileAiExportCatalog(backendCatalogFixture());
 
         expect(compatibility.status).toBe('compatible');
@@ -22,7 +23,7 @@ describe('AI Export catalog compatibility', () => {
         expect(reconcileAiExportCatalog(missingDataset).reasonCodes).toContain('dataset_catalog_mismatch');
 
         const contractDrift = backendCatalogFixture();
-        contractDrift.analyses[0].response_contract_version = 1;
+        contractDrift.analyses[0].response_contract_version = AI_EXPORT_SELECTION_VERSION + 1;
         const compatibility = reconcileAiExportCatalog(contractDrift);
         expect(compatibility.status).toBe('disabled');
         expect(compatibility.reasonCodes).toContain('response_contract_mismatch');
@@ -42,8 +43,8 @@ describe('AI Export catalog compatibility', () => {
 
     it('fails closed on schema and catalog version drift', () => {
         const catalog = backendCatalogFixture();
-        catalog.schema_version = 1;
-        catalog.catalog_version = 1;
+        catalog.schema_version = AI_EXPORT_SCHEMA_VERSION + 1;
+        catalog.catalog_version = AI_EXPORT_CATALOG_VERSION + 1;
 
         expect(reconcileAiExportCatalog(catalog).reasonCodes).toEqual(expect.arrayContaining(['schema_version_mismatch', 'catalog_version_mismatch']));
     });
