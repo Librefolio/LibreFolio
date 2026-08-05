@@ -486,3 +486,19 @@ condividono un'altra causa comune: la UI è stata rifattorizzata (rinominando
 metriche, aggiungendo colonne, cambiando denominatori) più velocemente della
 documentazione corrispondente, che è rimasta ancorata a una versione
 precedente della Card/tabella.
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi sopra restano lo snapshot dell'audit. Il manuale inglese corrente e'
+stato riallineato al codice per i seguenti reperti:
+
+| Reperti | Stato | Esito |
+|---|---|---|
+| R-04, R-05 | ✅ Aggiornato | Positions distingue Holdings e Performance, incluse viste, colonne e caricamento contestuale. |
+| R-06 | ✅ Aggiornato | Periodi Time Delta documentati da `1W` a `5Y`. |
+| R-08 | ✅ Aggiornato | Data Editor descrive import prezzi/eventi separati e CSV con `;` o `,`. |
+| R-09 | ✅ Aggiornato | justETF distingue quota live EUR e fallback `latestQuote` non intraday. |
+| R-10 | ✅ Aggiornato | Settings documenta Profile, Preferences, About e Admin, con permessi Admin corretti. |
+| R-13 | ✅ Aggiornato | Image Crop documenta Asset Icon `256x256` e le differenze dei preset. |
+
+Le traduzioni e la validazione MkDocs completa sono rinviate al batch multi-lingua.

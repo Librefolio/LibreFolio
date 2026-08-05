@@ -306,7 +306,7 @@ def test_full_plan_aggregates_all_fields_and_max_warmup(neutral_points):
         execution_context(points),
     )
 
-    assert plan.unique_computation_count == 17
+    assert len(plan.computations) == 17
     assert plan.required_price_fields == frozenset(
         {
             SignalPriceField.HIGH,

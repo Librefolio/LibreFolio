@@ -562,23 +562,6 @@ class TestValuationAndReconciliation:
         assert lot1_oc + lot2_oc == _d("1400")
         assert lot1_pnl + lot2_pnl == _d("360")
 
-    def test_signed_fragment_reconciliation_matches_broker_balances(self):
-        t_out, t_in = _transfer_pair(3, 4, "2", out_broker_id=1, in_broker_id=2, out_date="2025-01-03", in_date="2025-01-05")
-        result = _run(
-            [
-                _buy(1, "10", "100", dt="2025-01-01", broker_id=1),
-                _sell(2, "3", "110", dt="2025-01-02", broker_id=1),
-                t_out,
-                t_in,
-                _adjustment(5, "4", dt="2025-01-06", broker_id=2),
-                _sell(6, "1", "120", dt="2025-01-07", broker_id=2),
-            ]
-        )
-
-        assert result.signed_quantity_by_broker(1) == _d("5")
-        assert result.signed_quantity_by_broker(2) == _d("5")
-        assert sum(result.signed_quantity_by_broker(broker_id) for broker_id in (1, 2)) == _d("10")
-
 
 class TestAssetIncomeAllocation:
     """Engine economic stage (Fase 1): DIVIDEND/INTEREST allocated to D-1 holdings.

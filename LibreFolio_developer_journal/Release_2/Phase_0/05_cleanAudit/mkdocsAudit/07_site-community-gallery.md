@@ -336,3 +336,14 @@ La verifica sistematica delle 114 coppie di screenshot referenziate dalle 3 pagi
 immagini (index, gallery/desktop, gallery/mobile) non ha prodotto alcun riferimento
 rotto: la generazione screenshot (`frontend/e2e/gallery.spec.ts`) e le pagine di
 consumo sono coerenti al 100% sul piano categoria/nome.
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi sopra restano lo snapshot dell'audit. Il manuale inglese corrente e'
+stato riallineato al codice per il reperto seguente:
+
+| Reperto | Stato | Esito |
+|---|---|---|
+| R2 | ✅ Aggiornato | FAQ tratta le criptovalute come asset `CRYPTO` di portafoglio, non come Forex. |
+
+Le traduzioni e la validazione MkDocs completa sono rinviate al batch multi-lingua.

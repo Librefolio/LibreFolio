@@ -78,8 +78,9 @@ class PreviewCache:
             from backend.app.config import get_settings  # noqa: PLC0415 — lazy import / avoid circular
 
             self.max_bytes = get_settings().PREVIEW_CACHE_MAX_MB * 1024 * 1024
-        except Exception:
-            pass  # Keep default
+        except Exception as exc:
+            # Non-critical: keep the default cache limit if settings cannot load.
+            logger.debug("Failed to load preview cache size setting; keeping default", error=str(exc))
         self.config_loaded = True
 
     def get(self, file_id: str, size_key: str) -> tuple[bytes, str] | None:
@@ -373,11 +374,14 @@ async def serve_file(
             raise HTTPException(status_code=400, detail=f"Text preview not supported for {mime_type}. Only text/* files supported.")
 
         # Read text file window
-        try:
+        def _read_text_preview() -> str:
             with open(file_path, encoding="utf-8") as f:
                 if offset:
                     f.seek(offset)
-                content = f.read(window) if window else f.read()
+                return f.read(window) if window else f.read()
+
+        try:
+            content = await asyncio.to_thread(_read_text_preview)
 
             from fastapi.responses import PlainTextResponse  # noqa: PLC0415 — lazy import / avoid circular
 

@@ -9,14 +9,32 @@ from datetime import datetime
 import httpx
 import pytest
 import pytest_asyncio
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1 import auth as auth_api
 from backend.app.config import get_settings
+from backend.app.db.models import GlobalSetting
+from backend.app.db.session import get_async_engine
+from backend.app.schemas.auth import AuthRegisterRequest
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 10.0
+
+
+async def set_registration_enabled(enabled: bool) -> None:
+    """Set registration gate for auth API tests."""
+    engine = get_async_engine()
+    async with AsyncSession(engine) as session:
+        result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == "enable_registration"))
+        setting = result.scalar_one_or_none()
+        assert setting is not None, "enable_registration setting was not initialized"
+        setting.value = "true" if enabled else "false"
+        session.add(setting)
+        await session.commit()
 
 
 @pytest.fixture(scope="module")
@@ -26,6 +44,14 @@ def test_server():
         if not server_manager.start_server():
             pytest.fail("Failed to start test server")
         yield server_manager
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def registration_enabled_by_default(test_server):
+    """Keep global registration state isolated between auth API tests."""
+    await set_registration_enabled(True)
+    yield
+    await set_registration_enabled(True)
 
 
 class TestRegister:
@@ -68,6 +94,106 @@ class TestRegister:
                 print_success("First user registered as superuser (DB was empty)")
             else:
                 print_success("User registered as regular user (DB had existing users)")
+
+    @pytest.mark.asyncio
+    async def test_register_succeeds_when_registration_enabled(self, test_server):
+        """REG-005: Registration succeeds when enable_registration is true."""
+        print_section("REG-005: Registration enabled allows new user")
+
+        await set_registration_enabled(True)
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+            username = f"enabledreg_{timestamp}"
+
+            response = await client.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": username,
+                    "email": f"{username}@example.com",
+                    "password": "password123",
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 201, f"Expected 201, got {response.status_code}: {response.text}"
+            assert response.json()["user"]["username"] == username
+            print_success("Registration enabled allowed new user")
+
+    @pytest.mark.asyncio
+    async def test_register_disabled_rejects_when_users_exist(self, test_server):
+        """REG-006: Disabled registration returns 403 when at least one user exists."""
+        print_section("REG-006: Disabled registration rejects non-bootstrap user")
+
+        await set_registration_enabled(True)
+
+        async with httpx.AsyncClient() as client:
+            timestamp = int(datetime.now().timestamp() * 1000)
+            seed_username = f"disabledseed_{timestamp}"
+
+            seed_response = await client.post(
+                f"{API_BASE}/auth/register",
+                json={
+                    "username": seed_username,
+                    "email": f"{seed_username}@example.com",
+                    "password": "password123",
+                },
+                timeout=TIMEOUT,
+            )
+            assert seed_response.status_code == 201, f"Setup failed: {seed_response.text}"
+
+            try:
+                await set_registration_enabled(False)
+                username = f"disabledreg_{timestamp}"
+
+                response = await client.post(
+                    f"{API_BASE}/auth/register",
+                    json={
+                        "username": username,
+                        "email": f"{username}@example.com",
+                        "password": "password123",
+                    },
+                    timeout=TIMEOUT,
+                )
+
+                assert response.status_code == 403
+                assert "registration is disabled" in response.json()["detail"].lower()
+                print_success("Disabled registration rejected non-bootstrap user")
+            finally:
+                await set_registration_enabled(True)
+
+    @pytest.mark.asyncio
+    async def test_register_disabled_allows_bootstrap_when_no_users(self, test_server, monkeypatch):
+        """REG-007: Disabled registration still allows bootstrap when user count is zero."""
+        print_section("REG-007: Disabled registration allows bootstrap user")
+
+        async def count_no_users(_session):
+            return 0
+
+        monkeypatch.setattr(auth_api.user_service, "count_users", count_no_users)
+
+        try:
+            await set_registration_enabled(False)
+
+            timestamp = int(datetime.now().timestamp() * 1000)
+            username = f"bootstrapreg_{timestamp}"
+
+            engine = get_async_engine()
+            async with AsyncSession(engine) as session:
+                response = await auth_api.register(
+                    AuthRegisterRequest(
+                        username=username,
+                        email=f"{username}@example.com",
+                        password="password123",
+                    ),
+                    session,
+                )
+
+            assert response.user.username == username
+            assert response.user.is_superuser is True
+            print_success("Disabled registration allowed bootstrap user")
+        finally:
+            await set_registration_enabled(True)
 
     @pytest.mark.asyncio
     async def test_register_duplicate_username(self, test_server):

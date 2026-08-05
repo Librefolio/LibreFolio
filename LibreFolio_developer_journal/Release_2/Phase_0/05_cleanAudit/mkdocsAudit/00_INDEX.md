@@ -144,3 +144,85 @@ La guida developer non e' stata letta ne' confrontata, come richiesto. Dopo il v
 esplicito dell'utente servono una nuova baseline e tre report separati: backend/API,
 frontend e cross-cutting. Non riusare automaticamente le citazioni di questo audit
 per dichiarare valida la developer guide.
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi e le prove sopra restano lo snapshot storico dell'audit. La remediation
+del solo Blocco 3 della [tassonomia](08-functionality-gap-taxonomy.md) ha invece
+allineato il manuale inglese corrente al codice:
+
+| Stato | Reperti Block 3 | Nota |
+|---|---:|---|
+| ✅ Manuale EN aggiornato | 23 | Testo corretto dopo nuova verifica di codice e rami alternativi. |
+| ✅ Gia' allineato | 2 | `02 F7` Directa CSV/XLSX e `06A R-06` eventi justETF. |
+| ⏸ Validazione completa | — | MkDocs build/link-check/test rinviati al batch traduzioni multi-lingua richiesto dall'utente. |
+
+Le evidenze per reperto e il relativo stato sono nella colonna
+`Stato remediation EN` della tassonomia. Nessun reperto dei Blocchi 1, 2,
+editoriale o beta Risk Analysis e' stato modificato in questa remediation.
+
+Nota valida al momento in cui e' stata scritta: il Blocco 1 e' stato toccato da
+un'esecuzione distinta e successiva, riportata nella sezione seguente.
+
+## Stato remediation — Block 1, banda S1-S3 (2026-08-05)
+
+Diversamente dal Blocco 3 sopra, qui non e' stato il manuale a essere corretto: e'
+stato il codice a essere esteso fino a rendere vera la promessa gia' scritta nella
+pagina. L'esecuzione e' quella della banda di complessita' S1-S3 del backlog
+trasversale [14](../14_backlog_per_complessita.md), non un ciclo dedicato a
+questa tassonomia — 5 delle 13 voci del Blocco 1 rientravano in quella banda.
+
+| Stato | Reperti Block 1 | Nota |
+|---|---:|---|
+| ✅ Implementato | 5 | `05 A1`, `05 A3`, `05 B1`, `03 F2`, `03 F3` — dettaglio per voce nella tassonomia. |
+| ⏸ In attesa, fuori banda | 8 | `01 R-11`, `02 F6` (tier S4); `02 F4`, `03 F4`, `06A R-03` (tier S5); `02 F3`, `06B B1`, `06C F1` (tier S6). |
+
+Due correzioni emerse durante l'esecuzione, non durante l'audit originale:
+
+- `05 A1` e' lo stesso difetto gia' censito come voce 2.4 del backlog trasversale:
+  due audit indipendenti — quello documentale e quello di codice — convergono
+  sulla stessa riga (`api/v1/auth.py:189`).
+- `03 F3` era classificato come gap documentale; la verifica di codice ha
+  stabilito che si trattava di corruzione silenziosa dei dati, non di
+  un'imprecisione del manuale. Vedi la tassonomia per il dettaglio.
+
+Resta una correzione solo editoriale: `cli_tools.en.md` va allineato al
+comportamento reale di `--workers`, ora implementato per `05 B1`. ✅ Corretta il
+2026-08-05 sul solo testo EN; IT/FR/ES seguono nel batch multilingua.
+
+### Evidenza di verifica della remediation di codice
+
+Le 5 voci `✅ Implementato` sono state verificate a suite complete, non solo sui
+test toccati. Numeri finali, tutti su un albero di lavoro con l'intera banda S1-S3
+applicata:
+
+| Verifica | Esito |
+|---|---|
+| `./dev.py test api all` | **50/50** |
+| `./dev.py test services all` | **60/60** |
+| `./dev.py front check` (svelte-check) | **0 errori, 0 warning** |
+| `npx vitest run` | **45 file, 415 test** |
+| `./dev.py lint` (backend) | **36 errori — baseline invariata**, nessuno introdotto da questo ciclo |
+
+Due precondizioni ambientali sono emerse durante queste esecuzioni e vanno conosciute
+da chi le ripete, perche' entrambe producono fallimenti che *sembrano* regressioni
+del prodotto e non lo sono:
+
+1. **Il database di test va popolato** prima della suite API: i test di Risk Analysis
+   richiedono l'utente `e2e_test_user` e falliscono con `NoResultFound` se manca. La
+   suite non lo crea da sola —
+   `./dev.py test db populate --force --clean --with-static --with-reports`.
+2. **Nessun run Playwright in parallelo** con la suite API, e nessun server di test
+   gia' vivo sulla porta di test: entrambi ricreano o bloccano il database sotto la
+   suite in corso, che poi fallisce con `no such table` — un messaggio che non ha
+   alcun rapporto con la causa.
+
+Resta invece **non ancora eseguita** la validazione documentale: `mkdocs build`,
+`check-links` e le traduzioni IT/FR/ES sono rinviati al batch multilingua, come gia'
+dichiarato per il Blocco 3.
+
+Cronaca completa dell'esecuzione, incluse le tre lezioni trasversali che ha
+prodotto, in [15 - Esecuzione S1-S3](../15_esecuzione_s1_s3.md). Le capacita' perse
+silenziosamente nei redesign, emerse come effetto collaterale della stessa
+esecuzione, sono in
+[16 - Feature perse nei redesign](../16_feature_perse_nei_redesign.md).

@@ -17,11 +17,10 @@ from __future__ import annotations
 import asyncio
 import bisect
 from collections import defaultdict, deque
-from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, NamedTuple, Optional
+from typing import Any, Optional
 
 import structlog
 from sqlalchemy import func, select
@@ -597,79 +596,6 @@ async def compute_wac_iterative_multi_broker(
     return result
 
 
-# =============================================================================
-# HISTORY SERIES — Pure function (no I/O, fully testable)
-# =============================================================================
-
-
-class _HistoryTxRow(NamedTuple):
-    """Pre-processed transaction row ready for history series computation.
-
-    The async layer (get_history) is responsible for:
-    - Querying the DB
-    - Converting amounts to base currency
-    - Applying share_percentage per broker
-
-    This NamedTuple represents a single already-converted row.
-    """
-
-    date: date_type
-    type: str
-    amount: Decimal  # signed amount, already converted to base currency
-    share: Decimal  # broker ownership fraction (0.0-1.0), applied during aggregation
-
-
-class _HistoryQtyRow(NamedTuple):
-    """Quantity delta for a single BUY or SELL transaction.
-
-    Parallel to _HistoryTxRow but carries per-asset quantity info so that
-    get_history() can compute mark-to-market holdings value.
-    qty_delta is share-adjusted and signed: positive for BUY, negative for SELL.
-    """
-
-    date: date_type
-    asset_id: int
-    qty_delta: Decimal  # share-adjusted signed quantity change
-
-
-@dataclass
-class _HistoryCalcPoint:
-    """Mutable internal history point for backend calculations before API serialization."""
-
-    date: date_type
-    cash_value: Decimal
-    market_value: Decimal
-    nav_value: Decimal
-    twrr: Decimal | None = None
-    mwrr: Decimal | None = None
-    roi: Decimal | None = None
-
-
-# ---------------------------------------------------------------------------
-# Mark-to-market helpers (pure, no I/O)
-# ---------------------------------------------------------------------------
-
-
-def _price_on_date(
-    sorted_prices: list[tuple[date_type, Decimal, str]],
-    query_date: date_type,
-) -> tuple[Decimal, str] | None:
-    """Return the latest (close, currency) with date <= query_date using backward fill.
-
-    sorted_prices must be sorted ascending by date[0].
-    Returns None if no price exists at or before query_date.
-    """
-    if not sorted_prices:
-        return None
-    # bisect_right gives insertion point after all dates == query_date
-    dates = [p[0] for p in sorted_prices]
-    idx = bisect.bisect_right(dates, query_date) - 1
-    if idx < 0:
-        return None
-    _, close, ccy = sorted_prices[idx]
-    return close, ccy
-
-
 def _daily_state_as_of(daily_states: list[Any], as_of: date_type) -> Any | None:
     """Return the last daily state with date <= as_of using backward fill.
 
@@ -686,60 +612,6 @@ def _daily_state_as_of(daily_states: list[Any], as_of: date_type) -> Any | None:
     if idx < 0:
         return None
     return daily_states[idx]
-
-
-def _build_history_series(
-    transactions: list[_HistoryTxRow],
-    date_to: date_type | None = None,
-) -> list[_HistoryCalcPoint]:
-    """Build a dense daily cash/NAV baseline series from pre-processed transaction rows.
-
-    Pure function — no I/O, no DB, no async. Deterministic given the same input.
-
-    Rules:
-    - Cash follows the signed transaction ledger exactly.
-    - One output point per calendar day from first transaction to `date_to` (or the
-      last transaction date if `date_to` is omitted).
-    - `market_value`/`nav_value` are temporary placeholders at this stage and
-      are patched later by the mark-to-market layer in `get_history()`.
-
-    Args:
-        transactions: List of _HistoryTxRow, may be in any order (will be sorted).
-        date_to: Optional inclusive end date for dense expansion.
-
-    Returns:
-        List of _HistoryCalcPoint, one per calendar day, sorted ascending.
-    """
-    if not transactions:
-        return []
-
-    cash_delta_by_date: dict[date_type, Decimal] = defaultdict(Decimal)
-
-    for row in sorted(transactions, key=lambda r: r.date):
-        cash_delta_by_date[row.date] += row.amount * row.share
-
-    sorted_rows = sorted(transactions, key=lambda r: r.date)
-    start_date = sorted_rows[0].date
-    final_date = date_to or sorted_rows[-1].date
-    if final_date < start_date:
-        return []
-
-    history: list[_HistoryCalcPoint] = []
-    cumulative_cash = Decimal("0")
-    current_date = start_date
-    while current_date <= final_date:
-        cumulative_cash += cash_delta_by_date.get(current_date, Decimal("0"))
-        history.append(
-            _HistoryCalcPoint(
-                date=current_date,
-                cash_value=cumulative_cash,
-                market_value=Decimal("0"),
-                nav_value=cumulative_cash,
-            )
-        )
-        current_date += timedelta(days=1)
-
-    return history
 
 
 # =============================================================================

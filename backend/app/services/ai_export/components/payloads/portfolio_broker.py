@@ -52,7 +52,6 @@ from backend.app.schemas.portfolio import (
     PortfolioHolding,
     PortfolioReportQuery,
     PortfolioReportResponse,
-    PortfolioSummary,
     UnallocatedContribution,
 )
 from backend.app.services.ai_export.components.resources import LotsResultsResource
@@ -872,7 +871,3 @@ async def load_broker_metadata(session: AsyncSession, broker_ids: Sequence[int])
         return {}
     result = await session.execute(select(Broker).where(Broker.id.in_(sorted(set(broker_ids)))))
     return {broker.id: broker for broker in result.scalars().all() if broker.id is not None}
-
-
-def summary_position_count(summary: PortfolioSummary | None) -> int:
-    return len(summary.holdings) if summary is not None else 0

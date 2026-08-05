@@ -2,7 +2,7 @@ import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
 import {findCompatibleAiExportSelection, selectionsForDomain} from './catalog/compatibility';
 import {resolveDefaultDetailLevel} from './catalog/shared';
 import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
-import type {AiExportPromptStats, AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
+import type {AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
 export const AI_EXPORT_TOKEN_WARNING_THRESHOLD = 20_000;
 export const AI_EXPORT_TOKEN_LARGE_THRESHOLD = 60_000;
@@ -37,12 +37,6 @@ export interface AiExportOptionsSelection {
 export interface AiExportResolvedPeriod {
     readonly start: string;
     readonly end: string;
-}
-
-export interface AiExportStatsContextFingerprintInput {
-    readonly contextKey: string;
-    readonly snapshotAsOf: string;
-    readonly targetCurrency: string;
 }
 
 export interface AiExportOptionsPanelLabels {
@@ -196,16 +190,4 @@ export function reconcileAiExportOptions(compatibility: AiExportCatalogCompatibi
         userNotes: normalizeAiExportUserNotes(selection.kind, options.userNotes),
         period: normalizeAiExportPeriod(options.period),
     };
-}
-
-export function aiExportStatsContextFingerprint(context: AiExportStatsContextFingerprintInput): string {
-    return JSON.stringify(['ai-export-stats-context-v3', context.contextKey, context.snapshotAsOf, context.targetCurrency]);
-}
-
-export function isAiExportStatsRequestCurrent(requestGeneration: number, requestContextFingerprint: string, currentGeneration: number, currentContextFingerprint: string): boolean {
-    return requestGeneration === currentGeneration && requestContextFingerprint === currentContextFingerprint;
-}
-
-export function getMatchingAiExportStats(lastStats: AiExportPromptStats | undefined, lastStatsFingerprint: string | undefined, currentFingerprint: string): AiExportPromptStats | undefined {
-    return lastStatsFingerprint === currentFingerprint ? lastStats : undefined;
 }

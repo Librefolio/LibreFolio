@@ -234,7 +234,21 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 10: Close with dirty data shows confirm discard
+    // Test 10: Foreign pair header is rejected
+    // ========================================================================
+    test('rejects CSV header currencies that do not match page pair', async ({page}) => {
+        const modal = await openImportModal(page);
+
+        const textarea = modal.locator('textarea');
+        await textarea.fill('date;GBP>JPY\n2020-01-15;188.45');
+        await page.waitForTimeout(200);
+
+        await expect(modal.getByTestId('fx-import-header-mismatch-error')).toHaveText("Header currencies don't match");
+        await expect(modal.locator('button', {hasText: 'Import (1)'})).not.toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 11: Close with dirty data shows confirm discard
     // ========================================================================
     test('close with dirty data shows discard confirm', async ({page}) => {
         const modal = await openImportModal(page);
@@ -252,7 +266,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 11: Cancel closes modal without confirm when clean
+    // Test 12: Cancel closes modal without confirm when clean
     // ========================================================================
     test('cancel closes modal when clean', async ({page}) => {
         const modal = await openImportModal(page);
@@ -265,7 +279,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 12: Swap without data doesn't mark modal as dirty
+    // Test 13: Swap without data doesn't mark modal as dirty
     // ========================================================================
     test('swap without data does not mark modal as dirty', async ({page}) => {
         const modal = await openImportModal(page);
@@ -284,7 +298,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 13: Info banner updates on swap
+    // Test 14: Info banner updates on swap
     // ========================================================================
     test('info banner reflects current direction', async ({page}) => {
         const modal = await openImportModal(page);
@@ -311,7 +325,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 14: Inverted pair page (USD-EUR) has correct initial header
+    // Test 15: Inverted pair page (USD-EUR) has correct initial header
     // ========================================================================
     test('inverted pair URL has correct initial header', async ({page}) => {
         // Navigate to USD-EUR (inverted direction)
@@ -332,7 +346,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 15: Less-than syntax updates badges but keeps original header text
+    // Test 16: Less-than syntax updates badges but keeps original header text
     // ========================================================================
     test('less-than syntax swaps badges but keeps original header text', async ({page}) => {
         const modal = await openImportModal(page);
@@ -356,7 +370,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 16: Less-than syntax with data rows — header stays, data is valid
+    // Test 17: Less-than syntax with data rows — header stays, data is valid
     // ========================================================================
     test('less-than syntax with data rows keeps header and validates data', async ({page}) => {
         const modal = await openImportModal(page);
@@ -379,7 +393,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 17: Swap after less-than syntax rewrites header with >
+    // Test 18: Swap after less-than syntax rewrites header with >
     // ========================================================================
     test('swap after less-than syntax rewrites header with greater-than', async ({page}) => {
         const modal = await openImportModal(page);
@@ -411,7 +425,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 18: Changing from < to > syntax updates direction without errors
+    // Test 19: Changing from < to > syntax updates direction without errors
     // ========================================================================
     test('changing from less-than to greater-than syntax updates direction', async ({page}) => {
         const modal = await openImportModal(page);
@@ -444,7 +458,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 19: Changing from < to > with data rows — no validation errors
+    // Test 20: Changing from < to > with data rows — no validation errors
     // ========================================================================
     test('changing from less-than to greater-than with data keeps rows valid', async ({page}) => {
         const modal = await openImportModal(page);
@@ -477,7 +491,7 @@ test.describe('FX CSV Import', () => {
     });
 
     // ========================================================================
-    // Test 20: Changing > direction to different > direction updates badges
+    // Test 21: Changing > direction to different > direction updates badges
     // ========================================================================
     test('typing different greater-than direction updates badges', async ({page}) => {
         const modal = await openImportModal(page);

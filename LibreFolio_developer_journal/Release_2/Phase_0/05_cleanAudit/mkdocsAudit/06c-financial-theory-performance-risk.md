@@ -293,3 +293,14 @@ l'audit, a supporto della disposizione "Verificata — nessun reperto" sopra:
 | Confidenza alta su tutti i reperti | Si' |
 | Link interni rotti tra le 20 pagine | 0 |
 | Drift rispetto alla baseline durante l'audit | Nessuno osservato |
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi sopra restano lo snapshot dell'audit. Il manuale inglese corrente e'
+stato riallineato al codice per il reperto seguente:
+
+| Reperto | Stato | Esito |
+|---|---|---|
+| F2 | ✅ Aggiornato | WAC documenta override richiesto, altrimenti valuta dell'ultima acquisizione e infine fallback alla valuta dell'asset. |
+
+Le traduzioni e la validazione MkDocs completa sono rinviate al batch multi-lingua.

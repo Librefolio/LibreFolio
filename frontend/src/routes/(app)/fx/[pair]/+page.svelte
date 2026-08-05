@@ -145,7 +145,6 @@
 
     // Provider config
     let providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}> = $state([]);
-    let availableProviders: Array<{code: string; name: string}> = $state([]);
 
     // Foldable panels
     let showAesthetics = $state(false);
@@ -514,7 +513,7 @@
         void loadFxAiExportCompatibility();
 
         await loadFxSignalDefinitions();
-        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), loadChartData(), loadProviders(), loadAvailableProviders(), loadAssetList()]);
+        await Promise.all([ensureCurrenciesLoaded(get(currentLanguage)), loadChartData(), loadProviders(), loadAssetList()]);
         // Force flag reactivity after currencies load
         flagVersion++;
         // Load comparison asset data after initial data is ready
@@ -679,15 +678,6 @@
                 });
         } catch (e) {
             console.error('Failed to load providers:', e);
-        }
-    }
-
-    async function loadAvailableProviders() {
-        try {
-            const response = await zodiosApi.list_providers_api_v1_fx_providers_get();
-            availableProviders = (response as any[]).map((p: any) => ({code: p.code, name: p.name}));
-        } catch (e) {
-            console.error('Failed to load available providers:', e);
         }
     }
 

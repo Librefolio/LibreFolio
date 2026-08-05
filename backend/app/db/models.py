@@ -999,6 +999,6 @@ class AssetProviderAssignment(SQLModel, table=True):
 @event.listens_for(FxConversionRoute, "before_update")
 @event.listens_for(UserSettings, "before_update")
 @event.listens_for(BrokerUserAccess, "before_update")
-def receive_before_update(mapper, connection, target):
+def receive_before_update(_mapper, _connection, target):
     """Update updated_at timestamp on update."""
     target.updated_at = utcnow()

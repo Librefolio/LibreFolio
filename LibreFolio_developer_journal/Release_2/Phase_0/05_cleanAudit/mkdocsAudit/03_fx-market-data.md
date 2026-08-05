@@ -230,6 +230,13 @@ preferisce mantenere la promessa UX della pagina — implementare realmente la
 persistenza `localStorage` nello store (decisione di prodotto, non di
 documentazione).
 
+**✅ Stato remediation (2026-08-05): implementato, opzione (b).** È stata scelta la
+strada di rendere vera la promessa invece di ridimensionare la pagina: lo store del
+grafico serializza e reidrata ora le impostazioni su `localStorage` con una chiave di
+contesto, quindi la personalizzazione sopravvive davvero a refresh e chiusura del
+browser, come la pagina già dichiarava. La documentazione **non va toccata** per
+questo reperto: era il codice a essere indietro rispetto al testo, non il contrario.
+
 ---
 
 ### 🔴 F3 — `detail/data-editor.en.md` descrive una validazione "Header currencies don't match" che non esiste; l'header CSV con valute diverse dalla pagina viene importato silenziosamente
@@ -300,6 +307,27 @@ della direzione, utile per import legittimi con export da altri sistemi), riscri
 la pagina rimuovendo la promessa di rifiuto e spiegando invece che l'header determina
 sempre la direzione effettiva di importazione, con l'avvertenza di controllarla nella
 barra direzione prima di salvare.
+
+**✅ Stato remediation (2026-08-05): implementato, opzione (a).**
+
+**La gravità di questo reperto era sottostimata e va letta corretta: non era un gap
+documentale, era corruzione silenziosa dei dati.** L'audit lo aveva classificato
+`major` fra le contraddizioni del manuale; la verifica di codice svolta durante la
+remediation ha confermato che il percorso descritto qui sopra — coppia estranea che
+non viene né invertita né rifiutata, valori che arrivano comunque a `onimport(mapped)`
+etichettati come la coppia della pagina — era realmente raggiungibile da un utente con
+un semplice copia/incolla del file sbagliato. Il difetto non stava nella pagina: la
+pagina descriveva la protezione **giusta**, era il codice a non averla.
+
+Il fix confronta le valute dell'header con `displayBase`/`displayQuote` e produce un
+rifiuto bloccante e visibile prima che l'import possa procedere. Il caso negativo —
+assente dalla suite, come questo stesso reperto documentava — è ora coperto da un test
+E2E dedicato in `frontend/e2e/fx/fx-csv-import.spec.ts`.
+
+Conseguenza documentale: la pagina `detail/data-editor.en.md` **non va modificata**
+per questo reperto, perché descriveva già il comportamento corretto. Va però
+riletta insieme al fix per verificare che il testo dell'errore mostrato coincida con
+quello promesso ("Header currencies don't match"), nel prossimo batch documentale.
 
 ---
 

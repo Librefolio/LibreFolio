@@ -175,6 +175,8 @@ sostituto e la rimozione è sicura:
 | 12 | [Test & copertura](12_test_coverage.md) | salute suite, copertura, incrocio con codice morto | — | 🔴 |
 | 13 | [AI Export](13_ai_export.md) | catalogo, composer, BuildContext, frontend ai-export | 25 748 | 🟡 |
 | **14** | [**Backlog per complessità**](14_backlog_per_complessita.md) | **sintesi trasversale — tutti gli interventi, deduplicati e ordinati per complessità e rischio** | — | — |
+| **15** | [**Esecuzione S1–S3**](15_esecuzione_s1_s3.md) | **cronaca dell'esecuzione del 2026-08-05 — 32 interventi chiusi, correzioni ai reperti dell'audit, tre lezioni trasversali** | — | — |
+| **16** | [**Feature perse nei redesign**](16_feature_perse_nei_redesign.md) | **indagine sul pattern emerso dal report 15 — capacità perse silenziosamente durante un redesign, senza test rossi né traccia nei commit** | — | — |
 
 Il report 12 chiude l'audit e ne **corregge una parte**: una prima misurazione parziale
 aveva indicato una copertura del 75,65 % con lacune enormi su API e provider BRIM. Era un
@@ -198,6 +200,20 @@ Il suo risultato più utile è la scoperta che **complessità e rischio non sono
 asse**: `git rm fifo_utils.py` è l'azione più atomica dell'elenco ed è anche l'unica
 rimozione a rischio medio, mentre le 4 righe di `pyproject.toml` costano meno di tutto e
 valgono più di tutto.
+
+Il **report 15** non è un audit, è una cronaca: racconta cosa è successo quando la banda
+S1–S3 del report 14 è stata davvero eseguita, il 2026-08-05, da una fleet di 9 agenti
+paralleli più una passata di chiusura — 32 interventi chiusi in un solo ciclo. Il suo
+contenuto più importante non è l'elenco degli interventi ma **tre lezioni trasversali**,
+ciascuna emersa indipendentemente da parti diverse del ciclo. La sintesi delle cinque
+correzioni che l'esecuzione ha imposto ai reperti di questo stesso indice è nell'ultima
+sezione di questo file, "Aggiornamento — esecuzione S1–S3 (2026-08-05)".
+
+Il **report 16**, in lavorazione parallela a questo aggiornamento, nasce da una delle tre
+lezioni del report 15: `LiveTicker.svelte` è sparito dalla Dashboard durante un redesign
+precedente senza che alcun test fallisse e senza che alcun commit lo registrasse. Indaga
+quanto questo pattern — una capacità persa dentro un redesign, senza nulla che se ne
+accorga — sia diffuso altrove nel progetto.
 
 ---
 
@@ -395,3 +411,53 @@ dichiarato**. Anche nel codice più rigoroso del progetto, le parti fuori dal co
 comportano come tutto il resto.
 
 Non sono le persone: è se la struttura obbliga o no a dichiarare cosa esiste e perché.
+
+---
+
+## Aggiornamento — esecuzione S1–S3 (2026-08-05)
+
+Tutto quanto sopra descrive lo **stato dell'audit alla sua chiusura**. Il 2026-08-05 una
+fleet di 9 agenti paralleli più una passata di chiusura ha eseguito l'intera banda di
+complessità S1–S3 del backlog trasversale ([14](14_backlog_per_complessita.md)) — 30 voci,
+di cui 25 chiuse in banda e 2 chiuse fuori banda come effetto collaterale — insieme a 4
+voci nette del Blocco 1 dell'audit mkdocs
+([`mkdocsAudit/08-functionality-gap-taxonomy.md`](mkdocsAudit/08-functionality-gap-taxonomy.md),
+indice in [`mkdocsAudit/00_INDEX.md`](mkdocsAudit/00_INDEX.md)) e a una regressione
+segnalata dall'utente durante il ciclo stesso: **32 interventi chiusi in un solo ciclo**.
+Cronaca completa, incluse tre lezioni trasversali che valgono più dell'elenco degli
+interventi, in [15 — Esecuzione S1–S3](15_esecuzione_s1_s3.md).
+
+Quattro di quelle chiusure non si sono limitate a *eseguire* un reperto: hanno **corretto**
+la diagnosi che questo stesso indice, o l'audit mkdocs gemello, avevano scritto. Vale la
+pena elencarle qui, perché un lettore che si fidasse solo del testo originale dei report
+01–14 li leggerebbe sbagliati:
+
+| Reperto originale | Correzione imposta dall'esecuzione |
+|---|---|
+| **1.2** — alzare `max-complexity` da 20 a 25 | **Voce nulla.** Nessuna configurazione `max-complexity`, `C901` o mccabe esiste in alcun punto del progetto — non in `pyproject.toml`, non altrove; il rilievo descriveva una configurazione che non c'è mai stata. |
+| **3.1** — barrel `index.ts` morti nel frontend | **Il report originale era corretto; il conteggio finale è più alto.** Il [report 09](09_frontend_components.md) elencava già **12** percorsi e il suo rimedio diceva esplicitamente «rimuovere tutti e 12 (11 sotto `components/` più `src/lib/index.ts`)»; solo il titolo della voce I3 diceva «11», per un errore di etichetta sul proprio elenco. L'esecuzione ne ha rimossi **13**: i 12 previsti più `tanstack-table/index.ts`, che nell'elenco non c'era. |
+| **3.7** — 8 bandiere `isXLoaded`/`isXLoading` morte | **Mal contato.** Il codice ne esporta 12; il numero vero, misurato *dopo* la rimozione dei barrel morti (la misura non era attendibile finché i barrel esistevano ancora), è **9**. |
+| **[03 F3](mkdocsAudit/03_fx-market-data.md)** — header CSV FX incompatibile, classificato come gap documentale | **Sottovalutato in gravità.** La verifica di codice svolta durante la remediation ha stabilito che si trattava di **corruzione silenziosa dei dati**: una coppia valutaria estranea alla pagina non veniva né invertita né rifiutata, e i valori arrivavano comunque al callback di import come se fossero la coppia corretta. |
+
+Nessuna di queste quattro correzioni cambia la conclusione generale di questo indice — il
+codebase resta sano, il debito resta concentrato dove l'audit lo aveva già individuato —
+ma tutte e quattro cambiano la cifra o l'attribuzione esatta di un reperto specifico. Chi
+cita un numero da questo audit dopo il 2026-08-05 dovrebbe citare la versione corretta, non
+quella originale del report in cui la voce compare per la prima volta.
+
+> **Una quinta "correzione" è stata ritirata perché era falsa.** Una versione precedente di
+> questa tabella sosteneva che il reperto 2.6 attribuisse due `S110` a
+> `backend/app/api/v1/version.py`, un file inesistente. La verifica sugli artefatti ha
+> smentito l'accusa: il [report 11](11_crosscutting.md) ha sempre indicato
+> `utils/version.py:36,51`, e il [report 14](14_backlog_per_complessita.md) ha sempre
+> scritto `version.py`. L'attribuzione sbagliata era stata introdotta dal *briefing* di
+> esecuzione, non dall'audit, e da lì si era propagata nei report di chiusura. È un
+> promemoria che vale per questo indice quanto per il codice: **anche una correzione va
+> verificata contro la fonte prima di essere scritta**, altrimenti si documenta un errore
+> che nessuno ha mai commesso.
+
+Il report [16 — Feature perse nei redesign](16_feature_perse_nei_redesign.md) approfondisce
+un effetto collaterale dell'esecuzione, non una correzione di reperto: durante la rimozione
+dei barrel morti del frontend, `LiveTicker.svelte` si è rivelato non un semplice orfano ma
+una capacità — la striscia prezzi live in Dashboard — sparita senza traccia in un redesign
+precedente, riconosciuta solo perché l'utente l'ha vista riemergere come file morto.

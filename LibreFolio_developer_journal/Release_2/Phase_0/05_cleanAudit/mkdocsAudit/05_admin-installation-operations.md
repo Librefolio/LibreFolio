@@ -90,6 +90,36 @@ controllo non è ancora applicato lato server.
 > correzione minima immediata è documentale (avviso), quella strutturale è nel
 > codice (A1 di `01_api_layer.md`).
 
+**✅ Stato remediation (2026-08-05): implementato.** `register()` chiama ora
+`is_registration_enabled()` e risponde `403 New user registration is disabled`
+quando l'impostazione è falsa. È stata scelta l'**esenzione bootstrap**: il primo
+utente in assoluto (`count_users() == 0`) può sempre registrarsi, altrimenti
+un'installazione nuova con registrazioni chiuse resterebbe inaccessibile per sempre.
+Evidenza: `backend/app/api/v1/auth.py:186-192`.
+
+> **Conseguenza operativa emersa solo in fase di verifica finale, da conoscere prima
+> di toccare quest'area.** Rendere l'impostazione *effettiva* ha reso la suite di test
+> API dipendente dal suo valore: quasi ogni test crea il proprio utente via
+> `POST /auth/register`. Finché il controllo non esisteva, un `enable_registration`
+> lasciato a `false` nel database di test era del tutto innocuo; da ora in poi
+> propaga un fallimento a cascata su ~50 test, con il messaggio
+> `New user registration is disabled` che **non indica in alcun modo la causa reale**
+> (uno stato residuo, non un difetto del test che fallisce).
+>
+> I test di `test_auth_api.py` che disattivano deliberatamente la registrazione la
+> ripristinano già in un `finally`, ma quel ripristino salta se il processo viene
+> ucciso a metà — Ctrl-C, server di test morto, un run Playwright parallelo che
+> ricrea il database sotto i piedi. Lo stato sporco sopravvive quindi al run
+> *successivo*. È esattamente ciò che è accaduto durante questa verifica: la prima
+> esecuzione della suite API si è fermata a `0/50`.
+>
+> Mitigazione aggiunta: una fixture di sessione `autouse` in
+> `backend/test_scripts/conftest.py` riporta `enable_registration` a `true`
+> all'avvio della sessione di test. Non sostituisce la pulizia per-test — gira una
+> volta sola all'inizio, quindi i test che disattivano la registrazione *durante* la
+> sessione continuano a funzionare come prima — ma impedisce che uno stato residuo
+> si travesta da regressione del prodotto.
+
 ---
 
 ### 🔴 A2 — `require_email_verification` non ha alcuna implementazione
@@ -147,6 +177,12 @@ comunque "Maximum size: 10 MB", che rinforza la confusione).
 `get_max_upload_mb()` (stesso pattern già corretto in `uploads.py:169`), oppure
 correggere la doc per dire esplicitamente "solo Files/upload statici; i broker
 report hanno un limite fisso di 10 MB non configurabile".
+
+**✅ Stato remediation (2026-08-05): implementato.** L'endpoint di upload dei report
+broker usa ora lo stesso helper `get_max_upload_mb()` già impiegato per i file
+statici (`backend/app/api/v1/brokers.py:76,518`), quindi `max_file_upload_mb` vale
+davvero su entrambe le superfici come la pagina prometteva. La documentazione non va
+ridimensionata: era il codice ad applicare il limite solo a metà.
 
 ---
 
@@ -250,6 +286,23 @@ passarlo come intero.
 **Direzione di correzione**: riformulare come
 `# --workers <n>: manually size to your CPU count (e.g. 2 × cores - 1)`,
 rimuovendo ogni riferimento a un calcolo automatico assente.
+
+**✅ Stato remediation (2026-08-05): implementato, ma con esito opposto alla
+direzione suggerita — e la doc resta comunque da correggere.** Invece di rimuovere
+la promessa dalla pagina, è stato aggiunto il calcolo automatico: `--workers`
+accetta ora un intero positivo, `0` oppure `auto` — gli ultimi due attivano
+entrambi il calcolo, mentre un valore negativo o non numerico viene rifiutato con
+un messaggio esplicito. La formula è `max(1, 2 × (CPU − 1))`
+(`dev.py:138-152`, `_resolve_server_workers`), la stessa già usata altrove in
+`dev.py` (mantenuta per coerenza interna, pur non essendo la classica Gunicorn
+`(2 × CPU) + 1`).
+
+⚠️ **Lato documentale, corretto separatamente il 2026-08-05.**
+`cli_tools.en.md` descriveva `--workers N` come se un valore qualsiasi attivasse il
+calcolo automatico. Il testo EN è stato riallineato al comportamento reale (`auto`
+o `0` per il calcolo, un intero per il valore esplicito). Le versioni IT/FR/ES della
+stessa pagina restano al testo precedente e vanno riallineate nel batch multilingua,
+insieme a tutte le altre correzioni EN di questo audit.
 
 ---
 
@@ -594,3 +647,19 @@ Nessuna pagina admin richiede una riscrittura strutturale: i reperti sono
 correzioni puntuali (una riga di codice mancante, un URL, una sintassi di
 comando, righe di tabella da aggiungere), ad eccezione del nucleo A1/A2 che è
 condiviso con — e già aperto da — il report `01_api_layer.md`.
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi sopra restano lo snapshot dell'audit. Il manuale inglese corrente e'
+stato riallineato al codice per i seguenti reperti:
+
+| Reperti | Stato | Esito |
+|---|---|---|
+| A4 | ✅ Aggiornato | Aggiunto `default_theme` e distinta la preferenza utente dal default globale. |
+| A5 | ✅ Aggiornato | Documentati `scheduler_timezone`, UTC e il significato limitato del default scheduler. |
+| B7 | ✅ Aggiornato | Gallery descrive Playwright, server/test data gestiti dal comando e `--no-populate`. |
+| B9 | ✅ Aggiornato | Installation documenta stack GHCR production e bind mount `./LibreFolio-data`. |
+| B11 | ✅ Aggiornato | Backup Docker richiede stop container e copia completa del bind mount. |
+| B12 | ✅ Aggiornato | Host installation documenta Pipenv, root npm, frontend npm ci e Playwright. |
+
+Le traduzioni e la validazione MkDocs completa sono rinviate al batch multi-lingua.

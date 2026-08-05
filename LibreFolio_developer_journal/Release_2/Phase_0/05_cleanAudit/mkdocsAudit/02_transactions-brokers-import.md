@@ -464,3 +464,17 @@ dichiarata in [00 — Indice](00_INDEX.md)), non da HEAD puro; un futuro `git di
 su questi due file potrebbe invalidare le righe citate per F3 e per gli overdraft/
 shorting citati nella riga di copertura di `brokers/info.en.md` — da ri-verificare se
 quelle modifiche vengono confermate/mergiate.
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi sopra restano lo snapshot dell'audit. Il manuale inglese corrente e'
+stato riallineato al codice per i seguenti reperti:
+
+| Reperti | Stato | Esito |
+|---|---|---|
+| F1, F2 | ✅ Aggiornato | Documentato il flusso BRIM a quattro step, il parser compatibile di default e l'override per file. |
+| F7 | ✅ Gia' allineato | La pagina Directa gia' documentava i formati CSV e XLSX; nessuna modifica forzata. |
+| F8 | ✅ Aggiornato | Descritti i bucket di duplicati possibili/probabili senza esporre label interne. |
+| F9 | ✅ Aggiornato | Chiarito che righe metadata, invalide o sconosciute vengono gestite genericamente con warning. |
+
+Le traduzioni e la validazione MkDocs completa sono rinviate al batch multi-lingua.

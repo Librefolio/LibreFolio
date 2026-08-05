@@ -5,7 +5,7 @@ This package contains concrete implementations of FX rate providers.
 Each provider represents a central bank or financial data source.
 
 Providers are auto-discovered and registered via the FXProviderRegistry.
-No manual imports needed - use FXProviderRegistry.get_provider(code) to access them.
+No manual imports needed - use FXProviderRegistry.get_provider_instance(code) to access them.
 
 Available providers:
 - ECBProvider: European Central Bank (EUR base) - code: "ECB"

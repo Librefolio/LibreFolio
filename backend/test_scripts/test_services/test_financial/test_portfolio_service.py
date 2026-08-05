@@ -4,9 +4,6 @@ Integration tests for PortfolioService.
 Uses a real AsyncSession against the test database.
 Tests WAC orchestration and history aggregation.
 
-Also contains pure unit tests for _build_history_series() —
-synchronous, no DB, verify computation in isolation (TestBuildHistorySeries).
-
 Reference: backend/app/services/portfolio_service.py
 """
 
@@ -36,10 +33,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import IssueCode, PortfolioReportQuery
 from backend.app.services.portfolio_service import (
     PortfolioService,
-    _build_history_series,
-    _HistoryTxRow,
     _portfolio_l2_cache,
-    _price_on_date,
     _wac_cache,
     compute_wac_iterative_multi_broker,
 )
@@ -370,176 +364,6 @@ class TestComputeWacIterativeMultiBroker:
         assert [tx.original_unit_cost for tx in result.wac_qualifying_txs] == [Decimal("120"), Decimal("150")]
         assert [tx.original_currency for tx in result.wac_qualifying_txs] == ["USD", "USD"]
         assert [tx.fx_rate_used for tx in result.wac_qualifying_txs] == [Decimal("0.9"), Decimal("0.9")]
-
-
-# =============================================================================
-# TestBuildHistorySeries — PURE UNIT TESTS (no DB, no async, no fixtures)
-# =============================================================================
-
-
-def _row(dt: str, type_: str, amount: str, share: str = "1") -> _HistoryTxRow:
-    return _HistoryTxRow(
-        date=date.fromisoformat(dt),
-        type=type_,
-        amount=Decimal(amount),
-        share=Decimal(share),
-    )
-
-
-class TestBuildHistorySeries:
-    """Pure unit tests — no DB, no async, no fixtures. Fast and deterministic.
-
-    NOTE: _build_history_series was refactored to produce a *dense daily* series
-    (one point per calendar day) rather than one point per transaction date.
-    `market_value` is always 0 at this stage (patched by mark-to-market in
-    get_history()). `nav_value == cash_value` always in the raw output.
-
-    All transaction types contribute to cash_value (no type-based filtering here).
-    """
-
-    def test_empty_input(self):
-        assert _build_history_series([]) == []
-
-    def test_single_deposit(self):
-        """
-        Single DEPOSIT 10000 -> point on that date has cash=10000, market_value=0, nav=10000.
-        This test would have caught Bug 2 (NameError on vals["cash"]).
-        """
-        rows = [_row("2025-01-01", "DEPOSIT", "10000")]
-        result = _build_history_series(rows)
-
-        assert len(result) >= 1
-        pt = result[0]
-        assert pt.date == date(2025, 1, 1)
-        assert pt.cash_value == Decimal("10000")
-        assert pt.market_value == Decimal("0")
-        assert pt.nav_value == Decimal("10000")
-
-    def test_buy_moves_cash_to_invested(self):
-        """DEPOSIT 10000 then BUY -5000 (BUY amounts are negative = cash out).
-        Dense series: point on 2025-01-01 has cash=10000; point on 2025-03-01 has
-        cash=10000+(-5000)=5000. market_value is always 0 (MtM layer patches it).
-        """
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-03-01", "BUY", "-5000"),  # BUY: negative amount (cash out)
-        ]
-        result = _build_history_series(rows)
-
-        # Dense expansion: many daily points between 2025-01-01 and 2025-03-01
-        assert len(result) > 2
-        # Find points by date
-        t0 = next(p for p in result if p.date == date(2025, 1, 1))
-        t1 = next(p for p in result if p.date == date(2025, 3, 1))
-        assert t0.cash_value == Decimal("10000")
-        assert t0.nav_value == Decimal("10000")
-        assert t1.cash_value == Decimal("5000")
-        assert t1.nav_value == Decimal("5000")  # market_value=0, so nav=cash
-
-    def test_nav_invariant(self):
-        """For every point: nav_value == cash_value + market_value (market_value=0 always)."""
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "BUY", "-3000"),
-            _row("2025-04-01", "SELL", "1000"),
-            _row("2025-06-01", "WITHDRAWAL", "-2000"),
-            _row("2025-09-01", "DEPOSIT", "5000"),
-        ]
-        result = _build_history_series(rows)
-        # Dense: many more than 5 points
-        assert len(result) > 5
-        for point in result:
-            assert point.nav_value == point.cash_value + point.market_value, f"NAV invariant violated at {point.date}: " f"nav={point.nav_value} != cash={point.cash_value} + market_value={point.market_value}"
-
-    def test_chronological_order(self):
-        """Output must be sorted by date ascending regardless of input order."""
-        rows = [
-            _row("2025-06-01", "DEPOSIT", "3000"),
-            _row("2025-01-01", "DEPOSIT", "5000"),
-            _row("2025-03-15", "DEPOSIT", "2000"),
-        ]
-        result = _build_history_series(rows)
-        dates = [p.date for p in result]
-        assert dates == sorted(dates)
-
-    def test_share_halves_values(self):
-        """share=0.5 -> all monetary values are halved."""
-        rows = [_row("2025-01-01", "DEPOSIT", "10000", share="0.5")]
-        result = _build_history_series(rows)
-
-        assert len(result) >= 1
-        assert result[0].cash_value == Decimal("5000")
-        assert result[0].nav_value == Decimal("5000")
-
-    def test_withdrawal_reduces_cash(self):
-        """DEPOSIT 10000 -> WITHDRAWAL -3000 -> cash = 7000 on withdrawal date."""
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-06-01", "WITHDRAWAL", "-3000"),
-        ]
-        result = _build_history_series(rows)
-
-        # Dense: many points; find the withdrawal date
-        assert len(result) > 2
-        pt = next(p for p in result if p.date == date(2025, 6, 1))
-        assert pt.cash_value == Decimal("7000")
-        assert pt.nav_value == Decimal("7000")
-
-    def test_sell_increases_cash_reduces_invested(self):
-        """DEPOSIT 10000 -> BUY -8000 -> SELL 3000.
-        Net cash at end: 10000 - 8000 + 3000 = 5000.
-        market_value is always 0 in the raw series (patched by MtM later).
-        """
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "BUY", "-8000"),
-            _row("2025-03-01", "SELL", "3000"),
-        ]
-        result = _build_history_series(rows)
-
-        final = result[-1]
-        assert final.cash_value == Decimal("5000")
-        assert final.nav_value == Decimal("5000")  # market_value=0 at this stage
-
-    def test_all_types_contribute_to_cash(self):
-        """All transaction types (including DIVIDEND) contribute to cash_value.
-        There is no type-based filtering in _build_history_series.
-        """
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "10000"),
-            _row("2025-02-01", "DIVIDEND", "500"),
-        ]
-        result = _build_history_series(rows)
-        final = result[-1]
-        # DIVIDEND adds to cash (no type filtering at this layer)
-        assert final.cash_value == Decimal("10500")
-        assert final.nav_value == Decimal("10500")
-
-    def test_multiple_transactions_same_date(self):
-        """Two deposits on same date -> single point with cumulative state."""
-        rows = [
-            _row("2025-01-01", "DEPOSIT", "5000"),
-            _row("2025-01-01", "DEPOSIT", "3000"),
-        ]
-        result = _build_history_series(rows)
-        assert len(result) == 1
-        assert result[0].cash_value == Decimal("8000")
-
-
-class TestPriceOnDate:
-    def test_empty_and_before_first_price_return_none(self):
-        assert _price_on_date([], date(2025, 1, 10)) is None
-        assert _price_on_date([(date(2025, 1, 10), Decimal("100"), "EUR")], date(2025, 1, 9)) is None
-
-    def test_exact_match_and_backward_fill(self):
-        prices = [
-            (date(2025, 1, 10), Decimal("100"), "EUR"),
-            (date(2025, 1, 15), Decimal("105"), "EUR"),
-            (date(2025, 1, 20), Decimal("110"), "EUR"),
-        ]
-
-        assert _price_on_date(prices, date(2025, 1, 15)) == (Decimal("105"), "EUR")
-        assert _price_on_date(prices, date(2025, 1, 18)) == (Decimal("105"), "EUR")
 
 
 # =============================================================================

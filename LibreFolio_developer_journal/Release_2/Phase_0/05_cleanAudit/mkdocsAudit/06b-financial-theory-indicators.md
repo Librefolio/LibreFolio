@@ -302,3 +302,14 @@ discrepanze, a beneficio di futuri audit che tocchino lo stesso codice:
 Aggiornamento suggerito alla riga "06B" della tabella di copertura: stato da
 "In corso" a completato, 27/27 pagine coperte, 5 reperti (1 major, 3 minor, 1 info),
 0 non verificabili, 0 problemi di navigazione/link.
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi sopra restano lo snapshot dell'audit. Il manuale inglese corrente e'
+stato riallineato al codice per il reperto seguente:
+
+| Reperto | Stato | Esito |
+|---|---|---|
+| B0 | ✅ Aggiornato | I benchmark sintetici sono documentati come calcolati localmente nel browser, senza round-trip backend. |
+
+Le traduzioni e la validazione MkDocs completa sono rinviate al batch multi-lingua.

@@ -111,7 +111,15 @@
     });
 
     $effect(() => {
-        if (chartContainer && data && mapRegistered) {
+        // `data` is a Record, not an array: read every value synchronously so this
+        // effect tracks its CONTENT, not merely the truthiness of the object
+        // reference. An object is always truthy, so the previous
+        // `if (chartContainer && data && mapRegistered)` guard never re-fired when
+        // the parent rebuilt the weights — the defect that made SemiDonutChart
+        // render blank.
+        for (const key of Object.keys(data)) void data[key];
+
+        if (chartContainer && mapRegistered) {
             tick().then(() => {
                 setupResizeObserver();
                 renderChart();

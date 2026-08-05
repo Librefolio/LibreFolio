@@ -14,11 +14,13 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from backend.app.config import PROJECT_ROOT
+from backend.app.logging_config import get_logger
 from backend.app.schemas.system import DependencyInfo, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
 from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
 from backend.app.utils.version import get_git_version
 
 router = APIRouter(prefix="/system", tags=["System"])
+logger = get_logger(__name__)
 
 
 # Display name mappings for packages
@@ -84,8 +86,9 @@ def parse_pipfile() -> list[str]:
                     if match:
                         pkg_name = match.group(1).lower()
                         packages.append(pkg_name)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Non-critical diagnostics endpoint: return an empty dependency list on parse/read failures.
+        logger.debug("Failed to parse Pipfile dependencies", error=str(exc))
     return packages
 
 
@@ -99,9 +102,9 @@ def get_backend_deps() -> list[DependencyInfo]:
             ver = pkg_version(pkg_name)
             display_name = get_display_name(pkg_name, BACKEND_NAME_MAP)
             deps.append(DependencyInfo(name=display_name, version=ver))
-        except Exception:
-            # Package might be installed under different name
-            pass
+        except Exception as exc:
+            # Package might be installed under a different distribution name.
+            logger.debug("Failed to resolve backend dependency version", package=pkg_name, error=str(exc))
     return deps
 
 
@@ -133,8 +136,9 @@ def get_frontend_deps() -> list[DependencyInfo]:
             for dep, version in all_deps.items():
                 display_name = get_display_name(dep, FRONTEND_NAME_MAP)
                 deps.append(DependencyInfo(name=display_name, version=version))
-    except Exception:
-        pass
+    except Exception as exc:
+        # Non-critical diagnostics endpoint: return an empty dependency list on parse/read failures.
+        logger.debug("Failed to parse frontend package dependencies", error=str(exc))
 
     return deps
 

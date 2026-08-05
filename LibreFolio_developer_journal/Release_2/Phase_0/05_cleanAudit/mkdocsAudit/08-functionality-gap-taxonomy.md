@@ -47,27 +47,63 @@ classificazione venga letta come un nuovo backlog di 64 feature.
 
 ## 1. Funzionalita' da estendere per rendere vera la promessa
 
-| Riferimento | Promessa da rendere vera | Sistema gia' disponibile | Estensione minima |
-|---|---|---|---|
-| [01 R-11](01_user-core.md) | Preferenza `Date Format` | Preferences utente, i18n e formattazione gia' esistono | Aggiungere preferenza e applicarla ai renderer data; non richiede integrazione esterna. |
-| [02 F3](02_transactions-brokers-import.md) | Generic CSV importa `TRANSFER`, `FX_CONVERSION`, `CASH_TRANSFER` | Pipeline transazioni composte, `link_uuid` e promote esistono | Far emettere al parser le coppie/legami richiesti e passarle alla pipeline batch. |
-| [02 F4](02_transactions-brokers-import.md) | Quota percentuale assegnabile anche a Editor | Sharing, ruoli e `validate_share_for_role` esistono | Modificare la regola di autorizzazione e coprirne gli invarianti di accesso. |
-| [02 F6](02_transactions-brokers-import.md) | eToro importa XLSX | Pattern XLSX gia' presente in plugin fratelli Directa/Intesa | Riutilizzare il pattern di parsing XLSX nel provider eToro; non serve una nuova famiglia BRIM. |
-| [03 F2](03_fx-market-data.md) | Impostazioni grafico FX persistenti | Store grafico e pattern `localStorage` esistono | Serializzare/idratare il `chartSettingsStore` con chiave di contesto. |
-| [03 F3](03_fx-market-data.md) | Import FX rifiuta header valuta incompatibile | Importer FX riceve gia' base/quote della pagina | Confrontare header CSV con `displayBase`/`displayQuote` prima di salvare. |
-| [03 F4](03_fx-market-data.md) | Tre task AI Export FX con i nomi documentati | Catalogo AI Export estendibile | Aggiungere/rinominare l'Analysis richiesta nel catalogo e nei contratti; altrimenti correggere la pagina ai due task reali. |
-| [05 A1](05_admin-installation-operations.md) | `enable_registration=false` blocca registrazioni | Accessor `is_registration_enabled()` gia' esiste | Invocarlo nell'endpoint `register()` e decidere il caso del primo utente. |
-| [05 A3](05_admin-installation-operations.md) | `max_file_upload_mb` vale anche per report broker | Helper limite upload gia' usato per file statici | Applicare lo stesso controllo all'endpoint broker upload. |
-| [05 B1](05_admin-installation-operations.md) | `--workers` calcolato automaticamente | Logica CPU-based presente in altro comando `dev.py` | Definire e riusare una formula esplicita per `server --workers`. |
-| [06A R-03](06a-financial-theory-instruments.md) | ADJUSTMENT positivo senza override crea lotto a costo zero | `TransactionService` e validazione cost basis esistono | Introdurre una policy esplicita per costo zero/omissione, invece del rifiuto attuale. |
-| [06B B1](06b-financial-theory-indicators.md) | Benchmark composto seleziona frequenze di capitalizzazione | `CompoundSignal` locale e parametri ChartSignal esistono | Aggiungere `compoundingFrequency` e calcolo coerente al segnale/registry. |
-| [06C F1](06c-financial-theory-performance-risk.md) | CASH_TRANSFER conserva split capitale/rendimenti K/R | `portfolio_engine` gia' calcola entrambe le gambe | Bufferizzare/produrre il rapporto K/R della partenza per classificare correttamente l'arrivo. |
+| Riferimento | Promessa da rendere vera | Sistema gia' disponibile | Estensione minima | Stato remediation |
+|---|---|---|---|---|
+| [01 R-11](01_user-core.md) | Preferenza `Date Format` | Preferences utente, i18n e formattazione gia' esistono | Aggiungere preferenza e applicarla ai renderer data; non richiede integrazione esterna. | In attesa (tier S4) |
+| [02 F3](02_transactions-brokers-import.md) | Generic CSV importa `TRANSFER`, `FX_CONVERSION`, `CASH_TRANSFER` | Pipeline transazioni composte, `link_uuid` e promote esistono | Far emettere al parser le coppie/legami richiesti e passarle alla pipeline batch. | In attesa (tier S6) |
+| [02 F4](02_transactions-brokers-import.md) | Quota percentuale assegnabile anche a Editor | Sharing, ruoli e `validate_share_for_role` esistono | Modificare la regola di autorizzazione e coprirne gli invarianti di accesso. | In attesa (tier S5) |
+| [02 F6](02_transactions-brokers-import.md) | eToro importa XLSX | Pattern XLSX gia' presente in plugin fratelli Directa/Intesa | Riutilizzare il pattern di parsing XLSX nel provider eToro; non serve una nuova famiglia BRIM. | In attesa (tier S4) |
+| [03 F2](03_fx-market-data.md) | Impostazioni grafico FX persistenti | Store grafico e pattern `localStorage` esistono | Serializzare/idratare il `chartSettingsStore` con chiave di contesto. | ✅ Implementato (2026-08-05) |
+| [03 F3](03_fx-market-data.md) | Import FX rifiuta header valuta incompatibile | Importer FX riceve gia' base/quote della pagina | Confrontare header CSV con `displayBase`/`displayQuote` prima di salvare. | ✅ Implementato (2026-08-05) |
+| [03 F4](03_fx-market-data.md) | Tre task AI Export FX con i nomi documentati | Catalogo AI Export estendibile | Aggiungere/rinominare l'Analysis richiesta nel catalogo e nei contratti; altrimenti correggere la pagina ai due task reali. | In attesa (tier S5) |
+| [05 A1](05_admin-installation-operations.md) | `enable_registration=false` blocca registrazioni | Accessor `is_registration_enabled()` gia' esiste | Invocarlo nell'endpoint `register()` e decidere il caso del primo utente. | ✅ Implementato (2026-08-05) |
+| [05 A3](05_admin-installation-operations.md) | `max_file_upload_mb` vale anche per report broker | Helper limite upload gia' usato per file statici | Applicare lo stesso controllo all'endpoint broker upload. | ✅ Implementato (2026-08-05) |
+| [05 B1](05_admin-installation-operations.md) | `--workers` calcolato automaticamente | Logica CPU-based presente in altro comando `dev.py` | Definire e riusare una formula esplicita per `server --workers`. | ✅ Implementato (2026-08-05) |
+| [06A R-03](06a-financial-theory-instruments.md) | ADJUSTMENT positivo senza override crea lotto a costo zero | `TransactionService` e validazione cost basis esistono | Introdurre una policy esplicita per costo zero/omissione, invece del rifiuto attuale. | In attesa (tier S5) |
+| [06B B1](06b-financial-theory-indicators.md) | Benchmark composto seleziona frequenze di capitalizzazione | `CompoundSignal` locale e parametri ChartSignal esistono | Aggiungere `compoundingFrequency` e calcolo coerente al segnale/registry. | In attesa (tier S6) |
+| [06C F1](06c-financial-theory-performance-risk.md) | CASH_TRANSFER conserva split capitale/rendimenti K/R | `portfolio_engine` gia' calcola entrambe le gambe | Bufferizzare/produrre il rapporto K/R della partenza per classificare correttamente l'arrivo. | In attesa (tier S6) |
 
 ### Nota di prodotto
 
 Le voci `03 F4`, `06A R-03` e `06B B1` non sono correzioni meccaniche: il codice
 attuale puo' essere intenzionale. Prima di implementarle va confermato che la promessa
 del manuale e', in effetti, il requisito di prodotto desiderato.
+
+### Nota di remediation — banda S1-S3 (2026-08-05)
+
+Le 5 voci segnate `✅ Implementato` sono state chiuse da una fleet di agenti
+paralleli che ha eseguito la banda di complessita' S1-S3 del backlog trasversale
+[14](../14_backlog_per_complessita.md), non da un ciclo dedicato a questa
+tassonomia. `05 A1` e' lo stesso difetto gia' tracciato come voce 2.4 in quel
+backlog: due audit indipendenti, quello documentale e quello di codice, sono
+convergenti sulla stessa riga (`api/v1/auth.py:189`).
+
+`03 F3` merita anche una correzione di gravita', non solo di stato: era stato
+classificato come gap documentale, ma la verifica di codice svolta durante la
+remediation ha stabilito che si trattava di **corruzione silenziosa dei dati** —
+un header CSV di una coppia valutaria diversa non veniva ne' invertito ne'
+rifiutato, e i dati sbagliati arrivavano comunque al callback di import. Il fix
+aggiunge un rifiuto bloccante visibile; il caso negativo e' ora coperto da un
+test E2E dedicato.
+
+`05 A1` ha prodotto una conseguenza operativa che non era prevedibile dall'audit
+documentale: rendere *effettiva* l'impostazione ha reso l'intera suite di test API
+dipendente dal suo valore, perche' quasi ogni test crea il proprio utente via
+`POST /auth/register`. Un `enable_registration` lasciato a `false` da un run
+interrotto — prima del tutto innocuo, perche' nessuno leggeva l'impostazione — ora
+fa fallire ~50 test con un messaggio che non indica la causa reale. E' stata
+aggiunta una fixture di sessione in `backend/test_scripts/conftest.py` che
+ripristina il valore all'avvio. Dettaglio completo nella voce A1 del
+[report 05](05_admin-installation-operations.md).
+
+Le altre 8 voci del blocco restano fuori banda (tier S4-S6) e non sono state
+toccate in questo ciclo. Cronaca completa in
+[15 - Esecuzione S1-S3](../15_esecuzione_s1_s3.md).
+
+Resta una correzione solo editoriale, non di remediation: `cli_tools.en.md`
+descriveva ancora `--workers` con il comportamento manuale precedente. ✅ Corretta il
+2026-08-05 sul solo testo EN (`auto` o `0` attivano il calcolo, un intero lo forza);
+le versioni IT/FR/ES della pagina restano da riallineare nel batch multilingua.
 
 ## 2. Funzionalita' assenti che richiedono nuovi sistemi, librerie o integrazioni
 
@@ -86,48 +122,48 @@ prodotto debba davvero offrire la capacita'.
 
 ### User core - dashboard, asset, impostazioni
 
-| Riferimento | Capacita' reale non esposta correttamente |
-|---|---|
-| [01 R-04](01_user-core.md) | Vista Performance delle Positions espone le colonne reali, molto piu' ampie delle quattro descritte. |
-| [01 R-05](01_user-core.md) | Vista Holdings espone otto colonne ulteriori rispetto alla pagina. |
-| [01 R-06](01_user-core.md) | Time Delta Selector implementa i periodi reali 1W-5Y, non gli esempi 1D/YTD/ALL. |
-| [01 R-08](01_user-core.md) | Data Editor rileva e accetta anche CSV separato da virgola. |
-| [01 R-09](01_user-core.md) | justETF ha fallback di current price per valute non EUR. |
-| [01 R-10](01_user-core.md) | Settings include un tab Profile distinto dalle tre aree dichiarate. |
-| [01 R-13](01_user-core.md) | Image Crop offre preset Asset Icon 256x256. |
+| Riferimento | Capacita' reale non esposta correttamente | Stato remediation EN |
+|---|---|---|
+| [01 R-04](01_user-core.md) | Vista Performance delle Positions espone le colonne reali, molto piu' ampie delle quattro descritte. | ✅ Aggiornato |
+| [01 R-05](01_user-core.md) | Vista Holdings espone otto colonne ulteriori rispetto alla pagina. | ✅ Aggiornato |
+| [01 R-06](01_user-core.md) | Time Delta Selector implementa i periodi reali 1W-5Y, non gli esempi 1D/YTD/ALL. | ✅ Aggiornato |
+| [01 R-08](01_user-core.md) | Data Editor rileva e accetta anche CSV separato da virgola. | ✅ Aggiornato |
+| [01 R-09](01_user-core.md) | justETF ha fallback di current price per valute non EUR. | ✅ Aggiornato |
+| [01 R-10](01_user-core.md) | Settings include un tab Profile distinto dalle tre aree dichiarate. | ✅ Aggiornato |
+| [01 R-13](01_user-core.md) | Image Crop offre preset Asset Icon 256x256. | ✅ Aggiornato |
 
 ### Transactions, import e broker
 
-| Riferimento | Capacita' reale non esposta correttamente |
-|---|---|
-| [02 F1](02_transactions-brokers-import.md) | Wizard BRIM reale a quattro step, con resolution/staging come sezioni dello stesso flusso. |
-| [02 F2](02_transactions-brokers-import.md) | Parser ereditato da `default_import_plugin` del Broker, con override per file. |
-| [02 F7](02_transactions-brokers-import.md) | Directa supporta anche XLSX, omesso dalla tabella capacita'. |
-| [02 F8](02_transactions-brokers-import.md) | Dedup usa il modello/campi reali, non la descrizione semplificata e incoerente delle due pagine. |
-| [02 F9](02_transactions-brokers-import.md) | Schwab scarta le righe riepilogo tramite data non valida e mostra warning visibile. |
+| Riferimento | Capacita' reale non esposta correttamente | Stato remediation EN |
+|---|---|---|
+| [02 F1](02_transactions-brokers-import.md) | Wizard BRIM reale a quattro step, con resolution/staging come sezioni dello stesso flusso. | ✅ Aggiornato |
+| [02 F2](02_transactions-brokers-import.md) | Parser ereditato da `default_import_plugin` del Broker, con override per file. | ✅ Aggiornato |
+| [02 F7](02_transactions-brokers-import.md) | Directa supporta anche XLSX, omesso dalla tabella capacita'. | ✅ Gia' allineato |
+| [02 F8](02_transactions-brokers-import.md) | Dedup usa il modello/campi reali, non la descrizione semplificata e incoerente delle due pagine. | ✅ Aggiornato |
+| [02 F9](02_transactions-brokers-import.md) | Schwab scarta le righe riepilogo tramite data non valida e mostra warning visibile. | ✅ Aggiornato |
 
 ### Admin, deployment e sito pubblico
 
-| Riferimento | Capacita' reale non esposta correttamente |
-|---|---|
-| [05 A4](05_admin-installation-operations.md) | `default_theme` e' presente in schema, servizio e UI ma assente dalla tabella Global Settings. |
-| [05 A5](05_admin-installation-operations.md) | `scheduler_timezone` esiste ed e' usato; non e' semplicemente "server local time". |
-| [05 B7](05_admin-installation-operations.md) | Gallery Playwright puo' avviare/riusare test server; non richiede sempre server manuale. |
-| [05 B9](05_admin-installation-operations.md) | Esistono immagine GHCR e percorso `docker-compose.prod.yml`. |
-| [05 B11](05_admin-installation-operations.md) | Il caveat backup SQLite/WAL e' gia' noto nel filesystem host, ma manca nel percorso Docker. |
-| [05 B12](05_admin-installation-operations.md) | `./dev.py install` svolge un quarto step, root npm install. |
-| [07 R2](07_site-community-gallery.md) | CRYPTO e' gia' supportato end-to-end, non "coming soon". |
+| Riferimento | Capacita' reale non esposta correttamente | Stato remediation EN |
+|---|---|---|
+| [05 A4](05_admin-installation-operations.md) | `default_theme` e' presente in schema, servizio e UI ma assente dalla tabella Global Settings. | ✅ Aggiornato |
+| [05 A5](05_admin-installation-operations.md) | `scheduler_timezone` esiste ed e' usato; non e' semplicemente "server local time". | ✅ Aggiornato |
+| [05 B7](05_admin-installation-operations.md) | Gallery Playwright puo' avviare/riusare test server; non richiede sempre server manuale. | ✅ Aggiornato |
+| [05 B9](05_admin-installation-operations.md) | Esistono immagine GHCR e percorso `docker-compose.prod.yml`. | ✅ Aggiornato |
+| [05 B11](05_admin-installation-operations.md) | Il caveat backup SQLite/WAL e' gia' noto nel filesystem host, ma manca nel percorso Docker. | ✅ Aggiornato |
+| [05 B12](05_admin-installation-operations.md) | `./dev.py install` svolge un quarto step, root npm install. | ✅ Aggiornato |
+| [07 R2](07_site-community-gallery.md) | CRYPTO e' gia' supportato end-to-end, non "coming soon". | ✅ Aggiornato |
 
 ### Financial theory e motori di calcolo
 
-| Riferimento | Capacita' reale non esposta correttamente |
-|---|---|
-| [06A R-04](06a-financial-theory-instruments.md) | `AssetType.INDEX` e' read-only, selezionabile e senza transazioni. |
-| [06A R-05](06a-financial-theory-instruments.md) | Crédit Agricole genera controparte WITHDRAWAL per cedole e premi di scadenza. |
-| [06A R-06](06a-financial-theory-instruments.md) | justETF genera eventi DIVIDEND da chart data. |
-| [06A R-07](06a-financial-theory-instruments.md) | Scheduled Investment gestisce late interest/grace period dopo maturity. |
-| [06B B0](06b-financial-theory-indicators.md) | Benchmark sintetici sono calcolati client-side, senza round-trip backend. |
-| [06C F2](06c-financial-theory-performance-risk.md) | WAC multi-valuta sceglie una valuta target deterministica diversa dalla "piu' frequente" dichiarata. |
+| Riferimento | Capacita' reale non esposta correttamente | Stato remediation EN |
+|---|---|---|
+| [06A R-04](06a-financial-theory-instruments.md) | `AssetType.INDEX` e' read-only, selezionabile e senza transazioni. | ✅ Aggiornato |
+| [06A R-05](06a-financial-theory-instruments.md) | Crédit Agricole genera controparte WITHDRAWAL per cedole e premi di scadenza. | ✅ Aggiornato |
+| [06A R-06](06a-financial-theory-instruments.md) | justETF genera eventi DIVIDEND da chart data. | ✅ Gia' allineato |
+| [06A R-07](06a-financial-theory-instruments.md) | Scheduled Investment gestisce late interest/grace period dopo maturity. | ✅ Aggiornato |
+| [06B B0](06b-financial-theory-indicators.md) | Benchmark sintetici sono calcolati client-side, senza round-trip backend. | ✅ Aggiornato |
+| [06C F2](06c-financial-theory-performance-risk.md) | WAC multi-valuta sceglie una valuta target deterministica diversa dalla "piu' frequente" dichiarata. | ✅ Aggiornato |
 
 ## Ambiguo prima della pianificazione
 
@@ -155,7 +191,8 @@ funzionalita' assente o nascosta:
    sono decisioni di prodotto/infrastruttura.
 2. Per il blocco 1, trasformare ogni riga scelta in un piano tecnico mirato, con test
    del comportamento promesso e aggiornamento della pagina corrispondente.
-3. Per il blocco 3, aggiornare prima il manuale inglese e poi la pipeline traduzioni:
-   il codice e' gia' la fonte di verita'.
+3. Per il blocco 3, il manuale inglese e' stato aggiornato il 2026-08-05:
+   23 voci corrette e 2 gia' allineate. La pipeline traduzioni e la validazione
+   completa restano rinviate al batch multi-lingua richiesto dall'utente.
 4. Non usare questo file per archiviare i 21 fix editoriali: restano nei report
    originali con riga, fonte e direzione di correzione.

@@ -1155,7 +1155,7 @@
         naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${normalizedQuoteBaseQuantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
-        // (transactions cell, AssetCard, LiveTicker, …) reflect the entry
+        // (transactions cell, AssetCard, AssetTable, …) reflect the entry
         // immediately. The BE response only carries `asset_id`; we merge the
         // fields the FE just submitted (no extra round-trip).
         mergeAssets([{id: assetId, ...(createPayload[0] as Record<string, unknown>)}]);
@@ -1294,7 +1294,7 @@
         }
 
         // PATCH succeeded — sync the patched fields into the shared cache so
-        // every consumer (transactions cell, AssetCard, LiveTicker, …) sees
+        // every consumer (transactions cell, AssetCard, AssetTable, …) sees
         // the new icon/name/etc. without a manual reload. The BE response
         // only carries `{success, asset_id, message}`; we merge the fields
         // the FE just submitted.

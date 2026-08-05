@@ -359,3 +359,17 @@ lasciata non aggiornata rispetto al comportamento reale — utile indizio per
 chi correggerà i reperti, poiché la pagina "corretta" di riferimento esiste
 già nello stesso set (`interest.en.md`, `transfer.en.md`, docstring del
 plugin) e può essere usata come base per la riscrittura.
+
+## Stato remediation — Block 3 (2026-08-05)
+
+I conteggi sopra restano lo snapshot dell'audit. Il manuale inglese corrente e'
+stato riallineato al codice per i seguenti reperti:
+
+| Reperti | Stato | Esito |
+|---|---|---|
+| R-04 | ✅ Aggiornato | `INDEX` e' documentato come benchmark read-only, senza transazioni. |
+| R-05 | ✅ Aggiornato | Crédit Agricole distingue export Deposito Titoli e Movimenti Conto; le controparti artificiali appartengono solo al primo flusso. |
+| R-06 | ✅ Gia' allineato | Gli eventi `DIVIDEND` justETF da chart data erano gia' documentati. |
+| R-07 | ✅ Aggiornato | Scheduled Investment documenta grace period, late interest, `generate_interest` e settlement. |
+
+Le traduzioni e la validazione MkDocs completa sono rinviate al batch multi-lingua.
