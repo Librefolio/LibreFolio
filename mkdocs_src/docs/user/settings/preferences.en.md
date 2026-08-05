@@ -21,7 +21,7 @@ Every user can configure their own display preferences — changes apply only to
     <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile">
 </div>
 
-From the **Profile** tab you can update your display name and avatar. The avatar is used across the app wherever your identity is shown (e.g., broker sharing, comments).
+From the **Profile** tab you can update your username, email, and avatar. The avatar is used across the app wherever your identity is shown (e.g., broker sharing, comments).
 
 ---
 

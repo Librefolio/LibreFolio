@@ -26,7 +26,7 @@ For a detailed explanation of transaction fields and validation rules, see the *
 
 ## 🧙 BRIM: Broker Report Import Module
 
-The **Import** (`Upload` icon) button launches the **BRIM** wizard. This module allows you to import your broker's exported statements (CSV or Excel formats) in bulk, run automatic sanity validations, and map tickers to local assets before final commit.
+The **Import** (`Upload` icon) button launches the **BRIM** wizard. This module allows you to import your broker's exported statements in bulk, run automatic sanity validations, and map tickers to local assets before final commit.
 
 ### 🖼️ The Import Flow
 
@@ -40,12 +40,12 @@ The **Import** (`Upload` icon) button launches the **BRIM** wizard. This module 
   <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Bulk Staging" alt="Import Bulk Staging">
 </div>
 
-The wizard progresses through the following steps:
+The import flow includes the following stages:
 
-1.  **Select File & Parser**: Choose the statement file and select the appropriate parser configuration (e.g., Interactive Brokers, Degiro, Directa, Intesa Sanpaolo, Crédit Agricole, Charles Schwab, generic CSV, etc.).
-2.  **Verify Headers & Mapping**: Renders the CSV headers to confirm the parser aligns correctly with the columns.
+1.  **Upload Files**: Add one or more statement files and assign a broker to each file.
+2.  **Select Parser**: LibreFolio preselects the broker default parser when compatible; you can override the parser per file.
 3.  **Operation Analysis**: Processes the file and displays a preview grid of parsed actions (Buys, Sells, Dividends, snapshot seeds, automatic cash counter-entries, etc.).
-    *   **Badges**: Operations are labeled as `UNIQUE` (new trade), `DUPLICATE` (already exists in database), or `UNRESOLVED` (requires mapping ticker/ISIN).
+    *   **Badges**: Operations are labeled as `UNIQUE`, `POSSIBLE DUPLICATE`, or `LIKELY DUPLICATE`; asset-aware matching may promote a row to the likely tier.
     *   **TODO Notes**: Highlight fields requiring attention or items that could not be parsed automatically.
 4.  **Asset Resolution**: If the statement contains tickers or ISINs that do not exist in your local assets registry, BRIM displays a mapping step. You can:
     *   Map the ticker to an existing asset.

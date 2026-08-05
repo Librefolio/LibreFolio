@@ -41,11 +41,13 @@ To initialize default settings (creates only missing ones):
 | `max_file_upload_mb` | int | `10` | Maximum file upload size in megabytes. Applies to all uploads (static resources and broker reports). |
 | `scheduler_enabled` | bool | `true` | Enable or disable the automatic background synchronization daemon for exchange rates and historical/real-time prices. |
 | `scheduler_current_price_frequency_minutes` | int | `10` | Frequency (in minutes) with which the daemon updates current real-time prices (1-1440). |
-| `scheduler_history_sync_times` | str | `06:00,23:00` | Specific daily times (server local time, comma-separated) to trigger the end-of-day history sync. |
+| `scheduler_history_sync_times` | str | `06:00,23:00` | Comma-separated HH:MM times for daily history sync; saved times are stored in UTC and first-boot defaults are converted from the configured timezone. |
 | `scheduler_history_sync_days` | str | `mon,tue,wed,thu,fri,sat` | Specific days of the week (comma-separated) to run the historical synchronization. |
 | `scheduler_history_sync_horizon_days` | int | `14` | Rolling retrospective analysis window (in days) used to check for missing historical prices. |
+| `scheduler_timezone` | str | `UTC` | IANA timezone used to convert first-boot scheduler defaults and display scheduler state. Invalid values fall back to UTC. |
 | `default_currency` | str | `EUR` | Default display currency for newly registered users. Users can override this in their personal settings. |
 | `default_language` | str | `en` | Default language for newly registered users. Supported: `en`, `it`, `fr`, `es`. |
+| `default_theme` | str | `auto` | Default theme for newly registered users. Supported: `light`, `dark`, `auto`. |
 
 ---
 

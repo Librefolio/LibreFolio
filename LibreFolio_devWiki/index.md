@@ -254,6 +254,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
+| [[sources/mkdocs-audit-2026-08-05]] | Read-only 182-page published EN MkDocs audit; 64 evidence-backed discrepancies, developer guide explicitly deferred | 2026-08-05 | audit, mkdocs, documentation, backend, frontend, ai-export, fx, admin |
 | [[sources/phase00-risk-analysis-backend]] | Completed and audited `Release_2/Phase_0/02_riskfolioIntegration/` backend G0-G5 chain; G6 reconciled but not executed | 2026-07-28 | phase0, backend, risk, quantlib, riskfolio |
 | [[sources/phase00-ai-export-backend-snapshot]] | Completed AI Export chain through first public V1, single runtime, separated semantic probes, 114/114 closure evidence, and zero orphan tests | 2026-08-05 | phase0, ai-export, snapshot, composition, runtime, testing, mcp |
 | [[sources/fifo-v4-fee-tax-integration]] | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/` | 2026-07-22 | backend, fifo, fee, tax, dividend, cost-basis |

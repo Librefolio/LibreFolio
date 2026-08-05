@@ -4,6 +4,20 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-08-05] update | MkDocs audit capability taxonomy
+
+Updated [[sources/mkdocs-audit-2026-08-05]] with the second-order split:
+13 existing-system extensions, 4 new system/library/integration prerequisites,
+25 existing-but-undocumented capabilities, 21 editorial-only records, and 1
+product ambiguity. Beta Risk Analysis is intentionally excluded. Graph semantic refresh
+remains pending because the local Graphify Gemini API key was rejected.
+
+## [2026-08-05] file | MkDocs English Source Audit
+
+Filed [[sources/mkdocs-audit-2026-08-05]] from the completed non-developer English
+MkDocs audit. Preserved 182/182 page coverage, 64 evidence-backed discrepancies,
+validation results, and the explicit developer-guide deferral.
+
 ## [2026-08-05] update | AI Export first public V1 and probe/test boundary
 
 Updated [[decisions/ai-export-versioned-snapshot-boundary]],
