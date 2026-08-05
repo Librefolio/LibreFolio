@@ -24,7 +24,7 @@ Il valore principale viene calcolato utilizzando la seguente formula:
 
 Un numero positivo significa che hai guadagnato denaro dall'attività di investimento. Un numero negativo significa che hai perso denaro al netto dei movimenti di capitale.
 
-### Il numero sotto il valore principale
+### The numero sotto il valore principale
 
 Subito sotto il valore del P&L del Periodo, una riga più piccola mostra qualcosa come `+45.20 (+3.10%)`.
 
@@ -35,7 +35,7 @@ Subito sotto il valore del P&L del Periodo, una riga più piccola mostra qualcos
 
 Questa riga appare solo quando la cronologia ha almeno due punti giornalieri.
 
-### Le righe di dettaglio
+### The righe di dettaglio
 
 | Riga | Cosa misura |
 |-----|-------------|
@@ -60,7 +60,7 @@ Questa riga appare solo quando la cronologia ha almeno due punti giornalieri.
 
 La scheda **Rendimenti** mostra metriche di *tasso di rendimento* — percentuali che ti permettono di confrontare le prestazioni indipendentemente dalla dimensione del portafoglio.
 
-### Effetto Tempistica
+### Timing Tempistica
 
 L'**Effetto Tempistica** nella parte superiore della scheda misura se le tue decisioni di deposito/prelievo hanno *aggiunto* o *sottratto* valore rispetto a una strategia passiva di buy-and-hold:
 
@@ -69,7 +69,7 @@ L'**Effetto Tempistica** nella parte superiore della scheda misura se le tue dec
 - **Favorevole (positivo)** ✅: hai avuto la tendenza a depositare quando i prezzi erano bassi, aumentando il tuo rendimento personale al di sopra di quanto guadagnato dai soli asset.
 - **Sfavorevole (negativo)** ❌: hai avuto la tendenza a depositare ai picchi o hai perso i ribassi, abbassando il tuo rendimento al di sotto della pura performance degli asset.
 
-### Il numero sotto l'Effetto Tempistica
+### The numero sotto l'Effetto Tempistica
 
 Sotto l'Effetto Tempistica vedrai una piccola percentuale (es. `+0.35%`) — è la variazione del tuo **P&L Totale** da **ieri a oggi**, espressa come quota del patrimonio netto di ieri:
 
@@ -77,7 +77,7 @@ Sotto l'Effetto Tempistica vedrai una piccola percentuale (es. `+0.35%`) — è 
 
 È una stima approssimativa del rendimento di **oggi** — un rapido controllo del polso. Non è il ROI, TWRR o MWRR mostrati nelle righe sottostanti, che rimangono ancorati all'intero periodo selezionato.
 
-### Le quattro metriche di rendimento
+### The quattro metriche di rendimento
 
 | Metrica | Domanda a cui risponde |
 |---------|------------------------|
@@ -102,7 +102,7 @@ Sotto l'Effetto Tempistica vedrai una piccola percentuale (es. `+0.35%`) — è 
 
 La scheda **Patrimonio Netto** mostra il valore assoluto del tuo portafoglio alla fine del periodo selezionato.
 
-### Il numero sotto il Patrimonio Netto
+### The numero sotto il Patrimonio Netto
 
 Sotto il valore del Patrimonio Netto troverai il tuo **P&L Totale**, con la sua variazione percentuale tra parentesi — es. `+12.450,30 (+0,35%)`.
 
@@ -115,7 +115,7 @@ Nota: "Capitale Netto Investito dall'Inizio" qui è la somma di **tutti** i depo
 
 🔗 **Teoria**: [Capitale Depositato, P&L Totale e Pool di Liquidità](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)
 
-### Cosa significano le righe
+### What significano le righe
 
 | Riga | Definizione |
 |------|-------------|
@@ -124,7 +124,7 @@ Nota: "Capitale Netto Investito dall'Inizio" qui è la somma di **tutti** i depo
 | **Cassa** | Saldo liquido detenuto nei conti del broker |
 | **[Capitale Depositato](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md)** | Capitale esterno netto conferito a questo ambito |
 
-### La barra del Capitale Depositato
+### The barra del Capitale Depositato
 
 La barra orizzontale sotto le righe visualizza:
 

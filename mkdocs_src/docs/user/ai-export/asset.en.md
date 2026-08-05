@@ -6,14 +6,15 @@ for the asset currently open. LibreFolio never sends it to an AI service.
 ## 📍 Location
 
 Open an Asset detail page. In the **Signals** header, select **AI Export**. Your
-draft is remembered separately for this user and asset.
+draft remains available for 10 minutes in the current login session and resets
+after logout or a new login.
 
 ## 🎯 Asset Analyses
 
-| Task | Focus |
-|---|---|
-| **Asset Trend Analysis** | Price trend, normalized returns, drawdown, and technical signals. |
-| **Position Review** | Position size, cost basis, performance, income, and concentration. |
+| Task                      | Focus                                                                                                 |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Position Review**       | Position size, cost basis, performance, income, and concentration.                                    |
+| **Asset Market Analysis** | Observed-close history, returns, trend, momentum, volatility, Drawdown, states, events, and coverage. |
 
 ## 🗂️ Scope and Data
 
@@ -32,17 +33,21 @@ results. The browser does not recalculate indicators.
   response language follows the current LibreFolio interface language.
 - Optional notes are included only when supported by the selected Analysis.
 
-Available data exports include Asset Overview, Position Performance, Position
-Context, Asset Drawdown Context, Market & Technical Data, and All Asset Data.
-Drawdown Context is data/evidence; there is no separate Drawdown Recovery Analysis.
+Two public data exports are available:
+
+- **Asset Position & History** — positions per Broker, cost, value, P&L,
+  recorded-zero period semantics, economic lots with allocated fees/taxes, compact
+  market history, Drawdown, and provenance;
+- **Asset Market History** — observed-close buckets, returns, indicators, states,
+  events, Drawdown, and coverage.
 
 ## 📏 Detail and Sampling
 
-| Detail | Exact sampling |
-|---|---|
-| **Compact** | Same data universe with the sparsest supported temporal buckets (up to 30 days). Focused Position Context can include a very small recent history. |
-| **Standard** | Same data universe with temporal buckets up to 14 days. |
-| **Full** | Same data universe with temporal buckets up to 7 days. |
+| Detail       | Exact sampling                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **Compact**  | Position export: up to 8 uniform observed history points. Market export: up to 5 non-empty indicator rows per Signal. |
+| **Standard** | Position export: up to 16 points. Market export: up to 10 indicator rows.                                             |
+| **Full**     | Position export: up to 30 points. Market export: every non-empty indicator bucket and can be large.                   |
 
 A dataset or Analysis can omit unavailable or non-applicable optional sections.
 The **AI period** ends on the snapshot date. Available dates, coverage, partial

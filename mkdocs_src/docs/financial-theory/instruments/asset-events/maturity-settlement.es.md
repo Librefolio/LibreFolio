@@ -12,7 +12,7 @@ El vencimiento es la fecha en la que un instrumento de deuda (bono, letra, certi
 2. Se realiza cualquier **pago de interés final** (si corresponde)
 3. El instrumento **deja de existir**: no hay más valoraciones ni negociaciones
 
-### Instrumentos con Fechas de Vencimiento
+### Instruments con Fechas de Vencimiento
 
 | Instrumento | Vencimiento Típico | Liquidación |
 |------------|-----------------|------------|

@@ -1,87 +1,102 @@
 # 📥 <img src="https://www.credit-agricole.it/favicon.ico" alt=""> Crédit Agricole
 
-!!! info "Beta"
+Crédit Agricole functions as both **bank and broker**: the same account holds both your **cash** (salary or pension, wire transfers, utility bills, taxes) and your **securities**. For this reason, the primary import to run is the **Account Activity List**: it is the full bank statement and brings **real cash** into LibreFolio — wire transfers, utility bills, pension, **taxes**, **fees**, and actually credited **coupons and dividends**. Download the file, import it as-is, and the plugin automatically recognizes the format.
 
-    This plugin is in **Beta** — tested with sample files but edge cases may exist.
+The account statement covers the **last 2 years**. If your securities account is **older** and you want to recover its **history**, expand the collapsible section below **before** proceeding.
 
-## 📥 How to Export
+??? note "📦 Securities account older than 2 years? Recover history (optional)"
 
-LibreFolio reads Crédit Agricole exports in **CSV** *or* **XLSX** — you do not need
-to convert the file, just import it as downloaded. The supported report is the
-**"Lista Movimenti Deposito Titoli"** (securities dossier movements) of your account.
+    The bank account statement stops at **2 years**. If the securities account is older, add a second export — the **Securities Account Activity List** — which goes much further back and recovers at least the **securities history** (quantities, prices, coupons, maturities) **prior** to that window. It is **securities-only**: it does **not** contain checking account cash flows (wire transfers, utilities, taxes…), which remain in the Account Activity List. The cash for this export is **auto-balanced** to avoid distorting cash balances.
 
-From your Crédit Agricole online banking, open the securities dossier, select the
-period you want, and export the movements list.
+    **How to combine them without duplicates.** First export the **Account Activity List** and note its start date (**"Date from"**). Then export the **Securities Account Activity List** **truncated** so that it ends the day **before** the start of the account activity: the two files **do not overlap** and the same operation is not counted twice.
 
-## 📝 Notes
+    #### 📂 Step 1 — Open the securities dossier
 
-- **No ISIN** — the report only carries the security **name** (`Nome`), so assets are matched by name. Confirm the asset in **Step 4** of the wizard if it is not recognised.
-- **Operations** (*causali*) are mapped as follows:
+    From online banking, navigate to the **Securities Account** section and go to the activity list.
 
-    | Causale | Imported as |
-    |:--------|:------------|
-    | `CEDOLA` | Bond **coupon** → interest (the nominal in the quantity column is ignored) |
-    | `ACQ.CONT.SU MERC.`, `SICAV: SOTTOSCR` | **Buy** with an automatic matching **deposit** |
-    | `FONDI: RIMBORSO` | **Sell** (fund redemption) with an automatic matching **withdrawal** |
-    | `TITOLI SCADUTI` | Bond **maturity**: **sell at par (100)** + an **interest** leg for anything credited above par (see below) |
-    | `GIRO ALTRO DOSSIER`, `VERS.TITOLI` | Succession **transfer-in** → cashless **adjustment** carrying the per-unit book price (see succession note) |
+    ![Crédit Agricole — home, selecting the Securities Account section](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/01_CA_HOME_selezionePagina.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-- **`TITOLI SCADUTI` (bond maturity)** — a matured security is **assumed to be a bond
-  redeemed at par (100)**. LibreFolio closes the held nominal with a **sell at par** and books
-  any amount **credited above par** (a *premio fedeltà* or *FOI* inflation revaluation) as a
-  separate **interest** leg — the same nature as a coupon. This keeps the realised gain based
-  on price-vs-cost only and lets the position close cleanly to zero. The nominal is taken from
-  the positions already present in the file (buy / succession rows). If those legs are **not in
-  the file** (e.g. you exported only the last few months), the nominal is **derived** from
-  countervalue ÷ price and the row is **flagged for review** — verify it matches the holding
-  you are closing. *Assumption:* today every `TITOLI SCADUTI` row is treated as a par-100 bond
-  (anything above par → interest); this will be generalised if a non-bond maturity ever
-  appears in a real export.
-- **Amounts are imported verbatim** in the currency reported by Crédit Agricole. No currency conversion is performed and the *Cambio* (exchange rate) column is ignored. The code uses *Data operazione* as the transaction date.
+    #### 🗓️ Step 2 — Select the time period
 
-## ⚠️ Maturity notices
+    Go as far back as possible, then truncate at the beginning of the checking account activity (see the tip above).
 
-If a row such as `TITOLI SCADUTI` or `FONDI: RIMBORSO` suggests a security may be matured or redeemed, LibreFolio attaches an asset notice. When you create or map the asset in the wizard, that notice appears as an amber advisory banner; it is informational only and does not change the import.
+    ![Crédit Agricole — securities activity list with period selector](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/02_CA_ListaMobimentiPeriodo.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-## 💶 Cash model
+    #### 💾 Step 3 — Export
 
-The Crédit Agricole "Lista Movimenti Deposito Titoli" export is **securities-only**: it
-does not include the ordinary bank-account cash movements that fund purchases or receive
-sale proceeds. To keep the imported broker cash balance neutral, LibreFolio adds automatic
-cash counter-entries:
+    Export and import the file into LibreFolio without opening or modifying it.
 
-- each **buy** gets a same-day **deposit** immediately before it;
-- each **sell** gets a same-day **withdrawal** immediately after it (for a maturity, the
-  withdrawal neutralises the par principal, so only the interest surplus adds cash);
-- **coupons** (`CEDOLA`) and **maturity interest** stay as reported and do not receive
-  counter-entries.
+    ![Crédit Agricole — securities activity export area](../../../static/broker-guides/CreditAgricole/MovimentiSoloTitoli/03_CA_ExportZone.jpeg){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-## 👵 Succession transfers
+    #### 💰 Step 4 — Starting balance (manual deposit)
 
-When a securities dossier is transferred following a **succession**, Crédit Agricole may
-record the incoming holdings with the causali `GIRO ALTRO DOSSIER` and `VERS.TITOLI`
-(price present, countervalue 0). These rows are the **receiving leg** of a transfer whose
-paying leg lives on **another account that LibreFolio does not track** — no money is spent
-here.
+    Required to have **correct total cash balances**: neither export records the starting cash balance as a transaction, so without this step absolute cash starts at zero at the beginning of the exported window and remains offset.
 
-LibreFolio therefore imports each succession row as a **cashless adjustment** (not a buy):
-it seeds the position with the reported quantity and carries the **per-unit book price** as
-a cost-basis override, using the report's price convention (bond prices per 100 of nominal;
-funds per unit). **No deposit is created**, so your paid-in capital is not inflated by money
-you never spent. The **origin causale stays in the description**, for example
-`[GIRO ALTRO DOSSIER — successione / transfer-in] ...`, so the provenance of each position
-remains traceable.
+    **How to get it.** The **Starting Balance** can be read in two equivalent places (it is the same value): at the top of the **Excel file** of the *Account Activity List* and also **at the beginning of the webpage export** — the same page from which you export account activity. It is the value (e.g., `2984.99 EUR`) at the date **"Date from"** (e.g., `01/07/2024`).
 
-!!! info "Faithful multi-leg import"
+    The plugin does **not** create it automatically: at import time **manually create a cash deposit transaction** equal to that **Starting Balance**, with a **date** equal to the **"Date from"**. This keeps absolute cash accurate even if the export covers only a time window.
 
-    Crédit Agricole may list the same security in multiple succession legs at different
-    prices or quantities. LibreFolio keeps those rows separate (each adjustment keeps its
-    own price) instead of aggregating them, mirroring the bank report.
+    ![Crédit Agricole — "Starting Balance" and "Date from" row at the top of export](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/04C_CA_SaldoInizialeExportMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-## ⛔ Before the broker's opening date
+    **How securities operations are mapped.** The report only includes the security **name** (`Nome`), not the ISIN: assets are matched by name — confirm the asset in **Step 4** of the wizard if it is not recognized.
 
-When your broker has an **opening date** set, movements dated **strictly before** that date are flagged in the wizard as **"Before opening"** and cannot be imported (their checkbox is disabled). The opening day itself is valid: the shipped check is `txDate < info.openedAt`, not `<=`. If a row is flagged incorrectly, use the inline **Edit broker date** action, then re-check/refresh so the wizard evaluates the updated broker date.
+    | Transaction Type | Imported as |
+    |:-----------------|:------------|
+    | `CEDOLA` | Bond **Coupon** → interest (nominal value in quantity column is ignored) |
+    | `ACQ.CONT.SU MERC.`, `SICAV: SOTTOSCR` | **Buy** with an automatic **deposit** of equal amount |
+    | `FONDI: RIMBORSO` | **Sell** (fund redemption) with an automatic **withdrawal** of equal amount |
+    | `TITOLI SCADUTI` | Bond **Maturity**: **sell at par (100)** + an **interest** leg for any amount above par |
+    | `GIRO ALTRO DOSSIER`, `VERS.TITOLI` | **Inbound transfer** from inheritance → **adjustment** without cash using cost price per unit |
+
+    Amounts are imported **verbatim** in the report currency: no conversion, the *Exchange Rate* column is ignored. The date used is *Transaction Date*.
+
+    **Cash model (securities).** Being a securities-only export, LibreFolio maintains a **neutral** cash balance via automatic offset transactions (tag `auto_cash`): every **buy** receives a **deposit** of equal amount, every **sell**/**coupon**/**maturity interest** receives a **withdrawal** of equal amount. Thus the securities export **does not accumulate ghost cash** — true cash comes from the Account Activity List.
+
+## 💳 How to Import — Account Activity List
+
+This is the **main import**: the statement with **real cash** (wire transfers, utilities, pension, taxes, fees, credited coupons and dividends). Covers the **last 2 years**.
+
+### 📄 Step 1 — Open account activity
+
+From online banking, navigate to the **checking account** section and go to the activity list.
+
+![Crédit Agricole — home, checking account activity section](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/01C_CA_HomeContiMovimenti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+
+### 🗓️ Step 2 — Select the time period
+
+Click on **Advanced Search** to open the date filters, then set the widest allowed window (account export is limited to **2 years**).
+
+![Crédit Agricole — account activity list](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/02C_CA_ListaMovimentiConti.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+
+### 💾 Step 3 — Export
+
+Download the list and import it into LibreFolio without modifying it.
+
+![Crédit Agricole — account activity export with period warning](../../../static/broker-guides/CreditAgricole/MovimentiContiTotali/03C_CA_ExportMovimentiContiConWarning.png){ style="max-height: 460px; width: auto; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
+
+!!! warning "If the maximum period warning appears"
+
+    Crédit Agricole limits how many rows/months you can export at once. If the warning appears, **split the export into multiple sub-blocks** until all missing months are covered:
+
+    1. Export the block as currently shown.
+    2. Look at the **last** (oldest) transaction of the freshly downloaded block and note its date.
+    3. Return to the date selector and set the **end date ("to")** to the date of that last transaction.
+    4. Export the new block and **repeat** from step 2 until you reach the desired period.
+    5. Import **all** exported files into LibreFolio.
+
+### 📝 How account transactions are mapped
+
+Account **transaction types** are categorized as follows:
+
+| Transaction Type | Imported as |
+|:-----------------|:------------|
+| Credited coupons / dividends | **Interest** (coupon) or **Dividend** if description identifies a security with **ISIN**; otherwise **interest** |
+| Interest / credit fees | **Interest** (positive amount) |
+| Account fee, commissions, management fees, coupon detachment fees | **Fee** (cash outflow) |
+| Capital gains tax, stamp duty, withholding tax, D.Lgs 461 | **Tax** (cash outflow) |
+| Securities/funds trading, matured or drawn securities | **Deposit/Withdrawal** by sign + **warning** of possible double counting |
+| Pension/salaries, POS, utilities, withdrawals, transfers, other | **Deposit** (amount > 0) / **Withdrawal** (amount < 0) by sign |
 
 ## 🔗 Developer Reference
 
-→ [BRIM Providers — Implementation Details](../../../developer/backend/brim/providers_list.md)
+→ [BRIM Providers — Implementation details](../../../developer/backend/brim/providers_list.md)

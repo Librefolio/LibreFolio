@@ -153,7 +153,7 @@ Quando un portafoglio contiene acquisizioni in valute diverse, LibreFolio:
 
 !!! warning "Il PMC non viene mai utilizzato per la valutazione degli asset"
 
-    Il PMC è un costrutto contabile per la base di costo. La catena di valutazione per il valore di mercato utilizza: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. Vedi [NAV](portfolio-engine/nav.md).
+    Il PMC è un costrutto contabile per la base di costo. La catena di valutazione per il valore di mercato utilizza: `MARKET_PRICE → LAST_BUY_PRICE → MISSING`. Vedi [Risoluzione Prezzi](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implementazione: Ambito a Livello di Posizione
 
@@ -165,7 +165,7 @@ $$
 
 Il motore calcola il PMC inline durante il ciclo giornaliero delle transazioni — nessuna query separata al database necessaria. Ciò raggiunge un costo ammortizzato O(1) per transazione invece del costo O(N) di rieseguire query sull'intera cronologia.
 
-### Ordinamento delle transazioni nello stesso giorno
+### 📅 delle transazioni nello stesso giorno
 
 All'interno della stessa data, **gli aumenti vengono elaborati prima delle riduzioni**:
 

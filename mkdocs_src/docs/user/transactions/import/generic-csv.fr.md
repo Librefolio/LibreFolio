@@ -2,13 +2,13 @@
 
 Le fournisseur **CSV Générique** est un fallback flexible pour les courtiers qui ne sont pas directement pris en charge. Il permet une correspondance manuelle des colonnes afin que vous puissiez importer depuis n'importe quel export basé sur un fichier CSV.
 
-## Quand l'utiliser
+## When l'utiliser
 
 - Votre courtier ne figure pas dans la liste des courtiers pris en charge.
 - Un courtier pris en charge a modifié son format d'exportation et le plugin n'a pas encore été mis à jour.
 - Vous possédez un tableur personnalisé ou un CSV généré par script que vous souhaitez importer.
 
-## Comment ça marche
+## How ça marche
 
 1. Téléversez votre fichier CSV.
 2. LibreFolio affiche les colonnes brutes détectées.
@@ -45,7 +45,7 @@ Voici les colonnes reconnues par LibreFolio dans un fichier CSV Générique. Les
 | **`asset`** | Requis pour BUY/SELL/DIVIDEND/TRANSFER/ADJUSTMENT | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, ou nom cohérent pour les actifs non cotés |
 | **`description`** | Optionnel | `descrizione`, `notes`, `memo`, `note`, `details`, `dettagli`, `comment`, `commento` | Texte libre |
 
-### Valeurs valides pour `type`
+### Valid valides pour `type`
 
 `BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `TRANSFER` · `ADJUSTMENT` · `FX_CONVERSION` · `CASH_TRANSFER`
 

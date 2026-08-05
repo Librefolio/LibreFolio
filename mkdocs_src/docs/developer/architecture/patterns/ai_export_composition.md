@@ -3,6 +3,10 @@
 AI Export composes small factual units instead of routing tasks through monolithic
 profiles or domain assemblers.
 
+The profile/assembler implementation was retired after Public Catalog V3.
+`runtime_service.py`, `Composer`, `BuildContext`, and the component/dataset/
+analysis registries are the only executable snapshot pipeline.
+
 ## 🧱 ComponentSpec
 
 A `ComponentSpec` is the smallest declarative runtime unit. It defines:
@@ -47,7 +51,7 @@ re-entrant-per-task lock because all builders share one `AsyncSession`.
 The context also records price sampling, per-indicator sampling, event-selection
 usage, and internal optional-component diagnostics.
 
-## 📚 DatasetSpec and all_data
+## 📚 DatasetSpec, Visibility, and Public Composition
 
 A `DatasetSpec` declares:
 
@@ -56,9 +60,22 @@ A `DatasetSpec` declares:
 - exact `section_order`;
 - technical prerequisites and period semantics;
 - supported detail levels.
+- direct-selection visibility (`public` or `internal`, default internal).
 
-`portfolio.all_data`, `broker.all_data`, `asset.all_data`, and `fx.all_data` are
-computed unions of their domain's canonical complete datasets. They are not
+The runtime registry contains 40 datasets. The public catalog exposes only:
+
+| Domain    | General                          | Detailed                  |
+| --------- | -------------------------------- | ------------------------- |
+| Portfolio | `portfolio.overview_and_history` | `portfolio.asset_history` |
+| Broker    | `broker.overview_and_history`    | `broker.asset_history`    |
+| Asset     | `asset.position_and_history`     | `asset.market_history`    |
+| FX        | `fx.market_and_exposure`         | `fx.market_history`       |
+
+Legacy granular datasets, including `*.all_data`, remain internal composition
+blocks. The catalog filters them out and direct requests using their IDs fail
+closed as unsupported selections.
+
+The four `*.all_data` datasets remain computed internal unions. They are not
 special builders.
 The union:
 
@@ -68,19 +85,18 @@ The union:
 - uses canonical component-registry order.
 
 Focused semantic datasets such as `portfolio.asset_comparison` and
-`fx.market_context` are public Export Data choices, but they are derived
-projections of the complete technical facts. They are deliberately excluded from
+`fx.market_context` are internal projections. They remain excluded from
 `*.all_data` to avoid exporting both the complete series and a duplicate summary.
 
 Each `*.all_data` union is composed only from its domain's canonical complete
 datasets:
 
-| all_data | Source datasets | Derived contexts excluded |
-|---|---|---|
-| `portfolio.all_data` | `overview`, `performance_flows`, `technical`, `fifo` | `technical_summary`, `asset_snapshot`, `asset_comparison`, `drawdown_context`, `income_evidence` |
-| `broker.all_data` | `overview`, `performance_flows`, `technical`, `fifo` | `technical_summary`, `asset_comparison`, `drawdown_context`, `concentration_evidence`, `cost_efficiency_evidence` |
-| `asset.all_data` | `overview`, `position_performance`, `market_technical` | `position_context`, `drawdown_context` |
-| `fx.all_data` | `overview`, `market_technical`, `direct_exposure` | `market_context`, `conversion_timing_context` |
+| all_data             | Source datasets                                        | Derived contexts excluded                                                                                         |
+| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `portfolio.all_data` | `overview`, `performance_flows`, `technical`, `fifo`   | `technical_summary`, `asset_snapshot`, `asset_comparison`, `drawdown_context`, `income_evidence`                  |
+| `broker.all_data`    | `overview`, `performance_flows`, `technical`, `fifo`   | `technical_summary`, `asset_comparison`, `drawdown_context`, `concentration_evidence`, `cost_efficiency_evidence` |
+| `asset.all_data`     | `overview`, `position_performance`, `market_technical` | `position_context`, `drawdown_context`                                                                            |
+| `fx.all_data`        | `overview`, `market_technical`, `direct_exposure`      | `market_context`, `conversion_timing_context`                                                                     |
 
 Derived context and task-specific evidence datasets stay opt-in: they are
 projections or targeted evidence for one analysis, so bundling them into
@@ -114,12 +130,12 @@ period summary, latest value, and selected full-policy event.
 Multi-asset technical coverage distinguishes raw period legs from the eligible
 held universe so breadth counts are never overstated:
 
-| Count | Meaning | Unit |
-|---|---|---|
-| `period_position_leg_count` | Period `(broker_id, asset_id)` contribution legs before eligibility, including legs fully sold inside the period | legs |
-| `period_contributor_asset_count` | Unique asset IDs across all period legs (broker-deduplicated, includes fully-sold-in-period assets) | assets |
-| `eligible_asset_count` | Unique currently-held (not fully sold, non-zero end value) assets, broker-deduplicated | assets |
-| `covered_asset_count` | Eligible assets with at least one included Signal (subset of eligible) | assets |
+| Count                            | Meaning                                                                                                          | Unit   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------ |
+| `period_position_leg_count`      | Period `(broker_id, asset_id)` contribution legs before eligibility, including legs fully sold inside the period | legs   |
+| `period_contributor_asset_count` | Unique asset IDs across all period legs (broker-deduplicated, includes fully-sold-in-period assets)              | assets |
+| `eligible_asset_count`           | Unique currently-held (not fully sold, non-zero end value) assets, broker-deduplicated                           | assets |
+| `covered_asset_count`            | Eligible assets with at least one included Signal (subset of eligible)                                           | assets |
 
 Weight ratios use gross absolute open-position value:
 `eligible_portfolio_weight_ratio` sums over all eligible assets,
@@ -133,12 +149,12 @@ tallies (0 or 1) and carry no portfolio weight.
 Portfolio financial components distinguish calculation scope, current positions,
 and period contributors:
 
-| Field | Semantics | Period-sensitive |
-|---|---|:---:|
-| `scoped_broker_count` | Brokers selected after access validation | No |
-| `broker_scope` | The same selected Broker universe, rendered as B# refs | No |
-| `position_broker_count` | Brokers with current open positions at `snapshot_as_of` | No |
-| `period_contributor_broker_count` | Brokers represented by performance contribution rows | Yes |
+| Field                             | Semantics                                               | Period-sensitive |
+| --------------------------------- | ------------------------------------------------------- | :--------------: |
+| `scoped_broker_count`             | Brokers selected after access validation                |        No        |
+| `broker_scope`                    | The same selected Broker universe, rendered as B# refs  |        No        |
+| `position_broker_count`           | Brokers with current open positions at `snapshot_as_of` |        No        |
+| `period_contributor_broker_count` | Brokers represented by performance contribution rows    |       Yes        |
 
 The Portfolio Engine always runs over the full scoped set. A Broker with no current
 position remains in scope. A historical contributor can appear in the period count
@@ -155,11 +171,11 @@ Export NAV buckets.
 
 Scope and basis are honestly typed per domain:
 
-| Component | Risk scope | Basis | Currency |
-|---|---|---|---|
-| `portfolio.drawdown_summary` | whole portfolio (`broker_ids=None`) | TWRR / `historical_twrr` | build target currency |
-| `broker.drawdown_summary` | selected broker ID(s) | TWRR / `historical_twrr` | build target currency |
-| `asset.drawdown_summary` | single Asset | native `price_only` | asset observed native price currency |
+| Component                    | Risk scope                          | Basis                    | Currency                             |
+| ---------------------------- | ----------------------------------- | ------------------------ | ------------------------------------ |
+| `portfolio.drawdown_summary` | whole portfolio (`broker_ids=None`) | TWRR / `historical_twrr` | build target currency                |
+| `broker.drawdown_summary`    | selected broker ID(s)               | TWRR / `historical_twrr` | build target currency                |
+| `asset.drawdown_summary`     | single Asset                        | native `price_only`      | asset observed native price currency |
 
 The Asset basis is the asset's native observed price currency (declared
 dependency on `asset.market_snapshot` → `observed.native_price.code`) so it
@@ -190,43 +206,40 @@ Baseline adequacy rating flagged missing concrete evidence for several analyses.
 V2 adds deterministic, honestly-typed evidence datasets — each reuses existing
 engine outputs and never forecasts:
 
-| Dataset | New evidence | Honesty rule |
-|---|---|---|
-| `portfolio.income_evidence` | dated realized `DIVIDEND`/`INTEREST` timeline, ownership-share aware, FX-converted with provenance | realized ledger rows only; missing rate keeps native amount with `conversion_reason`, never coerced to zero; no coupon forecast |
-| `broker.concentration_evidence` | allocation-by-type/sector/geography/currency slices plus HHI-points and largest-position weight, optional broker-vs-portfolio comparison | slices/HHI read verbatim off the report; explicit coverage/unknown buckets; no row identifiers |
-| `broker.cost_efficiency_evidence` | recorded fees, taxes, total costs, contributor categories, BUY/SELL turnover, average NAV and other denominators, plus explicit ratios | recorded zero, unavailable, and not applicable stay distinct; formulas/operands/unit/coverage are exported; trading/FX/other subtypes stay unavailable when the source does not classify them |
-| `fx.conversion_timing_context` | observed period min/max, range position, distance-to-extreme, realized volatility, partial-history flag | observed genuine rates only; no forecast/predictive band; flat/empty range → `range_position_unavailable_reason`; neutral-scenario user inputs surfaced through `missing_user_inputs` |
+| Dataset                           | New evidence                                                                                                                             | Honesty rule                                                                                                                                                                                  |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `portfolio.income_evidence`       | dated realized `DIVIDEND`/`INTEREST` timeline, ownership-share aware, FX-converted with provenance                                       | realized ledger rows only; missing rate keeps native amount with `conversion_reason`, never coerced to zero; no coupon forecast                                                               |
+| `broker.concentration_evidence`   | allocation-by-type/sector/geography/currency slices plus HHI-points and largest-position weight, optional broker-vs-portfolio comparison | slices/HHI read verbatim off the report; explicit coverage/unknown buckets; no row identifiers                                                                                                |
+| `broker.cost_efficiency_evidence` | recorded fees, taxes, total costs, contributor categories, BUY/SELL turnover, average NAV and other denominators, plus explicit ratios   | recorded zero, unavailable, and not applicable stay distinct; formulas/operands/unit/coverage are exported; trading/FX/other subtypes stay unavailable when the source does not classify them |
+| `fx.conversion_timing_context`    | observed period min/max, range position, distance-to-extreme, realized volatility, partial-history flag                                  | observed genuine rates only; no forecast/predictive band; flat/empty range → `range_position_unavailable_reason`; neutral-scenario user inputs surfaced through `missing_user_inputs`         |
 
 Each evidence dataset is bound to its task analysis and complements — never
 replaces — the retained aggregates (for example `portfolio.income_evidence` uses
 the same `(start, end]` window as `portfolio.flows_income` so they cannot
 contradict each other).
 
-## 🧭 Analysis Dataset Bindings
+## 🧭 Public Analysis Dataset Bindings
 
-Required datasets fail closed; optional datasets degrade to omission. `technical_breadth`
-reads only the aggregate `technical_summary` and recommends the complete
-`technical` series as Additional Data.
+Required datasets fail closed; optional components inside general snapshots
+degrade independently. Fiscal Analyses add the internal full-FIFO dataset.
 
-| Analysis | Required datasets | Notable optional / evidence |
-|---|---|---|
-| `portfolio.pac_planning` | `overview`, `performance_flows` | `asset_snapshot`, `drawdown_context` |
-| `portfolio.rebalancing` | `overview` | `performance_flows`, `asset_comparison`, `drawdown_context` |
-| `portfolio.performance_attribution` | `overview`, `performance_flows` | — |
-| `portfolio.market_events_review` | `overview`, `asset_comparison` | `performance_flows`; recommends `technical` (3m standard) as Additional Data |
-| `portfolio.income_review` | `overview`, `performance_flows`, `income_evidence` | — |
-| `portfolio.fifo_review` | `overview`, `fifo` | — |
-| `portfolio.technical_breadth` | `overview`, `technical_summary` | recommends `technical` (1y full) as Additional Data |
-| `portfolio.description` | `overview` | `performance_flows`, `technical_summary` |
-| `broker.review` | `overview`, `performance_flows` | `asset_comparison`, `fifo`, `drawdown_context`, `concentration_evidence` |
-| `broker.cost_efficiency` | `overview`, `performance_flows`, `cost_efficiency_evidence` | — |
-| `broker.concentration_context` | `overview`, `concentration_evidence` | `technical_summary` |
-| `broker.fifo_review` | `overview`, `fifo` | — |
-| `asset.trend_analysis` | `overview`, `market_technical` | — |
-| `asset.position_review` | `overview`, `position_performance` | `position_context`, `drawdown_context` |
-| `fx.trend_review` | `overview`, `market_technical` | — |
-| `fx.conversion_timing` | `overview`, `market_technical`, `conversion_timing_context` | `direct_exposure` |
-| `fx.exposure_impact` | `overview`, `direct_exposure` | `market_context` |
+| Analysis                               | Required datasets                | Additional public export     |
+| -------------------------------------- | -------------------------------- | ---------------------------- |
+| `portfolio.pac_planning`               | `portfolio.overview_and_history` | `portfolio.asset_history`    |
+| `portfolio.rebalancing`                | `portfolio.overview_and_history` | `portfolio.asset_history`    |
+| `portfolio.performance_market_drivers` | `portfolio.overview_and_history` | `portfolio.asset_history`    |
+| `portfolio.fiscal_lots`                | general + internal full FIFO     | `portfolio.asset_history`    |
+| `broker.review`                        | `broker.overview_and_history`    | `broker.asset_history`       |
+| `broker.performance_market_drivers`    | `broker.overview_and_history`    | `broker.asset_history`       |
+| `broker.fiscal_lots`                   | general + internal full FIFO     | `broker.asset_history`       |
+| `asset.position_review`                | `asset.position_and_history`     | `asset.market_history`       |
+| `asset.market_analysis`                | `asset.market_history`           | `asset.position_and_history` |
+| `fx.pair_analysis`                     | `fx.market_history`              | `fx.market_and_exposure`     |
+| `fx.exposure_impact`                   | `fx.market_and_exposure`         | `fx.market_history`          |
+
+Forward-looking tasks use a shared Scenario Thesis. Market-driver Analyses require
+dated per-Asset research and causal confidence labels. Fiscal Analyses separate
+economic FIFO evidence from jurisdiction-dependent legal tax treatment.
 
 ### 📅 PAC Planning Contract
 
@@ -241,19 +254,24 @@ operating constraints. Portfolio/Asset Drawdown, trend, momentum, volatility, an
 events are historical subordinate evidence, not forecasts or standalone purchase
 signals.
 
-### 🧾 Broker Cost Efficiency Contract
+### 🧾 Capital-Loss Offset Contract
 
-Cost Efficiency keeps:
+Portfolio and Broker fiscal-lot Analyses are specifically for exploring how
+available or expiring tax losses might offset legally eligible gains. Before
+proposing paths, the prompt asks for:
 
-- fees, taxes, and total recorded costs separate;
-- source-row counts and contributor categories explicit;
-- gross traded amount, average NAV, invested capital, income, and trade count as
-  deterministic denominators where available;
-- each ratio's status, formula, numerator, denominator, unit, period, and coverage.
+- country of tax residence or jurisdiction, tax regime, and account/wrapper;
+- official tax-loss inventory, such as the Italian `cassetto fiscale`;
+- original, remaining, used/reserved, and expiring amounts by legal category;
+- origin and expiry dates, offset order, limits, and eligible gain categories;
+- whether balances span Brokers/accounts and can legally be pooled or transferred;
+- expected gains, intended disposals, exposure constraints, liquidity, and costs.
 
-`recorded` zero is a real source value. `unavailable` means the source cannot
-support the value. `not_applicable` means inputs exist but the denominator makes
-the ratio meaningless. The LLM must not convert one state into another.
+LibreFolio FIFO rows remain economic evidence, not legal tax lots. The response
+compares no-action, eligible-gain realization, staged realization/rebalancing, and
+loss-harvesting paths only when relevant. Every path stays conditional, shows
+expiry windows and portfolio trade-offs, and must never recommend a transaction
+solely for tax reasons.
 
 ## 🧠 AnalysisSpec
 
@@ -286,12 +304,12 @@ No token budget, payload size, or heuristic relevance rule changes this order.
 
 ## 🗺️ Applicability
 
-| UI page | Runtime page slug | Domain | Available catalog types |
-|---|---|---|---|
-| Dashboard | `dashboard` | Portfolio | datasets and analyses |
-| Broker | `broker` | Broker | datasets and analyses |
-| Asset | `asset` | Asset | datasets and analyses |
-| FX | `fx` | FX | datasets and analyses |
+| UI page   | Runtime page slug | Domain    | Available catalog types |
+| --------- | ----------------- | --------- | ----------------------- |
+| Dashboard | `dashboard`       | Portfolio | datasets and analyses   |
+| Broker    | `broker`          | Broker    | datasets and analyses   |
+| Asset     | `asset`           | Asset     | datasets and analyses   |
+| FX        | `fx`              | FX        | datasets and analyses   |
 
 Static catalog applicability filters where an item may be offered. Runtime
 applicability can additionally reject facts such as an Asset analysis requiring a
@@ -425,19 +443,19 @@ when debugging a specific case.
 
 ## 🚨 Failure and Partial-Success Semantics
 
-| Situation | Result |
-|---|---|
-| Required component raises | Whole snapshot fails with `503 snapshot_source_failure`. |
-| Optional component raises | Component omitted; diagnostic remains internal. |
-| Required dataset component raises | Analysis fails closed. |
-| Optional dataset has a required-component failure | Entire optional dataset is skipped. |
-| Builder returns an empty valid payload | Section remains successful and included. |
-| Analysis facts fail applicability | `422 selection_not_applicable`. |
-| Signal result is `unavailable` or `failed` | Only that indicator instance is omitted. |
-| Signal result is `ok` or `partial` | Indicator is exported with its available canonical series. |
-| FX warm-up dates precede source history | Missing prefix dates are skipped; available observations and calculable Signal are returned with coverage warning. |
-| No FX rate exists on or before snapshot date | Snapshot fails with a typed source reason. |
-| Contract identity differs | `409 version_mismatch`; no fallback. |
+| Situation                                         | Result                                                                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Required component raises                         | Whole snapshot fails with `503 snapshot_source_failure`.                                                           |
+| Optional component raises                         | Component omitted; diagnostic remains internal.                                                                    |
+| Required dataset component raises                 | Analysis fails closed.                                                                                             |
+| Optional dataset has a required-component failure | Entire optional dataset is skipped.                                                                                |
+| Builder returns an empty valid payload            | Section remains successful and included.                                                                           |
+| Analysis facts fail applicability                 | `422 selection_not_applicable`.                                                                                    |
+| Signal result is `unavailable` or `failed`        | Only that indicator instance is omitted.                                                                           |
+| Signal result is `ok` or `partial`                | Indicator is exported with its available canonical series.                                                         |
+| FX warm-up dates precede source history           | Missing prefix dates are skipped; available observations and calculable Signal are returned with coverage warning. |
+| No FX rate exists on or before snapshot date      | Snapshot fails with a typed source reason.                                                                         |
+| Contract identity differs                         | `409 version_mismatch`; no fallback.                                                                               |
 
 Signal omission is intentionally narrower than component failure: one
 non-calculable indicator does not remove sibling indicators, the technical
@@ -448,7 +466,7 @@ component, or unrelated datasets.
 Frontend flow:
 
 1. load and validate catalog compatibility;
-2. submit selected V2 IDs and versions;
+2. submit selected V3 IDs and versions;
 3. validate snapshot identity and analysis contract;
 4. render safe deterministic text;
 5. write through Clipboard API, with textarea fallback where required.
@@ -468,7 +486,7 @@ contains:
 - localized LibreFolio UI path;
 - recommended period and detail;
 - required/optional status;
-- internal dataset ID as a secondary technical reference.
+- no internal dataset ID.
 
 The renderer does not decide which financial or technical data is useful; it only
 presents the backend contract.

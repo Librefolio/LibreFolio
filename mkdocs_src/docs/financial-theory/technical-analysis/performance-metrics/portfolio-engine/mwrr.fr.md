@@ -11,7 +11,7 @@ Pour offrir une visibilité complète, LibreFolio distingue deux formes de cet i
 
 ## 📈 MWRR Annualisé vs. MWRR Cumulatif
 
-### MWRR Annualisé {: #annualized-mwrr }
+### 📈 Annualisé {: #annualized-mwrr }
 Le MWRR Annualisé est le taux annuel composé qui égalise la valeur actuelle de tous les flux de trésorerie (valeur actuelle nette, VAN) avec zéro.
 
 Ce taux composé est mathématiquement équivalent au **CAGR** (Compound Annual Growth Rate - taux de croissance annuel composé) de votre capital réellement investi, représentant le taux de croissance annuel constant nécessaire pour que le capital initial atteigne le solde final, en tenant compte de tous les mouvements intermédiaires.
@@ -87,7 +87,7 @@ $$
 * Il est idéal pour les comparaisons à long terme (ex. comparer votre performance avec un taux d'intérêt bancaire annuel ou le CAGR).
 * **Avertissement sur la volatilité :** Sur des périodes courtes (ex. quelques jours ou semaines), le rendement annualisé peut être très volatile et afficher des pourcentages extrêmes car la formule extrapole le rendement d'une petite période sur une année complète de 365 jours.
 
-### MWRR Cumulatif {: #cumulative-mwrr }
+### 📊 Cumulatif {: #cumulative-mwrr }
 Le MWRR Cumulatif représente le rendement total équivalent sur la période sélectionnée, obtenu en capitalisant le taux annualisé sur la durée réelle de cette période.
 
 **Formule Directe (sans racine, utilise directement $r$) :**
@@ -124,27 +124,27 @@ Voyons un scénario sur 10 ans pour comprendre l'impact du timing sur la perform
 * **Année 5 :** Vous déposez **90 000 €** supplémentaires.
 * **Année 10 :** Votre valeur nette finale (VNI) est de **200 000 €**.
 
-### Comparaison avec le ROI Simple
+### 📉 avec le ROI Simple
 Le ROI simple est calculé uniquement sur les contributions nettes totales :
 
 $$
 ROI = \frac{200\,000 - 100\,000}{100\,000} = +100\ \%
 $$
 
-### Effet du timing sur le MWRR
+### ⏱️ du timing sur le MWRR
 Si la majeure partie de votre capital (90 000 €) a été déposée à l'Année 5, juste avant une forte reprise du marché sur plusieurs années, votre argent a travaillé très efficacement. Parce que la somme la plus importante a été exposée aux années de forte croissance, votre **MWRR Annualisé** sera bien supérieur au TWRR du marché.
 
 En utilisant un solveur VAN pour ce scénario spécifique :
 * Le **MWRR Annualisé ($r$)** est exactement de **13,02 %**.
 
-### Conversion en MWRR Cumulatif
+### 🔁 en MWRR Cumulatif
 En capitalisant ce rendement annualisé de 13,02 % sur la période de 10 ans :
 
 $$
 \text{MWRR}_{\text{cumulatif}} = (1 + 0{,}130227)^{10} - 1 \approx +240{,}14\ \%
 $$
 
-### Que signifie +240,14 % ?
+### 💡 signifie +240,14 % ?
 * Cela ne signifie **pas** que vos 100 000 € de contributions totales sont devenus 340 140 € :
 * Cela signifie qu'un **euro théorique**, investi au tout début de la période de 10 ans et jamais retouché, serait devenu 3,40 €, réalisant un rendement total de 240,14 % en croissant à la même vitesse composée moyenne que vos flux réels.
 
@@ -154,10 +154,10 @@ $$
 
 LibreFolio affiche ces indicateurs de performance à différents endroits du tableau de bord :
 
-### Graphique en pourcentage (`%`)
+### 📊 en pourcentage (`%`)
 Les courbes tracées utilisent le **MWRR Cumulatif**, le **TWRR Cumulatif** et le **ROI Simple**. Cela permet une comparaison visuelle directe, car les trois courbes commencent à 0 % et représentent la progression totale sur la période sélectionnée.
 
-### Cartes KPI
+### 🧾 KPI
 * **ROI Simple** (Indicateur principal pour le rendement absolu).
 * **TWRR Cumulatif** (Indicateur de performance de la stratégie ou de l'allocation d'actifs).
 * **MWRR Cumulatif** (Indicateur principal du timing personnel).

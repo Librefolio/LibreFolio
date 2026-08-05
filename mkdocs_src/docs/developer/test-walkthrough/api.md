@@ -42,6 +42,9 @@ AI Export spans API, service, probe, frontend unit, and live Playwright layers:
 # Backend components, datasets, analyses, sampling, runtime, and composition
 ./dev.py test services ai-export
 
+# Strict request/response/catalog schemas
+./dev.py test schemas ai-export
+
 # Real-prompt probe orchestration and metrics
 ./dev.py test utils ai-export-probe
 
@@ -59,6 +62,15 @@ AI Export spans API, service, probe, frontend unit, and live Playwright layers:
 
 # Canonical frontend AI Export gate: unit + Playwright
 ./dev.py test front-ai-export all
+
+# Ensure every remaining test file is registered
+./dev.py test check-orphans
+
+# Accumulate backend AI Export coverage
+./dev.py test --cov-clean-backend --coverage services ai-export
+./dev.py test --coverage schemas ai-export
+./dev.py test --coverage api ai-export
+./dev.py test --coverage utils ai-export-probe
 ```
 
 ## 🚀 Running

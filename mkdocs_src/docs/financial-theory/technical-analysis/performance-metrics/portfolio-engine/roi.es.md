@@ -1,19 +1,51 @@
-# 📉 ROI Simple (Retorno de la Inversión)
+# 📉 ROI Simple (Retorno sobre la Inversión)
 
-*[⬅️ Volver a la descripción general de métricas de rendimiento](../index.md)*
+*[⬅️ Volver a la Descripción General de Métricas de Rendimiento](../index.md)*
 
 ## 💡 ¿Qué es?
-El ROI Simple mide el porcentaje de retorno absoluto generado por una inversión en relación con su costo, sin considerar el tiempo transcurrido ni los flujos de caja de manera compleja. 
+
+El ROI simple mide el valor generado en relación con el capital invertido. En el motor de cartera actual, el denominador del capital invertido es la **línea base de capital** proveniente de `cumulative_external_cash_flow`, no solo depósitos en efectivo.
 
 ## 🧮 Fórmula
 
 $$
-ROI = \frac{\text{Valor Actual}}{\text{Precio de Compra Medio (PCM)}} - 1
+\mathrm{ROI}(t)=
+\frac{\mathrm{NAV}(t)-\mathrm{CapitalBaseline}(t)}
+{\mathrm{CapitalBaseline}(t)}
 $$
 
-## 🎯 Cuándo usarlo
-- Para evaluar una **sola posición** (por ejemplo, "¿Cuánto he ganado con mis acciones de Apple?").
-- Cuando se desea una instantánea rápida e intuitiva de la ganancia total no ajustada.
+La misma línea base impulsa la cifra principal de `total_gain_loss`:
 
-## ⚠️ El defecto: Dilución del flujo de caja
-El ROI Simple deja de ser preciso cuando se realizan inversiones posteriores en el mismo activo. Si compras una acción y sube un +50%, tu ROI es del +50%. Si luego inviertes 10 veces más capital en la misma acción y el precio no se mueve, tu ganancia absoluta sigue siendo la misma, pero tu nueva y masiva base de capital diluirá instantáneamente tu ROI, bajándolo quizás al +5%. Parecerá que tu rendimiento colapsó, aunque el mercado no se haya movido. Para corregir este efecto de dilución y evaluar los rendimientos monetarios absolutos ajustados a estos movimientos de capital, consulte la métrica [P&L del Periodo](period-pnl.md).
+$$
+\mathrm{TotalGainLoss}(t)=\mathrm{NAV}(t)-\mathrm{CapitalBaseline}(t)
+$$
+
+`CapitalBaseline` incluye flujos de efectivo externos ordinarios y capital valorado en especie por AJUSTE/TRANSFERENCIA. Esto evita que carteras heredadas o sembradas muestren un ROI absurdo porque un activo ingresó sin un depósito en efectivo.
+
+## 🎯 Cuándo usarlo
+
+- Para leer la ganancia/pérdida principal de la cartera en relación con el capital económico aportado.
+- Para comparar el NAV actual con la línea base de capital actual.
+- Para verificar el rendimiento ajustado por flujo de efectivo antes de analizar TWRR/MWRR.
+
+## 📈 Rendimiento Neto Anualizado de la Posición
+
+Las posiciones abiertas también exponen un CAGR neto:
+
+$$
+r_{\mathrm{net}}=
+\frac{\mathrm{MarketComponent}+\mathrm{Income}-\mathrm{FeesTaxes}}
+{\mathrm{CostBasis}}
+$$
+
+La anualización utiliza:
+
+$$
+r_{\mathrm{ann}}=(1+r_{\mathrm{net}})^{365/d}-1
+$$
+
+La ventana comienza en la primera transacción que afecta al lote: COMPRA, VENTA, AJUSTE o TRANSFERENCIA. Los valores menores a 30 días se suprimen. Las definiciones completas están en [Rendimiento Neto Anualizado](net-annualized-return.md).
+
+## ⚠️ La Limitación: Dilución por Flujo de Efectivo
+
+El ROI simple sigue siendo sensible a la cantidad y el momento del capital agregado. Si se agrega una contribución grande después de que ya ocurrieron ganancias, el ratio puede caer aunque el valor de mercado no lo haya hecho. Utilice [PyG del Período](period-pnl.md), [TWRR](twrr.md) y [MWRR](mwrr.md) para separar la ganancia absoluta, el rendimiento de la estrategia y el rendimiento del inversor ponderado por dinero.

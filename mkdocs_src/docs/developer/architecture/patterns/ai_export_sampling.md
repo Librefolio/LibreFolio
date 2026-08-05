@@ -266,19 +266,28 @@ Semantic Composition V2 also exposes separate focused context components for
 financial analyses. Their backend-declared policies are intentionally narrower and
 do not alter global Compact/Standard/Full:
 
-- Portfolio/Broker snapshots expose current/summary market fields and at most the
-  latest selected structural event per Asset;
+- Portfolio/Broker general snapshots expose current/summary market fields, a
+  6/12/24-row observed-only uniform path per eligible Asset, and the latest
+  selected structural event per category;
 - multi-Asset comparisons expose a bounded set of latest structural event types;
 - Portfolio Description uses an aggregate 30-day event digest, with the latest
   prior event when a type has no recent occurrence;
-- Asset Position Context exposes three recent rows in Compact, six in Standard,
-  and twelve in Full;
-- FX Market Context exposes no context history in Compact, four recent rows in
-  Standard, and eight in Full;
+- Asset Position Context exposes 8/16/30 uniform observed rows;
+- FX Market Context exposes 8/16/30 uniform genuine-observation rows;
+- Portfolio/Broker aggregate NAV paths expose 8/16/30 uniform rows. NAV values
+  are explicitly flow-inclusive; normalized return uses historical TWRR;
+- focused rows carry bucket boundaries, the real representative observation,
+  observation count, normalized index, and return from the first observation.
+  Bucket extrema are omitted because the per-entity summary already carries
+  full-period extrema;
 - Drawdown context sections carry no numeric history at all: they reuse the Risk
   `drawdown_summary` current/maximum episode dates and coverage verbatim;
 - PAC's per-Asset Drawdown snapshot is one observed-price row per Asset and also
   carries no Drawdown history;
+- technical coverage names current Assets excluded from technical eligibility
+  and publishes a deterministic reason such as `end_value_unavailable`;
+- every detailed indicator block publishes its own `result_status` and
+  `partial_reason_code`;
 - task-specific evidence datasets apply component-local monotonic detail (for
   example income Compact aggregates by `(month, asset, income_type)`, Standard
   adds bounded recent dated rows, Full exposes every dated row).

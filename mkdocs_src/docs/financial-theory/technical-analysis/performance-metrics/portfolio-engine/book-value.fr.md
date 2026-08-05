@@ -4,7 +4,7 @@
 
 ## 💡 Qu'est-ce que la Valeur Comptable ?
 
-La **Valeur Comptable** représente le coût comptable historique de votre portefeuille — le montant de capital déployé au prix d'achat, plus les réserves de trésorerie. Elle ne fluctue pas selon les prix du marché.
+La **Valeur Comptable** représente le coût comptable historique de votre portefeuille — le montant de capital déployé au prix d'achat, plus les réserves de trésorerie. Elle ne fluctue pas selon les prix du marché e distinct de la [Résolution des Prix](price-resolution.md).
 
 ---
 
@@ -19,6 +19,9 @@ Où le Prix de revient ouvert (Open Cost Basis) :
 $$
 \mathrm{OCB}(t) = \sum_{\substack{(a,b) \in S \\ q > 0}} q(a,b,t) \cdot w(a,b,t) \cdot \mathrm{fx}(\mathrm{ccy}_w, C^*, t)
 $$
+
+Où $w(a,b,t)$ est le PMC dans sa devise de coût. Le coût d'acquisition lui-même est fixé au taux de change de la date de transaction dans le PMC ; la valeur comptable ouverte est ensuite rapportée dans la devise demandée pour la date de valorisation.
+
 
 🔗 Voir **[Portfolio Engine — §3 État de la Position](index.md#3-position-state)** pour la dérivation complète.
 
@@ -56,4 +59,5 @@ $$
 
 - 📊 [PMP](../weighted-average-cost.md) — méthode du coût unitaire pour l'OCB
 - 💼 [NAV](nav.md) — l'équivalent en valeur de marché
+- 🧭 [Résolution des Prix](price-resolution.md) — cours de marché/trade utilisés par le NAV, pas par la valeur comptable
 - 📈 [Period PnL](period-pnl.md) — combinaison des gains réalisés et non réalisés

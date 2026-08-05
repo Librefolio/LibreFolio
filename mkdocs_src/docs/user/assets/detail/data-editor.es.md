@@ -36,7 +36,7 @@ La pestaña de Precios muestra todos los puntos de datos de precios del activo. 
 | **Low** | | Precio mínimo del día |
 | **Volume** | | Volumen de negociación |
 
-### Formato de Importación CSV
+### CSV de Importación CSV
 
 ```
 date;currency;close
@@ -68,7 +68,7 @@ La pestaña de Eventos muestra todos los [eventos de activos](../../../financial
 
     Los eventos generados por un proveedor (ej., Inversión Programada) se marcan como **auto** y aparecen como filas de solo lectura. Pueden eliminarse pero no editarse. Los eventos manuales son totalmente editables.
 
-### Formato de Importación CSV
+### CSV de Importación CSV
 
 ```
 date;currency;type;amount;notes

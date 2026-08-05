@@ -5,17 +5,17 @@ accessible broker. LibreFolio never sends it to an AI service.
 
 ## 📍 Location
 
-Open a Broker detail page and select **AI Export** in the top toolbar. Your draft
-is remembered separately for this user and broker.
+Open a Broker detail page and select **AI Export** in the top toolbar. The draft
+remains available for 10 minutes in the current login session and resets after
+logout or a new login.
 
 ## 🎯 Broker Analyses
 
-| Task | Focus |
-|---|---|
-| **Broker Review** | Holdings, cash, activity, performance, and data coverage. |
-| **Broker Cost Efficiency** | Fees, taxes, turnover, and cost patterns. |
-| **Broker Concentration Context** | Asset, currency, and portfolio-share concentration. |
-| **FIFO Lot Review** | Open lots and lots closed during the previous three months, with one summary row per eligible lot. |
+| Task                                    | Focus                                                                                                                                     |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Broker Review**                       | Holdings, cash, activity, performance, and data coverage.                                                                                 |
+| **Broker Performance & Market Drivers** | Performance reconciliation plus dated research for every Asset held through the Broker.                                                   |
+| **Capital-Loss Offset Strategies**      | Conditional ways to use available or expiring tax losses against potentially eligible gains using selected-Broker economic FIFO evidence. |
 
 ## 🗂️ Scope and Data
 
@@ -25,13 +25,11 @@ transactions, performance, costs, allocation, concentration, income, and FIFO
 lot summaries. Server-side access checks prevent exporting a broker the
 current user cannot read.
 
-!!! important "FIFO rows are summaries, not histories"
+!!! important "Allocated and unallocated costs stay distinct"
 
-    FIFO Lot Review includes every open or partially closed lot plus fully closed
-    lots whose closing date falls within the previous three calendar months. Each
-    row identifies the asset and opening date and summarizes quantities, residual
-    cost, value, results, income, fees, and taxes. It does not export custody,
-    event, value, return, or price timelines.
+    FIFO rows contain only fees and taxes deterministically allocated to lots.
+    Broker-level unallocated costs remain in the general financial evidence and
+    are never presented as zero lot costs.
 
 ## 📤 Export Data and Request Analysis
 
@@ -42,36 +40,39 @@ current user cannot read.
   language.
 - Optional notes are included only when supported by the selected Analysis.
 
-Available exports include Broker Overview, Performance & Flows, Technical Summary,
-Asset Comparison, Drawdown Context, Concentration Evidence, Cost Efficiency
-Evidence, complete Technical Data, FIFO Lots, and All Broker Data.
+Two public data exports are available:
 
-## 🧾 Broker Cost Efficiency
+- **Broker Overview & History** — selected-Broker holdings, cash, concentration,
+  performance path, flows, costs, ratios, economic FIFO summary, compact per-Asset
+  history, Drawdown, coverage, and provenance;
+- **Broker Asset History** — Broker-scoped observed-close price buckets,
+  indicators, states, events, breadth, and explicit reasons for current Assets
+  excluded from technical eligibility.
 
-Cost Efficiency keeps these values separate:
+## 🧾 Capital-Loss Offset Strategies
 
-- recorded fees;
-- taxes;
-- total recorded costs;
-- trading activity and deterministic denominators;
-- valid cost ratios.
+The prompt uses selected-Broker economic FIFO lots to identify conditional gain
+and loss candidates, but never treats them as legally eligible automatically. It
+first asks for tax residence, regime, account type, official tax-loss inventory,
+amounts by legal category, origin and expiry dates, already-used balances, offset
+rules, and whether balances across Brokers/accounts may be combined.
 
-`recorded` with amount 0 means the source contains a real zero. `unavailable`
-means the source does not support the value and does not mean zero.
-`not applicable` means the inputs exist but the denominator makes the ratio
-meaningless. Ratios appear only with valid inputs and include their formula,
-numerator, denominator, unit, period, and coverage.
-
-Trading, FX, or other cost subcategories remain unavailable when the Broker data
-does not classify them separately.
+It can then compare no-action, eligible-gain realization before expiry, staged
+realization aligned with rebalancing, and loss harvesting when relevant. Every
+path shows costs, exposure changes, liquidity, concentration, timing, and legal
+uncertainty; no trade is recommended solely for tax reasons.
 
 ## 📏 Detail and Sampling
 
-| Detail | Exact sampling |
-|---|---|
-| **Compact** | Same data universe with the sparsest supported temporal buckets (up to 30 days). |
-| **Standard** | Same data universe with temporal buckets up to 14 days. |
-| **Full** | Same data universe with temporal buckets up to 7 days. |
+| Detail       | Exact sampling                                                                   |
+| ------------ | -------------------------------------------------------------------------------- |
+| **Compact**  | Same data universe with the sparsest supported temporal buckets (up to 30 days). |
+| **Standard** | Same data universe with temporal buckets up to 14 days.                          |
+| **Full**     | Same data universe with temporal buckets up to 7 days.                           |
+
+The general export uses 8/16/30 Broker path points and up to 6/12/24 compact
+history points per eligible Asset. The detailed export keeps the full technical
+sampling policy and can be large.
 
 A dataset or Analysis can omit unavailable or non-applicable optional sections.
 The **AI period** ends on the snapshot date. Partial history and coverage remain
@@ -79,10 +80,9 @@ explicit.
 
 ## 🔒 Applicability, Errors, and Privacy
 
-Analyses can be unavailable when required facts do not exist—for example, FIFO Lot
-Review without eligible open or recently closed lots. Choices also fail closed on catalog or contract
-mismatch. Typed errors report access, applicability, source, or contract
-problems.
+Analyses can be unavailable when required facts do not exist. Choices also fail
+closed on catalog or contract mismatch. Typed errors report access,
+applicability, source, or contract problems.
 
 The clipboard can contain sensitive account and transaction data. Review it
 before sharing. See the [AI Export overview](index.md) for the

@@ -87,6 +87,14 @@ Si el estado de cuenta contiene símbolos de cotización o ISIN que no están en
  <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Asistente Paso 4: Resolución de Activos" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
+#### ⛔ Fecha de apertura del bróker
+
+Si el bróker de destino tiene una fecha de apertura establecida, el asistente marca las filas cuya fecha es **estrictamente anterior** con el estado `Antes de la apertura`. Esas filas se desseleccionan y no se pueden importar; una fila en la fecha de apertura sigue siendo válida. Utiliza **Editar fecha del bróker** y luego vuelve a comprobar/actualizar si la fecha es incorrecta.
+
+#### ⚠️ Avisos de activos
+
+Algunos plugins adjuntan avisos informativos a los activos extraídos. Por ejemplo, Intesa Sanpaolo y Crédit Agricole pueden advertir que un valor puede estar vencido o amortizado. Estos avisos aparecen como banners amarillos cuando creas/vinculas el activo; no bloquean la importación.
+
 #### ⚠️ Detección de Duplicados
 
 El sistema compara las entradas procesadas con tu base de datos para encontrar posibles duplicados basándose en el tipo, fecha, monto, cantidad y descripción.

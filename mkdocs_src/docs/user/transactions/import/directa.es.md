@@ -8,13 +8,13 @@
 
 LibreFolio soporta tanto el formato **CSV** como **XLSX** (Excel) exportados desde Directa SIM. Las capturas de pantalla a continuación son de escritorio, pero los pasos son similares en móvil.
 
-### Paso 1 — Abrir la lista de movimientos
+### Step 1 — Abrir la lista de movimientos
 
 Inicie sesión en [Directa](https://www.directatrading.com) y haga clic en la pestaña **CONTO** (❶). Luego haga clic en el icono de filtro/movimientos a la izquierda (❷) y seleccione el período deseado — ej. **6M** (❸).
 
 ![Directa SIM — pestaña CONTO, lista de movimientos, selector de período](../../../static/broker-guides/directa/Directa_1.png){ style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" }
 
-### Paso 2 — Exportar como CSV o Excel
+### Step 2 — Exportar como CSV o Excel
 
 Haga clic en el icono de exportación (el icono de hoja de cálculo con la **X** verde) en la parte superior de la tabla. En el cuadro de diálogo, seleccione **File separato da virgole (csv)** (o la opción de Excel) y haga clic en **ESTRAI**.
 

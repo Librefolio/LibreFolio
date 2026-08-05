@@ -32,7 +32,7 @@ Utilizza queste transazioni quando il denaro arriva sul tuo conto broker come re
 
 ## 💰 Dividendi in Dettaglio
 
-### Evento vs Transazione
+### Event vs Transazione
 
 | Concetto | Evento Dividendo | Transazione Dividendo |
 |----------|-----------------|----------------------|
@@ -41,7 +41,7 @@ Utilizza queste transazioni quando il denaro arriva sul tuo conto broker come re
 | **Registrato da** | Provider o manualmente (Editor Dati) | Report del broker (importazione BRIM) |
 | **Impatto sul grafico** | Indicatore a diamante (◆) sul grafico dei prezzi | Non visibile sul grafico |
 
-### Importo del Dividendo
+### Dividend del Dividendo
 
 L'importo ricevuto dipende dal numero di azioni possedute alla **data di registrazione**:
 
@@ -49,7 +49,7 @@ $$
 \text{Dividendo Ricevuto} = \text{Azioni Possedute} \times \text{Dividendo per Azione}
 $$
 
-### Ritenuta d'Acconto
+### Withholding d'Acconto
 
 Molte giurisdizioni applicano una **ritenuta d'acconto** sui dividendi — specialmente per le azioni estere. L'imposta viene detratta alla fonte:
 

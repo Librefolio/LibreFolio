@@ -123,6 +123,20 @@ LibreFolio supporta l'importazione di file di report dai seguenti broker:
     </div>
     <span class="card-desc">Importa l'export CSV "Movimenti Dossier Titoli" da Fineco.</span>
     </a>
+    <a href="intesa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://www.intesasanpaolo.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Intesa Sanpaolo">
+    <span class="card-title" style="margin: 0;">Intesa Sanpaolo</span>
+    </div>
+    <span class="card-desc">Importa i movimenti CSV/XLSX o gli export patrimonio da Intesa Sanpaolo.</span>
+    </a>
+    <a href="credit_agricole/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+    <img src="https://www.credit-agricole.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Crédit Agricole">
+    <span class="card-title" style="margin: 0;">Crédit Agricole</span>
+    </div>
+    <span class="card-desc">Importa movimenti conto da Crédit Agricole — cassa reale, commissioni, tasse e cedole/dividendi; export titoli opzionale per storico oltre 2 anni.</span>
+    </a>
  <a href="traderepublic/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
  <div style="display: flex; align-items: center; gap: 0.75rem;">
  <img src="https://traderepublic.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon Trade Republic">
@@ -236,6 +250,8 @@ LibreFolio supporta l'importazione di file di report dai seguenti broker:
     | <img src="https://www.investengine.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **InvestEngine** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ❌ | Scritto sui file di esempio |
     | <img src="https://www.rabobank.com/static/msp/global-sites/rds/favicons/favicon-svg.svg" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Rabobank** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Scritto sui file di esempio |
     | <img src="https://finecobank.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Fineco** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | Entrambi i layout di export; importi nella valuta del report |
+    | <img src="https://www.intesasanpaolo.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Intesa Sanpaolo** | 🧪 Beta | CSV/XLSX | ❌ | ✅ | ✅ | ✅ | Movimenti cedole/dividendi/commissioni/tasse; snapshot patrimonio alimenta liquidità quando presente + posizioni |
+    | <img src="https://www.credit-agricole.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Crédit Agricole** | ✅ Stabile | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | I movimenti del conto portano liquidità reale, commissioni, tasse e cedole/dividendi; l'export titoli opzionale recupera lo storico oltre 2 anni; contro-voci automatiche di cassa, scadenze e rettifiche di successione |
     | <img src="https://traderepublic.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Trade Republic** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Scritto sui file di esempio |
     | <img src="https://www.xtb.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **XTB** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Scritto sui file di esempio |
     | <img src="https://parqet.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Parqet** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Scritto sui file di esempio |
@@ -264,6 +280,12 @@ Durante il passaggio di anteprima, LibreFolio tenta di **abbinare automaticament
 ## ♻️ Rilevamento dei Duplicati {: #duplicate-detection }
 
 BRIM verifica la presenza di **transazioni duplicate** in base a data, tipo, asset, quantità e importo. Le righe duplicate vengono segnalate nell'anteprima — puoi scegliere di saltarle o forzarne l'importazione.
+
+---
+
+## ⛔ Prima della data di apertura del broker {: #before-opening }
+
+Se un broker ha una **data di apertura** impostata, qualsiasi transazione con data **antecedente** viene contrassegnata nell'anteprima come **"Prima dell'apertura"** e non può essere importata (la relativa casella di spunta è disabilitata). Il giorno dell'apertura rimane valido. Se una riga è segnalata per errore, usa l'azione **Modifica data broker**, quindi **ricontrolla / aggiorna** per rivalutare le righe.
 
 ---
 

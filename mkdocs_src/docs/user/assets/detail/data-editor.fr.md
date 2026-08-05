@@ -36,7 +36,7 @@ L'onglet Prix affiche tous les points de données de prix pour l'actif. Colonnes
 | **Plus bas** | | Prix le plus bas de la journée |
 | **Volume** | | Volume d'échange |
 
-### Format d'importation CSV
+### CSV d'importation CSV
 
 ```
 date;currency;close
@@ -68,7 +68,7 @@ L'onglet Événements affiche tous les [événements d'actifs](../../../financia
 
     Les événements générés par un fournisseur (ex: Investissement programmé) sont marqués comme **auto** et apparaissent comme des lignes en lecture seule. Ils peuvent être supprimés mais pas modifiés. Les événements manuels sont entièrement modifiables.
 
-### Format d'importation CSV
+### CSV d'importation CSV
 
 ```
 date;currency;type;amount;notes

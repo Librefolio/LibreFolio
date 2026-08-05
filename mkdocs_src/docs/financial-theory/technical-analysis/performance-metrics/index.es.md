@@ -44,7 +44,7 @@ Contabilidad por lote: rastrea cada lote de adquisición a través de su propio 
 | **[Descripción General del Motor FIFO](fifo-engine/index.md)** | Estados del ciclo de vida del lote, procesamiento cronológico de eventos, emparejamiento FIFO, divisiones y transferencias entre brókers. |
 | **[Análisis de Lotes FIFO](fifo-engine/fifo-lot-analysis.md)** | Complemento por lote al PMP: rastrea cada lote de adquisición a través de su propio ciclo de vida, empareja las ventas en orden FIFO y calcula el rendimiento abierto/total por lote. |
 
-### Precio Medio Ponderado (Weighted Average Cost)
+### 📊 Medio Ponderado (Weighted Average Cost)
 
 | Métrica / Concepto | Descripción |
 |------------------|-------------|
@@ -56,42 +56,42 @@ Contabilidad por lote: rastrea cada lote de adquisición a través de su propio 
 
 Para ayudarte a elegir la métrica adecuada para tu análisis, utiliza esta guía de comparación:
 
-### 1. [Valor Liquidativo (NAV) / Patrimonio Neto](portfolio-engine/nav.md)
+### 💼 . [Valor Liquidativo (NAV) / Patrimonio Neto](portfolio-engine/nav.md)
 * **Pregunta Clave:** "¿Cuánto vale la cartera en el ámbito seleccionado en este momento?"
 * **Concepto de Fórmula:** $\text{Valor de Mercado} + \text{Efectivo} + \text{Activos en Tránsito}$ al final del período.
 * **Mejor Caso de Uso:** Instantánea de la riqueza absoluta en la fecha de fin seleccionada (`date_to`).
 
-### 2. [Valor Contable (Book Value)](portfolio-engine/book-value.md)
+### 📖 . [Valor Contable (Book Value)](portfolio-engine/book-value.md)
 * **Pregunta Clave:** "¿Cuánto costó construir mi cartera actual?"
 * **Concepto de Fórmula:** $\text{Base de Coste Abierta} + \text{Efectivo} + \text{Valor Contable en Tránsito}$ utilizando el Precio Medio Ponderado (PMP).
 * **Mejor Caso de Uso:** Evaluar los costes de adquisición y compararlos con el valor de mercado actual (NAV) para encontrar ganancias latentes.
 
-### 3. [P&L del Período](portfolio-engine/period-pnl.md)
+### 📊 . [P&L del Período](portfolio-engine/period-pnl.md)
 * **Pregunta Clave:** "¿Cuánto dinero gané o perdí realmente durante este período?"
 * **Concepto de Fórmula:** $\text{NAV}_{\text{final}} - \text{NAV}_{\text{inicio}} - \text{Flujos Externos Netos}$.
 * **Mejor Caso de Uso:** Medir las ganancias del período en moneda absoluta, independientemente de las inyecciones/retiros de efectivo del inversor.
 
-### 4. [Efecto del Momento (Timing Effect)](portfolio-engine/timing-effect.md)
+### ⏱️ . [Efecto del Momento (Timing Effect)](portfolio-engine/timing-effect.md)
 * **Pregunta Clave:** "¿Cómo afectaron el momento y el tamaño de mis flujos de efectivo a mi rendimiento general en comparación con una estrategia de comprar y mantener?"
 * **Concepto de Fórmula:** $\text{MWRR}_{\text{acumulado}} - \text{TWRR}_{\text{acumulado}}$.
 * **Mejor Caso de Uso:** Diagnosticar si los depósitos y retiros añadieron valor ($>0$ pp) o lastraron el rendimiento ($<0$ pp).
 
-### 5. [ROI Simple](portfolio-engine/roi.md)
+### 📉 . [ROI Simple](portfolio-engine/roi.md)
 * **Pregunta Clave:** "¿Cuánto gané en relación con el capital neto que invertí?"
 * **Denominador de la Fórmula:** Precio Medio Ponderado (PMP).
 * **Limitaciones:** No tiene en cuenta *cuándo* ocurrieron los flujos de efectivo, lo que provoca una dilución del flujo de efectivo al comprar más de un activo posteriormente.
 
-### 6. [TWRR (Tasa de Rendimiento Ponderada por Tiempo)](portfolio-engine/twrr.md)
+### ⏱️ . [TWRR (Tasa de Rendimiento Ponderada por Tiempo)](portfolio-engine/twrr.md)
 * **Pregunta Clave:** "¿Cómo se desempeñó mi asignación/estrategia de activos elegida, ignorando el momento de mis flujos de efectivo?"
 * **Concepto de Fórmula:** Divide la línea de tiempo en cada flujo de efectivo, calcula los rendimientos de los subperíodos y los multiplica.
 * **Mejor Caso de Uso:** Comparar tu rendimiento con índices de referencia externos (como el S&P 500) o evaluar el rendimiento puro de los activos.
 
-### 7. [MWRR Anualizada (Tasa de Rendimiento Ponderada por Dinero)](portfolio-engine/mwrr.md#annualized-mwrr)
+### 📈 . [MWRR Anualizada (Tasa de Rendimiento Ponderada por Dinero)](portfolio-engine/mwrr.md#annualized-mwrr)
 * **Pregunta Clave:** "¿A qué tasa anual compuesta creció mi capital real, considerando mis depósitos y retiros?"
 * **Concepto de Fórmula:** Resuelve la tasa interna de rendimiento ($r$) que iguala el valor presente neto de todos los flujos de efectivo a cero.
 * **Mejor Caso de Uso:** Comparar tu rendimiento personal con las tasas de interés a largo plazo o evaluar el crecimiento compuesto en horizontes largos. Puede ser muy volátil en ventanas cortas.
 
-### 8. [MWRR Acumulada](portfolio-engine/mwrr.md#cumulative-mwrr)
+### 📊 . [MWRR Acumulada](portfolio-engine/mwrr.md#cumulative-mwrr)
 * **Pregunta Clave:** "¿Cuál es el rendimiento acumulado equivalente ponderado por dinero durante esta ventana de tiempo seleccionada?"
 * **Concepto de Fórmula:** Compone la MWRR anualizada para el número real de días transcurridos.
 * **Mejor Caso de Uso:** Gráficos en serie y widgets de panel de control para comparar visualmente las tendencias de rendimiento junto con TWRR y ROI.
@@ -108,7 +108,7 @@ Veamos un ejemplo extremo para ver cómo TWRR, MWRR y ROI Simple cuentan histori
 
 Esto es lo que LibreFolio calculará para este escenario:
 
-### TWRR Acumulada: +80.00%
+### 📊 Acumulada: +80.00%
 Los activos que elegiste subieron un +100% y luego cayeron un -10%. Matemáticamente:
 
 $$
@@ -117,7 +117,7 @@ $$
 
 Esto aísla el rendimiento puro de la acción. Tu *selección de activos* fue excelente. Si hubieras invertido todo tu dinero el día 1, habrías obtenido un rendimiento del 80%.
 
-### ROI Simple: -9.11%
+### 📉 Simple: -9.11%
 Depositaste un total de €101.000 de tu propio bolsillo (€1.000 + €100.000), pero actualmente posees €91.800:
 
 $$
@@ -126,7 +126,7 @@ $$
 
 Esto representa tu ganancia/pérdida real y bruta en la cartera en relación con tu capital neto invertido.
 
-### MWRR Acumulada: -16.99%
+### 💵 Acumulada: -16.99%
 Debido a que depositaste €100.000 justo en el pico antes de una caída, tu elección del momento perjudicó tu rendimiento significativamente:
 
 $$
@@ -135,7 +135,7 @@ $$
 
 Este rendimiento acumulado ponderado por dinero representa el rendimiento de un "euro teórico" bajo el momento real de tus flujos de efectivo.
 
-### MWRR Anualizada: -67.19%
+### 📈 Anualizada: -67.19%
 Dado que la caída sustancial ocurrió en una ventana de tiempo muy corta (31 días) sobre una base de capital masiva (€100.000), la tasa compuesta anualizada de pérdida es muy alta:
 
 $$
@@ -167,3 +167,5 @@ Para facilitar la navegación, el panel de control de LibreFolio presenta iconos
 * Los widgets de **TWRR** enlazan directamente a la [Página de TWRR](portfolio-engine/twrr.md).
 * Los widgets de **MWRR** enlazan directamente a la [Página de MWRR](portfolio-engine/mwrr.md).
 * **Capital Depositado / P&L Total** (información emergente del gráfico de crecimiento) enlaza a la [Página de Capital Depositado y P&L Total](portfolio-engine/deposited-capital.md).
+| **[Resolución de Precios](portfolio-engine/price-resolution.md)** | Niveles de resolución unificados: MARKET → TRADE_AVG → CARRIED → MISSING, con cotizaciones nativas y FX por fecha. |
+| **[Rendimiento Anualizado Neto](portfolio-engine/net-annualized-return.md)** | Definiciones CAGR neto para posiciones, contribución del periodo y lotes FIFO, con ventana mínima de 30 días. |

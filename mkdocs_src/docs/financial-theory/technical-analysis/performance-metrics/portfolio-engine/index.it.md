@@ -33,9 +33,14 @@ p_{\text{buy}}(a, t) & \text{se esiste l'ultimo BUY da } V(u) \\
 \end{cases}
 $$
 
-- $p_{\text{mkt}}$ = riempimento a ritroso (backward-fill) da PriceHistory (ultima chiusura con data $\leq t$)
-- $p_{\text{buy}}$ = prezzo unitario dell'acquisto (BUY) più recente di $a$ tra tutti i broker in $V(u)$, con data $\leq t$
-- Il PMC **non** viene mai utilizzato come prezzo di valutazione
+- Il resolver unificato è il cervello unico di valutazione: `MARKET → TRADE_AVG → CARRIED → MISSING`.
+- `CARRIED` è l'ultimo valore osservato proiettato in avanti (LOCF). Porta i metadati di obsolescenza `days_back`.
+- `estimated=True` indica origine TRADE. Una quotazione MARKET obsoleta è stale, non estimated.
+- I mark restano in valuta nativa; ogni consumatore converte a $C^*$ alla data di valutazione $t$.
+- L'FX del costo di carico rimane fissato alla data della transazione.
+- Il PMC **non** viene mai utilizzato come prezzo di valutazione.
+
+Vedi [Risoluzione Prezzi](price-resolution.md) per il contratto del resolver e la semantica della qualità dei dati.
 
 ---
 
@@ -119,7 +124,7 @@ Tre pool di accumulo tracciano la provenienza della liquidità. $K$ e $R$ sono m
 
     Un acquisto (BUY) sul broker $b_1$ può consumare solo $R_{b_1}$, mai $R_{b_2}$. La liquidità non si "teletrasporta" tra i broker — solo i trasferimenti espliciti spostano i saldi dei pool.
 
-### Regole di aggiornamento (per transazione sul broker $b$, cronologiche)
+### 🔁 di aggiornamento (per transazione sul broker $b$, cronologiche)
 
 | Icona e Tipo | Formule di Aggiornamento | Logica e Descrizione |
 |:---:|---|---|
@@ -133,7 +138,7 @@ Tre pool di accumulo tracciano la provenienza della liquidità. $K$ e $R$ sono m
 
 Se le date di uscita e arrivo differiscono, il trasferimento è in transito (in-transit): sottratto da $s$ nel giorno di partenza, aggiunto a $d$ nel giorno di arrivo. Tra queste date, $\sum K_b + \sum R_b < \mathrm{Cash}_{\text{like}}$ per l'importo in transito — gestito tramite riconciliazione proporzionale.
 
-### Aggregazione per l'output
+### 🧮 per l'output
 
 $$
 \mathrm{CashFromCapital}(t) = \sum_{b \in S} K_b(t)
@@ -143,7 +148,7 @@ $$
 \mathrm{CashFromReturns}(t) = \sum_{b \in S} R_b(t)
 $$
 
-### Invariante di riconciliazione
+### ⚖️ di riconciliazione
 
 $$
 \mathrm{Cash}_{\text{like}}(t) \approx \sum_{b \in S} K_b(t) + \sum_{b \in S} R_b(t)
@@ -162,16 +167,23 @@ $$
 $$
 
 $$
-\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{Fees}(a,b)
+\mathrm{PnL}(a,b) = \Delta\mathrm{UGL}(a,b) + \mathrm{Realized}(a,b) + \mathrm{Income}(a,b) - \mathrm{FeesTaxes}(a,b)
 $$
 
 Insieme delle posizioni che contribuiscono:
 
 $$
-\mathcal{P} = \mathcal{P}(t_0) \cup \mathcal{P}(t_1) \cup \mathrm{keys}(\text{Realized}) \cup \mathrm{keys}(\text{Income}) \cup \mathrm{keys}(\text{Fees})
+\mathcal{P} = \text{posizioni con attività BUY/SELL/ADJUSTMENT/TRANSFER o quantità al limite}
 $$
 
-Le voci non allocate (commissioni/redditi senza `asset_id`) sono raggruppate per broker.
+Il P&L di periodo a livello di portafoglio espone anche un residuo:
+
+$$
+\mathrm{Other} = \mathrm{PnL}_{period} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
+$$
+
+Le commissioni/redditi non allocati senza `asset_id` sono raggruppati per broker come altri effetti di periodo.
+
 
 ---
 
@@ -214,13 +226,17 @@ Calcolate **dopo** gli stati giornalieri, come passaggio separato:
 | MWRR | XIRR risolvendo $\sum \frac{CF_i}{(1+r)^{d_i/365}} = 0$ | [MWRR](mwrr.md) |
 | Simple ROI | $(\mathrm{NAV} - \text{NetInvested}) / \text{NetInvested}$ | [ROI](roi.md) |
 | Timing Effect | $\text{MWRR}_{\text{cum}} - \text{TWRR}_{\text{cum}}$ | [Timing Effect](timing-effect.md) |
+| Net Annualized Return | $(1+r_{\mathrm{net}})^{365/d}-1$ | [Net Annualized Return](net-annualized-return.md) |
 
 ---
+
 
 ## 🔗 Correlati
 
 - 💼 [NAV](nav.md) — valutazione istantanea (snapshot)
+- 🧭 [Risoluzione Prezzi](price-resolution.md) — resolver unificato di valutazione
+- 📈 [Net Annualized Return](net-annualized-return.md) — definizioni CAGR per posizioni, periodo e FIFO
 - 📖 [Book Value](book-value.md) — aggregato del costo di base
 - 📊 [Period P&L](period-pnl.md) — guadagni/perdite in una finestra temporale con contributo
 - 💸 [Deposited Capital](deposited-capital.md) — dettagli sui 3 pool ed esempi pratici
-- 📈 [PMC](../weighted-average-cost.md) — metodo di costo iterativo
+- 📈 [WAC](../weighted-average-cost.md) — metodo di costo iterativo

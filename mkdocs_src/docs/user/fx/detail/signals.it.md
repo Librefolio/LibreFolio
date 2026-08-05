@@ -61,8 +61,7 @@ risultati tecnici del servizio segnali condiviso. Per Impatto dell'esposizione
 valutaria, l'esposizione è limitata alle valute della liquidità e alle valute di
 negoziazione o valutazione delle posizioni direttamente collegabili alla coppia;
 non effettua **look-through** di fondi o emittenti per dedurre esposizioni
-valutarie nascoste. Consulta la
-[guida Esportazione AI](../../ai-export/index.md).
+valutarie nascoste. Vedi [Esportazione AI FX](../../ai-export/fx.md) o la [guida Esportazione AI](../../ai-export/index.md).
 
 ---
 

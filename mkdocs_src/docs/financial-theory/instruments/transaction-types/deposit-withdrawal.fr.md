@@ -1,4 +1,4 @@
-# ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Dépôts et Retraits ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }
+# 💶 ![](../../../static/icons/transactions/deposit.png){: width="32" style="vertical-align: middle;" } Dépôts et Retraits ![](../../../static/icons/transactions/withdrawal.png){: width="32" style="vertical-align: middle;" }
 
 <div class="screenshot-container">
  <img class="gallery-img" data-category="transactions" data-name="form-modal-deposit" alt="Formulaire de Transaction — DÉPÔT">

@@ -17,11 +17,15 @@ AI Export is available from:
 - the Broker toolbar for Broker tasks;
 - the Signals header on Asset and FX detail pages.
 
-The backend supplies valuations, performance, allocations, FIFO facts, FX
-exposure, and technical indicators. **Export Data** copies one selected dataset
-without analysis instructions. **Request Analysis** combines the datasets
-declared for that Analysis with an objective and response contract. Optional notes
-and the requested response language apply only to analyses.
+The backend supplies valuations, performance, allocations, economic FIFO facts,
+FX exposure, and technical indicators. The public catalog intentionally exposes
+only **eight autonomous Export Data choices** and **thirteen task-oriented
+Analyses**. Smaller backend datasets remain internal composition blocks.
+
+**Export Data** copies one selected factual snapshot without analysis
+instructions. **Request Analysis** adds an objective and response contract to an
+autonomous snapshot, plus a complementary public export suggestion when useful.
+Optional notes and the requested response language apply only to analyses.
 
 ## 🚀 How to Use It
 
@@ -35,55 +39,69 @@ and the requested response language apply only to analyses.
 
 ## 🎛️ Export Options
 
-| Option | Meaning |
-|---|---|
-| **Export type** | **Export Data** creates a factual dataset prompt. **Request Analysis** adds the Analysis objective, verification instructions, response contract, and relevant datasets. |
-| **Dataset or analysis** | The available choices come from the current LibreFolio runtime catalog for the page/domain. |
-| **AI period** | **3M**, **6M**, **1Y**, or Custom when offered. The period ends on the snapshot date. Partial source history remains explicit. |
-| **Detail level** | **Compact**, **Standard**, and **Full** keep the same data universe but use progressively denser temporal buckets where supported (up to 30, 14, or 7 days). Synthetic snapshots can remain similar across levels; Full is not always necessary. |
-| **Notes for the AI** | Available for supported analyses. Adds optional user context as a safely serialized data block. |
+| Option                  | Meaning                                                                                                                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Export type**         | **Export Data** creates a factual dataset prompt. **Request Analysis** adds the Analysis objective, verification instructions, response contract, and relevant datasets.                                                                                     |
+| **Dataset or analysis** | The available choices come from the current LibreFolio runtime catalog for the page/domain.                                                                                                                                                                  |
+| **AI period**           | **3M**, **6M**, **1Y**, or Custom when offered. The period ends on the snapshot date. Partial source history remains explicit.                                                                                                                               |
+| **Detail level**        | **Compact**, **Standard**, and **Full** keep the same entity universe. General snapshots use progressively denser uniform mini-histories; detailed market exports use the complete technical sampling policy. Full can be large and is not always necessary. |
+| **Notes for the AI**    | Available for supported analyses. Adds optional user context as a safely serialized data block.                                                                                                                                                              |
 
-Draft export type, selection, detail, AI period, and notes are remembered per authenticated user and page
-context. Closing the panel or navigating away does not discard them.
+Draft export type, selection, detail, AI period, and notes remain in browser
+memory for 10 minutes per page context. Closing the panel or navigating away
+preserves them within that window. Expiry, logout, or any new login resets every
+AI Export panel to its defaults; drafts are not persisted in `localStorage`.
+
+## 📤 Available Export Data
+
+| Page      | General snapshot                 | Detailed market history     |
+| --------- | -------------------------------- | --------------------------- |
+| Dashboard | **Portfolio Overview & History** | **Portfolio Asset History** |
+| Broker    | **Broker Overview & History**    | **Broker Asset History**    |
+| Asset     | **Asset Position & History**     | **Asset Market History**    |
+| FX        | **FX Market & Exposure**         | **FX Market History**       |
+
+General snapshots combine current economic facts with a compact historical path
+and focused market context. Detailed market histories contain denser observed
+prices or rates, indicators, states, events, and coverage.
 
 ## 🗂️ Available Analyses
 
 ### 📊 Portfolio
 
-| Task | Purpose |
-|---|---|
-| Recurring Investment Plan | Review portfolio structure, cash flows, and constraints for recurring investments. |
-| Portfolio Rebalancing | Compare current allocation with diversification and target-allocation context. |
-| Performance Attribution | Identify the main contributors to performance over the selected period. |
-| Portfolio News & Price Drivers | Match material dated Asset movements with cited current news while keeping correlation distinct from causation. |
-| Portfolio Income Review | Review dividends, interest, and other portfolio income. |
-| Portfolio FIFO Lot Review | Review all open lots plus lots closed during the previous three months across the active Dashboard broker scope. |
-| Technical Breadth | Summarize technical signal breadth across portfolio assets. |
-| Portfolio Description | Produce a factual overview of composition, allocation, and recent activity. |
+| Task                                   | Purpose                                                                                                                                            |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recurring Investment Plan              | Review portfolio structure, cash flows, and constraints for recurring investments.                                                                 |
+| Portfolio Rebalancing                  | Compare current allocation with diversification and target-allocation context.                                                                     |
+| Portfolio Performance & Market Drivers | Reconcile performance, then research dated short- and long-horizon drivers for every held Asset without overstating causality.                     |
+| Capital-Loss Offset Strategies         | Explore how available or expiring tax losses might offset eligible gains using economic FIFO evidence and an explicit official tax-loss inventory. |
 
 ### 🏦 Broker
 
-| Task | Purpose |
-|---|---|
-| Broker Review | Summarize holdings, cash, activity, performance, and data coverage for one broker. |
-| Broker Cost Efficiency | Review fees, taxes, turnover, and cost patterns. |
-| Broker Concentration Context | Review concentration by assets, currencies, and portfolio share. |
-| FIFO Lot Review | Review all open lots plus lots closed during the previous three months for one broker. |
+| Task                                | Purpose                                                                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Broker Review                       | Summarize holdings, cash, activity, performance, and data coverage for one broker.                                     |
+| Broker Performance & Market Drivers | Reconcile selected-Broker performance and research dated drivers for every held Asset.                                 |
+| Capital-Loss Offset Strategies      | Explore tax-loss offset paths using selected-Broker economic FIFO evidence and the user's official tax-loss inventory. |
 
 ### 📈 Asset
 
-| Task | Purpose |
-|---|---|
-| Asset Trend Analysis | Review price trends, normalized returns, drawdowns, and technical signals. |
-| Position Review | Review size, cost basis, performance, income, and concentration context. |
+| Task                  | Purpose                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Position Review       | Review size, cost basis, performance, income, and concentration context.                                     |
+| Asset Market Analysis | Review observed-close history, returns, trend, momentum, volatility, Drawdown, states, events, and coverage. |
 
 ### 💱 FX
 
-| Task | Purpose |
-|---|---|
-| FX Trend Review | Review pair direction, returns, volatility, and technical context. |
-| FX Conversion Timing Context | Review trend, volatility, and rate context for a possible conversion. |
-| FX Exposure Impact | Review direct cash, trading-currency, and valuation-currency links to the pair. |
+| Task               | Purpose                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| FX Pair Analysis   | Review pair direction, returns, volatility, technical evidence, coverage, and dated macro context. |
+| FX Exposure Impact | Review direct cash, trading-currency, and valuation-currency links to the pair.                    |
+
+Analyses that compare future paths use a **Scenario Thesis**: supplied evidence,
+assumptions, horizon, trade-offs, trigger conditions, invalidation conditions, and
+missing user decisions. It is mandatory for PAC, rebalancing, and capital-loss
+offset scenarios.
 
 ## 🧩 Partial History and Additional Data
 
@@ -122,8 +140,8 @@ readable names in its answer; database IDs are not needed.
 
 AI Export fails closed if the browser and server catalogs or response contracts
 do not match. An option can also be unavailable when its facts do not apply—for
-example, Position Review without an open position, FIFO Lot Review without
-holdings, or Performance Attribution without period contributions.
+example, Position Review without an open position or FX Exposure Impact without
+direct linked exposure.
 
 The export provides factual context, not investment advice or automated trading
 instructions.

@@ -50,7 +50,7 @@ En haut à droite du tableau de bord, plusieurs contrôles vous permettent de pe
   instructions et son contrat de réponse, puis sélectionnez le **niveau de
   détail** (Compact, Standard ou Complet). L'instantané du backend suit le filtre
   de courtier actif, la période et la devise cible ; LibreFolio ne contacte aucun
-  service d'IA. Consultez le [guide de l'Export IA](../ai-export/index.md).
+  service d'IA. Consultez [Export AI Portefeuille](../ai-export/portfolio.md) ou le [guide Export AI](../ai-export/index.md).
 
 !!! tip "Le périmètre a son importance"
 
@@ -69,6 +69,7 @@ Si des cours ou des taux de change sont manquants à la date de fin, une banniè
 - 💰 **[Indicateurs KPI](kpi-cards.md)** — Valeur nette, P&L de période et rendements expliqués
 - 📊 **[Graphiques](charts.md)** — Graphique de croissance et panneau d'allocation expliqués
 - 🔍 **[Positions et analyse](positions.md)** — Positions ouvertes, vues tableau vs. carte, et analyse détaillée des lots fiscaux FIFO.
+
 
 ## 🔗 Théorie connexe
 

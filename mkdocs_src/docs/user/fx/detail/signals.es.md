@@ -60,8 +60,7 @@ seleccionado, la moneda objetivo, el historial de tipos y los resultados técnic
 del servicio de señales compartido. Para Impacto de la exposición cambiaria, la
 exposición se limita a las monedas de efectivo y a las monedas de negociación o
 valoración de posiciones vinculables directamente al par; no realiza
-**look-through** de fondos o emisores para deducir exposición oculta. Consulta la
-[guía de Exportación de IA](../../ai-export/index.md).
+**look-through** de fondos o emisores para deducir exposición oculta. Consulta la [Exportación AI FX](../../ai-export/fx.md) o la [guía de exportación AI](../../ai-export/index.md).
 
 ---
 

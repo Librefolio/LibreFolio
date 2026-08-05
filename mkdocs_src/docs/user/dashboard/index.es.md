@@ -50,7 +50,7 @@ En la parte superior derecha del panel de control, tienes varios controles para 
   respuesta; después, selecciona el **nivel de detalle** (Compacto, Estándar o
   Completo). La instantánea del backend sigue el filtro de bróker activo, el
   rango de fechas y la moneda objetivo; LibreFolio no contacta con servicios de
-  IA. Consulta la [guía de Exportación de IA](../ai-export/index.md).
+  IA. Consulta [Exportación AI de Cartera](../ai-export/portfolio.md) o la [guía de Exportación de IA](../ai-export/index.md).
 
 !!! tip "El ámbito importa"
 
@@ -69,6 +69,7 @@ Si faltan precios o tipos de cambio en la fecha de finalización, aparece un ban
 - 💰 **[Tarjetas KPI](kpi-cards.md)** — Valor Neto, PyG del Período y Rendimientos explicados
 - 📊 **[Gráficos](charts.md)** — Gráfico de Crecimiento y Panel de Asignación explicados
 - 🔍 **[Posiciones y Análisis](positions.md)** — Posiciones abiertas, vistas de tabla vs. mapa y análisis detallado de lotes fiscales FIFO.
+
 
 ## 🔗 Teoría relacionada
 
