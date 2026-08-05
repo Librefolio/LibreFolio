@@ -458,7 +458,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
                 instance = plugin_cls()
                 result.append(instance.to_plugin_info())
             except Exception:
-                pass
+                logger.exception("Failed to build plugin info", plugin_class=f"{plugin_cls.__module__}.{plugin_cls.__qualname__}")
         return result
 
 

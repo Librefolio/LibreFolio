@@ -339,14 +339,6 @@ class FifoEngineResult:
             active = [fragment for fragment in active if fragment.custody_type == custody_type]
         return sorted(active, key=lambda fragment: (fragment.start_date, fragment.fragment_id))
 
-    def signed_quantity_by_broker(self, broker_id: int) -> Decimal:
-        total = Decimal("0")
-        for fragment in self.active_fragments(broker_id=broker_id, custody_type="BROKER"):
-            sign = Decimal("1") if fragment.direction == "LONG" else Decimal("-1")
-            total += sign * fragment.quantity
-        return total
-
-
 @dataclass(slots=True)
 class _PendingTransferPiece:
     pair_id: int

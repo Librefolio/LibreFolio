@@ -2687,8 +2687,9 @@ class AssetSourceManager:
             try:
                 if isinstance(provider_params, str):
                     provider_params = json.loads(provider_params)
-            except Exception:
-                pass
+            except Exception as e:
+                # Keep legacy behaviour: validation below reports bad params to the result item.
+                logger.debug("Failed to decode provider params JSON", asset_id=asset_id, provider_code=provider_code, error=str(e))
 
             # Validate params
             try:
@@ -3066,8 +3067,9 @@ class AssetSourceManager:
                             fresh_assignment.last_fetch_at = utcnow()
                             persist_session.add(fresh_assignment)
                             await persist_session.commit()
-                    except Exception:
-                        pass  # Not critical
+                    except Exception as e:
+                        # Not critical: price/event persistence result is already committed separately.
+                        logger.debug("Failed to update provider assignment fetch timestamp", asset_id=asset_id, error=str(e))
             except Exception as e:
                 errors.append(f"Persist session error: {e!s}")
 

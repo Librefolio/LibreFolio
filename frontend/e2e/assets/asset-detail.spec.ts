@@ -13,22 +13,56 @@ import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage} from './assets-helpers';
 
+/**
+ * Navigate to the first available asset detail page.
+ * Module-level (not nested in a single `describe`) so both the main "Asset
+ * Detail Page" suite and other sibling suites in this file (e.g. the live
+ * price flash tests below) can share it.
+ */
+async function goToFirstAssetDetail(page: import('@playwright/test').Page) {
+    await goToAssetsPage(page);
+    const firstCard = page.locator('[data-testid^="asset-card-"]').first();
+    await expect(firstCard).toBeVisible({timeout: 5_000});
+    await firstCard.click();
+    await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
+    await page.waitForTimeout(1000);
+}
+
+/**
+ * Asserts that the asset detail price chart has actually rendered content,
+ * not merely that its wrapper container is visible. A container can stay
+ * visible while the ECharts canvas inside it never mounts or ends up with
+ * zero size — the same defect shape that let a previous chart regression
+ * ship without a failing test. Modeled on `expectOwnershipChartCanvas()` in
+ * `frontend/e2e/brokers/broker-sharing.spec.ts` (duplicated locally on
+ * purpose: these are separate suites and cross-suite imports are avoided).
+ */
+async function expectAssetDetailChartCanvas(page: import('@playwright/test').Page) {
+    const section = page.getByTestId('asset-detail-chart');
+    await expect(section).toBeVisible({timeout: 5_000});
+
+    const canvas = section.locator('canvas').first();
+    await expect(canvas).toBeVisible({timeout: 5_000});
+    await expect
+        .poll(
+            async () => {
+                const box = await canvas.boundingBox();
+                if (!box || box.width <= 0 || box.height <= 0) return 'zero-css-size';
+
+                return canvas.evaluate((node) => {
+                    const htmlCanvas = node as HTMLCanvasElement;
+                    return htmlCanvas.width > 0 && htmlCanvas.height > 0 ? 'non-zero' : 'zero-bitmap-size';
+                });
+            },
+            {timeout: 5_000},
+        )
+        .toBe('non-zero');
+}
+
 test.describe('Asset Detail Page', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
-
-    /**
-     * Navigate to the first available asset detail page.
-     */
-    async function goToFirstAssetDetail(page: import('@playwright/test').Page) {
-        await goToAssetsPage(page);
-        const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        await expect(firstCard).toBeVisible({timeout: 5_000});
-        await firstCard.click();
-        await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
-        await page.waitForTimeout(1000);
-    }
 
     // ========================================================================
     // Test 1: Detail page loads with header and chart
@@ -36,7 +70,7 @@ test.describe('Asset Detail Page', () => {
     test('detail page shows header and chart', async ({page}) => {
         await goToFirstAssetDetail(page);
         await expect(page.getByTestId('asset-detail-header')).toBeVisible();
-        await expect(page.getByTestId('asset-detail-chart')).toBeVisible();
+        await expectAssetDetailChartCanvas(page);
     });
 
     // ========================================================================
@@ -304,7 +338,7 @@ test.describe('Asset Detail Page', () => {
 
         // Page should still be intact
         await expect(page.getByTestId('asset-detail-page')).toBeVisible();
-        await expect(page.getByTestId('asset-detail-chart')).toBeVisible();
+        await expectAssetDetailChartCanvas(page);
     });
 
     // ========================================================================
@@ -366,5 +400,153 @@ test.describe('Asset Detail Page', () => {
         // ECharts must have initialised without throwing
         await expect(page.getByTestId('asset-detail-chart').getByTestId('candlestick-chart')).toBeVisible({timeout: 5000});
         expect(errors).toHaveLength(0);
+    });
+});
+
+// ============================================================================
+// Live price direction flash (green on up-tick, red on down-tick, animated
+// decay back to neutral) — see `_fetchLivePrice` in +page.svelte and the
+// `data-live-price-direction` attribute rendered by AssetPriceSummary.svelte.
+//
+// A prior regression in this codebase (a broker-sharing chart silently going
+// blank) slipped through because its E2E test only asserted a wrapper <div>
+// was visible, never the actual rendered content. These tests deliberately
+// assert on the *applied* class and the `data-live-price-direction` value —
+// never just "the price element exists" — so a similar regression here (e.g.
+// direction stuck at 'neutral', or the flash class never applied) would fail
+// the suite instead of passing silently.
+//
+// Prices are intercepted via Playwright routing (not live market data) so
+// ticks are deterministic, and Playwright's fake clock fast-forwards the 30s
+// poll interval and the ~1.3s flash-decay timer instead of waiting in real
+// time.
+// ============================================================================
+test.describe('Live price direction flash', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /**
+     * Intercepts POST /api/v1/assets/prices/current and answers with
+     * `price.value` (as of today) for every requested asset id. `price` is a
+     * mutable box the test mutates between polls to simulate a new tick —
+     * every intercepted request (from either of the detail page's two live
+     * price pollers) reads whatever value is current at call time, so the
+     * mock stays correct regardless of call count/order.
+     */
+    async function mockCurrentPrice(page: import('@playwright/test').Page, price: {value: number}) {
+        await page.route('**/api/v1/assets/prices/current', async (route) => {
+            const ids = (route.request().postDataJSON() as number[] | null) ?? [];
+            const today = new Date().toISOString().slice(0, 10);
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    results: ids.map((assetId) => ({
+                        asset_id: assetId,
+                        value: price.value.toFixed(2),
+                        currency: 'USD',
+                        as_of_date: today,
+                        source: 'mock',
+                        error: null,
+                    })),
+                    success_count: ids.length,
+                }),
+            });
+        });
+    }
+
+    test('first tick after load is neutral — no previous value to compare against', async ({page}) => {
+        test.setTimeout(20_000);
+        const price = {value: 100};
+        await mockCurrentPrice(page, price);
+        await page.clock.install();
+        await goToFirstAssetDetail(page);
+
+        const priceEl = page.getByTestId('asset-detail-live-price');
+        await expect(priceEl).toBeVisible({timeout: 5_000});
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral');
+        await expect(priceEl).not.toHaveClass(/lf-price-flash-/);
+        await expect(priceEl).toHaveText('100.00');
+    });
+
+    test('an up-tick flashes green then decays back to neutral', async ({page}) => {
+        test.setTimeout(20_000);
+        const price = {value: 100};
+        await mockCurrentPrice(page, price);
+        await page.clock.install();
+        await goToFirstAssetDetail(page);
+
+        const priceEl = page.getByTestId('asset-detail-live-price');
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+
+        // New tick with a HIGHER value than the previous poll.
+        price.value = 105;
+        await page.clock.fastForward(30_000);
+
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'up');
+        await expect(priceEl).toHaveClass(/lf-price-flash-up/);
+        await expect(priceEl).toHaveText('105.00');
+
+        // Past the ~1.3s flash-decay window the colour settles back to
+        // neutral — the price value itself does not change, only the flash.
+        await page.clock.fastForward(1_500);
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral');
+        await expect(priceEl).not.toHaveClass(/lf-price-flash-/);
+        await expect(priceEl).toHaveText('105.00');
+    });
+
+    test('a down-tick flashes red then decays back to neutral', async ({page}) => {
+        test.setTimeout(20_000);
+        const price = {value: 100};
+        await mockCurrentPrice(page, price);
+        await page.clock.install();
+        await goToFirstAssetDetail(page);
+
+        const priceEl = page.getByTestId('asset-detail-live-price');
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+
+        // New tick with a LOWER value than the previous poll.
+        price.value = 95;
+        await page.clock.fastForward(30_000);
+
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'down');
+        await expect(priceEl).toHaveClass(/lf-price-flash-down/);
+        await expect(priceEl).toHaveText('95.00');
+
+        await page.clock.fastForward(1_500);
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral');
+        await expect(priceEl).not.toHaveClass(/lf-price-flash-/);
+        await expect(priceEl).toHaveText('95.00');
+    });
+
+    test('consecutive same-direction ticks each restart the flash', async ({page}) => {
+        test.setTimeout(20_000);
+        const price = {value: 100};
+        await mockCurrentPrice(page, price);
+        await page.clock.install();
+        await goToFirstAssetDetail(page);
+
+        const priceEl = page.getByTestId('asset-detail-live-price');
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
+
+        price.value = 101;
+        await page.clock.fastForward(30_000);
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'up');
+        await expect(priceEl).toHaveText('101.00');
+
+        // Let the first flash decay...
+        await page.clock.fastForward(1_500);
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral');
+
+        // ...then tick UP again. This must re-flash rather than silently stay
+        // neutral just because the direction string repeats ('up' -> 'up') —
+        // the component keys the flash element on a monotonic token precisely
+        // to guard against this.
+        price.value = 102;
+        await page.clock.fastForward(30_000);
+        await expect(priceEl).toHaveAttribute('data-live-price-direction', 'up');
+        await expect(priceEl).toHaveClass(/lf-price-flash-up/);
+        await expect(priceEl).toHaveText('102.00');
     });
 });

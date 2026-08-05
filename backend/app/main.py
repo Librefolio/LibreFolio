@@ -69,6 +69,7 @@ settings = get_settings()
 # Configure logging with settings
 configure_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _alembic_head_revision():
@@ -248,7 +249,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     await _initialize_global_settings()
 
     # Pre-warm provider caches in background (non-blocking)
-    asyncio.create_task(_prewarm_provider_caches())
+    provider_prewarm_task = asyncio.create_task(_prewarm_provider_caches())
+    _background_tasks.add(provider_prewarm_task)
+    provider_prewarm_task.add_done_callback(_background_tasks.discard)
 
     # Start scheduler daemon
     shutdown_event = get_shutdown_event()

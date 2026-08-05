@@ -47,7 +47,6 @@ export const AI_EXPORT_DEFAULT_DETAIL_LEVEL = 'standard' satisfies AiExportDetai
 export function resolveDefaultDetailLevel(supportedDetailLevels: readonly AiExportDetailLevel[]): AiExportDetailLevel {
     return supportedDetailLevels.includes(AI_EXPORT_DEFAULT_DETAIL_LEVEL) ? AI_EXPORT_DEFAULT_DETAIL_LEVEL : supportedDetailLevels[0];
 }
-export const AI_EXPORT_DOMAIN_ORDER = ['portfolio', 'broker', 'asset', 'fx'] as const satisfies readonly AiExportDomain[];
 export const AI_EXPORT_PAGE_LABEL_KEYS: Readonly<Record<string, string>> = {
     dashboard: 'nav.dashboard',
     broker: 'brokers.title',

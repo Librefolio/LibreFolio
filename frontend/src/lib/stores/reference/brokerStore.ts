@@ -159,9 +159,6 @@ export const getBrokerInfo = store.get;
 /** All cached brokers, in insertion order. */
 export const getAllBrokers = store.getAll;
 
-/** Whether the store has been populated at least once. */
-export const isBrokersLoaded = store.isLoaded;
-
 /**
  * Hydrate icon-relevant fields for a broker when a consumer only has a partial
  * `{id, name}` shape. Shared de-duplication prevents N identical requests.

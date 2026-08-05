@@ -125,10 +125,6 @@ class SignalExecutionPlan:
     annotation_requests: tuple[SignalAnnotationRequest, ...]
 
     @property
-    def unique_computation_count(self) -> int:
-        return len(self.computations)
-
-    @property
     def max_history_points_before_visible(self) -> int:
         return self.max_total_points
 

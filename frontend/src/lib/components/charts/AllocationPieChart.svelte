@@ -93,7 +93,14 @@
     });
 
     $effect(() => {
-        if (chartContainer && data) {
+        // Read every element synchronously so this effect tracks the CONTENT of
+        // `data`, not merely the truthiness of the array reference: an array is
+        // always truthy, so the previous `if (chartContainer && data)` guard never
+        // re-fired when the parent rebuilt the slices. Same defect that made
+        // SemiDonutChart render blank — see its $effect for the reference fix.
+        void data.map((slice) => ({...slice}));
+
+        if (chartContainer) {
             tick().then(() => {
                 setupResizeObserver();
                 renderChart();

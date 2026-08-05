@@ -56,9 +56,11 @@ test.describe('Brokers', () => {
             // Modal should close and broker should appear in list
             await expect(page.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
 
-            // Check broker card appears with matching ID pattern
-            const brokerCards = page.locator('[data-testid^="broker-card-"]');
-            await expect(brokerCards).toHaveCount(await brokerCards.count());
+            // The newly created broker must actually appear in the list.
+            // Matching on the unique timestamped name keeps this independent
+            // of any brokers already present.
+            const newBrokerCard = page.locator('[data-testid^="broker-card-"]').filter({hasText: brokerName});
+            await expect(newBrokerCard).toHaveCount(1, {timeout: 5000});
         });
 
         test('can open edit modal from broker card', async ({page}) => {

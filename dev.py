@@ -135,13 +135,34 @@ def _print_port_help(port: int, processes: list):
     print(f"{Colors.YELLOW}     Use --force to automatically kill blocking processes.{Colors.NC}")
 
 
+def _resolve_server_workers(value) -> int:
+    """Resolve server worker CLI value to an integer."""
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        cpu_count = os.cpu_count() or 1
+        return max(1, 2 * (cpu_count - 1))
+    try:
+        workers = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("--workers must be a positive integer, 0, or auto") from exc
+    if workers == 0:
+        cpu_count = os.cpu_count() or 1
+        return max(1, 2 * (cpu_count - 1))
+    if workers < 0:
+        raise ValueError("--workers must be a positive integer, 0, or auto")
+    return workers
+
+
 def cmd_server(args):
     """Start the development server."""
     test_mode = getattr(args, 'test', False)
     rebuild = getattr(args, 'rebuild', False)
     debug_mode = getattr(args, 'debug', False)
     force = getattr(args, 'force', False)
-    workers = getattr(args, 'workers', 1)
+    try:
+        workers = _resolve_server_workers(getattr(args, 'workers', 1))
+    except ValueError as exc:
+        print_error(str(exc))
+        return 1
     host_override = getattr(args, 'host', None)
     port_override = getattr(args, 'port', None)
     coverage_mode = getattr(args, 'coverage', False)
@@ -2070,7 +2091,7 @@ Examples:
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
-    p.add_argument("--workers", "-w", type=int, default=1, help="Number of uvicorn workers (default: 1)")
+    p.add_argument("--workers", "-w", metavar="N|auto", default=1, help="Number of uvicorn workers, or 'auto' for 2 × (CPU-1) (default: 1)")
     p.add_argument("--host", type=str, default=None, help="Bind host (default: HOST env or 0.0.0.0)")
     p.add_argument("--port", "-p", type=int, default=None, help="Bind port (default: PORT env or 6040)")
     p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")

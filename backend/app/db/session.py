@@ -18,7 +18,7 @@ from backend.app.config import get_settings
 
 
 @event.listens_for(Engine, "connect")
-def set_sqlite_pragma(dbapi_conn, connection_record):
+def set_sqlite_pragma(dbapi_conn, _connection_record):
     """
     Enable essential SQLite PRAGMAs for proper operation.
 

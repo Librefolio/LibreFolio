@@ -339,7 +339,7 @@ async def test_bulk_plan_deduplicates_and_aggregates_requirements():
 
     plan = service.prepare_plan(requests, make_context())
 
-    assert plan.unique_computation_count == 3
+    assert len(plan.computations) == 3
     assert plan.max_total_points == 10
     assert plan.max_history_points_before_visible == 10
     assert plan.required_price_fields == frozenset({SignalPriceField.CLOSE})

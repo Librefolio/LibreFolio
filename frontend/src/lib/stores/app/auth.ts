@@ -233,10 +233,3 @@ export const isAuthInitialized = derived(auth, ($auth) => $auth.isInitialized);
 export function getAuthState(): AuthState {
     return get(auth);
 }
-
-/**
- * Helper to check if user is authenticated synchronously
- */
-export function isLoggedIn(): boolean {
-    return get(isAuthenticated);
-}

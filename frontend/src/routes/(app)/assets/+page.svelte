@@ -787,7 +787,7 @@
             const r = (response as any)?.results?.[0];
             if (r?.success) {
                 // Evict from the shared cache so other pages (transactions
-                // cell, LiveTicker) drop the deleted asset without a reload.
+                // cell, dashboard) drop the deleted asset without a reload.
                 invalidateAfterMutation(deletingAsset.id);
                 assets = assets.filter((a) => a.id !== deletingAsset!.id);
                 toasts.success($t('assets.delete.toastOk', {values: {name: deletingAsset!.display_name}}));

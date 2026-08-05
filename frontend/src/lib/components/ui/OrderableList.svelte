@@ -11,7 +11,7 @@
   - Optional warning tone per item
   - Emits reordered items via callback
 
-  Used by: FxProviderConfig, DataTableToolbar (future), etc.
+  Used by: FxProviderSelect, ColumnVisibilityToggle, ChartSignalsSection, ImportWizardModal.
 -->
 <script generics="T" lang="ts">
     import {ChevronDown, ChevronUp, GripVertical} from 'lucide-svelte';

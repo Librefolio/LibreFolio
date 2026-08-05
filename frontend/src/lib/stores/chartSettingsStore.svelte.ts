@@ -1,18 +1,19 @@
 /**
- * Chart Settings Store — Session-level cache for chart aesthetics and signal configs.
+ * Chart Settings Store — Browser-persisted cache for chart aesthetics and signal configs.
  *
  * Two levels:
  * - **Global settings**: applied to all cards/charts by default
- * - **Pair overrides**: per-pair customizations that persist during session navigation
- *   (card → detail → card) but are cleared when global settings are saved.
+ * - **Pair overrides**: per-pair customizations stored in localStorage and cleared
+ *   when matching global settings are saved.
  *
- * NOT persisted to backend — session-lifetime only (lost on browser refresh).
+ * NOT persisted to backend — settings live in user-scoped localStorage and survive refresh.
  *
  * @module stores/chartSettingsStore
  */
 
+import {browser} from '$app/environment';
 import type {SignalConfig} from '$lib/charts/signals';
-import {registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -57,18 +58,127 @@ function deepClone<T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
 }
 
+const STORAGE_VERSION = 1;
+const STORAGE_BASE_KEY = 'chartSettingsStore';
+const STORAGE_WRITE_DELAY_MS = 250;
+
+interface PersistedChartSettings {
+    version: typeof STORAGE_VERSION;
+    globalSettings: ChartSettings;
+    pairOverrides: Array<[string, ChartSettings]>;
+}
+
+function getStorageKey(): string {
+    return `lf_${getClientSessionUserId() ?? 'anon'}_${STORAGE_BASE_KEY}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sanitizeSettings(value: unknown): ChartSettings {
+    if (!isRecord(value)) return deepClone(DEFAULT_CHART_SETTINGS);
+
+    const yAxisMode = value.yAxisMode === 'include0' || value.yAxisMode === 'custom' ? value.yAxisMode : 'auto';
+    const yAxisMin = typeof value.yAxisMin === 'number' && Number.isFinite(value.yAxisMin) ? value.yAxisMin : undefined;
+    const yAxisMax = typeof value.yAxisMax === 'number' && Number.isFinite(value.yAxisMax) ? value.yAxisMax : undefined;
+
+    return {
+        colorByBaseline: typeof value.colorByBaseline === 'boolean' ? value.colorByBaseline : DEFAULT_CHART_SETTINGS.colorByBaseline,
+        areaFill: typeof value.areaFill === 'boolean' ? value.areaFill : DEFAULT_CHART_SETTINGS.areaFill,
+        gridLines: typeof value.gridLines === 'boolean' ? value.gridLines : DEFAULT_CHART_SETTINGS.gridLines,
+        staleGradient: typeof value.staleGradient === 'boolean' ? value.staleGradient : DEFAULT_CHART_SETTINGS.staleGradient,
+        yAxisMode,
+        yAxisMin,
+        yAxisMax,
+        signals: Array.isArray(value.signals) ? deepClone(value.signals) : [],
+    };
+}
+
+function parsePersistedSettings(raw: string | null): PersistedChartSettings | null {
+    if (!raw) return null;
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!isRecord(parsed) || parsed.version !== STORAGE_VERSION) return null;
+
+        const overrides = new Map<string, ChartSettings>();
+        if (Array.isArray(parsed.pairOverrides)) {
+            for (const entry of parsed.pairOverrides) {
+                if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') continue;
+                overrides.set(entry[0], sanitizeSettings(entry[1]));
+            }
+        }
+
+        return {
+            version: STORAGE_VERSION,
+            globalSettings: sanitizeSettings(parsed.globalSettings),
+            pairOverrides: [...overrides.entries()],
+        };
+    } catch {
+        return null;
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// Module-level state (session-lifetime)
+// Module-level state (hydrated from localStorage on client)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 let globalSettings: ChartSettings = deepClone(DEFAULT_CHART_SETTINGS);
 let pairOverrides = new Map<string, ChartSettings>();
+let hydratedStorageKey: string | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Reactive version counter — Svelte 5 components can use this to trigger re-renders
 let _version = $state(0);
 
 function bump() {
     _version++;
+}
+
+function loadFromStorage(): void {
+    if (!browser) return;
+
+    const storageKey = getStorageKey();
+    if (hydratedStorageKey === storageKey) return;
+
+    let raw: string | null = null;
+    try {
+        raw = localStorage.getItem(storageKey);
+    } catch {
+        raw = null;
+    }
+
+    const persisted = parsePersistedSettings(raw);
+    globalSettings = persisted ? deepClone(persisted.globalSettings) : deepClone(DEFAULT_CHART_SETTINGS);
+    pairOverrides = new Map(persisted?.pairOverrides ?? []);
+    hydratedStorageKey = storageKey;
+}
+
+function persistNow(): void {
+    if (!browser) return;
+
+    const storageKey = getStorageKey();
+    const payload: PersistedChartSettings = {
+        version: STORAGE_VERSION,
+        globalSettings: deepClone(globalSettings),
+        pairOverrides: [...pairOverrides.entries()].map(([key, settings]) => [key, deepClone(settings)] as [string, ChartSettings]),
+    };
+
+    try {
+        localStorage.setItem(storageKey, JSON.stringify(payload));
+        hydratedStorageKey = storageKey;
+    } catch {
+        // Ignore storage errors (private browsing, quota exceeded).
+    }
+}
+
+function schedulePersist(): void {
+    if (!browser) return;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        persistNow();
+    }, STORAGE_WRITE_DELAY_MS);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -82,6 +192,7 @@ function bump() {
  * Returns a copy to prevent accidental mutation.
  */
 export function getGlobalSettings(scope?: string): ChartSettings {
+    loadFromStorage();
     // Access _version to register reactive dependency
     void _version;
     if (scope) {
@@ -97,6 +208,7 @@ export function getGlobalSettings(scope?: string): ChartSettings {
  * then base global settings.
  */
 export function getSettingsForPair(slug: string, scope?: string): ChartSettings {
+    loadFromStorage();
     // Access _version to register reactive dependency
     void _version;
     const override = pairOverrides.get(slug);
@@ -106,14 +218,6 @@ export function getSettingsForPair(slug: string, scope?: string): ChartSettings 
         if (scoped) return deepClone(scoped);
     }
     return deepClone(globalSettings);
-}
-
-/**
- * Check if a pair has custom (overridden) settings.
- */
-export function hasPairOverride(slug: string): boolean {
-    void _version;
-    return pairOverrides.has(slug);
 }
 
 /**
@@ -135,6 +239,7 @@ export function getSettingsVersion(): number {
  * Without scope: clears ALL pair overrides (backward compatible).
  */
 export function setGlobalSettings(settings: ChartSettings, scope?: string): void {
+    loadFromStorage();
     if (scope) {
         pairOverrides.set(`__global_${scope}__`, deepClone(settings));
         // Clear per-item overrides for this scope only
@@ -151,6 +256,7 @@ export function setGlobalSettings(settings: ChartSettings, scope?: string): void
         pairOverrides.clear();
     }
     bump();
+    schedulePersist();
 }
 
 /**
@@ -158,25 +264,14 @@ export function setGlobalSettings(settings: ChartSettings, scope?: string): void
  * Does NOT affect other pairs or global settings.
  */
 export function setPairSettings(slug: string, settings: ChartSettings): void {
+    loadFromStorage();
     pairOverrides.set(slug, deepClone(settings));
     bump();
+    schedulePersist();
 }
 
-/**
- * Remove per-pair override — pair falls back to global settings.
- */
-export function clearPairSettings(slug: string): void {
-    pairOverrides.delete(slug);
+registerClientSessionReset('chartSettingsStore', () => {
+    hydratedStorageKey = null;
+    loadFromStorage();
     bump();
-}
-
-/**
- * Reset everything to defaults (for testing or "reset all" button).
- */
-export function resetAllSettings(): void {
-    globalSettings = deepClone(DEFAULT_CHART_SETTINGS);
-    pairOverrides.clear();
-    bump();
-}
-
-registerClientSessionReset('chartSettingsStore', resetAllSettings);
+});

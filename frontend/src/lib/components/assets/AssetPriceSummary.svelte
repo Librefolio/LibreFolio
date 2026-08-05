@@ -21,6 +21,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
+    import type {LivePriceDirection} from '$lib/services/livePriceService';
 
     interface Props {
         /** Last (closing) price */
@@ -52,6 +53,22 @@
          */
         livePriceConversionFailed?: boolean;
         /**
+         * Direction of the latest live-price tick vs the previous poll (native
+         * currency — see `+page.svelte`'s `_fetchLivePrice`). 'neutral' (default)
+         * means no active flash — the price renders in its normal resting colour.
+         * Drives a transient flash-then-decay animation on the price text (see
+         * `.lf-price-flash-up`/`.lf-price-flash-down` in `app.css`).
+         */
+        livePriceDirection?: LivePriceDirection;
+        /**
+         * Monotonic counter incremented by the parent on every non-neutral tick.
+         * Used purely as a Svelte `{#key}` so the flash element is torn down and
+         * recreated on each tick — otherwise two consecutive same-direction ticks
+         * (e.g. up, then up again) would not restart the CSS animation, since the
+         * class list wouldn't actually change.
+         */
+        livePriceFlashToken?: number;
+        /**
          * Optional URL to the FX pair detail page.
          * Parent should pass it only when the FX pair is **healthy** (configured + has
          * data for the current range) — otherwise the full-width FX banner already
@@ -63,16 +80,22 @@
         onCreateForex?: () => void;
     }
 
-    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, filtersStacked, maxWidth, livePriceConversionFailed = false, fxPairUrl, onCreateForex}: Props = $props();
+    let {lastPrice, deltaPercent, deltaAbs, displayCurrency = $bindable(), assetCurrency, layoutMode, filtersStacked, maxWidth, livePriceConversionFailed = false, livePriceDirection = 'neutral', livePriceFlashToken = 0, fxPairUrl, onCreateForex}: Props = $props();
 </script>
 
 <div class="flex flex-wrap {layoutMode === 'oneRow' ? 'flex-row items-center gap-4 px-3' : filtersStacked ? 'flex-col items-start gap-2 w-full' : 'flex-col items-center gap-2'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
     {#if lastPrice !== null}
         <div class="flex items-center gap-2 {layoutMode === 'oneRow' ? '' : filtersStacked ? 'justify-around w-full' : 'justify-center w-full'}">
             <div class="flex items-center gap-1.5">
-                <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
-                    {lastPrice.toFixed(2)}
-                </span>
+                {#key livePriceFlashToken}
+                    <span
+                        class="font-mono text-lg font-semibold transition-colors duration-300 {livePriceDirection === 'up' ? 'lf-price-flash-up' : livePriceDirection === 'down' ? 'lf-price-flash-down' : 'text-gray-700 dark:text-gray-200'}"
+                        data-testid="asset-detail-live-price"
+                        data-live-price-direction={livePriceDirection}
+                    >
+                        {lastPrice.toFixed(2)}
+                    </span>
+                {/key}
                 <span class="text-xs text-gray-400 dark:text-gray-500">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
                 {#if livePriceConversionFailed}
                     <Tooltip text={$t('assetDetail.livePriceConversionFailed', {values: {currency: assetCurrency}})} position="bottom">

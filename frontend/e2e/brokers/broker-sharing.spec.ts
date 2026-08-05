@@ -53,6 +53,28 @@ async function openSharingModalFromList(page: Page) {
     await expect(page.getByTestId('broker-sharing-modal')).toBeVisible({timeout: 5000});
 }
 
+async function expectOwnershipChartCanvas(page: Page) {
+    const section = page.getByTestId('ownership-chart-section');
+    await expect(section).toBeVisible({timeout: 5000});
+
+    const canvas = section.locator('canvas').first();
+    await expect(canvas).toBeVisible({timeout: 5000});
+    await expect
+        .poll(
+            async () => {
+                const box = await canvas.boundingBox();
+                if (!box || box.width <= 0 || box.height <= 0) return 'zero-css-size';
+
+                return canvas.evaluate((node) => {
+                    const htmlCanvas = node as HTMLCanvasElement;
+                    return htmlCanvas.width > 0 && htmlCanvas.height > 0 ? 'non-zero' : 'zero-bitmap-size';
+                });
+            },
+            {timeout: 5000},
+        )
+        .toBe('non-zero');
+}
+
 test.describe('Broker Sharing', () => {
     test.describe('Share Button Visibility', () => {
         test('S1: share button visible for OWNER on broker detail', async ({page}) => {
@@ -97,6 +119,7 @@ test.describe('Broker Sharing', () => {
         test('S9: close modal with Escape key', async ({page}) => {
             await login(page, TEST_ADMIN);
             await openSharingModalFromList(page);
+            await expectOwnershipChartCanvas(page);
             await page.getByTestId('broker-sharing-modal').press('Escape');
             await expect(page.getByTestId('broker-sharing-modal')).not.toBeVisible({timeout: 3000});
         });
@@ -110,7 +133,7 @@ test.describe('Broker Sharing', () => {
         });
 
         test('S4: panel shows ownership chart section', async ({page}) => {
-            await expect(page.getByTestId('ownership-chart-section')).toBeVisible();
+            await expectOwnershipChartCanvas(page);
         });
 
         test('S5: panel shows at least the current OWNER in badge list', async ({page}) => {
@@ -234,7 +257,7 @@ test.describe('Broker Sharing', () => {
             await openSharingModal(page);
 
             // Verify panel content is visible in dark mode
-            await expect(page.getByTestId('ownership-chart-section')).toBeVisible();
+            await expectOwnershipChartCanvas(page);
             // Verify dark class on html
             const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark'));
             expect(isDark).toBe(true);

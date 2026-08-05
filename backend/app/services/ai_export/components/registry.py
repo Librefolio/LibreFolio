@@ -93,21 +93,3 @@ class ComponentRegistry:
     def canonical_order(self) -> tuple[str, ...]:
         """Component IDs in deterministic registration order (used e.g. by `*.all_data` union ordering)."""
         return self._canonical_order
-
-    def transitive_dependencies(self, component_id: str) -> tuple[str, ...]:
-        """Dependency IDs (transitively) in dependency-first topological order, excluding `component_id` itself."""
-        self.get(component_id)  # raises UnknownComponentError if absent
-        visited: set[str] = set()
-        order: list[str] = []
-
-        def visit(node: str) -> None:
-            if node in visited:
-                return
-            visited.add(node)
-            for dep in self._specs[node].dependencies:
-                visit(dep)
-            if node != component_id:
-                order.append(node)
-
-        visit(component_id)
-        return tuple(order)

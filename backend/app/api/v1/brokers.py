@@ -73,6 +73,7 @@ from backend.app.services.file_preview import (
     build_image_preview_url,
     build_preview_response,
 )
+from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.provider_registry import BRIMProviderRegistry
 
 logger = get_logger(__name__)
@@ -484,10 +485,6 @@ async def bulk_update_broker_access(
 # =============================================================================
 
 
-# Maximum file size: 10 MB
-MAX_FILE_SIZE = 10 * 1024 * 1024
-
-
 # =============================================================================
 # FILE MANAGEMENT
 # =============================================================================
@@ -518,16 +515,19 @@ async def upload_file(
     if not current_user.is_superuser and role is None:
         raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to upload files to this broker")
 
+    max_mb = await get_max_upload_mb(session)
+    max_bytes = max_mb * 1024 * 1024
+
     # Read file content
     content = await file.read()
 
     # Validate file size
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
-    if len(content) > MAX_FILE_SIZE:
+    if len(content) > max_bytes:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)} MB",
+            detail=f"File too large. Maximum size is {max_mb} MB",
         )
 
     # Get filename: prefer user-provided custom_filename over original file.filename

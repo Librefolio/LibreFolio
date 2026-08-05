@@ -102,7 +102,7 @@ def test_catalog_contains_nine_close_only_plugins():
         "oversold",
     }
     assert set(definitions["KAMA"].params_schema["properties"]) == {"period"}
-    serialized = json.dumps({code: definitions[code].model_dump(mode="json") for code in ADDITIONAL_CODES})
+    serialized = json.dumps({code: definitions[code].params_schema for code in ADDITIONAL_CODES})
     for ignored in ("rsi_length", "mamode", '"fast"', '"slow"'):
         assert ignored not in serialized
 

@@ -77,7 +77,8 @@
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {fetchCurrentPrices} from '$lib/services/livePriceService';
+    import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
+    import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -242,6 +243,24 @@
     let currentLivePrice = $state<number | null>(null);
     /** True when live price conversion to displayCurrency failed (pair exists but rate unavailable) */
     let livePriceConversionFailed = $state(false);
+
+    // --- Live price direction flash --------------------------------------------
+    // Tracks whether the latest polled tick moved the price up/down vs the
+    // PREVIOUS poll (not vs the day's open) so AssetPriceSummary can flash the
+    // price text. Mirrors the assets list page's use of computeDirection, but
+    // compares the asset's NATIVE-currency value (not the possibly FX-converted
+    // display value) so switching displayCurrency never fabricates a fake
+    // up/down tick on its own.
+    /** Direction of the latest live-price tick — drives the transient flash animation. Resets to 'neutral' once the flash decays. */
+    let livePriceDirection = $state<LivePriceDirection>('neutral');
+    /** Increments on every non-neutral tick so the flash element can be re-keyed (forces the CSS animation to restart even for two consecutive same-direction ticks). */
+    let livePriceFlashToken = $state(0);
+    /** Previous poll's native-currency value — plain (non-reactive) bookkeeping var, not rendered directly. */
+    let previousNativeLivePrice: number | null = null;
+    /** Pending "decay back to neutral" timer for the current flash. */
+    let livePriceFlashTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    /** How long the flash stays lit before decaying to the resting colour — kept in sync with the CSS animation duration in app.css (.lf-price-flash-*). */
+    const LIVE_PRICE_FLASH_DECAY_MS = 1300;
 
     // =========================================================================
     // Derived
@@ -919,12 +938,27 @@
         if (!isHeadToday || !id) {
             currentLivePrice = null;
             livePriceConversionFailed = false;
+            // Polling context changed (asset switched, or range no longer heads
+            // "today") — drop the direction/flash state so it can't carry over
+            // and compare against a stale/unrelated previous value.
+            previousNativeLivePrice = null;
+            livePriceDirection = 'neutral';
+            if (livePriceFlashTimeoutId) {
+                clearTimeout(livePriceFlashTimeoutId);
+                livePriceFlashTimeoutId = null;
+            }
             return;
         }
         // Fetch immediately, then poll every 30s
         _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing);
         const timer = setInterval(() => _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing), 30_000);
-        return () => clearInterval(timer);
+        return () => {
+            clearInterval(timer);
+            if (livePriceFlashTimeoutId) {
+                clearTimeout(livePriceFlashTimeoutId);
+                livePriceFlashTimeoutId = null;
+            }
+        };
     });
 
     async function _fetchLivePrice(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean) {
@@ -932,6 +966,24 @@
             const results = await fetchCurrentPrices([assetId]);
             if (results.length === 0 || results[0].value == null) return;
             const nativeValue = results[0].value;
+
+            // Direction compares this tick's NATIVE value to the previous poll's
+            // NATIVE value (never the day's open, never the display-converted
+            // value) — reuses computeDirection from livePriceService.ts (same
+            // helper the assets list page uses) so a displayCurrency switch can
+            // never fabricate a false up/down tick. First poll after (re)mount
+            // has no previous value → computeDirection returns 'neutral'.
+            const direction = computeDirection(nativeValue, previousNativeLivePrice);
+            previousNativeLivePrice = nativeValue;
+            if (direction !== 'neutral') {
+                livePriceDirection = direction;
+                livePriceFlashToken++;
+                if (livePriceFlashTimeoutId) clearTimeout(livePriceFlashTimeoutId);
+                livePriceFlashTimeoutId = setTimeout(() => {
+                    livePriceDirection = 'neutral';
+                    livePriceFlashTimeoutId = null;
+                }, LIVE_PRICE_FLASH_DECAY_MS);
+            }
 
             // No conversion needed
             if (!targetCurrency || !nativeCurrency || targetCurrency === nativeCurrency || fxMissing) {
@@ -1774,7 +1826,21 @@
 
         {#snippet summary({layoutMode, filtersStacked})}
             {#if assetInfo}
-                <AssetPriceSummary {lastPrice} {deltaPercent} {deltaAbs} bind:displayCurrency assetCurrency={assetInfo.currency} {layoutMode} {filtersStacked} maxWidth={pickerMaxWidth} {livePriceConversionFailed} fxPairUrl={mainFxPairUrl} onCreateForex={() => (showFxPairAddModal = true)} />
+                <AssetPriceSummary
+                    {lastPrice}
+                    {deltaPercent}
+                    {deltaAbs}
+                    bind:displayCurrency
+                    assetCurrency={assetInfo.currency}
+                    {layoutMode}
+                    {filtersStacked}
+                    maxWidth={pickerMaxWidth}
+                    {livePriceConversionFailed}
+                    {livePriceDirection}
+                    {livePriceFlashToken}
+                    fxPairUrl={mainFxPairUrl}
+                    onCreateForex={() => (showFxPairAddModal = true)}
+                />
             {/if}
         {/snippet}
 

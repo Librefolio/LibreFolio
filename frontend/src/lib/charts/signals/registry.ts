@@ -12,7 +12,7 @@ import {CompoundSignal} from './CompoundSignal';
 import {SineSignal} from './SineSignal';
 
 // Re-export for convenience
-export type {SignalConfig, SignalStyle};
+export type {SignalConfig};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // REGISTRY MAP: signalType → constructor

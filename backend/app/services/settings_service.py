@@ -220,23 +220,3 @@ async def initialize_global_settings(session: AsyncSession) -> int:
 
     return created
 
-
-def get_session_ttl_sync() -> int:
-    """
-    Get session TTL in hours from global settings (synchronous).
-
-    This is a fallback that returns the default value.
-    For actual DB lookup, use the async version.
-    """
-    return int(GLOBAL_SETTINGS_DEFAULTS["session_ttl_hours"]["value"])
-
-
-async def get_session_ttl(session: AsyncSession) -> int:
-    """Get session TTL in hours from global settings."""
-    setting = await get_global_setting("session_ttl_hours", session)
-    if setting:
-        try:
-            return int(setting.value)
-        except ValueError:
-            pass
-    return int(GLOBAL_SETTINGS_DEFAULTS["session_ttl_hours"]["value"])

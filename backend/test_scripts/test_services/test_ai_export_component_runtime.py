@@ -254,7 +254,6 @@ class TestComponentRegistry:
         )
         assert len(registry) == 3
         assert "portfolio.a" in registry
-        assert registry.transitive_dependencies("portfolio.c") == ("portfolio.a", "portfolio.b")
 
     def test_canonical_order_preserves_registration_order(self):
         registry = ComponentRegistry([_spec("portfolio.c"), _spec("portfolio.a"), _spec("portfolio.b")])

@@ -21,8 +21,12 @@ LibreFolio provides the `dev.py` script for administration tasks. This page cove
 # Standard start
 pipenv run ./dev.py server
 
-# With auto-calculated workers (2 × (CPU-1))
-pipenv run ./dev.py server --workers N
+# Auto-size workers to the CPU count — 2 × (cores - 1)
+# Both `auto` and `0` trigger the calculation
+pipenv run ./dev.py server --workers auto
+
+# Or pass an explicit worker count
+pipenv run ./dev.py server --workers 4
 
 # Kill existing process on port before starting
 pipenv run ./dev.py server --force

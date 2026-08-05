@@ -447,19 +447,6 @@ class DailyPositionState:
     cost_basis: Decimal  # in target_currency (wac * qty * fx)
     unrealized_pnl: Decimal | None  # market_value - cost_basis (None if MV missing)
 
-    @property
-    def valuation_price(self) -> Decimal | None:
-        """Compatibility alias for the effective current-unit price."""
-
-        return self.valuation_effective_unit_price
-
-    @property
-    def valuation_price_ccy(self) -> str | None:
-        """Compatibility alias for the effective price currency."""
-
-        return self.valuation_effective_currency
-
-
 @dataclass
 class DailyPortfolioState:
     """Complete daily portfolio state — the heart of the calculation engine."""

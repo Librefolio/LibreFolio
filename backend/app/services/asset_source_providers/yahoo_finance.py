@@ -355,7 +355,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 if info:
                     currency = info.get("currency", "USD") or "USD"
             except Exception:
-                pass
+                logger.exception("Failed to fetch yfinance currency metadata; falling back to USD", identifier=identifier)
             # Dividends & splits (may trigger additional requests)
             try:
                 dividends = t.dividends
@@ -627,7 +627,7 @@ class YahooFinanceProvider(AssetSourceProvider):
                 if isin_val and isin_val != "-" and len(isin_val) == 12:
                     identifier_isin = isin_val
             except Exception:
-                pass
+                logger.exception("Failed to fetch yfinance ISIN metadata", identifier=identifier)
 
             if not info:
                 logger.warning(f"No info data returned from yfinance for {identifier}")

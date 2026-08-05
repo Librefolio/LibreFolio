@@ -6,7 +6,7 @@
  * asset by id without firing its own request.
  *
  * Loads the FULL set of accessible assets via `GET /assets/query` (no filter),
- * matching the existing pattern used by `/assets/+page.svelte` and `LiveTicker`.
+ * matching the existing pattern used by `/assets/+page.svelte`.
  *
  * Cross-client edits are NOT proactively synced (no WS/SSE). Mitigations:
  * - `mergeAssets(items)`: opportunistic ingress called wherever fresh asset data
@@ -143,9 +143,6 @@ export const getAssetInfo = store.get;
 
 /** All cached assets, in insertion order. Re-derives on every call. */
 export const getAllAssets = store.getAll;
-
-/** Whether the store has been populated at least once. */
-export const isAssetsLoaded = store.isLoaded;
 
 /**
  * Opportunistic ingress: upsert fresh asset data into the cache.

@@ -277,3 +277,65 @@ html.dark .bg-libre-green {
 html.dark .animated-bg-gradient {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
 }
+
+/* ===== Live price flash (asset detail — AssetPriceSummary) =====
+   One-shot flash-and-settle for the live price number: when a newly polled
+   price differs from the previous poll, the text jumps to the direction's
+   peak colour then eases back to the resting (neutral) colour over ~1.3s.
+   Peak colours mirror the emerald/red pair already used for the static delta
+   badge right next to this price (see AssetPriceSummary.svelte) and for
+   AssetCard's price tint on the assets list page, so all three agree.
+   One shared keyframe driven by CSS custom properties (same pattern as
+   `pulse-highlight`/`tinted-lot-highlight-pulse` above) — dark mode overrides
+   the peak/rest variables rather than duplicating the keyframe.
+   Restarting the animation on repeated same-direction ticks is the caller's
+   job (Svelte `{#key}` re-keys the element) — this CSS only defines the look.
+   Namespaced `lf-` (LibreFolio) to avoid clashing with other keyframes here. */
+@keyframes lf-price-flash {
+    0% {
+        color: var(--lf-price-flash-peak);
+    }
+    100% {
+        color: var(--lf-price-flash-rest);
+    }
+}
+
+.lf-price-flash-up,
+.lf-price-flash-down {
+    animation: lf-price-flash 1.3s ease-out 1 forwards;
+    --lf-price-flash-rest: var(--color-gray-700);
+}
+
+.lf-price-flash-up {
+    --lf-price-flash-peak: var(--color-emerald-600);
+}
+
+.lf-price-flash-down {
+    --lf-price-flash-peak: var(--color-red-500);
+}
+
+html.dark .lf-price-flash-up,
+html.dark .lf-price-flash-down {
+    --lf-price-flash-rest: var(--color-gray-200);
+}
+
+html.dark .lf-price-flash-up {
+    --lf-price-flash-peak: var(--color-emerald-400);
+}
+
+html.dark .lf-price-flash-down {
+    --lf-price-flash-peak: var(--color-red-400);
+}
+
+/* Reduced motion: plain colour swap communicating direction, no keyframe
+   sweep. The JS-driven decay-to-neutral timer (same one used for the
+   animated case, in +page.svelte) removes the class again after the flash
+   window regardless of this media query, so the colour still settles back
+   on its own — just as an instant swap instead of an eased fade. */
+@media (prefers-reduced-motion: reduce) {
+    .lf-price-flash-up,
+    .lf-price-flash-down {
+        animation: none;
+        color: var(--lf-price-flash-peak);
+    }
+}
