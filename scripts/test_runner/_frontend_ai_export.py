@@ -16,7 +16,7 @@ AI_EXPORT_UNIT_TEST_PATHS = (
     "src/lib/features/ai-export/__tests__/catalogCompatibility.test.ts",
     "src/lib/features/ai-export/__tests__/drawdownContextCatalog.test.ts",
     "src/lib/features/ai-export/__tests__/promptRenderer.test.ts",
-    "src/lib/features/ai-export/__tests__/remediationAdequacyCatalog.test.ts",
+    "src/lib/features/ai-export/__tests__/publicCatalogContract.test.ts",
     "src/lib/features/ai-export/__tests__/snapshotDataRenderer.test.ts",
     "src/lib/features/ai-export/__tests__/safeSerialization.test.ts",
     "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
@@ -137,7 +137,7 @@ def populate_registry(registry: dict) -> None:
         "catalog",
         front_ai_export_catalog,
         name="AI Export Catalog Tests",
-        desc="Exact V3 Dataset/Analysis IDs, domain visibility, labels, and icons",
+        desc="Exact V1 Dataset/Analysis IDs, domain visibility, labels, and icons",
         tests=AI_EXPORT_E2E_SPECS[1],
     )
     add_test(
@@ -153,7 +153,7 @@ def populate_registry(registry: dict) -> None:
         "contract",
         front_ai_export_contract,
         name="AI Export Contract Tests",
-        desc="V3 selections over the V2 snapshot wire and Dataset/Analysis clipboard boundaries",
+        desc="V1 public contracts and Dataset/Analysis clipboard boundaries",
         tests=AI_EXPORT_E2E_SPECS[3],
     )
     add_test(

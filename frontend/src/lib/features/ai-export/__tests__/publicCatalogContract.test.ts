@@ -3,21 +3,10 @@ import {describe, expect, it} from 'vitest';
 import {AI_EXPORT_ANALYSIS_IDS, AI_EXPORT_DATASET_IDS, AI_EXPORT_PUBLIC_CATALOG_CONFIG} from '../catalog/shared';
 import {findAiExportResponseContract} from '../templates/responseContracts';
 import {renderSnapshotDataText} from '../templates/snapshotDataRenderer';
-import {AI_EXPORT_SCENARIO_THESIS_RULE, findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
+import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {backendCatalogFixture} from './runtimeFixtures';
 
-function contractText(analysisId: Parameters<typeof findAiExportResponseContract>[0]): string {
-    return findAiExportResponseContract(analysisId)
-        .sections.flatMap((section) => [section.title, ...section.requirements])
-        .join(' ');
-}
-
-function instructionText(analysisId: Parameters<typeof findAiExportAnalysisInstruction>[0]): string {
-    const instruction = findAiExportAnalysisInstruction(analysisId);
-    return [instruction.objective, ...instruction.steps].join(' ');
-}
-
-describe('AI Export V3 public catalog', () => {
+describe('AI Export V1 public catalog', () => {
     it('registers exactly 8 Dataset and 11 Analysis entries with approved group, domain, and icon config', () => {
         expect(AI_EXPORT_DATASET_IDS).toEqual(['portfolio.overview_and_history', 'portfolio.asset_history', 'broker.overview_and_history', 'broker.asset_history', 'asset.position_and_history', 'asset.market_history', 'fx.market_and_exposure', 'fx.market_history']);
         expect(AI_EXPORT_ANALYSIS_IDS).toEqual([
@@ -57,7 +46,7 @@ describe('AI Export V3 public catalog', () => {
         ]);
     });
 
-    it('uses backend-owned V3 composition and Additional Data suggestions', () => {
+    it('uses backend-owned V1 composition and Additional Data suggestions', () => {
         const catalog = backendCatalogFixture();
         const analysisById = new Map(catalog.analyses.map((entry) => [entry.id, entry]));
 
@@ -77,112 +66,26 @@ describe('AI Export V3 public catalog', () => {
     });
 });
 
-describe('AI Export V3 prompt contracts', () => {
-    it('defines canonical V3 objective and response identities for all 11 analyses', () => {
+describe('AI Export V1 prompt contract identities', () => {
+    it('defines matching V1 instruction and response identities', () => {
         for (const analysisId of AI_EXPORT_ANALYSIS_IDS) {
             const instruction = findAiExportAnalysisInstruction(analysisId);
             const response = findAiExportResponseContract(analysisId);
             expect(instruction).toMatchObject({
                 id: `${analysisId}.instructions`,
-                version: 3,
+                version: 1,
                 analysisId,
             });
-            expect(instruction.objective.length).toBeGreaterThan(40);
-            expect(instruction.steps.length).toBeGreaterThan(2);
             expect(response).toMatchObject({
                 id: `${analysisId}.response`,
-                version: 3,
+                version: 1,
                 analysisId,
             });
-            expect(response.sections.length).toBeGreaterThan(3);
-        }
-    });
-
-    it('shares one conditional Scenario Thesis rule and makes it mandatory for approved tasks', () => {
-        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('horizon');
-        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('trigger conditions');
-        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('invalidation conditions');
-        expect(AI_EXPORT_SCENARIO_THESIS_RULE).toContain('conditional');
-
-        const mandatory = ['portfolio.pac_planning', 'portfolio.rebalancing', 'portfolio.fiscal_lots', 'broker.fiscal_lots'] as const;
-        for (const analysisId of mandatory) {
-            const scenario = findAiExportResponseContract(analysisId).sections.find((entry) => entry.title === 'Scenario Thesis');
-            expect(scenario, `${analysisId} requires Scenario Thesis`).toBeDefined();
-            expect(scenario!.requirements.join(' ')).toContain('mandatory');
-        }
-    });
-
-    it('enforces the PAC immediate/staged/conditional-waiting gate and user timing preference', () => {
-        const text = `${instructionText('portfolio.pac_planning')} ${contractText('portfolio.pac_planning')}`;
-        expect(text).toContain('immediate');
-        expect(text).toContain('staged');
-        expect(text).toContain('conditional waiting');
-        expect(text).toContain('broad, persistent decline');
-        expect(text).toContain('isolated Asset weakness');
-        expect(text).toContain('single indicator');
-        expect(text).toContain('Ask the user');
-        expect(text).toContain('timing preference');
-    });
-
-    it.each(['portfolio.performance_market_drivers', 'broker.performance_market_drivers'] as const)('requires dated research, per-Asset short/long theses, source quality, and qualified causality for %s', (analysisId) => {
-        const text = `${instructionText(analysisId)} ${contractText(analysisId)}`;
-        for (const required of ['every held Asset', 'short-horizon thesis', 'long-horizon thesis', 'publisher', 'URL', 'publication date', 'access date', 'source quality', 'chronology', 'correlation', 'causality']) {
-            expect(text).toContain(required);
-        }
-        for (const confidence of ['supported', 'plausible', 'inferred', 'speculative', 'unexplained']) {
-            expect(text).toContain(confidence);
-        }
-        expect(text).toContain('primary issuer');
-        expect(text).toContain('lower-quality secondary');
-        expect(text).toContain('never proves causation');
-    });
-
-    it.each(['portfolio.fiscal_lots', 'broker.fiscal_lots'] as const)('centers tax-loss offsets, official inventory, expiries, and conditional strategies for %s', (analysisId) => {
-        const text = `${instructionText(analysisId)} ${contractText(analysisId)}`.toLowerCase();
-        for (const required of [
-            'tax-loss carryforwards',
-            'country of tax residence',
-            'jurisdiction',
-            'tax regime',
-            'cassetto fiscale',
-            'original amount',
-            'remaining usable amount',
-            'already used or reserved',
-            'origin date',
-            'expiry date',
-            'eligible gain categories',
-            'multiple brokers',
-            'legally be pooled or transferred',
-            'expected or planned realizable gains',
-            'taking no tax-driven action',
-            'realizing legally eligible gains before expiry',
-            'staged realization',
-            'loss harvesting',
-            'never recommend a trade solely for tax reasons',
-        ]) {
-            expect(text).toContain(required);
-        }
-        expect(text).toContain('do not state a definitive tax liability');
-        expect(text).toContain('scenario thesis');
-    });
-
-    it('keeps remaining analyses aligned with their approved scope', () => {
-        const expectations = {
-            'broker.review': ['selected broker scope', 'whole portfolio', 'economic FIFO'],
-            'asset.position_review': ['broker distribution', 'portfolio-role weight basis', 'focused market context'],
-            'asset.market_analysis': ['OHLC', 'drawdown', 'dated state transitions'],
-            'fx.pair_analysis': ['quote currency per one unit of base currency', 'Never invert the pair silently'],
-            'fx.exposure_impact': ['cash, trading-currency, and valuation-currency links', 'No Look-Through Inference'],
-        } as const;
-
-        for (const [analysisId, fragments] of Object.entries(expectations) as [keyof typeof expectations, readonly string[]][]) {
-            const text = `${instructionText(analysisId)} ${contractText(analysisId)}`;
-            for (const fragment of fragments) expect(text).toContain(fragment);
         }
     });
 });
 
-describe('AI Export V3 public rendering', () => {
+describe('AI Export V1 public rendering', () => {
     it('renders FX conversion timing ratios as bounded and unbounded percentages', () => {
         const rendered = renderSnapshotDataText(
             [

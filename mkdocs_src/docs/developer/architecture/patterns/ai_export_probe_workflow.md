@@ -4,6 +4,11 @@ AI Export probes validate the exact prompt copied by the UI against real,
 authenticated LibreFolio data. They are measurement and review tools, not
 alternative renderers.
 
+They are also separate from the functional test runner. The runner action
+`./dev.py test utils ai-export-probe-helpers` executes only fast unit tests for
+probe helper code; it never starts the copied database, diagnostic API, frontend
+renderer bridge, prompt matrix, or qualitative review.
+
 ## 🎯 Source of Truth
 
 The authoritative path is:
@@ -65,7 +70,7 @@ The current standard profile is `tuning-v2`. It discovers the runtime catalog an
 applies the current dataset/Analysis matrices. Do not copy a historical expected
 count: inspect the catalog recorded in `run_manifest.json`.
 
-The release-validation profile is `public-catalog-v3`:
+The release-validation profile is `public-catalog-v1`:
 
 ```text
 19 public selections × {3M, 1Y} × {Compact, Standard, Full} = 114 prompts
@@ -229,7 +234,7 @@ real_prompt_probe/<run_id>/
 Additional review artifacts may be added for a specific task. Do not mix a targeted
 run into a previously authoritative full corpus.
 
-Public V3 runs additionally contain `retained_prompt_manifest.json`, deterministic
+Public V1 runs additionally contain `retained_prompt_manifest.json`, deterministic
 SVG charts, structured review artifacts, and comparison manifests. Artifact user
 labels and prompt filenames are anonymized.
 

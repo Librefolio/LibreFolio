@@ -4,12 +4,12 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 1540 nodes · 2222 edges · 150 communities (133 shown, 17 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 106 edges (avg confidence: 0.82)
+- 1614 nodes · 2274 edges · 160 communities (143 shown, 17 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 132 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0a948827`
+- Built from commit: `81b08ea0`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -163,18 +163,27 @@
 - [[_COMMUNITY_Community 147|Community 147]]
 - [[_COMMUNITY_Community 148|Community 148]]
 - [[_COMMUNITY_Community 149|Community 149]]
+- [[_COMMUNITY_Community 153|Community 153]]
+- [[_COMMUNITY_Community 154|Community 154]]
+- [[_COMMUNITY_Community 155|Community 155]]
+- [[_COMMUNITY_Community 158|Community 158]]
+- [[_COMMUNITY_Community 159|Community 159]]
+- [[_COMMUNITY_Community 161|Community 161]]
+- [[_COMMUNITY_Community 163|Community 163]]
+- [[_COMMUNITY_Community 164|Community 164]]
+- [[_COMMUNITY_Community 165|Community 165]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `F-048 — Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done)` - 76 edges
 2. `F-046 — Transaction Model & Bulk API` - 44 edges
 3. `F-047 — Transaction List Page` - 30 edges
-4. `AI Export Runtime Service and Snapshot Platform` - 22 edges
-5. `WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER)` - 21 edges
-6. `Backend-owned versioned AI snapshots with a frontend-owned safe prompt and clipboard boundary` - 21 edges
-7. `Dependency Graph — Full Project` - 20 edges
-8. `BRIM Framework (Broker Report Import)` - 20 edges
-9. `AI Export Technical Sampling` - 19 edges
-10. `Unified Batch Pipeline — 2 endpoints replace 4` - 18 edges
+4. `WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER)` - 21 edges
+5. `Dependency Graph — Full Project` - 20 edges
+6. `BRIM Framework (Broker Report Import)` - 20 edges
+7. `AI Export Technical Sampling` - 19 edges
+8. `🧩 AI Export Composition and Prompt` - 18 edges
+9. `Unified Batch Pipeline — 2 endpoints replace 4` - 18 edges
+10. `💱 FX Rates` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Calendar-Bucket Sampling Policy Matrix` --conceptually_related_to--> `Detail Level x Temporal Class Sampling Matrix`  [INFERRED]
@@ -194,15 +203,15 @@
 ## Hyperedges (group relationships)
 - **Short-lived session memory decision mechanisms** — wiki_decisions_ai-export-contextual-ui-memory, wiki_decisions_ai-export-contextual-ui-memory_reactive_identity_bound_memory, wiki_decisions_ai-export-contextual-ui-memory_raw_note_effective_option_separation, wiki_decisions_ai-export-contextual-ui-memory_context_bound_in_flight_preparation, wiki_decisions_ai-export-contextual-ui-memory_concern_based_e2e_cutover [EXTRACTED 1.00]
 
-## Communities (150 total, 17 thin omitted)
+## Communities (160 total, 17 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.05
-Nodes (116): Transactions Without-Asset Filter NaN URL Loop, Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Backend-Only Calculations Rule, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Import Todo Signals, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps (+108 more)
+Nodes (126): Transactions Without-Asset Filter NaN URL Loop, Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Backend-Only Calculations Rule, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Import Todo Signals, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps (+118 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.05
-Nodes (108): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Single Migration Strategy (001_initial.py), Asset Feature Connections, Dependency Graph — Full Project (+100 more)
+Cohesion: 0.06
+Nodes (89): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Asset Feature Connections, Dependency Graph — Full Project, FX Feature Connections (+81 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.21
@@ -213,8 +222,8 @@ Cohesion: 0.05
 Nodes (50): Drawdown Chart, Drawdown Series, Loss-Recovery Asymmetry, Max Drawdown, Drawdown Recovery Time, Risk Analysis Application Plan, Applied Shock Bucket Audit, Shared Foundation and G6-11 Approval Gate (+42 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.07
-Nodes (42): Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention, TimeSeriesStore pattern (+34 more)
+Cohesion: 0.06
+Nodes (51): Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention, TimeSeriesStore pattern (+43 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.19
@@ -405,8 +414,8 @@ Cohesion: 0.25
 Nodes (9): BRIM Transaction Import, Broker Account, Broker AI Export, Broker Info, Broker Overview, Broker Positions, Broker Sharing, Holdings and Performance Dual View (+1 more)
 
 ### Community 52 - "Community 52"
-Cohesion: 0.22
-Nodes (8): 🤖 AI-Assisted Development, 👥 Core Team, 🏆 Credits, ⚖️ Credits & Legal, 🌐 Documentation Translations, 📄 Full License Text, 📜 Legal & License, 📋 What this means for you
+Cohesion: 0.20
+Nodes (9): 🤖 AI-Assisted Development, 👥 Core Team, 🏆 Credits, ⚖️ Credits & Legal, 🌐 Documentation Translations, 📄 Full License Text, 📜 Legal & License, 🧩 Third-Party Open Source (+1 more)
 
 ### Community 53 - "Community 53"
 Cohesion: 0.22
@@ -709,23 +718,59 @@ Cohesion: 0.67
 Nodes (3): Interactive Pros/Cons Slider, Remotion Video Promo, Source Code v0.9.0 Batch
 
 ### Community 145 - "Community 145"
-Cohesion: 0.26
-Nodes (22): AiExportRuntimeService, AnalysisSpec, 66/66 OPTIMAL Analysis variants, Authoritative candidate run 20260804T224056.073291Z, Baseline run 20260804T214400.268752Z, Catalog V3, ComponentComposer, ComponentSpec (+14 more)
+Cohesion: 0.28
+Nodes (16): Authoritative Closure Run 20260804T224056.073291Z, 67 Components, 40 Internal Datasets, 8 Public Datasets, 11 Public Analyses, Fail-Closed Catalog Handshake, First Public AI Export V1, Functional Test Boundary, AI Export Probe Helpers and Copied-DB Real Prompt Separation, AiExportRuntimeService and ComponentComposer, Snapshot/Catalog/Selection/Instruction/Response Contract V1 (+8 more)
 
 ### Community 146 - "Community 146"
 Cohesion: 0.23
 Nodes (16): AnalysisSpec Prompt Contract, Authenticated Snapshot Runtime Flow, AI Export Backend-Frontend Ownership Boundary, BuildContext Resource Memoization, Component-Dataset-Analysis Runtime, AI Export Component Runtime, ComponentSpec Runtime Unit, AI Export Composition and Prompt (+8 more)
 
 ### Community 147 - "Community 147"
-Cohesion: 0.21
-Nodes (13): Empty Temporal-Row Public Rendering Hardening: Omit Only Completely Empty Rows, Indicator History Density Policy: Compact 5 / Standard 10 / Full All Non-Empty Rows, Standard Event Selection Policy: Complete 21-Day Recent Window + Minimum Latest 10 per Entity/Annotation (Approved 2026-08-03), AI Export News-Driver Analysis Decision, AI Export Technical Series and Density Contract, 2026-08-03 Indicator Density Amendment, Signal Density V2, Detail Level x Temporal Class Sampling Matrix (+5 more)
+Cohesion: 0.23
+Nodes (12): Empty Temporal-Row Public Rendering Hardening: Omit Only Completely Empty Rows, Indicator History Density Policy: Compact 5 / Standard 10 / Full All Non-Empty Rows, Standard Event Selection Policy: Complete 21-Day Recent Window + Minimum Latest 10 per Entity/Annotation (Approved 2026-08-03), AI Export Technical Series and Density Contract, 2026-08-03 Indicator Density Amendment, Signal Density V2, Detail Level x Temporal Class Sampling Matrix, Signals Domain (+4 more)
 
 ### Community 148 - "Community 148"
 Cohesion: 0.31
 Nodes (13): Causality Boundary for News-Movement Links, LLM-Side Web Research Pattern, portfolio.market_events_review Analysis, Cited Current News Research, Clipboard-Only AI Export Boundary, Contextual AI Export Draft Memory, Dated Asset Movement-to-News Matching, Market Events Review Evidence Binding (+5 more)
 
+### Community 153 - "Community 153"
+Cohesion: 0.12
+Nodes (15): 🧠 AI Export, 📈 Asset, ⚠️ Availability and Safety, 🗂️ Available Analyses, 📤 Available Export Data, 🏦 Broker, 🎛️ Export Options, 💱 FX (+7 more)
+
+### Community 154 - "Community 154"
+Cohesion: 0.13
+Nodes (15): 🧩 AI Export Composition and Prompt, 🧠 AnalysisSpec, 🗺️ Applicability, ♻️ BuildContext and Resource Memoization, 🧱 ComponentSpec, 🧮 Composer Ordering and Deduplication, 📚 DatasetSpec, Visibility, and Public Composition, 📉 Drawdown Risk Context (+7 more)
+
+### Community 155 - "Community 155"
+Cohesion: 0.14
+Nodes (14): ⏱️ AI Export Technical Sampling, 🔥 Calculation Range, Exported Range, and Warm-up, 🎯 Event Selection, 🧪 Extension and Testing Checklist, 🧮 Full Policy Matrix, 📈 Indicator Policy, 🗂️ Initial Instance Mapping, 🧾 Manifest Examples (+6 more)
+
+### Community 158 - "Community 158"
+Cohesion: 0.20
+Nodes (9): 🔒 Applicability, Errors, and Privacy, 📏 Detail and Sampling, 📤 Export Data and Request Analysis, 📍 Location, 📰 Performance and Market Drivers, 🧠 Portfolio AI Export, 🎯 Portfolio Analyses, 📅 Recurring Investment Plan (+1 more)
+
+### Community 159 - "Community 159"
+Cohesion: 0.22
+Nodes (9): 🧠 AI Export Component Runtime, 🔐 Authentication and Failures, 🏦 Broker Scope Semantics, 📦 Completeness and Size, 🗺️ Main Files, 🧭 Ownership Boundary, 🔗 Related Documentation, 🔄 Request Flow (+1 more)
+
+### Community 161 - "Community 161"
+Cohesion: 0.50
+Nodes (4): 🧭 Focused Context Policies, 💱 FX Observed Range Position, 🏷️ Latest-per-category Context Events, 🧹 Public Empty Temporal Rows
+
+### Community 163 - "Community 163"
+Cohesion: 0.67
+Nodes (3): 🧾 Capital-Loss Offset Contract, 📅 PAC Planning Contract, 🧭 Public Analysis Dataset Bindings
+
+### Community 164 - "Community 164"
+Cohesion: 0.67
+Nodes (3): 📝 Exact Prompt Order, 📤 Export Data, 🔬 Request Analysis
+
+### Community 165 - "Community 165"
+Cohesion: 0.67
+Nodes (3): 🎯 Focused Technical Projections, 🏦 Portfolio Broker Universes, 🔢 Universe Coverage Counts
+
 ## Knowledge Gaps
-- **664 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+659 more)
+- **728 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+723 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -733,16 +778,16 @@ Nodes (13): Causality Boundary for News-Movement Links, LLM-Side Web Research Pa
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Portfolio Engine` connect `Community 11` to `Community 147`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
-- **Why does `AI Export Technical Series and Density Contract` connect `Community 147` to `Community 145`, `Community 2`, `Community 11`, `Community 146`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+  _High betweenness centrality (0.019) - this node is a cross-community bridge._
 - **Why does `3-Pool Cash Model` connect `Community 5` to `Community 11`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
-- **Are the 3 inferred relationships involving `AI Export Runtime Service and Snapshot Platform` (e.g. with `Authenticated Snapshot Runtime Flow` and `Clipboard-Only AI Export Boundary`) actually correct?**
-  _`AI Export Runtime Service and Snapshot Platform` has 3 INFERRED edges - model-reasoned connections that need verification._
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `AI Export falsely required transaction-date engine cash to equal snapshot-date native-cash exposure` connect `Community 11` to `Community 5`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **What connects `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings` to the rest of the system?**
-  _741 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _805 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.05442278860569715 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.052825396825396824 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.05001730702665282 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05822267620020429 - nodes in this community are weakly interconnected._
+- **Should `Community 3` be split into smaller, more focused modules?**
+  _Cohesion score 0.053877551020408164 - nodes in this community are weakly interconnected._

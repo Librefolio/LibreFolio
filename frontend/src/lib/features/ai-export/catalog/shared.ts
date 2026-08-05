@@ -31,9 +31,9 @@ export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, '
 export type AiExportSelectionKind = 'dataset' | 'analysis';
 export type AiExportCatalogEntry = AiExportDatasetCatalogEntry | AiExportAnalysisCatalogEntry;
 
-export const AI_EXPORT_SCHEMA_VERSION = 2;
-export const AI_EXPORT_CATALOG_VERSION = 3;
-export const AI_EXPORT_SELECTION_VERSION = 3;
+export const AI_EXPORT_SCHEMA_VERSION = 1;
+export const AI_EXPORT_CATALOG_VERSION = 1;
+export const AI_EXPORT_SELECTION_VERSION = 1;
 export const AI_EXPORT_DETAIL_LEVELS = ['compact', 'standard', 'full'] as const satisfies readonly AiExportDetailLevel[];
 export const AI_EXPORT_DEFAULT_DETAIL_LEVEL = 'standard' satisfies AiExportDetailLevel;
 export const AI_EXPORT_DOMAIN_ORDER = ['portfolio', 'broker', 'asset', 'fx'] as const satisfies readonly AiExportDomain[];
@@ -216,7 +216,7 @@ export interface AiExportCompatibleSelection {
     readonly kind: AiExportSelectionKind;
     readonly id: AiExportSelectionId;
     readonly domain: AiExportDomain;
-    readonly version: 3;
+    readonly version: 1;
     readonly supportedDetailLevels: readonly AiExportDetailLevel[];
     readonly entry: AiExportCatalogEntry;
 }

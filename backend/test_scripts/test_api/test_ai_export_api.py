@@ -1,4 +1,4 @@
-"""Focused ASGI tests for the component-based AI Export V3 catalog API."""
+"""Focused ASGI tests for the component-based AI Export V1 catalog API."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from pydantic import TypeAdapter
 from backend.app.api.v1.ai_export import get_ai_export_snapshot_service, router
 from backend.app.api.v1.auth import get_current_user
 from backend.app.schemas.ai_export_runtime import (
+    AI_EXPORT_CATALOG_VERSION,
+    AI_EXPORT_SCHEMA_VERSION,
     AiExportProblem,
     AiExportProblemResponse,
     AiExportSnapshotResponse,
@@ -71,7 +73,7 @@ def _payload(domain: str) -> dict[str, object]:
         "detail_level": "standard",
         "period": {"start": START.isoformat(), "end": END.isoformat()},
         "target_currency": "EUR",
-        "expected_catalog_version": 3,
+        "expected_catalog_version": AI_EXPORT_CATALOG_VERSION,
     }
     if domain == "broker":
         payload["broker_id"] = 1
@@ -170,8 +172,8 @@ async def test_catalog_returns_8_datasets_and_11_analyses():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["schema_version"] == 2
-    assert payload["catalog_version"] == 3
+    assert payload["schema_version"] == AI_EXPORT_SCHEMA_VERSION
+    assert payload["catalog_version"] == AI_EXPORT_CATALOG_VERSION
     assert {entry["id"] for entry in payload["datasets"]} == {
         "portfolio.overview_and_history",
         "portfolio.asset_history",

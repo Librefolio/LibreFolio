@@ -49,9 +49,9 @@ DEFAULT_USERS = ("alfy", "marco")
 DEFAULT_REPRESENTATIVE_USER = "marco"
 DEFAULT_PERIODS = ("3M", "6M", "1Y")
 DEFAULT_DETAILS = ("compact", "standard", "full")
-PUBLIC_CATALOG_V3_PROFILE = "public-catalog-v3"
-PUBLIC_CATALOG_V3_PERIODS = ("3M", "1Y")
-PUBLIC_CATALOG_V3_DATASETS = (
+PUBLIC_CATALOG_V1_PROFILE = "public-catalog-v1"
+PUBLIC_CATALOG_V1_PERIODS = ("3M", "1Y")
+PUBLIC_CATALOG_V1_DATASETS = (
     "portfolio.overview_and_history",
     "portfolio.asset_history",
     "broker.overview_and_history",
@@ -61,7 +61,7 @@ PUBLIC_CATALOG_V3_DATASETS = (
     "fx.market_and_exposure",
     "fx.market_history",
 )
-PUBLIC_CATALOG_V3_ANALYSES = (
+PUBLIC_CATALOG_V1_ANALYSES = (
     "portfolio.pac_planning",
     "portfolio.rebalancing",
     "portfolio.performance_market_drivers",
@@ -74,8 +74,8 @@ PUBLIC_CATALOG_V3_ANALYSES = (
     "fx.pair_analysis",
     "fx.exposure_impact",
 )
-PUBLIC_CATALOG_V3_SELECTIONS = PUBLIC_CATALOG_V3_DATASETS + PUBLIC_CATALOG_V3_ANALYSES
-PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT = len(PUBLIC_CATALOG_V3_SELECTIONS) * len(PUBLIC_CATALOG_V3_PERIODS) * len(DEFAULT_DETAILS)
+PUBLIC_CATALOG_V1_SELECTIONS = PUBLIC_CATALOG_V1_DATASETS + PUBLIC_CATALOG_V1_ANALYSES
+PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT = len(PUBLIC_CATALOG_V1_SELECTIONS) * len(PUBLIC_CATALOG_V1_PERIODS) * len(DEFAULT_DETAILS)
 PROMPT_CATEGORY_CLASSES = (
     "financial",
     "financial_with_context",
@@ -1261,44 +1261,44 @@ def tuning_v2_cases(
     return build_period_detail_matrix(periods=periods, details=details)
 
 
-def public_catalog_v3_selections(
+def public_catalog_v1_selections(
     selections: Sequence[Mapping[str, object]],
     *,
     mode: str | None = None,
     domain: str | None = None,
 ) -> list[dict[str, object]]:
-    """Select the exact public V3 catalog, failing closed when an expected entry is absent."""
+    """Select the exact public V1 catalog, failing closed when an expected entry is absent."""
     by_id = {str(selection.get("id")): dict(selection) for selection in selections}
-    expected = [selection_id for selection_id in PUBLIC_CATALOG_V3_SELECTIONS if (mode is None or ("data" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis") == mode) and (domain is None or selection_id.startswith(f"{domain}."))]
+    expected = [selection_id for selection_id in PUBLIC_CATALOG_V1_SELECTIONS if (mode is None or ("data" if selection_id in PUBLIC_CATALOG_V1_DATASETS else "analysis") == mode) and (domain is None or selection_id.startswith(f"{domain}."))]
     missing = [selection_id for selection_id in expected if selection_id not in by_id]
     if missing:
-        raise ProbeError(f"Public catalog V3 selections absent from runtime catalog: {missing}")
+        raise ProbeError(f"Public catalog V1 selections absent from runtime catalog: {missing}")
     selected = [by_id[selection_id] for selection_id in expected]
     for selection in selected:
-        expected_kind = "dataset" if str(selection["id"]) in PUBLIC_CATALOG_V3_DATASETS else "analysis"
+        expected_kind = "dataset" if str(selection["id"]) in PUBLIC_CATALOG_V1_DATASETS else "analysis"
         if selection.get("kind") != expected_kind:
-            raise ProbeError(f"Public catalog V3 selection has wrong kind: {selection.get('id')}")
+            raise ProbeError(f"Public catalog V1 selection has wrong kind: {selection.get('id')}")
         if str(selection.get("domain")) != str(selection["id"]).partition(".")[0]:
-            raise ProbeError(f"Public catalog V3 selection has wrong domain: {selection.get('id')}")
+            raise ProbeError(f"Public catalog V1 selection has wrong domain: {selection.get('id')}")
         supported_details = {str(detail) for detail in selection.get("supported_detail_levels", DEFAULT_DETAILS)}
         if not set(DEFAULT_DETAILS) <= supported_details:
-            raise ProbeError(f"Public catalog V3 selection lacks compact/standard/full support: {selection.get('id')}")
+            raise ProbeError(f"Public catalog V1 selection lacks compact/standard/full support: {selection.get('id')}")
     return selected
 
 
-def public_catalog_v3_cases(
+def public_catalog_v1_cases(
     selection: Mapping[str, object],
     *,
     period_filter: str | None = None,
     detail_filter: str | None = None,
 ) -> list[dict[str, object]]:
-    """Return the exact 3M/1Y × compact/standard/full V3 matrix for one public selection."""
+    """Return the exact 3M/1Y × compact/standard/full V1 matrix for one public selection."""
     selection_id = str(selection.get("id") or "")
-    if selection_id not in PUBLIC_CATALOG_V3_SELECTIONS:
-        raise ProbeError(f"Selection is outside public catalog V3: {selection_id}")
-    periods = (period_filter,) if period_filter else PUBLIC_CATALOG_V3_PERIODS
-    if any(period not in PUBLIC_CATALOG_V3_PERIODS for period in periods):
-        raise ProbeError("Public catalog V3 supports only 3M and 1Y periods")
+    if selection_id not in PUBLIC_CATALOG_V1_SELECTIONS:
+        raise ProbeError(f"Selection is outside public catalog V1: {selection_id}")
+    periods = (period_filter,) if period_filter else PUBLIC_CATALOG_V1_PERIODS
+    if any(period not in PUBLIC_CATALOG_V1_PERIODS for period in periods):
+        raise ProbeError("Public catalog V1 supports only 3M and 1Y periods")
     details = (detail_filter,) if detail_filter else DEFAULT_DETAILS
     return build_period_detail_matrix(periods=periods, details=details)
 
@@ -1333,8 +1333,8 @@ def representative_scopes(scopes: Sequence[Mapping[str, object]]) -> list[dict[s
     return selected
 
 
-def public_catalog_v3_scope(scopes: Sequence[Mapping[str, object]], selection: Mapping[str, object]) -> dict[str, object] | None:
-    """Choose one deterministic scope per V3 selection without adding Cartesian scope cases."""
+def public_catalog_v1_scope(scopes: Sequence[Mapping[str, object]], selection: Mapping[str, object]) -> dict[str, object] | None:
+    """Choose one deterministic scope per V1 selection without adding Cartesian scope cases."""
     domain = str(selection.get("domain") or "")
     if domain == "portfolio":
         selected = next((dict(scope) for scope in scopes if scope.get("domain") == "portfolio" and scope.get("scope_alias") == "all"), None)
@@ -1837,14 +1837,20 @@ def compare_metric_runs(
         before_chars = int(before.get("rendered_prompt_chars") or 0) if before else None
         now_chars = int(now.get("rendered_prompt_chars") or 0) if now else None
         delta = now_chars - before_chars if now_chars is not None and before_chars is not None else None
+        previous_prompt_sha256 = str(before.get("rendered_prompt_sha256")) if before and before.get("rendered_prompt_sha256") else None
+        current_prompt_sha256 = str(now.get("rendered_prompt_sha256")) if now and now.get("rendered_prompt_sha256") else None
         previous_signals = signal_metric_summary(before)
         current_signals = signal_metric_summary(now)
         comparison.append(
             {
                 "stable_key": "|".join(key),
                 "status": status,
+                "comparison_basis": "functional_metrics_v1",
                 "previous_chars": before_chars,
                 "current_chars": now_chars,
+                "previous_prompt_sha256": previous_prompt_sha256,
+                "current_prompt_sha256": current_prompt_sha256,
+                "prompt_content_changed": bool(previous_prompt_sha256 and current_prompt_sha256 and previous_prompt_sha256 != current_prompt_sha256),
                 "absolute_delta": delta,
                 "percentage_delta": None if delta is None or before_chars in (None, 0) else delta / before_chars * 100,
                 "previous_category": metric_size_category(before),
@@ -2668,8 +2674,8 @@ def _missing_scope_metrics(
             period_filter=period_filter,
             detail_filter=detail_filter,
         )
-    elif profile == PUBLIC_CATALOG_V3_PROFILE:
-        cases = public_catalog_v3_cases(
+    elif profile == PUBLIC_CATALOG_V1_PROFILE:
+        cases = public_catalog_v1_cases(
             selection,
             period_filter=period_filter,
             detail_filter=detail_filter,
@@ -3454,7 +3460,7 @@ def build_period_detail_svg(entries: Sequence[Mapping[str, object]]) -> str:
     grouped: defaultdict[tuple[str, str], list[int]] = defaultdict(list)
     for entry in successful:
         grouped[(str(entry.get("period_label")), str(entry.get("detail_level")))].append(int(entry.get("rendered_prompt_chars") or 0))
-    keys = [(period, detail) for period in PUBLIC_CATALOG_V3_PERIODS for detail in DEFAULT_DETAILS if (period, detail) in grouped]
+    keys = [(period, detail) for period in PUBLIC_CATALOG_V1_PERIODS for detail in DEFAULT_DETAILS if (period, detail) in grouped]
     means = {key: statistics.fmean(grouped[key]) for key in keys}
     maximum = max(1, max(means.values(), default=1))
     width = 1000
@@ -3686,9 +3692,9 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("tuning-v2", "representative", PUBLIC_CATALOG_V3_PROFILE, "exhaustive"),
+        choices=("tuning-v2", "representative", PUBLIC_CATALOG_V1_PROFILE, "exhaustive"),
         default="tuning-v2",
-        help="tuning-v2 keeps V2 tuning behavior; public-catalog-v3 runs 19 public selections × 3M/1Y × compact/standard/full",
+        help="tuning-v2 keeps the internal tuning matrix; public-catalog-v1 runs 19 public selections × 3M/1Y × compact/standard/full",
     )
     parser.add_argument("--manifest-shape", choices=("legacy", "slim"), default="slim", help="Expected public technical manifest shape")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -3714,18 +3720,18 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def run_probe(args: argparse.Namespace) -> int:
     target_cases = tuple(parse_target_case(value) for value in args.target_case)
-    public_catalog_v3_run = args.profile == PUBLIC_CATALOG_V3_PROFILE and not target_cases
+    public_catalog_v1_run = args.profile == PUBLIC_CATALOG_V1_PROFILE and not target_cases
     if len(target_cases) != len(set(target_cases)):
         raise ProbeError("Duplicate --target-case entries are not allowed")
     if target_cases and any(value is not None for value in (args.mode, args.domain, args.period, args.detail)):
         raise ProbeError("--target-case cannot be combined with --mode/--domain/--period/--detail")
-    if public_catalog_v3_run and any(value is not None for value in (args.mode, args.domain, args.period, args.detail)):
-        raise ProbeError(f"public-catalog-v3 is an exact {PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT}-case profile and cannot be filtered")
-    if public_catalog_v3_run and args.user and len(set(args.user)) != 1:
-        raise ProbeError("public-catalog-v3 requires exactly one deterministic user")
-    default_users = (DEFAULT_REPRESENTATIVE_USER,) if args.profile in {"tuning-v2", "representative", PUBLIC_CATALOG_V3_PROFILE} else DEFAULT_USERS
+    if public_catalog_v1_run and any(value is not None for value in (args.mode, args.domain, args.period, args.detail)):
+        raise ProbeError(f"public-catalog-v1 is an exact {PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT}-case profile and cannot be filtered")
+    if public_catalog_v1_run and args.user and len(set(args.user)) != 1:
+        raise ProbeError("public-catalog-v1 requires exactly one deterministic user")
+    default_users = (DEFAULT_REPRESENTATIVE_USER,) if args.profile in {"tuning-v2", "representative", PUBLIC_CATALOG_V1_PROFILE} else DEFAULT_USERS
     users = tuple(dict.fromkeys(case.user_alias for case in target_cases)) if target_cases else tuple(dict.fromkeys(args.user or default_users))
-    artifact_aliases = build_artifact_aliases(users, anonymize=bool(target_cases) or public_catalog_v3_run)
+    artifact_aliases = build_artifact_aliases(users, anonymize=bool(target_cases) or public_catalog_v1_run)
     passwords = _passwords_for_users(users)
     actual_secrets = tuple(passwords.values())
     source_db = args.source_db.expanduser().resolve()
@@ -3744,7 +3750,7 @@ def run_probe(args: argparse.Namespace) -> int:
     source_snapshot_dir = run_dir / ".source_snapshot"
     data_prompts_dir.mkdir(parents=True)
     analysis_prompts_dir.mkdir(parents=True)
-    if public_catalog_v3_run:
+    if public_catalog_v1_run:
         staging_data_prompts_dir.mkdir(parents=True)
         staging_analysis_prompts_dir.mkdir(parents=True)
     canonical_dir.mkdir()
@@ -3837,12 +3843,12 @@ def run_probe(args: argparse.Namespace) -> int:
                         )
                         continue
                     selections = (
-                        public_catalog_v3_selections(
+                        public_catalog_v1_selections(
                             discover_catalog(catalog_payload),
                             mode=args.mode,
                             domain=args.domain,
                         )
-                        if public_catalog_v3_run
+                        if public_catalog_v1_run
                         else discover_catalog(catalog_payload, mode=args.mode, domain=args.domain)
                     )
                     user_target_cases = tuple(case for case in target_cases if case.user_alias == user_alias)
@@ -3922,8 +3928,8 @@ def run_probe(args: argparse.Namespace) -> int:
                                 if failure is not None:
                                     failures.append(failure)
                             continue
-                        if public_catalog_v3_run:
-                            selected_scope = public_catalog_v3_scope(scopes, selection)
+                        if public_catalog_v1_run:
+                            selected_scope = public_catalog_v1_scope(scopes, selection)
                             matching_scopes = [selected_scope] if selected_scope is not None else []
                         else:
                             matching_scopes = [scope for scope in scopes if scope["domain"] == selection["domain"]]
@@ -3951,12 +3957,12 @@ def run_probe(args: argparse.Namespace) -> int:
                                 )
                                 if args.profile == "tuning-v2"
                                 else (
-                                    public_catalog_v3_cases(
+                                    public_catalog_v1_cases(
                                         selection,
                                         period_filter=args.period,
                                         detail_filter=args.detail,
                                     )
-                                    if public_catalog_v3_run
+                                    if public_catalog_v1_run
                                     else (
                                         representative_cases(
                                             selection,
@@ -3986,7 +3992,7 @@ def run_probe(args: argparse.Namespace) -> int:
                                     case=case,
                                     client=client,
                                     bridge=bridge,
-                                    prompts_dir=(staging_data_prompts_dir if public_catalog_v3_run and selection["kind"] == "dataset" else (staging_analysis_prompts_dir if public_catalog_v3_run else (data_prompts_dir if selection["kind"] == "dataset" else analysis_prompts_dir))),
+                                    prompts_dir=(staging_data_prompts_dir if public_catalog_v1_run and selection["kind"] == "dataset" else (staging_analysis_prompts_dir if public_catalog_v1_run else (data_prompts_dir if selection["kind"] == "dataset" else analysis_prompts_dir))),
                                     canonical_dir=canonical_dir,
                                     artifact_root=run_dir,
                                     keep_canonical=args.keep_canonical,
@@ -3994,7 +4000,7 @@ def run_probe(args: argparse.Namespace) -> int:
                                     response_language=str(user_data["response_language"]),
                                     actual_secrets=actual_secrets,
                                     manifest_shape=args.manifest_shape,
-                                    stage_prompt=public_catalog_v3_run,
+                                    stage_prompt=public_catalog_v1_run,
                                 )
                                 entries.append(metric)
                                 if failure is not None:
@@ -4052,9 +4058,9 @@ def run_probe(args: argparse.Namespace) -> int:
             include_removed=not bool(target_cases),
         )
     staged_prompt_paths = collect_staged_prompt_paths(entries, run_dir)
-    staged_prompt_file_count = sum(1 for path in prompt_staging_dir.rglob("*") if path.is_file()) if public_catalog_v3_run else 0
+    staged_prompt_file_count = sum(1 for path in prompt_staging_dir.rglob("*") if path.is_file()) if public_catalog_v1_run else 0
     retention_reasons: dict[str, list[str]] = {}
-    if public_catalog_v3_run:
+    if public_catalog_v1_run:
         retention_reasons = select_prompt_retention_reasons(entries)
         for entry in entries:
             entry["retention_reasons"] = retention_reasons.get(stable_metric_key_text(entry), [])
@@ -4099,14 +4105,14 @@ def run_probe(args: argparse.Namespace) -> int:
             "representative_scope_policy": (
                 "explicit target-case scopes"
                 if target_cases
-                else ("one deterministic representative scope per public selection" if public_catalog_v3_run else "portfolio all; broker with most positions then longest history; one deterministic longest-history asset; one deterministic longest-history FX pair")
+                else ("one deterministic representative scope per public selection" if public_catalog_v1_run else "portfolio all; broker with most positions then longest history; one deterministic longest-history asset; one deterministic longest-history FX pair")
             ),
             "case_policy": (
                 "exact explicit target cases only"
                 if target_cases
                 else (
                     "exact 19 selections x 3M/1Y x compact/standard/full; no 6M"
-                    if public_catalog_v3_run
+                    if public_catalog_v1_run
                     else ("base datasets: 3M/6M/1Y x compact/standard/full; analyses with temporal data: 3M/1Y x compact/standard/full; all_data excluded from tuning" if args.profile == "tuning-v2" else "representative or exhaustive legacy profile")
                 )
             ),
@@ -4115,11 +4121,11 @@ def run_probe(args: argparse.Namespace) -> int:
                     "asset": "longest history meeting minimum, then observations and stable asset key",
                     "fx": "longest history meeting configured minimum, then observations and canonical pair key; partial/unavailable state is classified from measured output rather than extra Cartesian cases",
                 }
-                if public_catalog_v3_run
+                if public_catalog_v1_run
                 else {}
             ),
-            "public_selection_ids": list(PUBLIC_CATALOG_V3_SELECTIONS) if public_catalog_v3_run else [],
-            "expected_case_count": len(PUBLIC_CATALOG_V3_SELECTIONS) * len(PUBLIC_CATALOG_V3_PERIODS) * len(DEFAULT_DETAILS) if public_catalog_v3_run else None,
+            "public_selection_ids": list(PUBLIC_CATALOG_V1_SELECTIONS) if public_catalog_v1_run else [],
+            "expected_case_count": len(PUBLIC_CATALOG_V1_SELECTIONS) * len(PUBLIC_CATALOG_V1_PERIODS) * len(DEFAULT_DETAILS) if public_catalog_v1_run else None,
         },
         "inventory": {artifact_aliases[alias]: data["inventory"] for alias, data in inventories.items()},
         "inventory_methods": {
@@ -4183,9 +4189,9 @@ def run_probe(args: argparse.Namespace) -> int:
             "copy_writes_expected": "optional credential normalization and successful login update the disposable copied DB only",
         },
         "corpus": {
-            "expected_row_count": PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT if public_catalog_v3_run else len(entries),
+            "expected_row_count": PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT if public_catalog_v1_run else len(entries),
             "actual_row_count": len(entries),
-            "matrix_complete": len(entries) == PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT if public_catalog_v3_run else True,
+            "matrix_complete": len(entries) == PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT if public_catalog_v1_run else True,
             "measured_row_count": sum(1 for entry in entries if entry.get("status") == "ok"),
             "retained_prompt_count": sum(1 for entry in entries if entry.get("retained") is True),
             "rendered_chars_diagnostic_total": sum(int(entry.get("rendered_prompt_chars") or 0) for entry in entries if entry.get("status") == "ok"),
@@ -4194,7 +4200,7 @@ def run_probe(args: argparse.Namespace) -> int:
         "review_artifacts": {},
         "charts": [],
         "retention": {
-            "mode": "selective_named_and_global_representatives" if public_catalog_v3_run else "profile_full_retention",
+            "mode": "selective_named_and_global_representatives" if public_catalog_v1_run else "profile_full_retention",
             "staged_prompt_count": staged_prompt_file_count,
             "planned_retention_count": len(retention_reasons),
             "retained_prompt_count": sum(1 for entry in entries if entry.get("retained") is True),
@@ -4203,7 +4209,7 @@ def run_probe(args: argparse.Namespace) -> int:
     }
     failures_payload: dict[str, object] = {"run_id": run_id, "failures": failures}
     retained_manifest_path = run_dir / "retained_prompt_manifest.json"
-    if public_catalog_v3_run:
+    if public_catalog_v1_run:
         task_reviews_path = run_dir / "task_adequacy_reviews.json"
         export_reviews_path = run_dir / "export_data_reviews.json"
         comparison_manifest_path = run_dir / "comparison_baseline_manifest.json"
@@ -4228,7 +4234,7 @@ def run_probe(args: argparse.Namespace) -> int:
     staged_scan_paths = list(run_dir.rglob("*"))
     pre_retention_findings = scan_generated_files(staged_scan_paths, actual_secrets)
 
-    if public_catalog_v3_run:
+    if public_catalog_v1_run:
         retention_reasons = finalize_public_catalog_prompt_retention(
             entries,
             staged_prompt_paths,
@@ -4263,7 +4269,7 @@ def run_probe(args: argparse.Namespace) -> int:
         return [json.loads(serialized) for serialized in sorted({canonical_json(dict(finding)) for group in groups for finding in group})]
 
     combined_findings = deduplicate_findings(pre_retention_findings, post_retention_findings)
-    if public_catalog_v3_run and post_retention_findings:
+    if public_catalog_v1_run and post_retention_findings:
         for entry in entries:
             prompt_file = entry.get("prompt_file")
             if entry.get("retained") is True and isinstance(prompt_file, str):
@@ -4312,7 +4318,7 @@ def run_probe(args: argparse.Namespace) -> int:
         f"secret scan: {'passed' if not final_findings else 'failed'}"
     )
     regression_failure = args.fail_on_regression and any(item.get("regression") for item in comparisons)
-    matrix_failure = public_catalog_v3_run and len(entries) != PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT
+    matrix_failure = public_catalog_v1_run and len(entries) != PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT
     return 2 if final_findings or not sqlite_primary_unchanged(source_snapshot_hash_before, source_snapshot_hash_after) or regression_failure or matrix_failure else 0
 
 

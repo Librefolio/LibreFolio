@@ -7,7 +7,7 @@ export interface AiExportResponseContractSection {
 
 export interface AiExportResponseContractTemplate {
     readonly id: string;
-    readonly version: 3;
+    readonly version: 1;
     readonly analysisId: AiExportAnalysisId;
     readonly sections: readonly AiExportResponseContractSection[];
 }
@@ -17,7 +17,7 @@ function section(title: string, ...requirements: readonly string[]): AiExportRes
 }
 
 function contract(analysisId: AiExportAnalysisId, sections: readonly AiExportResponseContractSection[]): AiExportResponseContractTemplate {
-    return {id: `${analysisId}.response`, version: 3, analysisId, sections};
+    return {id: `${analysisId}.response`, version: 1, analysisId, sections};
 }
 
 const facts = section('LibreFolio Facts', 'State the relevant supplied facts, units, currencies, signs, dates, periods, scope, methodologies, coverage, and data-quality status before interpreting them.');

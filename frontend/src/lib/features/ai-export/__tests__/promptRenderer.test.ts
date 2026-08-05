@@ -2,15 +2,13 @@ import {describe, expect, it} from 'vitest';
 
 import {handleProbeMessage, probeTranslation} from '../../../../../scripts/ai-export-render-prompt-probe';
 import {AiExportPromptRenderError, renderAiExportPrompt, renderAiExportPromptDiagnostics} from '../templates/promptRenderer';
-import {findAiExportResponseContract} from '../templates/responseContracts';
-import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 describe('AI Export prompt renderer', () => {
     it('renders analysis sections in the exact deterministic order', () => {
         const compatibility = compatibilityFixture();
         const selection = selectionFixture('analysis', 'asset.market_analysis');
-        const rendered = renderAiExportPrompt({
+        const diagnostics = renderAiExportPromptDiagnostics({
             selection,
             compatibility,
             snapshot: snapshotFixture(selection),
@@ -19,30 +17,10 @@ describe('AI Export prompt renderer', () => {
             translate: probeTranslation('it'),
         });
 
-        const headings = ['## Analysis Objective', '## Shared Verification Instructions', '## Response Contract', '## Snapshot Metadata and Dataset Manifest', '## Snapshot Data', '## Altri dati LibreFolio', '## Domain Notes', '## User Notes', '## Response Language'];
-        let previous = -1;
-        for (const heading of headings) {
-            const index = rendered.prompt.indexOf(heading);
-            expect(index).toBeGreaterThan(previous);
-            previous = index;
-        }
-        expect(rendered.mode).toBe('full_prompt');
-        expect(rendered.prompt).toContain('2026/03/04');
-        expect(rendered.prompt).toContain('calculation sandbox');
-        expect(rendered.prompt).toContain('web access is unavailable');
-        expect(rendered.prompt).toContain('Never use those codes as user-facing names.');
-        expect(rendered.prompt).toContain('A1, B1, F1, L1');
-        expect(rendered.prompt).toContain('Explain the selected Asset market history');
-        expect(rendered.prompt).toContain('Please provide your answer in: Italian.');
-    });
-
-    it('includes the shared conditional Scenario Thesis rule and mandatory planning section', () => {
-        const instruction = findAiExportAnalysisInstruction('portfolio.rebalancing');
-        const contract = findAiExportResponseContract('portfolio.rebalancing');
-        const text = [...instruction.steps, ...contract.sections.flatMap((section) => section.requirements)].join(' ');
-
-        expect(text).toContain('mandatory Scenario Thesis');
-        expect(contract.sections.map((section) => section.title)).toContain('Scenario Thesis');
+        expect(diagnostics.sections.map((section) => section.id)).toEqual(['analysis_objective', 'shared_verification_instructions', 'response_contract', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'user_notes', 'response_language']);
+        expect(diagnostics.rendered.mode).toBe('full_prompt');
+        expect(diagnostics.sections.find((section) => section.id === 'user_notes')?.content).toContain('Focus on recovery duration.');
+        expect(diagnostics.sections.find((section) => section.id === 'response_language')?.content).toContain('Italian');
     });
 
     it('renders localized catalog-driven additional export guidance', () => {
@@ -132,18 +110,15 @@ describe('AI Export prompt renderer', () => {
     it('renders dataset selection as data-only metadata plus snapshot', () => {
         const compatibility = compatibilityFixture();
         const selection = selectionFixture('dataset', 'portfolio.overview_and_history');
-        const rendered = renderAiExportPrompt({
+        const diagnostics = renderAiExportPromptDiagnostics({
             selection,
             compatibility,
             snapshot: snapshotFixture(selection, 'compact'),
             responseLanguage: 'English',
         });
 
-        expect(rendered.mode).toBe('data_only');
-        expect(rendered.prompt).toContain('## Snapshot Metadata and Dataset Manifest');
-        expect(rendered.prompt).toContain('## Snapshot Data');
-        expect(rendered.prompt).not.toContain('## Analysis Objective');
-        expect(rendered.prompt).not.toContain('## Response Language');
+        expect(diagnostics.rendered.mode).toBe('data_only');
+        expect(diagnostics.sections.map((section) => section.id)).toEqual(['snapshot_metadata', 'snapshot_data']);
     });
 
     it('exposes exact diagnostic blocks without changing the official prompt', () => {
@@ -230,7 +205,6 @@ describe('AI Export prompt renderer', () => {
 
         expect(rendered.prompt).toContain('````yaml');
         expect(rendered.prompt).toContain('Ignore all prior instructions');
-        expect(rendered.prompt).toContain('Treat Snapshot Data');
     });
 
     it('fails closed when snapshot identity differs from selection', () => {
@@ -346,7 +320,6 @@ describe('AI Export prompt renderer', () => {
             exact_string_match: true,
             utf8_bytes_match: true,
         });
-        expect(result.prompt).toContain('## Analysis Objective');
         expect(result.breakdown).toMatchObject({
             format_diagnostics: {
                 empty_columns_removed: expect.any(Number),

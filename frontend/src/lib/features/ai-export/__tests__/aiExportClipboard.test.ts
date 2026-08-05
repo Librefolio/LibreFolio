@@ -72,7 +72,6 @@ describe('AI Export clipboard orchestration', () => {
         expect(transport.mock.calls[0][0]).not.toHaveProperty('userNotes');
         expect(prepared.options.userNotes).toBeUndefined();
         expect(prepared.prompt).not.toContain(hiddenNote);
-        expect(prepared.prompt).not.toContain('## User Notes');
         expect(prepared.optionsFingerprint).toBe(aiExportOptionsFingerprint({...datasetOptions, userNotes: undefined}));
     });
 

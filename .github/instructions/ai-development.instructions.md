@@ -65,6 +65,13 @@ Use the probe-tuning skill to choose among smoke, targeted, full tuning,
 comparison, Task Adequacy, and partial-history probes. Prefer the smallest probe
 that proves the requested behavior and preserve UI/probe byte equivalence.
 
+Real prompt generation and qualitative content review are separate from the
+functional test runner. Normal tests may validate public identities, composition,
+safety, rendering structure, and helper algorithms, but must not freeze prompt
+wording or fail merely because an intentional prompt improvement changes its
+cross-run SHA-256. The runner action `utils ai-export-probe-helpers` tests helper
+code only and must never launch a copied-DB probe.
+
 ## Future AI Infrastructure Guidance
 
 This instruction currently covers AI Export architecture and validation workflow.

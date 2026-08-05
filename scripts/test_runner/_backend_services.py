@@ -565,7 +565,7 @@ def services_scheduler_settings_misc(verbose: bool = False, test_names: list = N
 def services_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     """Run the complete component-based AI Export service test set."""
     print_section("Services: AI Export")
-    print_info("Testing the component runtime, datasets, analyses, and probes")
+    print_info("Testing the component runtime, datasets, analyses, temporal policy, and serialization")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *AI_EXPORT_SERVICE_TEST_PATHS, "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])

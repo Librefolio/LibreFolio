@@ -26,7 +26,7 @@ export const AI_EXPORT_DOMAIN_NOTES: Readonly<Record<AiExportDomain, readonly st
 
 export interface AiExportAnalysisInstructionTemplate {
     readonly id: string;
-    readonly version: 3;
+    readonly version: 1;
     readonly analysisId: AiExportAnalysisId;
     readonly objective: string;
     readonly steps: readonly string[];
@@ -35,7 +35,7 @@ export interface AiExportAnalysisInstructionTemplate {
 function defineAnalysisInstruction(analysisId: AiExportAnalysisId, objective: string, steps: readonly string[]): AiExportAnalysisInstructionTemplate {
     return {
         id: `${analysisId}.instructions`,
-        version: 3,
+        version: 1,
         analysisId,
         objective,
         steps,

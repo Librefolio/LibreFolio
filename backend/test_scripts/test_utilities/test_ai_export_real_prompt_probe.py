@@ -12,10 +12,10 @@ from backend.app.services.auth_service import hash_password, verify_password
 from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     COMPOSITION_COMPONENTS,
     NAMED_PROMPT_RETENTION,
-    PUBLIC_CATALOG_V3_ANALYSES,
-    PUBLIC_CATALOG_V3_DATASETS,
-    PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT,
-    PUBLIC_CATALOG_V3_PROFILE,
+    PUBLIC_CATALOG_V1_ANALYSES,
+    PUBLIC_CATALOG_V1_DATASETS,
+    PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT,
+    PUBLIC_CATALOG_V1_PROFILE,
     AssetCandidate,
     FxCandidate,
     ProbeError,
@@ -53,9 +53,9 @@ from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     parse_target_case,
     prepare_runtime_credentials,
     prompt_size_category,
-    public_catalog_v3_cases,
-    public_catalog_v3_scope,
-    public_catalog_v3_selections,
+    public_catalog_v1_cases,
+    public_catalog_v1_scope,
+    public_catalog_v1_selections,
     rank_asset_candidates,
     rank_fx_candidates,
     representative_cases,
@@ -119,7 +119,7 @@ def _public_metric(
     status: str = "ok",
 ) -> dict[str, object]:
     domain = selection_id.partition(".")[0]
-    mode = "data" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis"
+    mode = "data" if selection_id in PUBLIC_CATALOG_V1_DATASETS else "analysis"
     return {
         "user_alias": "marco",
         "mode": mode,
@@ -491,48 +491,48 @@ def test_tuning_v2_excludes_only_all_data_and_builds_approved_matrices():
     assert [(case["period_label"], case["detail_level"]) for case in as_of_analysis_cases] == [("1Y", "standard")]
 
 
-def test_public_catalog_v3_profile_is_exact_19_by_6_without_6m():
+def test_public_catalog_v1_profile_is_exact_19_by_6_without_6m():
     selections = [
         {
-            "kind": "dataset" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis",
+            "kind": "dataset" if selection_id in PUBLIC_CATALOG_V1_DATASETS else "analysis",
             "id": selection_id,
             "domain": selection_id.partition(".")[0],
             "supported_detail_levels": ["compact", "standard", "full"],
         }
-        for selection_id in reversed((*PUBLIC_CATALOG_V3_DATASETS, *PUBLIC_CATALOG_V3_ANALYSES))
+        for selection_id in reversed((*PUBLIC_CATALOG_V1_DATASETS, *PUBLIC_CATALOG_V1_ANALYSES))
     ]
 
-    selected = public_catalog_v3_selections(selections)
-    cases = [case for selection in selected for case in public_catalog_v3_cases(selection)]
+    selected = public_catalog_v1_selections(selections)
+    cases = [case for selection in selected for case in public_catalog_v1_cases(selection)]
 
-    assert _parse_args(["--profile", PUBLIC_CATALOG_V3_PROFILE]).profile == PUBLIC_CATALOG_V3_PROFILE
-    assert [selection["id"] for selection in selected] == [*PUBLIC_CATALOG_V3_DATASETS, *PUBLIC_CATALOG_V3_ANALYSES]
+    assert _parse_args(["--profile", PUBLIC_CATALOG_V1_PROFILE]).profile == PUBLIC_CATALOG_V1_PROFILE
+    assert [selection["id"] for selection in selected] == [*PUBLIC_CATALOG_V1_DATASETS, *PUBLIC_CATALOG_V1_ANALYSES]
     assert len(selected) == 19
-    assert len(cases) == PUBLIC_CATALOG_V3_EXPECTED_CASE_COUNT == 114
+    assert len(cases) == PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT == 114
     assert {case["period_label"] for case in cases} == {"3M", "1Y"}
     assert {case["detail_level"] for case in cases} == {"compact", "standard", "full"}
     assert all(case["period_label"] != "6M" for case in cases)
     with pytest.raises(ProbeError, match="only 3M and 1Y"):
-        public_catalog_v3_cases(selected[0], period_filter="6M")
+        public_catalog_v1_cases(selected[0], period_filter="6M")
     with pytest.raises(ProbeError, match="exact 114-case"):
-        run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V3_PROFILE, "--period", "3M"]))
+        run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V1_PROFILE, "--period", "3M"]))
     with pytest.raises(ProbeError, match="exactly one deterministic user"):
-        run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V3_PROFILE, "--user", "alfy", "--user", "marco"]))
+        run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V1_PROFILE, "--user", "alfy", "--user", "marco"]))
     assert parse_target_case("marco|portfolio.pac_planning|6M|standard|all").period_label == "6M"
 
 
-def test_public_catalog_v3_selection_fails_closed_and_filters_exactly():
+def test_public_catalog_v1_selection_fails_closed_and_filters_exactly():
     selections = [
         {
-            "kind": "dataset" if selection_id in PUBLIC_CATALOG_V3_DATASETS else "analysis",
+            "kind": "dataset" if selection_id in PUBLIC_CATALOG_V1_DATASETS else "analysis",
             "id": selection_id,
             "domain": selection_id.partition(".")[0],
         }
-        for selection_id in (*PUBLIC_CATALOG_V3_DATASETS, *PUBLIC_CATALOG_V3_ANALYSES)
+        for selection_id in (*PUBLIC_CATALOG_V1_DATASETS, *PUBLIC_CATALOG_V1_ANALYSES)
     ]
     selections.append({"kind": "dataset", "id": "portfolio.internal", "domain": "portfolio"})
 
-    broker_analyses = public_catalog_v3_selections(selections, mode="analysis", domain="broker")
+    broker_analyses = public_catalog_v1_selections(selections, mode="analysis", domain="broker")
 
     assert [selection["id"] for selection in broker_analyses] == [
         "broker.review",
@@ -540,7 +540,7 @@ def test_public_catalog_v3_selection_fails_closed_and_filters_exactly():
         "broker.fiscal_lots",
     ]
     with pytest.raises(ProbeError, match="absent"):
-        public_catalog_v3_selections(selections[:-2])
+        public_catalog_v1_selections(selections[:-2])
 
 
 def test_representative_scopes_keep_dashboard_one_rich_broker_asset_and_fx():
@@ -573,7 +573,7 @@ def test_representative_scopes_keep_dashboard_one_rich_broker_asset_and_fx():
     ]
 
 
-def test_public_catalog_v3_scope_uses_broker_and_history_reasons_without_extra_cases():
+def test_public_catalog_v1_scope_uses_broker_and_history_reasons_without_extra_cases():
     scopes = [
         {"domain": "portfolio", "scope_alias": "all", "inventory": {"position_count": 20}},
         {
@@ -592,8 +592,8 @@ def test_public_catalog_v3_scope_uses_broker_and_history_reasons_without_extra_c
         {"domain": "fx", "scope_alias": "fx_pair_anon_01"},
     ]
 
-    ordinary = public_catalog_v3_scope(scopes, {"id": "broker.review", "domain": "broker"})
-    fx = public_catalog_v3_scope(scopes, {"id": "fx.pair_analysis", "domain": "fx"})
+    ordinary = public_catalog_v1_scope(scopes, {"id": "broker.review", "domain": "broker"})
+    fx = public_catalog_v1_scope(scopes, {"id": "fx.pair_analysis", "domain": "fx"})
 
     assert ordinary is not None and ordinary["scope_alias"] == "broker_anon_01"
     assert fx is not None
@@ -922,6 +922,20 @@ def test_run_comparison_reports_all_statuses_and_regression_rule():
         "portfolio.recovered",
         "portfolio.failed",
     }
+
+
+def test_run_comparison_reports_prompt_hash_changes_without_failing_functional_status():
+    previous = _metric("portfolio.same_metrics")
+    current = _metric("portfolio.same_metrics")
+    previous["rendered_prompt_sha256"] = "a" * 64
+    current["rendered_prompt_sha256"] = "b" * 64
+
+    [row] = compare_metric_runs({"entries": [current]}, {"entries": [previous]})
+
+    assert row["status"] == "unchanged"
+    assert row["comparison_basis"] == "functional_metrics_v1"
+    assert row["prompt_content_changed"] is True
+    assert row["regression"] is False
 
 
 def test_run_comparison_reports_signal_history_event_and_coverage_deltas():
