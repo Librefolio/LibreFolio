@@ -184,4 +184,37 @@ test.describe('AI Export request and clipboard contract', () => {
         expect(clipboard).toContain('Per-Asset Short- and Long-Horizon Thesis');
         expect(clipboard).toContain('Please provide your answer in: English.');
     });
+
+    test('exports capital-loss offset analysis with FIFO and fiscal-input contract', async ({page}) => {
+        await gotoDashboard(page);
+        await openAiExportPanel(page);
+        await selectAiExportSelection(page, 'analysis', 'portfolio.fiscal_lots');
+        await page.getByTestId('ai-export-detail-compact').click();
+
+        const notes = 'Prioritize losses expiring first without changing strategic exposures unnecessarily.';
+        await page.getByTestId('ai-export-user-notes').fill(notes);
+        const {payload} = await exportCurrentSelection(page);
+
+        expect(payload.domain).toBe('portfolio');
+        expect(payload.selection).toEqual({
+            kind: 'analysis',
+            id: 'portfolio.fiscal_lots',
+            version: 3,
+            instruction_template_id: 'portfolio.fiscal_lots.instructions',
+            instruction_template_version: 3,
+            response_contract_id: 'portfolio.fiscal_lots.response',
+            response_contract_version: 3,
+        });
+        expect(payload.detail_level).toBe('compact');
+        expect(payload.expected_catalog_version).toBe(3);
+        expect(payload).not.toHaveProperty('broker_ids');
+        expectUppercaseCurrency(payload.target_currency, 'target_currency');
+        expectIsoPeriod(payload);
+
+        const clipboard = await waitForClipboard(page, ['User Tax-Loss Inventory', 'Economic FIFO Candidate Map', 'Expiry and Decision Timeline', 'Conditional Offset Strategies', 'cassetto fiscale', notes], 'Capital-loss offset Analysis clipboard was not populated');
+        expect(clipboard).toContain('dataset_id: portfolio.fifo');
+        expect(clipboard).toContain('remaining usable amount');
+        expect(clipboard).toContain('amount already used or reserved');
+        expect(clipboard).toContain('Never recommend a transaction solely for tax reasons');
+    });
 });

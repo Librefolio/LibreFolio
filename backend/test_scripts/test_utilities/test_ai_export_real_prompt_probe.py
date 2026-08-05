@@ -232,12 +232,12 @@ def test_target_case_representative_scope_supports_asset_and_fx_domains():
 
     asset = select_target_scope(
         scopes,
-        TargetProbeCase("marco", "asset.trend_analysis", "1Y", "standard", "representative"),
+        TargetProbeCase("marco", "asset.market_analysis", "1Y", "standard", "representative"),
         domain="asset",
     )
     fx = select_target_scope(
         scopes,
-        TargetProbeCase("marco", "fx.trend_review", "1Y", "standard", "representative"),
+        TargetProbeCase("marco", "fx.pair_analysis", "1Y", "standard", "representative"),
         domain="fx",
     )
 
@@ -358,7 +358,7 @@ def test_representative_profile_keeps_all_base_prompts_and_only_density_anchors(
     }
     analysis = {
         "kind": "analysis",
-        "id": "portfolio.description",
+        "id": "portfolio.pac_planning",
     }
 
     assert is_technical_dataset(technical) is True
@@ -457,9 +457,8 @@ def test_tuning_v2_excludes_only_all_data_and_builds_approved_matrices():
     temporal_analysis_cases = tuning_v2_cases(
         {
             "kind": "analysis",
-            "id": "portfolio.performance_attribution",
+            "id": "portfolio.performance_market_drivers",
             "required_dataset_ids": [
-                "portfolio.overview",
                 "portfolio.performance_flows",
             ],
             "optional_dataset_ids": [],
@@ -757,7 +756,7 @@ def test_prompt_composition_reuses_official_breakdown_and_reconciles():
 @pytest.mark.parametrize(
     ("metric", "expected_primary", "expected_tag"),
     [
-        ({"selection_id": "portfolio.performance_attribution", "domain": "portfolio", "status": "ok"}, "financial", "financial"),
+        ({"selection_id": "portfolio.synthetic_financial", "domain": "portfolio", "status": "ok"}, "financial", "financial"),
         ({"selection_id": "portfolio.overview_and_history", "domain": "portfolio", "status": "ok"}, "financial_with_context", "financial_with_context"),
         ({"selection_id": "asset.market_analysis", "domain": "asset", "status": "ok"}, "explicit_technical", "explicit_technical"),
         ({"selection_id": "portfolio.fiscal_lots", "domain": "portfolio", "status": "ok"}, "fifo", "fifo"),

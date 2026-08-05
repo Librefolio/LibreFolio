@@ -1,11 +1,11 @@
 ---
-title: "AiExportSnapshotService and AI Export Snapshot Platform"
+title: "AI Export Runtime Service and Snapshot Platform"
 category: entity
 type: service
 date: 2026-07-26
-updated: 2026-08-04
+updated: 2026-08-05
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
-tags: [backend, frontend, ai-export, snapshot, service, profiles, assemblers, mcp, security]
+tags: [backend, frontend, ai-export, snapshot, service, components, datasets, analyses, mcp, security]
 related:
   - sources/phase00-ai-export-backend-snapshot
   - decisions/ai-export-versioned-snapshot-boundary
@@ -24,24 +24,29 @@ related:
   - concepts/ai-export-catalog-granularity-and-composition
 ---
 
-# AiExportSnapshotService and AI Export Snapshot Platform
+# AI Export Runtime Service and Snapshot Platform
 
 ## Role
 
-`AiExportSnapshotService` is the FastAPI-independent orchestration boundary for AI Export V2. It turns an authenticated, discriminated request into one typed, versioned Portfolio, Broker, Asset, or FX snapshot by resolving an exact profile, deriving broker scope, and dispatching to the appropriate assembler. The wider platform includes the static profile catalog, strict schemas, shared normalization/sampling/coverage/telemetry utilities, domain assemblers, and the frontend compatibility/rendering/clipboard boundary.
+`AiExportRuntimeService` is the sole backend orchestration boundary for AI Export.
+It turns an authenticated V3 selection into a typed Snapshot V2 by validating
+the public catalog choice, deriving broker scope, composing required/optional
+datasets from reusable components, and returning deterministic facts and
+metadata. The frontend owns trusted prompt rendering, localization, contextual
+notes and clipboard transport.
 
 ## Location
 
-`backend/app/services/ai_export/service.py`
+`backend/app/services/ai_export/runtime_service.py`
 
 ## Key Interfaces
 
 | Interface | Responsibility |
 |---|---|
-| `AiExportSnapshotService.get_catalog()` | Returns the static, user-data-free 54-entry compatibility catalog. |
-| `prepare_request(user_id, request)` | Resolves the exact profile, loads accessible broker IDs once, rejects denied explicit scope, and produces `AiExportPreparedRequest`. |
-| `build_snapshot(user_id, request)` | Dispatches to the Asset, FX, Portfolio, or Broker assembler. |
-| `resolve_profile(domain, task, detail)` | Exact allow-list lookup; raises an unsupported-profile error instead of defaulting. |
+| `AiExportRuntimeService.get_catalog()` | Returns the cached static public catalog: 8 datasets and 11 analyses. |
+| `AiExportRuntimeService.build_snapshot()` | Validates selection/scope and composes a Snapshot V2 through the V3 registries. |
+| `ComponentComposer.compose()` | Builds each component once per request and enforces required/optional failure behavior. |
+| Component/Dataset/Analysis registries | Define the finite 67/40/11 composition graph. |
 | `GET /api/v1/ai-export/catalog` | HTTP catalog adapter. |
 | `POST /api/v1/ai-export/snapshot` | Authenticated read-only HTTP snapshot adapter with typed problems. |
 
@@ -49,24 +54,30 @@ related:
 
 ```text
 Strict request
-  → exact profile resolver
+  → public selection resolver
   → authenticated broker scope
-  → domain assembler
-      → Portfolio Engine / PortfolioService
-      → LotsAnalysisService / runtime FIFO
-      → Asset and FX source services
-      → SignalService curated bundle
+  → AnalysisSpec or public DatasetSpec
+  → DatasetSpec composition
+  → ComponentComposer + request BuildContext
+      → Portfolio Engine / PortfolioService / runtime FIFO
+      → Asset and FX source services / SignalService
   → typed versioned snapshot
   → frontend contract verification
   → safe local YAML/Markdown prompt
   → Clipboard API
 ```
 
-- The current semantic-composition layer exposes 32 `DatasetSpec` entries and 17 `AnalysisSpec` entries over 65 reviewed `ComponentSpec` builders. A request-scoped `BuildContext` memoizes components and raw typed resources so analyses can reuse facts without duplicate I/O or signal calculation.
-- Analyses compose ordered required and optional datasets; required failures fail closed and optional failures degrade to omission. The complete `*.all_data` entries are computed unions of canonical complete datasets, not special builders and not unions of every focused public choice.
-- `assemblers/` map authoritative domain services; they do not own independent portfolio, FIFO, FX, or signal mathematics.
-- `technical.py` adapts profile-owned bundles to the shared [[decisions/signal-backend-plugin-architecture]].
-- `normalization.py`, `sampling.py`, `coverage.py`, and `telemetry.py` provide deterministic shared policies.
+- The final registry has 67 `ComponentSpec`, 40 `DatasetSpec`, and 11 public
+  `AnalysisSpec` entries. Only eight datasets are directly selectable.
+- A request-scoped `BuildContext` memoizes components and typed resources so
+  analyses reuse facts without duplicate I/O or signal calculation.
+- Required datasets fail closed. Optional components degrade only with explicit
+  omission/unavailable diagnostics.
+- `*.all_data` entries remain internal computed unions, not special builders.
+- Temporal policy lives under `temporal/`; `telemetry.py` contains only canonical
+  JSON and chars/4 estimation.
+- Registry/composer defaults and the public catalog are shared; response stats
+  use one canonical dump plus integer fixed-point convergence.
 - The frontend catalog intersects local presentation definitions with the backend catalog and fails closed before requesting or rendering a snapshot.
 
 ## Security and Failure Model
@@ -97,16 +108,25 @@ The service does not return prompt text, labels, translations, or user notes. `f
 ## Design Notes
 
 - Portfolio and Broker share authoritative report data but have separate request/response domains and task catalogs.
-- PAC Planning and Rebalancing both receive `portfolio.overview`, so their prompts already include per-position Asset/Broker rows with quantity, unit price, value, WAC, P&L, and weight. Their optional Asset Snapshot/Comparison datasets add per-Asset observed market context when available; they are not aggregate-only.
+- PAC Planning and Rebalancing receive `portfolio.overview_and_history`, so
+  their prompts include positions, prices, value, WAC, P&L, weights, cash,
+  performance, flows, income, costs, economic FIFO summary and compact
+  per-Asset market context. `portfolio.asset_history` is the denser optional
+  follow-up.
 - Position unit price, observed Asset market price, and bucketed price history are distinct data contracts. See [[concepts/ai-export-catalog-granularity-and-composition]].
-- `broker.technical` currently includes coverage, indicator history, events, and breadth but no raw technical-price/OHLC component. `asset.trend_analysis` currently composes Overview + Market Technical without `asset.drawdown_context`, despite the Italian UI description mentioning Drawdown. These are recorded gaps, not service changes.
-- Asset and FX can assemble independently while sharing technical and normalized-return utilities.
+- Asset and FX compose independently while sharing component, temporal and
+  signal infrastructure.
 - FIFO is queried at runtime through [[entities/lots-analysis-service]]; no AI-specific FIFO persistence is introduced.
 - Portfolio cash decomposition remains engine-owned. Currency exposure uses factual native balances converted at snapshot time and declares a separate denominator; see [[problems/ai-export-cash-fx-valuation-basis-mismatch]].
 - Asset drawdown market context uses technical-window observations when present, otherwise selected observed history. `drawdown_recovery` applicability remains based on two selected observations and a measurable prior maximum; see [[problems/ai-export-drawdown-selected-history-fallback]].
 - Clipboard capability fallback never changes the export architecture: it transports the same prepared V2 prompt and never revives legacy builders; see [[problems/ai-export-clipboard-fallback-unreachable]].
 - New tasks or plugins require explicit backend and frontend contract changes plus versioned tests; registry auto-enrolment is intentionally forbidden.
-- AI Export service/schema/API tests and the frontend AI Export+signal unit/E2E set are explicitly registered in the canonical test runner, so backend, frontend, and complete aggregate suites execute them. Unrelated pre-existing orphan tests remain out of scope.
+- AI Export service/schema/API/probe and frontend unit/E2E tests are explicitly
+  registered in the canonical runner; the final orphan audit is zero.
+- The backend/frontend public catalog duplication is intentional: it is the
+  fail-closed compatibility handshake, not duplicate runtime logic.
+- The legacy profile/assembler runtime, V1 schema and 11 internal Analysis specs
+  were removed after a 114/114 exact-output comparison.
 - The final UI intentionally separates remembered draft state from effective export state: response language is refreshed from locale, web research is false, and Snapshot notes are absent even when the raw draft remains stored.
 - The panel is portalized to `document.body` with `z-index: 9000`; owned portalized select events, Escape behavior, outside-click closing, repositioning, and trigger-focus restoration are handled by the menu component rather than by the four routes.
 
@@ -122,38 +142,34 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | 2026-07-27 | Final UX replaced exposed mode/language/web/compatibility controls with the custom analysis select and locale-owned defaults; added per-user/per-context persistent draft memory, Snapshot note non-export, body portal, and domain manual links. |
 | 2026-07-27 | Project owner approved the desktop/mobile review; the completed plan chain was indexed by `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` in its nested migration location. |
 | 2026-08-04 | A 49/49 catalog explanation documented the 32-dataset/17-analysis/65-component composition model, confirmed per-position/per-Asset facts in PAC and Rebalancing, clarified price and `all_data` semantics, and recorded two potential gaps. Real Portfolio probe `20260804T085052.052297Z` passed 5/5 with unchanged databases and a passed secret scan. |
+| 2026-08-05 | Final V3 closure reduced the public catalog to 8 datasets/11 analyses over 67 components and 40 internal datasets, removed the entire profile/assembler runtime and proved 114/114 prompt equivalence in candidate `20260804T224056.073291Z`. |
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | Completed chain index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
-| UI catalog explanation and prompt verification | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
-| Service orchestration | `backend/app/services/ai_export/service.py` |
-| Exact resolver/catalog | `backend/app/services/ai_export/resolver.py` |
-| Profile composition models | `backend/app/services/ai_export/models.py` |
-| Task and detail profiles | `backend/app/services/ai_export/profiles/` |
+| Final audit and closure | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
+| Runtime orchestration | `backend/app/services/ai_export/runtime_service.py` |
+| Runtime schemas | `backend/app/schemas/ai_export_runtime.py` |
 | Dataset/analysis composition | `backend/app/services/ai_export/datasets/`, `backend/app/services/ai_export/analyses/` |
 | Component composition | `backend/app/services/ai_export/components/`, `backend/app/services/ai_export/dependencies.py`, `backend/app/services/ai_export/composer.py` |
-| Domain assemblers | `backend/app/services/ai_export/assemblers/` |
-| Shared technical runner | `backend/app/services/ai_export/technical.py` |
-| Normalization/sampling/coverage/telemetry | `backend/app/services/ai_export/normalization.py`, `sampling.py`, `coverage.py`, `telemetry.py` |
+| Temporal policy | `backend/app/services/ai_export/temporal/` |
+| Canonical serialization utilities | `backend/app/services/ai_export/telemetry.py` |
 | HTTP API | `backend/app/api/v1/ai_export.py` |
-| Strict schemas | `backend/app/schemas/ai_export.py` |
 | Frontend platform | `frontend/src/lib/features/ai-export/` |
 | Custom analysis panel and manual links | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte` |
 | Snapshot/full-prompt normalization | `frontend/src/lib/features/ai-export/aiExportOptions.ts` |
-| Persistent contextual memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts` |
+| Short-lived contextual memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts` |
 | Body portal and locale-owned panel session | `frontend/src/lib/features/ai-export/AiExportMenuV2.svelte` |
 | Locale mapping | `frontend/src/lib/features/ai-export/ui.ts` |
 | Client-session user isolation | `frontend/src/lib/stores/app/clientSession.ts`, `frontend/src/lib/stores/app/auth.ts` |
 | Shared book-link fallback | `frontend/src/lib/components/ui/DocsLink.svelte` |
-| Asset drawdown assembler/regression | `backend/app/services/ai_export/assemblers/asset.py`, `backend/test_scripts/test_services/test_ai_export_asset_fx.py` |
-| Clipboard orchestration/regression | `frontend/src/lib/features/ai-export/aiExportClipboardV2.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportClipboardV2.test.ts` |
+| Clipboard orchestration/regression | `frontend/src/lib/features/ai-export/aiExportClipboard.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportClipboard.test.ts` |
 | Backend tests | `backend/test_scripts/test_services/test_ai_export_*.py`, `backend/test_scripts/test_api/test_ai_export_api.py` |
 | Frontend tests | `frontend/src/lib/features/ai-export/__tests__/` |
 | UI memory/options regressions | `frontend/src/lib/features/ai-export/__tests__/aiExportMemory.test.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportOptions.test.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportUi.test.ts` |
 | Canonical test registration | `scripts/test_runner/_backend_services.py`, `scripts/test_runner/_backend_schemas.py`, `scripts/test_runner/_backend_api.py`, `scripts/test_runner/_frontend_ai_export.py`, `scripts/test_runner/_registry.py`, `scripts/test_runner/_suites.py` |
-| Browser E2E | `frontend/e2e/ai-export.spec.ts` |
+| Browser E2E | `frontend/e2e/ai-export/` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |
 | Composition architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |

@@ -21,27 +21,25 @@ domains:
   one `PortfolioService.get_report` call per request regardless of how many
   components need it.
 
-Transitional reuse note: a handful of pure, formula-free helpers are imported
-from the legacy `backend.app.services.ai_export.assemblers.fifo` module
-(deterministic lot status/residual-cost-basis classification and the bulk
-transacted-asset-id discovery query) - these are plain FIFO-lot bookkeeping
-helpers, not financial engine formulas, and are deliberately isolated behind
-the `_LEGACY_FIFO_HELPERS` import block below for later cleanup once that
-legacy module is retired.
+FIFO lot status/residual-cost-basis classification and transacted-asset discovery
+live here with the shared Portfolio/Broker payload mapping. They are plain
+bookkeeping helpers around authoritative Lots Analysis output, not a second
+financial engine.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, Broker, BrokerUserAccess
+from backend.app.db.models import Asset, Broker, BrokerUserAccess, Transaction
 from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal
 from backend.app.schemas.portfolio import (
     AllocationItem,
@@ -56,15 +54,6 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PortfolioSummary,
     UnallocatedContribution,
-)
-
-# -- Transitional reuse (see module docstring) --------------------------------
-from backend.app.services.ai_export.assemblers.fifo import (  # noqa: E402  _LEGACY_FIFO_HELPERS
-    default_transaction_asset_ids_loader,
-    has_nonzero_open_lot,
-    lot_is_eligible,
-    lot_residual_cost_basis,
-    lot_status,
 )
 from backend.app.services.ai_export.components.resources import LotsResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
@@ -111,6 +100,82 @@ __all__ = [
 # =============================================================================
 # Currency-safe helpers
 # =============================================================================
+
+
+class _FifoLotStatus(StrEnum):
+    OPEN = "open"
+    PARTIAL = "partial"
+    CLOSED = "closed"
+
+
+TransactionAssetIdsLoader = Callable[
+    [AsyncSession, Sequence[int], Date],
+    Awaitable[set[int]],
+]
+
+
+async def default_transaction_asset_ids_loader(
+    session: AsyncSession,
+    broker_ids: Sequence[int],
+    snapshot_as_of: Date,
+) -> set[int]:
+    """Discover every transacted Asset in scope through ``snapshot_as_of``."""
+
+    if not broker_ids:
+        return set()
+    result = await session.execute(
+        select(Transaction.asset_id)
+        .where(
+            Transaction.broker_id.in_(sorted(set(broker_ids))),
+            Transaction.date <= snapshot_as_of,
+            Transaction.asset_id.is_not(None),
+        )
+        .distinct()
+    )
+    return {int(asset_id) for asset_id in result.scalars().all() if asset_id is not None}
+
+
+def _lot_decimal(value: Any) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def lot_status(lot: Any) -> _FifoLotStatus:
+    open_quantity = _lot_decimal(getattr(lot, "open_quantity", None))
+    realized_quantity = _lot_decimal(getattr(lot, "realized_quantity", None))
+    if open_quantity.is_zero():
+        return _FifoLotStatus.CLOSED
+    if realized_quantity.is_zero():
+        return _FifoLotStatus.OPEN
+    return _FifoLotStatus.PARTIAL
+
+
+def lot_residual_cost_basis(lot: Any) -> Decimal:
+    """Return original cost attributable to the still-open quantity."""
+
+    open_quantity = abs(_lot_decimal(getattr(lot, "open_quantity", None)))
+    if open_quantity.is_zero():
+        return Decimal("0")
+    original_quantity = abs(_lot_decimal(getattr(lot, "original_quantity", None)))
+    if original_quantity.is_zero():
+        return Decimal("0")
+    return _lot_decimal(getattr(lot, "original_cost", None)) * open_quantity / original_quantity
+
+
+def has_nonzero_open_lot(lots: Sequence[Any]) -> bool:
+    return any(not _lot_decimal(getattr(lot, "open_quantity", None)).is_zero() for lot in lots)
+
+
+def lot_is_eligible(lot: Any, *, cutoff: Date) -> bool:
+    """Keep open/partial lots and closed lots inside the requested period."""
+
+    if lot_status(lot) is not _FifoLotStatus.CLOSED:
+        return True
+    closing_date = getattr(lot, "closing_date", None)
+    return closing_date is not None and closing_date >= cutoff
 
 
 def _currency(currency_code: str, value: Decimal | None) -> Currency | None:

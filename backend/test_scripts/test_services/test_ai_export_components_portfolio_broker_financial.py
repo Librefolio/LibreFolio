@@ -25,6 +25,7 @@ import asyncio
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -911,6 +912,101 @@ class TestPerformanceBuckets:
         assert Decimal(third["return_percent"]) == (Decimal("1.02") / Decimal("1.01") - Decimal(1))
         assert Decimal(third["normalized_index_base_100"]) == Decimal("102")
         assert Decimal(third["return_from_first_ratio"]) == Decimal("0.02")
+
+
+# =============================================================================
+# FIFO bookkeeping helpers
+# =============================================================================
+
+
+class TestFifoBookkeepingHelpers:
+    def test_status_residual_cost_and_open_detection(self):
+        open_lot = _lot(1, 1)
+        partial_lot = _lot(
+            1,
+            2,
+            open_quantity=5,
+            realized_quantity=5,
+        )
+        closed_lot = _lot(
+            1,
+            3,
+            open_quantity=0,
+            realized_quantity=10,
+            closing_date=date(2026, 1, 5),
+        )
+
+        assert shared_payloads.lot_status(open_lot).value == "open"
+        assert shared_payloads.lot_status(partial_lot).value == "partial"
+        assert shared_payloads.lot_status(closed_lot).value == "closed"
+        assert shared_payloads.lot_residual_cost_basis(open_lot) == Decimal("1000")
+        assert shared_payloads.lot_residual_cost_basis(partial_lot) == Decimal("500")
+        assert shared_payloads.lot_residual_cost_basis(closed_lot) == Decimal("0")
+        assert shared_payloads.has_nonzero_open_lot([closed_lot, partial_lot]) is True
+        assert shared_payloads.has_nonzero_open_lot([closed_lot]) is False
+
+    def test_residual_cost_handles_zero_original_quantity(self):
+        lot = SimpleNamespace(
+            open_quantity=Decimal("1"),
+            original_quantity=Decimal("0"),
+            original_cost=Decimal("100"),
+        )
+        assert shared_payloads.lot_residual_cost_basis(lot) == Decimal("0")
+
+    def test_eligibility_keeps_open_and_in_period_closed_lots(self):
+        cutoff = date(2026, 1, 1)
+        open_lot = _lot(1, 1)
+        before = _lot(
+            1,
+            2,
+            open_quantity=0,
+            realized_quantity=10,
+            closing_date=date(2025, 12, 31),
+        )
+        boundary = _lot(
+            1,
+            3,
+            open_quantity=0,
+            realized_quantity=10,
+            closing_date=cutoff,
+        )
+
+        assert shared_payloads.lot_is_eligible(open_lot, cutoff=cutoff) is True
+        assert shared_payloads.lot_is_eligible(before, cutoff=cutoff) is False
+        assert shared_payloads.lot_is_eligible(boundary, cutoff=cutoff) is True
+
+    @pytest.mark.asyncio
+    async def test_transaction_asset_loader_is_bulk_scoped_and_deduplicated(self):
+        session = AsyncMock(spec=AsyncSession)
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [9, 3, 9, None]
+        session.execute.return_value = result
+
+        asset_ids = await shared_payloads.default_transaction_asset_ids_loader(
+            session,
+            (5, 2, 5),
+            date(2026, 1, 31),
+        )
+
+        assert asset_ids == {3, 9}
+        session.execute.assert_awaited_once()
+        statement = session.execute.await_args.args[0]
+        params = statement.compile().params
+        assert [2, 5] in params.values()
+        assert date(2026, 1, 31) in params.values()
+
+    @pytest.mark.asyncio
+    async def test_transaction_asset_loader_skips_empty_scope(self):
+        session = AsyncMock(spec=AsyncSession)
+        assert (
+            await shared_payloads.default_transaction_asset_ids_loader(
+                session,
+                (),
+                date(2026, 1, 31),
+            )
+            == set()
+        )
+        session.execute.assert_not_awaited()
 
 
 # =============================================================================

@@ -1,6 +1,6 @@
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 
-import {buildAiExportSnapshotRequest, copyAiExport, prepareAiExport, writePreparedAiExport} from '../aiExportClipboard';
+import {AiExportClipboardUnavailableError, buildAiExportSnapshotRequest, copyAiExport, defaultAiExportClipboardWriter, prepareAiExport, writePreparedAiExport} from '../aiExportClipboard';
 import {aiExportOptionsFingerprint} from '../aiExportOptions';
 import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
@@ -12,6 +12,10 @@ const options = {
     responseLanguage: 'English' as const,
     userNotes: 'Focus',
 };
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
 
 describe('AI Export clipboard orchestration', () => {
     it('builds the new selection/period request contract', () => {
@@ -86,5 +90,20 @@ describe('AI Export clipboard orchestration', () => {
 
         expect(result.prompt).not.toBe('');
         expect(writer).toHaveBeenCalledOnce();
+    });
+
+    it('surfaces clipboard permission failures as typed unavailable errors', async () => {
+        const denied = Object.assign(new Error('Permission denied'), {
+            name: 'NotAllowedError',
+        });
+        const writeText = vi.fn().mockRejectedValue(denied);
+        vi.stubGlobal('navigator', {clipboard: {writeText}});
+
+        await expect(defaultAiExportClipboardWriter('prompt')).rejects.toMatchObject({
+            name: 'AiExportClipboardUnavailableError',
+            kind: 'clipboard_unavailable',
+            cause: denied,
+        } satisfies Partial<AiExportClipboardUnavailableError>);
+        expect(writeText).toHaveBeenCalledWith('prompt');
     });
 });

@@ -72,7 +72,7 @@
 | [[decisions/risk-g6-application-contracts]] | Stable/pending-approval G6 contracts: proxy audit trail, lazy-panel cache identity, present-buckets + Show all UX, and optional inert YAML tags | 2026-07-29 | risk, frontend, scenarios, cache, yaml |
 | [[decisions/risk-quant-engine-process-boundary]] | QuantLib simulation and Riskfolio optimization run in separate lazy spawn pools with warm reuse, safe idle reap, and no in-process native math or silent fallback | 2026-07-28 | backend, risk, quantlib, riskfolio, multiprocessing |
 | [[decisions/ai-export-contextual-ui-memory]] | AI Export drafts use user/context-scoped session storage with a sliding 10-minute TTL; logout or any new login resets defaults, while stale-operation guards remain | 2026-08-04 | frontend, ai-export, ui-memory, session-storage, ttl, auth, privacy |
-| [[decisions/ai-export-versioned-snapshot-boundary]] | Backend owns versioned facts; frontend owns safe prompt/clipboard rendering, omits only truly empty temporal rows, and exposes explicit Broker universes | 2026-08-03 | ai-export, backend, frontend, snapshot, security, mcp |
+| [[decisions/ai-export-versioned-snapshot-boundary]] | One V3 runtime composes backend-owned versioned facts through 67 components/40 datasets/11 analyses; frontend owns safe prompt and clipboard rendering | 2026-08-05 | ai-export, backend, frontend, snapshot, components, security, mcp |
 | [[decisions/credit-agricole-securities-only-cash-neutral-brim]] | Crédit Agricole securities-only BRIM imports trades cash-neutral; succession legs become faithful BUY+DEPOSIT pairs | 2026-07-25 | backend, brim, broker, credit-agricole, cash |
 | [[decisions/fifo-v4-income-eligibility-d1]] | FIFO v4 income eligibility uses D-1 open quantity, scoped to paying broker, transfer-aware | 2026-07-22 | backend, fifo, dividend, interest |
 | [[decisions/fifo-v4-cost-allocation-ladder]] | Distinct deterministic FEE/TAX matching ladders route asset-linked costs to lots | 2026-07-22 | backend, fifo, fee, tax |
@@ -134,7 +134,7 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
-| [[concepts/ai-export-catalog-granularity-and-composition]] | 32 datasets + 17 analyses over 65 components; PAC/rebalancing include position and optional per-Asset facts, while price levels and canonical `all_data` need clearer UI cues | ai-export, composition, datasets, analyses, ux, granularity |
+| [[concepts/ai-export-catalog-granularity-and-composition]] | V3 exposes 8 data exports + 11 analyses over 67 components/40 internal datasets; granular projections remain internal and fail closed when requested directly | ai-export, composition, datasets, analyses, ux, granularity |
 | [[concepts/cancellation-safe-inflight-deduplication]] | Shield followers and explicitly resolve leader cancellation when collapsing identical expensive async jobs | backend, async, cache, cancellation, risk |
 | [[concepts/d1-income-eligibility-window]] | Income eligibility = open quantity at end of D-1, never same-day state | backend, fifo, dividend |
 | [[concepts/deterministic-cost-matching-ladder]] | Ordered FEE/TAX target search (same-day trades → prev-day trades → open holdings → orphan) | backend, fifo, fee, tax |
@@ -229,7 +229,7 @@
 
 | Page | Summary |
 |------|---------|
-| [[entities/ai-export-snapshot-service]] | FastAPI-independent AI Export platform with 65 components, 32 datasets, 17 analyses, fail-closed composition, and a safe frontend prompt/clipboard boundary |
+| [[entities/ai-export-snapshot-service]] | Sole AI Export runtime service with 67 components, 40 internal datasets, 8 public data exports, 11 analyses, exact stats, and a safe frontend prompt/clipboard boundary |
 | [[entities/fifo-lot-engine]] | Canonical FIFO engine (backend/app/services/fifo_lot_engine.py) — quantitative replay + v4 economic allocation (income/fees/taxes, net metrics, 3-level audit) |
 | [[entities/lots-analysis-service]] | Orchestration service between API and FifoLotEngine — FX prep, economic event building, DTO mapping; no longer the income allocator of record |
 | [[entities/api-router]] | FastAPI router structure — all v1 API routes and their modules |
@@ -255,7 +255,7 @@
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
 | [[sources/phase00-risk-analysis-backend]] | Completed and audited `Release_2/Phase_0/02_riskfolioIntegration/` backend G0-G5 chain; G6 reconciled but not executed | 2026-07-28 | phase0, backend, risk, quantlib, riskfolio |
-| [[sources/phase00-ai-export-backend-snapshot]] | Completed AI Export chain plus 49/49 UI catalog explanation, composition semantics, final hardening/density evidence, and documented UX gaps | 2026-08-04 | phase0, ai-export, snapshot, composition, ux, sampling, mcp |
+| [[sources/phase00-ai-export-backend-snapshot]] | Completed AI Export chain through single-runtime V3 closure, 114/114 exact prompt equivalence, 66/66 optimal Analysis variants, and zero orphan tests | 2026-08-05 | phase0, ai-export, snapshot, composition, runtime, testing, mcp |
 | [[sources/fifo-v4-fee-tax-integration]] | `RoadmapV4_UI/fifo-engine/v4-fee_tax_integration/` | 2026-07-22 | backend, fifo, fee, tax, dividend, cost-basis |
 | [[sources/roadmap-v1-summary]] | `RoadMapV1/01-Riassunto_generale.md` | 2026-04-24 | roadmap, architecture, history |
 | [[sources/todos]] | `TODO_Completati.md` + `TODO_FUTURI.md` | 2026-05-10 | todo, planning, roadmap, features |

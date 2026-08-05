@@ -1,11 +1,9 @@
 """Pydantic payload models for the Asset-core `ComponentSpec` builders.
 
-Deliberately independent from `backend.app.schemas.ai_export` (the legacy
-task/profile public API schemas, superseded per the Phase 0 AI Export
-refinement plan - see `backend.app.services.ai_export.components.types`
-module docstring) and from `backend.app.services.ai_export.components.
-catalog` (the fail-closed foundation placeholders this module is a real
-replacement for). Every model here is `extra="forbid"`, Decimal-safe (via
+Deliberately independent from the public wire schemas and from
+`backend.app.services.ai_export.components.catalog` (the fail-closed foundation
+metadata this module implements). Every model here is `extra="forbid"`,
+Decimal-safe (via
 `backend.app.schemas.common.SafeDecimal`, which always serializes in plain
 decimal notation - never scientific notation - see that module) and
 JSON-safe, so `backend.app.services.ai_export.components.envelope.

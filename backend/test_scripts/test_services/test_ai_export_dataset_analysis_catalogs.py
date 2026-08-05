@@ -1,7 +1,8 @@
-"""Focused tests for the internal registry and public AI Export V3 catalog.
+"""Focused tests for the component registry and public AI Export V3 catalog.
 
-Covers exact public/internal IDs and counts, analysis-to-dataset mapping,
-registry validation, and declarative ``*.all_data`` expansion.
+Covers exact dataset visibility, the public-only analysis registry,
+analysis-to-dataset mapping, registry validation, and declarative
+``*.all_data`` expansion.
 """
 
 from __future__ import annotations
@@ -9,7 +10,12 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from backend.app.services.ai_export.analyses.catalog import ALL_ANALYSES, EXPECTED_ANALYSIS_COUNT, EXPECTED_PUBLIC_ANALYSIS_COUNT, PUBLIC_ANALYSES, build_analysis_registry
+from backend.app.services.ai_export.analyses.catalog import (
+    EXPECTED_ANALYSIS_COUNT,
+    EXPECTED_PUBLIC_ANALYSIS_COUNT,
+    PUBLIC_ANALYSES,
+    build_analysis_registry,
+)
 from backend.app.services.ai_export.analyses.spec import (
     AdditionalExportPeriod,
     AdditionalExportSuggestion,
@@ -91,20 +97,6 @@ EXPECTED_PUBLIC_DATASET_IDS = (
     "fx.market_and_exposure",
     "fx.market_history",
 )
-
-EXPECTED_LEGACY_ANALYSIS_MAPPING = {
-    "portfolio.performance_attribution": (("portfolio.overview", "portfolio.performance_flows"), ()),
-    "portfolio.market_events_review": (("portfolio.overview", "portfolio.asset_comparison"), ("portfolio.performance_flows",)),
-    "portfolio.income_review": (("portfolio.overview", "portfolio.performance_flows", "portfolio.income_evidence"), ()),
-    "portfolio.fifo_review": (("portfolio.overview", "portfolio.fifo"), ()),
-    "portfolio.technical_breadth": (("portfolio.overview", "portfolio.technical_summary"), ()),
-    "portfolio.description": (("portfolio.overview",), ("portfolio.performance_flows", "portfolio.technical_summary")),
-    "broker.concentration_context": (("broker.overview", "broker.concentration_evidence"), ("broker.technical_summary",)),
-    "broker.fifo_review": (("broker.overview", "broker.fifo"), ()),
-    "asset.trend_analysis": (("asset.overview", "asset.market_technical"), ()),
-    "fx.trend_review": (("fx.overview", "fx.market_technical"), ()),
-    "fx.conversion_timing": (("fx.overview", "fx.market_technical", "fx.conversion_timing_context"), ("fx.direct_exposure",)),
-}
 
 EXPECTED_PUBLIC_ANALYSIS_MAPPING = {
     "portfolio.pac_planning": (("portfolio.overview_and_history",), ()),
@@ -205,36 +197,29 @@ class TestIntegratedComponentCatalog:
 
 class TestAnalysisCatalog:
     def test_expected_analysis_counts(self):
-        assert EXPECTED_ANALYSIS_COUNT == 22
+        assert EXPECTED_ANALYSIS_COUNT == 11
         assert EXPECTED_PUBLIC_ANALYSIS_COUNT == 11
-        assert len(ALL_ANALYSES) == 22
         assert len(PUBLIC_ANALYSES) == 11
 
-    def test_analysis_registry_has_public_and_internal_entries(self, analysis_registry: AnalysisRegistry):
-        assert len(analysis_registry) == 22
+    def test_analysis_registry_is_public_only(self, analysis_registry: AnalysisRegistry):
+        assert len(analysis_registry) == 11
         assert len(analysis_registry.for_visibility(CatalogVisibility.PUBLIC)) == 11
-        assert len(analysis_registry.for_visibility(CatalogVisibility.INTERNAL)) == 11
+        assert analysis_registry.for_visibility(CatalogVisibility.INTERNAL) == ()
 
-    def test_analysis_ids_match_public_and_legacy_mappings(self, analysis_registry: AnalysisRegistry):
+    def test_analysis_ids_match_public_mapping(self, analysis_registry: AnalysisRegistry):
         assert {spec.analysis_id for spec in analysis_registry.for_visibility(CatalogVisibility.PUBLIC)} == set(EXPECTED_PUBLIC_ANALYSIS_MAPPING)
-        assert {spec.analysis_id for spec in analysis_registry.for_visibility(CatalogVisibility.INTERNAL)} == set(EXPECTED_LEGACY_ANALYSIS_MAPPING)
 
-    @pytest.mark.parametrize("mapping", [EXPECTED_PUBLIC_ANALYSIS_MAPPING, EXPECTED_LEGACY_ANALYSIS_MAPPING])
-    def test_required_optional_mapping_matches_catalog(self, analysis_registry: AnalysisRegistry, mapping):
-        for analysis_id, (expected_required, expected_optional) in mapping.items():
+    def test_required_optional_mapping_matches_catalog(self, analysis_registry: AnalysisRegistry):
+        for analysis_id, (expected_required, expected_optional) in EXPECTED_PUBLIC_ANALYSIS_MAPPING.items():
             spec = analysis_registry.get(analysis_id)
             assert spec.required_dataset_ids == expected_required, analysis_id
             assert spec.optional_dataset_ids == expected_optional, analysis_id
 
-    def test_analysis_versions_follow_visibility(self, analysis_registry: AnalysisRegistry):
-        for spec in analysis_registry.for_visibility(CatalogVisibility.PUBLIC):
+    def test_analysis_versions_are_v3(self, analysis_registry: AnalysisRegistry):
+        for spec in analysis_registry:
             assert spec.version == 3
             assert spec.instruction_template_version == 3
             assert spec.response_contract_version == 3
-        for spec in analysis_registry.for_visibility(CatalogVisibility.INTERNAL):
-            assert spec.version == 2
-            assert spec.instruction_template_version == 2
-            assert spec.response_contract_version == 2
 
     def test_no_required_optional_overlap_in_any_analysis(self, analysis_registry: AnalysisRegistry):
         for spec in analysis_registry:

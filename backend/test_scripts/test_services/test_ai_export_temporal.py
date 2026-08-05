@@ -46,6 +46,11 @@ from backend.app.services.ai_export.temporal import (
     slice_to_requested_period,
     warmup_window_start,
 )
+from backend.app.services.ai_export.temporal.uniform import (
+    UniformObservedBucket,
+    uniform_calendar_buckets,
+    uniform_observed_buckets,
+)
 
 SNAPSHOT = date(2026, 1, 1)
 AGGREGATION_FIXTURE = json.loads((Path(__file__).parents[1] / "fixtures" / "signals" / "aggregation_profiles.v1.json").read_text())
@@ -58,6 +63,107 @@ TEMPORAL_CLASS_ORDER = (
     SignalTemporalClass.SLOW,
     SignalTemporalClass.VERY_SLOW,
 )
+
+
+def test_uniform_calendar_buckets_validate_inputs_and_cover_short_ranges():
+    start = date(2026, 1, 1)
+    end = date(2026, 1, 3)
+
+    buckets = uniform_calendar_buckets(start, end, 10)
+
+    assert [(bucket.start_date, bucket.end_date) for bucket in buckets] == [
+        (date(2026, 1, 1), date(2026, 1, 1)),
+        (date(2026, 1, 2), date(2026, 1, 2)),
+        (date(2026, 1, 3), date(2026, 1, 3)),
+    ]
+    with pytest.raises(TypeError):
+        uniform_calendar_buckets("2026-01-01", end, 1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        uniform_calendar_buckets(end, start, 1)
+    with pytest.raises(TypeError):
+        uniform_calendar_buckets(start, end, True)
+    with pytest.raises(ValueError):
+        uniform_calendar_buckets(start, end, 0)
+
+
+def test_uniform_observed_buckets_validate_points_and_duplicate_dates():
+    day = date(2026, 1, 1)
+    point = ObservedPoint(date=day, value=Decimal("1"))
+
+    assert uniform_observed_buckets((), 3) == ()
+    with pytest.raises(TypeError):
+        uniform_observed_buckets((point,), True)
+    with pytest.raises(ValueError):
+        uniform_observed_buckets((point,), 0)
+    with pytest.raises(TypeError):
+        uniform_observed_buckets((object(),), 1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="unique"):
+        uniform_observed_buckets((point, point), 2)
+
+
+def test_uniform_observed_bucket_rejects_inconsistent_statistics():
+    bucket = Bucket(
+        index=0,
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 3),
+    )
+    first = ObservedPoint(date=date(2026, 1, 1), value=Decimal("2"))
+    last = ObservedPoint(date=date(2026, 1, 3), value=Decimal("3"))
+
+    with pytest.raises(TypeError):
+        UniformObservedBucket(  # type: ignore[arg-type]
+            bucket="invalid",
+            observation_count=1,
+            first=first,
+            minimum=first,
+            maximum=first,
+            last=first,
+            representative=first,
+        )
+    with pytest.raises(ValueError, match="positive"):
+        UniformObservedBucket(
+            bucket=bucket,
+            observation_count=0,
+            first=first,
+            minimum=first,
+            maximum=first,
+            last=last,
+            representative=last,
+        )
+    with pytest.raises(ValueError, match="inside"):
+        UniformObservedBucket(
+            bucket=bucket,
+            observation_count=1,
+            first=first,
+            minimum=first,
+            maximum=first,
+            last=last,
+            representative=ObservedPoint(
+                date=date(2026, 1, 4),
+                value=Decimal("3"),
+            ),
+        )
+    with pytest.raises(ValueError, match="must not follow"):
+        UniformObservedBucket(
+            bucket=bucket,
+            observation_count=2,
+            first=last,
+            minimum=first,
+            maximum=last,
+            last=first,
+            representative=last,
+        )
+    with pytest.raises(ValueError, match="minimum"):
+        UniformObservedBucket(
+            bucket=bucket,
+            observation_count=2,
+            first=first,
+            minimum=last,
+            maximum=first,
+            last=last,
+            representative=last,
+        )
+
 
 INDICATOR_POLICY_CASES = (
     (BucketDetailLevel.COMPACT, SignalTemporalClass.VERY_FAST, 2, 30, 30, (20, 23, 29)),

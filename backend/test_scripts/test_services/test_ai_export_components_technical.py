@@ -98,8 +98,7 @@ from backend.app.services.provider_registry import SignalPluginRegistry
 from backend.app.services.signal_plugins.drawdown import DrawdownParams, DrawdownPlugin
 from backend.app.services.signal_service import SignalService
 
-#: Exact replica of legacy `ASSET_FULL_BUNDLE`'s 20 signal instance IDs
-#: (`backend/app/services/ai_export/profiles/asset.py` lines 320-437).
+#: Frozen 20-instance Asset technical universe.
 ASSET_BUNDLE_INSTANCE_IDS = frozenset(
     {
         "ema_20",
@@ -125,8 +124,7 @@ ASSET_BUNDLE_INSTANCE_IDS = frozenset(
     }
 )
 
-#: Exact replica of legacy `FX_FULL_BUNDLE`'s 12 signal instance IDs
-#: (`backend/app/services/ai_export/profiles/fx.py` lines 233-292).
+#: Frozen 12-instance FX technical universe.
 FX_BUNDLE_INSTANCE_IDS = frozenset(
     {
         "ema_20",

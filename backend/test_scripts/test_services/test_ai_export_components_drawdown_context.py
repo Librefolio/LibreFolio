@@ -34,9 +34,9 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
-from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT, build_analysis_registry
+from backend.app.services.ai_export.analyses.catalog import build_analysis_registry
 from backend.app.services.ai_export.components.asset_payloads import AssetMarketSnapshotPayload, AssetPriceObservation
-from backend.app.services.ai_export.components.catalog import ALL_COMPONENTS, build_component_registry
+from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.drawdown_context import (
     REASON_NO_NATIVE_PRICE,
     DrawdownContextPayload,
@@ -49,7 +49,7 @@ from backend.app.services.ai_export.components.drawdown_context import (
 )
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
-from backend.app.services.ai_export.datasets.catalog import EXPECTED_DATASET_COUNT, build_dataset_registry
+from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 
 PERIOD_START = date(2024, 1, 1)
@@ -409,13 +409,6 @@ class TestDrawdownCatalogWiring:
             assert spec.output_model is output_model
             assert spec.version == 1
             assert spec.dependencies == deps
-
-    def test_counts_are_67_40_24(self):
-        assert len(ALL_COMPONENTS) == 67
-        assert EXPECTED_DATASET_COUNT == 40
-        assert len(build_dataset_registry()) == 40
-        assert EXPECTED_ANALYSIS_COUNT == 24
-        assert len(build_analysis_registry()) == 24
 
     def test_drawdown_datasets_excluded_from_all_data(self):
         registry = build_dataset_registry()

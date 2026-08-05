@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import cache
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -62,6 +62,7 @@ from backend.app.services.ai_export.analyses.spec import (
 from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
 from backend.app.services.ai_export.components.catalog import build_component_registry
+from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.technical_shared import load_fx_rate_series
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
@@ -82,6 +83,10 @@ from backend.app.services.ai_export.dependencies import (
     RequiredComponentBuildError,
     ResourceLoadError,
     build_bucket_plan_for_scope,
+)
+from backend.app.services.ai_export.telemetry import (
+    canonical_json,
+    estimate_tokens_chars_div_4,
 )
 from backend.app.services.ai_export.temporal.policy import (
     BucketDetailLevel,
@@ -109,6 +114,11 @@ _FX_HISTORY_COVERAGE_DATASET_IDS = frozenset(
         "fx.market_history",
     }
 )
+
+_DEFAULT_COMPONENT_REGISTRY = build_component_registry()
+_DEFAULT_DATASET_REGISTRY = build_dataset_registry(_DEFAULT_COMPONENT_REGISTRY)
+_DEFAULT_ANALYSIS_REGISTRY = build_analysis_registry(_DEFAULT_DATASET_REGISTRY)
+_DEFAULT_COMPOSER = Composer()
 
 
 class AiExportRuntimeError(RuntimeError):
@@ -237,6 +247,52 @@ def _root_cause(error: BaseException) -> BaseException:
     return current
 
 
+def _api_section_envelope(
+    envelope: SectionEnvelope,
+) -> AiExportSectionEnvelope:
+    """Bridge an already validated component envelope without re-walking payload."""
+
+    return AiExportSectionEnvelope.model_construct(
+        component_id=envelope.component_id,
+        component_version=envelope.component_version,
+        schema_id=envelope.schema_id,
+        schema_version=envelope.schema_version,
+        payload=envelope.payload,
+    )
+
+
+def _stable_snapshot_stats(
+    *,
+    base_characters: int,
+    base_bytes: int,
+    dataset_count: int,
+    section_count: int,
+) -> AiExportSnapshotStats:
+    """Solve self-referential size fields using integer digit lengths only."""
+
+    values = (0, 0, 0)
+    for _attempt in range(16):
+        digit_delta = sum(len(str(value)) - 1 for value in values)
+        serialized_characters = base_characters + digit_delta
+        serialized_bytes = base_bytes + digit_delta
+        estimated_tokens = estimate_tokens_chars_div_4(serialized_characters)
+        updated = (
+            serialized_characters,
+            serialized_bytes,
+            estimated_tokens,
+        )
+        if updated == values:
+            return AiExportSnapshotStats(
+                dataset_count=dataset_count,
+                section_count=section_count,
+                serialized_characters=serialized_characters,
+                serialized_bytes=serialized_bytes,
+                estimated_tokens=estimated_tokens,
+            )
+        values = updated
+    raise RuntimeError("AI Export snapshot stats did not converge")
+
+
 async def _fx_history_coverage(context: BuildContext) -> AiExportHistoryCoverage:
     scope = context.scope
     if scope is None or scope.domain is not Domain.FX:
@@ -284,17 +340,18 @@ class AiExportSnapshotService:
         composer: Composer | None = None,
     ) -> None:
         self.db = db
-        self.component_registry = component_registry if component_registry is not None else build_component_registry()
-        self.dataset_registry = dataset_registry if dataset_registry is not None else build_dataset_registry(self.component_registry)
-        self.analysis_registry = analysis_registry if analysis_registry is not None else build_analysis_registry(self.dataset_registry)
-        self.composer = composer if composer is not None else Composer()
+        self.component_registry = component_registry if component_registry is not None else _DEFAULT_COMPONENT_REGISTRY
+        self.dataset_registry = dataset_registry if dataset_registry is not None else _DEFAULT_DATASET_REGISTRY
+        self.analysis_registry = analysis_registry if analysis_registry is not None else _DEFAULT_ANALYSIS_REGISTRY
+        self.composer = composer if composer is not None else _DEFAULT_COMPOSER
 
     @staticmethod
+    @cache
     def get_catalog() -> AiExportCatalogResponse:
-        component_registry = build_component_registry()
-        dataset_registry = build_dataset_registry(component_registry)
-        analysis_registry = build_analysis_registry(dataset_registry)
-        return AiExportSnapshotService._catalog_response(dataset_registry, analysis_registry)
+        return AiExportSnapshotService._catalog_response(
+            _DEFAULT_DATASET_REGISTRY,
+            _DEFAULT_ANALYSIS_REGISTRY,
+        )
 
     @staticmethod
     def _catalog_response(
@@ -595,42 +652,28 @@ class AiExportSnapshotService:
             serialized_bytes=0,
             estimated_tokens=0,
         )
-        response = None
-        for _attempt in range(6):
-            response = AiExportSnapshotResponse(
-                domain=domain,
-                selection=selection,
-                detail_level=detail_level,
-                target=target,
-                entity_directory=entity_directory,
-                meta=meta,
-                dataset_manifest=dataset_manifest,
-                analysis_contract=analysis_contract,
-                technical_sampling=technical_sampling,
-                event_selection=event_selection,
-                sections=sections,
-                stats=stats,
-            )
-            serialized = json.dumps(
-                response.model_dump(mode="json"),
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-            )
-            serialized_characters = len(serialized)
-            serialized_bytes = len(serialized.encode("utf-8"))
-            updated = AiExportSnapshotStats(
-                dataset_count=len(dataset_manifest),
-                section_count=len(sections),
-                serialized_characters=serialized_characters,
-                serialized_bytes=serialized_bytes,
-                estimated_tokens=(serialized_characters + 3) // 4,
-            )
-            if updated == stats:
-                return response
-            stats = updated
-        assert response is not None
-        return response.model_copy(update={"stats": stats})
+        response = AiExportSnapshotResponse(
+            domain=domain,
+            selection=selection,
+            detail_level=detail_level,
+            target=target,
+            entity_directory=entity_directory,
+            meta=meta,
+            dataset_manifest=dataset_manifest,
+            analysis_contract=analysis_contract,
+            technical_sampling=technical_sampling,
+            event_selection=event_selection,
+            sections=sections,
+            stats=stats,
+        )
+        serialized = canonical_json(response.model_dump(mode="json"))
+        stable_stats = _stable_snapshot_stats(
+            base_characters=len(serialized),
+            base_bytes=len(serialized.encode("utf-8")),
+            dataset_count=len(dataset_manifest),
+            section_count=len(sections),
+        )
+        return response.model_copy(update={"stats": stable_stats})
 
     @staticmethod
     def _technical_sampling_manifest(
@@ -755,7 +798,7 @@ class AiExportSnapshotService:
                 reason_code=getattr(root_cause, "reason_code", None),
             ) from exc
 
-        sections = tuple(AiExportSectionEnvelope.model_validate(envelope.model_dump(mode="json")) for envelope in envelopes)
+        sections = tuple(_api_section_envelope(envelope) for envelope in envelopes)
         if prepared.analysis is not None:
             self._check_analysis_applicability(prepared.analysis, sections)
         entity_directory = await self._entity_directory(

@@ -137,7 +137,7 @@ def populate_registry(registry: dict) -> None:
         "catalog",
         front_ai_export_catalog,
         name="AI Export Catalog Tests",
-        desc="Dataset/Analysis categories, V2 IDs, domain visibility, labels, and icons",
+        desc="Exact V3 Dataset/Analysis IDs, domain visibility, labels, and icons",
         tests=AI_EXPORT_E2E_SPECS[1],
     )
     add_test(
@@ -145,7 +145,7 @@ def populate_registry(registry: dict) -> None:
         "memory",
         front_ai_export_memory,
         name="AI Export Memory Tests",
-        desc="Per-user and per-context drafts, canonical FX, periods, detail, and notes",
+        desc="10-minute session drafts, login reset, canonical FX, periods, detail, and notes",
         tests=AI_EXPORT_E2E_SPECS[2],
     )
     add_test(
@@ -153,7 +153,7 @@ def populate_registry(registry: dict) -> None:
         "contract",
         front_ai_export_contract,
         name="AI Export Contract Tests",
-        desc="V2 request shape and Dataset/Analysis clipboard boundaries",
+        desc="V3 selections over the V2 snapshot wire and Dataset/Analysis clipboard boundaries",
         tests=AI_EXPORT_E2E_SPECS[3],
     )
     add_test(

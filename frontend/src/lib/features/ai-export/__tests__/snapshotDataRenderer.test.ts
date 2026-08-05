@@ -419,6 +419,78 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content).toContain('|total|10|');
     });
 
+    it('renders partial income conversion without inventing target amounts', () => {
+        const section = {
+            component_id: 'portfolio.income_timeline',
+            component_version: 1,
+            schema_id: 'portfolio.income_timeline',
+            schema_version: 1,
+            payload: {
+                status: 'ok',
+                detail_level: 'standard',
+                period_convention: 'exclusive_start_inclusive_end',
+                summary: {
+                    target_currency: 'EUR',
+                    transaction_count: 2,
+                    dividend_count: 1,
+                    interest_count: 1,
+                    distinct_asset_count: 2,
+                    distinct_broker_count: 1,
+                    earliest_date: '2026/01/10',
+                    latest_date: '2026/02/10',
+                    native_totals: [
+                        {amount: 10, code: 'USD'},
+                        {amount: 5, code: 'EUR'},
+                    ],
+                    target_total: null,
+                    conversion_status: 'partial',
+                },
+                rows: [
+                    {
+                        date: '2026/01/10',
+                        income_type: 'DIVIDEND',
+                        broker_id: 1,
+                        broker_name: 'Broker One',
+                        asset_id: 7,
+                        asset_name: 'Asset Seven',
+                        native_amount: {amount: 10, code: 'USD'},
+                        target_amount: null,
+                        conversion: null,
+                        conversion_reason: 'fx_rate_not_found',
+                    },
+                    {
+                        date: '2026/02/10',
+                        income_type: 'INTEREST',
+                        broker_id: 1,
+                        broker_name: 'Broker One',
+                        asset_id: 8,
+                        asset_name: 'Asset Eight',
+                        native_amount: {amount: 5, code: 'EUR'},
+                        target_amount: {amount: 5, code: 'EUR'},
+                        conversion: {
+                            source: 'fx_convert_bulk',
+                            rate_date: '2026/02/10',
+                            backfill_applied: false,
+                            identity: true,
+                        },
+                        conversion_reason: null,
+                    },
+                ],
+                rows_truncated: false,
+                rows_omitted_count: 0,
+            },
+        };
+
+        const rendered = renderSnapshotDataText([section], {kind: 'portfolio'});
+
+        expect(rendered.content).toContain('|summary.conversion_status|partial|');
+        expect(rendered.content).toContain('TABLE rows');
+        expect(rendered.content).toContain('fx_rate_not_found');
+        expect(rendered.content).toContain('|10|USD|');
+        expect(rendered.content).toContain('|5|EUR|null|5|EUR|fx_convert_bulk|');
+        expect(rendered.content).not.toContain('|10|USD|0|EUR|');
+    });
+
     it('renders a leading identity directory with names and every available identifier', () => {
         const identity = {
             component_id: 'asset.identity',

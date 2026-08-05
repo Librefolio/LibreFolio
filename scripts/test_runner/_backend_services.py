@@ -22,24 +22,19 @@ from ._common import (
 )
 
 AI_EXPORT_SERVICE_TEST_PATHS = (
-    "backend/test_scripts/test_services/test_ai_export_asset_fx.py",
     "backend/test_scripts/test_services/test_ai_export_component_runtime.py",
     "backend/test_scripts/test_services/test_ai_export_components_asset.py",
     "backend/test_scripts/test_services/test_ai_export_components_asset_fx_integration.py",
+    "backend/test_scripts/test_services/test_ai_export_components_broker_adequacy.py",
+    "backend/test_scripts/test_services/test_ai_export_components_drawdown_context.py",
     "backend/test_scripts/test_services/test_ai_export_components_fx.py",
     "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py",
     "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py",
+    "backend/test_scripts/test_services/test_ai_export_components_portfolio_income.py",
     "backend/test_scripts/test_services/test_ai_export_components_technical.py",
     "backend/test_scripts/test_services/test_ai_export_composer.py",
-    "backend/test_scripts/test_services/test_ai_export_coverage.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
-    "backend/test_scripts/test_services/test_ai_export_normalization.py",
-    "backend/test_scripts/test_services/test_ai_export_portfolio_broker.py",
-    "backend/test_scripts/test_services/test_ai_export_profiles.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
-    "backend/test_scripts/test_services/test_ai_export_sampling.py",
-    "backend/test_scripts/test_services/test_ai_export_service.py",
-    "backend/test_scripts/test_services/test_ai_export_technical.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",
     "backend/test_scripts/test_services/test_ai_export_temporal.py",
 )
@@ -568,9 +563,9 @@ def services_scheduler_settings_misc(verbose: bool = False, test_names: list = N
 
 
 def services_ai_export(verbose: bool = False, test_names: list = None) -> bool:
-    """Run the complete AI Export service test set in one pytest invocation."""
+    """Run the complete component-based AI Export service test set."""
     print_section("Services: AI Export")
-    print_info("Testing all AI Export service files")
+    print_info("Testing the component runtime, datasets, analyses, and probes")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *AI_EXPORT_SERVICE_TEST_PATHS, "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
@@ -704,7 +699,7 @@ Note: No backend server required.
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
     add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")
-    add_test(cat, "ai-export", services_ai_export, name="AI Export", desc="All AI Export service test files in one pytest invocation")
+    add_test(cat, "ai-export", services_ai_export, name="AI Export", desc="Component runtime, datasets, analyses, financial/technical builders, and temporal policy")
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
     add_test(cat, "borsa-italiana-funds", services_borsa_italiana_funds, name="Borsa Italiana Funds", desc="Mutual-fund NAV via codice_fondo detail page + resolve_url (scraper mocked)")
     add_test(cat, "web-link-finder", services_web_link_finder, name="Web Link Finder", desc="find_candidate_urls + search orchestration augmentation (ddgs mocked)")

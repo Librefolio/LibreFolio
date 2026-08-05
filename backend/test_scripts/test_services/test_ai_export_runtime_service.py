@@ -21,11 +21,13 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportDetailLevel,
     AiExportFxSnapshotRequest,
     AiExportPortfolioSnapshotRequest,
+    AiExportSectionEnvelope,
 )
 from backend.app.schemas.signals import SignalTemporalClass
 from backend.app.services.ai_export.analyses.spec import AnalysisRegistry, AnalysisSpec
 from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
+from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import FxRateObservation, FxRateSeriesResource
 from backend.app.services.ai_export.components.spec import ComponentSpec
@@ -47,6 +49,8 @@ from backend.app.services.ai_export.runtime_service import (
     AiExportSnapshotSourceError,
     AiExportUnsupportedSelectionError,
     AiExportVersionMismatchError,
+    _api_section_envelope,
+    _stable_snapshot_stats,
 )
 
 START = date(2026, 1, 1)
@@ -57,6 +61,12 @@ class _ValuePayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     value: int
+
+
+class _TextPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: str
 
 
 class _RowsPayload(BaseModel):
@@ -258,8 +268,66 @@ def test_catalog_exposes_exact_public_v3_catalog_without_prompts():
     assert "web_research" not in serialized.lower()
 
 
+def test_default_services_share_immutable_registries_and_cached_catalog():
+    first = AiExportSnapshotService(_session_with_accessible_brokers([]))
+    second = AiExportSnapshotService(_session_with_accessible_brokers([]))
+
+    assert first.component_registry is second.component_registry
+    assert first.dataset_registry is second.dataset_registry
+    assert first.analysis_registry is second.analysis_registry
+    assert first.composer is second.composer
+    assert AiExportSnapshotService.get_catalog() is AiExportSnapshotService.get_catalog()
+
+
+def test_api_section_bridge_preserves_validated_payload_without_round_trip():
+    internal = SectionEnvelope(
+        component_id="portfolio.summary",
+        component_version=1,
+        schema_id="portfolio.summary",
+        schema_version=1,
+        payload={"nested": [{"value": 1}]},
+    )
+    reference = AiExportSectionEnvelope.model_validate(internal.model_dump(mode="json"))
+
+    bridged = _api_section_envelope(internal)
+
+    assert bridged.model_dump(mode="json") == reference.model_dump(mode="json")
+    assert bridged.payload is internal.payload
+
+
+@pytest.mark.parametrize(
+    ("base_characters", "base_bytes"),
+    (
+        (9, 9),
+        (10, 17),
+        (99, 106),
+        (100, 107),
+        (999, 1_006),
+        (9_999, 10_006),
+        (499_999, 500_006),
+    ),
+)
+def test_stable_snapshot_stats_solve_digit_boundaries(
+    base_characters,
+    base_bytes,
+):
+    stats = _stable_snapshot_stats(
+        base_characters=base_characters,
+        base_bytes=base_bytes,
+        dataset_count=1,
+        section_count=1,
+    )
+    digit_delta = len(str(stats.serialized_characters)) + len(str(stats.serialized_bytes)) + len(str(stats.estimated_tokens)) - 3
+
+    assert stats.serialized_characters == base_characters + digit_delta
+    assert stats.serialized_bytes == base_bytes + digit_delta
+    assert stats.estimated_tokens == (stats.serialized_characters + 3) // 4
+
+
 @pytest.mark.asyncio
-async def test_dataset_selection_builds_manifest_sections_and_stable_stats():
+async def test_dataset_selection_builds_manifest_sections_and_stable_stats(
+    monkeypatch,
+):
     session = _session_with_accessible_brokers([2, 1])
     component = _component(
         "portfolio.summary",
@@ -273,6 +341,15 @@ async def test_dataset_selection_builds_manifest_sections_and_stable_stats():
         ("portfolio.summary",),
     )
     service = _service(session, (component,), (dataset,))
+    canonical_calls = 0
+    original_canonical_json = rs_module.canonical_json
+
+    def _counted_canonical_json(payload):
+        nonlocal canonical_calls
+        canonical_calls += 1
+        return original_canonical_json(payload)
+
+    monkeypatch.setattr(rs_module, "canonical_json", _counted_canonical_json)
 
     response = await service.build_snapshot(41, _portfolio_dataset_request())
 
@@ -290,6 +367,36 @@ async def test_dataset_selection_builds_manifest_sections_and_stable_stats():
     assert response.stats.serialized_characters == len(serialized)
     assert response.stats.serialized_bytes == len(serialized.encode("utf-8"))
     assert response.stats.estimated_tokens == (len(serialized) + 3) // 4
+    assert canonical_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_snapshot_stats_remain_exact_with_large_unicode_payload():
+    session = _session_with_accessible_brokers([])
+    component = _component(
+        "portfolio.summary",
+        Domain.PORTFOLIO,
+        _TextPayload,
+        _TextPayload(value="€" * 25_000),
+    )
+    dataset = _dataset(
+        "portfolio.overview",
+        Domain.PORTFOLIO,
+        ("portfolio.summary",),
+    )
+    service = _service(session, (component,), (dataset,))
+
+    response = await service.build_snapshot(41, _portfolio_dataset_request())
+    serialized = json.dumps(
+        response.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+    assert response.stats.serialized_characters == len(serialized)
+    assert response.stats.serialized_bytes == len(serialized.encode("utf-8"))
+    assert response.stats.serialized_bytes > response.stats.serialized_characters
 
 
 @pytest.mark.asyncio

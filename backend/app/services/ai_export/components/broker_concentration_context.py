@@ -1,10 +1,8 @@
 """Broker concentration adequacy evidence `ComponentSpec` builders (Phase 0 AI Export adequacy remediation).
 
 Two standalone, broker-owned components that expose *already-computed*
-deterministic concentration evidence for the AI Export ``broker.concentration_context``
-Analysis, without touching any shared catalog/registry wiring (that is the
-coordinator integration gate's responsibility - see this module's
-``__all__``/component tuple and the task hand-off notes):
+deterministic concentration evidence inside the public Broker general snapshot,
+without touching shared catalog/registry wiring:
 
 - ``broker.concentration_context``: surfaces the existing broker report
   ``allocation_by_type``/``allocation_by_sector``/``allocation_by_geography``

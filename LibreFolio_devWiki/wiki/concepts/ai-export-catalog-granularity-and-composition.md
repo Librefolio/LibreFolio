@@ -2,6 +2,7 @@
 title: "AI Export catalog granularity and composition"
 category: concept
 date: 2026-08-04
+updated: 2026-08-05
 mkdocs: "developer/architecture/patterns/ai_export_composition.md"
 tags: [ai-export, composition, datasets, analyses, ux, granularity, prices, all-data]
 related:
@@ -16,18 +17,16 @@ related:
 
 ## Definition
 
-The current AI Export catalog is a modular composition system with **65 reusable
-components**, **32 public Export Data datasets**, and **17 Request Analysis
-choices** across Portfolio, Broker, Asset, and FX. This decomposition is useful
-internally: analyses request only the facts material to their task, components
-build once per request, and focused projections avoid forcing complete technical
-series into every prompt.
+The final AI Export V3 catalog is a modular composition system with **67 reusable
+components**, **40 internal datasets**, **8 public Export Data choices**, and
+**11 public Request Analysis choices** across Portfolio, Broker, Asset, and FX.
+Analyses request only facts material to the task, components build once per
+request, and internal projections remain available for composition without
+exposing implementation-level fragmentation in the UI.
 
-The same decomposition is harder to understand when exposed almost directly in
-the UI. Users must currently infer whether a choice is aggregate, per Asset,
-current-state, historical, position-accounting, market-context, or evidence-only.
-The main UX issue is therefore not missing per-Asset data in PAC or rebalancing;
-it is missing visible granularity and data-shape cues.
+The public catalog deliberately presents one general and one detailed data
+export per domain. Granular legacy datasets remain internal, and direct requests
+for their IDs fail closed.
 
 ## Where It Applies
 
@@ -35,11 +34,11 @@ it is missing visible granularity and data-shape cues.
 
 | Domain | Export Data | Request Analysis |
 |---|---:|---:|
-| Portfolio | 10 | 8 |
-| Broker | 10 | 4 |
-| Asset | 6 | 2 |
-| FX | 6 | 3 |
-| **Total** | **32** | **17** |
+| Portfolio | 2 | 4 |
+| Broker | 2 | 3 |
+| Asset | 2 | 2 |
+| FX | 2 | 2 |
+| **Total** | **8** | **11** |
 
 `DatasetSpec` selects required/optional components and section order.
 `AnalysisSpec` selects required/optional datasets plus instructions, response
@@ -48,22 +47,25 @@ optional datasets are attempted and omitted only when unavailable or
 inapplicable. Additional Data is not already in the prompt: it is a suggested
 second export.
 
+The public data pairs are:
+
+| Domain | General | Detailed |
+|---|---|---|
+| Portfolio | `portfolio.overview_and_history` | `portfolio.asset_history` |
+| Broker | `broker.overview_and_history` | `broker.asset_history` |
+| Asset | `asset.position_and_history` | `asset.market_history` |
+| FX | `fx.market_and_exposure` | `fx.market_history` |
+
 ### PAC and rebalancing are not aggregate-only
 
-`portfolio.pac_planning` always composes `portfolio.overview` and
-`portfolio.performance_flows`, and optionally composes
-`portfolio.asset_snapshot` and `portfolio.drawdown_context`. The receiving AI
-therefore gets per-position rows with Asset, Broker, quantity, position unit
-price, current value, WAC, P&L, and weight. When the focused optional projection
-is available, it also gets per-Asset observed market price, recent returns,
-extrema, trend, momentum, volatility, events, and compact Asset Drawdown context.
+`portfolio.pac_planning` and `portfolio.rebalancing` require
+`portfolio.overview_and_history`. The receiving AI therefore gets composition,
+positions, cash, performance, flows, income, recorded costs, economic FIFO
+summary, provenance and compact per-Asset market context. The optional
+`portfolio.asset_history` export adds the denser per-Asset history when needed.
 
-`portfolio.rebalancing` always composes `portfolio.overview`, and optionally
-composes `portfolio.performance_flows`, `portfolio.asset_comparison`, and
-`portfolio.drawdown_context`. It likewise receives per-position accounting rows
-and, when available, uniform per-Asset market context. It does not automatically
-receive targets, full technical history, FIFO lots, or future tax/execution
-assumptions; those are user inputs or follow-up exports.
+They do not invent budget, targets, risk tolerance, liquidity needs, tax rules
+or execution constraints; these remain explicit user inputs.
 
 ## Three Distinct Price Semantics
 
@@ -101,66 +103,30 @@ the UI.”
 
 ## UX Interpretation
 
-The most easily confused choices are:
+The V3 reduction removes the old menu collision between Overview, Performance,
+Technical Summary, Asset Snapshot, Asset Comparison and Technical. Users choose
+only:
 
-| Choice | Granularity | Per-Asset price | Per-Asset Drawdown | History |
-|---|---|:---:|:---:|:---:|
-| Technical Summary | aggregate | no | no | no |
-| Asset Snapshot | per Asset | observed current | yes | no |
-| Asset Comparison | per Asset | observed current | no | no |
-| Technical | Asset × Signal × bucket/event | current + bucketed | no | yes |
+- a general cross-domain factual export;
+- a detailed historical export;
+- one task-specific Analysis.
 
-Two other collisions recur:
-
-- **Overview vs Performance** — Overview is current state and position
-  valuation; Performance is economic change and contributor rows over a period.
-- **Context dataset vs similarly named Analysis** — a `*.context` choice exports
-  facts, while an Analysis adds a task, response structure, required/optional
-  dataset composition, and user notes.
-
-No granularity badges currently make these distinctions explicit. Candidate
-presentation cues are `Aggregated`, `Per Asset`, `Current price`, `Price
-history`, and `Lots`, together with grouping into Base, Asset comparison,
-specific evidence, and complete/advanced choices. These are findings for future
-product discussion, not an approved UI change.
-
-## Potential Contract Gaps
-
-The 4 August review identified two concrete mismatches to keep visible:
-
-1. **Broker Technical has no raw price-history component.**
-   `broker.technical` contains coverage, indicator history, events, and breadth,
-   but not a `broker.technical_prices`/raw OHLC section comparable to Portfolio,
-   Asset, or FX complete technical exports. Current price remains available from
-   Broker Overview or Asset Comparison.
-2. **Asset Trend promises Drawdown without composing it.**
-   The Italian UI description for `asset.trend_analysis` says it explains
-   “trend, momentum, volatilità, drawdown ed eventi,” but the current
-   `AnalysisSpec` requires only `asset.overview` and
-   `asset.market_technical`; `asset.drawdown_context` is not included. The
-   instruction and response contract likewise cover trend/momentum/volatility
-   and events, not a supplied Drawdown section.
-
-Neither gap was changed by this discovery/report.
+The backend still composes granular projections internally, but internal
+dataset IDs are not public API choices. Data exports contain facts only;
+Analyses add an objective, response contract, user questions and recommendations
+for a second public export.
 
 ## Verification
 
-The report explains all **49/49 public choices** against the current runtime
-catalog, payload models, instructions, response contracts, and Italian labels.
-Five representative Portfolio prompts were also generated and read in full in
-`real_prompt_probe/20260804T085052.052297Z`:
+Final candidate `20260804T224056.073291Z` generated all **114/114** public
+variants with zero failure/skip and 36 retained prompts. Comparison against
+baseline `20260804T214400.268752Z` found 114/114 stable keys unchanged, with
+zero character, byte, composition, event or state deltas. Secret scan,
+UI/probe equivalence and primary/source database immutability passed.
 
-- Portfolio Overview;
-- Portfolio Asset Snapshot;
-- Portfolio Asset Comparison;
-- PAC Planning;
-- Portfolio Rebalancing.
-
-The run passed **5/5**, with zero failures and zero public-output violations,
-UI/probe equivalence, a passed secret scan, and unchanged source and production
-databases. The report deliberately follows the live `_PORTFOLIO_ANALYSES`,
-`_BROKER_ANALYSES`, `_ASSET_ANALYSES`, and `_FX_ANALYSES` declarations rather
-than the stale historical mapping in the module docstring.
+Task Adequacy covers all 66 Analysis variants (11 choices × 2 periods × 3
+details): 54 invariant reviews were carried forward and the 12 fiscal variants
+were reread; all 66 are `OPTIMAL`.
 
 ## Related pages
 
@@ -175,6 +141,7 @@ than the stale historical mapping in the module docstring.
 | Role | Path |
 |------|------|
 | Discovery/report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
+| Final audit and closure | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
 | Developer composition overview | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | Dataset catalog and `all_data` unions | `backend/app/services/ai_export/datasets/catalog.py`, `backend/app/services/ai_export/datasets/spec.py` |
 | Analysis composition | `backend/app/services/ai_export/analyses/catalog.py`, `backend/app/services/ai_export/analyses/spec.py` |
