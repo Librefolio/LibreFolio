@@ -4,7 +4,7 @@ import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/ap
 import {z} from 'zod';
 
 import {findCompatibleAiExportSelection, selectionsForDomain, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
-import {isAiExportAnalysisId, isAiExportDatasetId, type AiExportDomain, type AiExportSelectionId, type AiExportSelectionKind} from './catalog/shared';
+import {isAiExportAnalysisId, isAiExportDatasetId, resolveDefaultDetailLevel, AI_EXPORT_DEFAULT_DETAIL_LEVEL, type AiExportDomain, type AiExportSelectionId, type AiExportSelectionKind} from './catalog/shared';
 import {AI_EXPORT_DEFAULT_PERIOD, AI_EXPORT_PERIOD_PRESETS, AI_EXPORT_PERIOD_UNITS, normalizeAiExportPeriod, normalizeAiExportUserNotes, type AiExportOptionsSelection} from './aiExportOptions';
 import type {AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
@@ -135,7 +135,7 @@ function fallbackState(input: LoadAiExportMemoryInput): AiExportMemoryState {
             options: {
                 selectionKind: requestedKind,
                 selectionId: input.defaultSelectionId,
-                detailLevel: 'standard',
+                detailLevel: AI_EXPORT_DEFAULT_DETAIL_LEVEL,
                 period: AI_EXPORT_DEFAULT_PERIOD,
                 responseLanguage: input.responseLanguage,
             },
@@ -146,7 +146,7 @@ function fallbackState(input: LoadAiExportMemoryInput): AiExportMemoryState {
         options: {
             selectionKind: selection.kind,
             selectionId: selection.id,
-            detailLevel: selection.supportedDetailLevels.includes('standard') ? 'standard' : selection.supportedDetailLevels[0],
+            detailLevel: resolveDefaultDetailLevel(selection.supportedDetailLevels),
             period: AI_EXPORT_DEFAULT_PERIOD,
             responseLanguage: input.responseLanguage,
         },

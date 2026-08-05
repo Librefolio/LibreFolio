@@ -37,6 +37,24 @@ backend/test_scripts/
 ./dev.py test --coverage api all   # With coverage tracking
 ```
 
+**Global flags come BEFORE the category**: `./dev.py test -q --coverage services all`.
+Extra positional args after `<category> <action>` are consumed as a pytest `-k` filter.
+
+## ⚠️ Coverage: partial runs report falsely LOW
+
+Coverage accumulates across categories in `.coverage_data/backend`. Measuring only the
+*unit* categories reported **75.65 %** on this repo, with `api/` at 31.6 % and
+`brim_providers/` at 34.8 %. The complete run reports **90.48 %**, 87.2 % and 84.8 %.
+
+- Always declare **which categories were run** next to any coverage number.
+- A comparable figure needs `services` + `schemas` + `utils` + `db` + `api all` +
+  `external {brim,fx,asset}-providers` (~50 min).
+- `coverage-report` reads `/tmp/cov_report.json`; regenerate it from the live DB first.
+- Coverage cannot see `multiprocessing` spawn children (`risk/quant/spawn_worker.py`
+  always reads 0 %) — never infer dead code from that alone.
+
+See skill `testing-backend` for the full command sequence and rationale.
+
 ## Resume Interrupted Runs
 
 When a test fails mid-suite, fix the issue and resume from where it stopped:

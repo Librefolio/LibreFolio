@@ -303,7 +303,6 @@ class BRDeleteResult(BaseDeleteResult):
 class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
     """Response for bulk broker deletion."""
 
-    pass
 
 
 # =============================================================================
@@ -326,7 +325,6 @@ class BRCreateResult(BaseModel):
 class BRBulkCreateResponse(BaseBulkResponse[BRCreateResult]):
     """Response for bulk broker creation."""
 
-    pass
 
 
 # =============================================================================
@@ -348,7 +346,6 @@ class BRUpdateResult(BaseModel):
 class BRBulkUpdateResponse(BaseBulkResponse[BRUpdateResult]):
     """Response for bulk broker update."""
 
-    pass
 
 
 # =============================================================================
@@ -376,7 +373,6 @@ class BRAccessItem(BaseModel):
 class BRAccessListResponse(BaseListResponse[BRAccessItem]):
     """Response for listing broker accesses."""
 
-    pass
 
 
 class BRAccessBulkItem(BaseModel):
@@ -416,4 +412,3 @@ class BRAccessBulkResponse(BaseBulkResponse[BRAccessItem]):
     len(results) on success, and on failure an HTTPException is raised.
     """
 
-    pass

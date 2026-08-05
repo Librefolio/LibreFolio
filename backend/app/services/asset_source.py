@@ -307,7 +307,6 @@ class AssetSourceProvider(ABC):
         - Unique across all registered providers
         - Stable (changing breaks existing assets)
         """
-        pass
 
     @property
     @abstractmethod
@@ -317,7 +316,6 @@ class AssetSourceProvider(ABC):
 
         Examples: 'Yahoo Finance', 'JustETF', 'CSS Web Scraper'
         """
-        pass
 
     @property
     def provider_kind(self) -> FAProviderKind:
@@ -447,7 +445,6 @@ class AssetSourceProvider(ABC):
                 }
             ]
         """
-        pass
 
     @abstractmethod
     async def get_current_value(
@@ -488,7 +485,6 @@ class AssetSourceProvider(ABC):
             - FETCH_ERROR: Network/API error
             - MISSING_PARAMS: Required provider_params missing
         """
-        pass
 
     @property
     def supports_history(self) -> bool:
@@ -567,7 +563,6 @@ class AssetSourceProvider(ABC):
             - NO_DATA: No data available for date range
             - FETCH_ERROR: Network/API error
         """
-        pass
 
     @property
     @abstractmethod
@@ -583,7 +578,6 @@ class AssetSourceProvider(ABC):
             'MSCI World' - for ETF providers
             None - for CSS scrapers (no search)
         """
-        pass
 
     async def search(self, query: str) -> list[dict]:
         """
@@ -661,7 +655,7 @@ class AssetSourceProvider(ABC):
         Raises:
             AssetSourceError: With error_code 'MISSING_PARAMS' or 'INVALID_PARAMS'
         """
-        pass  # Default: no validation, accepts any params including None
+        # Default: no validation, accepts any params including None
 
     @property
     def params_schema(self) -> list[dict]:
@@ -858,7 +852,6 @@ class AssetSourceProvider(ABC):
 
         Default: no-op.
         """
-        pass
 
 
 # ============================================================================
@@ -1219,7 +1212,7 @@ class AssetSourceManager:
                         FAMetadataRefreshResult(
                             asset_id=asset_id,
                             success=False,
-                            message=f"Failed to fetch metadata: {str(e)}",
+                            message=f"Failed to fetch metadata: {e!s}",
                         )
                     )
                     continue
@@ -1268,7 +1261,7 @@ class AssetSourceManager:
 
             except Exception as e:
                 logger.error(f"Error preparing refresh for asset {asset_id}: {e}")
-                results.append(FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Error: {str(e)}"))
+                results.append(FAMetadataRefreshResult(asset_id=asset_id, success=False, message=f"Error: {e!s}"))
 
         # Apply all patches in bulk using AssetCRUDService
         if patches_to_apply:
@@ -2706,7 +2699,7 @@ class AssetSourceManager:
                         asset_id=asset_id,
                         status=SyncStatus.FAILED,
                         provider_used=provider_code,
-                        errors=[f"Invalid provider params: {str(e)}"],
+                        errors=[f"Invalid provider params: {e!s}"],
                         elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
                     )
                 )
@@ -3042,7 +3035,7 @@ class AssetSourceManager:
                                 if "rejected" in (r.get("message") or ""):
                                     errors.append(r["message"])
                         except Exception as e:
-                            errors.append(f"DB upsert failed: {str(e)}")
+                            errors.append(f"DB upsert failed: {e!s}")
                             # If the upsert failed, no delta is reliable.
                             changed_items_delta = []
 
@@ -3062,7 +3055,7 @@ class AssetSourceManager:
                                 or 0
                             )
                         except Exception as e:
-                            errors.append(f"Event upsert failed: {str(e)}")
+                            errors.append(f"Event upsert failed: {e!s}")
 
                     # Update last_fetch_at on assignment
                     try:
@@ -3076,7 +3069,7 @@ class AssetSourceManager:
                     except Exception:
                         pass  # Not critical
             except Exception as e:
-                errors.append(f"Persist session error: {str(e)}")
+                errors.append(f"Persist session error: {e!s}")
 
             points_changed = inserted_count + updated_count
             elapsed_ms = (time.monotonic_ns() - t_start_ns) // 1_000_000
@@ -3762,7 +3755,7 @@ class AssetCRUDService:
                     FAAssetCreateResult(
                         asset_id=None,
                         success=False,
-                        message=f"Error: {str(e)}",
+                        message=f"Error: {e!s}",
                         display_name=item.display_name,
                     )
                 )
@@ -3777,7 +3770,7 @@ class AssetCRUDService:
             for result in results:
                 if result.success:
                     result.success = False
-                    result.message = f"Transaction failed: {str(e)}"
+                    result.message = f"Transaction failed: {e!s}"
                     result.asset_id = None
 
         success_count = sum(1 for r in results if r.success)
@@ -4209,7 +4202,7 @@ class AssetCRUDService:
                     FAAssetPatchResult(
                         asset_id=patch.asset_id,
                         success=False,
-                        message=f"Error: {str(e)}",
+                        message=f"Error: {e!s}",
                         updated_fields=None,
                     )
                 )

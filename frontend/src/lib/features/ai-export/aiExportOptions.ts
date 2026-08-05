@@ -1,5 +1,6 @@
 import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
 import {findCompatibleAiExportSelection, selectionsForDomain} from './catalog/compatibility';
+import {resolveDefaultDetailLevel} from './catalog/shared';
 import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
 import type {AiExportPromptStats, AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
 
@@ -186,7 +187,7 @@ export function reconcileAiExportOptions(compatibility: AiExportCatalogCompatibi
     const fallback = selectionsForDomain(compatibility, domain, 'analysis')[0] ?? selectionsForDomain(compatibility, domain, 'dataset')[0];
     const selection = current?.domain === domain ? current : fallback;
     if (!selection) return options;
-    const detailLevel = selection.supportedDetailLevels.includes(options.detailLevel) ? options.detailLevel : selection.supportedDetailLevels.includes('standard') ? 'standard' : selection.supportedDetailLevels[0];
+    const detailLevel = selection.supportedDetailLevels.includes(options.detailLevel) ? options.detailLevel : resolveDefaultDetailLevel(selection.supportedDetailLevels);
     return {
         ...options,
         selectionKind: selection.kind,

@@ -630,7 +630,6 @@ class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
     - ignored_fields: Fields skipped (future use)
     """
 
-    pass
 
 
 # ============================================================================
@@ -725,7 +724,6 @@ class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
     # Computed properties:
     # - failed_count: int (computed from len(results) - success_count)
     # - total_count: int
-    pass
 
 
 class FAAinfoFiltersRequest(BaseModel):
@@ -838,7 +836,6 @@ class FAAssetDeleteResult(BaseDeleteResult):
 class FABulkAssetDeleteResponse(BaseBulkResponse[FAAssetDeleteResult]):
     """Bulk asset deletion response (partial success allowed)."""
 
-    pass
 
 
 # ============================================================================
@@ -933,7 +930,6 @@ class FAAssetPatchResult(BaseModel):
 class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
     """Bulk asset patch response (partial success allowed)."""
 
-    pass
 
 
 # Export convenience

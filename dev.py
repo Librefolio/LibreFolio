@@ -60,6 +60,7 @@ from scripts.cli_base import (
     print_header,
     print_success,
     print_warning,
+    run_command,
     run_command_live,
     run_pipenv,
 )
@@ -1565,6 +1566,8 @@ def cmd_format(args):
 
 def cmd_lint(args):
     """Lint code with ruff."""
+    if getattr(args, "dead_code", False):
+        return cmd_dead_code(args)
     cmd = ["ruff", "check", "backend/"]
     if getattr(args, "fix", False):
         cmd.append("--fix")
@@ -1574,6 +1577,184 @@ def cmd_lint(args):
         cmd.append("--statistics")
     print(Colors.success(f"Linting code with ruff {'(--fix) ' if getattr(args, 'fix', False) else ''}..."))
     return run_pipenv(cmd)
+
+
+# Vulture categories worth acting on. Everything else ("variable", "attribute",
+# "import") is dominated by Pydantic model fields and Enum members, which are
+# consumed by value rather than by name and therefore always look unused.
+DEAD_CODE_SIGNAL_TYPES = ("function", "method", "class", "property")
+
+_VULTURE_LINE_RE = re.compile(r"^(?P<loc>.+?): unused (?P<kind>[a-z ]+) '(?P<name>[^']+)'")
+
+
+def _parse_vulture(output: str):
+    """Turn raw vulture output into (line, kind) pairs."""
+    parsed = []
+    for line in output.splitlines():
+        m = _VULTURE_LINE_RE.match(line)
+        if m:
+            parsed.append((line, m.group("kind")))
+    return parsed
+
+
+def _run_vulture(paths, exclude):
+    """Run vulture and return its raw stdout (exit code 3 == findings, not an error)."""
+    cmd = ["vulture", *paths]
+    if exclude:
+        cmd += ["--exclude", ",".join(exclude)]
+    code, out, err = run_command(pipenv_prefix() + cmd, cwd=PROJECT_ROOT)
+    if code not in (0, 3):
+        print_error(f"vulture failed (exit {code})")
+        if err:
+            print(err.strip())
+        return None
+    return out
+
+
+def cmd_dead_code(args):
+    """Find dead code: vulture on the backend, knip on the frontend."""
+    print_header("Dead Code Analysis")
+    print()
+
+    show_all = getattr(args, "all", False)
+    exclude = list(getattr(args, "exclude", None) or [])
+    scope = getattr(args, "scope", "both")
+    failed = False
+
+    if scope in ("both", "backend"):
+        print(Colors.info("[backend] Scanning backend/app with vulture..."))
+        # Production consumers are not limited to backend/app: the ./dev.py CLI
+        # (scripts/user_cli.py & co.) imports services directly. Scanning app in
+        # isolation would flag every CLI-only service function as dead.
+        prod_paths = ["backend/app", "scripts", "dev.py"]
+        app_out = _run_vulture(prod_paths, exclude)
+        if app_out is None:
+            return 1
+
+        findings = [(line, kind) for line, kind in _parse_vulture(app_out) if line.startswith("backend/app")]
+        raw_total = len(findings)
+        if not show_all:
+            findings = [f for f in findings if f[1] in DEAD_CODE_SIGNAL_TYPES]
+
+        # Differential pass: symbols that disappear from the report once the test
+        # suite is in scope are referenced *only* by tests — i.e. code kept alive
+        # artificially by its own tests.
+        test_only = set()
+        with_tests_out = _run_vulture([*prod_paths, "backend/test_scripts"], exclude)
+        if with_tests_out is not None:
+            still_dead = {line for line, _ in _parse_vulture(with_tests_out) if line.startswith("backend/app")}
+            test_only = {line for line, _ in findings if line not in still_dead}
+
+        truly_dead = [line for line, _ in findings if line not in test_only]
+
+        print()
+        if truly_dead:
+            print(Colors.warning(f"  Unreferenced ({len(truly_dead)}):"))
+            for line in truly_dead:
+                print(f"    {line}")
+        else:
+            print_success("  No unreferenced symbols")
+
+        print()
+        if test_only:
+            print(Colors.warning(f"  Referenced only by tests ({len(test_only)}):"))
+            for line in sorted(test_only):
+                print(f"    {line}")
+        else:
+            print_success("  No test-only symbols")
+
+        if not show_all:
+            hidden = raw_total - len(findings)
+            if hidden:
+                print()
+                print(Colors.info(f"  {hidden} low-signal findings hidden (variables, attributes) — use --all to show"))
+        failed = failed or bool(truly_dead) or bool(test_only)
+        print()
+
+    if scope in ("both", "frontend"):
+        print(Colors.info("[frontend] Scanning with knip..."))
+        frontend_dir = PROJECT_ROOT / "frontend"
+        if not (frontend_dir / "node_modules" / "knip").exists():
+            print_warning("  knip not installed — run './dev.py install' or 'npm install' in frontend/")
+        else:
+            failed = _run_knip(frontend_dir, exclude) or failed
+
+    return 1 if failed else 0
+
+
+# knip issue buckets, in report order, with the label shown to the user.
+_KNIP_BUCKETS = [
+    ("files", "Unused files"),
+    ("exports", "Unused exports"),
+    ("types", "Unused exported types"),
+    ("enumMembers", "Unused enum members"),
+    ("duplicates", "Duplicate exports"),
+    ("dependencies", "Unused dependencies"),
+    ("devDependencies", "Unused devDependencies"),
+    ("unlisted", "Unlisted dependencies"),
+    ("unresolved", "Unresolved imports"),
+]
+
+
+def _extract_json(text):
+    """Pull the JSON blob out of noisy stdout (dotenv banners, svelte.config debug lines)."""
+    import json
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('{"'):
+            try:
+                return json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _run_knip(frontend_dir, exclude):
+    """Run knip via its JSON reporter so results can be path-filtered. Returns True on findings."""
+    import fnmatch
+
+    code, out, err = run_command(["npx", "knip", "--no-progress", "--reporter", "json"], cwd=frontend_dir)
+    payload = _extract_json(out)
+    if payload is None:
+        print_error("  could not parse knip output")
+        if err:
+            print(err.strip()[:2000])
+        return True
+    issues = payload.get("issues", [])
+
+    def skipped(path):
+        return any(fnmatch.fnmatch(path, pat) for pat in exclude)
+
+    buckets = {key: [] for key, _ in _KNIP_BUCKETS}
+    hidden = 0
+    for issue in issues:
+        path = issue.get("file", "")
+        for key, _ in _KNIP_BUCKETS:
+            for item in issue.get(key) or []:
+                name = item.get("name", "") if isinstance(item, dict) else str(item)
+                # Dependency findings are reported against package.json, so the
+                # exclude globs must be matched on the owning file instead.
+                if skipped(path):
+                    hidden += 1
+                    continue
+                buckets[key].append(f"{name}  ({path})" if key not in ("files",) else name)
+
+    total = sum(len(v) for v in buckets.values())
+    print()
+    if total == 0:
+        print_success("  No dead code found")
+    for key, label in _KNIP_BUCKETS:
+        items = buckets[key]
+        if not items:
+            continue
+        print(Colors.warning(f"  {label} ({len(items)}):"))
+        for item in sorted(items):
+            print(f"    {item}")
+        print()
+    if hidden:
+        print(Colors.info(f"  {hidden} findings hidden by --exclude"))
+    return total > 0
 
 
 # =============================================================================
@@ -2111,6 +2292,10 @@ Examples:
     p.add_argument("--fix", action="store_true", help="Auto-fix safe issues")
     p.add_argument("--unsafe", action="store_true", help="Include unsafe fixes (use with --fix)")
     p.add_argument("--statistics", action="store_true", help="Show error statistics")
+    p.add_argument("--dead-code", action="store_true", help="Find dead code (vulture + knip) instead of linting")
+    p.add_argument("--all", action="store_true", help="With --dead-code: include low-signal findings (variables, attributes)")
+    p.add_argument("--scope", choices=["both", "backend", "frontend"], default="both", help="With --dead-code: which side to scan (default: both)")
+    p.add_argument("--exclude", action="append", metavar="GLOB", help="With --dead-code: extra path globs to skip (repeatable)")
     p.set_defaults(func=cmd_lint)
 
     # =========================================================================

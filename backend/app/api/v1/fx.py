@@ -163,7 +163,7 @@ async def list_providers(
 
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {e!s}") from e
 
 
 @router_currencies.post("/sync", response_model=FXSyncBulkResponse)
@@ -210,10 +210,10 @@ async def sync_rates(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except FXServiceError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to sync rates: {str(e)}") from e
+        raise HTTPException(status_code=502, detail=f"Failed to sync rates: {e!s}") from e
     except Exception as e:
         # Catch-all to prevent hanging — always return a response
-        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Unexpected sync error: {e!s}") from e
 
 
 @router_currencies.post("/rate", response_model=FXBulkUpsertResponse, status_code=200)
@@ -276,10 +276,10 @@ async def upsert_rates_endpoint(
             )
 
         except ValueError as e:
-            error_msg = f"Rate {idx}: Validation error: {str(e)}"
+            error_msg = f"Rate {idx}: Validation error: {e!s}"
             errors.append(error_msg)
         except Exception as e:
-            error_msg = f"Rate {idx}: Failed: {str(e)}"
+            error_msg = f"Rate {idx}: Failed: {e!s}"
             errors.append(error_msg)
 
     # If all rates failed, return 400
@@ -382,7 +382,7 @@ async def delete_rates_endpoint(
                 )
                 total_deleted += deleted_count
             except Exception as e:
-                errors.append(f"Delete all for {base}/{quote} failed: {str(e)}")
+                errors.append(f"Delete all for {base}/{quote} failed: {e!s}")
         else:
             # Date-range deletion — collect for bulk service call
             start_date = delete_req.date_range.start
@@ -436,7 +436,7 @@ async def delete_rates_endpoint(
                 total_deleted += deleted_count
 
         except Exception as e:
-            error_msg = f"Bulk deletion failed: {str(e)}"
+            error_msg = f"Bulk deletion failed: {e!s}"
             errors.append(error_msg)
             # If entire bulk operation failed, return 500
             raise HTTPException(status_code=500, detail=error_msg) from e
@@ -741,7 +741,7 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator), _c
 
         return FXConversionRoutesResponse(items=routes_list)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {e!s}") from e
 
 
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
@@ -885,7 +885,7 @@ async def create_routes_bulk(
         raise
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create routes: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to create routes: {e!s}") from e
 
 
 @router_providers.delete("/routes", response_model=FXDeleteRoutesResponse)
@@ -1012,7 +1012,7 @@ async def delete_routes_bulk(
 
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {e!s}") from e
 
 
 # ============================================================================

@@ -220,7 +220,7 @@ class FAProviderConfigBase(BaseModel):
         except AssetSourceError as e:
             raise ValueError(f"Invalid provider_params for {self.provider_code}: {e.message}") from e
         except Exception as e:
-            raise ValueError(f"Provider validation error for {self.provider_code}: {str(e)}") from e
+            raise ValueError(f"Provider validation error for {self.provider_code}: {e!s}") from e
 
         return self
 
@@ -302,7 +302,6 @@ class FAProviderAssignmentResult(BaseModel):
 class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
     """Response for bulk FA provider assignment."""
 
-    pass
 
 
 # ============================================================================
@@ -325,7 +324,6 @@ class FAProviderRemovalResult(BaseDeleteResult):
 class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
     """Response for bulk FA provider removal."""
 
-    pass
 
 
 # ============================================================================

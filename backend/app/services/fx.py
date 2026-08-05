@@ -75,13 +75,11 @@ class FXRateProvider(ABC):
         Provider code (e.g., 'ECB', 'FED', 'BOE').
         Used as identifier in database and configuration.
         """
-        pass
 
     @property
     @abstractmethod
     def name(self) -> str:
         """Human-readable provider name (e.g., 'European Central Bank')."""
-        pass
 
     @property
     def icon(self) -> str | None:  # pragma: no cover
@@ -129,7 +127,6 @@ class FXRateProvider(ABC):
         Provider APIs typically return rates as:
         1 base_currency = X quote_currency
         """
-        pass
 
     @property
     def base_currencies(self) -> list[str]:
@@ -268,7 +265,6 @@ class FXRateProvider(ABC):
         Raises:
             FXServiceError: If API request fails (for dynamic fetching)
         """
-        pass
 
     @abstractmethod
     async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:
@@ -325,7 +321,6 @@ class FXRateProvider(ABC):
             ValueError: If base_currency is not in base_currencies
             FXServiceError: If API request fails
         """
-        pass
 
     def shutdown(self) -> None:  # pragma: no cover  # noqa: B027 — intentional no-op default
         """
@@ -337,7 +332,6 @@ class FXRateProvider(ABC):
 
         Default: no-op.
         """
-        pass
 
 
 # ============================================================================
@@ -384,13 +378,11 @@ def normalize_rate_for_storage(base: str, quote: str, rate: Decimal) -> tuple[st
 class FXServiceError(Exception):
     """Base exception for FX service errors."""
 
-    pass
 
 
 class RateNotFoundError(FXServiceError):
     """Raised when no FX rate is found for a conversion."""
 
-    pass
 
 
 # ============================================================================
@@ -1401,7 +1393,7 @@ async def convert_bulk(
                 raise
             # Already appended error above
         except Exception as e:
-            error_msg = f"Conversion {idx} failed: {str(e)}"
+            error_msg = f"Conversion {idx} failed: {e!s}"
             if raise_on_error:
                 raise RateNotFoundError(error_msg) from e
             else:

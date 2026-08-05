@@ -67,6 +67,7 @@ tabulate = "*"
 aphra = {git = "https://github.com/DavidLMS/aphra.git", ref = "main"}
 graphifyy = "*"
 autobatcher = "*"
+vulture = "*"
 
 [requires]
 python_version = "3.13"

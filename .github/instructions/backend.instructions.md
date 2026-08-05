@@ -36,6 +36,7 @@ backend/
 | BRIM Plugins | `backend-providers-brim.instructions.md` — broker import, fake asset ID flow |
 | Testing | `backend-testing.instructions.md` — pytest patterns, fixtures, coverage |
 | Lint & Format | skill `lint-format-backend` — ruff + black, rules, workflow |
+| Dead code | skill `lint-format-backend` — `./dev.py lint --dead-code` (vulture), test-only detection |
 
 ## Auth
 

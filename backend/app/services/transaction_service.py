@@ -89,7 +89,6 @@ class BalanceValidationError(Exception):
 class LinkedTransactionError(Exception):
     """Raised when linked transaction operations fail."""
 
-    pass
 
 
 from dataclasses import dataclass

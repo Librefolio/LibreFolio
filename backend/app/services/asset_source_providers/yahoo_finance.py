@@ -574,7 +574,6 @@ class YahooFinanceProvider(AssetSourceProvider):
         """
         # Yahoo Finance doesn't require specific params
         # Identifier is passed as method argument
-        pass
 
     async def fetch_asset_metadata(
         self,

@@ -2072,7 +2072,6 @@ class PortfolioCalculationEngine:
                 # Will proceed to full compute but with frame_start = blob_to + 1
                 # and initial accumulators from end_state
                 # (full extension with state resume deferred — for now recompute)
-                pass
             else:
                 logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id, blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
 

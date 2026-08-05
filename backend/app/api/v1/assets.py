@@ -857,7 +857,7 @@ async def read_assets_bulk(
                         f"Failed to parse classification_params for asset {asset.id}: {e}",
                         extra={"asset_id": asset.id, "error": str(e)},
                     )
-                    pass  # Skip invalid JSON
+                    # Skip invalid JSON
 
             responses.append(
                 FAAssetMetadataResponse(
