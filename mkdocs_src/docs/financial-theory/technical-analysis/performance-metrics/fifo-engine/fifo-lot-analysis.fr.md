@@ -163,7 +163,7 @@ Sans cette mise à l'échelle, les rendements et les valorisations des obligatio
 
 ---
 
-## 🛟 Estimé au coût
+## 🛟 Estimé au coût {: #estimated-at-cost }
 
 Si aucun prix de marché en direct n'est disponible pour un actif, LibreFolio **ne fait pas échouer** l'analyse. Au lieu de cela, il valorise temporairement la partie encore ouverte du lot au coût :
 
