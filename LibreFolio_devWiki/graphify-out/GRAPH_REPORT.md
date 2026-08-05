@@ -1,13 +1,17 @@
-# Graph Report - corpus/  (2026-08-04)
+# Graph Report - corpus  (2026-08-05)
 
 ## Corpus Check
-- 526 files · ~999,999 words
-- Verdict: corpus is large enough that graph structure adds value.
+- cluster-only mode — file stats not available
 
 ## Summary
-- 1533 nodes · 2248 edges · 145 communities (129 shown, 16 thin omitted)
-- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 113 edges (avg confidence: 0.82)
+- 1540 nodes · 2222 edges · 150 communities (133 shown, 17 thin omitted)
+- Extraction: 95% EXTRACTED · 5% INFERRED · 0% AMBIGUOUS · INFERRED: 106 edges (avg confidence: 0.82)
 - Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `0a948827`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_Community 0|Community 0]]
@@ -154,30 +158,35 @@
 - [[_COMMUNITY_Community 142|Community 142]]
 - [[_COMMUNITY_Community 143|Community 143]]
 - [[_COMMUNITY_Community 144|Community 144]]
+- [[_COMMUNITY_Community 145|Community 145]]
+- [[_COMMUNITY_Community 146|Community 146]]
+- [[_COMMUNITY_Community 147|Community 147]]
+- [[_COMMUNITY_Community 148|Community 148]]
+- [[_COMMUNITY_Community 149|Community 149]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `F-048 — Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done)` - 76 edges
 2. `F-046 — Transaction Model & Bulk API` - 44 edges
 3. `F-047 — Transaction List Page` - 30 edges
-4. `Phase 0 — AI Export Backend Snapshot and Hard Cutover (source)` - 28 edges
-5. `Backend-owned versioned AI snapshots with frontend-owned prompt/clipboard boundary` - 25 edges
-6. `AiExportSnapshotService and AI Export Snapshot Platform` - 24 edges
-7. `WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER)` - 21 edges
-8. `Dependency Graph — Full Project` - 20 edges
-9. `BRIM Framework (Broker Report Import)` - 20 edges
-10. `AI Export Technical Sampling` - 19 edges
+4. `AI Export Runtime Service and Snapshot Platform` - 22 edges
+5. `WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER)` - 21 edges
+6. `Backend-owned versioned AI snapshots with a frontend-owned safe prompt and clipboard boundary` - 21 edges
+7. `Dependency Graph — Full Project` - 20 edges
+8. `BRIM Framework (Broker Report Import)` - 20 edges
+9. `AI Export Technical Sampling` - 19 edges
+10. `Unified Batch Pipeline — 2 endpoints replace 4` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `Calendar-Bucket Sampling Policy Matrix` --conceptually_related_to--> `Detail Level x Temporal Class Sampling Matrix`  [INFERRED]
+  mkdocs-en/docs/developer/architecture/patterns/ai_export_sampling.md → wiki/decisions/ai-export-technical-series-and-density-contract.md
+- `Semantic Composition V2 Hard Cutover` --conceptually_related_to--> `Backend-owned versioned AI snapshots with a frontend-owned safe prompt and clipboard boundary`  [INFERRED]
+  mkdocs-en/docs/developer/architecture/patterns/ai_export_snapshot.md → wiki/decisions/ai-export-versioned-snapshot-boundary.md
+- `Clipboard-Only AI Export Boundary` --conceptually_related_to--> `AI Export Runtime Service and Snapshot Platform`  [INFERRED]
+  mkdocs-en/docs/user/ai-export/index.en.md → wiki/entities/ai-export-snapshot-service.md
 - `Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable` --semantically_similar_to--> `Dual View Pattern (Card Grid + DataTable)`  [INFERRED] [semantically similar]
   wiki/concepts/always-pair-adjacent.md → wiki/concepts/dual-view-pattern.md
-- `Risk Metrics` --conceptually_related_to--> `Backend-Only Calculations`  [INFERRED]
-  mkdocs-en/docs/financial-theory/portfolio-theory/risk-metrics/index.en.md → wiki/decisions/risk-g6-application-contracts.md
-- `Risk Metrics` --references--> `Risk Metrics Mathematical and Semantic Contract`  [INFERRED]
-  mkdocs-en/docs/financial-theory/portfolio-theory/risk-metrics/index.en.md → wiki/decisions/risk-g6-application-contracts.md
-- `Historical Metrics Are Not Future Risk` --conceptually_related_to--> `Historical Replay Audit Trail`  [INFERRED]
-  mkdocs-en/docs/financial-theory/portfolio-theory/risk-metrics/index.en.md → wiki/decisions/risk-g6-application-contracts.md
-- `Rational Calendar-Bucket Formula` --conceptually_related_to--> `Inter-Bucket Price/FX Return Anchors`  [INFERRED]
-  mkdocs-en/docs/developer/architecture/patterns/ai_export_sampling.md → wiki/decisions/ai-export-technical-series-and-density-contract.md
+- `AI export: single kitchen-sink prompt replaced by a single-purpose prompt catalog` --conceptually_related_to--> `AnalysisSpec Prompt Contract`  [INFERRED]
+  wiki/decisions/ai-export-prompt-catalog.md → mkdocs-en/docs/developer/architecture/patterns/ai_export_composition.md
 
 ## Import Cycles
 - None detected.
@@ -185,27 +194,27 @@
 ## Hyperedges (group relationships)
 - **Short-lived session memory decision mechanisms** — wiki_decisions_ai-export-contextual-ui-memory, wiki_decisions_ai-export-contextual-ui-memory_reactive_identity_bound_memory, wiki_decisions_ai-export-contextual-ui-memory_raw_note_effective_option_separation, wiki_decisions_ai-export-contextual-ui-memory_context_bound_in_flight_preparation, wiki_decisions_ai-export-contextual-ui-memory_concern_based_e2e_cutover [EXTRACTED 1.00]
 
-## Communities (145 total, 16 thin omitted)
+## Communities (150 total, 17 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.05
-Nodes (130): Transactions Without-Asset Filter NaN URL Loop, Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Backend-Only Calculations Rule, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Import Todo Signals, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps (+122 more)
+Nodes (116): Transactions Without-Asset Filter NaN URL Loop, Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Backend-Only Calculations Rule, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Import Todo Signals, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps (+108 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.06
-Nodes (89): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Asset Feature Connections, Dependency Graph — Full Project, FX Feature Connections (+81 more)
+Cohesion: 0.05
+Nodes (108): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Single Migration Strategy (001_initial.py), Asset Feature Connections, Dependency Graph — Full Project (+100 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.06
-Nodes (83): AI export used ticker/ISIN as primary asset label, Explicit Broker Universe Nomenclature: accessible_broker_count / scoped_broker_count / position_broker_count / period_contributor_broker_count, Deferred IT/FR/ES User Guide Translations: English Remains Current Source, Dense Portfolio/Broker Export: 60k Token UI Warning Without Automatic Cap or Detail Downgrade, Empty Temporal-Row Public Rendering Hardening: Omit Only Completely Empty Rows, Indicator History Density Policy: Compact 5 / Standard 10 / Full All Non-Empty Rows, Standard Event Selection Policy: Complete 21-Day Recent Window + Minimum Latest 10 per Entity/Annotation (Approved 2026-08-03), AI Export News-Driver Analysis Decision (+75 more)
+Cohesion: 0.21
+Nodes (17): Inter-Bucket Price/FX Return Anchors, Technical vs Financial Series Separation, Calendar-Bucket Sampling Policy Matrix, Detail-Only Price and Rate Sampling, Focused Context Sampling Contracts, FX Observed Range Position, Latest-per-Category Context Event Policy, Observation-Level Event Selection Policy (+9 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.05
 Nodes (50): Drawdown Chart, Drawdown Series, Loss-Recovery Asymmetry, Max Drawdown, Drawdown Recovery Time, Risk Analysis Application Plan, Applied Shock Bucket Audit, Shared Foundation and G6-11 Approval Gate (+42 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.06
-Nodes (46): Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention, TimeSeriesStore pattern (+38 more)
+Cohesion: 0.07
+Nodes (42): Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention, TimeSeriesStore pattern (+34 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.19
@@ -232,8 +241,8 @@ Cohesion: 0.11
 Nodes (17): 📁 1. Create a project folder, 🛠️ 1. Manual Update, 🤖 2. Automatic Update (Watchtower), 📥 2. Get the base configuration files, 🔌 3. Other Management Alternatives, ▶️ 3. Start the application, 🌐 4. Access LibreFolio, 📶 5. Local and Remote Network Access (+9 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.21
-Nodes (17): FIFO at Runtime, Asset Orphan vs Portfolio-Level Cost/Income, D-1 Income Eligibility Window, DataTable net columns hidden despite real costs (visibility snapshot bug), Deterministic Cost-Matching Ladder, FIFO income silently dropped when no lot was open (pre-v4 allocator), FIFO Lot Engine, FIFO Lot Tracking (+9 more)
+Cohesion: 0.16
+Nodes (21): FIFO at Runtime, Asset Orphan vs Portfolio-Level Cost/Income, D-1 Income Eligibility Window, DataTable net columns hidden despite real costs (visibility snapshot bug), Deterministic Cost-Matching Ladder, FIFO income silently dropped when no lot was open (pre-v4 allocator), FIFO Lot Engine, FIFO Lot Tracking (+13 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.12
@@ -448,8 +457,8 @@ Cohesion: 0.25
 Nodes (7): 🚀 Asset Creation Flows, ➕ Create & Edit Assets, 🛠️ Editing an Asset, 🔌 Provider Assignment, 🔗 Related, 🔎 Smart Search Details, 🧪 Testing Provider Configuration
 
 ### Community 65 - "Community 65"
-Cohesion: 0.25
-Nodes (8): Dashboard KPI & Overview, Portfolio Charts, ROI Calculations, Holdings/Performance panel, Phase 09 M1+M2 archive (2026-07), Portfolio Engine, Unified /portfolio/report endpoint, Portfolio Service
+Cohesion: 0.18
+Nodes (11): AI export used ticker/ISIN as primary asset label, Dashboard KPI & Overview, Portfolio Charts, ROI Calculations, Holdings/Performance panel, Name-first asset labeling policy, Phase 09 M1+M2 archive (2026-07), Portfolio Engine (+3 more)
 
 ### Community 66 - "Community 66"
 Cohesion: 0.25
@@ -699,25 +708,41 @@ Nodes (3): NaN from __null__ Sentinel Numeric Conversion, Reactive Filter NaN Eq
 Cohesion: 0.67
 Nodes (3): Interactive Pros/Cons Slider, Remotion Video Promo, Source Code v0.9.0 Batch
 
+### Community 145 - "Community 145"
+Cohesion: 0.26
+Nodes (22): AiExportRuntimeService, AnalysisSpec, 66/66 OPTIMAL Analysis variants, Authoritative candidate run 20260804T224056.073291Z, Baseline run 20260804T214400.268752Z, Catalog V3, ComponentComposer, ComponentSpec (+14 more)
+
+### Community 146 - "Community 146"
+Cohesion: 0.23
+Nodes (16): AnalysisSpec Prompt Contract, Authenticated Snapshot Runtime Flow, AI Export Backend-Frontend Ownership Boundary, BuildContext Resource Memoization, Component-Dataset-Analysis Runtime, AI Export Component Runtime, ComponentSpec Runtime Unit, AI Export Composition and Prompt (+8 more)
+
+### Community 147 - "Community 147"
+Cohesion: 0.21
+Nodes (13): Empty Temporal-Row Public Rendering Hardening: Omit Only Completely Empty Rows, Indicator History Density Policy: Compact 5 / Standard 10 / Full All Non-Empty Rows, Standard Event Selection Policy: Complete 21-Day Recent Window + Minimum Latest 10 per Entity/Annotation (Approved 2026-08-03), AI Export News-Driver Analysis Decision, AI Export Technical Series and Density Contract, 2026-08-03 Indicator Density Amendment, Signal Density V2, Detail Level x Temporal Class Sampling Matrix (+5 more)
+
+### Community 148 - "Community 148"
+Cohesion: 0.31
+Nodes (13): Causality Boundary for News-Movement Links, LLM-Side Web Research Pattern, portfolio.market_events_review Analysis, Cited Current News Research, Clipboard-Only AI Export Boundary, Contextual AI Export Draft Memory, Dated Asset Movement-to-News Matching, Market Events Review Evidence Binding (+5 more)
+
 ## Knowledge Gaps
-- **661 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+656 more)
+- **664 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+659 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **16 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `F-048 — Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done)` connect `Community 0` to `Community 1`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
-- **Why does `Backend-owned versioned AI snapshots with frontend-owned prompt/clipboard boundary` connect `Community 2` to `Community 0`, `Community 5`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
-- **Why does `F-046 — Transaction Model & Bulk API` connect `Community 0` to `Community 1`, `Community 5`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
+- **Why does `Portfolio Engine` connect `Community 11` to `Community 147`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+- **Why does `AI Export Technical Series and Density Contract` connect `Community 147` to `Community 145`, `Community 2`, `Community 11`, `Community 146`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+- **Why does `3-Pool Cash Model` connect `Community 5` to `Community 11`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
+- **Are the 3 inferred relationships involving `AI Export Runtime Service and Snapshot Platform` (e.g. with `Authenticated Snapshot Runtime Flow` and `Clipboard-Only AI Export Boundary`) actually correct?**
+  _`AI Export Runtime Service and Snapshot Platform` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings` to the rest of the system?**
-  _736 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _741 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.05092426952892069 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05442278860569715 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.05822267620020429 - nodes in this community are weakly interconnected._
-- **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.06288568909785483 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05001730702665282 - nodes in this community are weakly interconnected._

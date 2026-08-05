@@ -2,8 +2,6 @@
 Backend schema validation tests: computed fields, common, assets, transactions, brokers.
 """
 
-from scripts.cli_base import pipenv_prefix
-
 from . import _common
 from ._common import (
     _build_pytest_cmd,
@@ -85,19 +83,12 @@ def schemas_risk(verbose: bool = False, test_names: list = None) -> bool:
 def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     """Test AI Export request, response, and catalog schemas."""
     print_section("Schemas: AI Export")
-    print_info("Testing: legacy fixtures + component-based public runtime contracts")
+    print_info("Testing: component-based public runtime contracts")
 
-    cmd = [
-        *pipenv_prefix(),
-        "python",
-        "-m",
-        "pytest",
-        "backend/test_scripts/test_schemas/test_ai_export_schemas.py",
+    cmd = _build_pytest_cmd(
         "backend/test_scripts/test_schemas/test_ai_export_runtime_schemas.py",
-        "-v",
-    ]
-    if test_names:
-        cmd.extend(["-k", " or ".join(test_names)])
+        test_names,
+    )
     return run_command(cmd, "AI Export schemas tests", verbose=verbose)
 
 

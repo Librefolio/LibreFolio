@@ -21,6 +21,8 @@ necessario spostarli nel diverso archivio `RoadmapV4_UI/phases/`.
 | [Piano Public Catalog V3](plan-phase00AiExportPublicCatalogReduction.prompt.md) | Riduzione 8 Export Data + 13 Analysis, componenti, probe e review | ✅ |
 | [Public Catalog Reduction V1](report-phase00AiExportPublicCatalogReductionV1.md) | Architettura V3, composizione, misure, confronto e decisione | ✅ |
 | [Task Adequacy Review V2](report-phase00AiExportTaskAdequacyReviewV2.md) | Review 126 varianti sul run autorevole V3 | ✅ |
+| [Piano final audit e legacy removal](plan-phase00AiExportFinalAuditAndLegacyRemoval.prompt.md) | Rimozione runtime storico, audit test, ottimizzazioni exact-output e gate finale | ✅ |
+| [Final Audit and Closure V1](report-phase00AiExportFinalAuditAndClosureV1.md) | Runtime unico, benchmark, matrice test/coverage, 114/114 equivalenti e run autorevole | ✅ |
 
 ## Stato corrente
 

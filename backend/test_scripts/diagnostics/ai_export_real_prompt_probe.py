@@ -4099,11 +4099,7 @@ def run_probe(args: argparse.Namespace) -> int:
             "representative_scope_policy": (
                 "explicit target-case scopes"
                 if target_cases
-                else (
-                    "one scope per public selection; cost efficiency prefers typed FEE/TAX rows; all other scopes use deterministic representative selectors"
-                    if public_catalog_v3_run
-                    else "portfolio all; broker with most positions then longest history; one deterministic longest-history asset; one deterministic longest-history FX pair"
-                )
+                else ("one deterministic representative scope per public selection" if public_catalog_v3_run else "portfolio all; broker with most positions then longest history; one deterministic longest-history asset; one deterministic longest-history FX pair")
             ),
             "case_policy": (
                 "exact explicit target cases only"

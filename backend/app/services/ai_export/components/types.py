@@ -1,14 +1,9 @@
 """Shared primitive types for the AI Export component/dataset/analysis runtime.
 
-This module is intentionally independent from `backend.app.services.ai_export.models`
-(the legacy task/profile catalog, superseded per the refinement plan) and from
-`backend.app.schemas.ai_export` (the public API schemas, still shaped around the
-legacy model). Workstream F migrates the public API onto this runtime; until then
-this module is the single source of truth for the new catalog/component runtime
-foundations (workstream D), plus the domain build context foundations (workstream
-D2): `BuildScope` (the validated, immutable per-request scope threaded through
-every domain builder) and `ResourceKey` (the typed identity for
-`BuildContext`'s internal raw resource cache).
+This module is independent from the public Pydantic wire schemas. It is the
+single source of truth for component/dataset/analysis runtime primitives,
+including `BuildScope` (the validated immutable request scope) and `ResourceKey`
+(the typed identity for `BuildContext`'s internal resource cache).
 """
 
 from __future__ import annotations
@@ -105,8 +100,7 @@ def normalize_currency_code(value: object) -> str:
     This is intentionally a lightweight *structural* check (3 uppercase
     letters), not a full ISO 4217 registry lookup like
     `backend.app.schemas.common.Currency.validate_code`: the component runtime
-    is deliberately independent from the public schemas layer (see module
-    docstring) and only needs a stable, canonical shape to key on.
+    only needs a stable canonical shape to key on.
     """
     if not isinstance(value, str):
         raise BuildScopeError(f"currency code must be a string, got {type(value).__name__}")

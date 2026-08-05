@@ -1710,14 +1710,15 @@
     "semantic_hash": "b6b55f1d08fc27eedeb6b73337ef0de3"
   },
   "wiki/decisions/ai-export-contextual-ui-memory.md": {
-    "mtime": 1785870347.5140073,
-    "ast_hash": "26a4af3fc31511790a2ffdf0bd61a348",
-    "semantic_hash": "26a4af3fc31511790a2ffdf0bd61a348"
+    "mtime": 1785871021.0444555,
+    "ast_hash": "4721e6938ff7d66a6a3260d2e4997822",
+    "semantic_hash": "4721e6938ff7d66a6a3260d2e4997822",
+    "size": 10262
   },
   "wiki/decisions/ai-export-versioned-snapshot-boundary.md": {
-    "mtime": 1785835542.6205432,
+    "mtime": 1785884254.4036448,
     "ast_hash": "1c59dd5f45a8c7703871598720ee7de7",
-    "semantic_hash": "7d86b7ff05a6f1d272ce4c3d74227b37"
+    "semantic_hash": "11b0cdf6e76f4718a98611a4c634b645"
   },
   "wiki/decisions/credit-agricole-securities-only-cash-neutral-brim.md": {
     "mtime": 1785016078.4394042,
@@ -1730,9 +1731,9 @@
     "semantic_hash": "1e6014732079b543e398db4ceecd6d33"
   },
   "wiki/entities/ai-export-snapshot-service.md": {
-    "mtime": 1785835543.2313278,
+    "mtime": 1785884215.2678757,
     "ast_hash": "a90a16bb42425469fe37815b0fd8c0f2",
-    "semantic_hash": "57462fa426175c543ecb5a1c4873e4fd"
+    "semantic_hash": "a714b6e9f63d1acce86ed0354740abee"
   },
   "wiki/problems/ai-export-cash-fx-valuation-basis-mismatch.md": {
     "mtime": 1785159054.2566378,
@@ -1750,9 +1751,9 @@
     "semantic_hash": "2c583a25ff6e1dde4e58132a56f11fe3"
   },
   "wiki/sources/phase00-ai-export-backend-snapshot.md": {
-    "mtime": 1785835542.8995366,
+    "mtime": 1785884297.7884948,
     "ast_hash": "1bcf56d18721df60b926c1d0e693a4cd",
-    "semantic_hash": "8159e8288728d01f3c6b9650894dc673"
+    "semantic_hash": "4ae415fe04f75b9c039809bfe29b17f8"
   },
   "wiki/concepts/cancellation-safe-inflight-deduplication.md": {
     "mtime": 1785246139.4125497,
@@ -2369,11 +2370,6 @@
     "ast_hash": "1338144e728f418f4296e0e9af00c9a5",
     "semantic_hash": "1338144e728f418f4296e0e9af00c9a5"
   },
-  "backend/schemas/ai_export.py": {
-    "mtime": 1785167462.691013,
-    "ast_hash": "8b1a1079e364cc33dfa1f61c1b412640",
-    "semantic_hash": "8b1a1079e364cc33dfa1f61c1b412640"
-  },
   "backend/schemas/assets.py": {
     "mtime": 1785241325.5953543,
     "ast_hash": "43264774782db47702a06ebec73d3adc",
@@ -2488,41 +2484,6 @@
     "mtime": 1785243230.6846523,
     "ast_hash": "889a6b3ab9ad8dad2e28a7a1360e09d5",
     "semantic_hash": "889a6b3ab9ad8dad2e28a7a1360e09d5"
-  },
-  "backend/services/ai_export/assemblers/__init__.py": {
-    "mtime": 1785079313.3352013,
-    "ast_hash": "d3e09846a99b0ffc55e839d8c7301278",
-    "semantic_hash": "d3e09846a99b0ffc55e839d8c7301278"
-  },
-  "backend/services/ai_export/assemblers/asset.py": {
-    "mtime": 1785247326.3387306,
-    "ast_hash": "1b8853e747e264124a0cdbcc634d8b09",
-    "semantic_hash": "1b8853e747e264124a0cdbcc634d8b09"
-  },
-  "backend/services/ai_export/assemblers/broker.py": {
-    "mtime": 1785247326.3496628,
-    "ast_hash": "ef4c84fa99a420f4cb7fc8750ca35f00",
-    "semantic_hash": "ef4c84fa99a420f4cb7fc8750ca35f00"
-  },
-  "backend/services/ai_export/assemblers/fifo.py": {
-    "mtime": 1785166259.2180436,
-    "ast_hash": "e06a68c2fc4b6cca97fcafee01d6fd1e",
-    "semantic_hash": "e06a68c2fc4b6cca97fcafee01d6fd1e"
-  },
-  "backend/services/ai_export/assemblers/fx.py": {
-    "mtime": 1785074448.7146862,
-    "ast_hash": "d9cbc192b464e26149d65dee4bcd4850",
-    "semantic_hash": "d9cbc192b464e26149d65dee4bcd4850"
-  },
-  "backend/services/ai_export/assemblers/portfolio.py": {
-    "mtime": 1785247326.3457468,
-    "ast_hash": "3ab55557bd75520de4733a3402d44ee3",
-    "semantic_hash": "3ab55557bd75520de4733a3402d44ee3"
-  },
-  "backend/services/ai_export/assemblers/shared.py": {
-    "mtime": 1785166880.648297,
-    "ast_hash": "99cb29030f4b0c9dea699e92ced08044",
-    "semantic_hash": "99cb29030f4b0c9dea699e92ced08044"
   },
   "backend/services/ai_export/components/__init__.py": {
     "mtime": 1785242823.0907223,
@@ -2639,11 +2600,6 @@
     "ast_hash": "d623361ef5fec13bb19842cf219857da",
     "semantic_hash": "d623361ef5fec13bb19842cf219857da"
   },
-  "backend/services/ai_export/coverage.py": {
-    "mtime": 1785081123.2588031,
-    "ast_hash": "9bce6e2b9855d226a3af02e8f6429c36",
-    "semantic_hash": "9bce6e2b9855d226a3af02e8f6429c36"
-  },
   "backend/services/ai_export/datasets/__init__.py": {
     "mtime": 1785241068.3244507,
     "ast_hash": "129f21c941e3d73b6aec6e6ba49462e7",
@@ -2663,66 +2619,6 @@
     "mtime": 1785246200.9076946,
     "ast_hash": "1d026237ad8dc5cd56bd2f70f1c4123b",
     "semantic_hash": "1d026237ad8dc5cd56bd2f70f1c4123b"
-  },
-  "backend/services/ai_export/models.py": {
-    "mtime": 1785164226.5671628,
-    "ast_hash": "a216eac3a8fbc2760695861dcf442e6a",
-    "semantic_hash": "a216eac3a8fbc2760695861dcf442e6a"
-  },
-  "backend/services/ai_export/normalization.py": {
-    "mtime": 1785070192.9792519,
-    "ast_hash": "f3d52e6c686e639290052002374ce12a",
-    "semantic_hash": "f3d52e6c686e639290052002374ce12a"
-  },
-  "backend/services/ai_export/profiles/__init__.py": {
-    "mtime": 1785057266.237427,
-    "ast_hash": "324bc11312176f2575a9025854e321f7",
-    "semantic_hash": "324bc11312176f2575a9025854e321f7"
-  },
-  "backend/services/ai_export/profiles/asset.py": {
-    "mtime": 1785057266.3371716,
-    "ast_hash": "f002c9be2d4b53c2d289aad067336283",
-    "semantic_hash": "f002c9be2d4b53c2d289aad067336283"
-  },
-  "backend/services/ai_export/profiles/base.py": {
-    "mtime": 1785057457.8478498,
-    "ast_hash": "820a6bfde534b06f89deafd5aa7f60af",
-    "semantic_hash": "820a6bfde534b06f89deafd5aa7f60af"
-  },
-  "backend/services/ai_export/profiles/broker.py": {
-    "mtime": 1785226836.8380253,
-    "ast_hash": "fb6c455b198129b1b9adae617924b582",
-    "semantic_hash": "fb6c455b198129b1b9adae617924b582"
-  },
-  "backend/services/ai_export/profiles/fx.py": {
-    "mtime": 1785057266.3312862,
-    "ast_hash": "e4ae31a8faf4c19267fdb1eda7fafeb4",
-    "semantic_hash": "e4ae31a8faf4c19267fdb1eda7fafeb4"
-  },
-  "backend/services/ai_export/profiles/portfolio.py": {
-    "mtime": 1785167425.9278889,
-    "ast_hash": "de1817e7bfbf44dac3ee4e3499774086",
-    "semantic_hash": "de1817e7bfbf44dac3ee4e3499774086"
-  },
-  "backend/services/ai_export/resolver.py": {
-    "mtime": 1785057266.2789772,
-    "ast_hash": "9bb7988ba1e26774e33216625a4bad5a",
-    "semantic_hash": "9bb7988ba1e26774e33216625a4bad5a"
-  },
-  "backend/services/ai_export/sampling.py": {
-    "mtime": 1785061892.9014566,
-    "ast_hash": "67651b90e41ecf2f1932257ac554af69",
-    "semantic_hash": "67651b90e41ecf2f1932257ac554af69"
-  },
-  "backend/services/ai_export/service.py": {
-    "mtime": 1785083310.0258727,
-    "ast_hash": "21206ad7a3818ef9d44e4550663ba9e5",
-    "semantic_hash": "21206ad7a3818ef9d44e4550663ba9e5"
-  },
-  "backend/services/ai_export/technical.py": {
-    "mtime": 1785314447.7822948,
-    "ast_hash": "2e9b32cc41c577554575251bf10ce54e",
-    "semantic_hash": "2e9b32cc41c577554575251bf10ce54e"
   },
   "backend/services/ai_export/telemetry.py": {
     "mtime": 1785061051.3882158,
@@ -7195,14 +7091,8 @@
     "semantic_hash": "883580c4d5f2e79ab86b442394d6e646"
   },
   "wiki/concepts/ai-export-catalog-granularity-and-composition.md": {
-    "mtime": 1785835542.2269764,
+    "mtime": 1785884160.9291272,
     "ast_hash": "",
-    "semantic_hash": "c133a45636bcdd079cf5b6d026079447"
-  },
-  "/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/LibreFolio_devWiki/corpus/wiki/decisions/ai-export-contextual-ui-memory.md": {
-    "mtime": 1785871021.0444555,
-    "ast_hash": "4721e6938ff7d66a6a3260d2e4997822",
-    "semantic_hash": "4721e6938ff7d66a6a3260d2e4997822",
-    "size": 10262
+    "semantic_hash": "1d4d93c52c0b39de5b8319beda59a74a"
   }
 }

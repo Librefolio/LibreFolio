@@ -1,20 +1,29 @@
-"""Focused tests for AI Export canonical serialization and telemetry."""
+"""Tests for live AI Export canonical JSON and token estimation utilities."""
 
 from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from enum import StrEnum
 
 import pytest
+from pydantic import BaseModel
 
-from backend.app.schemas.ai_export import AiExportSampledPoint, AiExportTokenEstimationMethod
+from backend.app.schemas.common import SafeDecimal
 from backend.app.services.ai_export.telemetry import (
-    SnapshotContentCounts,
-    build_export_stats,
     canonical_json,
-    count_snapshot_contents,
     estimate_tokens_chars_div_4,
 )
+
+
+class _Code(StrEnum):
+    VALUE = "value"
+
+
+class _Payload(BaseModel):
+    day: date
+    amount: SafeDecimal
+    code: _Code
 
 
 def test_canonical_json_is_deterministic_across_mapping_insertion_order():
@@ -40,70 +49,35 @@ def test_canonical_json_is_deterministic_across_mapping_insertion_order():
     assert "\\u" not in serialized
 
 
-def test_pydantic_json_serialization_preserves_fixed_point_decimal_behavior():
-    point = AiExportSampledPoint(date=date(2026, 7, 26), value=Decimal("1E+5"))
+def test_canonical_json_normalizes_models_dates_decimals_and_enums():
+    payload = _Payload(
+        day=date(2026, 7, 26),
+        amount=Decimal("1E+5"),
+        code=_Code.VALUE,
+    )
 
-    assert canonical_json(point) == '{"date":"2026-07-26","value":"100000"}'
+    assert canonical_json(payload) == '{"amount":"100000","code":"value","day":"2026-07-26"}'
 
 
-@pytest.mark.parametrize("value", (float("nan"), float("inf"), Decimal("NaN"), Decimal("Infinity")))
+@pytest.mark.parametrize(
+    "value",
+    (
+        float("nan"),
+        float("inf"),
+        Decimal("NaN"),
+        Decimal("Infinity"),
+    ),
+)
 def test_canonical_json_rejects_non_finite_numbers(value):
     with pytest.raises(ValueError, match="non-finite"):
         canonical_json({"value": value})
 
 
-@pytest.mark.parametrize(
-    ("payload", "expected"),
-    (
-        (
-            {
-                "domain": "portfolio",
-                "facts": {"positions": [{}, {}]},
-                "technical": {
-                    "targets": [
-                        {"signals": [{"components": [{"sampled_points": [{}, {}]}]}]},
-                        {"signals": [{"components": [{"sampled_points": [{}]}]}]},
-                    ]
-                },
-                "events": [{}, {}],
-            },
-            SnapshotContentCounts(positions=2, technical_assets=2, series_points=3, events=2),
-        ),
-        (
-            {
-                "domain": "asset",
-                "facts": {
-                    "current_position": {},
-                    "market": {"sampled_prices": [{}, {}]},
-                    "normalized_return": {"points": [{}, {}]},
-                },
-                "technical": {"targets": [{"signals": [{"components": [{"sampled_points": [{}]}]}]}]},
-                "events": [{}],
-            },
-            SnapshotContentCounts(positions=1, technical_assets=1, series_points=5, events=1),
-        ),
-        (
-            {
-                "domain": "fx",
-                "facts": {"sampled_rates": [{}, {}]},
-                "technical": {"targets": [{"signals": [{"components": [{"sampled_points": [{}, {}]}]}]}]},
-                "events": [],
-            },
-            SnapshotContentCounts(positions=0, technical_assets=1, series_points=4, events=0),
-        ),
-        (
-            {
-                "domain": "broker",
-                "facts": {"positions": [{}]},
-                "technical": {"targets": [{"signals": [{"components": [{"latest": {"date": "2026-07-26", "value": "1"}}]}]}]},
-                "nested": {"events": [{}]},
-            },
-            SnapshotContentCounts(positions=1, technical_assets=1, series_points=0, events=1),
-        ),
-    ),
-)
-def test_recursive_counts_cover_representative_four_domain_payloads(payload, expected):
-    assert count_snapshot_contents(payload) == expected
+def test_canonical_json_rejects_non_string_keys_and_unknown_objects():
+    with pytest.raises(ValueError, match="non-string key"):
+        canonical_json({1: "value"})
+    with pytest.raises(TypeError, match="non-JSON value"):
+        canonical_json({"value": object()})
 
 
 @pytest.mark.parametrize(
@@ -120,54 +94,15 @@ def test_chars_div_4_token_estimate_uses_ceiling(characters, tokens):
     assert estimate_tokens_chars_div_4(characters) == tokens
 
 
-def test_build_export_stats_uses_canonical_character_count_and_typed_method():
-    payload = {
-        "domain": "portfolio",
-        "facts": {"positions": [{}]},
-        "technical": {"targets": [{"signals": [{"components": [{"sampled_points": [{}, {}]}]}]}]},
-        "events": [{}],
-        "label": "Portafoglio €",
-    }
-
-    stats = build_export_stats(payload)
-    expected_characters = len(canonical_json(payload, exclude_export_stats=True))
-
-    assert stats.canonical_json.positions == 1
-    assert stats.canonical_json.technical_assets == 1
-    assert stats.canonical_json.series_points == 2
-    assert stats.canonical_json.events == 1
-    assert stats.canonical_json.serialized_characters == expected_characters
-    assert stats.token_estimate.method == AiExportTokenEstimationMethod.CHARS_DIV_4_V1
-    assert stats.token_estimate.estimated_tokens == (expected_characters + 3) // 4
-
-
-def test_export_stats_are_explicitly_excluded_from_self_measurement():
-    base = {
-        "domain": "asset",
-        "facts": {"current_position": {}},
-        "events": [],
-    }
-    first = {**base, "export_stats": {"canonical_json": {"serialized_characters": 1}}}
-    second = {**base, "export_stats": {"canonical_json": {"serialized_characters": 999999}, "events": [{}, {}]}}
-
-    assert build_export_stats(first) == build_export_stats(second)
-    assert canonical_json(first, exclude_export_stats=True) == canonical_json(base)
-    assert '"export_stats"' in canonical_json(first)
-
-
-def test_export_stats_exclusion_also_prevents_nested_counter_instability():
-    payload = {
-        "domain": "broker",
-        "facts": {"positions": [{}]},
-        "export_stats": {
-            "positions": [{}, {}, {}],
-            "technical": {"targets": [{}, {}]},
-            "events": [{}, {}],
-        },
-    }
-
-    stats = build_export_stats(payload)
-
-    assert stats.canonical_json.positions == 1
-    assert stats.canonical_json.technical_assets == 0
-    assert stats.canonical_json.events == 0
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    (
+        (True, TypeError),
+        (-1, ValueError),
+        (1.5, TypeError),
+        ("4", TypeError),
+    ),
+)
+def test_token_estimate_rejects_invalid_counts(value, expected):
+    with pytest.raises(expected):
+        estimate_tokens_chars_div_4(value)

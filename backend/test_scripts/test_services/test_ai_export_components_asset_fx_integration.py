@@ -473,11 +473,11 @@ class TestDatasetAnalysisRegistryConstruction:
 
     def test_analysis_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_analysis_registry()
-        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 22
+        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 11
         asset_analyses = {a.analysis_id for a in registry.for_domain(Domain.ASSET)}
         fx_analyses = {a.analysis_id for a in registry.for_domain(Domain.FX)}
-        assert asset_analyses == {"asset.trend_analysis", "asset.position_review", "asset.market_analysis"}
-        assert fx_analyses == {"fx.trend_review", "fx.conversion_timing", "fx.exposure_impact", "fx.pair_analysis"}
+        assert asset_analyses == {"asset.position_review", "asset.market_analysis"}
+        assert fx_analyses == {"fx.exposure_impact", "fx.pair_analysis"}
 
     def test_dataset_registry_builds_over_supplied_component_registry(self):
         component_registry = build_asset_fx_component_registry()
@@ -487,7 +487,7 @@ class TestDatasetAnalysisRegistryConstruction:
     def test_analysis_registry_builds_over_supplied_dataset_registry(self):
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == 22
+        assert len(analysis_registry) == 11
 
 
 # =============================================================================
@@ -841,7 +841,7 @@ class TestFxDatasetComposition:
 
 
 # =============================================================================
-# 6. Analysis composition - 3 Asset + 3 FX analyses, cardinality across detail levels (requirement 2/3)
+# 6. Analysis composition - 2 Asset + 2 FX public analyses
 # =============================================================================
 
 
@@ -852,9 +852,6 @@ class TestAnalysisComposition:
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
         composer = Composer()
-
-        trend = await composer.compose_analysis(analysis_registry.get("asset.trend_analysis"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
-        assert set(trend.dataset_ids) == {"asset.overview", "asset.market_technical"}
 
         review = await composer.compose_analysis(analysis_registry.get("asset.position_review"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
         assert review.dataset_ids == ("asset.position_and_history",)
@@ -868,12 +865,6 @@ class TestAnalysisComposition:
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
         composer = Composer()
-
-        trend_review = await composer.compose_analysis(analysis_registry.get("fx.trend_review"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
-        assert set(trend_review.dataset_ids) == {"fx.overview", "fx.market_technical"}
-
-        conversion_timing = await composer.compose_analysis(analysis_registry.get("fx.conversion_timing"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
-        assert {"fx.overview", "fx.market_technical"} <= set(conversion_timing.dataset_ids)
 
         exposure_impact = await composer.compose_analysis(analysis_registry.get("fx.exposure_impact"), dataset_registry, context, detail_level=DetailLevel.STANDARD)
         assert exposure_impact.dataset_ids == ("fx.market_and_exposure",)

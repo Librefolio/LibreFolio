@@ -1,9 +1,8 @@
 """Non-predictive FX conversion-timing evidence component for the AI Export runtime.
 
-Owns exactly one NEW component ID, ``fx.timing_context``, that supplies the
-`fx.conversion_timing` analysis with **observed-only** timing evidence so an
-analyst can frame a conversion decision *without* the runtime ever forecasting a
-rate. Every number here is either the exact resolved current rate/date (reused
+Owns ``fx.timing_context``, which supplies the public FX general snapshot with
+**observed-only** timing evidence without forecasting a rate. Every number here
+is either the exact resolved current rate/date (reused
 verbatim from the already-computed ``fx.current_rate`` / ``fx.conversion_provenance``
 sibling components - never recomputed) or a pure function of the genuine,
 observed daily rate series loaded through
@@ -475,9 +474,8 @@ async def _build_fx_timing_context(context: BuildContext, dependencies: Mapping[
 #   period_behavior=PeriodBehavior.WINDOWED). Metadata below is authoritative.
 # - Proposed dataset binding: add "fx.timing_context" to the FX conversion-timing
 #   dataset alongside fx.current_rate / fx.conversion_provenance / fx.rate_ohlc.
-# - Proposed Analysis binding: attach to the `fx.conversion_timing` analysis so
-#   its response contract can cite observed range/returns/coverage + the explicit
-#   missing_user_inputs list (no forecast contract fields).
+# - The public FX general snapshot can cite observed range/returns/coverage plus
+#   the explicit missing_user_inputs list (no forecast contract fields).
 
 FX_TIMING_CONTEXT_SPEC = ComponentSpec(
     component_id="fx.timing_context",

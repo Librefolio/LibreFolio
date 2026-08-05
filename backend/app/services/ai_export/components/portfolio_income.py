@@ -1,8 +1,8 @@
 """Isolated Portfolio dated-income-evidence component (``portfolio.income_timeline``).
 
-Motivation (``ai-adequacy-v1-remediate-portfolio``): ``portfolio.income_review``
-today only carries the *aggregate* period income (``portfolio.flows_income``:
-``period_income`` plus the per-asset ``Income`` effect rows). Baseline adequacy
+Motivation (``ai-adequacy-v1-remediate-portfolio``): the aggregate
+``portfolio.flows_income`` component carries ``period_income`` plus per-asset
+``Income`` effect rows. Baseline adequacy
 rating flagged the absence of concrete, *dated* historical income evidence: an
 analyst cannot see *when* each dividend/interest cash-flow actually landed, on
 which broker/asset, in which native currency, and how it was converted to the

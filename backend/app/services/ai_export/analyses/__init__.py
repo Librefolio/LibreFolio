@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from backend.app.services.ai_export.analyses.catalog import (
-    ALL_ANALYSES,
     EXPECTED_ANALYSIS_COUNT,
+    PUBLIC_ANALYSES,
     build_analysis_registry,
 )
 from backend.app.services.ai_export.analyses.spec import (
@@ -19,8 +19,8 @@ from backend.app.services.ai_export.analyses.spec import (
 )
 
 __all__ = [
-    "ALL_ANALYSES",
     "EXPECTED_ANALYSIS_COUNT",
+    "PUBLIC_ANALYSES",
     "AnalysisDatasetDomainMismatchError",
     "AnalysisRegistry",
     "AnalysisRegistryError",

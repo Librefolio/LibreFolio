@@ -77,8 +77,8 @@ export class AiExportChoiceUnavailableError extends Error {
 export class AiExportClipboardUnavailableError extends Error {
     readonly kind = 'clipboard_unavailable';
 
-    constructor(message = 'Clipboard writing is unavailable') {
-        super(message);
+    constructor(message = 'Clipboard writing is unavailable', options?: ErrorOptions) {
+        super(message, options);
         this.name = 'AiExportClipboardUnavailableError';
     }
 }
@@ -154,7 +154,11 @@ export async function prepareAiExport(input: PrepareAiExportInput, dependencies:
 
 export async function defaultAiExportClipboardWriter(text: string): Promise<void> {
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && (typeof window === 'undefined' || window.isSecureContext !== false)) {
-        await navigator.clipboard.writeText(text);
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch (error) {
+            throw new AiExportClipboardUnavailableError('Clipboard permission denied', {cause: error});
+        }
         return;
     }
     if (typeof document === 'undefined' || typeof document.execCommand !== 'function') throw new AiExportClipboardUnavailableError();

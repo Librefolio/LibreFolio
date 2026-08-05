@@ -4,6 +4,23 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-08-05] update | AI Export single-runtime V3 final closure
+
+Updated [[decisions/ai-export-versioned-snapshot-boundary]],
+[[entities/ai-export-snapshot-service]],
+[[concepts/ai-export-catalog-granularity-and-composition]], and
+[[sources/phase00-ai-export-backend-snapshot]]. Recorded removal of the complete
+profile/assembler/V1-schema runtime, the final 67-component/40-dataset/11-analysis
+registry, the 8+11 public catalog, exact-output registry/catalog/stats/envelope
+optimizations, zero orphan tests, 114/114 baseline/candidate prompt equivalence,
+and 66/66 `OPTIMAL` Analysis variants. Candidate
+`20260804T224056.073291Z` is the authoritative closure run.
+Graph: scoped semantic refresh replaced 15 historical page nodes with 22
+current nodes, pruned 11 obsolete findings, and regenerated `graph.json`,
+`GRAPH_REPORT.md`, and `graph.html`: 1,533→1,540 nodes, 2,248→2,222 edges,
+150 communities. BFS now resolves the single runtime, 114/114 prompt
+equivalence and 66/66 `OPTIMAL` variants.
+
 ## [2026-08-04] update | AI Export short-lived session memory and fiscal catalog refinement
 
 Updated [[decisions/ai-export-contextual-ui-memory]] after manual multi-login

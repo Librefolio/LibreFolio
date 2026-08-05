@@ -680,10 +680,10 @@ class TestDatasetAndAnalysisRegistryConstruction:
         registry = build_portfolio_broker_dataset_registry()
         assert len(registry) == EXPECTED_DATASET_COUNT == 40
 
-    def test_analysis_registry_has_22_analyses(self):
+    def test_analysis_registry_has_11_analyses(self):
         dataset_registry = build_portfolio_broker_dataset_registry()
         analysis_registry = build_portfolio_broker_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 22
+        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 11
 
     def test_portfolio_and_broker_datasets_present(self):
         registry = build_portfolio_broker_dataset_registry()
@@ -724,8 +724,8 @@ class TestDatasetAndAnalysisRegistryConstruction:
         analysis_registry = build_portfolio_broker_analysis_registry()
         portfolio_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.PORTFOLIO}
         broker_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.BROKER}
-        assert len(portfolio_analysis_ids) == 10
-        assert len(broker_analysis_ids) == 5
+        assert len(portfolio_analysis_ids) == 4
+        assert len(broker_analysis_ids) == 3
 
 
 # =============================================================================
@@ -945,7 +945,7 @@ class TestBrokerDatasetComposition:
 
 class TestAnalysisComposition:
     @pytest.mark.asyncio
-    async def test_all_ten_portfolio_analyses_compose(self, monkeypatch):
+    async def test_all_four_portfolio_analyses_compose(self, monkeypatch):
         scope = _portfolio_scope()
         _setup_portfolio_scenario(monkeypatch, scope)
         dataset_registry = build_portfolio_broker_dataset_registry()
@@ -954,14 +954,14 @@ class TestAnalysisComposition:
         composer = Composer()
 
         portfolio_analyses = [spec for spec in analysis_registry if spec.domain == Domain.PORTFOLIO]
-        assert len(portfolio_analyses) == 10
+        assert len(portfolio_analyses) == 4
         for analysis in portfolio_analyses:
             composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
             assert set(analysis.required_dataset_ids).issubset(set(composition.dataset_ids))
             assert composition.sections  # real payloads, never empty given the fixture scenario
 
     @pytest.mark.asyncio
-    async def test_all_five_broker_analyses_compose(self, monkeypatch):
+    async def test_all_three_broker_analyses_compose(self, monkeypatch):
         scope = _broker_scope()
         _setup_broker_scenario(monkeypatch, scope)
         dataset_registry = build_portfolio_broker_dataset_registry()
@@ -970,7 +970,7 @@ class TestAnalysisComposition:
         composer = Composer()
 
         broker_analyses = [spec for spec in analysis_registry if spec.domain == Domain.BROKER]
-        assert len(broker_analyses) == 5
+        assert len(broker_analyses) == 3
         for analysis in broker_analyses:
             composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
             assert set(analysis.required_dataset_ids).issubset(set(composition.dataset_ids))
@@ -1331,4 +1331,4 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        assert result.stdout.strip() == "67 40 22"
+        assert result.stdout.strip() == "67 40 11"
