@@ -15,13 +15,13 @@ The **Positions** tab of the dashboard allows you to inspect open holdings, anal
 
 ## 🔍 Positions Tab
 
-The **Positions** tab provides a detailed breakdown of all the financial instruments currently held in your portfolio (Stocks, ETFs, Bonds, Cryptocurrencies, etc.). 
+The **Positions** panel has two semantic modes: **Holdings** and **Performance**.
 
-The Positions tab allows you to switch between two primary metric modes using the view toggle, each focusing on a different aspect of your holdings:
+Use the view toggle to switch between them, and the table/map toggle to change the visual layout.
 
 #### 📋 Holdings View
 
-The **Holdings** view focuses on bookkeeping, quantities, and current asset valuation. It helps you monitor your current portfolio exposure and baseline metrics.
+The **Holdings** view shows the current open-position snapshot.
 
 | Metric | Description |
 |:---|:---|
@@ -33,14 +33,7 @@ The **Holdings** view focuses on bookkeeping, quantities, and current asset valu
 
 #### 📈 Performance View
 
-The **Performance** view focuses on absolute and relative returns. It helps you analyze the profitability of your open positions, factoring in historical transactions and income.
-
-| Metric | Description |
-|:---|:---|
-| **Total Value** | Current value of the holdings (matches Market Value). |
-| **Unrealized P&L** | Paper gain or loss calculated as \(\text{Market Value} - \text{Book Value}\). |
-| **ROI %** | Rate of return relative to the cost basis of the position. |
-| **Total P&L** | Cumulative absolute returns (includes past closed sales & dividends). |
+The **Performance** view loads on demand and shows open and closed positions together. In the table/chart, **Status** is filterable inside the component, not a top-level toggle.
 
 #### 🗺️ Visual Style: Table vs. Map
 

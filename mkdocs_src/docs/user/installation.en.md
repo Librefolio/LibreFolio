@@ -87,6 +87,8 @@ cd librefolio
     curl -L https://raw.githubusercontent.com/Librefolio/LibreFolio/main/.env.example -o .env
     ```
 
+This installs the official GHCR image-based production stack and stores persistent data in `./LibreFolio-data` beside `docker-compose.yml`.
+
 ✍️ Alternatively, you can manually create a file named `docker-compose.yml` and paste the following code inside:
 
 ```yaml
@@ -98,7 +100,7 @@ services:
     ports:
       - "6040:6040"
     volumes:
-      - ./librefolio-data:/app/backend/data/prod-docker
+      - ./LibreFolio-data:/app/backend/data/prod-docker
     env_file: .env
     environment:
       - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker

@@ -136,7 +136,7 @@ $$
 
 When a portfolio contains acquisitions in different currencies, LibreFolio:
 
-1. Determines the **target currency** (most frequent among acquisitions)
+1. Determines the **target currency** from the request override when provided; otherwise uses the latest acquisition currency (deterministic), falling back to the asset currency
 2. Converts all unit costs to the target currency using historical FX rates
 3. Computes WAC in the unified target currency
 

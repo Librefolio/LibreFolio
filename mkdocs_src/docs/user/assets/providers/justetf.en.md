@@ -6,6 +6,7 @@ justETF provides detailed data for European ETFs, including current prices and h
 
 - ✅ **Current Price**: Real-time gettex quotes (EUR only)
 - ✅ **History**: Historical price data in EUR, USD, CHF, or GBP
+- ✅ **Events**: May emit `DIVIDEND` events from chart data when dividend series are present
 - ✅ **Search**: Full-text search across 3000+ European ETFs
 
 ## 💱 Currency Selection
@@ -29,16 +30,13 @@ When you search for an ETF, results appear with currency flags:
 
 ## ⚠️ Limitations
 
-!!! warning "Current Price: EUR Only"
+!!! warning "Current Price Fallbacks"
 
-    Real-time prices (current value) are only available in **EUR** because they come from the **gettex** exchange WebSocket, which is a European exchange quoting in EUR.
+    Current value first tries the real-time **EUR** gettex quote.
 
-    For non-EUR currencies (USD, CHF, GBP):
+    If that live quote is unavailable, LibreFolio falls back to the daily `latestQuote` from the performance-chart API for **EUR, USD, CHF, and GBP**.
 
-    - ✅ Historical data is available (converted by JustETF)
-    - ❌ Real-time price is **not** available — the asset sync will show "current value unavailable"
-
-    **Recommendation**: If you need real-time prices, use EUR. For portfolio tracking where daily closing prices suffice, any currency works.
+    Historical data remains available for all supported currencies.
 
 ## 🔧 Configuration
 

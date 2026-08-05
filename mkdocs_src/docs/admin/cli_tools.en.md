@@ -86,7 +86,7 @@ pipenv run ./dev.py db upgrade
 # Build and deploy MkDocs documentation to GitHub Pages
 pipenv run ./dev.py mkdocs deploy
 
-# Generate gallery screenshots (requires running server + test data)
+# Generate gallery screenshots (uses Playwright; starts/controls a test server and populates test data unless --no-populate)
 pipenv run ./dev.py mkdocs gallery
 ```
 
@@ -108,4 +108,3 @@ pipenv run ./dev.py --help
     - **Testing**: `pipenv run ./dev.py test all` — see [Test Walkthrough](../developer/test-walkthrough/index.md)
     - **API Client**: `pipenv run ./dev.py api sync` — see [API Overview](../developer/api/overview.md)
     - **i18n**: `pipenv run ./dev.py i18n audit` — see [Internationalization](../developer/frontend/i18n.md)
-

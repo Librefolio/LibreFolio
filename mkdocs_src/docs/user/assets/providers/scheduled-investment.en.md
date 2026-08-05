@@ -36,7 +36,7 @@ The editor allows you to define multiple interest rate periods:
 
 ### ⚡ Late Interest
 
-You can enable **Late Interest** to define a penalty rate applied after the last scheduled period ends. The late interest has a configurable **grace period** (in days) before it starts accruing.
+You can enable **Late Interest** to define a penalty rate applied after the last scheduled period ends. A configurable **grace period** (in days) applies first; after that, late interest starts accruing.
 
 ## 📋 Asset Events
 
@@ -56,6 +56,8 @@ Events are configured in the editor and affect the calculated price from their d
 3. Apply asset events: INTEREST events reduce the price, PRICE_ADJUSTMENT events modify it algebraically
 4. The current value = `initial_value` + accrued interest - Σ(INTEREST events) + Σ(PRICE_ADJUSTMENT events)
 
+If `late_interest` is configured, the provider continues beyond maturity using the grace-period branch first, then the late-interest branch; if `generate_interest` is enabled, it also emits late `INTEREST` events and a final `MATURITY_SETTLEMENT` where applicable.
+
 !!! note "Pure Deterministic Engine"
 
     The provider is completely deterministic — given the same configuration, it always produces the same prices. It does NOT access the database or read transactions. All inputs come from `provider_params`.
@@ -67,4 +69,3 @@ Events are configured in the editor and affect the calculated price from their d
 - **Government bonds** where you want to track accrued interest rather than market price
 - **Crowdfunding loans** (P2P lending) with known interest schedules
 - **Any instrument** with a known interest rate schedule
-
