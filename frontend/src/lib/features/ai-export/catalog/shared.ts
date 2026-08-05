@@ -36,6 +36,17 @@ export const AI_EXPORT_CATALOG_VERSION = 1;
 export const AI_EXPORT_SELECTION_VERSION = 1;
 export const AI_EXPORT_DETAIL_LEVELS = ['compact', 'standard', 'full'] as const satisfies readonly AiExportDetailLevel[];
 export const AI_EXPORT_DEFAULT_DETAIL_LEVEL = 'standard' satisfies AiExportDetailLevel;
+
+/**
+ * Resolve the detail level to use for a selection: the default when supported,
+ * otherwise the first level the selection declares.
+ *
+ * Exported as a function rather than as a bare constant so callers adopt the *rule*
+ * instead of re-inlining the literal (see audit report 13, DRY orphan M4.1).
+ */
+export function resolveDefaultDetailLevel(supportedDetailLevels: readonly AiExportDetailLevel[]): AiExportDetailLevel {
+    return supportedDetailLevels.includes(AI_EXPORT_DEFAULT_DETAIL_LEVEL) ? AI_EXPORT_DEFAULT_DETAIL_LEVEL : supportedDetailLevels[0];
+}
 export const AI_EXPORT_DOMAIN_ORDER = ['portfolio', 'broker', 'asset', 'fx'] as const satisfies readonly AiExportDomain[];
 export const AI_EXPORT_PAGE_LABEL_KEYS: Readonly<Record<string, string>> = {
     dashboard: 'nav.dashboard',

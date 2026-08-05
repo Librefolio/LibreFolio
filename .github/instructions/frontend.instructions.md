@@ -42,6 +42,7 @@ frontend/
 | Signal Library | `frontend-signals.instructions.md` — all signals, base class, registry, adding new signals |
 | E2E Testing | `frontend-testing.instructions.md` — Playwright patterns, fixtures, conventions |
 | Lint & Format | skill `lint-format-frontend` — Prettier + svelte-check, config, workflow |
+| Dead code | skill `lint-format-frontend` — `./dev.py lint --dead-code` (knip), unused files/exports/deps |
 
 ## Design System
 

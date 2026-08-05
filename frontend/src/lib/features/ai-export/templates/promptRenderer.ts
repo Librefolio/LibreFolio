@@ -1,5 +1,5 @@
 import type {AiExportCatalogCompatibilityResult} from '../catalog/compatibility';
-import {AI_EXPORT_PAGE_FEATURE_LABEL_KEYS, AI_EXPORT_PAGE_LABEL_KEYS, AI_EXPORT_SCHEMA_VERSION, aiExportSelectionKey, isAiExportAnalysisId, type AiExportAnalysisCatalogEntry, type AiExportCompatibleSelection, type AiExportDatasetCatalogEntry, type AiExportSnapshotResponse} from '../catalog/shared';
+import {AI_EXPORT_PAGE_FEATURE_LABEL_KEYS, AI_EXPORT_PAGE_LABEL_KEYS, AI_EXPORT_SCHEMA_VERSION, aiExportSelectionKey, isAiExportAnalysisId, type AiExportAnalysisCatalogEntry, type AiExportCompatibleSelection, type AiExportSnapshotResponse} from '../catalog/shared';
 import {renderFencedSection, serializeYaml} from '../serialization';
 import {findAiExportResponseContract} from './responseContracts';
 import {renderSnapshotDataText, type RenderedSnapshotDataText, type SnapshotFormatDiagnostics, type SnapshotSignalMetric} from './snapshotDataRenderer';
@@ -414,8 +414,4 @@ export function calculateAiExportPromptStats(prompt: string, snapshotBackendStat
         },
         snapshotBackendStats,
     };
-}
-
-export function isDatasetCatalogEntry(entry: AiExportDatasetCatalogEntry | AiExportAnalysisCatalogEntry): entry is AiExportDatasetCatalogEntry {
-    return entry.kind === 'dataset';
 }

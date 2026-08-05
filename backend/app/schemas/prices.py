@@ -79,7 +79,6 @@ class AssetBackwardFillInfo(BackwardFillInfo, FxBackwardFillInfo):
     previous flat class — no client-side breaking change.
     """
 
-    pass
 
 
 # ============================================================================
@@ -257,7 +256,6 @@ class FABulkDeleteResponse(BaseBulkDeleteResponse[FAPriceDeleteResult]):
     # - success_count: int
     # - errors: List[str]
     # - total_deleted: int (total price records deleted)
-    pass
 
 
 # ============================================================================
@@ -395,7 +393,6 @@ class FAEventUpsertResult(BaseModel):
 class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):
     """Response for bulk event upsert."""
 
-    pass
 
 
 class FAEventDeleteResult(BaseDeleteResult):
@@ -484,7 +481,6 @@ class FAEventQueryResult(BaseModel):
 class FAEventQueryResponse(BaseListResponse[FAEventQueryResult]):
     """Bulk response for event queries."""
 
-    pass
 
 
 # ============================================================================
@@ -566,7 +562,6 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
     - items: List[FAPriceQueryResult]  (one per asset queried)
     """
 
-    pass
 
 
 # ============================================================================
@@ -596,4 +591,3 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
     - errors: List[str]
     """
 
-    pass

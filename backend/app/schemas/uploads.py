@@ -44,7 +44,6 @@ from backend.app.schemas.common import BaseListResponse
 class UploadListResponse(BaseListResponse[UploadFileInfo]):
     """Response for listing uploads."""
 
-    pass
 
 
 class UploadDeleteResponse(BaseModel):

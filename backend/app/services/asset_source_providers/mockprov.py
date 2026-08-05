@@ -148,7 +148,6 @@ class MockProvider(AssetSourceProvider):
         In a real provider, this would validate required params.
         """
         # Accept any params for testing flexibility
-        pass
 
     async def fetch_asset_metadata(
         self,

@@ -422,7 +422,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
                             validation_issues=validation_issues,
                         )
                     except Exception as e:
-                        warnings.append(f"Row {row_num}: {str(e)}")
+                        warnings.append(f"Row {row_num}: {e!s}")
                         continue
 
                     # Emit field_todo for ADJUSTMENT rows missing cost_basis_override
@@ -445,7 +445,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error reading CSV file: {str(e)}", details={"file": file_path.name}) from e
+            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")

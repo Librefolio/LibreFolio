@@ -127,7 +127,6 @@ class BRIMProvider(ABC):
 
         Examples: 'broker_generic_csv', 'directa_csv', 'degiro_xlsx'
         """
-        pass
 
     @property
     @abstractmethod
@@ -137,7 +136,6 @@ class BRIMProvider(ABC):
 
         Examples: 'Generic CSV', 'Directa CSV Export', 'Degiro XLSX'
         """
-        pass
 
     @property
     @abstractmethod
@@ -147,7 +145,6 @@ class BRIMProvider(ABC):
 
         Should explain what file formats are supported and any limitations.
         """
-        pass
 
     @property
     def supported_extensions(self) -> List[str]:  # pragma: no cover
@@ -271,7 +268,6 @@ class BRIMProvider(ABC):
         Returns:
             True if this plugin can likely parse the file
         """
-        pass
 
     @abstractmethod
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
@@ -306,7 +302,6 @@ class BRIMProvider(ABC):
         Raises:
             BRIMParseError: If file cannot be parsed
         """
-        pass
 
     @property
     def docs_url(self) -> Optional[str]:
@@ -460,7 +455,6 @@ class BRIMProvider(ABC):
 
         Default: no-op.
         """
-        pass
 
     @staticmethod
     def detect_csv_delimiter(file_path: Path, lines_to_read: int = 15) -> str:

@@ -72,7 +72,6 @@ class GlobalSettingBulkUpdate(BaseModel):
 class GlobalSettingsListResponse(BaseListResponse[GlobalSettingRead]):
     """Response for listing all global settings."""
 
-    pass
 
 
 # ============================================================================

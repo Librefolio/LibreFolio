@@ -9,7 +9,7 @@
     import type {PreparedAiExport} from './aiExportClipboard';
     import {findCompatibleAiExportSelection, selectionsForDomain, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
     import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
-    import {AI_EXPORT_DETAIL_LEVELS} from './catalog/shared';
+    import {AI_EXPORT_DETAIL_LEVELS, resolveDefaultDetailLevel} from './catalog/shared';
     import {
         AI_EXPORT_PERIOD_PRESETS,
         AI_EXPORT_PERIOD_UNITS,
@@ -99,7 +99,7 @@
             const fallback = domainSelections[0];
             if (fallback) {
                 selectionId = fallback.id;
-                detailLevel = fallback.supportedDetailLevels.includes('standard') ? 'standard' : fallback.supportedDetailLevels[0];
+                detailLevel = resolveDefaultDetailLevel(fallback.supportedDetailLevels);
             }
         }
     });
@@ -120,7 +120,7 @@
         const first = selectionsForDomain(compatibility, domain, kind)[0];
         if (first) {
             selectionId = first.id;
-            detailLevel = first.supportedDetailLevels.includes('standard') ? 'standard' : first.supportedDetailLevels[0];
+            detailLevel = resolveDefaultDetailLevel(first.supportedDetailLevels);
         }
     }
 

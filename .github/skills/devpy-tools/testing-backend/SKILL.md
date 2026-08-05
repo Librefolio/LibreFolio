@@ -163,6 +163,52 @@ The test runner modules in `scripts/test_runner/_backend_api.py` register entire
 ./dev.py test coverage-report --priority high  # uncovered functions analysis
 ```
 
+### ⚠️ A partial coverage measurement is worthless — and it lies LOW
+
+Coverage accumulates in `.coverage_data/backend` via `--cov-append`. Running only the
+*unit* categories reports code as uncovered when it is in fact covered by API or external
+tests. Measured on this repo:
+
+| Scope | Reported total | "Actionable" funcs |
+|---|---:|---:|
+| unit only (`services`+`schemas`+`utils`+`db`) | 75.65 % | 445 (6 406 stmt) |
+| **complete** | **90.48 %** | **42 (155 stmt)** |
+
+`api/` read 31.6 % vs the real 87.2 %; `brim_providers/` read 34.8 % vs the real 84.8 %.
+Acting on the partial number would have sent weeks of work to the wrong place.
+
+**Full sequence for a comparable figure** (~50 min):
+
+```bash
+./dev.py test -q --coverage services all
+./dev.py test -q --coverage schemas all
+./dev.py test -q --coverage utils all
+./dev.py test -q --coverage db all
+./dev.py test -q --coverage api all            # ~20 min, starts a server per group
+./dev.py test -q --coverage external brim-providers
+./dev.py test -q --coverage external fx-providers      # needs network
+./dev.py test -q --coverage external asset-providers   # needs network
+```
+
+Rules:
+
+- **Always state which categories were run** alongside any coverage number. A figure
+  without that declaration is not comparable to anything.
+- Do **not** wrap `api all` in a short `timeout` — it silently truncates the last groups
+  and their code then reads as 0 %.
+- `coverage-report` reads **`/tmp/cov_report.json`**, not the live DB. Regenerate first:
+  `COVERAGE_FILE=.coverage_data/backend pipenv run coverage json -o /tmp/cov_report.json`
+- **Coverage is blind to `multiprocessing` spawn children.** `services/risk/quant/spawn_worker.py`
+  (`_worker_main`, `_resolve_handler`, `_peak_rss_bytes`) always reads 0 % while being
+  live. Never treat those as dead code — cross-check with `./dev.py lint --dead-code`.
+
+### Coverage as a dead-code cross-check
+
+A symbol at 0 % **and** flagged by vulture is dead with near-certainty: static analysis
+can miss dynamic dispatch, but coverage cannot miss code that actually ran. Use the two
+together before proposing any removal. See
+`LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/12_test_coverage.md`.
+
 ## Provider Filtering (--providers / --exclude-providers)
 
 ```bash
