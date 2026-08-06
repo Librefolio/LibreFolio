@@ -43,6 +43,28 @@ from backend.app.services.risk.service import (
 API_BASE = "/api/v1/risk"
 USER_ID = 41
 
+FIXTURE_USERNAME = "e2e_test_user"
+
+
+async def fixture_user_id() -> int:
+    """Resolve the seeded fixture user, failing with an actionable message.
+
+    These tests assert against the mock portfolio created by `db populate`.
+    A bare scalar_one() raises NoResultFound from deep inside SQLAlchemy, which
+    says nothing about the missing precondition, so state it explicitly.
+    """
+    set_test_mode(True)
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        user_id = (await session.execute(select(User.id).where(User.username == FIXTURE_USERNAME))).scalar_one_or_none()
+
+    if user_id is None:
+        pytest.fail(
+            f"Test database is not populated: user '{FIXTURE_USERNAME}' is missing.\n"
+            "These tests run real analytics against the mock portfolio, so they need the fixtures.\n"
+            "Seed them with: ./dev.py test db populate --force",
+        )
+    return user_id
+
 
 def app_with_service(
     service: RiskService,
@@ -315,12 +337,7 @@ async def test_risk_query_rejects_invalid_discriminator_before_service(scope):
 
 @pytest.mark.asyncio
 async def test_risk_query_runs_all_analytics_against_populated_test_database():
-    set_test_mode(True)
-    async with AsyncSession(
-        get_async_engine(),
-        expire_on_commit=False,
-    ) as session:
-        user_id = (await session.execute(select(User.id).where(User.username == "e2e_test_user"))).scalar_one()
+    user_id = await fixture_user_id()
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -464,18 +481,7 @@ async def test_risk_query_runs_all_analytics_against_populated_test_database():
 
 @pytest.mark.asyncio
 async def test_portfolio_optimization_supports_all_scopes_and_strategies():
-    set_test_mode(True)
-    async with AsyncSession(
-        get_async_engine(),
-        expire_on_commit=False,
-    ) as session:
-        user_id = (
-            await session.execute(
-                select(User.id).where(
-                    User.username == "e2e_test_user",
-                ),
-            )
-        ).scalar_one()
+    user_id = await fixture_user_id()
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")

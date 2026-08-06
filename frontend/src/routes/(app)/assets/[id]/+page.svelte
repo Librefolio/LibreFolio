@@ -1133,16 +1133,14 @@
                 }
                 resolveMaxStartFromChartData();
                 pricesFromCache = true;
-                if (requestPlan.requests.length === 0) {
-                    applyBackendSignalResults(requestedSignalConfigs, requestVersion, []);
-                    signalRequestFailed = false;
-                    loading = false;
-                    return;
-                }
+                // No early return here: events travel in the same response as prices,
+                // so a price-cache hit would otherwise leave `events` empty and make
+                // them vanish from the chart and the data editor. Fall through with
+                // include_price:false to fetch just the events (a tiny payload).
             }
         }
 
-        // Cache miss fetches prices + signals; cache hit requests signals only.
+        // Cache miss fetches prices + signals; cache hit requests events (+ signals) only.
         loading = !pricesFromCache;
         error = null;
         signalRequestFailed = false;

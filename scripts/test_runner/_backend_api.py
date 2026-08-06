@@ -3,14 +3,18 @@ Backend API endpoint tests and E2E tests.
 """
 
 from . import _common
+from ._backend_db import db_populate
 from ._common import (
     _build_pytest_cmd,
     _get_category_tests_for_all,
     _run_test_suite,
     add_test,
     make_category,
+    print_error,
     print_info,
     print_section,
+    print_success,
+    print_warning,
     run_command,
 )
 
@@ -537,6 +541,18 @@ def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None
 
 def api_test(verbose: bool = False) -> bool:
     """Run all API tests."""
+    # The `services` category recreates the database empty (see services_all →
+    # db_create), so by the time this category runs in a full suite the fixture
+    # users seeded by `db populate` are gone. Tests that assert against real
+    # portfolio data (risk analytics) look up `e2e_test_user` and would fail with
+    # an opaque NoResultFound. Reseed here, mirroring the frontend runner.
+    print_info("\n⚙️  Populating test database for API tests...")
+    if db_populate(verbose=False, force=True):
+        print_success("Test database populated\n")
+    else:
+        print_error("Failed to populate test database")
+        print_warning("API tests needing fixture data (risk analytics) will fail")
+
     return _run_test_suite(
         suite_name="API Tests",
         tests=_get_category_tests_for_all("api", verbose),

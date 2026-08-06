@@ -58,9 +58,11 @@ async function fillCash(page: Page, testid: string, amount: string, currencyCode
         await expect(currencyTrigger).toBeVisible({timeout: 2_000});
         await currencyTrigger.click();
         await page.waitForTimeout(300);
-        // The dropdown search input appears (inlineSearch mode)
+        // The dropdown search input appears (inlineSearch mode). Scope it to the
+        // currency wrapper: the amount field is also an input[type="text"], so an
+        // unscoped .first() would type the currency code into the amount.
         const searchInput = page.locator('input[placeholder]').filter({hasText: ''}).last();
-        const dropdownInput = cashWrap.locator('input[type="text"]').first();
+        const dropdownInput = cashWrap.locator('.currency-wrap input[type="text"]').first();
         const inputToUse = (await dropdownInput.isVisible({timeout: 1_000}).catch(() => false)) ? dropdownInput : searchInput;
         await inputToUse.fill(currencyCode);
         await page.waitForTimeout(400);
@@ -69,7 +71,7 @@ async function fillCash(page: Page, testid: string, amount: string, currencyCode
         await currOption.click();
         await page.waitForTimeout(300);
     }
-    const cashInput = cashWrap.locator('input[type="number"]').first();
+    const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
     await expect(cashInput).toBeVisible({timeout: 1_000});
     await cashInput.fill(amount);
     await page.waitForTimeout(200);

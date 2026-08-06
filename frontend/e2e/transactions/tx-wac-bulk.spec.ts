@@ -96,7 +96,7 @@ async function fillQuantity(page: Page, qty: string) {
 async function fillCash(page: Page, amount: string) {
     const cashWrap = page.getByTestId('tx-form-cash-wrap');
     await expect(cashWrap).toBeVisible({timeout: 2_000});
-    const cashInput = cashWrap.locator('input[type="number"]').first();
+    const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
     await expect(cashInput).toBeVisible({timeout: 1_000});
     await cashInput.fill(amount);
     await page.waitForTimeout(200);

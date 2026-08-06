@@ -54,7 +54,7 @@ async function fillDeposit(page: Page, amount: string = '100') {
     // Cash amount — DEPOSIT always requires cash, so this must be present.
     const cashWrap = page.getByTestId('tx-form-cash-wrap');
     await expect(cashWrap).toBeVisible({timeout: 3_000});
-    const cashInput = cashWrap.locator('input[type="number"]').first();
+    const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
     await expect(cashInput).toBeVisible({timeout: 2_000});
     await cashInput.fill(amount);
     await page.waitForTimeout(200);
@@ -155,7 +155,7 @@ test.describe('Transaction CRUD Full Lifecycle', () => {
         // Set cash amount
         const cashWrap = page.getByTestId('tx-form-cash-wrap');
         if (await cashWrap.isVisible({timeout: 2_000}).catch(() => false)) {
-            const cashInput = cashWrap.locator('input[type="number"]').first();
+            const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
             if (await cashInput.isVisible({timeout: 1_000}).catch(() => false)) {
                 await cashInput.fill('500');
             }
