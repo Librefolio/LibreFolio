@@ -31,6 +31,18 @@ async function openCreateFlow(page: Page) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
+/** Fill the CompactCashCell amount inside the standard (non-dual) cash wrapper. */
+async function fillCashAmount(page: Page, amount: string) {
+    const cashWrap = page.getByTestId('tx-form-cash-wrap');
+    await expect(cashWrap).toBeVisible({timeout: 3_000});
+    const amountInput = cashWrap.locator('input[data-testid$="-amount"]').first();
+    await expect(amountInput).toBeVisible({timeout: 3_000});
+    await amountInput.click();
+    await amountInput.fill(amount);
+    await amountInput.press('Tab');
+    await page.waitForTimeout(300);
+}
+
 /** Fill a minimal BUY transaction in the FormModal (assumes it's already open). */
 async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: boolean} = {}) {
     const qty = opts.qty ?? '5';
@@ -52,15 +64,10 @@ async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: bo
     await page.getByTestId('tx-form-quantity').fill(qty);
 
     // Cash — BUY type requires a cash amount. Fill a non-zero value.
+    // The CompactCashCell amount is a locale-safe text input (not type=number),
+    // so it must be reached via its data-testid suffix.
     if (!opts.skipCash) {
-        const cashWrap = page.getByTestId('tx-form-cash-wrap');
-        if (await cashWrap.isVisible({timeout: 2_000}).catch(() => false)) {
-            // The CompactCashCell has input[type="number"] for the amount
-            const cashInput = cashWrap.locator('input[type="number"]').first();
-            if (await cashInput.isVisible({timeout: 1_000}).catch(() => false)) {
-                await cashInput.fill('100');
-            }
-        }
+        await fillCashAmount(page, '100');
     }
 
     // Asset — pick first available
@@ -409,11 +416,7 @@ test.describe('Transactions', () => {
             await page.waitForTimeout(300);
 
             // Cash amount
-            const cashWrap = page.getByTestId('tx-form-cash-wrap');
-            if (await cashWrap.isVisible({timeout: 1_000}).catch(() => false)) {
-                const amountInput = cashWrap.locator('input[type="number"]').first();
-                if (await amountInput.isVisible()) await amountInput.fill('100');
-            }
+            await fillCashAmount(page, '100');
 
             await clickApply(page);
             await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 3_000});

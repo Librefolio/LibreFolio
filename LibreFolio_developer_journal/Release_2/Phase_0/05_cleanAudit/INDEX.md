@@ -461,3 +461,28 @@ un effetto collaterale dell'esecuzione, non una correzione di reperto: durante l
 dei barrel morti del frontend, `LiveTicker.svelte` si è rivelato non un semplice orfano ma
 una capacità — la striscia prezzi live in Dashboard — sparita senza traccia in un redesign
 precedente, riconosciuta solo perché l'utente l'ha vista riemergere come file morto.
+
+Il report [17 — Stabilizzazione: la prima esecuzione completa della suite](17_stabilizzazione_suite_completa.md)
+chiude il ciclo sul piano empirico. Su richiesta dell'utente, dopo il commit `be8394bb`, la
+suite è stata portata **fino in fondo per la prima volta**: 15/15 categorie verdi, copertura
+combinata **90,66 %**, sostanzialmente identica al 90,48 % misurato dal
+[report 12](12_test_coverage.md) prima della pulizia.
+
+L'esecuzione si è fermata tre volte, e il reperto principale è che **nessuno dei tre blocchi
+era stato introdotto dalla banda S1–S3**:
+
+| Blocco | Natura | Introdotto |
+|---|---|---|
+| La suite API girava su un DB svuotato da `services` | Difetto del *runner* | ≤ 2026-05-04 |
+| Gli eventi sparivano dal grafico asset su cache dei prezzi | **Bug di prodotto** | 2026-07-23 (`5f4fabd05`) |
+| Il campo Cash non veniva mai compilato in 7 spec transazioni | Selettore di test marcito | 2026-06-05 (`ee84e078`) |
+
+Tutti e tre erano invisibili per lo stesso motivo: **la suite completa non era mai arrivata
+abbastanza lontano da incontrarli**. La pulizia non ha destabilizzato il sistema — ha reso
+eseguibile una verifica che prima non poteva completarsi, e quella verifica ha trovato
+difetti vecchi fino a tre mesi.
+
+Il report segnala inoltre il buco di misurazione più grande del progetto: **non esiste alcuna
+copertura JavaScript/Svelte**. Il comando `./dev.py test coverage show frontend` misura quanto
+*backend* viene toccato dagli E2E (47 %), non il codice frontend, che resta interamente non
+misurato — nonostante due dei tre difetti di questo ciclo vivessero proprio lì.

@@ -92,14 +92,16 @@ test.describe('Asset Event Delete', () => {
         // Open events editor
         await openEventsEditor(page);
 
-        // Events must exist (populated by mock data — Apple has 3 DIVIDEND events, some unlinked)
+        // Events must exist. After populate, Apple has 5 events: 4 DIVIDEND
+        // (~270/180/90/3 days ago) + 1 SPLIT (~13 days ago).
         const eventRows = getEventRows(page);
         const initialCount = await eventRows.count();
         expect(initialCount, 'Apple must have events — check populate_mock_data.py').toBeGreaterThan(1);
 
         // Click delete on the oldest event row (first in ASC order).
-        // Apple has 3 DIVIDEND events; the 2 most recent are linked to transactions.
-        // Only the oldest (270 days ago) is unlinked and safe to delete.
+        // Of the 5 events, 3 are linked to transactions (SPLIT + the 2 most recent
+        // DIVIDEND). The 2 oldest DIVIDEND are unlinked, so the first row is safe
+        // to delete. Note: this test is destructive — it consumes one of them.
         const targetRow = eventRows.first();
         await clickDeleteRowAction(page, targetRow);
 
@@ -139,7 +141,9 @@ test.describe('Asset Event Delete', () => {
         // Open events editor
         await openEventsEditor(page);
 
-        // Apple has 3 DIVIDEND events; the most recent one is linked to a transaction
+        // Deliberately left at the default 3M range: every Apple event inside that
+        // window is linked to a transaction, so this test stays independent of the
+        // destructive delete performed by the first test above.
         const eventRows = getEventRows(page);
         const count = await eventRows.count();
         expect(count, 'Apple must have events — check populate_mock_data.py').toBeGreaterThan(0);
