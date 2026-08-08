@@ -303,7 +303,6 @@ class FABulkAssignResponse(BaseBulkResponse[FAProviderAssignmentResult]):
     """Response for bulk FA provider assignment."""
 
 
-
 # ============================================================================
 # FA PROVIDER REMOVAL
 # ============================================================================
@@ -323,7 +322,6 @@ class FAProviderRemovalResult(BaseDeleteResult):
 
 class FABulkRemoveResponse(BaseBulkResponse[FAProviderRemovalResult]):
     """Response for bulk FA provider removal."""
-
 
 
 # ============================================================================

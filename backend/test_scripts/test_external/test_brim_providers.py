@@ -32,12 +32,14 @@ from backend.app.config import PROJECT_ROOT
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import (
     BRIMExtractedAssetInfo,
+    BRIMNotice,
     BRIMParseOutput,
     BRIMPluginInfo,
     is_fake_asset_id,
 )
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim_providers import broker_credit_agricole as ca
 from backend.app.services.brim_providers._brim_io import model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
 from backend.app.services.brim_providers.broker_credit_agricole import CreditAgricoleBrokerProvider
@@ -761,7 +763,17 @@ class TestBrokerParserCoverageHelpers:
         assert all(tx.cash is None for tx in succession)
         assert all(tx.cost_basis_override is not None for tx in succession)
         assert not any(tx.type == TransactionType.DEPOSIT and tx.description and "successione" in tx.description for tx in out.transactions)
-        assert any("RETTIFICA senza cassa" in warning for warning in out.warnings)
+        # Correct, intentional behaviour is announced as INFO (blue), not as a warning,
+        # and carries the transferred rows as evidence so the user can check them.
+        # The prose itself is only the Italian fallback — the frontend prefers the
+        # localised `importWizard.brimNotice.<code>` keyed on `code` and interpolated
+        # with `context` — so assert the contract the UI actually depends on, not the
+        # wording, which is free to change per locale.
+        notice = next(n for n in out.warnings if n.code == "ca_succession_transfer_in")
+        assert notice.severity == "info"
+        assert notice.context == {"row_count": len(succession)}
+        assert "Rettifica" in notice.message
+        assert notice.evidence and len(notice.evidence[0].rows) == len(succession)
 
     def test_credit_agricole_buy_has_deposit_before(self):
         out = CreditAgricoleBrokerProvider().parse(CA_SAMPLE, broker_id=1)
@@ -815,8 +827,8 @@ class TestBrokerParserCoverageHelpers:
         rows.append(["", "Riepilogo movimenti deposito titoli", "", "", "", "", "", "", "", ""])
         out = CreditAgricoleBrokerProvider()._parse_securities(rows, broker_id=1)
 
-        assert not any("missing date/causale" in w for w in out.warnings)
-        assert not any("Riepilogo" in w for w in out.warnings)
+        assert not any("missing date/causale" in n.message for n in out.warnings)
+        assert not any("Riepilogo" in n.message for n in out.warnings)
         assert len(out.transactions) == len(base.transactions)
 
     # ------------------------------------------------------------------
@@ -993,7 +1005,195 @@ class TestBrokerParserCoverageHelpers:
         assert "account_maturity" in (sell.tags or [])
         assert not any(tx.type == TransactionType.INTEREST and tx.description and "MYSTERY BOND" in tx.description for tx in out.transactions)
         assert not any(tx.type == TransactionType.DEPOSIT and tx.cash and tx.cash.amount == Decimal("12345.00") for tx in out.transactions)
-        assert any("non collegabile" in w and "vendita" in w for w in out.warnings)
+        assert any("non collegabile" in n.message and "vendita" in n.message for n in out.warnings)
+
+    # ------------------------------------------------------------------
+    # Account causale registry (4 tiers) — a causale can never pass unnoticed
+    # ------------------------------------------------------------------
+
+    def test_credit_agricole_registry_tiers_are_disjoint_and_complete(self):
+        """Each registered causale belongs to exactly one tier.
+
+        Guards the registry itself: a causale accidentally listed in two tiers would
+        make classification depend on dispatch order, which is exactly the kind of
+        silent ambiguity the registry exists to remove.
+        """
+        tiers = [ca._ACCT_INCOME_CAUSALI, ca._ACCT_MATURITY_CAUSALI, ca._ACCT_FEETAX_CAUSALI, ca._ACCT_CANONE_CAUSALI, ca._ACCT_UNRESOLVED_CAUSALI, ca._ACCT_DECLARED_CASH_CAUSALI]
+        seen: Set[str] = set()
+        for tier in tiers:
+            assert not (seen & tier), f"causale listed in more than one tier: {seen & tier}"
+            seen |= tier
+
+    def test_credit_agricole_declared_cash_causali_raise_no_alarm(self):
+        """Tier 3 is the whole point of the registry: real bank cash stays silent.
+
+        A net that cries wolf gets ignored, so the invariant worth protecting is not
+        only "the trade is flagged" but also "nothing else is". POS payments, utility
+        bills, ATM withdrawals, salary credits and transfers must produce neither a
+        todo nor a notice.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        declared_cash_slugs = {ca._slug_causale(c) for c in ca._ACCT_DECLARED_CASH_CAUSALI}
+        cash_rows = [tx for tx in out.transactions if declared_cash_slugs & set(tx.tags or [])]
+        assert cash_rows, "fixture must exercise the declared-cash tier"
+        assert all(tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) for tx in cash_rows)
+
+        flagged = {todo.tx_index for todo in out.field_todos}
+        assert not (flagged & {out.transactions.index(tx) for tx in cash_rows})
+        assert not any(n.code == "ca_unknown_causale" for n in out.warnings)
+
+    def test_credit_agricole_account_trade_is_blocked_not_silently_cash(self):
+        """The 50k bug: a COMPRAVENDITA row used to become an anonymous withdrawal.
+
+        The cash stays right (this layout carries no quantity, so we cannot build the
+        trade yet) but it must be *blocking*: a lost position only surfaces much later
+        as an unexplained gap in the cost basis, when nobody can trace it back.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        trade = next(tx for tx in out.transactions if "NOTA INF. ACQ." in (tx.description or ""))
+        assert trade.type == TransactionType.WITHDRAWAL
+        assert trade.cash is not None and trade.cash.amount == Decimal("-15000.00")
+
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        assert todo.severity == "blocker"
+        assert out.transactions[todo.tx_index] is trade
+        # A recognised-but-unresolved causale is tier 2, never tier 4: reporting it as
+        # an unknown causale would send the user looking for a registry gap that is not there.
+        assert not any(n.code == "ca_unknown_causale" for n in out.warnings)
+
+    def test_credit_agricole_account_todo_carries_the_source_row(self):
+        """The todo ships the originating row so the message can be checked, not trusted.
+
+        The plugin attaches it at the moment it gives up — the only moment the row is
+        still in hand. Re-reading the file preview later would cost a second fetch and
+        could misalign row indexes if that preview truncates or paginates.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+
+        evidence = todo.evidence[0]
+        assert evidence.headers[:4] == ["Data Op.", "Causale", "Descrizione", "Importo"]
+        assert len(evidence.rows) == 1 and len(evidence.rows[0]) == len(evidence.headers)
+        assert "NOTA INF. ACQ." in evidence.rows[0][2]
+        assert evidence.row_numbers == [16]  # 1-based line in the source file
+        assert evidence.comment and "l'importo è giusto, il titolo manca" in evidence.comment
+
+    def test_credit_agricole_charge_never_names_an_asset_after_itself(self):
+        """A charge line describes the charge, never the security it is charged on.
+
+        "SPESE STACCO CEDOLA DEL 21/05/2026 DOSSIER: 00496/05246854 TIT: IT000..." would
+        become an asset called after its own fee wording, which then shows up in the
+        user's asset picker as a nonsense instrument. The ISIN is the only honest name a
+        charge can supply, and a real one must be able to replace it — rows arrive in file
+        order, so the charge can be read before the coupon that names the bond.
+        """
+        rows = read_rows(CA_CONTI_SAMPLE)
+        header = rows[0]
+        charge = ["21/05/2026", "21/05/2026", "COMMISS./SPESE SU OPERAZ. TITOLI", "SPESE STACCO CEDOLA DEL 21/05/2026 DOSSIER: 00496/05246854 TIT: IT0009999999", "'-1,50", "EUR"]
+        coupon = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP TF 3,35% MZ35 IT0009999999 DOS:00496/05246854", "12,00", "EUR"]
+
+        # Charge first: the placeholder must survive only until the coupon names the bond.
+        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, charge, coupon], broker_id=1)
+        fee = next(tx for tx in out.transactions if "SPESE STACCO" in (tx.description or ""))
+
+        assert fee.asset_id is not None
+        assert out.extracted_assets[fee.asset_id].extracted_name == "BTP TF 3,35% MZ35"
+        assert out.extracted_assets[fee.asset_id].extracted_isin == "IT0009999999"
+
+        # Charge alone: the ISIN stands in, never the fee's own wording.
+        alone = CreditAgricoleBrokerProvider()._parse_account_movements([header, charge], broker_id=1)
+        lone_fee = alone.transactions[0]
+        assert alone.extracted_assets[lone_fee.asset_id].extracted_name == "IT0009999999"
+
+    def test_credit_agricole_prefers_the_untruncated_security_name(self):
+        """Crédit Agricole prints the same name at two different widths.
+
+        The coupon line cuts it at 19 characters ("BTP 05/26 0.55FOICU") while the
+        charge line prints it in full ("BTP 05/26 0.55FOICUM"). Importing the short
+        form creates a second asset that will never match the one already held, so
+        the longer form has to win whichever row is read first.
+        """
+        rows = read_rows(CA_CONTI_SAMPLE)
+        header = rows[0]
+        coupon = ["21/11/2024", "21/11/2024", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP 05/26 0.55FOICU IT0005332827 DOS:00496/05246854", "12,00", "EUR"]
+        charge = ["21/11/2024", "21/11/2024", "COMMISS./SPESE SU OPERAZ. TITOLI", "SPESE STACCO CEDOLA DEL 21/11/2024 DOSSIER: 00496/05246854 TIT: IT0005332827 BTP 05/26 0.55FOICUM MOV:252419599", "'-1,50", "EUR"]
+
+        for ordered in ([header, coupon, charge], [header, charge, coupon]):
+            out = CreditAgricoleBrokerProvider()._parse_account_movements(ordered, broker_id=1)
+            names = {info.extracted_name for info in out.extracted_assets.values()}
+            assert names == {"BTP 05/26 0.55FOICUM"}, names
+
+    def test_credit_agricole_securities_charge_links_to_the_isin_it_names(self):
+        """A fee that names its security belongs to that security, not to the account.
+
+        "SPESE STACCO CEDOLA ... TIT: IT000..." is charged for one bond. Booked
+        unallocated it silently understates that bond's cost basis, and the gap only
+        surfaces much later as a return that does not match the statement.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        fee = next(t for t in out.transactions if "SPESE STACCO CEDOLA" in (t.description or ""))
+        coupon = next(t for t in out.transactions if "CEDOLA:BTP SAMPLE" in (t.description or ""))
+
+        assert fee.asset_id is not None
+        assert fee.asset_id == coupon.asset_id  # same bond as the coupon it was charged on
+
+    def test_credit_agricole_unallocated_securities_charge_is_flagged_as_warning(self):
+        """A securities charge with no security named is anomalous, but not a blocker.
+
+        The file may genuinely never say which instrument it belonged to, and the expense
+        is real either way — so it is surfaced for review and stays approvable as-is.
+        Account charges (canone, bollo) are correctly unallocated and must NOT be flagged,
+        or the review list drowns in noise and gets ignored.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        todos = [t for t in out.field_todos if t.reason_code == "ca_account_charge_unallocated"]
+
+        assert len(todos) == 1
+        assert todos[0].severity == "warning" and todos[0].field == "asset_id"
+        flagged = out.transactions[todos[0].tx_index]
+        assert "ADDEBITO CAPITAL GAIN" in (flagged.description or "")
+        assert flagged.asset_id is None
+
+        # Account-level charges stay silent: they belong to no instrument by nature.
+        account_charges = [t for t in out.transactions if "Imposta bollo" in (t.description or "") or "CANONE MENSILE" in (t.description or "")]
+        assert account_charges and not any(out.transactions[t.tx_index] in account_charges for t in todos)
+
+    def test_credit_agricole_account_unknown_causale_is_declared_as_info(self):
+        """Tier 4: an unregistered causale is still booked as cash, but never in silence.
+
+        COMPRAVENDITA hid in the fallback for exactly this reason, so a causale the
+        registry has never seen must announce itself — as INFO, because the cash
+        movement itself is correct.
+        """
+        rows = read_rows(CA_CONTI_SAMPLE)
+        rows.append(["12/07/2026", "12/07/2026", "OPERAZIONE MAI VISTA", "QUALCOSA DI NUOVO", "'-250,00", "EUR"])
+        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+
+        booked = next(tx for tx in out.transactions if "QUALCOSA DI NUOVO" in (tx.description or ""))
+        assert booked.type == TransactionType.WITHDRAWAL
+        assert booked.cash is not None and booked.cash.amount == Decimal("-250.00")
+
+        notice = next(n for n in out.warnings if n.code == "ca_unknown_causale")
+        assert notice.severity == "info"
+        assert notice.context is not None and notice.context["causali"] == ["OPERAZIONE MAI VISTA"]
+        assert notice.evidence[0].row_numbers == [20]
+        # An unknown causale is a disclosure, not a blocker: nothing to fix, only to check.
+        assert not any(t.context and t.context.get("causale") == "OPERAZIONE MAI VISTA" for t in out.field_todos)
+
+    def test_brim_notice_coerces_legacy_string_warnings(self):
+        """Every plugin still appends plain strings; the schema must keep accepting them.
+
+        This is the test that protects the providers this work never touched: without
+        the coercion, widening ``warnings`` to a structured type would have required
+        editing every ``warnings.append("...")`` call in the codebase at once.
+        """
+        out = BRIMParseOutput(warnings=["riga saltata"])
+        assert out.warnings[0].severity == "warning"
+        assert out.warnings[0].message == "riga saltata"
+        assert out.warnings[0].evidence == []
+
+        untouched = FinecoBrokerProvider().parse(PROJECT_ROOT / "backend/app/services/brim_providers/sample_reports/fineco-export.csv", broker_id=1)
+        assert all(isinstance(n, BRIMNotice) for n in untouched.warnings)
 
     def test_credit_agricole_account_carries_causale_tag_and_currency(self):
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
@@ -1032,8 +1232,8 @@ class TestBrokerParserCoverageHelpers:
         rows.append(["", "", "", "Totale Movimenti €", "50.087,17", ""])
         out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
 
-        assert not any("missing date/causale" in w for w in out.warnings)
-        assert not any("Totale" in w for w in out.warnings)
+        assert not any("missing date/causale" in n.message for n in out.warnings)
+        assert not any("Totale" in n.message for n in out.warnings)
         assert len(out.transactions) == len(base.transactions)
         assert all(tx.cash is None or abs(tx.cash.amount) != Decimal("214739.70") for tx in out.transactions)
 

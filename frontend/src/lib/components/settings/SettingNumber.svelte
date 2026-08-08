@@ -11,6 +11,7 @@
     import {AlertCircle, RotateCcw, Save, Undo} from 'lucide-svelte';
     import type {Component} from 'svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
         value: string;
         label: string;
@@ -88,6 +89,7 @@
             <div class="flex items-center space-x-2">
                 <input
                     type="number"
+                    use:numericArrows
                     step={effectiveStep}
                     {min}
                     {max}

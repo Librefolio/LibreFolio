@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -39,7 +40,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 from pydantic import ValidationError
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.assets import FAAinfoFiltersRequest
@@ -1098,11 +1099,21 @@ async def search_asset_candidates(
     Returns candidates with confidence levels and auto-selects if exactly 1 match.
 
     Priority:
-    1. ISIN exact match → EXACT confidence (Asset.identifier_isin)
-    2. Symbol exact match → MEDIUM confidence (Asset.identifier_ticker)
-    3. Name partial match → LOW confidence (display_name search)
-    4. Soft-identifier match → MEDIUM (ISIN) / LOW (name) against the
-       Asset.identifier_other JSON list (soft broker labels + technical codes)
+    1. ISIN exact match on ``Asset.identifier_isin`` → EXACT confidence
+    2. ISIN found in the ``Asset.identifier_other`` JSON list → HIGH confidence
+    3. Symbol exact match on ``Asset.identifier_ticker`` → MEDIUM confidence
+    4. Name partial match (identifier, then ``display_name``) → LOW confidence
+    5. Name found in the ``Asset.identifier_other`` JSON list → LOW confidence
+
+    Steps 1 and 2 run **together** and their results are merged (deduplicated by
+    ``asset_id``, strongest confidence wins). An ISIN stored in ``identifier_other``
+    is a deliberate user assertion — typically the non-tradeable "CUM" ISIN of an
+    Italian BTP, kept alongside the quoted one — so it must outrank any name
+    similarity. Previously it was evaluated last and only when nothing else had
+    matched, meaning a vaguely plausible name hit silently shadowed it.
+
+    Running both also surfaces duplicates: if the same ISIN is primary on one asset
+    and alternate on another, the user sees **both** candidates and can merge them.
 
     Args:
         session: AsyncSession for database queries
@@ -1115,37 +1126,53 @@ async def search_asset_candidates(
         - If exactly 1 candidate: auto_selected_id = that asset's ID
         - Otherwise: auto_selected_id = None
     """
-    candidates = []
+    candidates: List[BRIMAssetCandidate] = []
+    by_id: dict = {}
+    # Strongest first — used to decide whether a later, weaker match may override.
+    rank = {
+        BRIMMatchConfidence.EXACT: 0,
+        BRIMMatchConfidence.HIGH: 1,
+        BRIMMatchConfidence.MEDIUM: 2,
+        BRIMMatchConfidence.LOW: 3,
+    }
 
-    # Priority 1: ISIN exact match (EXACT confidence)
+    def _add(asset, confidence: BRIMMatchConfidence) -> None:
+        """Append a candidate, keeping the strongest confidence per asset."""
+        existing = by_id.get(asset.id)
+        if existing is not None:
+            if rank[confidence] < rank[existing.match_confidence]:
+                existing.match_confidence = confidence
+            return
+        candidate = BRIMAssetCandidate(
+            asset_id=asset.id,
+            symbol=asset.identifier_ticker,
+            isin=asset.identifier_isin,
+            name=asset.display_name,
+            match_confidence=confidence,
+        )
+        by_id[asset.id] = candidate
+        candidates.append(candidate)
+
+    # Priority 1: ISIN exact match on the primary column (EXACT confidence).
     if extracted_isin:
         results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(isin=extracted_isin), session=session)
         for asset in results:
-            candidates.append(
-                BRIMAssetCandidate(
-                    asset_id=asset.id,
-                    symbol=asset.identifier_ticker,
-                    isin=asset.identifier_isin,
-                    name=asset.display_name,
-                    match_confidence=BRIMMatchConfidence.EXACT,
-                )
-            )
+            _add(asset, BRIMMatchConfidence.EXACT)
 
-    # Priority 2: Symbol exact match (MEDIUM confidence)
+    # Priority 2: ISIN stored among the alternate identifiers (HIGH confidence).
+    # Deliberately NOT guarded by `if not candidates` — see the docstring.
+    if extracted_isin:
+        results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_other=extracted_isin), session=session)
+        for asset in results:
+            _add(asset, BRIMMatchConfidence.HIGH)
+
+    # Priority 3: Symbol exact match (MEDIUM confidence)
     if extracted_symbol and not candidates:
         results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(ticker=extracted_symbol), session=session)
         for asset in results:
-            candidates.append(
-                BRIMAssetCandidate(
-                    asset_id=asset.id,
-                    symbol=asset.identifier_ticker,
-                    isin=asset.identifier_isin,
-                    name=asset.display_name,
-                    match_confidence=BRIMMatchConfidence.MEDIUM,
-                )
-            )
+            _add(asset, BRIMMatchConfidence.MEDIUM)
 
-    # Priority 3: Name partial match (LOW confidence)
+    # Priority 4: Name partial match (LOW confidence)
     if extracted_name and not candidates:
         # Try identifier partial match first
         results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_contains=extracted_name), session=session)
@@ -1153,42 +1180,15 @@ async def search_asset_candidates(
             # Fall back to display_name search
             results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(search=extracted_name), session=session)
         for asset in results:
-            candidates.append(
-                BRIMAssetCandidate(
-                    asset_id=asset.id,
-                    symbol=asset.identifier_ticker,
-                    isin=asset.identifier_isin,
-                    name=asset.display_name,
-                    match_confidence=BRIMMatchConfidence.LOW,
-                )
-            )
+            _add(asset, BRIMMatchConfidence.LOW)
 
-    # Priority 4: Soft-identifier match against the identifier_other JSON list.
-    # Catches assets whose soft broker label (e.g. "BTP 1/12/2026 1.25%") or a stored
-    # technical code/ISIN was saved in identifier_other on a previous import. Runs only
-    # as a last resort (no stronger candidate found) via substring LIKE on the list text.
-    if not candidates:
-        seen_ids: set = set()
-        soft_terms = []
-        if extracted_isin:
-            soft_terms.append((extracted_isin, BRIMMatchConfidence.MEDIUM))
-        if extracted_name:
-            soft_terms.append((extracted_name, BRIMMatchConfidence.LOW))
-        for term, confidence in soft_terms:
-            results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_other=term), session=session)
-            for asset in results:
-                if asset.id in seen_ids:
-                    continue
-                seen_ids.add(asset.id)
-                candidates.append(
-                    BRIMAssetCandidate(
-                        asset_id=asset.id,
-                        symbol=asset.identifier_ticker,
-                        isin=asset.identifier_isin,
-                        name=asset.display_name,
-                        match_confidence=confidence,
-                    )
-                )
+    # Priority 5: Soft broker label match against identifier_other (LOW confidence).
+    # Catches assets whose soft label (e.g. "BTP 1/12/2026 1.25%") was saved on a
+    # previous import. Still a last resort: a name is far weaker evidence than an ISIN.
+    if extracted_name and not candidates:
+        results = await AssetCRUDService.list_assets(filters=FAAinfoFiltersRequest(identifier_other=extracted_name), session=session)
+        for asset in results:
+            _add(asset, BRIMMatchConfidence.LOW)
 
     # Auto-select if exactly 1 candidate found
     auto_selected = candidates[0].asset_id if len(candidates) == 1 else None
@@ -1199,6 +1199,22 @@ async def search_asset_candidates(
 # =============================================================================
 # DUPLICATE DETECTION
 # =============================================================================
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _description_key(description: Optional[str]) -> str:
+    """
+    Comparison key for a transaction description.
+
+    Bank exports wrap and re-wrap the same text, so the identical movement can come
+    back as "DT EMISS." in one file and "DTEMISS." in another. Comparing raw strings
+    demotes such a pair to a *possible* duplicate and asks the user to arbitrate a
+    difference that is not there. Whitespace and case carry no meaning here.
+    """
+    if not description:
+        return ""
+    return _WHITESPACE_RE.sub("", description).upper()
 
 
 async def detect_tx_duplicates(
@@ -1272,9 +1288,12 @@ async def detect_tx_duplicates(
             Transaction.date == tx.date,
         ]
 
-        # If asset is resolved, filter by asset_id for more precise matching
+        # If asset is resolved, filter by asset_id for more precise matching. Rows with no
+        # asset at all stay in scope: the same movement imported before a plugin learned to
+        # attach its instrument sits in the DB unallocated, and excluding it would hand the
+        # user that very row back as "new" on every single re-import.
         if asset_is_resolved and real_asset_id is not None:
-            conditions.append(Transaction.asset_id == real_asset_id)
+            conditions.append(or_(Transaction.asset_id == real_asset_id, Transaction.asset_id.is_(None)))
 
         stmt = select(Transaction).where(and_(*conditions))
         result = await session.execute(stmt)
@@ -1303,12 +1322,12 @@ async def detect_tx_duplicates(
             # Determine match level based on:
             # 1. Whether asset is resolved (more confident)
             # 2. Whether description matches (even more confident)
-            tx_desc = tx.description or ""
-            existing_desc = existing.description or ""
-            desc_matches = tx_desc and existing_desc and tx_desc.strip() == existing_desc.strip()
+            tx_desc = _description_key(tx.description)
+            existing_desc = _description_key(existing.description)
+            desc_matches = bool(tx_desc) and tx_desc == existing_desc
 
-            if asset_is_resolved:
-                # Asset resolved - use WITH_ASSET levels
+            if asset_is_resolved and existing.asset_id is not None:
+                # Asset resolved on both sides - use WITH_ASSET levels
                 if desc_matches:
                     match_level = BRIMDuplicateLevel.LIKELY_WITH_ASSET
                 else:

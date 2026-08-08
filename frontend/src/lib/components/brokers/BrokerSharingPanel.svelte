@@ -33,6 +33,7 @@
     import {UserSearchSelect} from '$lib/components/ui/select';
     import SemiDonutChart from '$lib/components/charts/SemiDonutChart.svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Props
     // =========================================================================
@@ -646,6 +647,7 @@
                             <div class="flex items-center gap-1">
                                 <input
                                     type="number"
+                                    use:numericArrows={{step: 0.1}}
                                     min="0"
                                     max={maxNewShare}
                                     step="0.1"
@@ -764,6 +766,7 @@
                             <div class="flex items-center gap-1">
                                 <input
                                     type="number"
+                                    use:numericArrows={{step: 0.1}}
                                     min="0"
                                     max="100"
                                     step="0.1"

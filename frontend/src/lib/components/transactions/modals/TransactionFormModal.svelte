@@ -67,7 +67,7 @@
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
@@ -1210,6 +1210,13 @@
         qtyDisplay = v; // preserve raw user input mid-typing
         setQuantity(normalizeDecimalInput(v));
     }
+    /** The field is a text input (locale-safe), so the arrow keys are wired by hand. */
+    function onQuantityKeydown(e: KeyboardEvent) {
+        const stepped = decimalArrowStep(e, qtyDisplay);
+        if (stepped === null) return;
+        qtyDisplay = stepped;
+        setQuantity(stepped);
+    }
     function onDescriptionInput(e: Event) {
         draft = {...draft, description: (e.currentTarget as HTMLTextAreaElement).value};
     }
@@ -1560,6 +1567,7 @@
                                 value={qtyDisplay}
                                 disabled={isReadonly}
                                 oninput={onQuantityInput}
+                                onkeydown={onQuantityKeydown}
                                 onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
                                 data-testid="tx-form-quantity"
                             />
@@ -1835,6 +1843,7 @@
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}
+                                    onkeydown={onQuantityKeydown}
                                     onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
                                     data-testid="tx-form-quantity"
                                 />
@@ -1878,6 +1887,7 @@
                                     value={qtyDisplay}
                                     disabled={isReadonly}
                                     oninput={onQuantityInput}
+                                    onkeydown={onQuantityKeydown}
                                     onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
                                     data-testid="tx-form-quantity"
                                 />

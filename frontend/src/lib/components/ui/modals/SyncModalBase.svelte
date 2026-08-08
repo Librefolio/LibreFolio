@@ -20,6 +20,7 @@
     import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {formatTime} from '$lib/utils/sync/syncHelpers';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
         open: boolean;
         dateStart: string;
@@ -289,7 +290,16 @@
             <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <Timer size={13} class="shrink-0" />
                 <span>{$t('fx.sync.timeout') ?? 'Timeout'}:</span>
-                <input type="number" min="10" max="600" step="10" bind:value={timeoutSec} disabled={syncing} class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50" />
+                <input
+                    type="number"
+                    use:numericArrows
+                    min="10"
+                    max="600"
+                    step="10"
+                    bind:value={timeoutSec}
+                    disabled={syncing}
+                    class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                />
                 <span>sec</span>
             </div>
         {/if}

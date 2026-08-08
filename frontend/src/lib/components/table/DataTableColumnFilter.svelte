@@ -9,7 +9,7 @@
   - enum: checkbox list of available options
 -->
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, tick} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/files/upload';
     import {Check, Filter as FilterIcon, RotateCcw, Search, Trash2, X} from 'lucide-svelte';
@@ -23,6 +23,7 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
 
@@ -209,11 +210,31 @@
         if (numSliderMaxPos <= SNAP) numSliderMaxPos = 0;
     }
 
+    let numMinInputEl: HTMLInputElement | null = $state(null);
+    let numMaxInputEl: HTMLInputElement | null = $state(null);
+    let sizeMinInputEl: HTMLInputElement | null = $state(null);
+    let sizeMaxInputEl: HTMLInputElement | null = $state(null);
+
+    /**
+     * Sends the caret after the value when a swap moved it to the other field, so the
+     * number the user is working on stays under their cursor instead of being left
+     * behind in the box it just vacated.
+     */
+    async function followSwap(el: HTMLInputElement | null) {
+        await tick();
+        el?.focus();
+        el?.select();
+    }
+
     function syncNumSlidersFromInput() {
         if (isIntegerRange) {
             numMin = Math.round(numMin);
             numMax = Math.round(numMax);
         }
+        // A minimum above its maximum selects nothing, and a filter that quietly matches
+        // nothing looks like broken data. The user typed two bounds; they meant a range,
+        // so the pair is put back in order — text and slider handles together.
+        if (numMin > numMax) [numMin, numMax] = [numMax, numMin];
         numSliderMinPos = numToSliderPos(numMin);
         numSliderMaxPos = numToSliderPos(numMax);
     }
@@ -357,33 +378,40 @@
         return Math.round(((logVal - logMin) / (logMax - logMin)) * 100);
     }
 
+    /**
+     * Puts the size bounds back in order and repaints both fields and both handles.
+     *
+     * Crossing the bounds used to be clamped away, which silently threw the number the
+     * user had just typed on the floor. Swapping keeps it: they wrote a range, they
+     * just wrote its two ends in the other order.
+     */
+    function normalizeSizeBounds() {
+        if (sizeMinBytes > sizeMaxBytes) [sizeMinBytes, sizeMaxBytes] = [sizeMaxBytes, sizeMinBytes];
+        sliderMinPos = bytesToSliderPos(sizeMinBytes);
+        sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
+        const minResult = bytesToUnit(sizeMinBytes);
+        sizeMinInputValue = minResult.value;
+        sizeMinUnit = minResult.unit;
+        const maxResult = bytesToUnit(sizeMaxBytes);
+        sizeMaxInputValue = maxResult.value;
+        sizeMaxUnit = maxResult.unit;
+    }
+
     // Update bytes from input change
     function updateSizeMinFromInput() {
-        const newMinBytes = unitToBytes(sizeMinInputValue, sizeMinUnit);
-        // Clamp to valid range: [numberMin, sizeMaxBytes]
-        sizeMinBytes = Math.max(numberMin, Math.min(sizeMaxBytes, newMinBytes));
-        sliderMinPos = bytesToSliderPos(sizeMinBytes);
-        // Update displayed value if clamped
-        if (sizeMinBytes !== newMinBytes) {
-            const result = bytesToUnit(sizeMinBytes);
-            sizeMinInputValue = result.value;
-            sizeMinUnit = result.unit;
-        }
+        sizeMinBytes = Math.max(numberMin, Math.min(numberMax, unitToBytes(sizeMinInputValue, sizeMinUnit)));
+        const swapped = sizeMinBytes > sizeMaxBytes;
+        normalizeSizeBounds();
         applyFilter();
+        if (swapped) void followSwap(sizeMaxInputEl);
     }
 
     function updateSizeMaxFromInput() {
-        const newMaxBytes = unitToBytes(sizeMaxInputValue, sizeMaxUnit);
-        // Clamp to valid range: [sizeMinBytes, numberMax]
-        sizeMaxBytes = Math.max(sizeMinBytes, Math.min(numberMax, newMaxBytes));
-        sliderMaxPos = bytesToSliderPos(sizeMaxBytes);
-        // Update displayed value if clamped
-        if (sizeMaxBytes !== newMaxBytes) {
-            const result = bytesToUnit(sizeMaxBytes);
-            sizeMaxInputValue = result.value;
-            sizeMaxUnit = result.unit;
-        }
+        sizeMaxBytes = Math.max(numberMin, Math.min(numberMax, unitToBytes(sizeMaxInputValue, sizeMaxUnit)));
+        const swapped = sizeMinBytes > sizeMaxBytes;
+        normalizeSizeBounds();
         applyFilter();
+        if (swapped) void followSwap(sizeMinInputEl);
     }
 
     // Update bytes from slider change
@@ -536,16 +564,28 @@
         if (currencyOpenIdx === idx) currencyOpenIdx = null;
         applyFilter();
     }
+    /** Reorders one currency row's bounds and repaints both handles. See {@link normalizeSizeBounds}. */
+    function normalizeCurrencyBounds(idx: number) {
+        const item = currencyStack[idx];
+        if (!item) return;
+        if (item.min != null && item.max != null && item.min > item.max) {
+            currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, min: item.max, max: item.min} : it));
+        }
+        const fixed = currencyStack[idx];
+        currencyMinPos = {...currencyMinPos, [idx]: curNumToSliderPos(idx, fixed?.min ?? curRange(idx).min)};
+        currencyMaxPos = {...currencyMaxPos, [idx]: curNumToSliderPos(idx, fixed?.max ?? curRange(idx).max)};
+    }
+
     function updateCurrencyMin(idx: number, value: string) {
         const v = value === '' ? undefined : Number(value);
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, min: Number.isFinite(v as number) ? (v as number) : undefined} : it));
-        currencyMinPos = {...currencyMinPos, [idx]: curNumToSliderPos(idx, currencyStack[idx]?.min ?? curRange(idx).min)};
+        normalizeCurrencyBounds(idx);
         applyFilter();
     }
     function updateCurrencyMax(idx: number, value: string) {
         const v = value === '' ? undefined : Number(value);
         currencyStack = currencyStack.map((it, i) => (i === idx ? {...it, max: Number.isFinite(v as number) ? (v as number) : undefined} : it));
-        currencyMaxPos = {...currencyMaxPos, [idx]: curNumToSliderPos(idx, currencyStack[idx]?.max ?? curRange(idx).max)};
+        normalizeCurrencyBounds(idx);
         applyFilter();
     }
     function updateCurrencyMinSlider(idx: number, pos: number, el: HTMLInputElement) {
@@ -726,14 +766,18 @@
                     <label class="range-label" for="number-min-input">{$t('common.min')}</label>
                     <input
                         type="number"
+                        use:numericArrows
                         step={isIntegerRange ? '1' : 'any'}
                         class="range-input"
+                        bind:this={numMinInputEl}
                         bind:value={numMin}
                         min={numberMin}
-                        max={numMax}
+                        max={numberMax}
                         onchange={() => {
+                            const swapped = numMin > numMax;
                             syncNumSlidersFromInput();
                             applyFilter();
+                            if (swapped) void followSwap(numMaxInputEl);
                         }}
                         id="number-min-input"
                     />
@@ -742,14 +786,18 @@
                     <label class="range-label" for="number-max-input">{$t('common.max')}</label>
                     <input
                         type="number"
+                        use:numericArrows
                         step={isIntegerRange ? '1' : 'any'}
                         class="range-input"
+                        bind:this={numMaxInputEl}
                         bind:value={numMax}
-                        min={numMin}
+                        min={numberMin}
                         max={numberMax}
                         onchange={() => {
+                            const swapped = numMin > numMax;
                             syncNumSlidersFromInput();
                             applyFilter();
+                            if (swapped) void followSwap(numMinInputEl);
                         }}
                         id="number-max-input"
                     />
@@ -781,7 +829,7 @@
                 <div class="size-row">
                     <label class="size-label" for="size-min-input">{$t('common.min')}</label>
                     <div class="size-input-group">
-                        <input type="number" class="size-input" id="size-min-input" bind:value={sizeMinInputValue} min="0" onchange={updateSizeMinFromInput} />
+                        <input type="number" use:numericArrows class="size-input" id="size-min-input" bind:this={sizeMinInputEl} bind:value={sizeMinInputValue} min="0" onchange={updateSizeMinFromInput} />
                         <select class="size-unit-select" bind:value={sizeMinUnit} onchange={updateSizeMinFromInput}>
                             {#each SIZE_UNITS as u}
                                 <option value={u.unit}>{u.label}</option>
@@ -794,7 +842,7 @@
                 <div class="size-row">
                     <label class="size-label" for="size-max-input">{$t('common.max')}</label>
                     <div class="size-input-group">
-                        <input type="number" class="size-input" id="size-max-input" bind:value={sizeMaxInputValue} min="0" onchange={updateSizeMaxFromInput} />
+                        <input type="number" use:numericArrows class="size-input" id="size-max-input" bind:this={sizeMaxInputEl} bind:value={sizeMaxInputValue} min="0" onchange={updateSizeMaxFromInput} />
                         <select class="size-unit-select" bind:value={sizeMaxUnit} onchange={updateSizeMaxFromInput}>
                             {#each SIZE_UNITS as u}
                                 <option value={u.unit}>{u.label}</option>
@@ -966,11 +1014,11 @@
                                     <div class="currency-stack-range-editor number-filter">
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-min-${idx}`}>{$t('common.min')}</label>
-                                            <input type="number" class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, e.currentTarget.value)} />
+                                            <input type="number" use:numericArrows class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, e.currentTarget.value)} />
                                         </div>
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-max-${idx}`}>{$t('common.max')}</label>
-                                            <input type="number" class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, e.currentTarget.value)} />
+                                            <input type="number" use:numericArrows class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, e.currentTarget.value)} />
                                         </div>
                                         <!-- Linear dual range slider — same UX as `type:'number'`, scoped to per-currency min/max. -->
                                         <div class="size-slider-container">

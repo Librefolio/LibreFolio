@@ -49,25 +49,39 @@
         fields: CompareField[];
         columns: CompareColumn[];
         zIndex?: number;
-        /** Initial radio selection (column id or 'all'). */
-        defaultKeep?: string;
-        /** When provided AND ≥2 selectable columns, shows the keep selector. */
-        onKeep?: (choice: string) => void;
+        /** Column ids kept when the modal opens. */
+        defaultKept?: string[];
+        /** Column ids the "restore default" button goes back to. */
+        resetKept?: string[];
+        /** When provided AND ≥2 selectable columns, shows the keep toggles. */
+        onKeep?: (keptIds: string[]) => void;
         onClose: () => void;
     }
 
-    let {open, title, hint, fields, columns, zIndex = 60, defaultKeep, onKeep, onClose}: Props = $props();
+    let {open, title, hint, fields, columns, zIndex = 60, defaultKept, resetKept, onKeep, onClose}: Props = $props();
 
     const selectableColumns = $derived(columns.filter((c) => c.selectable));
     const showKeep = $derived(typeof onKeep === 'function' && selectableColumns.length >= 2);
 
-    let keepChoice = $state<string>('all');
+    // Mirrors the resolver table: one toggle per row, not a single-choice radio. The two
+    // views arbitrate the same thing, so they must not disagree on how a choice is made.
+    let kept = $state<Set<string>>(new Set());
     $effect(() => {
-        // Re-seed the radio whenever the modal (re)opens with a new default.
-        if (open) keepChoice = defaultKeep ?? selectableColumns[0]?.id ?? 'all';
+        if (open) kept = new Set(defaultKept ?? selectableColumns.map((c) => c.id));
     });
 
-    /** Most frequent cmp token for a field; ties resolve to the first column. */
+    function toggleKept(id: string) {
+        const next = new Set(kept);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        kept = next;
+    }
+
+    /**
+     * The cmp token shared by strictly more columns than any other, or `null` when no
+     * value holds a majority. Two columns that disagree have no majority at all: calling
+     * one of them the odd one out would be a coin toss dressed up as a finding.
+     */
     function majorityCmp(fieldKey: string): string | null {
         const counts = new Map<string, number>();
         for (const col of columns) {
@@ -75,14 +89,18 @@
             counts.set(v, (counts.get(v) ?? 0) + 1);
         }
         let best: string | null = null;
-        let bestN = -1;
+        let bestN = 0;
+        let tied = false;
         for (const [v, n] of counts) {
             if (n > bestN) {
                 best = v;
                 bestN = n;
+                tied = false;
+            } else if (n === bestN) {
+                tied = true;
             }
         }
-        return best;
+        return tied ? null : best;
     }
 
     function fieldDiffers(fieldKey: string): boolean {
@@ -90,9 +108,37 @@
         return seen.size > 1;
     }
 
+    /** Without a majority every differing cell is highlighted — none of them is "the wrong one". */
     function cellIsOutlier(fieldKey: string, col: CompareColumn): boolean {
         if (!fieldDiffers(fieldKey)) return false;
-        return (col.cells[fieldKey]?.cmp ?? '') !== majorityCmp(fieldKey);
+        const majority = majorityCmp(fieldKey);
+        return majority === null || (col.cells[fieldKey]?.cmp ?? '') !== majority;
+    }
+
+    /**
+     * Splits a cell against the value it is being read next to, so the part that actually
+     * differs can be marked. Two names that differ by one letter at the end
+     * ("…FOICU" / "…FOICUM") are indistinguishable side by side in a narrow column, which
+     * turns a real difference into an apparent bug in the comparison.
+     */
+    function diffParts(value: string, reference: string): {head: string; mid: string; tail: string} {
+        if (value === '' || reference === '' || value === reference) return {head: value, mid: '', tail: ''};
+        const max = Math.min(value.length, reference.length);
+        let start = 0;
+        while (start < max && value[start] === reference[start]) start += 1;
+        let end = 0;
+        while (end < max - start && value[value.length - 1 - end] === reference[reference.length - 1 - end]) end += 1;
+        return {head: value.slice(0, start), mid: value.slice(start, value.length - end), tail: value.slice(value.length - end)};
+    }
+
+    /** What a cell is compared against: the majority reading, or the other column when there are two. */
+    function referenceDisplay(fieldKey: string, index: number): string {
+        const majority = majorityCmp(fieldKey);
+        if (majority !== null) {
+            const peer = columns.find((c) => (c.cells[fieldKey]?.cmp ?? '') === majority);
+            if (peer) return peer.cells[fieldKey]?.display ?? '';
+        }
+        return columns[index === 0 ? 1 : 0]?.cells[fieldKey]?.display ?? '';
     }
 
     function colBadge(index: number): string {
@@ -101,7 +147,7 @@
     }
 
     function apply() {
-        onKeep?.(keepChoice);
+        onKeep?.([...kept]);
         onClose();
     }
 </script>
@@ -119,16 +165,32 @@
             {/if}
 
             <div class="overflow-x-auto">
-                <table class="w-full border-collapse text-sm" data-testid="import-wizard-compare-table">
+                <!-- table-fixed + a pinned label column: leftover width goes to the data
+                     columns (which is what the reader compares), never to the field names.
+                     min-width keeps columns readable and scrolls instead of squeezing. -->
+                <table class="w-full table-fixed border-collapse text-sm" style="min-width: {8 + columns.length * 10}rem" data-testid="import-wizard-compare-table">
                     <thead>
                         <tr>
-                            <th class="sticky left-0 z-10 min-w-[7rem] border-b border-gray-200 bg-white px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-400">
+                            <th class="sticky left-0 z-10 w-32 border-b border-gray-200 bg-white px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-400">
                                 {$t('importWizard.compareModal.field')}
                             </th>
                             {#each columns as col, i (col.id)}
-                                <th class="min-w-[9rem] max-w-[14rem] border-b border-l border-gray-200 px-2 py-2 text-left align-top dark:border-slate-700" data-testid="import-wizard-compare-col-{col.id}">
-                                    <div class="flex items-center gap-1">
-                                        <span class="shrink-0 text-xs text-gray-400">{colBadge(i)}</span>
+                                <th class="border-b border-l border-gray-200 px-2 py-2 text-left align-top dark:border-slate-700" data-testid="import-wizard-compare-col-{col.id}">
+                                    <div class="flex items-center gap-1.5">
+                                        {#if showKeep && col.selectable}
+                                            <button
+                                                type="button"
+                                                onclick={() => toggleKept(col.id)}
+                                                aria-label={$t('importWizard.compareModal.keep')}
+                                                title={$t('importWizard.compareModal.keep')}
+                                                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors {kept.has(col.id) ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'}"
+                                                data-testid="import-wizard-compare-keep-{col.id}"
+                                            >
+                                                <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform {kept.has(col.id) ? 'translate-x-5' : 'translate-x-1'}"></span>
+                                            </button>
+                                        {:else}
+                                            <span class="shrink-0 text-xs text-gray-400">{colBadge(i)}</span>
+                                        {/if}
                                         <span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs font-semibold text-gray-700 dark:text-gray-200" title={col.title}>{col.title}</span>
                                     </div>
                                     {#if col.subtitle}
@@ -148,9 +210,10 @@
                                         {field.label}
                                     </span>
                                 </th>
-                                {#each columns as col (col.id)}
+                                {#each columns as col, colIndex (col.id)}
                                     {@const cell = col.cells[field.key]}
                                     {@const outlier = cellIsOutlier(field.key, col)}
+                                    {@const parts = differs && cell && !cell.html ? diffParts(cell.display, referenceDisplay(field.key, colIndex)) : null}
                                     <td
                                         class="border-b border-l border-gray-100 px-2 py-1.5 align-top text-xs dark:border-slate-800 {outlier ? 'bg-amber-100 font-medium text-amber-900 dark:bg-amber-900/30 dark:text-amber-200' : 'text-gray-700 dark:text-gray-200'} {field.align === 'right'
                                             ? 'text-right'
@@ -161,6 +224,10 @@
                                         {#if cell}
                                             {#if cell.html}
                                                 <span use:scrollOnOverflow class={overflowScrollTextClass}>{@html cell.display}</span>
+                                            {:else if parts && parts.mid !== ''}
+                                                <span use:scrollOnOverflow class={overflowScrollTextClass} title={cell.display} data-testid="import-wizard-compare-diff"
+                                                    >{parts.head}<mark class="rounded-sm bg-amber-300 px-0.5 text-amber-950 dark:bg-amber-500/70 dark:text-amber-50">{parts.mid}</mark>{parts.tail}</span
+                                                >
                                             {:else}
                                                 <span use:scrollOnOverflow class={overflowScrollTextClass} title={cell.display}>{cell.display}</span>
                                             {/if}
@@ -178,20 +245,21 @@
 
         <div class="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 p-4 dark:border-slate-700">
             {#if showKeep}
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                    <span class="font-medium text-gray-600 dark:text-gray-300">{$t('importWizard.compareModal.keep')}:</span>
-                    {#each columns as col, i (col.id)}
-                        {#if col.selectable}
-                            <label class="inline-flex cursor-pointer items-center gap-1 text-gray-700 dark:text-gray-200">
-                                <input type="radio" name="compare-keep" value={col.id} bind:group={keepChoice} class="text-libre-green focus:ring-libre-green" data-testid="import-wizard-compare-keep-{col.id}" />
-                                <span>{colBadge(i)}</span>
-                            </label>
-                        {/if}
-                    {/each}
-                    <label class="inline-flex cursor-pointer items-center gap-1 text-gray-700 dark:text-gray-200">
-                        <input type="radio" name="compare-keep" value="all" bind:group={keepChoice} class="text-libre-green focus:ring-libre-green" data-testid="import-wizard-compare-keep-all" />
-                        <span>{$t('importWizard.compareModal.keepAll')}</span>
-                    </label>
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <span class="font-medium text-gray-600 dark:text-gray-300">{$t('importWizard.compareModal.keptCount', {values: {n: kept.size, total: selectableColumns.length}})}</span>
+                    <button
+                        type="button"
+                        class="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700"
+                        onclick={() => (kept = new Set(selectableColumns.map((c) => c.id)))}
+                        data-testid="import-wizard-compare-keep-all"
+                    >
+                        {$t('importWizard.compareModal.keepAll')}
+                    </button>
+                    {#if resetKept}
+                        <button type="button" class="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700" onclick={() => (kept = new Set(resetKept))} data-testid="import-wizard-compare-reset">
+                            {$t('importWizard.resolver.resetDefault')}
+                        </button>
+                    {/if}
                 </div>
                 <div class="flex items-center gap-2">
                     <button type="button" class="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700" onclick={onClose}>

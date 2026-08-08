@@ -15,6 +15,7 @@
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
+    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {Ban, Check, ChevronDown, ChevronsUpDown, ChevronUp, ExternalLink, Filter, ImageIcon, Info} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
@@ -1431,44 +1432,59 @@
                                                 {/if}
                                             </div>
                                         {:else if cellContent.type === 'editable-number'}
+                                            <!-- type="text" + manual normalisation: a native number input is
+                                                 parsed against the browser locale, so "5,9" typed on an Italian
+                                                 keyboard arrives here as an empty string and the digits vanish
+                                                 as the user types. -->
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputmode="decimal"
+                                                autocomplete="off"
                                                 class="cell-editable-number"
                                                 value={cellContent.value ?? ''}
-                                                step={cellContent.step ?? 1}
-                                                min={cellContent.min}
-                                                max={cellContent.max}
                                                 placeholder={cellContent.placeholder ?? ''}
                                                 oninput={(e) => {
-                                                    const raw = e.currentTarget.value;
-                                                    if (raw === '') {
+                                                    const typed = e.currentTarget.value;
+                                                    if (typed === '') {
                                                         cellContent.onchange(null);
                                                         return;
                                                     }
-                                                    let num = Number(raw);
+                                                    // Half-typed decimals ("5," / "5.") are left alone: committing
+                                                    // them would push a reformatted value back into the input and
+                                                    // eat the separator the user just pressed.
+                                                    if (typed.includes(',') || typed.endsWith('.')) return;
+                                                    let num = Number(normalizeDecimalInput(typed));
+                                                    if (!Number.isFinite(num)) return;
                                                     if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
                                                     if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
                                                     cellContent.onchange(num);
                                                 }}
                                                 onblur={(e) => {
-                                                    const raw = e.currentTarget.value;
+                                                    const raw = normalizeDecimalInput(e.currentTarget.value);
                                                     if (raw === '') {
                                                         cellContent.onchange(null);
                                                         return;
                                                     }
                                                     let num = Number(raw);
-                                                    if (cellContent.min !== undefined && num < cellContent.min) {
-                                                        num = cellContent.min;
-                                                        e.currentTarget.value = String(num);
-                                                    }
-                                                    if (cellContent.max !== undefined && num > cellContent.max) {
-                                                        num = cellContent.max;
-                                                        e.currentTarget.value = String(num);
-                                                    }
+                                                    if (!Number.isFinite(num)) return;
+                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
+                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
+                                                    e.currentTarget.value = String(num);
                                                     cellContent.onchange(num);
                                                 }}
                                                 onkeydown={(e) => {
-                                                    if (e.key === 'Enter') e.currentTarget.blur();
+                                                    if (e.key === 'Enter') {
+                                                        e.currentTarget.blur();
+                                                        return;
+                                                    }
+                                                    const stepped = decimalArrowStep(e, e.currentTarget.value, typeof cellContent.step === 'number' ? cellContent.step : 1);
+                                                    if (stepped === null) return;
+                                                    let num = Number(stepped);
+                                                    if (!Number.isFinite(num)) return;
+                                                    if (cellContent.min !== undefined && num < cellContent.min) num = cellContent.min;
+                                                    if (cellContent.max !== undefined && num > cellContent.max) num = cellContent.max;
+                                                    e.currentTarget.value = String(num);
+                                                    cellContent.onchange(num);
                                                 }}
                                                 onclick={(e) => e.stopPropagation()}
                                             />

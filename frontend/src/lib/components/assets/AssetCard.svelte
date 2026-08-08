@@ -8,7 +8,7 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
-    import {Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
+    import {Merge, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -64,10 +64,30 @@
         onsync?: (asset: AssetData) => void;
         onrefresh?: (asset: AssetData) => void;
         ondelete?: (asset: AssetData) => void;
+        onmerge?: (asset: AssetData) => void;
         onsettings?: (asset: AssetData) => void;
     }
 
-    let {asset, livePrice = null, livePriceDirection = 'neutral', deltaPercent = null, deltaAbs = null, dateStart, dateEnd, globalViewMode = 'percentage', chartSettings, renderSignals, chartData = [], loading = false, syncing = false, onsync, onrefresh, ondelete, onsettings}: Props = $props();
+    let {
+        asset,
+        livePrice = null,
+        livePriceDirection = 'neutral',
+        deltaPercent = null,
+        deltaAbs = null,
+        dateStart,
+        dateEnd,
+        globalViewMode = 'percentage',
+        chartSettings,
+        renderSignals,
+        chartData = [],
+        loading = false,
+        syncing = false,
+        onsync,
+        onrefresh,
+        ondelete,
+        onmerge,
+        onsettings,
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -285,6 +305,17 @@
             </button>
         </div>
         <div class="flex items-center gap-0.5">
+            <button
+                class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-libre-green transition-colors"
+                data-testid="asset-card-merge"
+                onclick={(e) => {
+                    stop(e);
+                    onmerge?.(asset);
+                }}
+                title={$t('assets.merge.action')}
+            >
+                <Merge size={15} />
+            </button>
             <button
                 class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-red-500 transition-colors"
                 onclick={(e) => {

@@ -252,7 +252,6 @@ class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
     """Response model for bulk rate upsert."""
 
 
-
 # ============================================================================
 # RATE DELETE MODELS
 # ============================================================================
@@ -432,7 +431,6 @@ class FXConversionRoutesResponse(BaseListResponse[FXConversionRouteItem]):
     """Response model for listing conversion routes."""
 
 
-
 class FXConversionRouteResult(BaseModel):
     """Result of a single route creation/update."""
 
@@ -482,7 +480,6 @@ class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
     """Response model for DELETE /routes."""
 
 
-
 # NOTE: FXCurrenciesResponse was removed — GET /fx/currencies endpoint absorbed by
 # GET /fx/providers which now includes target_currencies per provider.
 
@@ -498,4 +495,3 @@ class FXPairItem(BaseModel):
 
 class FXPairsListResponse(BaseListResponse[FXPairItem]):
     """Response for GET /currencies/pairs — all known FX pairs."""
-

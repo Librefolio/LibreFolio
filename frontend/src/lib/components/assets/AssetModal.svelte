@@ -43,6 +43,7 @@
     import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -126,6 +127,13 @@
          */
         onReuseExisting?: (existingAssetId: number, addKeys: boolean) => void;
         /**
+         * Whether reusing an existing asset may also merge the import's search keys into
+         * its identifiers. False when the caller has no identifier to offer — the plugin
+         * could not read one — so the prompt drops that option instead of proposing to
+         * add nothing.
+         */
+        reuseAllowKeyMerge?: boolean;
+        /**
          * Wizard create context only: advisory notices raised by the broker-import plugin for
          * this asset (e.g. a suspected maturity/redemption implying the security is delisted and
          * won't be found by the online search). Rendered as amber banners grouped by `kind`;
@@ -137,7 +145,23 @@
         onclose?: () => void;
     }
 
-    let {open = $bindable(false), editMode = false, editData = null, prefillData = null, zIndex = 50, initialSearchQuery = '', initialSearchBadges = [], searchHints = [], initialNoProvider = false, onReuseExisting, importNotices = [], oncreated, onupdated, onclose}: Props = $props();
+    let {
+        open = $bindable(false),
+        editMode = false,
+        editData = null,
+        prefillData = null,
+        zIndex = 50,
+        initialSearchQuery = '',
+        initialSearchBadges = [],
+        searchHints = [],
+        initialNoProvider = false,
+        onReuseExisting,
+        reuseAllowKeyMerge = true,
+        importNotices = [],
+        oncreated,
+        onupdated,
+        onclose,
+    }: Props = $props();
 
     // =========================================================================
     // Constants
@@ -270,7 +294,13 @@
     // Derived
     // =========================================================================
 
-    let isValid = $derived(displayName.trim().length > 0);
+    /**
+     * A quote base of zero or less is not a unit, it is a division by zero waiting to
+     * happen in every price conversion. It used to be coerced to 1 on save, which hid
+     * the mistake instead of reporting it.
+     */
+    let quoteBaseQuantityInvalid = $derived(!Number.isFinite(quoteBaseQuantity) || quoteBaseQuantity < 1);
+    let isValid = $derived(displayName.trim().length > 0 && !quoteBaseQuantityInvalid);
     let hasProvider = $derived(!providerNoProvider && providerCode !== '' && (providerIdentifier !== '' || providerIdentifierType === 'AUTO_GENERATED'));
 
     // Import advisory notices grouped by category (`kind`) — rendered as amber banners in the
@@ -1027,12 +1057,25 @@
         }
     }
 
-    /** Apply selected fields from ProviderComparisonModal */
-    function handleComparisonApply(selectedFields: string[]) {
+    /**
+     * Apply selected fields from ProviderComparisonModal.
+     *
+     * Identifier rows carry a `resolution` (P3/B-04): the chosen value lands in the
+     * structured column and everything else is merged into `identifier_other` instead of
+     * being discarded. Keeping the loser matters — for an Italian BTP the two ISINs are
+     * two phases of one security, and losing either breaks a future reimport.
+     */
+    function handleComparisonApply(selectedFields: string[], resolutions: Record<string, {primary: string; alternates: string[]}> = {}) {
         for (const diff of comparisonDifferences) {
             if (selectedFields.includes(diff.field)) {
                 if (diff.type === 'string') {
-                    setFieldValue(diff.field, diff.providerValue);
+                    const resolution = resolutions[diff.field];
+                    if (resolution) {
+                        setFieldValue(diff.field, resolution.primary);
+                        mergeOtherIdentifiers(resolution.alternates);
+                    } else {
+                        setFieldValue(diff.field, diff.providerValue);
+                    }
                 } else if (diff.type === 'distribution') {
                     if (diff.field === 'sector_area') {
                         sectorDistribution = diff.providerValue?.distribution ?? diff.providerValue;
@@ -1558,15 +1601,19 @@
                             <input
                                 id="asset-quote-base-quantity"
                                 type="number"
+                                use:numericArrows
                                 min="1"
                                 step="1"
                                 bind:value={quoteBaseQuantity}
                                 oninput={() => (quoteBaseQuantityTouched = true)}
                                 data-testid="asset-modal-quote-base-quantity"
-                                class="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
+                                class="w-full px-3 py-2 text-sm border rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                                           focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green"
+                                           focus:outline-none focus:ring-2 {quoteBaseQuantityInvalid ? 'border-red-400 focus:ring-red-400/50 dark:border-red-500' : 'border-gray-200 dark:border-slate-600 focus:ring-libre-green/50 focus:border-libre-green'}"
                             />
+                            {#if quoteBaseQuantityInvalid}
+                                <p class="mt-1 text-[11px] text-red-600 dark:text-red-400" data-testid="asset-modal-quote-base-quantity-error">{$t('assets.modal.quoteBaseMin')}</p>
+                            {/if}
                             {#if assetType === 'BOND'}
                                 <p class="mt-1 flex items-start gap-1 text-[11px] text-blue-600 dark:text-blue-300" data-testid="asset-modal-bond-qbq-hint">
                                     <Info size={12} class="mt-0.5 shrink-0" />
@@ -1944,19 +1991,33 @@
             </button>
         </div>
         <div class="px-5 py-4 text-sm text-gray-700 dark:text-gray-300" data-testid="reuse-existing-message">
-            {$t('assets.modal.reuseExisting.message', {values: {name: reuseExistingName}})}
+            <!-- Without the key merge there is no identifier to speak of: mentioning one
+                 would send the user looking for a choice this dialog does not offer. -->
+            {#if reuseAllowKeyMerge}
+                {$t('assets.modal.reuseExisting.message', {values: {name: reuseExistingName}})}
+            {:else}
+                {$t('assets.modal.reuseExisting.messagePlain', {values: {name: reuseExistingName}})}
+            {/if}
         </div>
         <div class="flex flex-col gap-2 px-5 py-4 border-t border-gray-200 dark:border-slate-700">
-            <button type="button" data-testid="reuse-existing-add" class="w-full px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => reuseExisting(true)}>
-                {$t('assets.modal.reuseExisting.useAndAdd')}
-            </button>
+            {#if reuseAllowKeyMerge}
+                <button type="button" data-testid="reuse-existing-add" class="w-full px-4 py-2 text-sm font-medium text-white bg-libre-green rounded-lg hover:bg-libre-green/90 transition-colors" onclick={() => reuseExisting(true)}>
+                    {$t('assets.modal.reuseExisting.useAndAdd')}
+                </button>
+            {/if}
             <button
                 type="button"
                 data-testid="reuse-existing-use"
-                class="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                class="w-full px-4 py-2 text-sm font-medium transition-colors {reuseAllowKeyMerge
+                    ? 'rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700'
+                    : 'rounded-lg bg-libre-green text-white hover:bg-libre-green/90'}"
                 onclick={() => reuseExisting(false)}
             >
-                {$t('assets.modal.reuseExisting.useOnly')}
+                {#if reuseAllowKeyMerge}
+                    {$t('assets.modal.reuseExisting.useOnly')}
+                {:else}
+                    {$t('assets.modal.reuseExisting.use')}
+                {/if}
             </button>
             <button type="button" data-testid="reuse-existing-cancel" class="w-full px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors" onclick={dismissReuse}>
                 {$t('assets.modal.reuseExisting.changeName')}
@@ -2012,6 +2073,7 @@
 <ProviderComparisonModal
     bind:open={showComparisonModal}
     differences={comparisonDifferences}
+    assetName={displayName}
     onapply={handleComparisonApply}
     oncancel={() => {
         showComparisonModal = false;

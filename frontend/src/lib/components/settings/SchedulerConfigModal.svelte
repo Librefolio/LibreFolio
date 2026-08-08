@@ -15,6 +15,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {Clock, Calendar, Search, Lightbulb, Plus, X, Globe} from 'lucide-svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
         open: boolean;
         serverTz: string;
@@ -277,6 +278,7 @@
                 <input
                     id="scheduler-freq"
                     type="number"
+                    use:numericArrows
                     bind:value={frequency}
                     min={1}
                     max={1440}
@@ -350,7 +352,14 @@
                 {$_('settings.global.scheduler.horizonLabel')}
             </h3>
             <div class="flex items-center gap-2">
-                <input type="number" bind:value={horizon} min={1} max={365} class="w-20 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green" />
+                <input
+                    type="number"
+                    use:numericArrows
+                    bind:value={horizon}
+                    min={1}
+                    max={365}
+                    class="w-20 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green"
+                />
                 <span class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.global.scheduler.horizonSuffix')}</span>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.horizonHint')}</p>

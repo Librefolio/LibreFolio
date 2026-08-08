@@ -27,7 +27,7 @@ from datetime import date
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import SafeDecimal
@@ -346,6 +346,31 @@ class BRIMParseRequest(BaseModel):
     broker_id: int = Field(..., gt=0, description="Target broker ID")
 
 
+class BRIMDuplicateCheckRequest(BaseModel):
+    """
+    Request to re-run duplicate detection on transactions the user has already worked on.
+
+    ``POST /files/{id}/parse`` returns a duplicate report computed on the transactions
+    *as the plugin produced them*. That verdict is stale the moment the user changes
+    anything: a row the plugin could only book as a cash withdrawal because it could not
+    read the instrument is compared against cash movements, not against the purchase it
+    actually is. Correcting it afterwards does not re-open the question.
+
+    This request carries the transactions in their current state — after asset
+    unification and after manual corrections — so the comparison runs on the data that
+    will really be imported.
+
+    Attributes:
+        broker_id: Target broker the transactions will be imported into
+        transactions: Transactions in their current, possibly user-edited state
+        asset_mappings: Fake-id → real-asset resolutions, so the check is asset-aware
+    """
+
+    broker_id: int = Field(..., gt=0, description="Target broker ID")
+    transactions: List[TXCreateItem] = Field(..., description="Transactions in their current state (post-correction)")
+    asset_mappings: List[BRIMAssetMapping] = Field(default_factory=list, description="Fake asset id resolutions, used for asset-aware matching")
+
+
 # =============================================================================
 # VALIDATION ISSUE (structured parse error)
 # =============================================================================
@@ -375,6 +400,74 @@ class BRIMValidationIssue(BaseModel):
 
 
 # =============================================================================
+# EVIDENCE + NOTICE (how a plugin explains what it did not understand)
+# =============================================================================
+
+
+class BRIMEvidence(BaseModel):
+    """A navigable table of source data plus a human comment on what does not add up.
+
+    A plugin message is a pair *data + interpretation*: the number that does not
+    reconcile stays verifiable next to the sentence explaining it, so the reader
+    does not have to take the plugin's word for it. Rendered by the frontend with
+    the shared ``DataTable`` component (sorting/filters/pagination for free).
+
+    Typical use: the source file row that could not be classified, the coupon row
+    that supplied a bond nominal, or a computed comparison between the two.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(..., description="Short table caption (e.g. 'Riga di origine', 'Cedola corrispondente')")
+    headers: List[str] = Field(default_factory=list, description="Column headers, in display order")
+    rows: List[List[str]] = Field(default_factory=list, description="Row values as strings, aligned with headers")
+    row_numbers: List[int] = Field(default_factory=list, description="Optional 1-based source-file line number per row (same length as rows, or empty)")
+    comment: Optional[str] = Field(default=None, description="Human-readable comment explaining what does not add up")
+
+
+class BRIMNotice(BaseModel):
+    """A parser notice: severity, stable code, human message and optional evidence.
+
+    Replaces the previous bare ``str`` warning. A ``field_validator`` in
+    ``mode="before"`` coerces a plain string into ``BRIMNotice(severity="warning",
+    ...)``, so every existing ``warnings.append("...")`` call across all plugins
+    keeps working unchanged.
+
+    Severity drives presentation only — both levels surface the confirmation modal
+    when the user advances:
+    - ``info``    — the plugin did something correct and non-obvious; explain it (blue)
+    - ``warning`` — the plugin had to fall back or guess; look at it (amber)
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    severity: Literal["info", "warning"] = Field(default="warning", description="info = explanatory (blue); warning = needs attention (amber)")
+    code: str = Field(default="generic", description="Machine-readable, i18n-stable notice code")
+    message: str = Field(..., description="Human-readable message (plugin language)")
+    evidence: List[BRIMEvidence] = Field(default_factory=list, description="Supporting source-data tables with comments")
+    context: Optional[Dict[str, Any]] = Field(default=None, description="Extra params for i18n interpolation")
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _default_evidence(cls, value: Any) -> Any:
+        return [] if value is None else value
+
+    @classmethod
+    def coerce(cls, value: Any) -> Any:
+        """Accept a bare string as a legacy warning so existing plugins keep working."""
+        if isinstance(value, str):
+            return cls(severity="warning", code="legacy", message=value)
+        return value
+
+
+def _coerce_notices(value: Any) -> Any:
+    """Normalise a ``List[str] | List[BRIMNotice]`` mix into notices (validator helper)."""
+    if isinstance(value, list):
+        return [BRIMNotice.coerce(item) for item in value]
+    return value
+
+
+# =============================================================================
 # FIELD_TODO (intentionally incomplete field in accepted TX)
 # =============================================================================
 
@@ -400,6 +493,7 @@ class BRIMFieldTodo(BaseModel):
     reason_code: str = Field(..., description="Machine-readable reason (e.g. 'stock_merger', 'spin_off', 'corporate_action')")
     message: str = Field(..., description="Human-readable fallback message (English)")
     context: Optional[Dict[str, Any]] = Field(default=None, description="Extra params for i18n (e.g. {old_ticker, new_ticker})")
+    evidence: List[BRIMEvidence] = Field(default_factory=list, description="Source-data tables backing this todo (e.g. the originating file row)")
 
 
 class BRIMParseResponse(BaseModel):
@@ -426,9 +520,14 @@ class BRIMParseResponse(BaseModel):
     transactions: List[TXCreateItem] = Field(default_factory=list, description="Parsed transactions (may have fake asset IDs)")
     asset_mappings: List[BRIMAssetMapping] = Field(default_factory=list, description="Fake asset ID → candidate real assets mapping")
     duplicates: Optional[BRIMDuplicateReport] = Field(default=None, description="Duplicate detection results")
-    warnings: List[str] = Field(default_factory=list, description="Parser warnings (skipped rows, ambiguous data, etc.)")
+    warnings: List[BRIMNotice] = Field(default_factory=list, description="Parser notices (info/warning) with optional source-data evidence")
     validation_issues: List[BRIMValidationIssue] = Field(default_factory=list, description="Structured validation errors from TXCreateItem construction")
     field_todos: List[BRIMFieldTodo] = Field(default_factory=list, description="Fields in accepted transactions that require manual user input")
+
+    @field_validator("warnings", mode="before")
+    @classmethod
+    def _coerce_warnings(cls, value: Any) -> Any:
+        return _coerce_notices(value)
 
 
 # =============================================================================
@@ -452,10 +551,15 @@ class BRIMParseOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     transactions: List[TXCreateItem] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
+    warnings: List[BRIMNotice] = Field(default_factory=list)
     validation_issues: List[BRIMValidationIssue] = Field(default_factory=list)
     field_todos: List[BRIMFieldTodo] = Field(default_factory=list)
     extracted_assets: Dict[int, BRIMExtractedAssetInfo] = Field(default_factory=dict)
+
+    @field_validator("warnings", mode="before")
+    @classmethod
+    def _coerce_warnings(cls, value: Any) -> Any:
+        return _coerce_notices(value)
 
 
 # NOTE: No atomic commit schema / endpoint.

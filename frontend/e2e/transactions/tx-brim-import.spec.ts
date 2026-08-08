@@ -90,7 +90,12 @@ async function parseFiles(page: Page) {
     await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
 }
 
-/** Navigate from Step 3 to Step 4 (Review), handling the optional warnings confirmation modal. */
+/**
+ * Navigate from Step 3 to the Review step, handling the optional warnings confirmation
+ * modal and the two steps that only appear when they have something to do:
+ * "Corrections" (rows the plugin flagged) and "Duplicates" (rows that collide with the
+ * database or with another file in the same import). Both auto-skip when empty.
+ */
 async function continueToReview(page: Page) {
     await page.getByTestId('import-wizard-continue').click();
     // If parse generated warnings, a confirmation modal appears — dismiss it to proceed
@@ -98,8 +103,20 @@ async function continueToReview(page: Page) {
     if (await warningConfirm.isVisible({timeout: 2_000}).catch(() => false)) {
         await warningConfirm.click();
     }
+    await passOptionalWizardSteps(page);
     await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
     await page.waitForTimeout(300);
+}
+
+/** Clicks through the Corrections/Duplicates steps if the wizard decided to show them. */
+export async function passOptionalWizardSteps(page: Page) {
+    for (const testid of ['import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
+        const button = page.getByTestId(testid);
+        if (await button.isVisible({timeout: 1_500}).catch(() => false)) {
+            await button.click();
+            await page.waitForTimeout(300);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

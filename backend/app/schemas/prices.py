@@ -80,7 +80,6 @@ class AssetBackwardFillInfo(BackwardFillInfo, FxBackwardFillInfo):
     """
 
 
-
 # ============================================================================
 # FA PRICE UPSERT
 # ============================================================================
@@ -394,7 +393,6 @@ class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):
     """Response for bulk event upsert."""
 
 
-
 class FAEventDeleteResult(BaseDeleteResult):
     """Result of deleting a single event by ID."""
 
@@ -482,7 +480,6 @@ class FAEventQueryResponse(BaseListResponse[FAEventQueryResult]):
     """Bulk response for event queries."""
 
 
-
 # ============================================================================
 # FA PRICE BULK QUERY
 # ============================================================================
@@ -563,7 +560,6 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
     """
 
 
-
 # ============================================================================
 # FA BULK CURRENT PRICE
 # ============================================================================
@@ -590,4 +586,3 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
     - success_count: int
     - errors: List[str]
     """
-

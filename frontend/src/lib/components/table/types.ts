@@ -93,15 +93,16 @@ export interface ImageCell {
 }
 
 /**
- * Editable number cell — renders an inline <input type="number">.
+ * Editable number cell — renders a text input that accepts "," or "." as the
+ * decimal separator and steps with the arrow keys.
  * Used by DataEditor for rate editing, etc.
  */
 export interface EditableNumberCell {
     type: 'editable-number';
     /** Current value (null = empty) */
     value: number | null;
-    /** Step for input increment (default: 1). Use 'any' to accept arbitrary
-     *  decimals (no spinner step constraint). */
+    /** Arrow-key increment (default: 1). 'any' means the arrows step by 1 while
+     *  typing stays free of any step constraint. */
     step?: number | 'any';
     /** Minimum allowed value */
     min?: number;

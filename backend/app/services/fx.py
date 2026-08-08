@@ -379,10 +379,8 @@ class FXServiceError(Exception):
     """Base exception for FX service errors."""
 
 
-
 class RateNotFoundError(FXServiceError):
     """Raised when no FX rate is found for a conversion."""
-
 
 
 # ============================================================================

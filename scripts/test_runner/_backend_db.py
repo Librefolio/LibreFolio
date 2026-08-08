@@ -153,13 +153,21 @@ def db_model_validators(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Model validator tests", verbose=verbose)
 
 
+def db_asset_merge(verbose: bool = False, test_names: list = None) -> bool:
+    """Test folding one asset into another (duplicate repair)."""
+    print_section("DB Test: Asset Merge")
+    print_info("Testing: transaction/price/event migration, identifier union, FK traps (RESTRICT, CASCADE)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_asset_merge.py", test_names)
+    return run_command(cmd, "Asset merge tests", verbose=verbose)
+
+
 def db_all(verbose: bool = False) -> bool:
     """Run all database tests in sequence."""
     from ._registry import TEST_REGISTRY
 
     db_order = [
         "create", "validate", "numeric-truncation", "populate",
-        "referential-integrity", "fx-rates", "brim", "model-validators"
+        "referential-integrity", "fx-rates", "brim", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -200,6 +208,7 @@ Tests for the SQLite database layer:
   • Populate with mock data
   • FX rates persistence
   • BRIM asset search & duplicate detection
+  • Asset merge (duplicate repair)
   • Referential integrity (CASCADE, RESTRICT, UNIQUE, CHECK)
 
 Note: No backend server required. Tests operate directly on test DB.
@@ -215,6 +224,9 @@ Note: No backend server required. Tests operate directly on test DB.
              desc="Test rate fetching and DB persistence", prereq="Database created")
     add_test(cat, "brim", db_brim, name="BRIM DB Tests",
              desc="Asset search, duplicate detection", prereq="Database populated")
+    add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
+             desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",
+             tests="12 merge tests")
     add_test(cat, "numeric-truncation", db_numeric_truncation, name="Numeric Truncation",
              desc="Test Numeric column precision behavior", prereq="Database created")
     add_test(cat, "referential-integrity", db_test_referential_integrity, name="Referential Integrity",

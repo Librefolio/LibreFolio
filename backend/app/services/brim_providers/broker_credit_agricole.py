@@ -42,12 +42,23 @@ Causale mapping:
 
 This single plugin also reads the account "Lista Movimenti Conto" cash-movements
 layout (``Data Op.;Data Val.;Causale;Descrizione;Importo;Divisa``). Those rows are
-bank cash, mapped by causale to FEE/TAX (capital gain, bollo, canone, spese),
-INTEREST/DIVIDEND (coupons/dividends, linked to their security by ISIN when named),
-identifiable bond maturity SELL + optional premium INTEREST, or DEPOSIT/WITHDRAWAL by
-sign (POS, utenze, prelievi, emoluments, giroconto and unidentified cash side of
-trades). Account-mode transactions keep the bank description verbatim and carry the
-causale as a tag.
+bank cash, classified through an explicit **four-tier causale registry** so that no
+causale can pass unnoticed:
+
+1. *typed* — FEE/TAX (capital gain, bollo, canone, spese), INTEREST/DIVIDEND
+   (coupons/dividends, linked to their security by ISIN when named), or an
+   identifiable bond maturity SELL + optional premium INTEREST;
+2. *unresolved* — recognised as a securities operation (COMPRAVENDITA) whose
+   quantity and instrument this layout does not carry: booked as cash by sign and
+   flagged with a **blocker** field-todo carrying the source row as evidence;
+3. *declared cash* — POS, utenze, prelievi, emolumenti, giroconto: deposit/withdrawal
+   by sign, silently, because here the fallback *is* the right answer;
+4. *unknown* — any causale the registry has never seen: same cash fallback plus an
+   INFO notice naming it, so a new causale can never enter the fallback quietly.
+
+Tiers 2-4 all produce the same, correct cash movement; they differ only in what the
+plugin declares about it. Account-mode transactions keep the bank description
+verbatim and carry the causale as a tag.
 
 Because the securities "Deposito Titoli" export is securities-only and does not
 include bank cash movements, the plugin adds same-day cash counter-entries so the
@@ -72,8 +83,10 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import (
     FAKE_ASSET_ID_BASE,
     BRIMAssetNotice,
+    BRIMEvidence,
     BRIMExtractedAssetInfo,
     BRIMFieldTodo,
+    BRIMNotice,
     BRIMParseOutput,
     BRIMValidationIssue,
 )
@@ -155,9 +168,57 @@ _ACCT_MATURITY_CAUSALI = {"TITOLI SCADUTI O ESTRATTI"}
 # Causali whose rows are securities fees/taxes (split by description keyword).
 _ACCT_FEETAX_CAUSALI = {"COMMISS./SPESE SU OPERAZ. TITOLI", "COMMISSIONI/SPESE"}
 
+# The subset that is a charge *on a security*, and therefore belongs to one. The
+# others ("COMMISSIONI/SPESE", the monthly canone) are account charges and are
+# correctly left unallocated, so only these are worth flagging when no asset is found.
+_ACCT_FEETAX_CAUSALI_SECURITIES = {"COMMISS./SPESE SU OPERAZ. TITOLI"}
+
 # "INTERESSI/COMPETENZE" is sign-dependent: a debit is the account fee
 # (CANONE MENSILE), a credit is real interest income.
 _ACCT_CANONE_CAUSALI = {"INTERESSI/COMPETENZE"}
+
+# --- Causale registry: tier 2 and tier 3 -----------------------------------
+#
+# The account layout used to type four causale groups and send *everything else*
+# to a deposit/withdrawal fallback by sign. That fallback is right for real bank
+# cash and wrong for the cash leg of a trade — and the two were indistinguishable,
+# so a lost trade looked exactly like a supermarket payment.
+#
+# The registry makes the difference explicit. Every causale lands in exactly one
+# of four tiers and none can pass unnoticed:
+#   1. typed          -> a dedicated handler builds a complete transaction
+#   2. unresolved     -> cash fallback + a *blocker* todo: recognised as not-cash,
+#                        but this layout alone does not carry the security
+#   3. declared cash  -> deposit/withdrawal by sign, silently: the fallback IS the
+#                        right answer here, and saying so turns silence from "not
+#                        handled" into "handled, and it is cash"
+#   4. unknown        -> deposit/withdrawal by sign + an INFO notice naming the
+#                        causale, so a new one can never enter the fallback quietly
+#
+# Classification stays a pure function of causale + description: no DB, no
+# network, no state — the BRIM contract.
+
+# Tier 3 — causali for which deposit/withdrawal by sign is the correct answer.
+_ACCT_DECLARED_CASH_CAUSALI = {
+    "PAGAMENTO TRAMITE POS",
+    "PAGAMENTO UTENZE",
+    "PRELIEVO SPORT. AUTOM. ALTRA BANCA",
+    "PRELIEVO NOSTRO SPORTELLO AUTOM.",
+    "ACCREDITO EMOLUMENTI",
+    "GIROCONTO/BONIFICO",
+}
+
+# Tier 2 — securities operations booked on the cash account. The row carries the
+# money but not the quantity or the instrument, and the matching securities leg
+# only exists when the "Deposito Titoli" export covers the same period. Booked as
+# cash (the amount is right) and flagged blocker (the security is missing).
+_ACCT_UNRESOLVED_CAUSALI = {"COMPRAVENDITA TITOLI/FONDI/OPZIONI"}
+
+# Tier labels returned by ``_classify_account_row`` alongside the (type, cash) pair.
+_TIER_TYPED = "typed"
+_TIER_UNRESOLVED = "unresolved"
+_TIER_DECLARED_CASH = "declared_cash"
+_TIER_UNKNOWN = "unknown"
 
 # Description keywords that make a fee row a TAX (capital gain, stamp duty,
 # withholding) rather than a plain FEE (management/administration/coupon-detach).
@@ -187,6 +248,37 @@ def _income_asset_name(description: str, isin: str) -> str:
     head = description[:idx] if idx > 0 else description
     head = re.sub(r"^\s*(CEDOLA|DIVIDEND[OIA]?)\s*", "", head, flags=re.IGNORECASE).strip(" :-\t")
     return head or isin
+
+
+def _charge_asset_name(description: str, isin: str) -> str:
+    """Best-effort security name for an account-mode securities charge.
+
+    A charge line names the instrument *after* its ISIN and before the movement
+    reference::
+
+        SPESE STACCO CEDOLA DEL 21/11/2024 DOSSIER: ... TIT: IT0005332827 BTP 05/26 0.55FOICUM MOV:252419599
+
+    Crédit Agricole prints this name in full, while the matching coupon line
+    truncates it to 19 characters (``BTP 05/26 0.55FOICU``), so the charge is the
+    better naming source of the two. Returns the ISIN when no name follows it.
+    """
+    idx = description.upper().find(isin)
+    if idx < 0:
+        return isin
+    tail = description[idx + len(isin) :]
+    tail = re.split(r"\bMOV\s*[:.]", tail, maxsplit=1)[0]
+    return tail.strip(" :-\t") or isin
+
+
+def _is_truncation_of(short: str, full: str) -> bool:
+    """True when ``short`` looks like ``full`` cut off by the bank's field width.
+
+    Crédit Agricole prints the same security name at different widths depending on
+    the row type, so the same instrument reaches us as both ``BTP 05/26 0.55FOICU``
+    and ``BTP 05/26 0.55FOICUM``. Keeping the longer form avoids creating an asset
+    under a name that will never match the one already in the portfolio.
+    """
+    return len(full) > len(short) and bool(short) and full.upper().startswith(short.upper())
 
 
 def _digits_only(value: str) -> str:
@@ -296,14 +388,22 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         # currency); the currency is resolved per row from these (see above).
         divisa_cols = [idx for idx, cell in enumerate(rows[header_idx]) if "divisa" in io.cell_str(cell).lower()]
 
+        # Column labels of the real header row, for rendering source rows back to
+        # the user as a navigable table (see ``source_row_evidence``).
+        sec_evidence_cols = [(label, col[key]) for label, key in (("Data operazione", "date"), ("Nome", "name"), ("Causale", "causale"), ("Prezzo", "price"), ("Quantità", "qty"), ("Controvalore in Euro", "ctv")) if col.get(key) is not None]
+        sec_evidence_headers = [label for label, _ in sec_evidence_cols]
+
+        def sec_row_values(row: Sequence) -> List[str]:
+            return [io.cell_str(row[cidx]) if cidx < len(row) else "" for _, cidx in sec_evidence_cols]
+
         transactions: List[TXCreateItem] = []
-        warnings: List[str] = []
+        warnings: List[BRIMNotice] = []
         validation_issues: List[BRIMValidationIssue] = []
         field_todos: List[BRIMFieldTodo] = []
         extracted_assets: Dict[int, BRIMExtractedAssetInfo] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
-        succession_count = 0
+        succession_rows: List[tuple[int, Sequence]] = []
 
         def fake_id_for(name: str) -> int:
             nonlocal next_fake_id
@@ -441,9 +541,25 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                     cost_basis_mode = "manual"
                 cash = None
                 description = f"[{causale} — successione / transfer-in] {name} (price {price}, qty {final_qty})"
-                succession_count += 1
+                succession_rows.append((offset, row))
             else:
-                warnings.append(f"Riga {offset}: causale '{causale}' non riconosciuta, saltata")
+                warnings.append(
+                    BRIMNotice(
+                        severity="warning",
+                        code="ca_securities_unknown_causale",
+                        message=f"Riga {offset}: causale '{causale}' non riconosciuta, saltata",
+                        context={"causale": causale, "row": offset},
+                        evidence=[
+                            BRIMEvidence(
+                                title="Riga del file",
+                                headers=sec_evidence_headers,
+                                rows=[sec_row_values(row)],
+                                row_numbers=[offset],
+                                comment="Non so cosa farne di questa causale, quindi la riga non è stata importata: se contiene un movimento vero, va inserito a mano.",
+                            )
+                        ],
+                    )
+                )
                 continue
 
             asset_id = fake_id_for(name) if name else None
@@ -547,13 +663,37 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                     trade_type=TransactionType.INTEREST,
                 )
 
-        if succession_count:
+        if succession_rows:
+            # Describes correct, intentional behaviour, so it is INFO, not a warning.
+            # This raw wording is the Italian fallback: the frontend prefers the
+            # localised `importWizard.brimNotice.ca_succession_transfer_in`, keyed on
+            # `code` and interpolated with `context` — a plugin runs backend-side and
+            # cannot know the reader's locale.
             warnings.append(
-                f"{succession_count} righe di successione (GIRO ALTRO DOSSIER / VERS.TITOLI) importate come RETTIFICA senza cassa (trasferimento in ingresso da un dossier non tracciato — nessun denaro speso, quindi nessun DEPOSITO creato). "
-                "Ogni gamba conserva il proprio prezzo tramite cost_basis_override; uno stesso titolo può comparire in più gambe a prezzi diversi, rispecchiando il report della banca."
+                BRIMNotice(
+                    severity="info",
+                    code="ca_succession_transfer_in",
+                    message=(
+                        f"Sono stati identificati dei titoli trasferiti da un altro dossier ({len(succession_rows)} righe).\n"
+                        "Sono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa "
+                        "associato: si suppone quindi che fossero già tuoi presso un altro broker.\n"
+                        "In caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della "
+                        "transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\n"
+                        "Di seguito le righe in dettaglio:"
+                    ),
+                    context={"row_count": len(succession_rows)},
+                    evidence=[
+                        BRIMEvidence(
+                            title="Righe di trasferimento",
+                            headers=sec_evidence_headers,
+                            rows=[sec_row_values(r) for _, r in succession_rows],
+                            row_numbers=[num for num, _ in succession_rows],
+                        )
+                    ],
+                )
             )
         if not transactions:
-            warnings.append("Nessuna transazione valida trovata nel file")
+            warnings.append(BRIMNotice(severity="warning", code="ca_securities_empty", message="Nessuna transazione valida trovata nel file"))
 
         # Advisory: flag assets whose transactions include a maturity/redemption (e.g. TITOLI
         # SCADUTI, FONDI: RIMBORSO) so the create-asset UI can warn that the security may be
@@ -588,18 +728,25 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
     # Account "Lista Movimenti Conto" -> cash movements (liquidity/fees/taxes/income)
     # ------------------------------------------------------------------
 
-    def _classify_account_row(self, causale: str, description: str, amount: Decimal, currency: str) -> tuple[TransactionType, Currency]:
-        """Map one account-movements row to a ``(type, cash)`` pair.
+    def _classify_account_row(self, causale: str, description: str, amount: Decimal, currency: str) -> tuple[TransactionType, Currency, str]:
+        """Map one account-movements row to a ``(type, cash, tier)`` triple.
 
-        Typed mapping (verbatim amounts, per-row currency; identifiable income —
+        The tier is the registry level the causale fell into (see the module-level
+        registry constants). It carries no accounting meaning: it tells the caller
+        *how confident the plugin is*, so it can stay silent, explain itself, or
+        stop the import.
+
+        Tier 1 — typed (verbatim amounts, per-row currency; identifiable income —
         bond coupon or dividend, both carrying an ISIN — is asset-linked by the
-        caller, bank interest and generic cash stay unallocated):
+        caller, bank interest stays unallocated):
         - securities fees/taxes -> TAX (capital gain / imposta / bollo / ritenuta)
           or FEE (management, administration, coupon-detach, monthly canone);
         - coupons / dividends / credit interest -> INTEREST, or DIVIDEND when the
-          row both mentions a dividend and names a security (ISIN);
-        - everything else (POS, utenze, prelievi, emoluments, giroconto and the
-          cash side of securities trades) -> DEPOSIT/WITHDRAWAL by sign.
+          row both mentions a dividend and names a security (ISIN).
+
+        Tiers 2-4 all produce DEPOSIT/WITHDRAWAL by sign — the cash is always
+        booked correctly — and differ only in what the caller must then say about
+        it: nothing (tier 3), an INFO notice (tier 4), or a blocking todo (tier 2).
 
         Sign-robust: a positive fee is treated as a refund (DEPOSIT), negative
         income as a clawback (WITHDRAWAL). BRIM sign convention: FEE/TAX and
@@ -608,25 +755,33 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         desc_u = description.upper()
         abs_amt = abs(amount)
 
+        # --- Tier 1: typed ---------------------------------------------------
         # Fees / taxes: securities operation charges, account charges, monthly canone.
         if causale in _ACCT_FEETAX_CAUSALI or (causale in _ACCT_CANONE_CAUSALI and amount < 0):
             if amount > 0:  # refunded charge
-                return TransactionType.DEPOSIT, Currency(code=currency, amount=abs_amt)
+                return TransactionType.DEPOSIT, Currency(code=currency, amount=abs_amt), _TIER_TYPED
             tx_type = TransactionType.TAX if any(kw in desc_u for kw in _TAX_KEYWORDS) else TransactionType.FEE
-            return tx_type, Currency(code=currency, amount=-abs_amt)
+            return tx_type, Currency(code=currency, amount=-abs_amt), _TIER_TYPED
 
         # Income: coupons, dividends, credit interest.
         if causale in _ACCT_INCOME_CAUSALI or (causale in _ACCT_CANONE_CAUSALI and amount > 0):
             if amount < 0:  # clawed-back income
-                return TransactionType.WITHDRAWAL, Currency(code=currency, amount=-abs_amt)
+                return TransactionType.WITHDRAWAL, Currency(code=currency, amount=-abs_amt), _TIER_TYPED
             is_dividend = any(kw in desc_u for kw in _DIVIDEND_KEYWORDS) and _names_an_asset(desc_u)
             tx_type = TransactionType.DIVIDEND if is_dividend else TransactionType.INTEREST
-            return tx_type, Currency(code=currency, amount=abs_amt)
+            return tx_type, Currency(code=currency, amount=abs_amt), _TIER_TYPED
 
-        # Everything else (incl. the cash side of trades) -> deposit/withdrawal by sign.
+        # --- Tiers 2-4: cash by sign, differing only in what we declare -------
+        if causale in _ACCT_UNRESOLVED_CAUSALI:
+            tier = _TIER_UNRESOLVED
+        elif causale in _ACCT_DECLARED_CASH_CAUSALI:
+            tier = _TIER_DECLARED_CASH
+        else:
+            tier = _TIER_UNKNOWN
+
         if amount > 0:
-            return TransactionType.DEPOSIT, Currency(code=currency, amount=abs_amt)
-        return TransactionType.WITHDRAWAL, Currency(code=currency, amount=-abs_amt)
+            return TransactionType.DEPOSIT, Currency(code=currency, amount=abs_amt), tier
+        return TransactionType.WITHDRAWAL, Currency(code=currency, amount=-abs_amt), tier
 
     def _parse_account_movements(self, rows: List[List], broker_id: int) -> BRIMParseOutput:
         """Parse the account "Lista Movimenti Conto" cash-movements layout.
@@ -640,8 +795,9 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         asset in the FIFO lot detail.
         """
         transactions: List[TXCreateItem] = []
-        warnings: List[str] = []
+        warnings: List[BRIMNotice] = []
         validation_issues: List[BRIMValidationIssue] = []
+        field_todos: List[BRIMFieldTodo] = []
         extracted_assets: Dict[int, BRIMExtractedAssetInfo] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -649,7 +805,16 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         def asset_id_for(*, key: str, name: str, isin: Optional[str]) -> int:
             nonlocal next_fake_id
             if key in asset_to_fake_id:
-                return asset_to_fake_id[key]
+                existing_id = asset_to_fake_id[key]
+                # Rows arrive in file order, so a charge on a security can be read before
+                # the coupon that actually names it. The charge can only offer the ISIN as
+                # a placeholder, so let a real name take its place when one turns up.
+                known = extracted_assets[existing_id]
+                current = known.extracted_name or ""
+                upgrade = (current == isin and name != isin) or _is_truncation_of(current, name)
+                if upgrade:
+                    extracted_assets[existing_id] = BRIMExtractedAssetInfo(extracted_symbol=known.extracted_symbol, extracted_isin=known.extracted_isin, extracted_name=name)
+                return existing_id
             new_id = next_fake_id
             asset_to_fake_id[key] = new_id
             extracted_assets[new_id] = BRIMExtractedAssetInfo(
@@ -669,6 +834,21 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
             isin = match.group(0)
             return asset_id_for(key=f"isin:{isin}", name=_income_asset_name(desc, isin), isin=isin)
 
+        def charge_asset_id(desc: str) -> Optional[int]:
+            """Link a securities charge to the instrument it was charged for, by ISIN.
+
+            Keyed exactly like an income row so the fee joins the same security. The name
+            is read from the fragment that follows the ISIN, never from the head of the
+            line: a charge line opens by describing the *charge* ("SPESE STACCO CEDOLA
+            DEL 21/05/2026 DOSSIER: ..."), and taking that text as a name would put the
+            fee's own wording in the user's asset list.
+            """
+            match = _ISIN_RE.search(desc.upper())
+            if match is None:
+                return None
+            isin = match.group(0)
+            return asset_id_for(key=f"isin:{isin}", name=_charge_asset_name(desc, isin), isin=isin)
+
         header_idx = io.find_header_row(rows, ["Data Op.", "Descrizione", "Importo"])
         if header_idx is None:
             raise BRIMParseError("Crédit Agricole account-movements header row not found")
@@ -683,7 +863,33 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
             },
         )
 
+        # Column labels of the real header row, used to render the source row back
+        # to the user as a navigable table. Only the mapped columns are kept, in a
+        # stable order: the raw header also carries the export's filler columns.
+        evidence_cols = [(label, col[key]) for label, key in (("Data Op.", "date"), ("Causale", "causale"), ("Descrizione", "descrizione"), ("Importo", "importo"), ("Divisa", "divisa")) if col.get(key) is not None]
+        evidence_headers = [label for label, _ in evidence_cols]
+
+        def source_row_evidence(row: Sequence, row_num: int, *, comment: Optional[str] = None) -> BRIMEvidence:
+            """The originating file row as a one-row table, so the user can check us.
+
+            Attached to the todo at the moment the plugin gives up, which is the only
+            moment the row is still in hand: re-reading the file preview later would
+            cost a second fetch and, worse, misalign the indexes if the preview
+            truncates or paginates.
+            """
+            return BRIMEvidence(
+                title="Riga del file",
+                headers=evidence_headers,
+                rows=[[io.cell_str(row[cidx]) if cidx < len(row) else "" for _, cidx in evidence_cols]],
+                row_numbers=[row_num],
+                comment=comment,
+            )
+
         income_identity_by_date: Dict = {}
+        # Tier-4 rows, grouped by causale, so an unregistered causale is reported once
+        # with its rows rather than once per row.
+        unknown_causali: Dict[str, List[tuple[int, Sequence]]] = {}
+
         for row in rows[header_idx + 1 :]:
             if io.is_blank_row(row):
                 continue
@@ -722,7 +928,15 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                 continue  # non-movement leftover (blank/meta) — not a real movement
 
             if amount is None:
-                warnings.append(f"Riga {offset}: importo non valido per '{causale}', saltata")
+                warnings.append(
+                    BRIMNotice(
+                        severity="warning",
+                        code="ca_account_invalid_amount",
+                        message=f"Riga {offset}: importo non valido per '{causale}', saltata",
+                        context={"causale": causale, "row": offset},
+                        evidence=[source_row_evidence(row, offset, comment="L'importo di questa riga non è leggibile come numero, quindi la riga è stata scartata.")],
+                    )
+                )
                 continue
             if amount == 0:
                 continue
@@ -744,7 +958,15 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                     # fallback at ``_parse_securities``). With no position and no reported
                     # price we assume a par (100) redemption, so the derived nominal equals
                     # the cash (quantity < 0); flag it for the user to verify.
-                    warnings.append(f"Riga {offset}: scadenza/rimborso '{description}' non collegabile a un titolo (ISIN/nominale non trovati nella stessa data); importata interamente come vendita a valore nominale (par 100, nessuna quota di interesse) — verifica il nominale.")
+                    warnings.append(
+                        BRIMNotice(
+                            severity="warning",
+                            code="ca_account_maturity_unlinked",
+                            message=f"Riga {offset}: scadenza/rimborso '{description}' non collegabile a un titolo (ISIN e nominale non trovati nella stessa data); importata interamente come vendita a valore nominale (par 100, nessuna quota di interesse) — verifica il nominale.",
+                            context={"causale": causale, "row": offset},
+                            evidence=[source_row_evidence(row, offset, comment="Per scorporare il capitale dal premio mi serve il nominale, che di solito ricavo dalla cedola pagata lo stesso giorno. Qui quella cedola non c'è, quindi ho trattato tutto l'importo come rimborso alla pari.")],
+                        )
+                    )
                     model = io.model_bond_maturity(ctv=abs(amount), price=Decimal(100), held_qty=None)
                     fallback_asset_id = asset_id_for(key=f"maturity:{maturity_code or maturity_name}", name=maturity_name, isin=None) if maturity_name else None
                     self._create_transaction(
@@ -801,14 +1023,23 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                         )
                     continue
 
-            tx_type, cash = self._classify_account_row(causale, description, amount, currency)
+            tx_type, cash, tier = self._classify_account_row(causale, description, amount, currency)
             # Coupons (INTEREST) and dividends both name their security by ISIN — link the
             # income to that bond/fund so it shows under the asset in the FIFO lot detail.
             # Bank credit interest ("INTERESSI/COMPETENZE" credit) carries no ISIN and stays
             # unallocated (income_asset_id returns None).
-            asset_id = income_asset_id(description) if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND) else None
+            # A charge on a securities operation names its security by ISIN as often as a
+            # coupon does ("SPESE STACCO CEDOLA ... TIT: IT000..."), so look it up the same
+            # way: a fee attached to the bond it was charged for lands in that bond's cost
+            # basis instead of drifting into unallocated account expenses.
+            if tx_type in (TransactionType.INTEREST, TransactionType.DIVIDEND):
+                asset_id = income_asset_id(description)
+            elif tx_type in (TransactionType.FEE, TransactionType.TAX):
+                asset_id = charge_asset_id(description)
+            else:
+                asset_id = None
 
-            self._create_transaction(
+            created = self._create_transaction(
                 row_num=offset,
                 transactions=transactions,
                 validation_issues=validation_issues,
@@ -823,18 +1054,101 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                 tags=["import", "credit_agricole", _slug_causale(causale)],
             )
 
+            if created is None:
+                continue
+
+            if tier == _TIER_UNRESOLVED:
+                # The money is right, the security is missing. Block rather than guess:
+                # a silent withdrawal loses the position entirely, and the loss only
+                # surfaces much later as an unexplained gap in the cost basis.
+                booked_as = "prelievo" if tx_type == TransactionType.WITHDRAWAL else "versamento"
+                field_todos.append(
+                    BRIMFieldTodo(
+                        tx_index=len(transactions) - 1,
+                        field="asset_id",
+                        severity="blocker",
+                        reason_code="ca_account_trade_unresolved",
+                        message=f"Riga {offset}: operazione su titoli registrata come movimento di cassa perché da questo file non ricavo quantità e strumento. Verificala e completala.",
+                        context={"causale": causale, "row": offset},
+                        evidence=[
+                            source_row_evidence(
+                                row,
+                                offset,
+                                comment=(
+                                    "Questa riga è un'operazione su titoli, ma la descrizione non riporta quantità né codice del titolo. "
+                                    f"L'ho registrata come {booked_as} di cassa: l'importo è giusto, il titolo manca. "
+                                    "Apri la transazione, cambia il tipo in acquisto o vendita e scegli il titolo."
+                                ),
+                            )
+                        ],
+                    )
+                )
+            elif tier == _TIER_UNKNOWN:
+                unknown_causali.setdefault(causale, []).append((offset, row))
+
+            # A charge on a securities operation belongs to the security it was charged
+            # for. This layout names neither, so the charge lands unallocated and silently
+            # skews the cost basis of whatever it belonged to. Flagged as a warning, not a
+            # blocker: the file may genuinely never say, and a fee is still a real expense.
+            if causale in _ACCT_FEETAX_CAUSALI_SECURITIES and tx_type in (TransactionType.FEE, TransactionType.TAX) and asset_id is None:
+                field_todos.append(
+                    BRIMFieldTodo(
+                        tx_index=len(transactions) - 1,
+                        field="asset_id",
+                        severity="warning",
+                        reason_code="ca_account_charge_unallocated",
+                        message=f"Riga {offset}: spesa su operazione titoli non collegata a nessun titolo. Assegnala al titolo giusto, oppure tienila così se riguarda il conto.",
+                        context={"causale": causale, "row": offset},
+                        evidence=[
+                            source_row_evidence(
+                                row,
+                                offset,
+                                comment=(
+                                    "Questa è una spesa o imposta su un'operazione in titoli, ma la descrizione non dice su quale. "
+                                    "Resta a carico del conto invece che del titolo, e il costo di carico di quel titolo risulta più basso del reale. "
+                                    "Scegli il titolo a cui appartiene, oppure tienila com'è se è una spesa di conto."
+                                ),
+                            )
+                        ],
+                    )
+                )
+
+        if unknown_causali:
+            # Not an error: the cash is booked correctly by sign. It is a disclosure —
+            # a causale the registry has never seen may well be a securities operation
+            # in disguise, exactly like COMPRAVENDITA was.
+            total_rows = sum(len(items) for items in unknown_causali.values())
+            warnings.append(
+                BRIMNotice(
+                    severity="info",
+                    code="ca_unknown_causale",
+                    message=(f"{total_rows} righe con {len(unknown_causali)} causali non ancora previste sono state registrate come versamento o prelievo, in base al segno dell'importo. " "Se una di queste è in realtà un'operazione su titoli, correggila prima di importare."),
+                    context={"causali": sorted(unknown_causali), "row_count": total_rows},
+                    evidence=[
+                        BRIMEvidence(
+                            title="Righe con causale non prevista",
+                            headers=evidence_headers,
+                            rows=[[io.cell_str(r[cidx]) if cidx < len(r) else "" for _, cidx in evidence_cols] for items in unknown_causali.values() for _, r in items],
+                            row_numbers=[num for items in unknown_causali.values() for num, _ in items],
+                        )
+                    ],
+                )
+            )
+
         if not transactions:
-            warnings.append("Nessun movimento di conto trovato nel file")
+            warnings.append(BRIMNotice(severity="warning", code="ca_account_empty", message="Nessun movimento di conto trovato nel file"))
 
         logger.info(
             "Crédit Agricole account movements parsed",
             transaction_count=len(transactions),
             warning_count=len(warnings),
+            field_todo_count=len(field_todos),
+            unknown_causale_count=len(unknown_causali),
         )
         return BRIMParseOutput(
             transactions=transactions,
             warnings=warnings,
             validation_issues=validation_issues,
-            field_todos=[],
+            field_todos=field_todos,
             extracted_assets=extracted_assets,
         )

@@ -65,4 +65,3 @@ class SectorItem(BaseModel):
 
 class SectorListResponse(BaseListResponse[SectorItem]):
     """Response for sectors list endpoint."""
-

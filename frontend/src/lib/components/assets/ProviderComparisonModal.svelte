@@ -20,6 +20,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {X} from 'lucide-svelte';
     import {sectorI18nKey} from '$lib/utils/assetTypes';
+    import IdentifierPrimaryChooser, {type IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
 
     // =========================================================================
     // Types
@@ -32,6 +33,25 @@
         currentValue: any;
         providerValue: any;
         selected: boolean; // Checkbox state
+        /**
+         * Present only for `identifier_*` fields (P3/B-04).
+         *
+         * An identifier conflict is not a binary "mine or theirs": both codes can be
+         * legitimate at once. The Italian BTP case is the clearest — the security is
+         * issued under a non-tradeable "CUM" ISIN and traded under a quoted one, and
+         * LibreFolio models them as a single asset. Forcing a replacement here is what
+         * pushed beta testers into creating duplicates.
+         *
+         * When set, the row renders an inline primary chooser instead of a checkbox:
+         * the chosen value becomes the field, the rest are merged into
+         * `identifier_other`. Non-identifier rows keep the original binary behaviour.
+         */
+        resolution?: {
+            /** The value that will land in the structured column. */
+            primary: string;
+            /** The values that will be merged into `identifier_other`. */
+            alternates: string[];
+        };
     }
 
     // =========================================================================
@@ -73,11 +93,17 @@
     interface Props {
         open?: boolean;
         differences: DiffItem[];
-        onapply?: (selectedFields: string[]) => void;
+        /** Asset name, used by the inline identifier chooser. */
+        assetName?: string;
+        /**
+         * Applied fields, plus the resolved identifier decisions.
+         * `resolutions` is keyed by field name and only carries `identifier_*` rows.
+         */
+        onapply?: (selectedFields: string[], resolutions: Record<string, {primary: string; alternates: string[]}>) => void;
         oncancel?: () => void;
     }
 
-    let {open = $bindable(false), differences = [], onapply, oncancel}: Props = $props();
+    let {open = $bindable(false), differences = [], assetName = '', onapply, oncancel}: Props = $props();
 
     // =========================================================================
     // State — local copy for checkbox management
@@ -88,9 +114,35 @@
     // Sync from props when modal opens
     $effect(() => {
         if (open && differences.length > 0) {
-            items = differences.map((d) => ({...d, selected: true}));
+            items = differences.map((d) => ({
+                ...d,
+                selected: true,
+                // Identifier rows default to keeping the provider's value as primary — it
+                // is the quoted one — with the local value demoted to an alternate rather
+                // than discarded.
+                resolution: isIdentifierField(d.field) ? {primary: String(d.providerValue ?? ''), alternates: [String(d.currentValue ?? '')].filter((v) => v !== '' && v !== String(d.providerValue ?? ''))} : undefined,
+            }));
         }
     });
+
+    /** Identifier rows get the three-outcome treatment; everything else stays binary. */
+    function isIdentifierField(field: string): boolean {
+        return field.startsWith('identifier_');
+    }
+
+    /** Build the chooser input, tagging each value with where it came from. */
+    function choicesFor(item: DiffItem): IdentifierChoice[] {
+        const out: IdentifierChoice[] = [];
+        const provider = String(item.providerValue ?? '').trim();
+        const current = String(item.currentValue ?? '').trim();
+        if (provider) out.push({value: provider, origin: 'provider'});
+        if (current) out.push({value: current, origin: 'stored'});
+        return out;
+    }
+
+    function setResolution(index: number, primary: string, alternates: string[]): void {
+        items = items.map((item, i) => (i === index ? {...item, resolution: {primary, alternates}} : item));
+    }
 
     // =========================================================================
     // Derived
@@ -144,8 +196,13 @@
     }
 
     function handleApply() {
-        const selectedFields = items.filter((i) => i.selected).map((i) => i.field);
-        onapply?.(selectedFields);
+        const selected = items.filter((i) => i.selected);
+        const selectedFields = selected.map((i) => i.field);
+        const resolutions: Record<string, {primary: string; alternates: string[]}> = {};
+        for (const item of selected) {
+            if (isIdentifierField(item.field) && item.resolution) resolutions[item.field] = item.resolution;
+        }
+        onapply?.(selectedFields, resolutions);
         open = false;
     }
 
@@ -217,53 +274,68 @@
                         <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{item.label}</span>
                     </label>
 
-                    <!-- Values grid: Current → Provider -->
-                    <div class="grid grid-cols-[1fr_auto_1fr] gap-2 mt-2 items-center">
-                        <!-- Current box -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded p-2">
-                            <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
-                                {$t('assets.comparison.currentValue')}
-                            </span>
-                            {#if item.type === 'distribution'}
-                                <div class="text-xs space-y-0.5">
-                                    {#each formatDistribution(item.currentValue?.distribution ?? item.currentValue) as entry}
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
-                                            <span class="font-mono text-gray-700 dark:text-gray-300">{entry.pct}</span>
-                                        </div>
-                                    {:else}
-                                        <span class="text-gray-400 italic">—</span>
-                                    {/each}
-                                </div>
-                            {:else}
-                                <div class="text-xs font-mono text-gray-600 dark:text-gray-400">{truncate(item.currentValue)}</div>
-                            {/if}
+                    {#if isIdentifierField(item.field)}
+                        <!-- Identifier: three outcomes, not two — keep both and pick the primary. -->
+                        <div class="mt-2 {item.selected ? '' : 'opacity-40 pointer-events-none'}">
+                            <IdentifierPrimaryChooser
+                                choices={choicesFor(item)}
+                                {assetName}
+                                typeLabel={item.label}
+                                isIsin={item.field === 'identifier_isin'}
+                                primary={item.resolution?.primary ?? null}
+                                testid="comparison-chooser-{item.field}"
+                                onchange={(primary, alternates) => setResolution(index, primary, alternates)}
+                            />
                         </div>
+                    {:else}
+                        <!-- Values grid: Current → Provider -->
+                        <div class="grid grid-cols-[1fr_auto_1fr] gap-2 mt-2 items-center">
+                            <!-- Current box -->
+                            <div class="bg-gray-50 dark:bg-slate-800 rounded p-2">
+                                <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
+                                    {$t('assets.comparison.currentValue')}
+                                </span>
+                                {#if item.type === 'distribution'}
+                                    <div class="text-xs space-y-0.5">
+                                        {#each formatDistribution(item.currentValue?.distribution ?? item.currentValue) as entry}
+                                            <div class="flex justify-between">
+                                                <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
+                                                <span class="font-mono text-gray-700 dark:text-gray-300">{entry.pct}</span>
+                                            </div>
+                                        {:else}
+                                            <span class="text-gray-400 italic">—</span>
+                                        {/each}
+                                    </div>
+                                {:else}
+                                    <div class="text-xs font-mono text-gray-600 dark:text-gray-400">{truncate(item.currentValue)}</div>
+                                {/if}
+                            </div>
 
-                        <!-- Arrow (perfectly centered between boxes) -->
-                        <div class="text-gray-400 dark:text-gray-500 text-lg font-light">→</div>
+                            <!-- Arrow (perfectly centered between boxes) -->
+                            <div class="text-gray-400 dark:text-gray-500 text-lg font-light">→</div>
 
-                        <!-- Provider box -->
-                        <div class="bg-green-50 dark:bg-green-900/20 rounded p-2">
-                            <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
-                                {$t('assets.comparison.providerValue')}
-                            </span>
-                            {#if item.type === 'distribution'}
-                                <div class="text-xs space-y-0.5">
-                                    {#each formatDistribution(item.providerValue?.distribution ?? item.providerValue) as entry}
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
-                                            <span class="font-mono text-libre-green dark:text-green-400">{entry.pct}</span>
-                                        </div>
-                                    {:else}
-                                        <span class="text-gray-400 italic">—</span>
-                                    {/each}
-                                </div>
-                            {:else}
-                                <div class="text-xs font-mono text-libre-green dark:text-green-400">{truncate(item.providerValue)}</div>
-                            {/if}
+                            <!-- Provider box -->
+                            <div class="bg-green-50 dark:bg-green-900/20 rounded p-2">
+                                <span class="text-[10px] uppercase text-gray-400 block mb-0.5">
+                                    {$t('assets.comparison.providerValue')}
+                                </span>
+                                {#if item.type === 'distribution'}
+                                    <div class="text-xs space-y-0.5">
+                                        {#each formatDistribution(item.providerValue?.distribution ?? item.providerValue) as entry}
+                                            <div class="flex justify-between">
+                                                <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
+                                                <span class="font-mono text-libre-green dark:text-green-400">{entry.pct}</span>
+                                            </div>
+                                        {:else}
+                                            <span class="text-gray-400 italic">—</span>
+                                        {/each}
+                                    </div>
+                                {:else}
+                                    <div class="text-xs font-mono text-libre-green dark:text-green-400">{truncate(item.providerValue)}</div>
+                                {/if}
+                            </div>
                         </div>
-                    </div>
+                    {/if}
                 </div>
             {/each}
         {/each}
