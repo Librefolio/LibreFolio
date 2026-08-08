@@ -181,7 +181,8 @@
       "quoteBaseTooltip": "Specifies how many shares or units the market price refers to. For ETFs or stocks it is typically 1; bonds are usually quoted on a base of 100.",
       "bondQuoteBaseHint": "Bonds are usually quoted per 100 nominal (e.g. BTP): check this value — it's typically 100.",
       "activeTooltip": "If active, the asset will be updated automatically by the scheduler and remain visible in selectors. Disable it to hide the asset when you no longer own it or do not want to keep downloading prices.",
-      "quoteBaseMin": "Must be at least 1"
+      "quoteBaseMin": "Must be at least 1",
+      "quoteBaseInteger": "Whole numbers only"
     },
     "provider": {
       "assignment": "Provider Assignment",
