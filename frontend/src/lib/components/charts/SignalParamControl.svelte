@@ -7,6 +7,7 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import SignalAssetParamControl from './SignalAssetParamControl.svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
         descriptor: SignalParamDescriptor;
         value: unknown;
@@ -70,6 +71,7 @@
         <div class="flex items-center gap-1">
             <input
                 type="number"
+                use:numericArrows
                 value={numberValue()}
                 min={descriptor.min}
                 max={descriptor.max}

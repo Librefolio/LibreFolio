@@ -101,6 +101,33 @@
       "resultDeleted": "supprimé",
       "resultHasTransactions": "a des transactions existantes"
     },
+    "merge": {
+      "title": "Fusionner des actifs",
+      "subtitle": "Deux entrées du même instrument n'en font plus qu'une. Rien n'est perdu : ce qui n'est pas principal est conservé comme identifiant alternatif.",
+      "chooseTarget": "Quel actif voulez-vous conserver ?",
+      "chooseTargetHint": "L'autre est supprimé et son historique est déplacé ici. Les actifs inactifs peuvent aussi être choisis.",
+      "targetPlaceholder": "Choisir un actif…",
+      "noTargets": "Il n'y a aucun autre actif avec lequel fusionner.",
+      "whatMoves": "Ce qui est déplacé",
+      "movesNothing": "Cet actif n'a aucun historique à déplacer.",
+      "moved": {
+        "transactions": "Transactions",
+        "prices": "Prix",
+        "pricesDiscarded": "Prix écartés (l'actif conservé a déjà ce jour)",
+        "events": "Événements",
+        "eventsDiscarded": "Événements en double écartés",
+        "relinked": "Transactions rattachées à l'événement conservé",
+        "providerMoved": "Fournisseur de prix déplacé",
+        "providerDropped": "Fournisseur de prix écarté (l'actif conservé en a déjà un)"
+      },
+      "identifiersKept": "Identifiants conservés comme alternatifs",
+      "identifiersKeptHint": "Ils continueront à reconnaître cet actif lors des prochains imports.",
+      "destructiveWarning": "\"{name}\" sera supprimé. Cette action est irréversible.",
+      "confirmButton": "Fusionner et supprimer",
+      "toastOk": "{source} fusionné dans {target}",
+      "errorGeneric": "Échec de la fusion",
+      "action": "Fusionner avec…"
+    },
     "types": {
       "STOCK": "Action",
       "ETF": "ETF",
@@ -130,7 +157,9 @@
         "message": "Un actif nommé « {name} » existe déjà. Il peut s'agir du même instrument sous un nom différent. Voulez-vous l'utiliser et ajouter les clés de recherche de l'import à ses identifiants ?",
         "useAndAdd": "L'utiliser et ajouter la clé",
         "useOnly": "L'utiliser sans ajouter",
-        "changeName": "Non, changer le nom"
+        "changeName": "Non, changer le nom",
+        "messagePlain": "Un actif nommé « {name} » existe déjà. Il peut s'agir du même instrument sous un nom différent.",
+        "use": "L'utiliser"
       },
       "importNotices": {
         "intro": "Il peut s'agir d'un titre ancien, arrivé à échéance ou remboursé et qui n'est plus coté : la recherche en ligne pourrait ne pas le trouver. Dans ce cas, créez un actif simple en saisissant les données manuellement ; vous pouvez le marquer comme inactif via le bouton dans le pied de page.",
@@ -151,7 +180,8 @@
       "quoteBaseQuantity": "Unités par prix unitaire",
       "quoteBaseTooltip": "Indique à combien de titres ou d'unités le prix de marché se réfère. Pour les ETF ou les actions c'est généralement 1 ; les obligations sont généralement cotées sur une base 100.",
       "bondQuoteBaseHint": "Les obligations sont généralement cotées pour 100 de nominal (ex. BTP) : vérifiez cette valeur — elle est généralement de 100.",
-      "activeTooltip": "Si l'actif est actif, il sera mis à jour automatiquement par le planificateur et restera visible dans les sélecteurs. Désactivez-le pour le masquer lorsque vous ne le détenez plus et que vous ne souhaitez plus télécharger ses prix."
+      "activeTooltip": "Si l'actif est actif, il sera mis à jour automatiquement par le planificateur et restera visible dans les sélecteurs. Désactivez-le pour le masquer lorsque vous ne le détenez plus et que vous ne souhaitez plus télécharger ses prix.",
+      "quoteBaseMin": "Doit être au moins 1"
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
@@ -227,7 +257,20 @@
       "deleteConfirmMessage": "Supprimer {n} identifiants ?",
       "otherLabel": "Autres identifiants",
       "otherPlaceholder": "Saisissez un code ou nom, puis Entrée ou virgule",
-      "otherSeparatorsHint": "Ajoutez un identifiant à la fois — appuyez sur Entrée, virgule (,), point-virgule (;) ou Tab pour valider. Les espaces sont conservés dans la valeur."
+      "otherSeparatorsHint": "Ajoutez un identifiant à la fois — appuyez sur Entrée, virgule (,), point-virgule (;) ou Tab pour valider. Les espaces sont conservés dans la valeur.",
+      "primaryChooser": {
+        "title": "Quel {type} est le principal pour «{asset}» ?",
+        "titleGeneric": "Quel identifiant est le principal pour «{asset}» ?",
+        "hint": "Les autres sont conservés comme identifiants alternatifs et serviront à reconnaître cet actif lors des prochains imports.",
+        "originProvider": "du fournisseur",
+        "originReport": "du rapport",
+        "originStored": "déjà enregistré",
+        "btpNote": "Les BTP italiens achetés à l'émission (\"CUM\") portent un ISIN différent de celui négociable : le premier donne droit à la prime de fidélité mais n'est pas coté. Gardez comme principal celui qui est **coté** — c'est le seul avec un prix.",
+        "keepAlternates": "Conservés comme alternatifs :",
+        "confirm": "Confirmer",
+        "cancel": "Annuler",
+        "skip": "Ne pas enregistrer"
+      }
     },
     "confirm": {
       "saveWithoutTest": "Enregistrer sans test ?",
@@ -441,7 +484,7 @@
     },
     "possibleDuplicate": "Doublon possible",
     "todoBlockerCommitHint": "Complétez tous les champs requis avant de sauvegarder",
-    "todoWarningVerifyHint": "{n} champ(s) auto-dérivé(s) à vérifier avant d'enregistrer",
+    "todoWarningVerifyHint": "{n, plural, one {# champ auto-dérivé à vérifier avant d'enregistrer} other {# champs auto-dérivés à vérifier avant d'enregistrer}}",
     "todoWarningConfirmTitle": "Vérifier les champs auto-dérivés ?",
     "todoWarningConfirmMessage": "{n} ligne(s) ont une valeur auto-dérivée pas encore vérifiée (p. ex. la quantité nominale des obligations arrivées à échéance). Vérifiez-les, ou enregistrez quand même si les valeurs dérivées sont correctes.",
     "todoWarningConfirmItemsLabel": "{n} champ(s) à vérifier",
@@ -514,7 +557,12 @@
       "duplicateBadge": "doublon",
       "similarityTotal": "Chevauchement total",
       "similarityPartial": "Partiel",
-      "similarityTooltip": "Total : chaque ligne a une correspondance entre les fichiers. Partiel : au moins une ligne n'a pas de jumeau exact — vérifiez avant d'importer."
+      "similarityTooltip": "Total : chaque ligne a une correspondance entre les fichiers. Partiel : au moins une ligne n'a pas de jumeau exact — vérifiez avant d'importer.",
+      "statusAllAuto": "Tout résolu automatiquement",
+      "statusToVerify": "{n} à vérifier",
+      "tierTotalTitle": "Chevauchement total",
+      "tierPartialTitle": "Chevauchement partiel",
+      "groupCount": "{n} groupes"
     },
     "duplicatesSelectedTip": "Compte uniquement les lignes en double encore sélectionnées (elles seront importées). Les doublons exacts du lot sont déjà désélectionnés et non comptés ici.",
     "deselectReasons": {
@@ -531,8 +579,56 @@
       "dbColumn": "BDD #{id}",
       "hint": "Les champs surlignés diffèrent entre les transactions.",
       "openHint": "Cliquez pour comparer côte à côte",
-      "openAction": "Comparer"
-    }
+      "openAction": "Comparer",
+      "keptCount": "Vous en gardez {n} sur {total}"
+    },
+    "noticeConfirmTitle": "Notes de l'importateur",
+    "noticeConfirmMessage": "{n, plural, one {L'import a laissé # note expliquant un choix effectué. Lisez-la avant de continuer.} other {L'import a laissé # notes expliquant les choix effectués. Lisez-les avant de continuer.}}",
+    "todoBlockerVerifyHint": "{n, plural, one {# ligne n'a pas été entièrement comprise par l'import et doit être vérifiée avant l'enregistrement.} other {# lignes n'ont pas été entièrement comprises par l'import et doivent être vérifiées avant l'enregistrement.}}",
+    "parseErrorsTitle": "{n} fichier(s) n'ont pas pu être analysés",
+    "brimNotice": {
+      "ca_succession_transfer_in": "Des titres transférés depuis un autre dossier ont été identifiés ({n} lignes).\nIls ont été enregistrés comme transactions de type «Ajustement» car ils n'ont aucun mouvement d'espèces associé : on suppose donc qu'ils vous appartenaient déjà chez un autre courtier.\nSi c'est le cas, et si ce courtier est suivi dans LibreFolio, lors de l'import de l'autre moitié de la transaction le système proposera de relier les deux et de les convertir en «Transfert de titres».\nVoici les lignes en détail :"
+    },
+    "evidenceRowsTitle": "Lignes du fichier",
+    "evidenceRowCount": "{n} lignes",
+    "noticeSectionInfo": "Notes d'information",
+    "noticeSectionWarning": "À vérifier",
+    "manualFieldsTooltip": "Les transactions listées ci-dessous peuvent être erronées : l'import n'a pas pu déduire seul tous les champs. Il vous sera demandé de les corriger avant l'enregistrement de l'import.",
+    "stepFixTitle": "Corrections",
+    "stepDuplicatesTitle": "Doublons",
+    "fixStep": {
+      "intro": "Ces lignes ont été enregistrées, mais le fichier n'en dit pas assez pour en être sûr. Réglez-les maintenant : le contrôle des doublons qui suit compare chaque ligne à votre base de données, et une ligne classée sous le mauvais type est comparée aux mauvaises choses.",
+      "pending": "{n, plural, one {# ligne encore à régler} other {# lignes encore à régler}}",
+      "settled": "{n, plural, one {# réglée} other {# réglées}}",
+      "allDone": "Plus rien à corriger",
+      "allDoneDetail": "{n, plural, =0 {Rien à corriger.} one {# ligne réglée. Vous pouvez continuer.} other {# lignes réglées. Vous pouvez continuer.}}",
+      "apply": "Appliquer la correction",
+      "acceptAsIs": "Garder tel quel",
+      "acceptAsIsHint": "Garder tel quel est un choix délibéré : la ligne est importée telle que l'importateur l'a enregistrée.",
+      "badgeCorrected": "Corrigée",
+      "badgeKept": "Conservée",
+      "applyAgain": "Mettre à jour",
+      "acceptAll": "{n, plural, one {Conserver la ligne restante telle quelle} other {Conserver les # lignes restantes telles quelles}}",
+      "acceptAllHint": "Accepte la lecture du plugin pour toutes les lignes en attente. Vous pourrez encore les modifier ensuite.",
+      "assetFromDb": "Actifs déjà catalogués",
+      "assetPlaceholder": "Choisissez parmi les instruments trouvés dans ces fichiers",
+      "assetCreate": "Créer un nouvel actif",
+      "groupTrades": "Mouvements d'espèces pouvant être des opérations",
+      "groupTradesHint": "Enregistrés comme dépôt ou retrait car le fichier ne donne ni quantité ni instrument. S'il s'agissait d'un achat ou d'une vente, corrigez-les maintenant.",
+      "groupCharges": "Frais et taxes sans instrument",
+      "groupChargesHint": "Frais ou taxes sur opérations sur titres que le fichier ne rattache à aucun instrument. Affectez-les au bon titre, ou gardez-les tels quels s'ils concernent le compte.",
+      "assetNone": "Aucun instrument (frais du courtier)",
+      "reset": "Restaurer",
+      "resetHint": "Remet la ligne telle qu’elle a été lue dans le fichier, en annulant la réponse donnée ici.",
+      "resetAll": "Tout restaurer ({n})",
+      "resetAllHint": "Remet toutes les lignes déjà traitées telles qu’elles ont été lues dans le fichier."
+    },
+    "duplicatesStepIntro": "Certaines lignes figurent dans plusieurs des fichiers que vous importez : choisissez la copie à garder. La comparaison avec votre base a déjà été refaite sur les lignes corrigées et arrive prête à la révision.",
+    "duplicateRecheckFailed": "Impossible de revérifier les doublons ({error}). Le résultat affiché est celui calculé avant vos corrections.",
+    "evidenceOpenFile": "Ligne {n} du fichier",
+    "evidenceOpenFileHint": "Ouvrir l'aperçu du fichier sur cette ligne, pour voir aussi les lignes voisines.",
+    "inspectAsset": "Inspecter / modifier",
+    "inspectAssetHint": "Ouvre l’instrument sélectionné pour vérifier sa devise, ses identifiants et sa source de prix."
   },
   "brokers": {
     "title": "Courtiers",
@@ -1337,7 +1433,9 @@
       "yearsShort": "A"
     },
     "today": "Aujourd'hui",
-    "resolvingStart": "Recherche…"
+    "resolvingStart": "Recherche…",
+    "openCalendar": "Ouvrir le calendrier",
+    "formatHint": "Saisissez la date ou choisissez-la dans le calendrier. Formats acceptés : 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’année doit être écrite en entier."
   },
   "error": {
     "pageNotFound": "Page Non Trouvée",
@@ -2118,7 +2216,8 @@
     },
     "size": "Taille",
     "zoomIn": "Zoom avant",
-    "zoomOut": "Zoom arrière"
+    "zoomOut": "Zoom arrière",
+    "previewAutofitHint": "Double-cliquez sur l’en-tête d’une colonne pour ajuster sa largeur"
   },
   "donationPopup": {
     "title": "LibreFolio grandit grâce à des utilisateurs comme vous !",

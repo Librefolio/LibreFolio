@@ -60,6 +60,19 @@ export type BrimParseResponse = z.infer<typeof schemas.BRIMParseResponse>;
 export type BrimValidationIssue = z.infer<typeof schemas.BRIMValidationIssue>;
 
 /**
+ * A source-data table backing a notice or a field todo.
+ * Rendered as a navigable table next to the human-readable comment.
+ */
+export type BrimEvidence = z.infer<typeof schemas.BRIMEvidence>;
+
+/**
+ * Parser notice: an `info` or `warning` message with optional evidence tables.
+ * Plugins may still emit plain strings; the backend coerces them to a
+ * `warning` notice, so this type is always the shape received by the frontend.
+ */
+export type BrimNotice = z.infer<typeof schemas.BRIMNotice>;
+
+/**
  * Field todo: an accepted TX with a field intentionally left incomplete.
  */
 export type BrimFieldTodo = z.infer<typeof schemas.BRIMFieldTodo>;

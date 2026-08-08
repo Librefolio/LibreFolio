@@ -19,6 +19,9 @@ from backend.app.schemas.assets import (
     FAAinfoFiltersRequest,
     # Asset CRUD schemas
     FAAssetCreateItem,
+    # Asset merge schemas
+    FAAssetMergeRequest,
+    FAAssetMergeResponse,
     FAAssetMetadataResponse,
     # Asset PATCH schemas
     FAAssetPatchItem,
@@ -337,6 +340,52 @@ async def delete_assets_bulk(
         return await AssetCRUDService.delete_assets_bulk(asset_ids, session)
     except Exception as e:
         logger.error(f"Error in bulk asset deletion: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@asset_router.post("/merge", response_model=FAAssetMergeResponse, tags=["FA CRUD"])
+async def merge_assets(
+    payload: FAAssetMergeRequest,
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """
+    Merge two assets that describe the same instrument, keeping ``target_asset_id``.
+
+    Typical case: an Italian BTP booked twice because the placement ("CUM") ISIN and
+    the tradeable market ISIN were treated as two instruments. Transactions, prices
+    and events converge on the target; every identifier survives, either as primary
+    or inside ``identifier_other``; the source asset is **deleted**.
+
+    Collision policy: on the same price date the **target row wins**; duplicate events
+    are dropped after remapping the transactions that realized them.
+
+    Use ``dry_run: true`` to obtain the preview shown in the confirmation dialog
+    without writing anything.
+
+    **Request Example**:
+    ```json
+    {
+      "source_asset_id": 42,
+      "target_asset_id": 7,
+      "identifier_primaries": {"identifier_isin": "IT0005634800"},
+      "dry_run": true
+    }
+    ```
+    """
+    try:
+        return await AssetCRUDService.merge_assets(
+            source_asset_id=payload.source_asset_id,
+            target_asset_id=payload.target_asset_id,
+            session=session,
+            identifier_primaries=payload.identifier_primaries,
+            dry_run=payload.dry_run,
+        )
+    except AssetSourceError as e:
+        status = 404 if e.error_code == "NOT_FOUND" else 400
+        raise HTTPException(status_code=status, detail=str(e)) from e
+    except Exception as e:
+        logger.error(f"Error merging assets: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

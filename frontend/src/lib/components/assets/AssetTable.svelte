@@ -11,7 +11,7 @@
     import {_ as t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef} from '$lib/components/table/types';
-    import {RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
+    import {Merge, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo, currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {assetProviderBadgeHtml, assetProvidersVersion, ensureAssetProvidersCached} from '$lib/utils/providerHelpers';
@@ -53,10 +53,11 @@
         onsync?: (asset: AssetRow) => void;
         onrefresh?: (asset: AssetRow) => void;
         ondelete?: (asset: AssetRow) => void;
+        onmerge?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onselectionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
@@ -307,6 +308,12 @@
                     }
                 },
                 iconClass: (row) => (refreshingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
+            },
+            {
+                id: 'merge',
+                label: () => $t('assets.merge.action'),
+                icon: Merge,
+                onClick: (row) => onmerge?.(row),
             },
             {
                 id: 'delete',

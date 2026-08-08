@@ -10,6 +10,7 @@
     import {findCompatibleAiExportSelection, selectionsForDomain, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
     import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
     import {AI_EXPORT_DETAIL_LEVELS, resolveDefaultDetailLevel} from './catalog/shared';
+    import {numericArrows} from '$lib/actions/numericArrows';
     import {
         AI_EXPORT_PERIOD_PRESETS,
         AI_EXPORT_PERIOD_UNITS,
@@ -260,7 +261,7 @@
             {/each}
             {#if periodPreset === 'custom'}
                 <div class="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-purple-400/40 bg-purple-500/10 px-1.5 py-0.5" data-testid="ai-export-period-custom">
-                    <input type="number" min="1" max="999" step="1" bind:value={customAmount} disabled={controlsDisabled} class="w-8 appearance-none bg-transparent text-center text-xs outline-none" data-testid="ai-export-period-custom-amount" />
+                    <input type="number" use:numericArrows min="1" max="999" step="1" bind:value={customAmount} disabled={controlsDisabled} class="w-8 appearance-none bg-transparent text-center text-xs outline-none" data-testid="ai-export-period-custom-amount" />
                     <SimpleSelect
                         value={customUnit}
                         options={AI_EXPORT_PERIOD_UNITS.map((unit) => ({value: unit, label: labels.periodUnitShortLabels[unit], searchText: labels.periodUnitLabels[unit]}))}

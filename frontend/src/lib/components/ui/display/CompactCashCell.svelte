@@ -20,7 +20,7 @@
     import type {SignRule} from '$lib/stores/transactions/transactionTypeStore';
     import CurrencySearchSelect from '../select/CurrencySearchSelect.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
 
     interface CashValue {
@@ -98,6 +98,14 @@
         emit();
     }
 
+    /** Arrow keys step the amount, as they did while this was a number input. */
+    function handleAmountKeydown(e: KeyboardEvent) {
+        const stepped = decimalArrowStep(e, amountStr);
+        if (stepped === null) return;
+        amountStr = stepped;
+        emit();
+    }
+
     function handleCurrencyChange(next: string) {
         code = next;
         emit();
@@ -115,7 +123,7 @@
 </script>
 
 <div class="compact-cash" class:sign-ok={signOk} class:sign-bad={signBad} data-testid={testid}>
-    <input type="text" inputmode="decimal" autocomplete="off" class="amount-input" value={amountStr} oninput={handleAmountInput} onblur={handleBlur} placeholder={amountPlaceholder} disabled={disabled || amountDisabled} data-testid={`${testid}-amount`} />
+    <input type="text" inputmode="decimal" autocomplete="off" class="amount-input" value={amountStr} oninput={handleAmountInput} onkeydown={handleAmountKeydown} onblur={handleBlur} placeholder={amountPlaceholder} disabled={disabled || amountDisabled} data-testid={`${testid}-amount`} />
     <div class="currency-wrap">
         <CurrencySearchSelect bind:value={code} compact={true} disabled={disabled || currencyDisabled} onchange={handleCurrencyChange} {originalCurrency} {allowedCurrencies} />
         <span class="sr-only" data-testid={`${testid}-currency`}>{code}</span>

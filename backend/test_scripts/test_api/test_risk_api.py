@@ -59,9 +59,7 @@ async def fixture_user_id() -> int:
 
     if user_id is None:
         pytest.fail(
-            f"Test database is not populated: user '{FIXTURE_USERNAME}' is missing.\n"
-            "These tests run real analytics against the mock portfolio, so they need the fixtures.\n"
-            "Seed them with: ./dev.py test db populate --force",
+            f"Test database is not populated: user '{FIXTURE_USERNAME}' is missing.\n" "These tests run real analytics against the mock portfolio, so they need the fixtures.\n" "Seed them with: ./dev.py test db populate --force",
         )
     return user_id
 

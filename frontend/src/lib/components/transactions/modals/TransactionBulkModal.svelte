@@ -27,10 +27,11 @@
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload} from 'lucide-svelte';
+    import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload, ChevronDown, ChevronRight} from 'lucide-svelte';
 
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import BrimEvidenceTable from '$lib/components/transactions/import/BrimEvidenceTable.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -1978,6 +1979,12 @@
     let hasPairedDelete = $derived(visibleOps.some((d) => deriveStatus(d) === 'delete' && getPartnerOp(d.tempId) != null));
     let actionCount = $derived(newCount + editedCount + deleteCount + pendingSplits.length + pendingPromotes.length);
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
+    /** Blocker todos with their row position, so the banner can name the offending rows.
+     *  Without this the user only sees a red row and a disabled Save, never the reason. */
+    let todoBlockerEntries = $derived(ops.flatMap((op, rowIdx) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowNumber: rowIdx + 1, date: op.fields.date, todo}))));
+    // Folded by default: with evidence tables attached, an expanded banner can be taller
+    // than the viewport and push the grid — the thing the user has to fix — off-screen.
+    let todoBlockersExpanded = $state(false);
     let todoWarningRowCount = $derived(ops.filter((op) => op.todos?.some((t) => t.severity === 'warning')).length);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
     let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((t) => t.message || t.field)));
@@ -2844,6 +2851,33 @@
                 <InfoBanner variant="info">
                     <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.deleteModal.splitHint')}</p>
                 </InfoBanner>
+            {/if}
+            {#if todoBlockerEntries.length > 0}
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs" data-testid="tx-bulk-todo-blockers">
+                    <button type="button" class="flex w-full items-center gap-1.5 p-3 text-left font-medium text-red-800 dark:text-red-200" onclick={() => (todoBlockersExpanded = !todoBlockersExpanded)} data-testid="tx-bulk-todo-blockers-toggle">
+                        {#if todoBlockersExpanded}
+                            <ChevronDown size={14} class="shrink-0" />
+                        {:else}
+                            <ChevronRight size={14} class="shrink-0" />
+                        {/if}
+                        <span class="min-w-0 flex-1">🔴 {$t('importWizard.todoBlockerVerifyHint', {values: {n: todoBlockerEntries.length}})}</span>
+                    </button>
+                    {#if todoBlockersExpanded}
+                        <ul class="max-h-72 space-y-2 overflow-y-auto px-3 pb-3">
+                            {#each todoBlockerEntries as entry}
+                                <li class="space-y-1.5">
+                                    <p class="text-red-700 dark:text-red-300 leading-relaxed">
+                                        <span class="font-mono opacity-70">#{entry.rowNumber}</span>
+                                        {entry.todo.message}
+                                    </p>
+                                    {#each entry.todo.evidence ?? [] as evidence}
+                                        <BrimEvidenceTable {evidence} tone="blocker" collapsible />
+                                    {/each}
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                </div>
             {/if}
             {#if todoWarningRowCount > 0}
                 <InfoBanner variant="warning">

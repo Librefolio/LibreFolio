@@ -23,6 +23,7 @@
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -541,6 +542,7 @@
                         {:else if field.type === 'number'}
                             <input
                                 type="number"
+                                use:numericArrows
                                 value={paramsValues[field.key] ?? field.default ?? ''}
                                 placeholder={field.placeholder ?? ''}
                                 oninput={(e) => {

@@ -101,6 +101,33 @@
       "resultDeleted": "eliminato",
       "resultHasTransactions": "ha transazioni esistenti"
     },
+    "merge": {
+      "title": "Unisci asset",
+      "subtitle": "Due voci dello stesso strumento diventano una. Non si perde nulla: ciò che non è principale resta come identificativo alternativo.",
+      "chooseTarget": "Quale asset vuoi tenere?",
+      "chooseTargetHint": "L'altro viene eliminato e la sua storia si sposta qui. Si possono scegliere anche gli asset inattivi.",
+      "targetPlaceholder": "Scegli un asset…",
+      "noTargets": "Non c'è nessun altro asset con cui unire.",
+      "whatMoves": "Cosa viene spostato",
+      "movesNothing": "Questo asset non ha storia da spostare.",
+      "moved": {
+        "transactions": "Transazioni",
+        "prices": "Prezzi",
+        "pricesDiscarded": "Prezzi scartati (l'asset che resta ha già quel giorno)",
+        "events": "Eventi",
+        "eventsDiscarded": "Eventi duplicati scartati",
+        "relinked": "Transazioni ricollegate all'evento che resta",
+        "providerMoved": "Provider di prezzo spostato",
+        "providerDropped": "Provider di prezzo scartato (l'asset che resta ne ha già uno)"
+      },
+      "identifiersKept": "Identificativi tenuti come alternativi",
+      "identifiersKeptHint": "Continueranno a riconoscere questo asset nei prossimi import.",
+      "destructiveWarning": "\"{name}\" verrà eliminato. L'operazione non è reversibile.",
+      "confirmButton": "Unisci ed elimina",
+      "toastOk": "{source} unito a {target}",
+      "errorGeneric": "Unione non riuscita",
+      "action": "Unisci con…"
+    },
     "types": {
       "STOCK": "Azione",
       "ETF": "ETF",
@@ -130,7 +157,9 @@
         "message": "Esiste già un asset chiamato \"{name}\". Potrebbe essere lo stesso strumento con un nome diverso. Vuoi usarlo e aggiungere le chiavi di ricerca dell'import ai suoi identificatori?",
         "useAndAdd": "Usalo e aggiungi la chiave",
         "useOnly": "Usalo senza aggiungere",
-        "changeName": "No, cambio il nome"
+        "changeName": "No, cambio il nome",
+        "messagePlain": "Esiste già un asset chiamato \"{name}\". Potrebbe essere lo stesso strumento con un nome diverso.",
+        "use": "Usalo"
       },
       "importNotices": {
         "intro": "Potrebbe trattarsi di un titolo vecchio, scaduto o rimborsato e non più quotato: la ricerca online potrebbe non trovarlo. In tal caso crea un asset semplice inserendo i dati a mano; puoi impostarlo come inattivo dal toggle nel footer.",
@@ -151,7 +180,8 @@
       "quoteBaseQuantity": "Unità per singolo prezzo",
       "quoteBaseTooltip": "Specifica a quanti titoli o quote fa riferimento il prezzo di mercato. Per ETF o azioni è tipicamente 1, le obbligazioni tendenzialmente sono quotate su base 100.",
       "bondQuoteBaseHint": "Le obbligazioni sono di solito quotate ogni 100 di nominale (es. BTP): verifica questo valore — tipicamente è 100.",
-      "activeTooltip": "Se attivo, l'asset sarà aggiornato automaticamente dallo scheduler e visibile nelle selezioni. Disabilitalo per nasconderlo se non lo possiedi più o non vuoi continuare a scaricarne i prezzi."
+      "activeTooltip": "Se attivo, l'asset sarà aggiornato automaticamente dallo scheduler e visibile nelle selezioni. Disabilitalo per nasconderlo se non lo possiedi più o non vuoi continuare a scaricarne i prezzi.",
+      "quoteBaseMin": "Deve essere almeno 1"
     },
     "provider": {
       "assignment": "Assegnazione Provider",
@@ -227,7 +257,20 @@
       "deleteConfirmMessage": "Eliminare {n} identificatori?",
       "otherLabel": "Altri identificatori",
       "otherPlaceholder": "Scrivi un codice o nome, poi Invio o virgola",
-      "otherSeparatorsHint": "Aggiungi un identificatore alla volta — premi Invio, virgola (,), punto e virgola (;) o Tab per confermarlo. Gli spazi restano nel valore."
+      "otherSeparatorsHint": "Aggiungi un identificatore alla volta — premi Invio, virgola (,), punto e virgola (;) o Tab per confermarlo. Gli spazi restano nel valore.",
+      "primaryChooser": {
+        "title": "Quale {type} è il principale per «{asset}»?",
+        "titleGeneric": "Quale identificativo è il principale per «{asset}»?",
+        "hint": "Gli altri restano come identificativi alternativi e serviranno a riconoscere l'asset nei prossimi import.",
+        "originProvider": "dal provider",
+        "originReport": "dal report",
+        "originStored": "già salvato",
+        "btpNote": "I BTP italiani comprati all'emissione (\"CUM\") hanno un ISIN diverso da quello negoziabile: il primo dà diritto al premio fedeltà ma non è quotato. Tieni come principale quello **quotato** — è l'unico su cui esiste un prezzo.",
+        "keepAlternates": "Restano come alternativi:",
+        "confirm": "Conferma",
+        "cancel": "Annulla",
+        "skip": "Non salvare"
+      }
     },
     "confirm": {
       "saveWithoutTest": "Salvare senza test?",
@@ -441,7 +484,7 @@
     },
     "possibleDuplicate": "Possibile duplicato",
     "todoBlockerCommitHint": "Completa tutti i campi obbligatori prima di salvare",
-    "todoWarningVerifyHint": "{n} campo/i auto-derivato/i da verificare prima di salvare",
+    "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivato da verificare prima di salvare} other {# campi auto-derivati da verificare prima di salvare}}",
     "todoWarningConfirmTitle": "Verificare i campi auto-derivati?",
     "todoWarningConfirmMessage": "{n} riga/e hanno un valore auto-derivato non ancora verificato (es. la quantità nominale dei titoli scaduti). Rivedili, oppure salva comunque se i valori derivati sono corretti.",
     "todoWarningConfirmItemsLabel": "{n} campo/i da verificare",
@@ -514,7 +557,12 @@
       "duplicateBadge": "duplicato",
       "similarityTotal": "Sovrapposizione totale",
       "similarityPartial": "Parziale",
-      "similarityTooltip": "Totale: ogni riga ha una corrispondenza tra i file. Parziale: almeno una riga non ha un gemello esatto — rivedi prima di importare."
+      "similarityTooltip": "Totale: ogni riga ha una corrispondenza tra i file. Parziale: almeno una riga non ha un gemello esatto — rivedi prima di importare.",
+      "statusAllAuto": "Tutto auto-risolto",
+      "statusToVerify": "{n} da verificare",
+      "tierTotalTitle": "Sovrapposizione totale",
+      "tierPartialTitle": "Sovrapposizione parziale",
+      "groupCount": "{n} gruppi"
     },
     "duplicatesSelectedTip": "Conta solo le righe duplicate ancora selezionate (verranno importate). I duplicati esatti nel lotto sono già deselezionati e non contati qui.",
     "deselectReasons": {
@@ -531,8 +579,56 @@
       "dbColumn": "DB #{id}",
       "hint": "I campi evidenziati differiscono tra le transazioni.",
       "openHint": "Clicca per confrontare affiancati",
-      "openAction": "Confronta"
-    }
+      "openAction": "Confronta",
+      "keptCount": "Ne tieni {n} su {total}"
+    },
+    "noticeConfirmTitle": "Note dall'importazione",
+    "noticeConfirmMessage": "{n, plural, one {L'importazione ha lasciato # nota che spiega una scelta fatta. Leggila prima di continuare.} other {L'importazione ha lasciato # note che spiegano le scelte fatte. Leggile prima di continuare.}}",
+    "todoBlockerVerifyHint": "{n, plural, one {# riga non è stata compresa del tutto dall'importazione e va rivista prima di salvare.} other {# righe non sono state comprese del tutto dall'importazione e vanno riviste prima di salvare.}}",
+    "parseErrorsTitle": "Non è stato possibile analizzare {n} file",
+    "brimNotice": {
+      "ca_succession_transfer_in": "Sono stati identificati dei titoli trasferiti da un altro dossier ({n} righe).\nSono stati registrati come transazioni di tipo «Rettifica» perché non hanno un movimento di cassa associato: si suppone quindi che fossero già tuoi presso un altro broker.\nIn caso affermativo, e se quel broker è tracciato su LibreFolio, importando l'altra metà della transazione il sistema proporrà di collegare le due e di trasformarle in un «Trasferimento titoli».\nDi seguito le righe in dettaglio:"
+    },
+    "evidenceRowsTitle": "Righe del file",
+    "evidenceRowCount": "{n} righe",
+    "noticeSectionInfo": "Note informative",
+    "noticeSectionWarning": "Da verificare",
+    "manualFieldsTooltip": "Le transazioni riportate qui sotto potrebbero essere sbagliate: l'importazione non è riuscita a ricavare da sola tutti i campi. Ti verrà chiesto di correggerle prima di salvare l'importazione.",
+    "stepFixTitle": "Correzioni",
+    "stepDuplicatesTitle": "Duplicati",
+    "fixStep": {
+      "intro": "Queste righe sono state registrate, ma dal file non arrivano abbastanza informazioni per esserne certi. Sistemale adesso: il controllo duplicati che segue confronta ogni riga con il tuo database, e una riga registrata con il tipo sbagliato viene confrontata con le cose sbagliate.",
+      "pending": "{n, plural, one {# riga ancora da sistemare} other {# righe ancora da sistemare}}",
+      "settled": "{n, plural, one {# sistemata} other {# sistemate}}",
+      "allDone": "Niente altro da correggere",
+      "allDoneDetail": "{n, plural, =0 {Niente da correggere.} one {# riga sistemata. Puoi proseguire.} other {# righe sistemate. Puoi proseguire.}}",
+      "apply": "Applica correzione",
+      "acceptAsIs": "Tieni com'è",
+      "acceptAsIsHint": "Tenerla com'è è una scelta consapevole: la riga viene importata come l'ha registrata l'importatore.",
+      "badgeCorrected": "Corretta",
+      "badgeKept": "Mantenuta",
+      "applyAgain": "Aggiorna",
+      "acceptAll": "{n, plural, one {Mantieni la riga rimasta com'è} other {Mantieni le # righe rimaste come sono}}",
+      "acceptAllHint": "Accetta la lettura del plugin per tutte le righe ancora in attesa. Puoi comunque cambiarle dopo.",
+      "assetFromDb": "Asset già catalogati",
+      "assetPlaceholder": "Scegli tra gli strumenti trovati in questi file",
+      "assetCreate": "Crea un nuovo asset",
+      "groupTrades": "Movimenti di cassa che potrebbero essere operazioni",
+      "groupTradesHint": "Registrati come versamento o prelievo perché dal file non arrivano quantità e strumento. Se erano un acquisto o una vendita, correggili adesso.",
+      "groupCharges": "Spese e imposte senza strumento",
+      "groupChargesHint": "Spese o imposte su operazioni in titoli che il file non collega a nessuno strumento. Assegnale al titolo giusto, oppure tienile così se riguardano il conto.",
+      "assetNone": "Nessun asset (spesa del broker)",
+      "reset": "Ripristina",
+      "resetHint": "Riporta la riga com’era stata letta dal file, annullando la risposta data qui.",
+      "resetAll": "Ripristina tutte ({n})",
+      "resetAllHint": "Riporta tutte le righe già sistemate com’erano state lette dal file."
+    },
+    "duplicatesStepIntro": "Alcune righe compaiono in più di uno dei file che stai importando: scegli quale copia tenere. Il confronto con il tuo database è già stato rifatto sulle righe corrette e arriva pronto alla revisione.",
+    "duplicateRecheckFailed": "Non è stato possibile ricontrollare i duplicati ({error}). Il risultato mostrato è quello calcolato prima delle tue correzioni.",
+    "evidenceOpenFile": "Riga {n} nel file",
+    "evidenceOpenFileHint": "Apri l'anteprima del file su questa riga, per vedere anche quelle vicine.",
+    "inspectAsset": "Ispeziona / modifica",
+    "inspectAssetHint": "Apre lo strumento selezionato per verificarne valuta, identificatori e fonte prezzi."
   },
   "brokers": {
     "title": "Broker",
@@ -1337,7 +1433,9 @@
       "yearsShort": "A"
     },
     "today": "Oggi",
-    "resolvingStart": "Ricerca…"
+    "resolvingStart": "Ricerca…",
+    "openCalendar": "Apri il calendario",
+    "formatHint": "Scrivi la data oppure scegliela dal calendario. Formati accettati: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’anno va scritto per esteso."
   },
   "error": {
     "pageNotFound": "Pagina Non Trovata",
@@ -2118,7 +2216,8 @@
     },
     "size": "Dimensione",
     "zoomIn": "Zoom avanti",
-    "zoomOut": "Zoom indietro"
+    "zoomOut": "Zoom indietro",
+    "previewAutofitHint": "Doppio clic sull’intestazione di una colonna per adattarne la larghezza"
   },
   "donationPopup": {
     "title": "LibreFolio cresce grazie agli utenti come te!",

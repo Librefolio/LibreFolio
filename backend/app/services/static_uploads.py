@@ -128,7 +128,6 @@ class UploadSecurityError(Exception):
     """Raised when upload fails security validation."""
 
 
-
 def _ensure_dir() -> None:
     """Create storage directory if it doesn't exist."""
     get_uploads_dir().mkdir(parents=True, exist_ok=True)

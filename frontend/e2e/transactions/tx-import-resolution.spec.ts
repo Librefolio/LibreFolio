@@ -111,8 +111,15 @@ async function goToStep4WithGenericSimple(page: Page) {
     await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 10_000});
     await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
 
-    // Continue to Step 4
+    // Continue to Step 4 — the Corrections and Duplicates steps appear only when needed
     await page.getByTestId('import-wizard-continue').click();
+    for (const testid of ['import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
+        const button = page.getByTestId(testid);
+        if (await button.isVisible({timeout: 1_500}).catch(() => false)) {
+            await button.click();
+            await page.waitForTimeout(300);
+        }
+    }
     await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
     await page.waitForTimeout(500);
 }

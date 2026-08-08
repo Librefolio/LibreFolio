@@ -242,7 +242,7 @@ class TestAssetCandidateSearch:
         AC-008: Soft-identifier match against the identifier_other JSON list.
 
         An asset whose ISIN / soft broker label lives only in identifier_other (not in a
-        dedicated column) is still detected — MEDIUM for an ISIN hit, and found for a soft
+        dedicated column) is still detected — HIGH for an ISIN hit, and found for a soft
         name hit. Exercises the additive JSON-list search.
         """
         import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
@@ -264,17 +264,140 @@ class TestAssetCandidateSearch:
         await async_session.refresh(asset)
 
         try:
-            # ISIN present only in identifier_other → MEDIUM soft match (not found by the
-            # dedicated-column ISIN search, which requires identifier_isin).
+            # ISIN present only in identifier_other → HIGH soft match (P3/A-01: an ISIN
+            # deliberately stored among the alternate identifiers outranks name similarity).
             candidates, auto_selected = await search_asset_candidates(async_session, extracted_symbol=None, extracted_isin=soft_isin, extracted_name=None)
             assert any(c.asset_id == asset.id for c in candidates), "ISIN in identifier_other should match"
             matched = next(c for c in candidates if c.asset_id == asset.id)
-            assert matched.match_confidence == BRIMMatchConfidence.MEDIUM
+            assert matched.match_confidence == BRIMMatchConfidence.HIGH
             assert auto_selected == asset.id
 
             # Soft broker label present only in identifier_other → detected via the list search.
             candidates_name, _ = await search_asset_candidates(async_session, extracted_symbol=None, extracted_isin=None, extracted_name=soft_name)
             assert any(c.asset_id == asset.id for c in candidates_name), "Soft name in identifier_other should match"
+        finally:
+            await async_session.delete(asset)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_soft_isin_is_not_shadowed_by_name_match(self, async_session: AsyncSession):
+        """
+        AC-009 (P3/A-01): an ISIN stored in identifier_other must win over a name match.
+
+        This is the Italian BTP "CUM" scenario that broke beta testing. The security is
+        issued with a non-tradeable ISIN (kept in identifier_other) and traded under a
+        different, quoted one (identifier_isin). A reimport quotes the CUM ISIN plus a
+        generic name.
+
+        Before the fix the alternate-identifier lookup ran last and only ``if not
+        candidates``, so the weak name match fired first, filled the list, and the correct
+        asset was never even considered — the user was offered a wrong candidate instead.
+        """
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+        suffix = uuid.uuid4().hex[:8].upper()
+        cum_isin = f"IT{suffix}CUM1"
+        market_isin = f"IT{suffix}MKT1"
+        shared_name_token = f"BTPTEST{suffix}"
+
+        # The right asset: quoted ISIN primary, CUM ISIN kept as an alternate.
+        target = Asset(
+            display_name=f"{shared_name_token} Piu Scad Fb33",
+            asset_type=AssetType.BOND,
+            currency="EUR",
+            identifier_isin=market_isin,
+            identifier_other=[cum_isin],
+            active=True,
+        )
+        # A decoy sharing the name token — enough to win a partial name match.
+        decoy = Asset(
+            display_name=f"{shared_name_token} Italia Nov30",
+            asset_type=AssetType.BOND,
+            currency="EUR",
+            active=True,
+        )
+        async_session.add(target)
+        async_session.add(decoy)
+        await async_session.commit()
+        await async_session.refresh(target)
+        await async_session.refresh(decoy)
+
+        try:
+            candidates, auto_selected = await search_asset_candidates(
+                async_session,
+                extracted_symbol=None,
+                extracted_isin=cum_isin,
+                extracted_name=shared_name_token,
+            )
+
+            assert len(candidates) == 1, f"The alternate-ISIN hit must be the only candidate, got {[(c.asset_id, c.match_confidence) for c in candidates]}"
+            assert candidates[0].asset_id == target.id
+            assert candidates[0].match_confidence == BRIMMatchConfidence.HIGH
+            assert auto_selected == target.id, "A single strong candidate must be auto-selected"
+            assert all(c.asset_id != decoy.id for c in candidates), "The name-only decoy must not surface"
+        finally:
+            await async_session.delete(target)
+            await async_session.delete(decoy)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_primary_and_alternate_isin_both_surface(self, async_session: AsyncSession):
+        """
+        AC-010 (P3/A-01): the same ISIN primary on one asset and alternate on another
+        surfaces **both** candidates — that pair is almost always a duplicate to merge.
+
+        Priorities 1 and 2 deliberately run together (no ``if not candidates`` guard), so
+        the user sees them side by side, which is where merging costs the fewest clicks.
+        """
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+        suffix = uuid.uuid4().hex[:8].upper()
+        isin = f"IT{suffix}DUP1"
+
+        primary = Asset(display_name=f"Dup Primary {suffix}", asset_type=AssetType.BOND, currency="EUR", identifier_isin=isin, active=True)
+        alternate = Asset(display_name=f"Dup Alternate {suffix}", asset_type=AssetType.BOND, currency="EUR", identifier_other=[isin], active=True)
+        async_session.add(primary)
+        async_session.add(alternate)
+        await async_session.commit()
+        await async_session.refresh(primary)
+        await async_session.refresh(alternate)
+
+        try:
+            candidates, auto_selected = await search_asset_candidates(async_session, extracted_symbol=None, extracted_isin=isin, extracted_name=None)
+
+            by_id = {c.asset_id: c for c in candidates}
+            assert primary.id in by_id, "Primary-column ISIN holder must be a candidate"
+            assert alternate.id in by_id, "Alternate-list ISIN holder must be a candidate too"
+            assert by_id[primary.id].match_confidence == BRIMMatchConfidence.EXACT
+            assert by_id[alternate.id].match_confidence == BRIMMatchConfidence.HIGH
+            assert auto_selected is None, "Two candidates → the user must choose (and can merge)"
+        finally:
+            await async_session.delete(primary)
+            await async_session.delete(alternate)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_ticker_still_wins_over_name(self, async_session: AsyncSession):
+        """
+        AC-011 (P3/A-01 regression guard): reordering the ISIN lookups must not disturb
+        the ticker → name ordering below them.
+        """
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+        suffix = uuid.uuid4().hex[:8].upper()
+        ticker = f"TK{suffix}"
+
+        asset = Asset(display_name=f"Ticker Holder {suffix}", asset_type=AssetType.STOCK, currency="USD", identifier_ticker=ticker, active=True)
+        async_session.add(asset)
+        await async_session.commit()
+        await async_session.refresh(asset)
+
+        try:
+            candidates, auto_selected = await search_asset_candidates(async_session, extracted_symbol=ticker, extracted_isin=None, extracted_name=f"Ticker Holder {suffix}")
+            assert len(candidates) == 1
+            assert candidates[0].asset_id == asset.id
+            assert candidates[0].match_confidence == BRIMMatchConfidence.MEDIUM, "A ticker hit must stay MEDIUM and pre-empt the name search"
+            assert auto_selected == asset.id
         finally:
             await async_session.delete(asset)
             await async_session.commit()
@@ -376,6 +499,99 @@ class TestDuplicateDetection:
 
         finally:
             # Cleanup
+            await async_session.delete(existing_tx)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_row_already_imported_without_asset_is_still_a_duplicate(self, async_session: AsyncSession, test_broker: int, test_date: date, test_assets: List[Asset]):
+        """The same movement, imported before the plugin could attach its instrument.
+
+        Filtering candidates strictly by asset_id hides it, so the improved parse offers
+        the identical row back as brand new — and every re-import silently doubles those
+        fees. The row must still be found, and the exact description makes it certain.
+        """
+        description = "SPESE STACCO CEDOLA DEL 01/06/2026 TIT: IT0000000001"
+        linked_asset_id = test_assets[0].id  # read before the commit expires the instance
+        existing_tx = Transaction(
+            broker_id=test_broker,
+            asset_id=None,  # imported before the plugin learned to link charges
+            type=TransactionType.FEE,
+            date=test_date,
+            quantity=Decimal("0"),
+            amount=Decimal("-1.50"),
+            currency="EUR",
+            description=description,
+        )
+        async_session.add(existing_tx)
+        await async_session.commit()
+
+        try:
+            transactions = [
+                TXCreateItem(
+                    broker_id=test_broker,
+                    asset_id=linked_asset_id,  # now attached to the bond it was charged on
+                    type=TransactionType.FEE,
+                    date=test_date,
+                    quantity=Decimal("0"),
+                    cash=Currency(code="EUR", amount=Decimal("-1.50")),
+                    description=description,
+                ),
+            ]
+
+            report = await detect_tx_duplicates(transactions=transactions, broker_id=test_broker, session=async_session)
+
+            assert len(report.tx_likely_duplicates) == 1, f"Expected a likely duplicate, got unique={len(report.tx_unique_indices)}, possible={len(report.tx_possible_duplicates)}"
+            # LIKELY, not LIKELY_WITH_ASSET: the stored row carries no asset to agree on.
+            assert report.tx_likely_duplicates[0].tx_existing_matches[0].match_level == BRIMDuplicateLevel.LIKELY
+
+        finally:
+            await async_session.delete(existing_tx)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_detect_likely_duplicate_ignores_whitespace_in_description(self, async_session: AsyncSession, test_broker: int, test_date: date):
+        """Re-wrapped text is the same text: whitespace must not demote a certain duplicate.
+
+        Banks re-flow descriptions between exports (observed on Crédit Agricole:
+        "DT EMISS." in one file, "DTEMISS." in another). Compared raw, the identical
+        movement comes back as merely *possible* and the user is asked to arbitrate a
+        difference that does not exist — the fastest way to make them stop reading.
+        """
+        existing_tx = Transaction(
+            broker_id=test_broker,
+            asset_id=None,
+            type=TransactionType.WITHDRAWAL,
+            date=test_date,
+            quantity=Decimal("0"),
+            amount=Decimal("-58.44"),
+            currency="EUR",
+            description="SDD A : AE S.P.A. FT NR. 0000822402279877 DTEMISS. 202411",
+        )
+        async_session.add(existing_tx)
+        await async_session.commit()
+
+        try:
+            transactions = [
+                TXCreateItem(
+                    broker_id=test_broker,
+                    asset_id=None,
+                    type=TransactionType.WITHDRAWAL,
+                    date=test_date,
+                    quantity=Decimal("0"),
+                    cash=Currency(code="EUR", amount=Decimal("-58.44")),
+                    description="SDD A : AE S.P.A. FT NR. 0000822402279877 DT EMISS. 202411",
+                ),
+            ]
+
+            report = await detect_tx_duplicates(transactions=transactions, broker_id=test_broker, session=async_session)
+
+            assert len(report.tx_likely_duplicates) == 1, f"Expected a likely duplicate, got possible={len(report.tx_possible_duplicates)}"
+            assert report.tx_likely_duplicates[0].tx_existing_matches[0].match_level in (
+                BRIMDuplicateLevel.LIKELY,
+                BRIMDuplicateLevel.LIKELY_WITH_ASSET,
+            )
+
+        finally:
             await async_session.delete(existing_tx)
             await async_session.commit()
 

@@ -35,7 +35,7 @@ from decimal import Decimal
 from typing import AsyncGenerator, Dict, List, Literal, Optional
 
 import structlog
-from sqlalchemy import String, and_, cast, delete, func, or_, select
+from sqlalchemy import String, and_, cast, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -83,6 +83,8 @@ from backend.app.schemas.assets import (
     FAAssetCreateItem,
     FAAssetCreateResult,
     FAAssetDeleteResult,
+    FAAssetMergePreview,
+    FAAssetMergeResponse,
     FAAssetPatchItem,
     FAAssetPatchResult,
     FABulkAssetCreateResponse,
@@ -123,6 +125,7 @@ from backend.app.services.signal_service import (
 from backend.app.utils.cache_utils import get_ttl_cache
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.decimal_utils import truncate_priceHistory
+from backend.app.utils.identifier_utils import merge_other_identifiers
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
@@ -4215,6 +4218,211 @@ class AssetCRUDService:
         success_count = sum(1 for r in results if r.success)
 
         return FABulkAssetPatchResponse(results=results, success_count=success_count, errors=[])
+
+    @staticmethod
+    async def merge_assets(
+        source_asset_id: int,
+        target_asset_id: int,
+        session: AsyncSession,
+        identifier_primaries: Optional[dict[str, str]] = None,
+        dry_run: bool = False,
+    ) -> FAAssetMergeResponse:
+        """Fold ``source_asset_id`` into ``target_asset_id``, then delete the source.
+
+        Answers the duplicate-asset debt left behind whenever the same instrument was
+        booked twice (typically an Italian BTP whose "CUM" placement ISIN and market
+        ISIN were treated as two instruments). The target is *always* the asset the
+        user wants to keep — this method never picks for them.
+
+        Exactly four tables reference ``assets.id``; each gets an explicit policy:
+
+        - ``Transaction.asset_id`` — reassigned (nullable FK, no unique constraint).
+        - ``PriceHistory.asset_id`` — reassigned; on a ``(asset_id, date)`` collision
+          the **target row wins** and the source row is discarded, because the target
+          is the asset whose provider assignment will keep feeding it.
+        - ``AssetEvent.asset_id`` — reassigned, de-duplicated on
+          ``(date, type, value, currency)``. Transactions pointing at a discarded event
+          are remapped onto the surviving one *before* the delete, since
+          ``Transaction.asset_event_id`` is ``ondelete=RESTRICT``.
+        - ``AssetProviderAssignment.asset_id`` — moved when the target has none,
+          otherwise dropped. **Careful**: ``AssetEvent.provider_assignment_id`` is
+          ``ondelete=CASCADE``, so events surviving on the target are re-pointed at the
+          target's assignment before the source one is deleted — otherwise the merge
+          would silently destroy the events it had just migrated.
+
+        Identifiers are never lost: whatever does not stay primary is demoted into the
+        target's ``identifier_other``.
+
+        Args:
+            source_asset_id: Asset to fold in and delete.
+            target_asset_id: Asset to keep.
+            session: Database session.
+            identifier_primaries: Optional ``{"identifier_isin": "IT…"}`` decisions.
+                A value must belong to one of the two assets (as primary or soft),
+                otherwise the merge is refused.
+            dry_run: Compute the plan and roll back without writing.
+
+        Returns:
+            FAAssetMergeResponse with the preview of what moved (or would move).
+
+        Raises:
+            AssetSourceError: NOT_FOUND, SAME_ASSET or INVALID_PRIMARY.
+        """
+        if source_asset_id == target_asset_id:
+            raise AssetSourceError(
+                "Source and target asset must be different",
+                "SAME_ASSET",
+                {"asset_id": source_asset_id},
+            )
+
+        source = (await session.execute(select(Asset).where(Asset.id == source_asset_id))).scalar_one_or_none()
+        target = (await session.execute(select(Asset).where(Asset.id == target_asset_id))).scalar_one_or_none()
+        if source is None:
+            raise AssetSourceError(f"Asset with ID {source_asset_id} not found", "NOT_FOUND", {"asset_id": source_asset_id})
+        if target is None:
+            raise AssetSourceError(f"Asset with ID {target_asset_id} not found", "NOT_FOUND", {"asset_id": target_asset_id})
+
+        preview = FAAssetMergePreview()
+        # IdentifierType.OTHER maps onto ``identifier_other``, which is the JSON *list*
+        # of soft identifiers, not a structured single-value column — it is the merge
+        # destination, never a candidate primary.
+        identifier_columns = [f"identifier_{t.value.lower()}" for t in IdentifierType if t != IdentifierType.OTHER]
+
+        try:
+            # ---------- identifiers: decide primaries, demote everything else ----------
+            demoted: list[str] = []
+            for column in identifier_columns:
+                source_value = (getattr(source, column, None) or "").strip()
+                target_value = (getattr(target, column, None) or "").strip()
+                chosen = (identifier_primaries or {}).get(column)
+                if chosen is not None:
+                    chosen = chosen.strip()
+                    known = {v.casefold() for v in (source_value, target_value) if v}
+                    if chosen and chosen.casefold() not in known:
+                        raise AssetSourceError(
+                            f"'{chosen}' is not a {column} of asset {source_asset_id} or {target_asset_id}",
+                            "INVALID_PRIMARY",
+                            {"field": column, "value": chosen},
+                        )
+                else:
+                    # Default: the target keeps its own value; the source's fills a gap.
+                    chosen = target_value or source_value
+
+                for value in (source_value, target_value):
+                    if value and value.casefold() != (chosen or "").casefold():
+                        demoted.append(value)
+                setattr(target, column, chosen or None)
+
+            merged_other = merge_other_identifiers(
+                target.identifier_other,
+                [*(source.identifier_other or []), *demoted],
+            )
+            before = {v.casefold() for v in (target.identifier_other or [])}
+            # A demoted primary must not shadow the value that is now primary on the target.
+            primaries_now = {(getattr(target, c, None) or "").casefold() for c in identifier_columns}
+            merged_other = [v for v in (merged_other or []) if v.casefold() not in primaries_now] or None
+            preview.identifiers_added = [v for v in (merged_other or []) if v.casefold() not in before]
+            target.identifier_other = merged_other
+
+            # ---------- price history: target wins on same date ----------
+            target_dates = set((await session.execute(select(PriceHistory.date).where(PriceHistory.asset_id == target_asset_id))).scalars().all())
+            source_prices = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == source_asset_id))).scalars().all()
+            for row in source_prices:
+                if row.date in target_dates:
+                    await session.delete(row)
+                    preview.prices_discarded += 1
+                else:
+                    row.asset_id = target_asset_id
+                    target_dates.add(row.date)
+                    preview.prices += 1
+
+            # ---------- asset events: dedup, then remap the transactions ----------
+            target_events = (await session.execute(select(AssetEvent).where(AssetEvent.asset_id == target_asset_id))).scalars().all()
+            source_events = (await session.execute(select(AssetEvent).where(AssetEvent.asset_id == source_asset_id))).scalars().all()
+
+            def _event_key(ev: AssetEvent) -> tuple:
+                return (ev.date, str(ev.type), Decimal(str(ev.value)), (ev.currency or "").upper())
+
+            surviving: dict[tuple, int] = {_event_key(ev): ev.id for ev in target_events if ev.id is not None}
+            kept_source_events: list[AssetEvent] = []
+            for ev in source_events:
+                key = _event_key(ev)
+                twin_id = surviving.get(key)
+                if twin_id is not None:
+                    relinked = await session.execute(update(Transaction).where(Transaction.asset_event_id == ev.id).values(asset_event_id=twin_id))
+                    preview.transactions_relinked += relinked.rowcount or 0
+                    await session.delete(ev)
+                    preview.events_discarded += 1
+                else:
+                    ev.asset_id = target_asset_id
+                    if ev.id is not None:
+                        surviving[key] = ev.id
+                    kept_source_events.append(ev)
+                    preview.events += 1
+
+            # ---------- provider assignment ----------
+            target_assignment = (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == target_asset_id))).scalar_one_or_none()
+            source_assignment = (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == source_asset_id))).scalar_one_or_none()
+            if source_assignment is not None:
+                if target_assignment is None:
+                    source_assignment.asset_id = target_asset_id
+                    preview.provider_assignment_moved = True
+                else:
+                    # CASCADE would wipe the events we just migrated → re-point them first.
+                    for ev in kept_source_events:
+                        if ev.provider_assignment_id == source_assignment.id:
+                            ev.provider_assignment_id = target_assignment.id
+                    await session.flush()
+                    await session.delete(source_assignment)
+                    preview.provider_assignment_dropped = True
+
+            # ---------- transactions ----------
+            moved = await session.execute(update(Transaction).where(Transaction.asset_id == source_asset_id).values(asset_id=target_asset_id))
+            preview.transactions = moved.rowcount or 0
+
+            await session.flush()
+            await session.delete(source)
+            await session.flush()
+
+            if dry_run:
+                await session.rollback()
+                return FAAssetMergeResponse(
+                    success=True,
+                    source_asset_id=source_asset_id,
+                    target_asset_id=target_asset_id,
+                    dry_run=True,
+                    preview=preview,
+                    message="Dry run: nothing was written",
+                )
+
+            await session.commit()
+        except AssetSourceError:
+            await session.rollback()
+            raise
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Error merging asset {source_asset_id} into {target_asset_id}: {e}")
+            raise AssetSourceError(f"Merge failed: {e!s}", "MERGE_FAILED", {"source_asset_id": source_asset_id, "target_asset_id": target_asset_id}) from e
+
+        logger.info(
+            "assets merged: %d → %d (tx=%d, prices=%d/-%d, events=%d/-%d, relinked=%d)",
+            source_asset_id,
+            target_asset_id,
+            preview.transactions,
+            preview.prices,
+            preview.prices_discarded,
+            preview.events,
+            preview.events_discarded,
+            preview.transactions_relinked,
+        )
+        return FAAssetMergeResponse(
+            success=True,
+            source_asset_id=source_asset_id,
+            target_asset_id=target_asset_id,
+            dry_run=False,
+            preview=preview,
+            message=f"Asset {source_asset_id} merged into {target_asset_id}",
+        )
 
 
 # ============================================================================

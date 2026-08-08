@@ -41,6 +41,7 @@
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import RiskResultFrame from './RiskResultFrame.svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
         scope: RiskScope;
         dateStart: string;
@@ -828,7 +829,15 @@
             <label class="text-xs text-gray-500 dark:text-gray-400">
                 {$t('chartSettings.params.riskFreeAnnualRate')}
                 <span class="mt-1 flex items-center gap-1">
-                    <input class="w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="number" step="0.1" min="-99.9" bind:value={riskFreePercentInput} data-testid="risk-free-rate-input" />
+                    <input
+                        class="w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                        type="number"
+                        use:numericArrows={{step: 0.1}}
+                        step="0.1"
+                        min="-99.9"
+                        bind:value={riskFreePercentInput}
+                        data-testid="risk-free-rate-input"
+                    />
                     <span>%</span>
                 </span>
             </label>
@@ -958,6 +967,7 @@
                                 <input
                                     class="w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
                                     type="number"
+                                    use:numericArrows
                                     min="-100"
                                     max="100"
                                     step="1"
@@ -979,7 +989,7 @@
                     <label class="text-xs text-gray-500 dark:text-gray-400">
                         {$t('risk.stress.uniformShock')}
                         <span class="mt-1 flex items-center gap-1">
-                            <input class="w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="number" min="-100" step="1" bind:value={stressPercent} data-testid="risk-stress-input" />
+                            <input class="w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="number" use:numericArrows min="-100" step="1" bind:value={stressPercent} data-testid="risk-stress-input" />
                             <span>%</span>
                         </span>
                     </label>
@@ -1187,7 +1197,16 @@
                 </label>
                 <label class="text-xs text-gray-500 dark:text-gray-400">
                     {$t('risk.params.horizonDays')}
-                    <input class="mt-1 block w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="number" min="1" max="3650" step="1" bind:value={simulationHorizonDays} data-testid="risk-simulation-horizon" />
+                    <input
+                        class="mt-1 block w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                        type="number"
+                        use:numericArrows
+                        min="1"
+                        max="3650"
+                        step="1"
+                        bind:value={simulationHorizonDays}
+                        data-testid="risk-simulation-horizon"
+                    />
                 </label>
                 <label class="text-xs text-gray-500 dark:text-gray-400">
                     {$t('risk.params.paths')}
@@ -1198,7 +1217,15 @@
                 {#if simulationSampling === 'mc'}
                     <label class="text-xs text-gray-500 dark:text-gray-400">
                         {$t('risk.params.randomSeed')}
-                        <input class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="number" min="0" step="1" bind:value={simulationRandomSeed} data-testid="risk-simulation-random-seed" />
+                        <input
+                            class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                            type="number"
+                            use:numericArrows
+                            min="0"
+                            step="1"
+                            bind:value={simulationRandomSeed}
+                            data-testid="risk-simulation-random-seed"
+                        />
                     </label>
                 {:else}
                     <label class="text-xs text-gray-500 dark:text-gray-400">
@@ -1206,6 +1233,7 @@
                         <input
                             class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
                             type="number"
+                            use:numericArrows
                             min="0"
                             step="1"
                             bind:value={simulationSobolStartIndex}

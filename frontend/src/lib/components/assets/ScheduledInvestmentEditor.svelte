@@ -30,6 +30,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {generateUUID} from '$lib/utils/core/uuid';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -1072,6 +1073,7 @@
                 <input
                     id="initial-value"
                     type="number"
+                    use:numericArrows
                     min="0"
                     step="100"
                     value={initialValue}
@@ -1329,6 +1331,7 @@
                                 <td class="px-2 py-1">
                                     <input
                                         type="number"
+                                        use:numericArrows
                                         value={evt.value}
                                         step={evt.type === 'MATURITY_SETTLEMENT' ? '100' : '0.01'}
                                         oninput={(e) => handleEventFieldChange(idx, 'value', Number(e.currentTarget.value))}

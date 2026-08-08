@@ -37,7 +37,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Decimal
 from enum import StrEnum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -631,7 +631,6 @@ class FABulkMetadataRefreshResponse(BaseBulkResponse[FAMetadataRefreshResult]):
     """
 
 
-
 # ============================================================================
 # ASSET CRUD SCHEMAS
 # ============================================================================
@@ -837,7 +836,6 @@ class FABulkAssetDeleteResponse(BaseBulkResponse[FAAssetDeleteResult]):
     """Bulk asset deletion response (partial success allowed)."""
 
 
-
 # ============================================================================
 # ASSET PATCH SCHEMAS (for PATCH /assets endpoint)
 # ============================================================================
@@ -931,6 +929,58 @@ class FABulkAssetPatchResponse(BaseBulkResponse[FAAssetPatchResult]):
     """Bulk asset patch response (partial success allowed)."""
 
 
+# ============================================================================
+# ASSET MERGE SCHEMAS (P3/A-02)
+# ============================================================================
+
+
+class FAAssetMergeRequest(BaseModel):
+    """Request body for ``POST /assets/merge``.
+
+    Folds ``source_asset_id`` into ``target_asset_id`` and deletes the source.
+    The target is always the asset the user wants to keep — the endpoint never
+    picks for them.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_asset_id: int = Field(..., description="Asset to fold in and delete")
+    target_asset_id: int = Field(..., description="Asset to keep")
+    identifier_primaries: Optional[Dict[str, str]] = Field(
+        None,
+        description="Optional per-column decision on which value stays primary, e.g. identifier_isin -> IT0005634800. Whatever loses is demoted into identifier_other rather than dropped. Values not belonging to either asset are rejected.",
+    )
+    dry_run: bool = Field(False, description="Compute and return the plan without writing anything")
+
+
+class FAAssetMergePreview(BaseModel):
+    """What a merge would move, so the user can confirm before anything is destroyed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    transactions: int = Field(0, description="Transactions that will be reassigned to the target")
+    prices: int = Field(0, description="Price rows that will be reassigned")
+    prices_discarded: int = Field(0, description="Source price rows dropped because the target already has that date")
+    events: int = Field(0, description="Asset events that will be reassigned")
+    events_discarded: int = Field(0, description="Source events dropped as duplicates of a target event")
+    transactions_relinked: int = Field(0, description="Transactions whose asset_event_id was remapped onto the surviving event")
+    provider_assignment_moved: bool = Field(False, description="Whether the source provider assignment was moved to the target")
+    provider_assignment_dropped: bool = Field(False, description="Whether the source provider assignment was dropped (target already had one)")
+    identifiers_added: List[str] = Field(default_factory=list, description="Values added to the target's identifier_other")
+
+
+class FAAssetMergeResponse(BaseModel):
+    """Outcome of an asset merge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = Field(..., description="Whether the merge completed")
+    source_asset_id: int = Field(..., description="Asset folded in (deleted unless dry_run)")
+    target_asset_id: int = Field(..., description="Surviving asset")
+    dry_run: bool = Field(False, description="True when nothing was written")
+    preview: FAAssetMergePreview = Field(..., description="What was moved (or would be moved)")
+    message: str = Field("", description="Human-readable outcome")
+
 
 # Export convenience
 __all__ = [
@@ -971,4 +1021,8 @@ __all__ = [
     "FAAssetPatchItem",
     "FABulkAssetPatchResponse",
     "FAAssetPatchResult",
+    # Asset merge schemas
+    "FAAssetMergeRequest",
+    "FAAssetMergePreview",
+    "FAAssetMergeResponse",
 ]

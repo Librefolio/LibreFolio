@@ -26,6 +26,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import {invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -97,6 +98,8 @@
     // Delete dialog (single)
     let deleteDialogOpen = $state(false);
     let deletingAsset: AssetRow | null = $state(null);
+    let mergeModalOpen = $state(false);
+    let mergingAsset: AssetRow | null = $state(null);
     let deleteLoading = $state(false);
 
     // Bulk delete confirmation dialog
@@ -777,6 +780,11 @@
         deleteDialogOpen = true;
     }
 
+    function handleMergeAsset(asset: any) {
+        mergingAsset = asset;
+        mergeModalOpen = true;
+    }
+
     async function confirmDeleteAsset() {
         if (!deletingAsset) return;
         deleteLoading = true;
@@ -1447,6 +1455,7 @@
                     onsync={handleSyncAsset}
                     onrefresh={handleRefreshAsset}
                     ondelete={handleDeleteAsset}
+                    onmerge={handleMergeAsset}
                     onsettings={handleCardSettings}
                 />
             {/each}
@@ -1464,6 +1473,7 @@
             onsync={handleSyncAsset}
             onrefresh={handleRefreshAsset}
             ondelete={handleDeleteAsset}
+            onmerge={handleMergeAsset}
             onselectionchange={(rows) => {
                 selectedAssetRows = rows;
             }}
@@ -1554,5 +1564,19 @@
     onupdated={() => loadAssets()}
     onclose={() => {
         assetModalOpen = false;
+    }}
+/>
+
+<!-- Asset Merge Modal (P3 · WS-E) -->
+<AssetMergeModal
+    bind:open={mergeModalOpen}
+    sourceAsset={mergingAsset ? {id: mergingAsset.id, display_name: mergingAsset.display_name} : null}
+    onmerged={async () => {
+        if (mergingAsset) invalidateAfterMutation(mergingAsset.id);
+        await loadAssets();
+    }}
+    onclose={() => {
+        mergeModalOpen = false;
+        mergingAsset = null;
     }}
 />

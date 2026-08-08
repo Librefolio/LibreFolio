@@ -42,6 +42,8 @@ from backend.app.schemas.brim import (
     BRIMAssetCandidate,
     BRIMAssetCandidatesRequest,
     BRIMAssetMapping,
+    BRIMDuplicateCheckRequest,
+    BRIMDuplicateReport,
     BRIMFileInfo,
     BRIMFileStatus,
     BRIMParseRequest,
@@ -864,6 +866,50 @@ async def parse_file(
         # Parse failed - move to failed folder
         brim_provider.move_to_failed(file_id, e.message)
         raise HTTPException(status_code=400, detail=f"Parse error: {e.message}") from e
+
+
+@brim_router.post("/duplicates", response_model=BRIMDuplicateReport)
+async def check_duplicates(
+    request: BRIMDuplicateCheckRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMDuplicateReport:
+    """
+    Re-run duplicate detection on transactions in their current, user-edited state.
+
+    ``/parse`` also returns a duplicate report, but it is computed on the plugin's raw
+    output. That verdict goes stale as soon as the user changes anything: a row the
+    plugin could only book as a cash movement — because the file did not give it the
+    instrument — gets compared against cash movements rather than against the purchase
+    it really is, and correcting it later never re-opens the question.
+
+    Call this once the transactions are final (assets unified, flagged rows corrected)
+    to get a verdict computed on the data that will actually be imported.
+
+    Requires EDITOR or OWNER access on the target broker.
+    """
+    broker_service = BrokerService(session)
+    role = await broker_service._check_user_access(request.broker_id, current_user.id, min_role=UserRole.EDITOR)
+    if not current_user.is_superuser and role is None:
+        raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to check duplicates for this broker")
+
+    duplicates = await detect_tx_duplicates(
+        transactions=request.transactions,
+        broker_id=request.broker_id,
+        session=session,
+        asset_mappings=request.asset_mappings,
+    )
+
+    logger.info(
+        "Duplicate check re-run on corrected transactions",
+        broker_id=request.broker_id,
+        transaction_count=len(request.transactions),
+        unique_tx_count=len(duplicates.tx_unique_indices),
+        possible_duplicates=len(duplicates.tx_possible_duplicates),
+        likely_duplicates=len(duplicates.tx_likely_duplicates),
+    )
+
+    return duplicates
 
 
 # =============================================================================

@@ -11,6 +11,7 @@
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -192,6 +193,7 @@
             <SimpleSelect class="inline-block w-auto" compact dropdownPosition="auto" onchange={(v) => onSetMonth(parseInt(v))} options={monthSelectOptions} showChevron={false} value={String(month)} />
             <input
                 type="number"
+                use:numericArrows
                 value={year}
                 min="1900"
                 max="2200"

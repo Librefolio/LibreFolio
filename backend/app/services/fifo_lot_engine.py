@@ -339,6 +339,7 @@ class FifoEngineResult:
             active = [fragment for fragment in active if fragment.custody_type == custody_type]
         return sorted(active, key=lambda fragment: (fragment.start_date, fragment.fragment_id))
 
+
 @dataclass(slots=True)
 class _PendingTransferPiece:
     pair_id: int

@@ -25,6 +25,7 @@
     import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/charts/signals';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
@@ -657,6 +658,7 @@
                                                 <div class="flex items-center gap-1">
                                                     <input
                                                         type="number"
+                                                        use:numericArrows
                                                         value={getParamNumber(signal, desc.key, desc.default)}
                                                         min={desc.min}
                                                         max={desc.max}

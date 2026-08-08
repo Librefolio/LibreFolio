@@ -539,6 +539,135 @@ class TestParseEndpoint:
             assert "plugin" in response.json()["detail"].lower()
 
 
+class TestDuplicateCheckEndpoint:
+    """Tests for POST /brokers/import/duplicates.
+
+    ``/parse`` computes its duplicate report on the plugin's raw output, which goes stale
+    the moment the user edits anything — and a row the plugin misread is exactly the row
+    the user edits. This endpoint re-runs the comparison on the transactions in their
+    current state, so what gets compared is what will actually be imported.
+    """
+
+    async def _create_broker_for_test(self, client: httpx.AsyncClient) -> int:
+        await create_test_user(client)
+        unique_name = f"BRIM_Dup_Test_{uuid.uuid4().hex[:8]}"
+        resp = await client.post(
+            f"{API_BASE}/brokers",
+            json=[{"name": unique_name, "allow_cash_overdraft": True}],
+            timeout=TIMEOUT,
+        )
+        assert resp.status_code == 200, f"Failed to create broker: {resp.text}"
+        return resp.json()["results"][0]["broker_id"]
+
+    async def _upload_and_parse(self, client: httpx.AsyncClient, broker_id: int, content: bytes, name: str) -> dict:
+        files = {"file": (name, io.BytesIO(content), "text/csv")}
+        upload = await client.post(
+            f"{API_BASE}/brokers/import/upload",
+            files=files,
+            data={"broker_id": broker_id},
+            timeout=TIMEOUT,
+        )
+        assert upload.status_code == 200, upload.text
+        file_id = upload.json()["file_id"]
+        parsed = await client.post(
+            f"{API_BASE}/brokers/import/files/{file_id}/parse",
+            json={"plugin_code": "broker_generic_csv", "broker_id": broker_id},
+            timeout=TIMEOUT,
+        )
+        assert parsed.status_code == 200, parsed.text
+        return parsed.json()
+
+    @pytest.mark.asyncio
+    async def test_duplicates_endpoint_matches_parse_on_untouched_data(self, test_server, sample_csv_content):
+        """API-014: With nothing edited, the standalone check agrees with /parse."""
+        async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+            parse_data = await self._upload_and_parse(client, broker_id, sample_csv_content, "dup_endpoint.csv")
+
+            response = await client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={
+                    "broker_id": broker_id,
+                    "transactions": parse_data["transactions"],
+                    "asset_mappings": parse_data["asset_mappings"],
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            report = response.json()
+            assert sorted(report["tx_unique_indices"]) == sorted(parse_data["duplicates"]["tx_unique_indices"])
+            assert len(report["tx_likely_duplicates"]) == len(parse_data["duplicates"]["tx_likely_duplicates"])
+            assert len(report["tx_possible_duplicates"]) == len(parse_data["duplicates"]["tx_possible_duplicates"])
+
+    @pytest.mark.asyncio
+    async def test_duplicates_endpoint_reflects_edits(self, test_server):
+        """API-015: Editing a transaction changes the verdict — the whole point.
+
+        The transactions are imported, then re-checked: they now collide with the DB.
+        Moving one of them to a different date must clear *that one* and only that one,
+        proving the report is computed on the submitted state rather than on whatever
+        the plugin happened to produce at parse time.
+        """
+        csv_content = b"""date,type,quantity,amount,currency,description
+2025-03-01,DEPOSIT,0,4000.00,EUR,Dup check deposit
+2025-03-02,WITHDRAWAL,0,-250.00,EUR,Dup check withdrawal
+"""
+        async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+            parse_data = await self._upload_and_parse(client, broker_id, csv_content, "dup_edit.csv")
+            transactions = parse_data["transactions"]
+            assert len(transactions) == 2
+            assert len(parse_data["duplicates"]["tx_unique_indices"]) == 2
+
+            commit = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"creates": transactions},
+                timeout=TIMEOUT,
+            )
+            assert commit.status_code == 200, commit.text
+            assert commit.json()["committed"] is True
+
+            unchanged = await client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={"broker_id": broker_id, "transactions": transactions},
+                timeout=TIMEOUT,
+            )
+            assert unchanged.status_code == 200, unchanged.text
+            flagged = unchanged.json()
+            flagged_rows = {c["tx_row_index"] for c in flagged["tx_likely_duplicates"] + flagged["tx_possible_duplicates"]}
+            assert flagged_rows == {0, 1}, f"Both rows should now collide with the DB, got {flagged}"
+
+            edited = [dict(tx) for tx in transactions]
+            edited[1]["date"] = "2025-09-30"
+            after_edit = await client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={"broker_id": broker_id, "transactions": edited},
+                timeout=TIMEOUT,
+            )
+            assert after_edit.status_code == 200, after_edit.text
+            report = after_edit.json()
+            still_flagged = {c["tx_row_index"] for c in report["tx_likely_duplicates"] + report["tx_possible_duplicates"]}
+            assert still_flagged == {0}, f"Only the untouched row should stay flagged, got {report}"
+            assert 1 in report["tx_unique_indices"]
+
+    @pytest.mark.asyncio
+    async def test_duplicates_endpoint_denies_foreign_broker(self, test_server, sample_csv_content):
+        """API-016: A user without EDITOR access on the broker cannot probe it."""
+        async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+            parse_data = await self._upload_and_parse(client, broker_id, sample_csv_content, "dup_access.csv")
+
+        async with httpx.AsyncClient() as other_client:
+            await create_test_user(other_client)
+            response = await other_client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={"broker_id": broker_id, "transactions": parse_data["transactions"]},
+                timeout=TIMEOUT,
+            )
+            assert response.status_code == 403, response.text
+
+
 class TestPluginsEndpoint:
     """Tests for plugins listing endpoint."""
 

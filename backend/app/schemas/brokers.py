@@ -304,7 +304,6 @@ class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
     """Response for bulk broker deletion."""
 
 
-
 # =============================================================================
 # BULK CREATE RESPONSE
 # =============================================================================
@@ -326,7 +325,6 @@ class BRBulkCreateResponse(BaseBulkResponse[BRCreateResult]):
     """Response for bulk broker creation."""
 
 
-
 # =============================================================================
 # BULK UPDATE RESPONSE
 # =============================================================================
@@ -345,7 +343,6 @@ class BRUpdateResult(BaseModel):
 
 class BRBulkUpdateResponse(BaseBulkResponse[BRUpdateResult]):
     """Response for bulk broker update."""
-
 
 
 # =============================================================================
@@ -372,7 +369,6 @@ class BRAccessItem(BaseModel):
 
 class BRAccessListResponse(BaseListResponse[BRAccessItem]):
     """Response for listing broker accesses."""
-
 
 
 class BRAccessBulkItem(BaseModel):
@@ -411,4 +407,3 @@ class BRAccessBulkResponse(BaseBulkResponse[BRAccessItem]):
     Since the operation is atomic (all-or-nothing), success_count equals
     len(results) on success, and on failure an HTTPException is raised.
     """
-

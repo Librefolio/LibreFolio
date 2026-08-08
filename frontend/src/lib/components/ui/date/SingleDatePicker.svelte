@@ -1,15 +1,21 @@
 <!--
-  SingleDatePicker — Single-date picker with calendar popover.
+  SingleDatePicker — Single-date field: type it, or pick it from the calendar.
 
-  Renders a trigger button (Calendar icon + label + date) that opens
-  a popover with one CalendarMonth. Single click = select + close.
+  The calendar icon opens a popover with one CalendarMonth (single click = select
+  and close). The date itself is a text field, because reaching a date far from
+  today through month arrows is slow and a user who already knows the date should
+  simply be able to write it. Typed input accepts both orders and all three
+  separators (see `parseTypedDate`); anything unreadable is refused and the field
+  falls back to the current value rather than guessing.
 
-  Used by: DataEditor (new row date editing).
+  Used by: DataEditor (new row date editing), transaction form, broker form.
 -->
 <script lang="ts">
     import {Calendar} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import CalendarMonth from './CalendarMonth.svelte';
+    import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
+    import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
     // =========================================================================
     // i18n
@@ -56,9 +62,13 @@
         disabledDates?: Set<string>;
         /** Allow selecting future dates (default: false) */
         allowFuture?: boolean;
+        /** Disable both the field and the calendar. */
+        disabled?: boolean;
+        /** Test id for E2E targeting. */
+        testid?: string;
     }
 
-    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false}: Props = $props();
+    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, testid}: Props = $props();
 
     // =========================================================================
     // State
@@ -67,17 +77,47 @@
     let calendarOpen = $state(false);
     let calYear = $state(new Date().getFullYear());
     let calMonth = $state(new Date().getMonth());
-    let triggerEl: HTMLButtonElement | null = $state(null);
+    let triggerEl: HTMLElement | null = $state(null);
     let popoverStyle = $state('');
+    /** What the user is typing. `null` means the field just shows `value`. */
+    let typed = $state<string | null>(null);
+
+    let shown = $derived(typed ?? value ?? '');
+    let typedIso = $derived(typed === null ? null : parseTypedDate(typed));
+    let typedInvalid = $derived(typed !== null && typed.trim() !== '' && !isSelectable(typedIso));
+    /** What the calendar highlights: the date being typed as soon as it reads as one. */
+    let previewIso = $derived(isSelectable(typedIso) ? typedIso : value);
 
     // =========================================================================
     // Helpers
     // =========================================================================
 
-    function displayDate(iso: string): string {
-        if (!iso) return '—';
-        // Use YYYY-MM-DD format (ISO, non-ambiguous)
-        return iso;
+    /** Today in ISO, used to enforce `allowFuture` on typed input too. */
+    function todayIso(): string {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    /**
+     * The same gates the calendar applies to a day cell, applied to a typed date:
+     * a field that accepts what the calendar greys out would be a way around the rule.
+     */
+    function isSelectable(iso: string | null): iso is string {
+        if (!iso) return false;
+        if (disabledDates?.has(iso)) return false;
+        if (!allowFuture && iso > todayIso()) return false;
+        return true;
+    }
+
+    /** Reads what the user typed; reverts to the stored value when unreadable. */
+    function commitTyped() {
+        if (typed === null) return;
+        const parsed = parseTypedDate(typed);
+        if (isSelectable(parsed) && parsed !== value) {
+            value = parsed;
+            onchange(parsed);
+        }
+        typed = null;
     }
 
     function updatePopoverPosition() {
@@ -94,8 +134,10 @@
     }
 
     function openCalendar() {
-        if (value) {
-            const [y, m] = value.split('-').map(Number);
+        if (disabled) return;
+        const anchor = previewIso || value;
+        if (anchor) {
+            const [y, m] = anchor.split('-').map(Number);
             calYear = y;
             calMonth = m - 1;
         } else {
@@ -103,6 +145,10 @@
             calYear = now.getFullYear();
             calMonth = now.getMonth();
         }
+        // Positioned *before* it is shown: the popover is `position: fixed` only once
+        // `popoverStyle` is set, so opening first would paint one frame in the document
+        // flow, on top of the field. The frame after is for anything that moved since.
+        updatePopoverPosition();
         calendarOpen = true;
         requestAnimationFrame(updatePopoverPosition);
     }
@@ -129,8 +175,54 @@
 
     function handleDayClick(iso: string) {
         value = iso;
+        typed = null;
         calendarOpen = false;
         onchange(iso);
+    }
+
+    /**
+     * Typing is the fast path, but the calendar is what tells the user *which* date they
+     * actually wrote — "07/08" reads differently to everyone. It follows along, so a
+     * misread is visible before it is committed.
+     */
+    function syncCalendarToTyped() {
+        if (!calendarOpen || !isSelectable(typedIso)) return;
+        const [y, m] = typedIso.split('-').map(Number);
+        calYear = y;
+        calMonth = m - 1;
+    }
+
+    /**
+     * Arrow keys step the date, accelerating while held: day, then month, then year,
+     * then tens and hundreds of years. Reaching a birth date or a decade-old boundary
+     * through the month arrows of the calendar is otherwise a long click session.
+     */
+    function stepDate(e: KeyboardEvent) {
+        const next = dateArrowStep(e, isSelectable(typedIso) ? typedIso : value || null, todayIso());
+        if (next === null) return false;
+        // The same ceiling the calendar enforces: arrows are a stepper, and a stepper
+        // stops at its bound instead of walking past it into an invalid state.
+        typed = !allowFuture && next > todayIso() ? todayIso() : next;
+        syncCalendarToTyped();
+        if (!calendarOpen) openCalendar();
+        return true;
+    }
+
+    function handleInputKeydown(e: KeyboardEvent) {
+        if (stepDate(e)) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            // Enter commits and puts the calendar away; pressing it again asks for it back,
+            // which is the only way to reopen it without leaving and re-entering the field.
+            if (calendarOpen) {
+                commitTyped();
+                closeCalendar();
+            } else {
+                openCalendar();
+            }
+        } else if (e.key === 'Escape') {
+            typed = null;
+        }
     }
 
     function handleClickOutside(e: MouseEvent) {
@@ -191,25 +283,66 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="relative sdp-trigger {inputStyle ? 'block w-full' : 'inline-block'}">
-    <button
+    <!-- The date is typed, not only picked: the calendar is one click away but is
+         the slow path for anything more than a few months from today. -->
+    <div
         bind:this={triggerEl}
-        class="flex items-center gap-1.5 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 cursor-pointer hover:border-libre-green/50 transition-colors {inputStyle ? 'w-full px-3 py-2 text-sm' : compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {calendarOpen
-            ? 'ring-1 ring-libre-green border-libre-green'
-            : ''}"
-        onclick={(e) => {
-            e.stopPropagation();
-            openCalendar();
-        }}
-        type="button"
+        class="flex items-center gap-1.5 rounded-lg border bg-white transition-colors dark:bg-slate-800 {inputStyle ? 'w-full px-3 py-2 text-sm' : compact ? 'px-2 py-1' : 'px-2.5 py-1.5'} {typedInvalid
+            ? 'border-red-400 dark:border-red-500'
+            : calendarOpen
+              ? 'border-libre-green ring-1 ring-libre-green'
+              : 'border-gray-200 hover:border-libre-green/50 dark:border-slate-600'} {disabled ? 'opacity-60' : ''}"
     >
-        <Calendar class="text-libre-green flex-shrink-0" size={inputStyle ? 14 : compact ? 12 : 14} />
-        {#if label}<span class="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{label}</span>{/if}
-        <span class="font-mono {inputStyle ? 'text-sm' : compact ? 'text-[11px]' : 'text-xs'} text-gray-700 dark:text-gray-200 flex-shrink-0">{displayDate(value)}</span>
-    </button>
+        <button
+            type="button"
+            class="flex-shrink-0 text-libre-green disabled:cursor-not-allowed"
+            {disabled}
+            aria-label={$_('datePicker.openCalendar')}
+            title={$_('datePicker.openCalendar')}
+            onclick={(e) => {
+                e.stopPropagation();
+                if (calendarOpen) closeCalendar();
+                else openCalendar();
+            }}
+        >
+            <Calendar size={inputStyle ? 14 : compact ? 12 : 14} />
+        </button>
+        {#if label}<span class="flex-shrink-0 text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">{label}</span>{/if}
+        <input
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            spellcheck="false"
+            {disabled}
+            class="min-w-0 flex-1 border-none bg-transparent font-mono text-gray-700 outline-none dark:text-gray-200 {inputStyle ? 'text-sm' : compact ? 'text-[11px]' : 'text-xs'} {typedInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+            style={inputStyle ? undefined : 'width: 6.5rem'}
+            value={shown}
+            placeholder="YYYY-MM-DD"
+            title={$_('datePicker.formatHint')}
+            data-testid={testid}
+            oninput={(e) => {
+                typed = e.currentTarget.value;
+                syncCalendarToTyped();
+            }}
+            onblur={() => {
+                resetDateArrowHold();
+                commitTyped();
+            }}
+            onkeyup={resetDateArrowHold}
+            onkeydown={handleInputKeydown}
+            onfocus={openCalendar}
+            onclick={(e) => {
+                e.stopPropagation();
+                // Clicking the field still opens the calendar: the input is an addition to
+                // the picker, not a replacement, and the click means "I want to set a date".
+                if (!calendarOpen) openCalendar();
+            }}
+        />
+    </div>
 
     {#if calendarOpen}
         <div class="sdp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 w-[280px]" style={popoverStyle}>
-            <CalendarMonth year={calYear} month={calMonth} {weekdayLabels} {monthLabels} onDayClick={handleDayClick} onPrevMonth={prevMonth} onNextMonth={nextMonth} onSetMonth={setMonth} onSetYear={setYear} onGoToToday={goToToday} highlights={{selected: value}} {disabledDates} {allowFuture} />
+            <CalendarMonth year={calYear} month={calMonth} {weekdayLabels} {monthLabels} onDayClick={handleDayClick} onPrevMonth={prevMonth} onNextMonth={nextMonth} onSetMonth={setMonth} onSetYear={setYear} onGoToToday={goToToday} highlights={{selected: previewIso}} {disabledDates} {allowFuture} />
         </div>
     {/if}
 </div>

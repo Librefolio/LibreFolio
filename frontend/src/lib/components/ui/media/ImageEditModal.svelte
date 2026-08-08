@@ -18,6 +18,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/files/imageCrop';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // Props
     export let open: boolean = false;
     export let file: File | null = null;
@@ -376,9 +377,9 @@
                     <div class="panel-row">
                         <span class="panel-label">{$_('uploads.outputSize') || 'Output'}:</span>
                         <div class="dimensions-group">
-                            <input class="dim-input" max={selectionWidth || 9999} min="1" on:input={handleOutputWidthInput} type="number" value={effectiveOutputWidth} />
+                            <input class="dim-input" max={selectionWidth || 9999} min="1" on:input={handleOutputWidthInput} type="number" use:numericArrows value={effectiveOutputWidth} />
                             <span class="dim-sep">×</span>
-                            <input class="dim-input" max={selectionHeight || 9999} min="1" on:input={handleOutputHeightInput} type="number" value={effectiveOutputHeight} />
+                            <input class="dim-input" max={selectionHeight || 9999} min="1" on:input={handleOutputHeightInput} type="number" use:numericArrows value={effectiveOutputHeight} />
                             <span class="dim-unit">px</span>
                             <Lock class="lock-icon" size={12} />
                         </div>
@@ -390,7 +391,7 @@
                             <!-- Spacer to align with the Y (second) dim-input -->
                             <span class="scale-spacer"></span>
                             <span class="scale-x">×</span>
-                            <input class="scale-input" max="1" min="0.01" on:input={handleScaleInput} step="0.01" type="number" value={scaleFactor.toFixed(2)} />
+                            <input class="scale-input" max="1" min="0.01" on:input={handleScaleInput} step="0.01" type="number" use:numericArrows={{step: 0.01}} value={scaleFactor.toFixed(2)} />
                         </div>
                     </div>
                 </div>

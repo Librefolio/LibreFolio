@@ -101,6 +101,33 @@
       "resultDeleted": "eliminado",
       "resultHasTransactions": "tiene transacciones existentes"
     },
+    "merge": {
+      "title": "Fusionar activos",
+      "subtitle": "Dos entradas del mismo instrumento pasan a ser una. No se pierde nada: lo que no es principal se conserva como identificador alternativo.",
+      "chooseTarget": "¿Qué activo quieres conservar?",
+      "chooseTargetHint": "El otro se elimina y su historial se traslada aquí. También se pueden elegir activos inactivos.",
+      "targetPlaceholder": "Elige un activo…",
+      "noTargets": "No hay ningún otro activo con el que fusionar.",
+      "whatMoves": "Qué se traslada",
+      "movesNothing": "Este activo no tiene historial que trasladar.",
+      "moved": {
+        "transactions": "Transacciones",
+        "prices": "Precios",
+        "pricesDiscarded": "Precios descartados (el activo que permanece ya tiene ese día)",
+        "events": "Eventos",
+        "eventsDiscarded": "Eventos duplicados descartados",
+        "relinked": "Transacciones revinculadas al evento que permanece",
+        "providerMoved": "Proveedor de precios trasladado",
+        "providerDropped": "Proveedor de precios descartado (el activo que permanece ya tiene uno)"
+      },
+      "identifiersKept": "Identificadores conservados como alternativos",
+      "identifiersKeptHint": "Seguirán reconociendo este activo en las próximas importaciones.",
+      "destructiveWarning": "\"{name}\" será eliminado. Esta acción no se puede deshacer.",
+      "confirmButton": "Fusionar y eliminar",
+      "toastOk": "{source} fusionado en {target}",
+      "errorGeneric": "La fusión ha fallado",
+      "action": "Fusionar con…"
+    },
     "types": {
       "STOCK": "Acción",
       "ETF": "ETF",
@@ -130,7 +157,9 @@
         "message": "Ya existe un activo llamado «{name}». Podría ser el mismo instrumento con un nombre diferente. ¿Quieres usarlo y agregar las claves de búsqueda de la importación a sus identificadores?",
         "useAndAdd": "Usarlo y agregar la clave",
         "useOnly": "Usarlo sin agregar",
-        "changeName": "No, cambiar el nombre"
+        "changeName": "No, cambiar el nombre",
+        "messagePlain": "Ya existe un activo llamado «{name}». Podría ser el mismo instrumento con un nombre diferente.",
+        "use": "Usarlo"
       },
       "importNotices": {
         "intro": "Puede tratarse de un valor antiguo, vencido o reembolsado que ya no cotiza: la búsqueda en línea podría no encontrarlo. En ese caso, crea un activo simple introduciendo los datos manualmente; puedes marcarlo como inactivo desde el interruptor del pie de página.",
@@ -151,7 +180,8 @@
       "quoteBaseQuantity": "Unidades por precio unitario",
       "quoteBaseTooltip": "Especifica a cuántas acciones o participaciones se refiere el precio de mercado. Para ETF o acciones suele ser 1; los bonos suelen cotizarse sobre una base de 100.",
       "bondQuoteBaseHint": "Los bonos suelen cotizarse por cada 100 de nominal (p. ej. BTP): verifica este valor — normalmente es 100.",
-      "activeTooltip": "Si está activo, el activo se actualizará automáticamente por el programador y seguirá visible en los selectores. Desactívelo para ocultarlo cuando ya no lo posea y no quiera seguir descargando precios."
+      "activeTooltip": "Si está activo, el activo se actualizará automáticamente por el programador y seguirá visible en los selectores. Desactívelo para ocultarlo cuando ya no lo posea y no quiera seguir descargando precios.",
+      "quoteBaseMin": "Debe ser al menos 1"
     },
     "provider": {
       "assignment": "Asignación de Proveedor",
@@ -227,7 +257,20 @@
       "deleteConfirmMessage": "¿Eliminar {n} identificadores?",
       "otherLabel": "Otros identificadores",
       "otherPlaceholder": "Escribe un código o nombre, luego Intro o coma",
-      "otherSeparatorsHint": "Añade un identificador a la vez — pulsa Intro, coma (,), punto y coma (;) o Tab para confirmarlo. Los espacios se mantienen en el valor."
+      "otherSeparatorsHint": "Añade un identificador a la vez — pulsa Intro, coma (,), punto y coma (;) o Tab para confirmarlo. Los espacios se mantienen en el valor.",
+      "primaryChooser": {
+        "title": "¿Cuál {type} es el principal para «{asset}»?",
+        "titleGeneric": "¿Cuál identificador es el principal para «{asset}»?",
+        "hint": "Los demás se conservan como identificadores alternativos y servirán para reconocer este activo en próximas importaciones.",
+        "originProvider": "del proveedor",
+        "originReport": "del informe",
+        "originStored": "ya guardado",
+        "btpNote": "Los BTP italianos comprados en la emisión (\"CUM\") tienen un ISIN distinto del negociable: el primero da derecho al premio de fidelidad pero no cotiza. Mantén como principal el que **cotiza** — es el único con precio.",
+        "keepAlternates": "Se conservan como alternativos:",
+        "confirm": "Confirmar",
+        "cancel": "Cancelar",
+        "skip": "No guardar"
+      }
     },
     "confirm": {
       "saveWithoutTest": "¿Guardar sin probar?",
@@ -441,7 +484,7 @@
     },
     "possibleDuplicate": "Posible duplicado",
     "todoBlockerCommitHint": "Complete todos los campos requeridos antes de guardar",
-    "todoWarningVerifyHint": "{n} campo(s) auto-derivado(s) a verificar antes de guardar",
+    "todoWarningVerifyHint": "{n, plural, one {# campo auto-derivado a verificar antes de guardar} other {# campos auto-derivados a verificar antes de guardar}}",
     "todoWarningConfirmTitle": "¿Verificar los campos auto-derivados?",
     "todoWarningConfirmMessage": "{n} fila(s) tienen un valor auto-derivado que aún no se ha verificado (p. ej. la cantidad nominal de los bonos vencidos). Revísalos, o guarda de todos modos si los valores derivados son correctos.",
     "todoWarningConfirmItemsLabel": "{n} campo(s) a verificar",
@@ -514,7 +557,12 @@
       "duplicateBadge": "duplicado",
       "similarityTotal": "Solapamiento total",
       "similarityPartial": "Parcial",
-      "similarityTooltip": "Total: cada fila tiene coincidencia entre archivos. Parcial: al menos una fila no tiene gemelo exacto — revísalo antes de importar."
+      "similarityTooltip": "Total: cada fila tiene coincidencia entre archivos. Parcial: al menos una fila no tiene gemelo exacto — revísalo antes de importar.",
+      "statusAllAuto": "Todo resuelto automáticamente",
+      "statusToVerify": "{n} por verificar",
+      "tierTotalTitle": "Solapamiento total",
+      "tierPartialTitle": "Solapamiento parcial",
+      "groupCount": "{n} grupos"
     },
     "duplicatesSelectedTip": "Cuenta solo las filas duplicadas que siguen seleccionadas (se importarán). Los duplicados exactos del lote ya están deseleccionados y no se cuentan aquí.",
     "deselectReasons": {
@@ -531,8 +579,56 @@
       "dbColumn": "BD #{id}",
       "hint": "Los campos resaltados difieren entre las transacciones.",
       "openHint": "Haz clic para comparar en paralelo",
-      "openAction": "Comparar"
-    }
+      "openAction": "Comparar",
+      "keptCount": "Conservas {n} de {total}"
+    },
+    "noticeConfirmTitle": "Notas del importador",
+    "noticeConfirmMessage": "{n, plural, one {La importación ha dejado # nota que explica una decisión tomada. Léela antes de continuar.} other {La importación ha dejado # notas que explican las decisiones tomadas. Léelas antes de continuar.}}",
+    "todoBlockerVerifyHint": "{n, plural, one {# fila no ha sido comprendida del todo por la importación y debe revisarse antes de guardar.} other {# filas no han sido comprendidas del todo por la importación y deben revisarse antes de guardar.}}",
+    "parseErrorsTitle": "No se pudieron analizar {n} archivo(s)",
+    "brimNotice": {
+      "ca_succession_transfer_in": "Se han identificado valores transferidos desde otra cuenta de custodia ({n} filas).\nSe han registrado como transacciones de tipo «Ajuste» porque no tienen un movimiento de efectivo asociado: se supone por tanto que ya eran tuyos en otro bróker.\nEn ese caso, y si ese bróker está registrado en LibreFolio, al importar la otra mitad de la transacción el sistema propondrá vincular ambas y convertirlas en una «Transferencia de valores».\nA continuación, las filas en detalle:"
+    },
+    "evidenceRowsTitle": "Filas del archivo",
+    "evidenceRowCount": "{n} filas",
+    "noticeSectionInfo": "Notas informativas",
+    "noticeSectionWarning": "Por verificar",
+    "manualFieldsTooltip": "Las transacciones que aparecen aquí abajo pueden ser incorrectas: la importación no ha podido deducir por sí sola todos los campos. Se te pedirá corregirlas antes de guardar la importación.",
+    "stepFixTitle": "Correcciones",
+    "stepDuplicatesTitle": "Duplicados",
+    "fixStep": {
+      "intro": "Estas filas se registraron, pero el archivo no aporta información suficiente para estar seguros. Resuélvelas ahora: la comprobación de duplicados posterior compara cada fila con tu base de datos, y una fila con el tipo equivocado se compara con lo que no toca.",
+      "pending": "{n, plural, one {# fila aún por resolver} other {# filas aún por resolver}}",
+      "settled": "{n, plural, one {# resuelta} other {# resueltas}}",
+      "allDone": "Nada más que corregir",
+      "allDoneDetail": "{n, plural, =0 {Nada que corregir.} one {# fila resuelta. Puedes continuar.} other {# filas resueltas. Puedes continuar.}}",
+      "apply": "Aplicar corrección",
+      "acceptAsIs": "Dejar como está",
+      "acceptAsIsHint": "Dejarla como está es una elección consciente: la fila se importa tal y como la registró el importador.",
+      "badgeCorrected": "Corregida",
+      "badgeKept": "Mantenida",
+      "applyAgain": "Actualizar",
+      "acceptAll": "{n, plural, one {Mantener la fila restante tal cual} other {Mantener las # filas restantes tal cual}}",
+      "acceptAllHint": "Acepta la lectura del plugin para todas las filas pendientes. Aun así podrás cambiarlas después.",
+      "assetFromDb": "Activos ya catalogados",
+      "assetPlaceholder": "Elige entre los instrumentos encontrados en estos archivos",
+      "assetCreate": "Crear un activo nuevo",
+      "groupTrades": "Movimientos de efectivo que podrían ser operaciones",
+      "groupTradesHint": "Registrados como ingreso o retiro porque el archivo no indica cantidad ni instrumento. Si eran una compra o una venta, corrígelos ahora.",
+      "groupCharges": "Comisiones e impuestos sin instrumento",
+      "groupChargesHint": "Comisiones o impuestos sobre operaciones de valores que el archivo no vincula a ningún instrumento. Asígnalos al valor correcto, o mantenlos así si afectan a la cuenta.",
+      "assetNone": "Ningún activo (gasto del bróker)",
+      "reset": "Restaurar",
+      "resetHint": "Devuelve la fila tal como se leyó del archivo, descartando la respuesta dada aquí.",
+      "resetAll": "Restaurar todas ({n})",
+      "resetAllHint": "Devuelve todas las filas ya resueltas tal como se leyeron del archivo."
+    },
+    "duplicatesStepIntro": "Algunas filas aparecen en más de uno de los archivos que estás importando: elige qué copia conservar. La comparación con tu base de datos ya se ha rehecho sobre las filas corregidas y llega lista a la revisión.",
+    "duplicateRecheckFailed": "No se han podido volver a comprobar los duplicados ({error}). El resultado mostrado es el calculado antes de tus correcciones.",
+    "evidenceOpenFile": "Fila {n} del archivo",
+    "evidenceOpenFileHint": "Abre la vista previa del archivo en esta fila, para ver también las filas contiguas.",
+    "inspectAsset": "Inspeccionar / editar",
+    "inspectAssetHint": "Abre el instrumento seleccionado para comprobar su moneda, identificadores y fuente de precios."
   },
   "brokers": {
     "title": "Brókeres",
@@ -1337,7 +1433,9 @@
       "yearsShort": "A"
     },
     "today": "Hoy",
-    "resolvingStart": "Buscando…"
+    "resolvingStart": "Buscando…",
+    "openCalendar": "Abrir el calendario",
+    "formatHint": "Escribe la fecha o elígela en el calendario. Formatos aceptados: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — el año debe escribirse completo."
   },
   "error": {
     "pageNotFound": "Página No Encontrada",
@@ -2118,7 +2216,8 @@
     },
     "size": "Tamaño",
     "zoomIn": "Ampliar",
-    "zoomOut": "Reducir"
+    "zoomOut": "Reducir",
+    "previewAutofitHint": "Haz doble clic en la cabecera de una columna para ajustar su ancho"
   },
   "donationPopup": {
     "title": "¡LibreFolio crece gracias a usuarios como tú!",

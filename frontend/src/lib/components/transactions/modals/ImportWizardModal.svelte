@@ -10,7 +10,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, ListChecks, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
+    import {Upload, Trash2, Eye, Search, ChevronDown, ChevronRight, Check, AlertTriangle, Info, Plus, CheckCircle, FileText, RefreshCw, CheckSquare, Square, ListChecks, X, Wand2, Pencil, Loader2} from 'lucide-svelte';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
@@ -47,7 +47,9 @@
     import {scrollOnOverflow, attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import type {ColumnDef, RowAction, EnumOption} from '$lib/components/table/types';
-    import type {BrimDuplicateMatch} from '$lib/types/files';
+    import type {BrimDuplicateMatch, BrimNotice} from '$lib/types/files';
+    import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
+    import FixFlaggedStep, {type FixPatch} from '$lib/components/transactions/import/FixFlaggedStep.svelte';
     import TransactionCompareModal from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {CompareColumn, CompareField, CompareCell} from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {TXReadItem} from '$lib/components/transactions';
@@ -82,14 +84,37 @@
     // =========================================================================
 
     const ALLOWED_EXTENSIONS = ['.csv', '.xlsx', '.xls'];
-    const STEPS = ['step1Title', 'step2Title', 'step3Title', 'step4Title'] as const;
+
+    /**
+     * Wizard steps, in canonical order.
+     *
+     * `fix` and `duplicates` only appear when they have something to do. A wizard that
+     * always shows every step, half of them empty, teaches the user to click through
+     * without reading — which is exactly the habit that makes a review step useless.
+     *
+     * Order matters and encodes the invariant that motivated the split: nothing is
+     * compared against the database until the data is complete. Understand → correct →
+     * compare → review. An `assets` step ("Unifica asset") belongs between `analyze`
+     * and `fix`; add it to STEP_DEFS and to `stepIsActive` when it lands.
+     */
+    type StepId = 'upload' | 'select' | 'analyze' | 'fix' | 'duplicates' | 'review';
+
+    const STEP_DEFS: ReadonlyArray<{id: StepId; titleKey: string}> = [
+        {id: 'upload', titleKey: 'step1Title'},
+        {id: 'select', titleKey: 'step2Title'},
+        {id: 'analyze', titleKey: 'step3Title'},
+        {id: 'fix', titleKey: 'stepFixTitle'},
+        {id: 'duplicates', titleKey: 'stepDuplicatesTitle'},
+        {id: 'review', titleKey: 'step4Title'},
+    ];
+
+    const STEP_ORDER: ReadonlyArray<StepId> = STEP_DEFS.map((s) => s.id);
 
     // =========================================================================
     // Stepper State
     // =========================================================================
 
-    let currentStep = $state(1);
-    let maxReachedStep = $state(1);
+    let currentStepId = $state<StepId>('upload');
 
     // =========================================================================
     // Step 1 State — Upload & Assign Broker
@@ -191,6 +216,7 @@
     let parseDone = $derived(parseTotalCount > 0 && parseResults.every((r) => r.status === 'done' || r.status === 'error'));
     let parseHasSuccess = $derived(parseResults.some((r) => r.status === 'done'));
     let parseHasErrors = $derived(parseResults.some((r) => r.status === 'error'));
+    let parseFailures = $derived(parseResults.filter((r) => r.status === 'error'));
     let parseParsing = $derived(parseResults.some((r) => r.status === 'parsing'));
     let step3CanContinue = $derived(parseDone && parseHasSuccess);
     let usingCachedResults = $state(false);
@@ -545,6 +571,42 @@
     let duplicateResolverSelections = $state<Record<number, boolean>>({});
     let expandedDuplicateGroupKeys = $state<Set<string>>(new Set());
     let duplicateResolverCollapsed = $state(false);
+    /** The database-collision recap is informational — it opens folded. */
+    /** Width of the file-priority column, dragged by the user (desktop only). */
+    let duplicatePriorityWidth = $state(280);
+
+    function startPriorityResize(ev: PointerEvent) {
+        ev.preventDefault();
+        const startX = ev.clientX;
+        const startWidth = duplicatePriorityWidth;
+        const onMove = (m: PointerEvent) => {
+            duplicatePriorityWidth = Math.min(560, Math.max(180, startWidth + (m.clientX - startX)));
+        };
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    }
+    /** Tier sub-panels inside the resolver — both start folded (see `resolverTierPanels`). */
+    let expandedDuplicateTiers = $state<Set<DuplicateTier>>(new Set());
+    /**
+     * How the user settled each flagged row in the `fix` step: by correcting it, or by
+     * accepting the plugin's fallback. Kept apart from the todos themselves so a re-parse
+     * can restore the original verdict, and kept per-row (rather than as a bare "done"
+     * set) so the list can show *which* decision was taken.
+     */
+    let fixDecisions = $state<Record<number, 'corrected' | 'kept'>>({});
+    /** The flagged todos as they were before being retired — the row stays readable. */
+    let fixTodoSnapshot = $state<Record<number, ImportTodo[]>>({});
+    /** The transaction as the plugin read it, so a correction can always be undone. */
+    let fixTxSnapshot = $state<Record<number, TransactionCreateItem>>({});
+    let fixExpandedIndices = $state<Set<number>>(new Set());
+    let duplicateRecheckRunning = $state(false);
+    let duplicateRecheckError = $state<string | null>(null);
+    /** True once the duplicate report has been recomputed on the corrected transactions. */
+    let duplicateRecheckDone = $state(false);
     let createAssetForFakeId = $state<number | null>(null);
     let createBrokerOpen = $state(false);
     /** Tracks which context opened the create-broker modal: 'global' or a pendingFile id */
@@ -578,8 +640,9 @@
     let nwCompareHint = $state<string | undefined>(undefined);
     let nwCompareFields = $state<CompareField[]>([]);
     let nwCompareColumns = $state<CompareColumn[]>([]);
-    let nwCompareDefaultKeep = $state<string | undefined>(undefined);
-    let nwCompareOnKeep = $state<((choice: string) => void) | undefined>(undefined);
+    let nwCompareDefaultKept = $state<string[] | undefined>(undefined);
+    let nwCompareResetKept = $state<string[] | undefined>(undefined);
+    let nwCompareOnKeep = $state<((keptIds: string[]) => void) | undefined>(undefined);
 
     // Add-identifier prompt state — shown when user manually resolves an asset that is missing the extracted identifier
     let identifierPromptOpen = $state(false);
@@ -716,7 +779,7 @@
             for (const ft of resp.field_todos ?? []) {
                 const idx = (ft as any).tx_index as number;
                 const list = todosMap.get(idx) ?? [];
-                list.push({field: (ft as any).field, severity: (ft as any).severity, reasonCode: (ft as any).reason_code, message: (ft as any).message});
+                list.push({field: (ft as any).field, severity: (ft as any).severity, reasonCode: (ft as any).reason_code, message: (ft as any).message, evidence: (ft as any).evidence ?? []});
                 todosMap.set(idx, list);
             }
 
@@ -799,10 +862,7 @@
         }
 
         syncDuplicateFilePriority();
-        const groups = buildDuplicateGroups(txArr, assetMap);
-        duplicateGroups = groups;
-        applyPendingDuplicateGroups(txArr, groups);
-        markPendingBulkDuplicates(txArr, assetMap);
+        rebuildDuplicateGroups(txArr, assetMap);
 
         // Compute txCount and sourceFiles per asset resolution
         for (const [fakeId, res] of assetMap) {
@@ -814,6 +874,123 @@
         mergedTransactions = txArr;
         assetResolutions = [...assetMap.values()];
         step4ShowResolveSection = assetMap.size > 0;
+    }
+
+    /** Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly. */
+    function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
+        const groups = buildDuplicateGroups(txArr, assetMap);
+        duplicateGroups = groups;
+        // Nothing partial to arbitrate ⇒ every group is a total overlap, which the resolver
+        // already keeps one copy of. The panel stays available but folded, with a badge that
+        // says so — showing an open resolver full of decisions that need no decision buries
+        // the cases that do.
+        duplicateResolverCollapsed = !groups.some((g) => g.tier === 'probable');
+        expandedDuplicateTiers = new Set<DuplicateTier>();
+        applyPendingDuplicateGroups(txArr, groups);
+        markPendingBulkDuplicates(txArr, assetMap);
+    }
+
+    /**
+     * Recomputes the duplicate verdict against the database using the transactions as they
+     * stand now — corrections applied, fake asset ids replaced by the user's choices.
+     *
+     * The report returned by `/parse` answers the question "does the plugin's raw reading of
+     * this file already exist?". After the user fixes a row that the plugin misread, that is
+     * no longer the question being asked, so the answer is re-requested rather than reused.
+     */
+    async function refreshDuplicateReport(): Promise<void> {
+        duplicateRecheckError = null;
+        if (mergedTransactions.length === 0) {
+            duplicateGroups = [];
+            return;
+        }
+
+        // Duplicate detection is scoped to one broker, and an import can span several.
+        const byBroker = new Map<number, MergedTx[]>();
+        for (const m of mergedTransactions) {
+            const brokerId = parseResults.find((r) => r.fileId === m.sourceFileId)?.brokerId;
+            if (typeof brokerId !== 'number') continue;
+            const list = byBroker.get(brokerId) ?? [];
+            list.push(m);
+            byBroker.set(brokerId, list);
+        }
+        if (byBroker.size === 0) return;
+
+        const resolvedByFakeId = new Map<number, number>();
+        for (const res of assetResolutions) {
+            if (typeof res.resolvedAssetId === 'number') resolvedByFakeId.set(res.fakeAssetId, res.resolvedAssetId);
+        }
+
+        duplicateRecheckRunning = true;
+        const verdict = new Map<number, {status: DuplicateStatus; matches: BrimDuplicateMatch[]}>();
+        try {
+            for (const [brokerId, rows] of byBroker) {
+                const payload = rows.map((m) => {
+                    const clone = {...m.tx} as TransactionCreateItem;
+                    const aid = typeof clone.asset_id === 'number' ? clone.asset_id : null;
+                    // An unresolved fake id would be compared as a literal id that matches
+                    // nothing — send null so the row is compared on its other fields.
+                    if (aid !== null && isFakeAssetId(aid)) {
+                        (clone as {asset_id?: number | null}).asset_id = resolvedByFakeId.get(aid) ?? null;
+                    }
+                    return clone;
+                });
+                const report = await zodiosApi.check_duplicates_api_v1_brokers_import_duplicates_post({
+                    broker_id: brokerId,
+                    transactions: payload as never,
+                });
+                const pendingDeleteSet = new Set(pendingDeleteTxIds);
+                const record = (entries: unknown[], status: DuplicateStatus) => {
+                    for (const raw of entries as Array<{tx_row_index: number; tx_existing_matches?: BrimDuplicateMatch[]}>) {
+                        const all = raw.tx_existing_matches ?? [];
+                        const surviving = all.filter((mm) => !pendingDeleteSet.has(mm.existing_tx_id));
+                        // Every DB match is queued for deletion ⇒ nothing left to collide with.
+                        if (all.length > 0 && surviving.length === 0) continue;
+                        const row = rows[raw.tx_row_index];
+                        if (row) verdict.set(row.index, {status, matches: surviving});
+                    }
+                };
+                record(report.tx_likely_duplicates ?? [], 'likely');
+                record(report.tx_possible_duplicates ?? [], 'possible');
+            }
+        } catch (e) {
+            // A failed re-check must not silently fall back to the stale verdict: say so and
+            // keep what we have, so the user can still arbitrate manually.
+            duplicateRecheckError = extractErrorMessage(e);
+            duplicateRecheckRunning = false;
+            return;
+        }
+        duplicateRecheckRunning = false;
+
+        const assetMap = new Map<number, AssetResolution>(assetResolutions.map((r) => [r.fakeAssetId, r]));
+        const txArr = mergedTransactions.map((m) => {
+            const v = verdict.get(m.index);
+            const status: DuplicateStatus = v?.status ?? 'unique';
+            // Recomputed, not carried over: a correction can clear a false duplicate, and the
+            // row must then become selectable again. Rows predating the broker's opening date
+            // stay out either way.
+            const openedAt = brokers.find((b) => b.id === parseResults.find((r) => r.fileId === m.sourceFileId)?.brokerId)?.opened_at ?? null;
+            const beforeOpening = openedAt != null && String(m.tx.date ?? '') !== '' && String(m.tx.date ?? '') < openedAt;
+            return {
+                ...m,
+                duplicateStatus: status,
+                dupMatches: v?.matches ?? [],
+                dupGroupKey: undefined,
+                dupTier: undefined,
+                dupKeeperIndex: undefined,
+                dupKeeperFileName: undefined,
+                isDupKeeper: undefined,
+                dupPendingMatch: undefined,
+                selected: !beforeOpening && duplicateStatusAllowsAutoSelect(status),
+            } as MergedTx;
+        });
+
+        duplicateResolverTouchedKeys = new Set();
+        duplicateResolverSelections = {};
+        expandedDuplicateGroupKeys = new Set();
+        rebuildDuplicateGroups(txArr, assetMap);
+        mergedTransactions = txArr;
+        duplicateRecheckDone = true;
     }
 
     function resolveAsset(fakeAssetId: number, realAssetId: number) {
@@ -1004,8 +1181,14 @@
         return getAssetDisplayName(typeof first.tx.asset_id === 'number' ? first.tx.asset_id : null);
     }
 
+    /**
+     * Badge colour by overlap tier — semantics are *safety*, not severity:
+     *  - `sure`     = total overlap → green: keeping one copy is the safe, obvious call.
+     *  - `probable` = partial overlap → orange: the rows only partly match, so the
+     *                 automatic choice may be wrong and deserves a look.
+     */
     function duplicateTierBadgeClass(tier: DuplicateTier): string {
-        return tier === 'sure' ? 'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700' : 'bg-yellow-100 text-yellow-800 ring-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:ring-yellow-700';
+        return tier === 'sure' ? 'bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-700' : 'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700';
     }
 
     function toggleDuplicateGroup(groupKey: string) {
@@ -1029,6 +1212,13 @@
     /** Discrete overlap-similarity label for a group header (Totale / Parziale). */
     function duplicateSimilarityLabel(tier: DuplicateTier): string {
         return tier === 'sure' ? $t('importWizard.resolver.similarityTotal') : $t('importWizard.resolver.similarityPartial');
+    }
+
+    function toggleDuplicateTier(tier: DuplicateTier) {
+        const next = new Set(expandedDuplicateTiers);
+        if (next.has(tier)) next.delete(tier);
+        else next.add(tier);
+        expandedDuplicateTiers = next;
     }
 
     /**
@@ -1296,7 +1486,9 @@
             amount: amountCell,
             broker: src.brokerId != null ? {display: getBrokerName(src.brokerId), cmp: String(src.brokerId)} : {display: '—', cmp: ''},
             asset: {display: assetName, cmp: `${src.assetId ?? ''}|${assetName.toLowerCase()}`},
-            description: {display: src.description.trim() || '—', cmp: src.description.trim().toLowerCase()},
+            // Compared whitespace-insensitively, like the duplicate matcher: a description
+            // re-wrapped by the bank is the same text and must not be flagged as a difference.
+            description: {display: src.description.trim() || '—', cmp: src.description.toLowerCase().replace(/\s+/g, '')},
         };
     }
 
@@ -1304,7 +1496,9 @@
         return [
             {key: 'date', label: $t('common.date')},
             {key: 'type', label: $t('common.type')},
-            {key: 'amount', label: $t('common.amount'), align: 'right'},
+            // Left-aligned like every other field: the columns are transactions, not a
+            // ledger, so nothing lines up under an amount to be read against it.
+            {key: 'amount', label: $t('common.amount')},
             {key: 'broker', label: $t('common.broker')},
             {key: 'asset', label: $t('common.asset')},
             {key: 'description', label: $t('common.description')},
@@ -1333,19 +1527,20 @@
         if (members.length < 2) return;
         nwCompareFields = compareFieldDefs();
         nwCompareColumns = members.map(columnFromMergedTx);
-        const selected = members.filter((mt) => resolverSelectionFor(group, mt.index));
-        nwCompareDefaultKeep = selected.length === 1 ? String(selected[0].index) : 'all';
-        nwCompareOnKeep = (choice: string) => applyLotCompareKeep(group, choice);
+        nwCompareDefaultKept = members.filter((mt) => resolverSelectionFor(group, mt.index)).map((mt) => String(mt.index));
+        nwCompareResetKept = [...defaultKeeperIndices(group)].map((i) => String(i));
+        nwCompareOnKeep = (keptIds: string[]) => applyLotCompareKeep(group, keptIds);
         nwCompareTitle = `🔍 ${$t('importWizard.compareModal.title', {values: {n: members.length}})}`;
         nwCompareHint = $t('importWizard.compareModal.hint');
         nwCompareOpen = true;
     }
 
     /** Apply a "keep which" choice from the compare modal back to the resolver selection. */
-    function applyLotCompareKeep(group: DuplicateGroup, choice: string) {
+    function applyLotCompareKeep(group: DuplicateGroup, keptIds: string[]) {
+        const keep = new Set(keptIds);
         const next = {...duplicateResolverSelections};
         for (const idx of group.memberIndices) {
-            next[idx] = choice === 'all' ? true : String(idx) === choice;
+            next[idx] = keep.has(String(idx));
         }
         duplicateResolverSelections = next;
         duplicateResolverTouchedKeys = new Set(duplicateResolverTouchedKeys).add(group.key);
@@ -1363,7 +1558,8 @@
             {id: String(mt.index), title: fileName, selectable: false, cells: {...buildCompareCells(cmpSourceFromTx(mt.tx, getBrokerIdForTx(mt))), file: fileCell(fileName)}},
             {id: 'pending', title: pendingLabel, selectable: false, cells: {...buildCompareCells(cmpSourceFromTx(match)), file: fileCell(pendingLabel)}},
         ];
-        nwCompareDefaultKeep = undefined;
+        nwCompareDefaultKept = undefined;
+        nwCompareResetKept = undefined;
         nwCompareOnKeep = undefined;
         nwCompareTitle = `🔍 ${$t('importWizard.compareModal.title', {values: {n: 2}})}`;
         nwCompareHint = $t('importWizard.compareModal.hint');
@@ -1400,7 +1596,8 @@
             {id: String(mt.index), title: fileName, selectable: false, cells: {...buildCompareCells(cmpSourceFromTx(mt.tx, getBrokerIdForTx(mt))), file: fileCell(fileName)}},
             {id: `db-${existingId}`, title: dbLabel, selectable: false, cells: {...buildCompareCells(cmpSourceFromExisting(existing)), file: fileCell('—')}},
         ];
-        nwCompareDefaultKeep = undefined;
+        nwCompareDefaultKept = undefined;
+        nwCompareResetKept = undefined;
         nwCompareOnKeep = undefined;
         nwCompareTitle = `🔍 ${$t('importWizard.compareModal.title', {values: {n: 2}})}`;
         nwCompareHint = $t('importWizard.compareModal.hint');
@@ -1941,7 +2138,41 @@ ${arrow}<span>${label}</span></span>`,
     let hasUnsavedWork = $derived(pendingFiles.length > 0 || selectedFiles.length > 0 || parseResults.length > 0 || mergedTransactions.length > 0);
     let selectedBrokerCount = $derived(new Set(selectedFiles.map((f) => f.brokerId)).size);
     let step3Warnings = $derived(parseResults.flatMap((r) => r.response?.warnings ?? []));
-    let step3WarningsByFile = $derived(parseResults.filter((r) => r.status === 'done' && (r.response?.warnings?.length ?? 0) > 0).map((r) => ({fileName: r.fileName, fileId: r.fileId, warnings: r.response!.warnings as string[]})));
+    /**
+     * Notices grouped by *severity first, file second*.
+     *
+     * Severity is the axis the reader acts on: an `info` explains a deliberate plugin
+     * decision, a `warning` asks for attention. Grouping by file alone mixed the two,
+     * so a single warning buried among informational notes looked identical to them.
+     * Warnings are emitted first so the section that needs action is on top.
+     */
+    let step3NoticeSections = $derived(
+        (['warning', 'info'] as const)
+            .map((severity) => ({
+                severity,
+                files: parseResults
+                    .filter((r) => r.status === 'done' && (r.response?.warnings?.length ?? 0) > 0)
+                    .map((r) => ({
+                        fileName: r.fileName,
+                        fileId: r.fileId,
+                        warnings: (r.response!.warnings as BrimNotice[]).filter((w) => (w.severity === 'info' ? 'info' : 'warning') === severity),
+                    }))
+                    .filter((f) => f.warnings.length > 0),
+            }))
+            .filter((s) => s.files.length > 0),
+    );
+    let step3HasWarningSeverity = $derived(step3Warnings.some((w) => w.severity !== 'info'));
+
+    /**
+     * Duplicate groups split by overlap tier, partial first.
+     *
+     * `probable` (partial overlap) is the only tier that really needs a human: the rows
+     * only partly match, so the automatic keeper may be the wrong one. `sure` (total
+     * overlap) is mechanical — keep one copy — and is folded away behind its own panel
+     * so it stops competing for attention.
+     */
+    let resolverTierPanels = $derived((['probable', 'sure'] as const).map((tier) => ({tier: tier as DuplicateTier, groups: duplicateGroups.filter((g) => g.tier === tier)})).filter((p) => p.groups.length > 0));
+    let resolverPartialCount = $derived(duplicateGroups.filter((g) => g.tier === 'probable').length);
 
     // =========================================================================
     // Lifecycle
@@ -1957,8 +2188,7 @@ ${arrow}<span>${label}</span></span>`,
     });
 
     function resetState() {
-        currentStep = 1;
-        maxReachedStep = 1;
+        currentStepId = 'upload';
         pendingFiles = [];
         globalBrokerId = null;
         uploading = false;
@@ -1987,6 +2217,15 @@ ${arrow}<span>${label}</span></span>`,
         duplicateResolverTouchedKeys = new Set();
         duplicateResolverSelections = {};
         expandedDuplicateGroupKeys = new Set();
+        fixDecisions = {};
+        fixTodoSnapshot = {};
+        fixTxSnapshot = {};
+        fixExpandedIndices = new Set();
+        fixCreateAssetIndex = null;
+        fixCreatedAssets = {};
+        duplicateRecheckRunning = false;
+        duplicateRecheckDone = false;
+        duplicateRecheckError = null;
         step4ShowResolveSection = true;
         createAssetForFakeId = null;
         editBrokerOpen = false;
@@ -2024,58 +2263,332 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     // =========================================================================
-    // Navigation
+    // Navigation — step machine
     // =========================================================================
 
-    function goToStep(target: number) {
-        if (target >= currentStep) return;
-        if (target <= 2) {
-            selectedFiles = target === 1 ? [] : selectedFiles;
+    /**
+     * Fields whose value decides the duplicate comparison: type, date, quantity, asset and
+     * the cash leg. Only a blocker on one of these belongs in this step.
+     *
+     * A missing cost basis, by contrast, blocks the *import* but not the *comparison* — it
+     * is handled later, in the bulk editor, which has the per-unit tooling for it. Dragging
+     * it here would turn the step into a wall the editor cannot open.
+     */
+    const DUP_RELEVANT_FIELDS = new Set(['type', 'date', 'quantity', 'asset_id', 'cash', 'cash.amount', 'cash.code']);
+
+    function isDupRelevantBlocker(td: ImportTodo): boolean {
+        return td.severity === 'blocker' && DUP_RELEVANT_FIELDS.has(td.field);
+    }
+
+    /**
+     * A charge or an income the plugin could not attach to an instrument. Not a blocker —
+     * the file may genuinely never name it — but just as anomalous as a misread trade, and
+     * this is the one screen where the user can still fix it while the context is on screen.
+     */
+    function isUnallocatedAssetWarning(td: ImportTodo): boolean {
+        return td.severity === 'warning' && td.field === 'asset_id';
+    }
+
+    function isFixStepTodo(td: ImportTodo): boolean {
+        return isDupRelevantBlocker(td) || isUnallocatedAssetWarning(td);
+    }
+
+    /**
+     * Rows the plugin could not fully understand: it booked them somehow, but said so.
+     * They must be settled before the database comparison, because a purchase misread as
+     * a cash withdrawal gets compared against cash withdrawals — the wrong question,
+     * asked confidently.
+     *
+     * A settled row stays in the list, badged with the decision and still editable: the
+     * blockers it carried are retired from the transaction (so the bulk editor no longer
+     * refuses to save), which is why the todos shown here come from `fixTodoSnapshot`.
+     */
+    let fixStepRows = $derived(
+        mergedTransactions
+            .filter((m) => m.todos.some(isFixStepTodo) || fixDecisions[m.index] != null)
+            // Only the todos this step can actually act on are handed over: showing a row a
+            // cost-basis complaint it cannot fix here would be noise at best.
+            .map((m) => ({
+                index: m.index,
+                tx: m.tx as unknown as Record<string, unknown>,
+                todos: fixTodoSnapshot[m.index] ?? m.todos.filter(isFixStepTodo),
+                decision: fixDecisions[m.index] ?? null,
+            })),
+    );
+
+    let fixStepPendingCount = $derived(fixStepRows.filter((r) => r.decision === null).length);
+
+    /**
+     * The instruments the analysis already recognised. A flagged row's asset is nearly
+     * always one of them — the file named it on another line — so offering the whole
+     * database first would mean asking the user to find what the import already found.
+     */
+    let fixAnalysisAssets = $derived(
+        assetResolutions.map((r) => ({
+            id: r.fakeAssetId,
+            label: r.extractedName || r.extractedSymbol || r.extractedIsin || `#${r.fakeAssetId}`,
+            detail: [r.extractedSymbol, r.extractedIsin].filter(Boolean).join(' · '),
+        })),
+    );
+
+    /*
+     * Collisions with the database are deliberately NOT listed here. They carry no
+     * decision — the re-check recomputes them after the corrections and they land
+     * straight in the review table as pre-deselected rows with a ⚠ status. Showing
+     * a second, read-only copy of them would only add noise to a step whose whole
+     * job is arbitrating overlaps *between the files being imported*.
+     */
+
+    function toggleFixRow(index: number) {
+        const next = new Set(fixExpandedIndices);
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+        fixExpandedIndices = next;
+    }
+
+    /**
+     * Writes the user's correction onto the merged transaction and retires its blocker
+     * todos. The parse response itself is left untouched: it stays the plugin's objective
+     * reading of the file, and a re-parse must be able to restore it.
+     */
+    function applyFixToRow(index: number, patch: FixPatch) {
+        snapshotFixTodos(index);
+        mergedTransactions = mergedTransactions.map((m) => {
+            if (m.index !== index) return m;
+            const tx = {...m.tx} as TransactionCreateItem;
+            if (patch.type) (tx as {type?: string}).type = patch.type;
+            if (patch.asset_id !== undefined) (tx as {asset_id?: number | null}).asset_id = patch.asset_id;
+            if (patch.quantity !== undefined && patch.quantity !== '') (tx as {quantity?: string}).quantity = String(patch.quantity);
+            return {...m, tx, todos: m.todos.filter((td) => !isFixStepTodo(td))};
+        });
+        markFixResolved(index, 'corrected');
+    }
+
+    /** The user judged the plugin's fallback good enough — record the decision, keep the row. */
+    function acceptPluginFallback(index: number) {
+        snapshotFixTodos(index);
+        mergedTransactions = mergedTransactions.map((m) => (m.index === index ? {...m, todos: m.todos.filter((td) => !isFixStepTodo(td))} : m));
+        markFixResolved(index, 'kept');
+    }
+
+    /** "Everything the plugin proposed is fine" — settles every row still waiting. */
+    function acceptAllPluginFallbacks() {
+        for (const row of fixStepRows.filter((r) => r.decision === null)) acceptPluginFallback(row.index);
+    }
+
+    /**
+     * Row index whose asset is being created, and the ids created so far. The instrument
+     * of a flagged row can be in neither the analysis list nor the database — the file
+     * only ever named it in the free-text description of this one line — so the step
+     * needs a way out that does not send the user off to another screen.
+     */
+    let fixCreateAssetIndex = $state<number | null>(null);
+    let fixCreatedAssets = $state<Record<number, number>>({});
+
+    /** Bare ISIN detector: 2 country letters, 9 alphanumerics, 1 check digit. */
+    const ISIN_RE = /\b([A-Z]{2}[A-Z0-9]{9}\d)\b/;
+
+    /**
+     * Asset opened for inspection from the resolution step. Picking the right instrument
+     * from a list of names is guesswork when two of them read alike — the currency, the
+     * identifiers and the provider decide it, and they are only visible in the asset form.
+     */
+    let inspectAssetData = $state<Record<string, unknown> | null>(null);
+    let inspectAssetLoading = $state(false);
+
+    async function openAssetInspector(assetId: number) {
+        if (inspectAssetLoading) return;
+        inspectAssetLoading = true;
+        try {
+            const assets = (await zodiosApi.get_all_assets_api_v1_assets_all_get()) as Array<Record<string, unknown>>;
+            const asset = assets.find((a) => a.id === assetId);
+            if (!asset) return;
+            const assignments = (await zodiosApi.get_provider_assignments_api_v1_assets_provider_assignments_get({queries: {asset_ids: [assetId]}})) as Array<Record<string, unknown>>;
+            const assignment = assignments[0] ?? null;
+            inspectAssetData = {
+                ...asset,
+                provider_code: assignment?.provider_code ?? null,
+                provider_identifier: assignment?.identifier ?? '',
+                provider_identifier_type: assignment?.identifier_type ?? '',
+                provider_params: assignment?.provider_params ?? null,
+                provider_user_url: asset.user_url ?? '',
+                provider_url: assignment?.provider_url ?? null,
+            };
+        } finally {
+            inspectAssetLoading = false;
         }
-        if (target <= 2) {
-            mergedTransactions = [];
-            assetResolutions = [];
-            duplicateGroups = [];
-            duplicateFilePriorityIds = [];
-            duplicateResolverTouchedKeys = new Set();
-            duplicateResolverSelections = {};
-            expandedDuplicateGroupKeys = new Set();
+    }
+
+    function fixRowDescription(index: number): string {
+        const row = mergedTransactions.find((m) => m.index === index);
+        const desc = row?.tx?.description;
+        return typeof desc === 'string' ? desc.trim() : '';
+    }
+
+    /**
+     * Search seeds taken from the description. The plugin could not read an instrument out
+     * of it, so nothing here is claimed to be the name — these are candidates the user
+     * filters, which is why the whole description is offered alongside its parts.
+     */
+    function fixCreateHints(index: number): string[] {
+        const desc = fixRowDescription(index);
+        if (desc === '') return [];
+        const isin = desc.match(ISIN_RE)?.[1];
+        const words = desc
+            .split(/[\s:;,/|]+/)
+            .map((w) => w.trim())
+            .filter((w) => w.length >= 3 && w.length <= 24 && /[A-Za-z]/.test(w) && !/^\d+$/.test(w));
+        return [...new Set([...(isin ? [isin] : []), desc, ...words])];
+    }
+
+    /**
+     * Keeps the flagged todos alive for display after they have been retired from the
+     * transaction: the row stays visible and editable, so its reason must stay readable.
+     */
+    function snapshotFixTodos(index: number) {
+        const row = mergedTransactions.find((m) => m.index === index);
+        if (!row) return;
+        if (!fixTxSnapshot[index]) fixTxSnapshot = {...fixTxSnapshot, [index]: {...row.tx}};
+        if (fixTodoSnapshot[index]) return;
+        const todos = row.todos.filter(isFixStepTodo);
+        if (todos.length > 0) fixTodoSnapshot = {...fixTodoSnapshot, [index]: todos};
+    }
+
+    /**
+     * Puts a settled row back exactly as the plugin read it. Correcting a row rewrites the
+     * transaction and retires its todos, so without the snapshots there would be no way
+     * back from a wrong answer other than re-uploading the file.
+     */
+    function resetFixRow(index: number) {
+        const original = fixTxSnapshot[index];
+        const todos = fixTodoSnapshot[index];
+        mergedTransactions = mergedTransactions.map((m) => {
+            if (m.index !== index) return m;
+            return {
+                ...m,
+                tx: original ? ({...original} as TransactionCreateItem) : m.tx,
+                todos: todos ? [...m.todos.filter((td) => !isFixStepTodo(td)), ...todos] : m.todos,
+            };
+        });
+        fixDecisions = Object.fromEntries(Object.entries(fixDecisions).filter(([k]) => Number(k) !== index));
+        fixCreatedAssets = Object.fromEntries(Object.entries(fixCreatedAssets).filter(([k]) => Number(k) !== index));
+    }
+
+    function resetAllFixRows() {
+        for (const row of fixStepRows.filter((r) => r.decision !== null)) resetFixRow(row.index);
+    }
+
+    function markFixResolved(index: number, decision: 'corrected' | 'kept') {
+        fixDecisions = {...fixDecisions, [index]: decision};
+        const open = new Set(fixExpandedIndices);
+        open.delete(index);
+        fixExpandedIndices = open;
+    }
+
+    function stepIsActive(id: StepId): boolean {
+        if (id === 'fix') return fixStepRows.length > 0;
+        // Database collisions do NOT open this step: there is nothing to arbitrate about
+        // them here — they simply arrive at the review deselected. The step exists for the
+        // one decision only the user can make: which copy to keep when the same movement
+        // appears in two of the files being imported.
+        if (id === 'duplicates') return duplicateGroups.length > 0;
+        return true;
+    }
+
+    /**
+     * The step currently shown always stays in the bar even if its reason to exist just
+     * disappeared — fixing the last flagged row must not make the step vanish from under
+     * the user mid-click.
+     */
+    let visibleSteps = $derived(STEP_DEFS.filter((s) => s.id === currentStepId || stepIsActive(s.id)));
+
+    let currentStepIndex = $derived(
+        Math.max(
+            0,
+            visibleSteps.findIndex((s) => s.id === currentStepId),
+        ),
+    );
+
+    function isStepBeforeCurrent(id: StepId): boolean {
+        const idx = visibleSteps.findIndex((s) => s.id === id);
+        return idx >= 0 && idx < currentStepIndex;
+    }
+
+    function resetDownstreamState() {
+        mergedTransactions = [];
+        assetResolutions = [];
+        duplicateGroups = [];
+        duplicateFilePriorityIds = [];
+        duplicateResolverTouchedKeys = new Set();
+        duplicateResolverSelections = {};
+        expandedDuplicateGroupKeys = new Set();
+        fixDecisions = {};
+        fixTodoSnapshot = {};
+        fixExpandedIndices = new Set();
+        fixCreateAssetIndex = null;
+        fixCreatedAssets = {};
+        duplicateRecheckDone = false;
+        duplicateRecheckError = null;
+    }
+
+    function goToStep(target: StepId) {
+        if (!isStepBeforeCurrent(target)) return;
+        if (target === 'upload') selectedFiles = [];
+        if (target === 'upload' || target === 'select') resetDownstreamState();
+        currentStepId = target;
+    }
+
+    /**
+     * Walks forward from `from` and lands on the first step that has something to do.
+     * The duplicate report is refreshed just before its step is evaluated: it must be
+     * computed on the corrected transactions, otherwise the step would either be skipped
+     * on a stale "nothing to arbitrate" or shown with the plugin's original verdict.
+     */
+    async function enterNextActiveStep(from: StepId) {
+        for (let i = STEP_ORDER.indexOf(from) + 1; i < STEP_ORDER.length; i++) {
+            const id = STEP_ORDER[i];
+            if (id === 'duplicates') await refreshDuplicateReport();
+            if (stepIsActive(id)) {
+                currentStepId = id;
+                return;
+            }
         }
-        currentStep = target;
+        currentStepId = 'review';
     }
 
     function goNext() {
-        if (currentStep === 1) {
+        if (currentStepId === 'upload') {
             uploadAllPendingFiles().then(() => {
-                currentStep = 2;
-                if (maxReachedStep < 2) maxReachedStep = 2;
+                currentStepId = 'select';
                 loadBrokerFiles();
             });
-        } else if (currentStep === 2) {
-            currentStep = 3;
-            if (maxReachedStep < 3) maxReachedStep = 3;
+        } else if (currentStepId === 'select') {
+            currentStepId = 'analyze';
             // Init parse results and auto-start parsing
             initParseResults();
             if (!usingCachedResults) doParseAll();
             else mergeAllTransactions();
-        } else if (currentStep === 3) {
+        } else if (currentStepId === 'analyze') {
             if (step3Warnings.length > 0 && !showWarningConfirm) {
                 showWarningConfirm = true;
                 return;
             }
             showWarningConfirm = false;
-            currentStep = 4;
-            if (maxReachedStep < 4) maxReachedStep = 4;
             mergeAllTransactions();
+            enterNextActiveStep('analyze');
+        } else if (currentStepId === 'fix') {
+            enterNextActiveStep('fix');
+        } else if (currentStepId === 'duplicates') {
+            currentStepId = 'review';
         }
     }
 
     function goBack() {
-        if (currentStep === 3 && parseParsing) {
+        if (currentStepId === 'analyze' && parseParsing) {
             abortParsing = true;
         }
-        if (currentStep > 1) {
-            currentStep = currentStep - 1;
+        if (currentStepIndex > 0) {
+            currentStepId = visibleSteps[currentStepIndex - 1].id;
         }
     }
 
@@ -2656,6 +3169,16 @@ ${arrow}<span>${label}</span></span>`,
                 if (row.status === 'parsing') {
                     return {type: 'badge', text: $t('importWizard.fileParsing'), variant: 'info'} as const;
                 }
+                // Failed rows carry the reason in a tooltip: a bare "Error" badge tells
+                // the user nothing about what went wrong.
+                if (row.status === 'error') {
+                    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    return {
+                        type: 'html',
+                        html: `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">${esc($t('common.error'))}</span>`,
+                        tooltip: {text: row.errorMessage ?? $t('common.error'), position: 'top', maxWidth: '28rem'},
+                    } as const;
+                }
                 const variantMap: Record<string, 'default' | 'success' | 'warning' | 'error'> = {
                     pending: 'default',
                     done: 'success',
@@ -2813,9 +3336,12 @@ ${arrow}<span>${label}</span></span>`,
     let previewRequestToken = 0;
     /** z-index for FilePreviewModal — set dynamically based on the caller's z-index. */
     let previewZIndex = $state(untrack(() => zIndex + 20));
+    /** 1-based lines to tint, when the preview is opened from specific rows. */
+    let previewHighlightRows = $state<number[]>([]);
 
-    async function openPreview(fileId: string, callerZIndex?: number) {
+    async function openPreview(fileId: string, callerZIndex?: number, highlightRows?: number[]) {
         previewZIndex = (callerZIndex ?? zIndex) + 20;
+        previewHighlightRows = highlightRows ?? [];
         previewFileId = fileId;
         showPreviewModal = true;
         previewData = null;
@@ -2841,6 +3367,17 @@ ${arrow}<span>${label}</span></span>`,
         }
     }
 
+    /**
+     * Opens the file a flagged row came from, scrolled to that row. A charge line often
+     * cannot be judged on its own — what it was charged on is written on a neighbouring
+     * row — and the one-row evidence table has no neighbours to show.
+     */
+    async function openSourceRow(index: number, rowNumbers: number[]) {
+        const fileId = mergedTransactions.find((m) => m.index === index)?.sourceFileId;
+        if (!fileId) return;
+        await openPreview(fileId, undefined, rowNumbers);
+    }
+
     function closePreviewModal() {
         previewRequestToken += 1;
         showPreviewModal = false;
@@ -2848,6 +3385,7 @@ ${arrow}<span>${label}</span></span>`,
         previewError = null;
         previewData = null;
         previewFileId = null;
+        previewHighlightRows = [];
     }
 </script>
 
@@ -2867,12 +3405,12 @@ ${arrow}<span>${label}</span></span>`,
     <!-- Stepper Bar -->
     <!-- ================================================================== -->
     <div class="flex items-center justify-center gap-0 px-6 py-3 border-b border-gray-100 dark:border-gray-800" data-testid="import-wizard-stepper">
-        {#each STEPS as stepKey, i}
+        {#each visibleSteps as step, i}
             {@const stepNum = i + 1}
-            {@const isCompleted = stepNum < currentStep}
-            {@const isCurrent = stepNum === currentStep}
-            {@const isFuture = stepNum > currentStep}
-            {@const isClickable = stepNum < currentStep}
+            {@const isCompleted = i < currentStepIndex}
+            {@const isCurrent = i === currentStepIndex}
+            {@const isFuture = i > currentStepIndex}
+            {@const isClickable = i < currentStepIndex}
 
             {#if i > 0}
                 <div class="w-8 sm:w-12 h-0.5 mx-1 {isCompleted || isCurrent ? 'bg-libre-green' : 'bg-gray-200 dark:bg-gray-700'}"></div>
@@ -2883,9 +3421,10 @@ ${arrow}<span>${label}</span></span>`,
                 class="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-colors
                     {isClickable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700' : 'cursor-default'}
                     {isCurrent ? 'font-semibold' : ''}"
-                onclick={() => isClickable && goToStep(stepNum)}
+                onclick={() => isClickable && goToStep(step.id)}
                 disabled={isFuture}
                 data-testid="import-wizard-step-{stepNum}"
+                data-step-id={step.id}
             >
                 <span
                     class="flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold
@@ -2900,7 +3439,7 @@ ${arrow}<span>${label}</span></span>`,
                     {/if}
                 </span>
                 <span class="hidden sm:inline text-xs {isFuture ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}">
-                    {$t(`importWizard.${stepKey}`)}
+                    {$t(`importWizard.${step.titleKey}`)}
                 </span>
             </button>
         {/each}
@@ -2913,7 +3452,7 @@ ${arrow}<span>${label}</span></span>`,
         <!-- ============================================================ -->
         <!-- Step 1: Upload & Assign Broker -->
         <!-- ============================================================ -->
-        {#if currentStep === 1}
+        {#if currentStepId === 'upload'}
             <div class="space-y-4" data-testid="import-wizard-step1">
                 <!-- Info hint -->
                 <p class="text-xs text-gray-500 dark:text-gray-400 italic">{$t('importWizard.step1Optional')}</p>
@@ -3015,7 +3554,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- ============================================================ -->
             <!-- Step 2: Select Files from Broker Panels (DataTable) -->
             <!-- ============================================================ -->
-        {:else if currentStep === 2}
+        {:else if currentStepId === 'select'}
             <div class="space-y-4" data-testid="import-wizard-step2">
                 {#if brokerFilesLoading}
                     <div class="py-8 text-center">
@@ -3108,7 +3647,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- ============================================================ -->
             <!-- Step 3: Parse Engine -->
             <!-- ============================================================ -->
-        {:else if currentStep === 3}
+        {:else if currentStepId === 'analyze'}
             <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3">
                 <!-- Progress bar -->
                 <div class="space-y-1">
@@ -3129,6 +3668,25 @@ ${arrow}<span>${label}</span></span>`,
                         <div class="h-full rounded-full transition-all duration-300 ease-out" class:bg-libre-green={!parseHasErrors} class:bg-amber-500={parseHasErrors} style="width: {parseTotalCount > 0 ? (parseCompletedCount / parseTotalCount) * 100 : 0}%"></div>
                     </div>
                 </div>
+
+                <!-- Parse failures: show WHY, not just "Error".
+                     Without this the only signal is a red badge, which is useless for
+                     diagnosing e.g. a stale client bundle rejecting a new response shape. -->
+                {#if parseFailures.length > 0}
+                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-xs" data-testid="import-wizard-parse-errors">
+                        <div class="font-medium text-red-800 dark:text-red-200 mb-1.5">
+                            {$t('importWizard.parseErrorsTitle', {values: {n: parseFailures.length}})}
+                        </div>
+                        <ul class="space-y-1">
+                            {#each parseFailures as failure}
+                                <li class="text-red-700 dark:text-red-300">
+                                    <span class="font-medium">{failure.fileName}</span>
+                                    <span class="opacity-80"> — {failure.errorMessage ?? $t('common.error')}</span>
+                                </li>
+                            {/each}
+                        </ul>
+                    </div>
+                {/if}
 
                 <!-- Results DataTable -->
                 <DataTable
@@ -3152,114 +3710,6 @@ ${arrow}<span>${label}</span></span>`,
                     stickyActions={false}
                     enableContextMenu={true}
                 />
-
-                {#if duplicateGroups.length > 0}
-                    <section class="rounded-lg border border-amber-200 bg-amber-50/40 dark:border-amber-800/70 dark:bg-amber-900/10" data-testid="import-wizard-duplicate-resolver">
-                        <button
-                            type="button"
-                            class="flex w-full items-center gap-2 border-amber-200 px-3 py-2 text-left dark:border-amber-800/70"
-                            class:border-b={!duplicateResolverCollapsed}
-                            onclick={() => (duplicateResolverCollapsed = !duplicateResolverCollapsed)}
-                            data-testid="import-wizard-duplicate-resolver-toggle"
-                        >
-                            {#if duplicateResolverCollapsed}
-                                <ChevronRight size={16} class="shrink-0 text-amber-500" />
-                            {:else}
-                                <ChevronDown size={16} class="shrink-0 text-amber-500" />
-                            {/if}
-                            <div class="min-w-0 flex-1">
-                                <h3 class="text-sm font-semibold text-amber-900 dark:text-amber-100">{$t('importWizard.resolver.title')}</h3>
-                                <p class="text-xs text-amber-700 dark:text-amber-300">{$t('importWizard.resolver.subtitle', {values: {n: duplicateGroups.length}})}</p>
-                            </div>
-                        </button>
-
-                        <div class="min-w-0 gap-3 p-3 lg:grid-cols-[280px_minmax(0,1fr)] {duplicateResolverCollapsed ? 'hidden' : 'grid'}">
-                            <div class="min-w-0 space-y-2 rounded-lg border border-amber-200 bg-white p-2 dark:border-amber-800 dark:bg-slate-900/60" data-testid="import-wizard-file-priority">
-                                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.filePriority')}</div>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.priorityPanelHint')}</p>
-                                <OrderableList
-                                    items={duplicateFilePriorityIds}
-                                    keyFn={(id) => id}
-                                    onReorder={(ids) => {
-                                        duplicateFilePriorityIds = ids;
-                                        reapplyResolverGroups();
-                                    }}
-                                    compact
-                                >
-                                    {#snippet children({item, index})}
-                                        <div class="flex min-w-0 items-center gap-2" data-testid="import-wizard-priority-file-{item}">
-                                            <span class="w-5 shrink-0 text-xs font-semibold text-gray-400">{index + 1}</span>
-                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-xs text-gray-700 dark:text-gray-200" title={getSourceFileName(item)}>{getSourceFileName(item)}</span>
-                                        </div>
-                                    {/snippet}
-                                </OrderableList>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:border-amber-700 dark:bg-slate-800 dark:text-amber-200 dark:hover:bg-slate-700"
-                                    onclick={recalcResolverDefaults}
-                                    data-testid="import-wizard-resolver-recalc"
-                                >
-                                    <RefreshCw size={13} />
-                                    {$t('importWizard.resolver.recalcDefaults')}
-                                </button>
-                            </div>
-
-                            <div class="min-w-0 space-y-2">
-                                {#each duplicateGroups as group (group.key)}
-                                    <div class="min-w-0 overflow-hidden rounded-lg border border-amber-200 bg-white dark:border-amber-800 dark:bg-slate-900/60" data-testid="import-wizard-duplicate-group">
-                                        <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-amber-50 dark:hover:bg-amber-900/20" onclick={() => toggleDuplicateGroup(group.key)}>
-                                            {#if expandedDuplicateGroupKeys.has(group.key)}
-                                                <ChevronDown size={14} class="shrink-0 text-gray-400" />
-                                            {:else}
-                                                <ChevronRight size={14} class="shrink-0 text-gray-400" />
-                                            {/if}
-                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-sm font-medium text-gray-800 dark:text-gray-100">{getDuplicateGroupTitle(group)}</span>
-                                            <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300">{$t('importWizard.resolver.memberCount', {values: {n: group.memberIndices.length}})}</span>
-                                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(group.tier)}" title={$t('importWizard.resolver.similarityTooltip')}>{duplicateSimilarityLabel(group.tier)}</span>
-                                        </button>
-
-                                        {#if expandedDuplicateGroupKeys.has(group.key)}
-                                            <div class="min-w-0 border-t border-amber-100 p-3 dark:border-amber-900/60">
-                                                <div class="mb-2 flex items-center justify-between gap-2">
-                                                    <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.groupHelp')}</p>
-                                                    <div class="flex shrink-0 items-center gap-3">
-                                                        <button type="button" class="inline-flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={() => openLotCompare(group)} data-testid="import-wizard-resolver-compare-{group.key}">
-                                                            <Search size={13} />
-                                                            {$t('importWizard.compareModal.openAction')}
-                                                        </button>
-                                                        {#if resolverHasManualChoice(group)}
-                                                            <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => resetDuplicateResolverChoice(group)} data-testid="import-wizard-resolver-reset">
-                                                                {$t('importWizard.resolver.resetDefault')}
-                                                            </button>
-                                                        {/if}
-                                                    </div>
-                                                </div>
-                                                <div use:marqueeDescendants class="min-w-0" data-testid="import-wizard-resolver-member-table-{group.key}">
-                                                    <DataTable
-                                                        data={resolverGroupMembers(group)}
-                                                        columns={resolverMemberColumns(group)}
-                                                        getRowId={(mt) => String(mt.index)}
-                                                        storageKey="import-wizard-resolver-members"
-                                                        enableSelection={false}
-                                                        enableActions={false}
-                                                        enablePagination={false}
-                                                        enableSorting={false}
-                                                        enableColumnFilters={false}
-                                                        enableColumnVisibility={false}
-                                                        enableColumnResize={false}
-                                                        enableContextMenu={false}
-                                                        stickyHeader={false}
-                                                        tableLayout="fixed"
-                                                    />
-                                                </div>
-                                            </div>
-                                        {/if}
-                                    </div>
-                                {/each}
-                            </div>
-                        </div>
-                    </section>
-                {/if}
 
                 <!-- Aggregate summary -->
                 {#if parseHasSuccess}
@@ -3329,9 +3779,192 @@ ${arrow}<span>${label}</span></span>`,
             </div>
 
             <!-- ============================================================ -->
+            <!-- Step FIX: correct the rows the plugin flagged -->
+            <!-- ============================================================ -->
+        {:else if currentStepId === 'fix'}
+            <div class="space-y-4" data-testid="import-wizard-step-fix">
+                <FixFlaggedStep
+                    rows={fixStepRows}
+                    analysisAssets={fixAnalysisAssets}
+                    expanded={fixExpandedIndices}
+                    createdAssets={fixCreatedAssets}
+                    ontoggle={toggleFixRow}
+                    onapply={applyFixToRow}
+                    onaccept={acceptPluginFallback}
+                    onacceptall={acceptAllPluginFallbacks}
+                    onreset={resetFixRow}
+                    onresetall={resetAllFixRows}
+                    oncreateasset={(index) => (fixCreateAssetIndex = index)}
+                    ongotosource={openSourceRow}
+                />
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- Step DUPLICATES: arbitrate against the database -->
+            <!-- ============================================================ -->
+        {:else if currentStepId === 'duplicates'}
+            <div class="space-y-4" data-testid="import-wizard-step-duplicates">
+                <InfoBanner variant="info" message={$t('importWizard.duplicatesStepIntro')} />
+                {#if duplicateRecheckError}
+                    <InfoBanner variant="error" message={$t('importWizard.duplicateRecheckFailed', {values: {error: duplicateRecheckError}})} />
+                {/if}
+
+                {#if duplicateGroups.length > 0}
+                    <section class="rounded-lg border border-gray-200 bg-gray-50/60 dark:border-slate-700 dark:bg-slate-800/40" data-testid="import-wizard-duplicate-resolver">
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-2 border-gray-200 px-3 py-2 text-left dark:border-slate-700"
+                            class:border-b={!duplicateResolverCollapsed}
+                            onclick={() => (duplicateResolverCollapsed = !duplicateResolverCollapsed)}
+                            data-testid="import-wizard-duplicate-resolver-toggle"
+                        >
+                            {#if duplicateResolverCollapsed}
+                                <ChevronRight size={16} class="shrink-0 text-gray-400" />
+                            {:else}
+                                <ChevronDown size={16} class="shrink-0 text-gray-400" />
+                            {/if}
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{$t('importWizard.resolver.title')}</h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.subtitle', {values: {n: duplicateGroups.length}})}</p>
+                            </div>
+                            <span
+                                class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {resolverPartialCount > 0
+                                    ? 'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700'
+                                    : 'bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-700'}"
+                                data-testid="import-wizard-resolver-status"
+                            >
+                                {resolverPartialCount > 0 ? $t('importWizard.resolver.statusToVerify', {values: {n: resolverPartialCount}}) : $t('importWizard.resolver.statusAllAuto')}
+                            </span>
+                        </button>
+
+                        <div class="min-w-0 gap-3 p-3 lg:grid-cols-[var(--priority-w)_minmax(0,1fr)] {duplicateResolverCollapsed ? 'hidden' : 'grid'}" style="--priority-w: {duplicatePriorityWidth}px">
+                            <div class="relative min-w-0 space-y-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900/60" data-testid="import-wizard-file-priority">
+                                <div class="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">{$t('importWizard.resolver.filePriority')}</div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.priorityPanelHint')}</p>
+                                <OrderableList
+                                    items={duplicateFilePriorityIds}
+                                    keyFn={(id) => id}
+                                    onReorder={(ids) => {
+                                        duplicateFilePriorityIds = ids;
+                                        reapplyResolverGroups();
+                                    }}
+                                    compact
+                                >
+                                    {#snippet children({item, index})}
+                                        <div class="flex min-w-0 items-center gap-2" data-testid="import-wizard-priority-file-{item}">
+                                            <span class="w-5 shrink-0 text-xs font-semibold text-gray-400">{index + 1}</span>
+                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-xs text-gray-700 dark:text-gray-200" title={getSourceFileName(item)}>{getSourceFileName(item)}</span>
+                                        </div>
+                                    {/snippet}
+                                </OrderableList>
+                                <div class="flex justify-end">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
+                                        onclick={recalcResolverDefaults}
+                                        data-testid="import-wizard-resolver-recalc"
+                                    >
+                                        <RefreshCw size={13} />
+                                        {$t('importWizard.resolver.recalcDefaults')}
+                                    </button>
+                                </div>
+                                <!-- Drag handle: file names are long and unpredictable, so the split
+                                     between the priority list and the groups is the user's to make. -->
+                                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                                <div role="separator" aria-orientation="vertical" class="absolute top-0 -right-2 hidden h-full w-2 cursor-col-resize touch-none lg:block" onpointerdown={startPriorityResize} data-testid="import-wizard-priority-resize">
+                                    <span class="absolute top-1/2 left-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded bg-gray-300 dark:bg-slate-600"></span>
+                                </div>
+                            </div>
+
+                            <div class="min-w-0 space-y-2">
+                                {#each resolverTierPanels as panel (panel.tier)}
+                                    {@const tierOpen = expandedDuplicateTiers.has(panel.tier)}
+                                    <section class="min-w-0 overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700" data-testid="import-wizard-resolver-tier-{panel.tier}">
+                                        <button
+                                            type="button"
+                                            class="flex w-full items-center gap-2 bg-gray-50 px-3 py-2 text-left hover:bg-gray-100 dark:bg-slate-800/70 dark:hover:bg-slate-800"
+                                            onclick={() => toggleDuplicateTier(panel.tier)}
+                                            data-testid="import-wizard-resolver-tier-toggle-{panel.tier}"
+                                        >
+                                            {#if tierOpen}
+                                                <ChevronDown size={14} class="shrink-0 text-gray-400" />
+                                            {:else}
+                                                <ChevronRight size={14} class="shrink-0 text-gray-400" />
+                                            {/if}
+                                            <span class="min-w-0 flex-1 text-sm font-medium text-gray-800 dark:text-gray-100">
+                                                {panel.tier === 'sure' ? $t('importWizard.resolver.tierTotalTitle') : $t('importWizard.resolver.tierPartialTitle')}
+                                            </span>
+                                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(panel.tier)}">
+                                                {$t('importWizard.resolver.groupCount', {values: {n: panel.groups.length}})}
+                                            </span>
+                                        </button>
+                                        {#if tierOpen}
+                                            <div class="min-w-0 space-y-2 border-t border-gray-100 p-2 dark:border-slate-700/60">
+                                                {#each panel.groups as group (group.key)}
+                                                    <div class="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/60" data-testid="import-wizard-duplicate-group">
+                                                        <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60" onclick={() => toggleDuplicateGroup(group.key)}>
+                                                            {#if expandedDuplicateGroupKeys.has(group.key)}
+                                                                <ChevronDown size={14} class="shrink-0 text-gray-400" />
+                                                            {:else}
+                                                                <ChevronRight size={14} class="shrink-0 text-gray-400" />
+                                                            {/if}
+                                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-sm font-medium text-gray-800 dark:text-gray-100">{getDuplicateGroupTitle(group)}</span>
+                                                            <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300">{$t('importWizard.resolver.memberCount', {values: {n: group.memberIndices.length}})}</span>
+                                                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(group.tier)}" title={$t('importWizard.resolver.similarityTooltip')}>{duplicateSimilarityLabel(group.tier)}</span>
+                                                        </button>
+
+                                                        {#if expandedDuplicateGroupKeys.has(group.key)}
+                                                            <div class="min-w-0 border-t border-gray-100 p-3 dark:border-slate-700/60">
+                                                                <div class="mb-2 flex items-center justify-between gap-2">
+                                                                    <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.groupHelp')}</p>
+                                                                    <div class="flex shrink-0 items-center gap-3">
+                                                                        <button type="button" class="inline-flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={() => openLotCompare(group)} data-testid="import-wizard-resolver-compare-{group.key}">
+                                                                            <Search size={13} />
+                                                                            {$t('importWizard.compareModal.openAction')}
+                                                                        </button>
+                                                                        {#if resolverHasManualChoice(group)}
+                                                                            <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => resetDuplicateResolverChoice(group)} data-testid="import-wizard-resolver-reset">
+                                                                                {$t('importWizard.resolver.resetDefault')}
+                                                                            </button>
+                                                                        {/if}
+                                                                    </div>
+                                                                </div>
+                                                                <div use:marqueeDescendants class="min-w-0" data-testid="import-wizard-resolver-member-table-{group.key}">
+                                                                    <DataTable
+                                                                        data={resolverGroupMembers(group)}
+                                                                        columns={resolverMemberColumns(group)}
+                                                                        getRowId={(mt) => String(mt.index)}
+                                                                        storageKey="import-wizard-resolver-members"
+                                                                        enableSelection={false}
+                                                                        enableActions={false}
+                                                                        enablePagination={false}
+                                                                        enableSorting={false}
+                                                                        enableColumnFilters={false}
+                                                                        enableColumnVisibility={false}
+                                                                        enableColumnResize={false}
+                                                                        enableContextMenu={false}
+                                                                        stickyHeader={false}
+                                                                        tableLayout="fixed"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        {/if}
+                                                    </div>
+                                                {/each}
+                                            </div>
+                                        {/if}
+                                    </section>
+                                {/each}
+                            </div>
+                        </div>
+                    </section>
+                {/if}
+            </div>
+
+            <!-- ============================================================ -->
             <!-- Step 4: Review & Import -->
             <!-- ============================================================ -->
-        {:else if currentStep === 4}
+        {:else if currentStepId === 'review'}
             <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4">
                 <!-- ── Resolve Assets section ─────────────────────────── -->
                 {#if assetResolutions.length > 0}
@@ -3407,6 +4040,19 @@ ${arrow}<span>${label}</span></span>`,
                                                 else clearResolution(res.fakeAssetId);
                                             }}
                                         />
+                                        {#if res.resolvedAssetId !== null}
+                                            <button
+                                                type="button"
+                                                class="ml-auto mt-1.5 flex w-fit items-center gap-1 text-xs text-gray-500 hover:text-libre-green disabled:opacity-50 dark:text-gray-400"
+                                                onclick={() => void openAssetInspector(res.resolvedAssetId!)}
+                                                disabled={inspectAssetLoading}
+                                                title={$t('importWizard.inspectAssetHint')}
+                                                data-testid="import-wizard-inspect-asset-{res.fakeAssetId}"
+                                            >
+                                                <Pencil size={12} />
+                                                {$t('importWizard.inspectAsset')}
+                                            </button>
+                                        {/if}
                                     </div>
                                 {/each}
                             </div>
@@ -3539,7 +4185,7 @@ ${arrow}<span>${label}</span></span>`,
     <!-- Footer -->
     <!-- ================================================================== -->
     <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
-        {#if currentStep === 1}
+        {#if currentStepId === 'upload'}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={handleClose}>
                     {$t('common.cancel')}
@@ -3572,7 +4218,7 @@ ${arrow}<span>${label}</span></span>`,
                     {/if}
                 </button>
             </div>
-        {:else if currentStep === 2}
+        {:else if currentStepId === 'select'}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
                     ◀ {$t('common.back')}
@@ -3592,7 +4238,7 @@ ${arrow}<span>${label}</span></span>`,
             <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse">
                 {$t('importWizard.parse', {values: {n: selectedFiles.length}})} ▶
             </button>
-        {:else if currentStep === 3}
+        {:else if currentStepId === 'analyze'}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
                     ◀ {$t('common.back')}
@@ -3625,6 +4271,50 @@ ${arrow}<span>${label}</span></span>`,
                 {/if}
             </div>
             <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step3CanContinue} data-testid="import-wizard-continue">
+                {$t('common.continue')} ▶
+            </button>
+        {:else if currentStepId === 'fix'}
+            <div class="flex items-center gap-1">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                    ◀ {$t('common.back')}
+                </button>
+                {#if fixStepPendingCount > 0}
+                    <span class="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+                        <AlertTriangle size={14} />
+                        {$t('importWizard.fixStep.pending', {values: {n: fixStepPendingCount}})}
+                    </span>
+                {:else}
+                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle size={14} />
+                        {$t('importWizard.fixStep.allDone')}
+                    </span>
+                {/if}
+            </div>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={fixStepPendingCount > 0 || duplicateRecheckRunning} data-testid="import-wizard-fix-continue">
+                {#if duplicateRecheckRunning}
+                    <LoadingSpinner size="sm" />
+                {:else}
+                    {$t('common.continue')} ▶
+                {/if}
+            </button>
+        {:else if currentStepId === 'duplicates'}
+            <div class="flex items-center gap-1">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                    ◀ {$t('common.back')}
+                </button>
+                {#if resolverPartialCount > 0}
+                    <span class="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400">
+                        <AlertTriangle size={14} />
+                        {$t('importWizard.resolver.statusToVerify', {values: {n: resolverPartialCount}})}
+                    </span>
+                {:else}
+                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle size={14} />
+                        {$t('importWizard.resolver.statusAllAuto')}
+                    </span>
+                {/if}
+            </div>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={goNext} data-testid="import-wizard-duplicates-continue">
                 {$t('common.continue')} ▶
             </button>
         {:else}
@@ -3672,50 +4362,62 @@ ${arrow}<span>${label}</span></span>`,
     onCancel={cancelDeleteFile}
 />
 
-<!-- Step 3 → 4: warning acknowledgement (custom modal with accordion) -->
-<ModalBase open={showWarningConfirm} maxWidth="lg" zIndex={85} onRequestClose={() => (showWarningConfirm = false)}>
+<!-- Step 3 → 4: parser notice acknowledgement (custom modal with accordion).
+     Shown for both `info` and `warning` notices: an `info` is a deliberate plugin
+     decision the user should see before the data lands, not noise to skip. -->
+<ModalBase open={showWarningConfirm} maxWidth="4xl" zIndex={85} onRequestClose={() => (showWarningConfirm = false)}>
     <!-- Header -->
     <div class="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
-        <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full shrink-0">
-            <AlertTriangle size={18} class="text-amber-600 dark:text-amber-400" />
+        <div class="p-2 {step3HasWarningSeverity ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-sky-100 dark:bg-sky-900/30'} rounded-full shrink-0">
+            {#if step3HasWarningSeverity}
+                <AlertTriangle size={18} class="text-amber-600 dark:text-amber-400" />
+            {:else}
+                <Info size={18} class="text-sky-600 dark:text-sky-400" />
+            {/if}
         </div>
         <div class="flex-1 min-w-0">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{$t('importWizard.warningConfirmTitle')}</h2>
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{step3HasWarningSeverity ? $t('importWizard.warningConfirmTitle') : $t('importWizard.noticeConfirmTitle')}</h2>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {$t('importWizard.warningConfirmMessage', {values: {n: step3Warnings.length}})}
+                {step3HasWarningSeverity ? $t('importWizard.warningConfirmMessage', {values: {n: step3Warnings.length}}) : $t('importWizard.noticeConfirmMessage', {values: {n: step3Warnings.length}})}
             </p>
         </div>
         <button type="button" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 shrink-0" onclick={() => (showWarningConfirm = false)}>
             <X size={16} />
         </button>
     </div>
-    <!-- Body: accordion grouped by file -->
-    <div class="p-4 space-y-2 max-h-[40vh] overflow-y-auto">
-        {#each step3WarningsByFile as group}
-            <details class="border border-amber-200 dark:border-amber-800 rounded-lg overflow-hidden">
-                <summary class="flex items-center justify-between px-3 py-2 cursor-pointer bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors list-none">
-                    <span class="text-xs font-medium text-amber-800 dark:text-amber-200 truncate flex-1 mr-2">
-                        {group.fileName} <span class="opacity-70">({group.warnings.length})</span>
-                    </span>
-                    <button
-                        type="button"
-                        class="flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors shrink-0"
-                        onclick={(e) => {
-                            e.stopPropagation();
-                            openPreview(group.fileId, 85);
-                        }}
-                    >
-                        <FileText size={11} />{$t('importWizard.previewFile')}
-                    </button>
-                </summary>
-                <ul class="px-4 py-2 space-y-1 bg-white dark:bg-slate-800">
-                    {#each group.warnings as w}
-                        <li class="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-                            <AlertTriangle size={11} class="shrink-0 mt-0.5" /><span>{w}</span>
-                        </li>
-                    {/each}
-                </ul>
-            </details>
+    <!-- Body: one block per severity, accordion by file inside -->
+    <div class="p-4 space-y-4 max-h-[55vh] overflow-y-auto">
+        {#each step3NoticeSections as section}
+            <div class="space-y-2">
+                {#if step3NoticeSections.length > 1}
+                    <h3 class="flex items-center gap-1.5 text-xs font-semibold {section.severity === 'info' ? 'text-sky-700 dark:text-sky-300' : 'text-amber-700 dark:text-amber-300'}">
+                        {#if section.severity === 'info'}
+                            <Info size={13} class="shrink-0" />
+                        {:else}
+                            <AlertTriangle size={13} class="shrink-0" />
+                        {/if}
+                        {section.severity === 'info' ? $t('importWizard.noticeSectionInfo') : $t('importWizard.noticeSectionWarning')}
+                    </h3>
+                {/if}
+                {#each section.files as group}
+                    <details open class="border {section.severity === 'info' ? 'border-sky-200 dark:border-sky-800' : 'border-amber-200 dark:border-amber-800'} rounded-lg overflow-hidden">
+                        <summary
+                            class="flex items-center justify-between px-3 py-2 cursor-pointer {section.severity === 'info'
+                                ? 'bg-sky-50 dark:bg-sky-900/20 hover:bg-sky-100 dark:hover:bg-sky-900/30'
+                                : 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'} transition-colors list-none"
+                        >
+                            <!-- No file-preview button here: every notice below carries its own
+                                 "open at row N" jump, which lands on the rows that matter. -->
+                            <span class="text-xs font-medium {section.severity === 'info' ? 'text-sky-800 dark:text-sky-200' : 'text-amber-800 dark:text-amber-200'} truncate flex-1 mr-2">
+                                {group.fileName} <span class="opacity-70">({group.warnings.length})</span>
+                            </span>
+                        </summary>
+                        <div class="px-4 py-2 bg-white dark:bg-slate-800">
+                            <BrimNoticeList notices={group.warnings} dense collapsibleEvidence onGotoRow={(lines) => openPreview(group.fileId, 85, lines)} />
+                        </div>
+                    </details>
+                {/each}
+            </div>
         {/each}
     </div>
     <!-- Footer -->
@@ -3723,14 +4425,28 @@ ${arrow}<span>${label}</span></span>`,
         <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" onclick={() => (showWarningConfirm = false)}>
             {$t('common.cancel')}
         </button>
-        <button type="button" class="px-4 py-2 text-sm rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors" onclick={goNext} data-testid="import-wizard-warning-confirm">
+        <button type="button" class="px-4 py-2 text-sm rounded-lg {step3HasWarningSeverity ? 'bg-amber-500 hover:bg-amber-600' : 'bg-sky-500 hover:bg-sky-600'} text-white transition-colors" onclick={goNext} data-testid="import-wizard-warning-confirm">
             {$t('importWizard.warningConfirmOk')}
         </button>
     </div>
 </ModalBase>
 
 <!-- File preview modal -->
-<FilePreviewModal open={showPreviewModal} preview={previewData} loading={previewLoading} error={previewError} onRequestClose={closePreviewModal} onSheetChange={(name) => loadPreview(name)} zIndex={previewZIndex} />
+<FilePreviewModal
+    open={showPreviewModal}
+    preview={previewData}
+    loading={previewLoading}
+    error={previewError}
+    onRequestClose={closePreviewModal}
+    onSheetChange={(name) => {
+        // The line numbers belong to the sheet they came from; on another sheet they point
+        // at unrelated rows, which is worse than pointing at nothing.
+        previewHighlightRows = [];
+        loadPreview(name);
+    }}
+    highlightRows={previewHighlightRows}
+    zIndex={previewZIndex}
+/>
 
 <!-- Parse detail modal (single file) -->
 <ParseDetailModal open={showParseDetail} parseResult={parseDetailResult} zIndex={80} onClose={closeParseDetail} onPreview={parseDetailResult ? () => openPreview(parseDetailResult!.fileId, 80) : undefined} />
@@ -3792,6 +4508,53 @@ ${arrow}<span>${label}</span></span>`,
     />
 {/if}
 
+<!-- Asset inspection from the resolution step — the picked instrument, in full -->
+{#if inspectAssetData !== null}
+    <AssetModal
+        open={true}
+        editMode={true}
+        editData={inspectAssetData as never}
+        zIndex={90}
+        onupdated={() => {
+            inspectAssetData = null;
+            void refreshAllAssets();
+        }}
+        onclose={() => (inspectAssetData = null)}
+    />
+{/if}
+
+<!-- Asset creation from the correction step — seeded with the row's own description -->
+{#if fixCreateAssetIndex !== null}
+    {@const _fixDesc = fixRowDescription(fixCreateAssetIndex)}
+    {@const _fixHints = fixCreateHints(fixCreateAssetIndex)}
+    {@const _fixIsin = _fixDesc.match(ISIN_RE)?.[1]}
+    <AssetModal
+        open={true}
+        editMode={false}
+        prefillData={{
+            display_name: '',
+            identifier_isin: _fixIsin ?? undefined,
+            classification_params: _fixDesc ? {short_description: _fixDesc} : undefined,
+        }}
+        initialSearchBadges={_fixHints.slice(0, 8).map((h) => ({label: h, value: h}))}
+        searchHints={_fixHints}
+        initialSearchQuery=""
+        zIndex={zIndex + 30}
+        initialNoProvider={true}
+        onReuseExisting={(existingAssetId) => {
+            fixCreatedAssets = {...fixCreatedAssets, [fixCreateAssetIndex!]: existingAssetId};
+            fixCreateAssetIndex = null;
+        }}
+        reuseAllowKeyMerge={false}
+        oncreated={(assetId) => {
+            fixCreatedAssets = {...fixCreatedAssets, [fixCreateAssetIndex!]: assetId};
+            fixCreateAssetIndex = null;
+            void refreshAllAssets();
+        }}
+        onclose={() => (fixCreateAssetIndex = null)}
+    />
+{/if}
+
 <!-- N-way duplicate compare modal — side-by-side field×transaction grid -->
 <TransactionCompareModal
     open={nwCompareOpen}
@@ -3799,7 +4562,8 @@ ${arrow}<span>${label}</span></span>`,
     hint={nwCompareHint}
     fields={nwCompareFields}
     columns={nwCompareColumns}
-    defaultKeep={nwCompareDefaultKeep}
+    defaultKept={nwCompareDefaultKept}
+    resetKept={nwCompareResetKept}
     onKeep={nwCompareOnKeep
         ? (choice) => {
               nwCompareOnKeep?.(choice);

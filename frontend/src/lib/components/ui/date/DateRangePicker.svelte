@@ -23,13 +23,18 @@
     import CalendarMonth from './CalendarMonth.svelte';
     import {SimpleSelect} from '$lib/components/ui/select';
     import {attachLayoutDebugExtra, type LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
+    import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
+    import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
     // Types
     // =========================================================================
 
     export type QuickPreset = '1W' | '1M' | '3M' | '6M' | 'WTD' | 'MTD' | 'QTD' | 'YTD' | '1Y' | '2Y' | '3Y' | '5Y' | '10Y' | 'MAX';
     export type Granularity = 'days' | 'weeks' | 'months' | 'years';
+    /** Which end of the range a typed field drives. */
+    export type RangeField = 'start' | 'end';
 
     interface Props {
         /** Start date (ISO YYYY-MM-DD) */
@@ -138,7 +143,24 @@
     let calendarOpen = $state(false);
     let pendingDate: string | null = $state(null);
     let hoveredDate: string | null = $state(null);
-    let triggerEl: HTMLButtonElement | null = $state(null);
+    let triggerEl: HTMLDivElement | null = $state(null);
+
+    /** What the user is typing in each field. `null` means the field just shows the range. */
+    let typedStart = $state<string | null>(null);
+    let typedEnd = $state<string | null>(null);
+    let focusedField = $state<RangeField | null>(null);
+    /**
+     * A range being edited by hand, not yet handed to the caller. `start`/`end` are
+     * bound props and pages run their fetches off them, so writing every intermediate
+     * date there would fire one report request per keystroke. The draft holds the
+     * range while it is being built; only the flush publishes it.
+     */
+    let draftStart = $state<string | null>(null);
+    let draftEnd = $state<string | null>(null);
+    /** True while a swap is moving focus itself, so the blur is not read as "user left". */
+    let swapFollowing = false;
+    let startInputEl: HTMLInputElement | null = $state(null);
+    let endInputEl: HTMLInputElement | null = $state(null);
     let popoverStyle = $state('');
 
     // Semi-independent left/right month+year
@@ -439,6 +461,7 @@
             pendingDate = null;
             hoveredDate = null;
             calendarOpen = false;
+            discardDraft();
             onchange?.(newStart, newEnd);
         }
     }
@@ -489,8 +512,10 @@
 
     function openCalendar() {
         // ...existing code for setting calLeft/calRight from start/end...
-        if (start) {
-            const [sy, sm] = start.split('-').map(Number);
+        const openStart = draftStart ?? start;
+        const openEnd = draftEnd ?? end;
+        if (openStart) {
+            const [sy, sm] = openStart.split('-').map(Number);
             calLeftYear = sy;
             calLeftMonth = sm - 1;
         } else {
@@ -498,8 +523,8 @@
             calLeftYear = now.getFullYear();
             calLeftMonth = Math.max(0, now.getMonth() - 1);
         }
-        if (end) {
-            const [ey, em] = end.split('-').map(Number);
+        if (openEnd) {
+            const [ey, em] = openEnd.split('-').map(Number);
             calRightYear = ey;
             calRightMonth = em - 1;
         } else {
@@ -521,6 +546,7 @@
         calendarOpen = false;
         pendingDate = null;
         hoveredDate = null;
+        flushTypedRange();
     }
 
     // Note: No scroll listener needed — popover uses position:fixed,
@@ -834,6 +860,7 @@
     function handlePresetClick(preset: QuickPreset) {
         activePreset = preset;
         customEditing = false;
+        discardDraft();
         if (preset === 'MAX') {
             start = 'min';
             end = 'max';
@@ -853,6 +880,7 @@
         const newEnd = todayISO();
         start = newStart;
         end = newEnd;
+        discardDraft();
         onchange?.(newStart, newEnd);
     }
 
@@ -883,6 +911,183 @@
         customGranularity = v as Granularity;
     }
 
+    // =========================================================================
+    // Typed date fields
+    //
+    // The range is also a pair of text fields, for the same reason the single picker
+    // is one: walking a calendar back to a date years away is slow, and a user who
+    // already knows the date should be able to write it. Tab moves between the two,
+    // the arrows step them, and driving one past the other swaps the pair rather than
+    // refusing the edit.
+    // =========================================================================
+
+    let typedStartIso = $derived(typedStart === null ? null : parseTypedDate(typedStart));
+    let typedEndIso = $derived(typedEnd === null ? null : parseTypedDate(typedEnd));
+    let startInvalid = $derived(typedStart !== null && typedStart.trim() !== '' && !isSelectableDate(typedStartIso));
+    let endInvalid = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isSelectableDate(typedEndIso));
+
+    /** The same ceiling the calendar applies, applied to what is typed. */
+    function isSelectableDate(iso: string | null): iso is string {
+        if (!iso) return false;
+        if (!allowFuture && iso > todayISO()) return false;
+        return true;
+    }
+
+    /** A concrete date for a field, or '' for the `min`/`max` sentinels and blanks. */
+    function fieldIso(which: RangeField): string {
+        const iso = which === 'start' ? (draftStart ?? start) : (draftEnd ?? end);
+        return !iso || iso === 'min' || iso === 'max' ? '' : iso;
+    }
+
+    /**
+     * What a field shows. Focused, it shows the ISO date, because that is what can be
+     * edited — "08 Aug 2024" is not something anyone can usefully type over. Blurred,
+     * it goes back to the formatted date the rest of the app reads.
+     */
+    function fieldText(which: RangeField): string {
+        const typed = which === 'start' ? typedStart : typedEnd;
+        if (typed !== null) return typed;
+        if (focusedField === which) return fieldIso(which);
+        const draft = which === 'start' ? draftStart : draftEnd;
+        return displayDate(draft ?? (which === 'start' ? start : end));
+    }
+
+    /**
+     * Writes one end of the range, swapping the pair when the user drives it past the
+     * other. A start after its end is not a range, and refusing the edit would be the
+     * worse answer: the user has said where they want that date, they simply reached
+     * it from the other field. Returns whether the swap happened.
+     */
+    function applyRangeDate(which: RangeField, iso: string): boolean {
+        let nextStart = which === 'start' ? iso : fieldIso('start') || iso;
+        let nextEnd = which === 'end' ? iso : fieldIso('end') || iso;
+        let swapped = false;
+        if (nextStart > nextEnd) {
+            [nextStart, nextEnd] = [nextEnd, nextStart];
+            swapped = true;
+        }
+        draftStart = nextStart;
+        draftEnd = nextEnd;
+        syncCalendarToRange();
+        return swapped;
+    }
+
+    /** Publishes a typed/stepped range, once the user has finished building it. */
+    function flushTypedRange() {
+        if (draftStart === null && draftEnd === null) return;
+        const nextStart = draftStart ?? start;
+        const nextEnd = draftEnd ?? end;
+        draftStart = null;
+        draftEnd = null;
+        if (nextStart === start && nextEnd === end) return;
+        start = nextStart;
+        end = nextEnd;
+        activePreset = null;
+        onchange?.(nextStart, nextEnd);
+    }
+
+    /** Drops a draft that a preset or a calendar click has just made irrelevant. */
+    function discardDraft() {
+        draftStart = null;
+        draftEnd = null;
+    }
+
+    /** Moves both calendar halves onto the range, so the months follow the text. */
+    function syncCalendarToRange() {
+        const s = fieldIso('start');
+        const e = fieldIso('end');
+        if (s) {
+            const [y, m] = s.split('-').map(Number);
+            calLeftYear = y;
+            calLeftMonth = m - 1;
+        }
+        if (e) {
+            const [y, m] = e.split('-').map(Number);
+            calRightYear = y;
+            calRightMonth = m - 1;
+        }
+    }
+
+    /** Applies a date and, when the swap moved it to the other field, follows it there. */
+    async function applyAndFollow(which: RangeField, iso: string) {
+        if (!applyRangeDate(which, iso)) return;
+        const other: RangeField = which === 'start' ? 'end' : 'start';
+        typedStart = null;
+        typedEnd = null;
+        focusedField = other;
+        await tick();
+        const el = other === 'start' ? startInputEl : endInputEl;
+        // The blur this focus() causes is ours, not the user leaving the picker.
+        swapFollowing = true;
+        el?.focus();
+        el?.setSelectionRange(el.value.length, el.value.length);
+        swapFollowing = false;
+    }
+
+    function commitTypedField(which: RangeField, follow = true) {
+        const typed = which === 'start' ? typedStart : typedEnd;
+        if (typed === null) return;
+        const parsed = parseTypedDate(typed);
+        if (which === 'start') typedStart = null;
+        else typedEnd = null;
+        if (!isSelectableDate(parsed)) return;
+        if (follow) void applyAndFollow(which, parsed);
+        else applyRangeDate(which, parsed);
+    }
+
+    function handleFieldKeydown(e: KeyboardEvent, which: RangeField) {
+        const typedIso = which === 'start' ? typedStartIso : typedEndIso;
+        const stepped = dateArrowStep(e, isSelectableDate(typedIso) ? typedIso : fieldIso(which) || null, todayISO());
+        if (stepped !== null) {
+            // Arrows are a stepper, and a stepper stops at its bound rather than
+            // walking past it into a date the calendar would grey out.
+            void applyAndFollow(which, !allowFuture && stepped > todayISO() ? todayISO() : stepped);
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            // Enter toggles: it closes a calendar that is open (applying what was
+            // typed), and reopens it from the same field without reaching for the mouse.
+            if (!calendarOpen) {
+                openCalendar();
+                return;
+            }
+            // Enter means "done": apply and close, without chasing the caret into the
+            // other field when the value swapped.
+            commitTypedField(which, false);
+            closeCalendar();
+        } else if (e.key === 'Escape') {
+            // Escape abandons the whole hand edit, not just the half-typed text.
+            typedStart = null;
+            typedEnd = null;
+            discardDraft();
+        }
+    }
+
+    function handleFieldFocus(which: RangeField) {
+        focusedField = which;
+        if (!calendarOpen) openCalendar();
+    }
+
+    async function handleFieldBlur(e: FocusEvent, which: RangeField) {
+        resetDateArrowHold();
+        commitTypedField(which, false);
+        if (focusedField === which) focusedField = null;
+        if (swapFollowing) return;
+        // Moving between the two halves is still "inside the picker": the range is
+        // published when focus leaves the component altogether, not on every hop.
+        // `relatedTarget` is what receives focus, and it is the only reliable answer
+        // during blur — `document.activeElement` is still <body> at this point.
+        if (insidePicker(e.relatedTarget as HTMLElement | null)) return;
+        await tick();
+        if (insidePicker(document.activeElement as HTMLElement | null)) return;
+        flushTypedRange();
+    }
+
+    function insidePicker(el: HTMLElement | null): boolean {
+        return !!el?.closest && !!(el.closest('.drp-trigger') || el.closest('.drp-popover'));
+    }
+
     function displayDate(iso: string): string {
         if (!iso) return '—';
         // "min" is the MAX/"All" sentinel, pending resolution to a concrete date
@@ -897,11 +1102,15 @@
     }
 
     /** Highlights object for CalendarMonth instances */
-    let calHighlights: CalendarHighlights = $derived({
-        rangeStart: start === 'min' ? undefined : start || undefined,
-        rangeEnd: end === 'max' ? undefined : end || undefined,
-        pending: pendingDate ?? undefined,
-        hovered: hoveredDate ?? undefined,
+    let calHighlights: CalendarHighlights = $derived.by(() => {
+        const s = draftStart ?? start;
+        const e = draftEnd ?? end;
+        return {
+            rangeStart: s === 'min' ? undefined : s || undefined,
+            rangeEnd: e === 'max' ? undefined : e || undefined,
+            pending: pendingDate ?? undefined,
+            hovered: hoveredDate ?? undefined,
+        };
     });
 
     /** Svelte action: portal — moves node to document.body (escapes stacking contexts) */
@@ -986,6 +1195,7 @@
             >
                 <input
                     type="number"
+                    use:numericArrows
                     bind:value={customAmount}
                     min="1"
                     max="999"
@@ -1070,30 +1280,64 @@
 
     {#if showDateFields}
         <div class="relative drp-trigger w-full">
-            <button
+            <!-- A pair of text fields rather than a button: the calendar is still one
+                 click away, but a known date should not have to be navigated to. -->
+            <div
                 bind:this={triggerEl}
-                type="button"
-                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden cursor-pointer hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
+                class="w-full flex {stacked ? 'flex-col' : ''} items-center gap-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden hover:border-libre-green/50 transition-colors {compact ? '' : 'shadow-sm'} {calendarOpen
                     ? 'ring-1 ring-libre-green border-libre-green'
                     : ''}"
-                onclick={openCalendar}
             >
-                <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                <!-- A label, so the padding around the field is part of the field. -->
+                <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
                     <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.from')}</span>
-                    <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(start)}</span>
-                </span>
+                    <input
+                        bind:this={startInputEl}
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        spellcheck="false"
+                        class="min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {startInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        value={fieldText('start')}
+                        title={$_('datePicker.formatHint')}
+                        data-testid="date-range-input-start"
+                        oninput={(e) => (typedStart = e.currentTarget.value)}
+                        onfocus={() => handleFieldFocus('start')}
+                        onblur={(e) => handleFieldBlur(e, 'start')}
+                        onkeyup={resetDateArrowHold}
+                        onkeydown={(e) => handleFieldKeydown(e, 'start')}
+                        onclick={(e) => e.stopPropagation()}
+                    />
+                </label>
                 {#if stacked}
                     <span class="block w-full h-px bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
                 {:else}
                     <span class="block w-px h-6 bg-gray-200 dark:bg-slate-600 flex-shrink-0"></span>
                 {/if}
-                <span class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
+                <!-- A label, so the padding around the field is part of the field. -->
+                <label class="{stacked ? 'w-full' : 'flex-1'} flex items-center gap-1 whitespace-nowrap overflow-hidden {compact ? 'px-1.5 py-1' : 'px-3 py-2'}">
                     <Calendar size={compact ? 11 : 14} class="text-libre-green flex-shrink-0" />
                     <span class="text-[9px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide flex-shrink-0">{$_('datePicker.to')}</span>
-                    <span class="font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 dark:text-gray-200 truncate">{displayDate(end)}</span>
-                </span>
-            </button>
+                    <input
+                        bind:this={endInputEl}
+                        type="text"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        spellcheck="false"
+                        class="min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {endInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        value={fieldText('end')}
+                        title={$_('datePicker.formatHint')}
+                        data-testid="date-range-input-end"
+                        oninput={(e) => (typedEnd = e.currentTarget.value)}
+                        onfocus={() => handleFieldFocus('end')}
+                        onblur={(e) => handleFieldBlur(e, 'end')}
+                        onkeyup={resetDateArrowHold}
+                        onkeydown={(e) => handleFieldKeydown(e, 'end')}
+                        onclick={(e) => e.stopPropagation()}
+                    />
+                </label>
+            </div>
 
             {#if calendarOpen}
                 {#if usePortal}

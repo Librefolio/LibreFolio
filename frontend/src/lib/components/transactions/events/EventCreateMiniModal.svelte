@@ -10,7 +10,7 @@
     import {zodiosApi} from '$lib/api';
     import {getEventTypeOptions, EVENT_TYPES_TX_COMPATIBLE} from '$lib/utils/transactions/eventTypes';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -240,6 +240,12 @@
                         class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-mono text-right focus:ring-2 focus:ring-libre-green/30 focus:border-libre-green [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
                         bind:value={eventAmount}
                         oninput={() => (userTouched = true)}
+                        onkeydown={(e) => {
+                            const stepped = decimalArrowStep(e, eventAmount, 0.01);
+                            if (stepped === null) return;
+                            eventAmount = stepped;
+                            userTouched = true;
+                        }}
                         onblur={formatAmount}
                         placeholder="0.00"
                         data-testid="event-create-amount"

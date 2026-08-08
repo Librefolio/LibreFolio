@@ -45,7 +45,6 @@ class UploadListResponse(BaseListResponse[UploadFileInfo]):
     """Response for listing uploads."""
 
 
-
 class UploadDeleteResponse(BaseModel):
     """Response after file deletion."""
 

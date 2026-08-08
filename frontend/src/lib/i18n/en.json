@@ -101,6 +101,33 @@
       "resultDeleted": "deleted",
       "resultHasTransactions": "has existing transactions"
     },
+    "merge": {
+      "title": "Merge assets",
+      "subtitle": "Two entries for the same instrument become one. Nothing is lost: whatever is not primary is kept as an alternate identifier.",
+      "chooseTarget": "Which asset do you want to keep?",
+      "chooseTargetHint": "The other one is deleted and its history moves here. Inactive assets can be chosen too.",
+      "targetPlaceholder": "Choose an asset…",
+      "noTargets": "There is no other asset to merge with.",
+      "whatMoves": "What moves",
+      "movesNothing": "This asset has no history to move.",
+      "moved": {
+        "transactions": "Transactions",
+        "prices": "Prices",
+        "pricesDiscarded": "Prices discarded (the surviving asset already has that day)",
+        "events": "Events",
+        "eventsDiscarded": "Duplicate events discarded",
+        "relinked": "Transactions relinked to the surviving event",
+        "providerMoved": "Price provider moved over",
+        "providerDropped": "Price provider discarded (the surviving asset already has one)"
+      },
+      "identifiersKept": "Identifiers kept as alternates",
+      "identifiersKeptHint": "They will keep matching this asset on future imports.",
+      "destructiveWarning": "\"{name}\" will be deleted. This cannot be undone.",
+      "confirmButton": "Merge and delete",
+      "toastOk": "{source} merged into {target}",
+      "errorGeneric": "Merge failed",
+      "action": "Merge with…"
+    },
     "types": {
       "STOCK": "Stock",
       "ETF": "ETF",
@@ -130,7 +157,9 @@
         "message": "An asset named \"{name}\" already exists. It may be the same instrument under a different name. Do you want to use it and add the import's search keys to its identifiers?",
         "useAndAdd": "Use it and add the key",
         "useOnly": "Use it without adding",
-        "changeName": "No, change the name"
+        "changeName": "No, change the name",
+        "messagePlain": "An asset named \"{name}\" already exists. It may be the same instrument under a different name.",
+        "use": "Use it"
       },
       "importNotices": {
         "intro": "This may be an old, matured or redeemed security that is no longer quoted, so the online search may not find it. In that case, create a simple asset by entering the data manually; you can mark it as inactive from the toggle in the footer.",
@@ -151,7 +180,8 @@
       "quoteBaseQuantity": "Units per single price",
       "quoteBaseTooltip": "Specifies how many shares or units the market price refers to. For ETFs or stocks it is typically 1; bonds are usually quoted on a base of 100.",
       "bondQuoteBaseHint": "Bonds are usually quoted per 100 nominal (e.g. BTP): check this value — it's typically 100.",
-      "activeTooltip": "If active, the asset will be updated automatically by the scheduler and remain visible in selectors. Disable it to hide the asset when you no longer own it or do not want to keep downloading prices."
+      "activeTooltip": "If active, the asset will be updated automatically by the scheduler and remain visible in selectors. Disable it to hide the asset when you no longer own it or do not want to keep downloading prices.",
+      "quoteBaseMin": "Must be at least 1"
     },
     "provider": {
       "assignment": "Provider Assignment",
@@ -227,7 +257,20 @@
       "deleteConfirmMessage": "Delete {n} identifiers?",
       "otherLabel": "Other identifiers",
       "otherPlaceholder": "Type a code or name, then Enter or comma",
-      "otherSeparatorsHint": "Add one identifier at a time — press Enter, comma (,), semicolon (;) or Tab to confirm each. Spaces are kept inside the value."
+      "otherSeparatorsHint": "Add one identifier at a time — press Enter, comma (,), semicolon (;) or Tab to confirm each. Spaces are kept inside the value.",
+      "primaryChooser": {
+        "title": "Which {type} is the main one for «{asset}»?",
+        "titleGeneric": "Which identifier is the main one for «{asset}»?",
+        "hint": "The others are kept as alternate identifiers and will be used to recognise this asset on future imports.",
+        "originProvider": "from the provider",
+        "originReport": "from the report",
+        "originStored": "already saved",
+        "btpNote": "Italian BTPs bought at issue (\"CUM\") carry a different ISIN from the tradeable one: the first grants the loyalty premium but is not quoted. Keep the **quoted** one as the main identifier — it is the only one with a price.",
+        "keepAlternates": "Kept as alternates:",
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "skip": "Don't save"
+      }
     },
     "confirm": {
       "saveWithoutTest": "Save Without Testing?",
@@ -441,7 +484,7 @@
     },
     "possibleDuplicate": "Possible duplicate",
     "todoBlockerCommitHint": "Complete all required fields before saving",
-    "todoWarningVerifyHint": "{n} auto-derived field(s) to verify before saving",
+    "todoWarningVerifyHint": "{n, plural, one {# auto-derived field to verify before saving} other {# auto-derived fields to verify before saving}}",
     "todoWarningConfirmTitle": "Verify auto-derived fields?",
     "todoWarningConfirmMessage": "{n} row(s) have an auto-derived value that hasn't been verified yet (e.g. the nominal quantity of matured bonds). Review them, or save anyway if the derived values are correct.",
     "todoWarningConfirmItemsLabel": "{n} field(s) to verify",
@@ -514,7 +557,12 @@
       "duplicateBadge": "duplicate",
       "similarityTotal": "Total overlap",
       "similarityPartial": "Partial",
-      "similarityTooltip": "Total: every row is matched across files. Partial: at least one row has no exact twin — review before importing."
+      "similarityTooltip": "Total: every row is matched across files. Partial: at least one row has no exact twin — review before importing.",
+      "statusAllAuto": "All auto-resolved",
+      "statusToVerify": "{n} to verify",
+      "tierTotalTitle": "Total overlap",
+      "tierPartialTitle": "Partial overlap",
+      "groupCount": "{n} groups"
     },
     "duplicatesSelectedTip": "Counts only duplicate rows that are still selected (they will be imported). Exact in-batch duplicates are already deselected and not counted here.",
     "deselectReasons": {
@@ -531,8 +579,56 @@
       "dbColumn": "DB #{id}",
       "hint": "Highlighted fields differ between the transactions.",
       "openHint": "Click to compare side by side",
-      "openAction": "Compare"
-    }
+      "openAction": "Compare",
+      "keptCount": "Keeping {n} of {total}"
+    },
+    "noticeConfirmTitle": "Notes from the importer",
+    "noticeConfirmMessage": "{n, plural, one {The importer left # note explaining a choice it made. Review it before continuing.} other {The importer left # notes explaining the choices it made. Review them before continuing.}}",
+    "todoBlockerVerifyHint": "{n, plural, one {# row was not fully understood by the importer and must be reviewed before saving.} other {# rows were not fully understood by the importer and must be reviewed before saving.}}",
+    "parseErrorsTitle": "{n} file(s) could not be parsed",
+    "brimNotice": {
+      "ca_succession_transfer_in": "Securities transferred in from another custody account were detected ({n} rows).\nThey were recorded as «Adjustment» transactions because they have no matching cash movement: the assumption is that you already owned them at a different broker.\nIf that is the case, and that broker is tracked in LibreFolio, then when you import the other half of the transaction the system will offer to link the two and turn them into a «Securities transfer».\nThe rows in detail:"
+    },
+    "evidenceRowsTitle": "Source rows",
+    "evidenceRowCount": "{n} rows",
+    "noticeSectionInfo": "Informational notes",
+    "noticeSectionWarning": "Needs your attention",
+    "manualFieldsTooltip": "The transactions listed here may be wrong: the importer could not work out every field on its own. You will be asked to correct them before the import is saved.",
+    "stepFixTitle": "Corrections",
+    "stepDuplicatesTitle": "Duplicates",
+    "fixStep": {
+      "intro": "These rows were recorded, but the file did not say enough for the importer to be sure. Settle them now: the duplicate check that follows compares each row against your database, and a row filed under the wrong type is compared against the wrong things.",
+      "pending": "{n, plural, one {# row still to settle} other {# rows still to settle}}",
+      "settled": "{n, plural, one {# settled} other {# settled}}",
+      "allDone": "Nothing left to correct",
+      "allDoneDetail": "{n, plural, =0 {Nothing to correct.} one {# row settled. You can move on.} other {# rows settled. You can move on.}}",
+      "apply": "Apply correction",
+      "acceptAsIs": "Keep as recorded",
+      "acceptAsIsHint": "Keeping it as recorded is a deliberate choice: the row is imported the way the importer filed it.",
+      "badgeCorrected": "Corrected",
+      "badgeKept": "Kept as read",
+      "applyAgain": "Update",
+      "acceptAll": "{n, plural, one {Keep the remaining row as read} other {Keep the remaining # rows as read}}",
+      "acceptAllHint": "Accepts the plugin's reading for every row still waiting. You can still change any of them afterwards.",
+      "assetFromDb": "Assets already catalogued",
+      "assetPlaceholder": "Pick one of the instruments found in these files",
+      "assetCreate": "Create a new asset",
+      "groupTrades": "Cash movements that may be operations",
+      "groupTradesHint": "Recorded as a deposit or a withdrawal because the file gives no quantity and no instrument. If they were a purchase or a sale, correct them now.",
+      "groupCharges": "Fees and taxes with no instrument",
+      "groupChargesHint": "Fees or taxes on securities operations that the file links to no instrument. Assign them to the right security, or keep them as they are if they concern the account.",
+      "assetNone": "No instrument (broker charge)",
+      "reset": "Restore",
+      "resetHint": "Puts this row back the way the file was read, discarding the answer given here.",
+      "resetAll": "Restore all ({n})",
+      "resetAllHint": "Puts every settled row back the way the file was read."
+    },
+    "duplicatesStepIntro": "Some rows appear in more than one of the files you are importing: pick which copy to keep. The comparison against your database has already been redone on the corrected rows and reaches the review step ready.",
+    "duplicateRecheckFailed": "Could not re-check for duplicates ({error}). The result shown is the one computed before your corrections.",
+    "evidenceOpenFile": "Row {n} in the file",
+    "evidenceOpenFileHint": "Open the file preview at this row, so the neighbouring rows are visible too.",
+    "inspectAsset": "Inspect / edit",
+    "inspectAssetHint": "Open the selected instrument to check its currency, identifiers and price source."
   },
   "brokers": {
     "title": "Brokers",
@@ -1337,7 +1433,9 @@
       "yearsShort": "Y"
     },
     "today": "Today",
-    "resolvingStart": "Finding…"
+    "resolvingStart": "Finding…",
+    "openCalendar": "Open the calendar",
+    "formatHint": "Type the date or pick it from the calendar. Accepted: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — the year must be written in full."
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -2118,7 +2216,8 @@
     },
     "size": "Size",
     "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out"
+    "zoomOut": "Zoom out",
+    "previewAutofitHint": "Double-click a column header to fit its width"
   },
   "donationPopup": {
     "title": "LibreFolio grows thanks to users like you!",

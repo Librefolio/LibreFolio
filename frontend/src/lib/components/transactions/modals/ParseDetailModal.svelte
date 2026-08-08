@@ -6,13 +6,15 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {CheckCircle, AlertTriangle, HelpCircle, X, CircleAlert, FileText, Wrench} from 'lucide-svelte';
+    import {CheckCircle, HelpCircle, X, CircleAlert, FileText, Wrench, Info} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {getTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getIndexColor} from '$lib/utils/colors';
-    import {resolveIssueMessage} from '$lib/utils/transactions/resolveValidationMessage';
-    import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo} from '$lib/types';
+    import {resolveIssueMessage, translateFieldName} from '$lib/utils/transactions/resolveValidationMessage';
+    import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
+    import type {BrimParseResponse, BrimAssetMapping, BrimValidationIssue, BrimFieldTodo, BrimNotice} from '$lib/types';
 
     interface ParsedFileResult {
         fileId: string;
@@ -112,7 +114,7 @@
         return null;
     });
 
-    let warnings = $derived.by(() => {
+    let warnings = $derived.by((): BrimNotice[] => {
         if (parseResult?.response?.warnings) return parseResult.response.warnings;
         if (isAggregate) return activeResults.flatMap((r) => r.response!.warnings ?? []);
         return [];
@@ -262,10 +264,17 @@
 
             <!-- Manual Fields (Field TODOs) — 'Required' only when blockers exist, else 'To Verify' -->
             <section>
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                    {hasBlockerTodo ? $t('importWizard.manualFieldsRequired') : $t('importWizard.manualFieldsToVerify')}
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                    <span>
+                        {hasBlockerTodo ? $t('importWizard.manualFieldsRequired') : $t('importWizard.manualFieldsToVerify')}
+                        {#if fieldTodoEntries.length > 0}
+                            <span class="ml-1 text-xs font-normal {hasBlockerTodo ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodoEntries.length})</span>
+                        {/if}
+                    </span>
                     {#if fieldTodoEntries.length > 0}
-                        <span class="ml-1 text-xs font-normal {hasBlockerTodo ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({fieldTodoEntries.length})</span>
+                        <Tooltip text={$t('importWizard.manualFieldsTooltip')} position="right" maxWidth="320px">
+                            <Info size={13} class="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" />
+                        </Tooltip>
                     {/if}
                 </h3>
                 {#if fieldTodoEntries.length > 0}
@@ -280,7 +289,7 @@
                                         <span class="text-xs text-gray-400 dark:text-gray-500 mr-1">{entry.fileName} ·</span>
                                     {/if}
                                     <span class="font-medium {isBlocker ? 'text-red-800 dark:text-red-300' : 'text-amber-800 dark:text-amber-300'}">{$t('importWizard.todoRow', {values: {n: todo.tx_index + 1}})}</span>
-                                    <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({todo.field})</span>
+                                    <span class="text-xs ml-1 {isBlocker ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}">({translateFieldName(todo.field, $t)})</span>
                                     <span class="ml-1 {isBlocker ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}">{todo.message}</span>
                                     {#if todo.context}
                                         <span class="text-xs text-gray-500 dark:text-gray-400 ml-1">— {JSON.stringify(todo.context)}</span>
@@ -319,14 +328,7 @@
             <section>
                 <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{$t('importWizard.warningsSection')}</h3>
                 {#if warnings.length > 0}
-                    <ul class="space-y-1">
-                        {#each warnings as warning}
-                            <li class="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
-                                <AlertTriangle size={14} class="mt-0.5 shrink-0" />
-                                <span>{warning}</span>
-                            </li>
-                        {/each}
-                    </ul>
+                    <BrimNoticeList notices={warnings} />
                 {:else}
                     <p class="text-xs text-gray-400">{$t('importWizard.noWarnings')}</p>
                 {/if}

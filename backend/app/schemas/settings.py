@@ -73,7 +73,6 @@ class GlobalSettingsListResponse(BaseListResponse[GlobalSettingRead]):
     """Response for listing all global settings."""
 
 
-
 # ============================================================================
 # PREDEFINED GLOBAL SETTINGS
 # ============================================================================

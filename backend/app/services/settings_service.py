@@ -219,4 +219,3 @@ async def initialize_global_settings(session: AsyncSession) -> int:
         logger.info("Initialized global settings", created=created)
 
     return created
-

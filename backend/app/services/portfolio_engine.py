@@ -447,6 +447,7 @@ class DailyPositionState:
     cost_basis: Decimal  # in target_currency (wac * qty * fx)
     unrealized_pnl: Decimal | None  # market_value - cost_basis (None if MV missing)
 
+
 @dataclass
 class DailyPortfolioState:
     """Complete daily portfolio state — the heart of the calculation engine."""

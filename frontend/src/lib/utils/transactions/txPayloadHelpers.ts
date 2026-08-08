@@ -7,6 +7,7 @@
  */
 
 import {type TypeRule, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
+import type {BrimEvidence} from '$lib/types/files';
 
 // =============================================================================
 //  Types
@@ -19,6 +20,8 @@ export interface ImportTodo {
     severity: 'blocker' | 'warning';
     reasonCode: string;
     message: string;
+    /** Source-data tables backing this todo (raw file rows + plugin comment). */
+    evidence?: BrimEvidence[];
 }
 
 /** Minimal cash shape used throughout transaction payloads. */

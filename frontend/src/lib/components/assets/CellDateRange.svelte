@@ -18,6 +18,7 @@
 <script lang="ts">
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
 
+    import {numericArrows} from '$lib/actions/numericArrows';
     interface Props {
         start: string;
         end: string;
@@ -151,6 +152,7 @@
                     <div class="flex items-center gap-1.5">
                         <input
                             type="number"
+                            use:numericArrows
                             bind:value={localY}
                             oninput={handleYMDBlur}
                             min="0"
@@ -161,6 +163,7 @@
                         <span class="text-xs text-gray-500">y</span>
                         <input
                             type="number"
+                            use:numericArrows
                             bind:value={localM}
                             oninput={handleYMDBlur}
                             min="0"
@@ -171,6 +174,7 @@
                         <span class="text-xs text-gray-500">m</span>
                         <input
                             type="number"
+                            use:numericArrows
                             bind:value={localD}
                             oninput={handleYMDBlur}
                             min="0"
@@ -186,6 +190,7 @@
                         <input
                             id="grace-days"
                             type="number"
+                            use:numericArrows
                             bind:value={localGraceDays}
                             oninput={handleGraceDaysBlur}
                             min="0"
