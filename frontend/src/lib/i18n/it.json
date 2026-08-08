@@ -181,7 +181,8 @@
       "quoteBaseTooltip": "Specifica a quanti titoli o quote fa riferimento il prezzo di mercato. Per ETF o azioni è tipicamente 1, le obbligazioni tendenzialmente sono quotate su base 100.",
       "bondQuoteBaseHint": "Le obbligazioni sono di solito quotate ogni 100 di nominale (es. BTP): verifica questo valore — tipicamente è 100.",
       "activeTooltip": "Se attivo, l'asset sarà aggiornato automaticamente dallo scheduler e visibile nelle selezioni. Disabilitalo per nasconderlo se non lo possiedi più o non vuoi continuare a scaricarne i prezzi.",
-      "quoteBaseMin": "Deve essere almeno 1"
+      "quoteBaseMin": "Deve essere almeno 1",
+      "quoteBaseInteger": "Solo numeri interi"
     },
     "provider": {
       "assignment": "Assegnazione Provider",

@@ -212,9 +212,19 @@ T4      [ultimo: richiede la verifica di parità sulle transazioni appaiate]
 
 ## Stato
 
+> 🔄 **Riallineato il 08/08/2026**, dopo i giri di beta testing su Crédit Agricole. Verificato
+> sul codice.
+
 | ID | Rilievo | Complessità | Stato |
 |---|---|---|---|
-| T1 🔴 | Decimali cancellati durante la digitazione | Piccola | ⏳ Da iniziare |
-| T2 | Tooltip senza ritardo in entrata | Piccola | ⏳ Da iniziare |
-| T3 | Duplica non copia la data | Banale | ⏳ Da iniziare |
-| T4 | Delete singolo → bulk modal | Piccola/Media | ⏳ Da iniziare |
+| T1 🔴 | Decimali cancellati durante la digitazione | Piccola | 🔶 **Parziale** — la normalizzazione è stata riscritta (`utils/core/parseDecimalInput.ts`: primo separatore = decimale, nessuna cifra persa, `1.4,1` → `1.41`) e le frecce ora scalano tenendo premuto. **Resta la causa radice descritta sopra**: l'`$effect` di `CompactCashCell.svelte:71-78` confronta ancora le stringhe di *display*, non i valori normalizzati → strategia **A** ancora da applicare |
+| T2 | Tooltip senza ritardo in entrata | Piccola | ⏳ Da iniziare — `Tooltip.svelte` è tuttora «0ms delay on hover» |
+| T3 | Duplica non copia la data | Banale | ⏳ Da iniziare — `TransactionFormModal.svelte:8` documenta ancora `date=today` in modalità `duplicate` |
+| T4 | Delete singolo → bulk modal | Piccola/Media | ⏳ Da iniziare — `transactions/+page.svelte` usa ancora `TransactionDeleteModal` |
+
+### Nota su ciò che è già arrivato per altra via
+
+Durante il beta testing sono stati introdotti, fuori da questo piano ma nella stessa area:
+stepping universale con accelerazione su tutti gli input numerici (`actions/numericArrows.ts`),
+date scrivibili a mano nei due picker, e i vincoli di validità sui campi numerici. Non chiudono
+T1–T4, ma ne cambiano il contorno: le fix vanno provate **con** le frecce attive.

@@ -277,15 +277,25 @@ W8 (schema warning)  ──▶ coordinare con P1/Step 6
 
 ## Stato
 
+> 🔄 **Riallineato il 08/08/2026**, dopo i giri di beta testing su Crédit Agricole (P1 Fase A) e
+> il rifacimento UI del wizard. Verificato sul codice, non sulla memoria del piano.
+
 | ID | Rilievo | Complessità | Stato |
 |---|---|---|---|
 | W2 🔴 | Consolidamento asset cross-file | Media/Alta | ➡️ Passato a P3 (WS‑C, Step 4 «Unifica asset») |
-| W1 | Conteggi non deduplicati | Media | ⏳ Da iniziare |
-| W3 | Riepilogo non sottrae le rimozioni | Piccola/Media | ⏳ Da iniziare |
-| W4 | Tipi transazione in inglese | Banale | ⏳ Da iniziare |
-| W5 | `N TX` poco chiaro | Banale | ⏳ Da iniziare |
+| W1 | Conteggi non deduplicati | Media | ⏳ Da iniziare — `parseAggregateStats` (`ImportWizardModal.svelte:225-243`) deriva ancora da `parseResults` |
+| W3 | Riepilogo non sottrae le rimozioni | Piccola/Media | ⏳ Da iniziare — stessa causa di W1, stessa fix |
+| W4 | Tipi transazione in inglese | Banale | ⏳ Da iniziare — `ParseDetailModal.svelte:183` è ancora `{type}` grezzo |
+| W5 | `N TX` poco chiaro | Banale | ✅ **Fatto** — `importWizard.txCount` = «{n} transazioni in {k} file», colonna «Transazioni parsate». Resta il micro-refuso `importWizard.todoRow` = «TX #{n}» |
 | W6 | Annulla non resetta l'asset | Banale | ➡️ Assorbito da P3 (B‑02) — qui resta solo la verifica |
-| W7 | Auto-selezione dopo assegnazione | Piccola | ⏳ Da iniziare |
-| W8 | Livello INFO nei warning | Media | ⏳ Da iniziare |
-| W9 | Upload/parse in parallelo | Piccola | ⏳ Da iniziare |
-| W10 | `asyncio.to_thread` sul parse | Piccola | ⏳ Da iniziare |
+| W7 | Auto-selezione dopo assegnazione | Piccola | 🔶 **Parziale** — `recheckOpenings()` (`:1663`) ora è invocata anche da `autoFixBrokerOpening` (`:1679`), dal bottone «ricontrolla» (`:4124`) e da `BrokerModal.onupdated` (`:4658`); **non** ancora da `resolveAsset` / `resolveAssetManual` / `clearResolution`. La derivazione a runes resta la fix preferita |
+| W8 | Livello INFO nei warning | Media | ✅ **Superato da P1 Fase A** — `BRIMNotice{severity: info\|warning, code, message, evidence, rows}` (`backend/app/schemas/brim.py:428-460`) con coercizione dalle stringhe legacy, `api sync` già fatto, resa in `BrimNoticeList.svelte`. Il campo `rows` copre la sinergia prevista con B7 |
+| W9 | Upload/parse in parallelo | Piccola | ⏳ Da iniziare — nessun `allSettled` nel wizard |
+| W10 | `asyncio.to_thread` sul parse | Piccola | ⏳ Da iniziare — `brokers.py:778` chiama ancora `brim_provider.parse_file(...)` sincrono dentro `async def` |
+
+### Nota sulla UI cambiata sotto questo piano
+
+Il wizard è stato riscritto in più punti durante il beta testing (ordine degli step, step di
+riparazione delle righe segnalate, anteprima file con goto/evidenziazione, modale di confronto,
+picker asset). Le **evidenze di riga** citate nei blocchi A–D sopra possono essere spostate: vanno
+ricercate per nome di funzione, non per numero di riga.

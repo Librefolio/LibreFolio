@@ -181,7 +181,8 @@
       "quoteBaseTooltip": "Especifica a cuántas acciones o participaciones se refiere el precio de mercado. Para ETF o acciones suele ser 1; los bonos suelen cotizarse sobre una base de 100.",
       "bondQuoteBaseHint": "Los bonos suelen cotizarse por cada 100 de nominal (p. ej. BTP): verifica este valor — normalmente es 100.",
       "activeTooltip": "Si está activo, el activo se actualizará automáticamente por el programador y seguirá visible en los selectores. Desactívelo para ocultarlo cuando ya no lo posea y no quiera seguir descargando precios.",
-      "quoteBaseMin": "Debe ser al menos 1"
+      "quoteBaseMin": "Debe ser al menos 1",
+      "quoteBaseInteger": "Solo números enteros"
     },
     "provider": {
       "assignment": "Asignación de Proveedor",

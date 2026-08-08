@@ -299,7 +299,16 @@
      * happen in every price conversion. It used to be coerced to 1 on save, which hid
      * the mistake instead of reporting it.
      */
-    let quoteBaseQuantityInvalid = $derived(!Number.isFinite(quoteBaseQuantity) || quoteBaseQuantity < 1);
+    let quoteBaseQuantityInvalid = $derived(!Number.isFinite(quoteBaseQuantity) || quoteBaseQuantity < 1 || !Number.isInteger(quoteBaseQuantity));
+    /** A price is quoted per N units, and half a unit is not a quotation base. */
+    let quoteBaseQuantityError = $derived(!Number.isFinite(quoteBaseQuantity) || quoteBaseQuantity < 1 ? 'assets.modal.quoteBaseMin' : 'assets.modal.quoteBaseInteger');
+
+    /** Drops the decimals the user typed, once they have moved on. */
+    function truncateQuoteBaseQuantity() {
+        if (!Number.isFinite(quoteBaseQuantity)) return;
+        const truncated = Math.trunc(quoteBaseQuantity);
+        if (truncated !== quoteBaseQuantity) quoteBaseQuantity = truncated;
+    }
     let isValid = $derived(displayName.trim().length > 0 && !quoteBaseQuantityInvalid);
     let hasProvider = $derived(!providerNoProvider && providerCode !== '' && (providerIdentifier !== '' || providerIdentifierType === 'AUTO_GENERATED'));
 
@@ -1606,13 +1615,14 @@
                                 step="1"
                                 bind:value={quoteBaseQuantity}
                                 oninput={() => (quoteBaseQuantityTouched = true)}
+                                onblur={truncateQuoteBaseQuantity}
                                 data-testid="asset-modal-quote-base-quantity"
                                 class="w-full px-3 py-2 text-sm border rounded-lg
                                            bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
                                            focus:outline-none focus:ring-2 {quoteBaseQuantityInvalid ? 'border-red-400 focus:ring-red-400/50 dark:border-red-500' : 'border-gray-200 dark:border-slate-600 focus:ring-libre-green/50 focus:border-libre-green'}"
                             />
                             {#if quoteBaseQuantityInvalid}
-                                <p class="mt-1 text-[11px] text-red-600 dark:text-red-400" data-testid="asset-modal-quote-base-quantity-error">{$t('assets.modal.quoteBaseMin')}</p>
+                                <p class="mt-1 text-[11px] text-red-600 dark:text-red-400" data-testid="asset-modal-quote-base-quantity-error">{$t(quoteBaseQuantityError)}</p>
                             {/if}
                             {#if assetType === 'BOND'}
                                 <p class="mt-1 flex items-start gap-1 text-[11px] text-blue-600 dark:text-blue-300" data-testid="asset-modal-bond-qbq-hint">

@@ -181,7 +181,8 @@
       "quoteBaseTooltip": "Indique à combien de titres ou d'unités le prix de marché se réfère. Pour les ETF ou les actions c'est généralement 1 ; les obligations sont généralement cotées sur une base 100.",
       "bondQuoteBaseHint": "Les obligations sont généralement cotées pour 100 de nominal (ex. BTP) : vérifiez cette valeur — elle est généralement de 100.",
       "activeTooltip": "Si l'actif est actif, il sera mis à jour automatiquement par le planificateur et restera visible dans les sélecteurs. Désactivez-le pour le masquer lorsque vous ne le détenez plus et que vous ne souhaitez plus télécharger ses prix.",
-      "quoteBaseMin": "Doit être au moins 1"
+      "quoteBaseMin": "Doit être au moins 1",
+      "quoteBaseInteger": "Nombres entiers uniquement"
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
