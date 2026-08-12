@@ -13,7 +13,7 @@
  * - Option selection
  * - Accessibility
  */
-import {expect, test} from '@playwright/test';
+import {expect, test} from './fixtures/playwright';
 import {login} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 

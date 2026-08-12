@@ -12,7 +12,7 @@
  * Mock data contract: e2e_test_user has OWNER/EDITOR on Interactive Brokers + Directa SIM.
  * Apple (AAPL) is a known asset with price history.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 
@@ -355,6 +355,9 @@ test.describe('BulkModal WAC Cell Rendering', () => {
     test('WB5 — Clone paired from DB, WAC auto cell appears (inline validate)', async ({page}) => {
         // Find a paired giver row on editable broker (from mock data)
         const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+        // The table is populated asynchronously: without this wait, a slow backend
+        // (e.g. running under coverage) yields a count of 0 and the loop below never runs.
+        await expect(allRows.first()).toBeVisible({timeout: 10_000});
         const count = await allRows.count();
         let giverRowId: string | null = null;
 

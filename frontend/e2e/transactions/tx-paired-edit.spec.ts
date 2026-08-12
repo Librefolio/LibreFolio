@@ -12,7 +12,7 @@
  * asymmetric paired TRANSFERs, and linked pairs. If a test fails because
  * expected data is missing, fix populate_mock_data.py — never skip.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 

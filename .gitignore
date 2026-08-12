@@ -85,13 +85,14 @@ frontend/static/fonts/
 # Coverage reports
 htmlcov/
 htmlcov-backend/
-htmlcov-frontend/
+htmlcov-backend-e2e/
 .coverage
 .coverage.*
 coverage.xml
 *.cover
 .hypothesis/
 .coverage_data/
+frontend/coverage-js/
 
 # Development stuff
 _backup_docs/

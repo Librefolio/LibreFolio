@@ -163,6 +163,23 @@ The test runner modules in `scripts/test_runner/_backend_api.py` register entire
 ./dev.py test coverage-report --priority high  # uncovered functions analysis
 ```
 
+### `--coverage` takes an optional language
+
+`--coverage [py|js|all]`, defaulting to `all` when omitted. Backend suites can only
+ever produce Python coverage, so on them `all` and `py` are equivalent and
+`--coverage js api all` is rejected with an explicit error rather than producing an
+empty report.
+
+Every form below stays valid — the suite name is never mistaken for a language:
+
+```bash
+./dev.py test --coverage api all       # language omitted → all → Python here
+./dev.py test --coverage py api all    # explicit
+```
+
+The `frontend/coverage-js/` reports come from Playwright and vitest runs; see the
+`testing-frontend` skill.
+
 ### ⚠️ A partial coverage measurement is worthless — and it lies LOW
 
 Coverage accumulates in `.coverage_data/backend` via `--cov-append`. Running only the
@@ -198,6 +215,8 @@ Rules:
   and their code then reads as 0 %.
 - `coverage-report` reads **`/tmp/cov_report.json`**, not the live DB. Regenerate first:
   `COVERAGE_FILE=.coverage_data/backend pipenv run coverage json -o /tmp/cov_report.json`
+- The same command analyses the **frontend** with `--lang js`, reading monocart's istanbul
+  JSON from `frontend/coverage-js/` (no regeneration step needed — the test run writes it).
 - **Coverage is blind to `multiprocessing` spawn children.** `services/risk/quant/spawn_worker.py`
   (`_worker_main`, `_resolve_handler`, `_peak_rss_bytes`) always reads 0 % while being
   live. Never treat those as dead code — cross-check with `./dev.py lint --dead-code`.

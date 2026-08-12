@@ -1427,13 +1427,17 @@
     }
 
     async function reloadMetadata() {
+        // Mark the classification as stale immediately: `buildEditData()` reads it, so the
+        // edit button must stay disabled for the whole reload, not just from the moment the
+        // classification fetch starts. Otherwise reopening the modal right after a save
+        // prefills it with the pre-save values.
+        classificationLoaded = false;
         await Promise.all([loadAssetInfo(), loadProviderAssignment()]);
         // Update provider icon if changed
         if (assetInfo?.provider_code) {
             providerIconUrl = getAssetProviderIconUrl(assetInfo.provider_code);
         }
         // Reload classification data if metadata is available (always refresh after sync)
-        classificationLoaded = false;
         if (assetInfo?.has_metadata) {
             await loadClassificationData();
         } else {
@@ -1860,7 +1864,7 @@
             <button
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="asset-detail-edit-btn"
-                disabled={!assetInfo}
+                disabled={!assetInfo || !classificationLoaded}
                 onclick={() => {
                     editDataForModal = buildEditData();
                     editModalOpen = true;

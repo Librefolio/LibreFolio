@@ -55,8 +55,12 @@ frontend/
 # With visible browser
 ./dev.py test front-transaction tx-broker-access --headed
 
-# With backend coverage tracking
+# With coverage tracking — Python + JS/Svelte (default when the language is omitted)
 ./dev.py test --coverage front-transaction all
+
+# Only one language
+./dev.py test --coverage py front-transaction all    # backend Python only
+./dev.py test --coverage js front-transaction all    # frontend JS/Svelte only
 
 # Gallery screenshots
 ./dev.py mkdocs gallery
@@ -174,6 +178,54 @@ Key files:
 - `playwright.config.ts`: `gracefulShutdown: {signal: 'SIGTERM', timeout: 5000}`
 - `dev.py` (cmd_server): `os.execvpe()` in coverage mode
 - `.coveragerc`: `sigterm = true`, `parallel = true`
+
+Report: `htmlcov-backend-e2e/` (formerly `htmlcov-frontend/` — the old name suggested
+it measured frontend code, which it never did).
+
+## JS/Svelte Coverage during E2E
+
+Collected via Chromium V8 (`page.coverage`) and remapped to `.svelte`/`.ts` through
+the build's sourcemaps. Enabled by `--coverage js|all`, which sets `COVERAGE_JS=1`.
+
+**All specs must import from the barrel, not from `@playwright/test`:**
+
+```typescript
+import {test, expect} from '../fixtures/playwright';
+import type {Page} from '../fixtures/playwright';
+```
+
+`e2e/fixtures/playwright.ts` re-exports the same symbols and adds an `auto` fixture
+that collects coverage only when the flag is on — at flag off the cost is zero.
+
+Key files:
+- `frontend/mcr.shared.js`: filters + external sourcemap resolution (read from `build/`)
+- `frontend/mcr.e2e.config.js`: E2E config — `cleanCache: false`, the fixture only calls `add()`
+- `frontend/scripts/mcr-generate.js`: turns the accumulated cache into the report
+
+Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
+`frontend/coverage-js/combined/`. Open with `./dev.py test coverage show js`.
+
+> **No blocking thresholds**: Svelte 5 compiles templates into closures, so the data
+> is reliable about *"was this component reached"*, less so per-line.
+
+### Finding the gaps
+
+```bash
+./dev.py test coverage-report --lang js --summary            # counts by category
+./dev.py test coverage-report --lang js --category js_store  # detail for one area
+./dev.py test coverage-report --lang js --priority high --json
+```
+
+Same analyser as the backend (`scripts/coverage_analysis.py`); `scripts/coverage_js.py`
+converts monocart's istanbul JSON and supplies the frontend categories
+(`JS_FEATURE`, `JS_STORE`, `JS_API`, `JS_UTILITY`, `JS_CHART`, `SVELTE_UI`, `JS_ROUTE`, …).
+
+Two caveats when reading it:
+
+- `.svelte` entries are named `block@142` — the compiler leaves closures anonymous. The
+  `.ts` sections (`JS_UTILITY`, `JS_STORE`) carry real names and are the best starting point.
+- Statements are attributed to functions **by line range**, so a nested closure counts
+  twice. Use it to rank untested code, not to quote a percentage.
 
 ## Conventions
 

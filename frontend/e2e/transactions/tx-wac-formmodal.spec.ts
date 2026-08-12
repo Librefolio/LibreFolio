@@ -18,7 +18,7 @@
  * Mock data contract: e2e_test_user has OWNER/EDITOR on Interactive Brokers + Directa SIM.
  * Apple (AAPL) is a known asset with price history and existing BUY transactions.
  */
-import {expect, test, type Page, type Request} from '@playwright/test';
+import {expect, test, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 

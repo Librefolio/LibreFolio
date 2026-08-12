@@ -1,4 +1,4 @@
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 
 import {API_TIMEOUT, assertPanelAboveOverlay, assertPanelWithinViewport, gotoDashboard, gotoFirstAsset, isSnapshotPost, isVisibleWithin, openAiExportPanel, readClipboard, selectAiExportSelection, setupAiExportPage} from './helpers';
 

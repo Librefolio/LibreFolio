@@ -21,7 +21,7 @@
  *   BRIMAssetNotice     the "possibly matured" banner on the asset form
  */
 
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';

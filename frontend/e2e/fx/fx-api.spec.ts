@@ -9,7 +9,7 @@
  * - Database populated
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {TEST_USER} from '../fixtures/test-users';
 
 const API_BASE = '/api/v1';

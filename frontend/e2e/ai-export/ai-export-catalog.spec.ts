@@ -1,4 +1,4 @@
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 
 import {gotoDashboard, gotoFirstAsset, gotoFirstBroker, gotoFx, openAiExportPanel, readVisibleSelectionIds, setupAiExportPage} from './helpers';
 

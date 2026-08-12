@@ -60,7 +60,13 @@ Frontend test categories (`front-utility`, `front-user`, `front-fx`) support the
 | `--debug` | Enables **Playwright Inspector** — pauses before each action | Step through actions one by one, inspect selectors, set breakpoints |
 | `--ui` | Opens **Playwright UI Mode** — a full interactive test runner | Explore tests interactively, view timeline/trace, re-run selectively |
 | `--list` | Lists available test files without running them | Discover tests, verify naming, plan what to run |
-| `--coverage` | Tracks backend code coverage during E2E tests | Generate `htmlcov-frontend/` report |
+| `--coverage [py\|js\|all]` | Tracks Python and/or JS coverage during E2E tests | `py` → `htmlcov-backend-e2e/`, `js` → `frontend/coverage-js/e2e/`, `all` (default) → both |
+
+!!! tip "E2E runs are the only ones that measure both languages"
+
+    A Playwright run exercises the frontend in the browser *and* the backend over
+    HTTP, so it is the only suite where `--coverage all` produces two reports. See
+    [Coverage Model](coverage-model.md).
 
 ### 🎨 Playwright UI Mode (`--ui`)
 

@@ -18,7 +18,7 @@
  * Test IDs: AID-001..AID-007
  */
 
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';

@@ -5,7 +5,7 @@
  * Follows the pattern established by fx-helpers.ts.
  */
 
-import {expect} from '@playwright/test';
+import {expect} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 
 export const API_BASE = '/api/v1';

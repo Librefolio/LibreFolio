@@ -9,6 +9,7 @@ from pathlib import Path
 
 from scripts.cli_base import auto_build_frontend, pipenv_prefix
 
+from . import _common
 from ._common import (
     PROJECT_ROOT, Colors,
     print_section, print_info, print_success, print_error, print_warning,
@@ -125,16 +126,29 @@ def _run_playwright(
     print(f"\n{Colors.BLUE}Running: Playwright {spec_label}{Colors.NC}")
     if test_names:
         print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
-    if coverage:
+
+    # `coverage` stays a plain on/off switch for the ~77 callers; *which*
+    # languages to collect is decided centrally in _cli.py.
+    cov_py = bool(coverage) and _common._COVERAGE_PY
+    cov_js = bool(coverage) and _common._COVERAGE_JS
+    if cov_py:
         print(f"{Colors.YELLOW}📊 Backend coverage tracking enabled (COVERAGE_BACKEND=1){Colors.NC}")
+    if cov_js:
+        print(f"{Colors.YELLOW}📊 JS/Svelte coverage tracking enabled (COVERAGE_JS=1){Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
 
     try:
         env = None
-        if coverage:
+        if cov_py or cov_js:
             import os
+
             env = os.environ.copy()
-            env['COVERAGE_BACKEND'] = '1'
+            if cov_py:
+                env['COVERAGE_BACKEND'] = '1'
+            if cov_js:
+                env['COVERAGE_JS'] = '1'
+            else:
+                env.pop('COVERAGE_JS', None)
 
         result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=env)
 

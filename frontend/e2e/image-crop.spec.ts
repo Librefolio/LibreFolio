@@ -10,7 +10,7 @@
  * - Suite 6: Dark Mode (3 tests)
  * - Suite 7: Grid View (4 tests)
  */
-import {expect, test} from '@playwright/test';
+import {expect, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
 import path from 'path';

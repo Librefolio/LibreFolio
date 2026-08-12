@@ -950,6 +950,7 @@ nav:
       - 🧪 Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
           - Runner Architecture: developer/test-walkthrough/runner_architecture.md
+          - Coverage Model: developer/test-walkthrough/coverage-model.md
           - 🐍 Backend Tests:
               - External: developer/test-walkthrough/external.md
               - Database: developer/test-walkthrough/db.md

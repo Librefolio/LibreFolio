@@ -10,7 +10,7 @@
  * Plan: FxImpliedRateSpread (2026-05-18).
  * Prerequisites: backend test mode (port 6041), mock data populated.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 

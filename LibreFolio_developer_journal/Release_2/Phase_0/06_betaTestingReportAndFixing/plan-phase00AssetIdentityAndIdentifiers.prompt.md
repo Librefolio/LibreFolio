@@ -1699,3 +1699,21 @@ gruppo **certo**; il covered bond in uno solo ⇒ **singolo**.
   saldo cassa negativo, e il dry‑run mostrava `transactions: 0`.
 - Non esiste `GET /assets/{id}`: l'esistenza si legge da `GET /assets?asset_ids=…`, ma **gli
   identificativi no** — quelli stanno solo in `GET /assets/all`.
+
+---
+
+## Seguito — P7, coverage JavaScript
+
+Questo piano ha prodotto un rilievo che va oltre il proprio ambito: **quasi tutti i difetti si
+nascondevano in codice frontend che nessuna misura sorvegliava**. Da lì nasce
+[`plan-phase00FrontendCoverage.prompt.md`](plan-phase00FrontendCoverage.prompt.md) (P7), che
+introduce la coverage di `.svelte`/`.ts` accanto a quella Python.
+
+La misura che lo giustifica: gli oltre 60 spec E2E aggiungono **15 statement Python su 37.331**
+(lo 0,04 %) alla copertura del backend, mentre le **134.051 righe di frontend** su cui agiscono
+davvero non venivano registrate in alcun modo.
+
+Onestà del bilancio: sui difetti effettivamente trovati qui, la coverage ne avrebbe segnalati
+**circa la metà** — quelli dovuti a codice mai eseguito. Sugli altri (ricerca dalla 4ª lettera,
+ordine del raggruppamento, dizionario di suffissi hard-coded) non avrebbe detto niente, perché
+quel codice girava: era sbagliato, non morto.
