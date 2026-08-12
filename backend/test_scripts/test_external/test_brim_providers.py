@@ -40,7 +40,7 @@ from backend.app.schemas.brim import (
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim_providers import broker_credit_agricole as ca
-from backend.app.services.brim_providers._brim_io import model_bond_maturity, read_rows
+from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
 from backend.app.services.brim_providers.broker_credit_agricole import CreditAgricoleBrokerProvider
 from backend.app.services.brim_providers.broker_degiro import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
@@ -845,13 +845,18 @@ class TestBrokerParserCoverageHelpers:
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
         types = [tx.type for tx in out.transactions]
         assert types.count(TransactionType.WITHDRAWAL) == 5
-        assert types.count(TransactionType.DEPOSIT) == 3
-        # The unidentifiable ``TITOLI SCADUTI O ESTRATTI`` row (no same-day coupon) is
-        # booked entirely as a SELL at par, not a plain cash DEPOSIT.
-        assert types.count(TransactionType.SELL) == 1
-        assert types.count(TransactionType.INTEREST) == 3
+        assert types.count(TransactionType.DEPOSIT) == 4
+        # ``COMPRAVENDITA`` rows are real trades, not cash: two purchases (one at par,
+        # one above par) plus one sale. The remaining SICAV subscription has no coupon
+        # to recover its quantity from, so it stays cash and is blocked instead.
+        assert types.count(TransactionType.BUY) == 2
+        # One sale, plus the unidentifiable ``TITOLI SCADUTI O ESTRATTI`` row (no
+        # same-day coupon), booked entirely as a SELL at par rather than a cash DEPOSIT.
+        assert types.count(TransactionType.SELL) == 2
+        assert types.count(TransactionType.INTEREST) == 4
         assert types.count(TransactionType.DIVIDEND) == 1
-        assert types.count(TransactionType.TAX) == 2
+        # Two charge rows + the withholding split out of the grossed-up coupon.
+        assert types.count(TransactionType.TAX) == 3
         assert types.count(TransactionType.FEE) == 3
         assert len(out.validation_issues) == 0
 
@@ -1007,6 +1012,36 @@ class TestBrokerParserCoverageHelpers:
         assert not any(tx.type == TransactionType.DEPOSIT and tx.cash and tx.cash.amount == Decimal("12345.00") for tx in out.transactions)
         assert any("non collegabile" in n.message and "vendita" in n.message for n in out.warnings)
 
+    def test_credit_agricole_account_maturity_flags_the_asset_as_expired(self):
+        """A redemption seen in the *account* statement must raise the maturity advisory
+        on its asset, exactly like one seen in the securities export.
+
+        This is the only warning the user gets that the security is delisted and no price
+        provider will ever quote it. It used to be emitted by ``_parse_securities`` only,
+        so a bond whose redemption appears in the account statement — the common case,
+        since the account file is the one that spans years — was created silently and
+        then failed to price with no explanation.
+        """
+        out = CreditAgricoleBrokerProvider()._parse_account_movements(read_rows(CA_CONTI_SAMPLE), broker_id=1)
+        sell = next(tx for tx in out.transactions if tx.type == TransactionType.SELL and "account_maturity" in (tx.tags or []))
+        assert sell.asset_id is not None
+        info = out.extracted_assets[sell.asset_id]
+        kinds = [n.kind for n in info.notices]
+        assert MATURITY_NOTICE_KIND in kinds, f"expected a maturity notice on {info.extracted_name!r}, got {kinds}"
+
+    def test_credit_agricole_account_cash_refund_is_not_a_maturity(self):
+        """``SCT:RIMBORSO`` on a bank transfer is a cash refund, not a redemption.
+
+        The advisory keys off the word "rimborso", which the file also uses for tax and
+        promo refunds. Those rows carry no asset, so they cannot mislabel an instrument —
+        this test keeps that true if the row ever gains one.
+        """
+        out = CreditAgricoleBrokerProvider()._parse_account_movements(read_rows(CA_CONTI_SAMPLE), broker_id=1)
+        flagged = {aid for aid, info in out.extracted_assets.items() if any(n.kind == MATURITY_NOTICE_KIND for n in info.notices)}
+        for tx in out.transactions:
+            if tx.description and "SCT:RIMBORSO" in tx.description:
+                assert tx.asset_id not in flagged
+
     # ------------------------------------------------------------------
     # Account causale registry (4 tiers) — a causale can never pass unnoticed
     # ------------------------------------------------------------------
@@ -1039,27 +1074,300 @@ class TestBrokerParserCoverageHelpers:
         assert all(tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) for tx in cash_rows)
 
         flagged = {todo.tx_index for todo in out.field_todos}
-        assert not (flagged & {out.transactions.index(tx) for tx in cash_rows})
+        # One transfer is deliberately promoted out of tier 3 — a fund redemption paid by
+        # wire, which has its own test. Every *other* declared-cash row must stay silent.
+        promoted = {t.tx_index for t in out.field_todos if (t.context or {}).get("reason") == "fund_redemption"}
+        cash_idx = {out.transactions.index(tx) for tx in cash_rows} - promoted
+        assert len(cash_idx) >= 4, "fixture must exercise several declared-cash rows"
+        assert not (flagged & cash_idx)
         assert not any(n.code == "ca_unknown_causale" for n in out.warnings)
 
-    def test_credit_agricole_account_trade_is_blocked_not_silently_cash(self):
-        """The 50k bug: a COMPRAVENDITA row used to become an anonymous withdrawal.
+    def test_credit_agricole_fund_redemption_by_wire_is_flagged(self):
+        """A fund disinvestment never reaches the account as a securities operation.
 
-        The cash stays right (this layout carries no quantity, so we cannot build the
-        trade yet) but it must be *blocking*: a lost position only surfaces much later
-        as an unexplained gap in the cost basis, when nobody can trace it back.
+        The fund house wires the money over, so the row lands under the ordinary
+        transfer causale and is indistinguishable, by causale alone, from a salary or a
+        tax refund. Booked as a plain deposit the position stays open forever and the
+        loss surfaces much later as an unexplained gap in the cost basis — the same
+        failure mode as the 50k bug, arriving through a different door.
         """
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
-        trade = next(tx for tx in out.transactions if "NOTA INF. ACQ." in (tx.description or ""))
-        assert trade.type == TransactionType.WITHDRAWAL
-        assert trade.cash is not None and trade.cash.amount == Decimal("-15000.00")
+        idx = next(i for i, tx in enumerate(out.transactions) if "SAMPLE FUND SICAV" in (tx.description or ""))
+        tx = out.transactions[idx]
+        # Cash is right and must stay right: only the security is missing.
+        assert tx.type == TransactionType.DEPOSIT
+        assert tx.cash is not None and tx.cash.amount == Decimal("9984.47")
+        assert tx.asset_id is None
+
+        todo = next(t for t in out.field_todos if t.tx_index == idx)
+        assert todo.field == "asset_id"
+        assert todo.severity == "blocker"
+        assert todo.context.get("reason") == "fund_redemption"
+        # The fund is named, so the two AMUNDI-style funds of one statement stay distinct.
+        assert "SAMPLE FUND SICAV" in todo.message
+        # The quantity is genuinely unknowable here — a fund states the countervalue, not
+        # the units, and this layout has no coupon to recover it from. Asking beats guessing.
+        assert todo.evidence and "quote" in todo.evidence[0].comment.lower()
+
+    def test_credit_agricole_ordinary_transfer_refund_stays_silent(self):
+        """The guard that makes the redemption rule safe: the payer must be the subject.
+
+        A refund from the tax office or an energy-cost rebate also says "RIMBORSO" on an
+        incoming transfer. The keyword alone fires on three real rows out of four, so the
+        rule additionally requires the ordering party to be named again inside the
+        operation text — a fund redeems *itself*, a refund is about something else.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        idx = next(i for i, tx in enumerate(out.transactions) if "MITTENTE SAMPLE" in (tx.description or ""))
+        assert out.transactions[idx].type == TransactionType.DEPOSIT
+        assert not [t for t in out.field_todos if t.tx_index == idx]
+
+    def test_credit_agricole_fund_redemption_detector_survives_column_wrapping(self):
+        """The name is cut mid-word by the export, so the match cannot keep whitespace.
+
+        The real statement prints ``AMUNDI PRIMO INVES TIMENTO`` because the column ends
+        there — comparing token by token, or by equality, misses exactly the rows the
+        rule exists for.
+        """
+        wrapped = "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*>"
+        assert ca._sct_fund_redemption_name(wrapped) == "SAMPLE FUND SICAV"
+        # No redemption wording at all.
+        assert ca._sct_fund_redemption_name("ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONE SCT:BONIFICO SU SAMPLE FUND SICAV") == ""
+        # Redemption wording, but the payer is not the subject of the payment.
+        assert ca._sct_fund_redemption_name("ORD:DIVISIONE SERVIZI DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO IRPEF - 730 ANNO 2023") == ""
+        # No ordering party to identify anything with.
+        assert ca._sct_fund_redemption_name("BONIFICO SCT:RIMBORSI SU QUALCOSA") == ""
+
+    def test_credit_agricole_account_trade_becomes_a_real_buy(self):
+        """The 50k bug: a COMPRAVENDITA row used to become an anonymous withdrawal.
+
+        The description names the direction and the sign confirms it, so the row is a
+        purchase — booking it as cash lost the position entirely, and the loss only
+        surfaced much later as an unexplained gap in the cost basis.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        trade = next(tx for tx in out.transactions if "TIT:BTP SAMPLE" in (tx.description or ""))
+        assert trade.type == TransactionType.BUY
+        assert trade.cash is not None and trade.cash.amount == Decimal("-40000.00")
+        assert trade.asset_id is not None
+        # Same fake asset as the coupon that named it: the purchase and its income must
+        # land on one instrument, not two.
+        coupon = next(tx for tx in out.transactions if "CEDOLA:BTP SAMPLE" in (tx.description or ""))
+        assert trade.asset_id == coupon.asset_id
+        assert not any(n.code == "ca_unknown_causale" for n in out.warnings)
+
+    def test_credit_agricole_account_trade_emits_no_cash_counterpart(self):
+        """⚠️ The most insidious risk of the two layouts: opposite cash rules.
+
+        ``_parse_securities`` synthesises a DEPOSIT before a BUY because that export
+        carries no cash at all. On the account statement **the row itself is the cash**,
+        so a counterpart here would double every trade — and the doubling is invisible
+        in the transaction list, showing up only as a wrong balance much later.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        assert not any("auto_cash" in (tx.tags or []) for tx in out.transactions)
+        trade_dates = {tx.date for tx in out.transactions if "account_trade" in (tx.tags or [])}
+        cash_legs = [tx for tx in out.transactions if tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) and tx.date in trade_dates]
+        assert cash_legs == []
+
+    def test_credit_agricole_account_trade_recovers_quantity_from_coupon(self):
+        """The quantity is missing from the trade row but present in the bond's coupons.
+
+        The two are printed at *different* widths ("BTP SAMPLE" vs "BTP SAMPLE 1/12/2026"),
+        so the match is a normalized prefix in both directions — equality would find nothing.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        at_par = next(tx for tx in out.transactions if "TIT:BTP SAMPLE" in (tx.description or ""))
+        above_par = next(tx for tx in out.transactions if "ACQ. TIT:BTP OTHER" in (tx.description or ""))
+        assert at_par.quantity == Decimal("40000.00")  # NOMINALE of IT0000000001
+        assert above_par.quantity == Decimal("20000.00")  # NOMINALE of IT0000000003
+        # Nothing was flagged for these: the quantity was read, not guessed.
+        blocked = {t.tx_index for t in out.field_todos if t.severity == "blocker"}
+        assert out.transactions.index(at_par) not in blocked
+        assert out.transactions.index(above_par) not in blocked
+
+    def test_credit_agricole_account_sell_declares_its_presumed_quantity(self):
+        """⚠️ Fixture-only branch: the real export contains no sales.
+
+        A coupon says how much of the bond was *held*, not how much was sold. For a full
+        sale the two coincide; for a partial one they do not, and the file never says
+        which — so the quantity ships as a declared presumption, never as a silent read.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        sale = next(tx for tx in out.transactions if "VEND. TIT:BTP OTHER" in (tx.description or ""))
+        assert sale.type == TransactionType.SELL
+        assert sale.quantity == Decimal("-20000.00")
+        assert sale.cash is not None and sale.cash.amount > 0
+
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_sell_quantity_presumed")
+        assert todo.severity == "warning"  # usable as-is, but visible
+        assert out.transactions[todo.tx_index] is sale
+
+    def test_credit_agricole_account_trade_without_quantity_stays_blocked(self):
+        """A fund subscription names its instrument but no coupon can supply a quantity.
+
+        Funds do not pay a NOMINALE-bearing coupon, so the number is genuinely absent from
+        the file. Booking a BUY would require inventing it; the row therefore keeps its
+        (correct) cash amount and blocks until the user supplies the quantity.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        fund = next(tx for tx in out.transactions if "SOTTOSC SICAV" in (tx.description or ""))
+        assert fund.type == TransactionType.WITHDRAWAL
+        assert fund.cash is not None and fund.cash.amount == Decimal("-5000.00")
 
         todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
         assert todo.severity == "blocker"
-        assert out.transactions[todo.tx_index] is trade
+        assert out.transactions[todo.tx_index] is fund
+        assert todo.context.get("reason") == "no_quantity"
+        # The instrument *is* readable — the message must say so, or the user goes
+        # looking for a name the plugin already had.
+        assert "SAMPLE GLOB EQ FUND" in todo.message
         # A recognised-but-unresolved causale is tier 2, never tier 4: reporting it as
         # an unknown causale would send the user looking for a registry gap that is not there.
         assert not any(n.code == "ca_unknown_causale" for n in out.warnings)
+
+    def test_credit_agricole_account_trade_direction_conflict_is_never_guessed(self):
+        """Word and sign disagree: a purchase that brings money in is not a purchase.
+
+        Typing it either way opens (or closes) a position that then poisons every FIFO
+        match downstream, so the row stays cash and is blocked instead.
+        """
+        header = read_rows(CA_CONTI_SAMPLE)[0]
+        conflicting = ["21/05/2026", "21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "15.000,00", "EUR"]
+        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, conflicting], broker_id=1)
+
+        assert [tx.type for tx in out.transactions] == [TransactionType.DEPOSIT]
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        assert todo.severity == "blocker"
+        assert todo.context.get("reason") == "sign_mismatch"
+
+    def test_credit_agricole_account_trade_ambiguous_name_is_never_guessed(self):
+        """Two bonds share the trade's (truncated) name — a wrong nominal is worse than none.
+
+        Picking either one would open a position on the wrong instrument, and nothing
+        downstream can detect it: the amounts stay plausible.
+        """
+        header = read_rows(CA_CONTI_SAMPLE)[0]
+        coupon_a = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00", "218,75", "EUR"]
+        coupon_b = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/9/2030 IT0000000009 DOS:00000/00000000 NOMINALE: 10.000,00", "100,00", "EUR"]
+        trade = ["21/05/2026", "21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "'-15.000,00", "EUR"]
+        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, coupon_a, coupon_b, trade], broker_id=1)
+
+        booked = next(tx for tx in out.transactions if "NOTA INF. ACQ." in (tx.description or ""))
+        assert booked.type == TransactionType.WITHDRAWAL
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        assert todo.severity == "blocker"
+        assert todo.context.get("reason") == "ambiguous_name"
+        # Both candidates must be named, or the user cannot resolve what we could not.
+        assert "IT0000000001" in todo.evidence[0].comment and "IT0000000009" in todo.evidence[0].comment
+
+    def test_credit_agricole_account_trade_ambiguous_nominal_is_never_guessed(self):
+        """The same bond shows two different nominals: the position changed over time.
+
+        Either value would be a guess about *which* trade this row is, so the quantity
+        goes back to the user rather than being picked by arrival order.
+        """
+        header = read_rows(CA_CONTI_SAMPLE)[0]
+        coupon_1 = ["01/06/2026", "01/06/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00", "218,75", "EUR"]
+        coupon_2 = ["01/12/2026", "01/12/2026", "CEDOLE, DIVIDENDI, PREMI ESTRATTI", "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 25.000,00", "136,72", "EUR"]
+        trade = ["21/05/2026", "21/05/2026", "COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000", "'-15.000,00", "EUR"]
+        out = CreditAgricoleBrokerProvider()._parse_account_movements([header, coupon_1, coupon_2, trade], broker_id=1)
+
+        todo = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        assert todo.severity == "blocker"
+        assert todo.context.get("reason") == "ambiguous_nominal"
+
+    def test_credit_agricole_account_trade_at_par_is_flagged_too(self):
+        """Even a purchase whose total matches the nominal to the cent gets the flag.
+
+        ⚠️ This inverts an earlier decision, on purpose. Firing only on a measured gap
+        made the warning depend on a coupon happening to sit in the same export: import
+        the very same purchase alone, in a window with no coupon, and it passed silently.
+        The layout never separates price from charges, so the honest trigger is "this is
+        a trade", not "I caught a contradiction". The at-par wording says as much, and
+        the noise stays bounded because the file books few trades (3 on 507 real rows).
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        bundled = [t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount"]
+        at_par = next(t for t in bundled if t.context["row"] == 16)  # the 40.000 = 40.000 purchase
+        assert Decimal(at_par.context["delta"]) == 0
+        assert "all'emissione" in at_par.evidence[0].comment
+        # Only trades carry it: a coupon or a fee row has nothing to split.
+        assert {t.context["row"] for t in bundled} == {16, 18, 19}
+
+    def test_credit_agricole_account_trade_suggestions_read_the_rest_of_the_file(self):
+        """The panel's hints are read off the export, never inferred from market data.
+
+        The one that matters is the double-counting guard: when the file already books a
+        charge as a row of its own, extracting it again from the trade total would count
+        it twice — a wrong import, not just a clumsy one.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        fund = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_unresolved")
+        # A blocked trade is still a trade: it gets the same split affordance once the
+        # user has supplied type, asset and quantity.
+        assert fund.context["split_hint"] == "trade_charges"
+        hints = fund.context["split_suggestions"]
+        assert any("conti due volte" in h for h in hints)  # charge row 10 sits near it
+        assert any("fondo" in h for h in hints)  # no accrued interest on a fund
+        assert all("rateo cedolare che hai rimborsato" not in h for h in hints)
+
+        # The bond purchase has no charge row nearby, so the hint says the opposite.
+        bond = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount" and t.context["row"] == 18)
+        assert any("non registra nessuna riga di commissioni" in h for h in bond.context["split_suggestions"])
+
+    def test_credit_agricole_account_trade_above_par_declares_the_gap(self):
+        """Cash ≠ nominal means the total also packs accrued interest and/or commissions.
+
+        The plugin measures the gap and shows both rows it compared — it does **not**
+        compute the accrued interest: that was tried on the real data and does not
+        reconcile (one residue comes out negative), and an invented split is worse than a
+        declared gap, because the first is a silent error and the second a known one.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        gap = next(t for t in out.field_todos if t.reason_code == "ca_account_trade_bundled_amount" and t.context["row"] == 18)
+
+        assert gap.severity == "warning"  # a heuristic never blocks
+        # It rides on the purchase itself, so the correction step can offer the split there.
+        assert out.transactions[gap.tx_index].type == "BUY"
+        assert gap.field == "cash"
+        assert gap.context["nominale"] == "20000.00"
+        assert Decimal(gap.context["delta"]) == Decimal("412.33")
+        # Two tables: the purchase, and the coupon that supplied the number it was compared to.
+        assert len(gap.evidence) == 2
+        assert "ACQ. TIT:BTP OTHER" in gap.evidence[0].rows[0][2]
+        assert "CEDOLA:BTP OTHER" in gap.evidence[1].rows[0][2]
+        assert gap.evidence[1].row_numbers == [17]
+        # Not also a notice: the same finding shown twice teaches the user to skim past it,
+        # and only the todo can be acted upon.
+        assert all(n.code != "ca_account_trade_bundled_amount" for n in out.warnings)
+
+    def test_credit_agricole_account_coupon_is_grossed_up_with_its_withholding(self):
+        """The bank credits a coupon net, but the description spells out the tax it suffered.
+
+        Importing the net amount silently loses a fiscally relevant number that is *right
+        there in the file*. Gross income + a separate TAX leg sum back to the same cash, so
+        the balance still reconciles against the bank's Saldo Finale.
+        """
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        coupon = next(tx for tx in out.transactions if (tx.description or "").startswith("CEDOLA:BTP SAMPLE"))
+        tax = next(tx for tx in out.transactions if "withholding_tax" in (tx.tags or []))
+
+        assert coupon.cash is not None and coupon.cash.amount == Decimal("250.00")  # 218,75 net + 31,25
+        assert tax.type == TransactionType.TAX
+        assert tax.cash is not None and tax.cash.amount == Decimal("-31.25")
+        assert tax.date == coupon.date
+        assert tax.asset_id == coupon.asset_id  # the tax belongs to the bond that paid it
+        # Net effect on cash is unchanged — this is what keeps the balance reconcilable.
+        assert coupon.cash.amount + tax.cash.amount == Decimal("218.75")
+
+    def test_credit_agricole_account_income_clawback_is_never_grossed_up(self):
+        """A negative "CEDOLA" is a clawback, classified as cash — grossing it up would
+        invent a tax refund the bank never paid."""
+        out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
+        clawback = next(tx for tx in out.transactions if "STORNO CEDOLA ERRATA" in (tx.description or ""))
+        assert clawback.type == TransactionType.WITHDRAWAL
+        assert clawback.cash is not None and clawback.cash.amount == Decimal("-50.00")
 
     def test_credit_agricole_account_todo_carries_the_source_row(self):
         """The todo ships the originating row so the message can be checked, not trusted.
@@ -1074,9 +1382,9 @@ class TestBrokerParserCoverageHelpers:
         evidence = todo.evidence[0]
         assert evidence.headers[:4] == ["Data Op.", "Causale", "Descrizione", "Importo"]
         assert len(evidence.rows) == 1 and len(evidence.rows[0]) == len(evidence.headers)
-        assert "NOTA INF. ACQ." in evidence.rows[0][2]
-        assert evidence.row_numbers == [16]  # 1-based line in the source file
-        assert evidence.comment and "l'importo è giusto, il titolo manca" in evidence.comment
+        assert "SOTTOSC SICAV" in evidence.rows[0][2]
+        assert evidence.row_numbers == [20]  # 1-based line in the source file
+        assert evidence.comment and "L'importo è giusto" in evidence.comment
 
     def test_credit_agricole_charge_never_names_an_asset_after_itself(self):
         """A charge line describes the charge, never the security it is charged on.
@@ -1176,7 +1484,7 @@ class TestBrokerParserCoverageHelpers:
         notice = next(n for n in out.warnings if n.code == "ca_unknown_causale")
         assert notice.severity == "info"
         assert notice.context is not None and notice.context["causali"] == ["OPERAZIONE MAI VISTA"]
-        assert notice.evidence[0].row_numbers == [20]
+        assert notice.evidence[0].row_numbers == [len(rows)]  # the appended row, 1-based
         # An unknown causale is a disclosure, not a blocker: nothing to fix, only to check.
         assert not any(t.context and t.context.get("causale") == "OPERAZIONE MAI VISTA" for t in out.field_todos)
 

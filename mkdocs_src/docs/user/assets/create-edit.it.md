@@ -69,6 +69,50 @@ Il campo **Altri identificatori** è un elenco modificabile di identificatori al
 e i provider possono aggiungere etichette del broker, codici tecnici o identificatori di fallback
 lì; ogni valore rimane una voce distinta dell'elenco.
 
+## 🏷️ Uno strumento, più codici
+
+Lo stesso titolo può essere noto con più di un codice. In questi casi LibreFolio tiene **un solo
+asset** e conserva i codici in più negli **Altri identificatori**, dove sono ricercabili e servono
+a riconoscere lo strumento nelle importazioni successive.
+
+Quale codice vada nel campo **ISIN** principale non è una questione di gusto:
+
+!!! tip "Tieni come principale il codice quotato"
+
+    Il prezzo è il valore dell'ultima compravendita, quindi solo un codice effettivamente
+    negoziabile ha un prezzo. Metti il codice negoziabile in **ISIN** e tutto il resto negli
+    **Altri identificatori** — altrimenti nessun provider potrà quotare l'asset.
+
+### Titoli di Stato italiani a collocamento retail (BTP Valore, BTP Più, BTP Italia)
+
+Questi titoli vengono emessi con un ISIN e negoziati con un altro:
+
+| Fase | Codice | A cosa serve |
+|---|---|---|
+| Sottoscrizione all'emissione | l'ISIN "CUM" | Dà diritto al **premio fedeltà** se detieni fino a scadenza. **Non negoziabile**, quindi nessun provider lo quota |
+| Mercato secondario | un ISIN diverso | Liberamente scambiabile e **quotato** — è quello che ha un prezzo |
+
+Per vendere prima della scadenza il titolo viene convertito nel codice di mercato. In LibreFolio i
+due sono lo stesso strumento, quindi:
+
+1. Metti l'**ISIN di mercato** nel campo **ISIN**.
+2. Metti l'**ISIN CUM** negli **Altri identificatori**.
+3. Registra il **premio fedeltà**, quando viene pagato, come transazione di tipo **Interesse** su
+   quell'asset, alla data in cui lo ricevi.
+
+Il punto 3 funziona anche a titolo scaduto e asset disattivato: un asset disattivato resta
+selezionabile proprio perché l'ultima cedola, il rimborso e il premio possano essere inseriti.
+
+!!! note "Durante l'importazione ti viene chiesto, non imposto"
+
+    Se un file del broker porta il codice CUM e l'asset ha già quello di mercato, l'importazione
+    chiede quale dei due debba essere il principale. Quello che non scegli finisce negli **Altri
+    identificatori** — non si perde nulla, e la prossima importazione riconosce il titolo da
+    entrambi i codici.
+
+    Se lo stesso titolo compare in due file con codici diversi, lo step **Unifica asset** della
+    procedura di importazione li raggruppa in un unico strumento prima di ogni altra decisione.
+
 ## 🔗 Correlati
 
 - 📊 **[Pagina di Dettaglio Asset](detail/index.md)** — Visualizza e analizza i dati dell'asset

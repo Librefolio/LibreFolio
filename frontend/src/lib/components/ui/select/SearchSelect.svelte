@@ -7,6 +7,7 @@
 <script lang="ts">
     import type {Snippet} from 'svelte';
     import type {SelectOption} from './types';
+    import {filterOptions, firstSelectable as firstSelectableIn, isSelectable, stepSelectable} from './optionFilter';
     import {ChevronDown, Search, X, Plus} from 'lucide-svelte';
     import {_} from '$lib/i18n';
 
@@ -45,8 +46,16 @@
          *  When set (non-empty), a persistent footer row is rendered at the
          *  bottom of the dropdown. Clicking it fires `onCreateNew`. */
         createLabel?: string;
-        /** W43/W44: Callback fired when the "Create new" footer is clicked. */
-        onCreateNew?: () => void;
+        /**
+         * Label for the footer while the user is typing, given the current query.
+         *
+         * Creating something the search could not find is the natural end of a failed search, so
+         * the footer says what will be created — «Crea "BTP Nov 28"» — instead of a generic verb
+         * the user has to translate back into their own intention.
+         */
+        createLabelFor?: (query: string) => string;
+        /** W43/W44: Callback fired when the "Create new" footer is clicked, with the typed query. */
+        onCreateNew?: (query: string) => void;
     }
 
     let {
@@ -66,6 +75,7 @@
         onchange,
         compact = false,
         createLabel = '',
+        createLabelFor,
         onCreateNew,
     }: Props = $props();
 
@@ -103,12 +113,16 @@
     // Calculate max height based on maxVisibleItems
     let maxDropdownHeight = $derived(maxVisibleItems * ITEM_HEIGHT);
 
-    // Filter options based on search query
-    let filteredOptions = $derived(
-        searchQuery.trim() === ''
-            ? options
-            : options.filter((o) => o.value.toLowerCase().includes(searchQuery.toLowerCase()) || o.label.toLowerCase().includes(searchQuery.toLowerCase()) || (o.searchText && o.searchText.toLowerCase().includes(searchQuery.toLowerCase())) || (o.icon && o.icon.includes(searchQuery))),
-    );
+    // Filter options based on search query — see `optionFilter.ts` for the section-title rule.
+    let filteredOptions = $derived(filterOptions(options, searchQuery));
+
+    function firstSelectable(): number {
+        return firstSelectableIn(filteredOptions);
+    }
+
+    function stepHighlight(from: number, dir: 1 | -1): number {
+        return stepSelectable(filteredOptions, from, dir);
+    }
 
     // Compute dropdown position and dynamic height based on available space
     function updateDropdownPosition() {
@@ -163,11 +177,12 @@
         }
     }
 
-    // Reset highlight when filtered options change
+    // Reset highlight when filtered options change — never onto a section title
     $effect(() => {
-        if (filteredOptions.length > 0 && highlightedIndex >= filteredOptions.length) {
-            highlightedIndex = 0;
-        }
+        if (filteredOptions.length === 0) return;
+        if (isSelectable(filteredOptions[highlightedIndex])) return;
+        const next = firstSelectable();
+        if (next !== -1 && next !== highlightedIndex) highlightedIndex = next;
     });
 
     // Close on click outside
@@ -211,7 +226,7 @@
         updateDropdownPosition();
         isOpen = true;
         searchQuery = '';
-        highlightedIndex = 0;
+        highlightedIndex = Math.max(firstSelectable(), 0);
     }
 
     /** Timestamp of last close — used to prevent immediate reopen on touch devices */
@@ -238,7 +253,7 @@
     }
 
     function selectOption(option: SelectOption, advanceFocus = false) {
-        if (option.disabled) return;
+        if (option.disabled || option.header) return;
         value = option.value;
         onchange?.(option.value);
         closeDropdown();
@@ -289,20 +304,20 @@
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
-                highlightedIndex = Math.min(highlightedIndex + 1, filteredOptions.length - 1);
+                highlightedIndex = stepHighlight(highlightedIndex, 1);
                 scrollToHighlighted();
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                highlightedIndex = Math.max(highlightedIndex - 1, 0);
+                highlightedIndex = stepHighlight(highlightedIndex, -1);
                 scrollToHighlighted();
                 break;
             case 'Enter':
                 event.preventDefault();
                 if (filteredOptions.length > 0) {
-                    // Select highlighted or first option
-                    const indexToSelect = highlightedIndex >= 0 ? highlightedIndex : 0;
-                    if (filteredOptions[indexToSelect]) {
+                    // Select highlighted or first option — a section title is neither.
+                    const indexToSelect = isSelectable(filteredOptions[highlightedIndex]) ? highlightedIndex : firstSelectable();
+                    if (indexToSelect !== -1) {
                         selectOption(filteredOptions[indexToSelect], true);
                     }
                 }
@@ -432,56 +447,64 @@
                     </div>
                 {:else}
                     {#each filteredOptions as option, index (option.value)}
-                        <button
-                            type="button"
-                            onclick={() => selectOption(option)}
-                            onmouseenter={() => (highlightedIndex = index)}
-                            disabled={option.disabled}
-                            data-testid="search-select-option-{option.value}"
-                            class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
+                        {#if option.header}
+                            <div class="px-4 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-gray-400 uppercase select-none dark:text-gray-500" role="presentation" data-testid="search-select-header-{option.value}">
+                                {option.label}
+                            </div>
+                        {:else}
+                            <button
+                                type="button"
+                                onclick={() => selectOption(option)}
+                                onmouseenter={() => (highlightedIndex = index)}
+                                disabled={option.disabled}
+                                data-testid="search-select-option-{option.value}"
+                                class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
                                    {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                    {index === highlightedIndex ? 'bg-libre-green/30 dark:bg-libre-green dark:text-white highlighted' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"
-                        >
-                            {#if item}
-                                <div class="flex-1 min-w-0">
-                                    {@render item(option)}
-                                </div>
-                            {:else}
-                                {#if option.icon && option.icon !== option.value}
-                                    {#if looksLikeUrl(option.icon)}
-                                        <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded-lg overflow-hidden">
-                                            <img src={option.icon} alt="" class="w-7 h-7 object-contain" onerror={hideOnError} />
-                                        </span>
-                                    {:else}
-                                        <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium emoji-flag">
-                                            {option.icon}
-                                        </span>
+                            >
+                                {#if item}
+                                    <div class="flex-1 min-w-0">
+                                        {@render item(option)}
+                                    </div>
+                                {:else}
+                                    {#if option.icon && option.icon !== option.value}
+                                        {#if looksLikeUrl(option.icon)}
+                                            <span class="shrink-0 w-9 h-9 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded-lg overflow-hidden">
+                                                <img src={option.icon} alt="" class="w-7 h-7 object-contain" onerror={hideOnError} />
+                                            </span>
+                                        {:else}
+                                            <span class="text-lg w-9 h-9 flex items-center justify-center bg-libre-green/20 text-libre-green rounded-lg shrink-0 font-medium emoji-flag">
+                                                {option.icon}
+                                            </span>
+                                        {/if}
                                     {/if}
+                                    <div class="min-w-0 flex-1">
+                                        <div class="font-mono text-sm text-gray-700 dark:text-gray-200">{option.value}</div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
+                                    </div>
                                 {/if}
-                                <div class="min-w-0 flex-1">
-                                    <div class="font-mono text-sm text-gray-700 dark:text-gray-200">{option.value}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{option.label}</div>
-                                </div>
-                            {/if}
-                        </button>
+                            </button>
+                        {/if}
                     {/each}
                 {/if}
             </div>
 
             <!-- W43/W44: Sticky "Create new" footer -->
             {#if createLabel && onCreateNew}
+                {@const typed = searchQuery.trim()}
                 <button
                     type="button"
                     class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-libre-green hover:bg-libre-green/10 dark:hover:bg-libre-green/20 border-t border-gray-100 dark:border-slate-700 transition-colors"
                     onclick={(e) => {
                         e.stopPropagation();
+                        const query = searchQuery.trim();
                         closeDropdown();
-                        onCreateNew?.();
+                        onCreateNew?.(query);
                     }}
                     data-testid="search-select-create-new"
                 >
                     <Plus size={14} class="shrink-0" />
-                    <span class="font-medium">{createLabel}</span>
+                    <span class="font-medium truncate">{typed !== '' && createLabelFor ? createLabelFor(typed) : createLabel}</span>
                 </button>
             {/if}
         </div>

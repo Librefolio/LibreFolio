@@ -124,6 +124,16 @@ def db_brim(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM database tests", verbose=verbose)
 
 
+def db_brim_bulk(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the bulk candidate search agrees with the per-asset one."""
+    print_section("DB Test: BRIM Bulk Candidate Search")
+    print_info(f"This test operates on: {TEST_DB_PATH} (test database)")
+    print_info("Testing: bulk vs per-asset equivalence, dual-ISIN bonds, '%' in names")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_brim_bulk_candidates.py", test_names)
+    return run_command(cmd, "BRIM bulk candidate tests", verbose=verbose)
+
+
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """Test Numeric column truncation behavior."""
     print_section("DB Test: Numeric Column Truncation")
@@ -167,7 +177,7 @@ def db_all(verbose: bool = False) -> bool:
 
     db_order = [
         "create", "validate", "numeric-truncation", "populate",
-        "referential-integrity", "fx-rates", "brim", "asset-merge", "model-validators"
+        "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -223,7 +233,10 @@ Note: No backend server required. Tests operate directly on test DB.
     add_test(cat, "fx-rates", db_fx_rates, name="FX Rates Persistence",
              desc="Test rate fetching and DB persistence", prereq="Database created")
     add_test(cat, "brim", db_brim, name="BRIM DB Tests",
-             desc="Asset search, duplicate detection", prereq="Database populated")
+             desc="Asset candidate search, duplicate detection", prereq="Database populated")
+    add_test(cat, "brim-bulk", db_brim_bulk, name="BRIM Bulk Candidates",
+             desc="Bulk candidate search matches the per-asset one", prereq="Database created",
+             tests="4 equivalence tests")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",
              tests="12 merge tests")

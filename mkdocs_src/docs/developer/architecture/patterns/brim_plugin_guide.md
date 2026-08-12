@@ -202,7 +202,7 @@ Copy the structure of an existing, well-tested plugin rather than starting from 
 | `backend/app/services/brim_providers/broker_coinbase.py` | Crypto assets (symbol, no ISIN), staking as `ADJUSTMENT`, separate fee tx |
 | `backend/app/services/brim_providers/broker_revolut.py` | **One plugin, two formats** (invest + crypto) via header detection |
 | `backend/app/services/brim_providers/broker_intesa.py` | CSV/XLSX, two layouts in one plugin; patrimonio snapshot → liquidity `DEPOSIT` when present + per-holding `ADJUSTMENT` seed with per-unit `cost_basis_override` |
-| `backend/app/services/brim_providers/broker_credit_agricole.py` | Securities-only export; automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
+| `backend/app/services/brim_providers/broker_credit_agricole.py` | **Richest wizard integration**: two layouts in one plugin, 4-tier causale registry, evidence tables, `info` notices, blocking and splitting field todos — read it before designing any `field_todos`. Also: automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
 | `backend/app/services/brim_providers/broker_saxo.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
 
 ## 📥 Canonical imports
@@ -361,6 +361,184 @@ transaction breaks these rules, so flip source signs as needed:
     `TITOLI SCADUTI O ESTRATTI` with the nominal recovered from the same-day coupon) and
     `broker_fineco.py` (`Rimborso` above par, nominal from the row).
 
+## 📡 Talking to the import wizard
+
+A plugin does not only produce transactions. It produces **what it could not do**, and that
+is what drives the wizard's UI. There are **four output channels**, and picking the right one
+is the single most important design decision in a plugin:
+
+| Channel | Field on `BRIMParseOutput` | The plugin is saying | Where it shows |
+|---------|---------------------------|----------------------|----------------|
+| Transactions | `transactions` | "I read this row" | Review table |
+| Validation issues | `validation_issues` | "I read this row and the schema refused it" | Parse-detail modal, red |
+| Notices | `warnings` | "Something about the **file** you should know" | Parse-detail modal + confirmation modal |
+| Field todos | `field_todos` | "I booked this row but a **specific field** is a guess" | **Correction step**, before the duplicate check |
+
+!!! danger "A notice is not a todo"
+
+    The line is not severity, it is **actionability**. If the user can fix it on one row,
+    it is a `BRIMFieldTodo`; if it is a statement about the file as a whole, it is a
+    `BRIMNotice`. Putting a fixable problem in `warnings` sends the user to a modal that
+    offers no way to fix it, and showing the same finding in both channels teaches them to
+    skip both. Crédit Agricole has a test asserting a given finding appears in exactly one.
+
+### 🔔 `BRIMNotice` — something about the file
+
+```python
+warnings.append(
+    BRIMNotice(
+        severity="info",                       # "info" (blue) | "warning" (amber)
+        code="ca_unknown_causale",             # machine-readable, i18n-stable
+        message="12 righe con 3 causali non previste …",   # report's language
+        context={"causali": [...], "row_count": 12},
+        evidence=[...],                        # see below
+    )
+)
+```
+
+- `severity="info"` — *the plugin did something correct and non-obvious*: explain it. An
+  unknown transaction code booked by sign, a succession row turned into a cashless
+  `ADJUSTMENT`. Blue, still surfaced in the confirmation modal.
+- `severity="warning"` — *the plugin had to fall back or guess*: look at it.
+- A bare `str` still works (coerced to `severity="warning"`, `code="legacy"`), but new code
+  should never use it: the `code` is what lets the frontend and the tests address the notice.
+
+### 🔎 `BRIMEvidence` — show the row, do not just describe it
+
+Every notice and every todo can carry evidence tables. This is what turns *"row 282 looks
+bundled"* into something the user can check without opening the file:
+
+```python
+BRIMEvidence(
+    title="Riga di acquisto",                 # short caption
+    headers=["Data Op.", "Causale", "Descrizione", "Importo"],
+    rows=[["28/07/2025", "COMPRAVENDITA …", "NOTA INF. ACQ. TIT:BTP …", "-46603.73"]],
+    row_numbers=[282],                        # 1-based source line, per row
+    comment="L'importo di questa riga è un totale: comprende …",
+)
+```
+
+- **`row_numbers` is not decoration.** It renders a *"row N in the file"* button that opens
+  the file preview scrolled to that line, so the user sees the neighbours too. Omit it and
+  the evidence becomes an unverifiable claim.
+- **Attach evidence at the moment the plugin gives up** — that is the only moment the source
+  row is still in hand. Re-reading the preview later costs a fetch and misaligns indexes if
+  the preview paginates.
+- **`comment` is the reasoning, the message is the headline.** The collapsed row in the
+  correction list is read while scrolling twenty others: keep it to one line. Everything the
+  plugin looked at, found and concluded belongs in `comment`, which is read only by someone
+  who opened the row.
+- Several tables are allowed: Crédit Agricole shows the purchase row **and** the coupon row
+  that supplied the nominal, each with its own comment.
+
+### 🧩 `BRIMFieldTodo` — one field, one question, one screen
+
+```python
+BRIMFieldTodo(
+    tx_index=len(transactions) - 1,     # index into transactions[]
+    field="asset_id",                   # TXCreateItem field that needs input
+    severity="blocker",                 # "blocker" | "warning"
+    reason_code="ca_account_trade_unresolved",
+    message="Riga 282: acquisto di BTP … — l'importo potrebbe raggruppare più voci.",
+    context={...},                      # see the contract below
+    evidence=[source_row_evidence(row, offset, comment="…")],
+)
+```
+
+**`field` and `severity` together decide where the row lands**, so they are not free-form:
+
+| `severity` | `field` | Wizard behaviour |
+|-----------|---------|------------------|
+| `blocker` | one of `type`, `date`, `quantity`, `asset_id`, `cash`, `cash.amount`, `cash.code` | Correction step, **"trades" panel**. The step cannot be passed until every such row is settled. |
+| `blocker` | anything else (e.g. `cost_basis_override`) | Carried on the transaction, but **not** shown in the correction step — that screen cannot fix it. |
+| `warning` | `asset_id` | Correction step, **"charges" panel** — a fee or an income with no instrument. |
+| `warning` | any, with `context.split_hint` | Correction step, **"split" panel** — see below. |
+
+A row is filed by its **worst** todo: a `blocker` that also carries `split_hint` lands in the
+trades panel, and its split zone appears there as soon as the user types the row into a
+`BUY`/`SELL`. That is deliberate — an unresolved trade is a trade too, only a less complete
+one, and its total is bundled for exactly the same reason.
+
+!!! info "Why blockers must be *duplicate-relevant* fields"
+
+    The correction step runs **before** the duplicate comparison, and only for fields the
+    comparison actually reads (`DUP_RELEVANT_FIELDS` in `ImportWizardModal.svelte`). A
+    purchase the plugin could only record as a cash withdrawal gets compared against cash
+    withdrawals — a real duplicate is missed, an imaginary one invented. Correcting after
+    the comparison cannot repair that; correcting before it can.
+
+### 🗝️ `context` keys the frontend understands
+
+`context` is a free `Dict[str, Any]`, but a handful of keys are a **contract** with the
+correction step. All of them are currently produced by `broker_credit_agricole.py`, which is
+the reference implementation:
+
+| Key | Type | Effect in the wizard |
+|-----|------|----------------------|
+| `split_hint` | `str` (e.g. `"trade_charges"`) | **Presence alone** turns the row into a split candidate. The split zone then appears only if the row's type is `BUY` or `SELL` — the plugin's own or the one the user just picked. |
+| `split_suggestions` | `List[str]` | Bullet list of what the plugin found *elsewhere in the file* about this row. |
+| `compare_nominal` | `bool` | Shows the "row amount vs face value" comparison. Set it `False` on sales: proceeds have no reason to resemble the face value, and showing them side by side invites the user to read a gap that means nothing. |
+| `nominale` | `str`/`Decimal` | The face value shown in that comparison. Requires `compare_nominal: True`. |
+| `nominale_row` | `int` | Source line of the row the nominal was read from; renders as a link into the file preview. |
+| `cash`, `currency` | `str` | The row total, used when the transaction itself cannot supply it (unresolved rows). |
+| `row` | `int` | Source line number — always include it. |
+
+Everything else in `context` is free: it is passed through untouched and is useful for tests
+and for i18n interpolation.
+
+!!! tip "Fire the todo on the *shape* of the row, not on a contradiction you happened to spot"
+
+    Crédit Agricole first raised the split todo only when the cash disagreed with a face
+    value recovered from a coupon **in the same file**. A user importing period by period —
+    the purchase this month, the coupons next year — never saw it, because by then the
+    purchase was already imported. The trigger had to become *"this is a trade, and this
+    layout never separates price from charges"*: fired on **every** resolved `BUY`/`SELL`.
+
+    That inversion is only acceptable because the noise was **measured before accepting it**:
+    on the real files it went from 2 to 3 warnings over 507 transactions, because account
+    trades are rare in this layout. Measure yours the same way; a flag on every row is a
+    flag on no row.
+
+### ✂️ The split zone (`split_hint`)
+
+When one source row bundles several economic facts — a bond bought on the secondary market
+pays price, accrued interest and commissions in a single debit — the plugin must **not**
+invent the breakdown. It flags the row, and the user, who has the contract note, types the
+charges. The wizard writes N extra `FEE`/`TAX` legs and leaves the rest on the trade, so the
+legs always re-sum to the source row.
+
+The plugin's only job is the flag plus honest suggestions. The most valuable suggestion is
+the one that **prevents a mistake**: if the file *already* books a commission row within a
+few days, splitting it out of the trade total again would count it twice.
+
+```python
+BRIMFieldTodo(
+    ...,
+    field="cash",
+    severity="warning",
+    context={
+        "row": offset,
+        "split_hint": "trade_charges",
+        "compare_nominal": is_buy,
+        "nominale": str(nominal), "nominale_row": nominal_row,
+        "split_suggestions": [
+            "Il file registra già una riga di spese il 30/07/2025 (−40,00 €): se la scorpori "
+            "di nuovo da questo totale la conti due volte.",
+            "È un'obbligazione: se non l'hai comprata all'emissione, parte dell'importo è "
+            "rateo cedolare.",
+        ],
+    },
+)
+```
+
+!!! warning "Accrued interest is a `FEE`, never an `INTEREST`"
+
+    `schemas/transactions.py` rule 11 requires `cash > 0` for `INTEREST`, and accrued
+    interest paid on a purchase is money **leaving**. `FEE` is also the semantically right
+    answer, not a workaround: accrued interest is not part of the security's cost — it comes
+    back with the first gross coupon — and `FEE` is exactly the type the FIFO engine keeps
+    out of the cost basis (`_LOT_AFFECTING_TYPES` in `portfolio_service.py`).
+
 ## 🆔 Fake asset IDs
 
 Asset-linked transactions reference a *fake* high positive asset id at parse time; the core
@@ -390,19 +568,56 @@ Return them as `BRIMExtractedAssetInfo` in `BRIMParseOutput.extracted_assets`. E
 
 ## ⚠️ Per-asset import notices
 
-When the parsed transactions suggest an asset-level warning, attach `BRIMAssetNotice` objects to that `BRIMExtractedAssetInfo`:
+A `BRIMAssetNotice` is not about a transaction, it is about the **instrument**: something the
+user needs to know at the moment they create it. Attach them to the `BRIMExtractedAssetInfo`:
 
 ```python
 extracted_assets[asset_id].notices.append(
     BRIMAssetNotice(
-        kind="maturity_suspected",
+        kind=io.MATURITY_NOTICE_KIND,          # "maturity_suspected"
         reason="Rilevata almeno una transazione di scadenza/rimborso.",
         transaction_indexes=[tx_index],
     )
 )
 ```
 
-The schema is `{kind, reason, transaction_indexes}` with `transaction_indexes=[]` by default. `BRIMAssetMapping.notices` carries those notices into the frontend; the asset-create modal groups them by `kind` and renders amber advisory banners. Notices are informational only and never change import behaviour. Intesa Sanpaolo and Crédit Agricole use this for maturity/redemption warnings.
+`BRIMAssetMapping.notices` carries them to the frontend; the asset-create modal groups them
+by `kind` into amber banners and de-duplicates identical `reason` texts, so the same notice
+raised by three files collapses into one bullet. Informational only — they never change
+import behaviour.
+
+The `kind` needs an i18n label under `assets.modal.importNotices.kind.*`; an unknown `kind`
+falls back to the generic label, so a new category degrades instead of breaking.
+
+### 🪦 The maturity advisory (shared helper)
+
+The one category shipped today. It is the **only warning** telling the user that a security is
+delisted and that no price provider will ever quote it — without it, the asset is created
+silently and then fails to price with no explanation:
+
+```python
+from backend.app.services.brim_providers import _brim_io as io
+
+for asset_id, idxs in io.detect_maturity_hits(transactions).items():
+    info = extracted_assets.get(asset_id)
+    if info is not None:
+        info.notices.append(BRIMAssetNotice(kind=io.MATURITY_NOTICE_KIND, reason="…", transaction_indexes=idxs))
+```
+
+`detect_maturity_hits` scans `description` with `looks_like_maturity` (substrings `scadut`,
+`scaden`, `rimbors`, `estinzion`, `redemption`, `matured`, `maturity`) and **skips rows with
+no asset**, which is what keeps a cash refund (`SCT:RIMBORSO` on a bank transfer, a tax
+rebate) from ever labelling an instrument as expired.
+
+!!! danger "Call it from **every** layout your plugin parses"
+
+    Real bug, found in beta: Crédit Agricole wired the scan into its securities-export branch
+    only. A bond redeemed in the *account statement* got its `SELL` but no notice — and the
+    account file is the one that spans years, so that is where redemptions normally appear.
+    A plugin with two `_parse_*` branches needs the call in both; factor it into one helper
+    (`_attach_maturity_notices`) so adding a third branch cannot forget it.
+
+Reference: `broker_credit_agricole.py`, `broker_intesa.py`.
 
 ## 🚪 Opening-date gate
 

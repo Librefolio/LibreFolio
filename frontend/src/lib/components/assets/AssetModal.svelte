@@ -25,6 +25,8 @@
     import ProviderAssignmentSection from './ProviderAssignmentSection.svelte';
     import ProviderComparisonModal from './ProviderComparisonModal.svelte';
     import type {DiffItem} from './ProviderComparisonModal.svelte';
+    import IdentifierPrimaryChooser from './IdentifierPrimaryChooser.svelte';
+    import type {IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
     import AssetCurrencyChangeModal from './AssetCurrencyChangeModal.svelte';
     import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
@@ -40,7 +42,7 @@
     import {trySave} from '$lib/utils/trySave';
     import {ASSET_TYPES, IDENTIFIER_TYPES, buildAssetTypeOptions} from '$lib/utils/assetTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {ensureAssetProvidersCached, isParametricProvider} from '$lib/utils/providerHelpers';
+    import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
 
     import {numericArrows} from '$lib/actions/numericArrows';
@@ -191,6 +193,8 @@
         autoFilled?: boolean;
     }
     let identifierRows: IdentifierRow[] = $state([]);
+    /** Codes that arrived from `prefillData` (i.e. from the imported reports), upper-cased. */
+    let prefilledIdentifiers = $state<Set<string>>(new Set());
 
     // Classification
     let shortDescription = $state('');
@@ -262,6 +266,19 @@
     let currencyChangePatchPayload: Record<string, unknown> | null = $state(null);
     let currencyChangeProviderAssigned = $state(false);
     let pendingSearchResult: any = $state(null);
+
+    // ── Provider vs report: which code leads ────────────────────────────────────────────
+    // A provider search is a *source of information*, not an authority. When it returns an
+    // identifier of a type the form already holds with a different value, overwriting it
+    // silently destroys a code the user got from a document he owns — which is exactly how
+    // the CUM ISIN of an Italian retail BTP used to disappear. So the two values are put
+    // side by side, with their provenance, and the user says which one leads.
+    let identifierChoiceOpen = $state(false);
+    let identifierChoiceType = $state<string | null>(null);
+    let identifierChoiceOptions = $state<IdentifierChoice[]>([]);
+    let identifierChoicePrimary = $state<string | null>(null);
+    let identifierChoiceProvider = $state<string | null>(null);
+    let identifierChoiceDiscardOpen = $state(false);
 
     // Provider comparison modal
     let showComparisonModal = $state(false);
@@ -599,6 +616,7 @@
         quoteBaseQuantityTouched = false;
         active = true;
         identifierRows = [];
+        prefilledIdentifiers = new Set();
         shortDescription = '';
         descriptionFromPrefill = false;
         sectorDistribution = {};
@@ -641,6 +659,9 @@
         const rows = columnsToIdentifierRows(data as AssetData);
         if (rows.length > 0) {
             identifierRows = rows;
+            // Remember which codes came from the documents: it is the only way to tell the user
+            // later *where* a value came from when a provider proposes a different one.
+            prefilledIdentifiers = new Set(rows.map((r) => r.value.trim().toUpperCase()).filter((v) => v !== ''));
             moreInfoExpanded = true;
         }
         maybeSeedBondQuoteBase();
@@ -698,12 +719,18 @@
         // Auto-fill identifier based on identifier_type
         const idType = (result.identifier_type ?? '').toUpperCase();
         if (idType && result.identifier) {
-            // Add or update the identifier row
             const existing = identifierRows.find((r) => r.type === idType);
-            if (existing) {
-                identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: result.identifier} : r));
+            const incoming = String(result.identifier).trim();
+            const current = (existing?.value ?? '').trim();
+            if (existing && current !== '' && current.toUpperCase() !== incoming.toUpperCase()) {
+                // Two codes of the same type, both legitimate: don't pick for the user.
+                // The provider link below is established regardless — the search did its job;
+                // only the *identity* question is deferred to the chooser.
+                askIdentifierPrimary(idType, incoming, current, result.provider_code);
+            } else if (existing) {
+                identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: incoming} : r));
             } else {
-                identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: result.identifier}];
+                identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: incoming}];
             }
         }
 
@@ -739,6 +766,62 @@
         maybeSeedBondQuoteBase();
         naLog(`search result selected → name="${result.display_name ?? ''}" provider=${result.provider_code ?? '—'} ${(result.identifier_type ?? 'ID').toUpperCase()}=${result.identifier ?? '—'} type=${result.asset_type ?? '—'} currency=${result.currency ?? '—'}`);
         naLog(`identifiers now present: ${identifiersSummary()}`);
+    }
+
+    /**
+     * Two codes of the same type are on the table — ask which one leads.
+     *
+     * The one the user does *not* elect is not discarded: it lands among the alternate
+     * identifiers, where it no longer quotes but still *recognises*, so any future import
+     * quoting it finds this asset. That is the whole CUM/quoted mechanism for a BTP.
+     */
+    function askIdentifierPrimary(idType: string, incoming: string, current: string, providerCodeForResult?: string | null) {
+        identifierChoiceType = idType;
+        identifierChoiceProvider = providerCodeForResult ? getAssetProviderName(providerCodeForResult) : null;
+        identifierChoiceOptions = [
+            {value: incoming, origin: 'provider'},
+            {value: current, origin: prefilledIdentifiers.has(current.toUpperCase()) ? 'report' : editMode ? 'stored' : 'report'},
+        ];
+        // Default to the provider's value: it is the one a price provider can index.
+        identifierChoicePrimary = incoming;
+        identifierChoiceOpen = true;
+    }
+
+    /** Write the elected primary into its typed row and demote the rest to alternates. */
+    function confirmIdentifierPrimary() {
+        const idType = identifierChoiceType;
+        const primary = identifierChoicePrimary;
+        if (!idType || !primary) return;
+        const alternates = identifierChoiceOptions.map((c) => c.value).filter((v) => v.toUpperCase() !== primary.toUpperCase());
+        const known = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => r.value.trim().toUpperCase()));
+        const rows = identifierRows.map((r) => (r.type === idType ? {...r, value: primary} : r));
+        for (const value of alternates) {
+            const key = value.toUpperCase();
+            if (known.has(key)) continue;
+            known.add(key);
+            rows.push({id: generateUUID(), type: 'OTHER', value});
+        }
+        identifierRows = rows;
+        moreInfoExpanded = true;
+        closeIdentifierPrimary();
+    }
+
+    /**
+     * Leaving without choosing is a real outcome, not a non-event: the provider's code is
+     * dropped and the asset stays on the identifier it started with. Cheap to undo now,
+     * invisible later — so it is stated before it happens, never after.
+     */
+    function requestCloseIdentifierPrimary() {
+        identifierChoiceDiscardOpen = true;
+    }
+
+    function closeIdentifierPrimary() {
+        identifierChoiceDiscardOpen = false;
+        identifierChoiceOpen = false;
+        identifierChoiceType = null;
+        identifierChoiceOptions = [];
+        identifierChoicePrimary = null;
+        identifierChoiceProvider = null;
     }
 
     /**
@@ -1967,6 +2050,48 @@
         showSaveWithoutTestConfirm = false;
     }}
     zIndex={zIndex + 20}
+/>
+
+<!--
+  Provider vs report: which code leads.
+
+  Raised when a provider search returns an identifier of a type the form already holds with a
+  different value. Both are shown with their provenance; the loser becomes an alternate, so
+  nothing is destroyed — which is what keeps a dual-ISIN bond resolvable from either code.
+-->
+{#if identifierChoiceOpen}
+    <ModalBase open={true} maxWidth="lg" onRequestClose={requestCloseIdentifierPrimary} zIndex={zIndex + 20}>
+        <div class="p-5 space-y-4" data-testid="asset-modal-identifier-primary">
+            <IdentifierPrimaryChooser
+                choices={identifierChoiceOptions}
+                assetName={displayName}
+                typeLabel={identifierChoiceType ?? undefined}
+                isIsin={identifierChoiceType === 'ISIN'}
+                providerName={identifierChoiceProvider ?? undefined}
+                bind:primary={identifierChoicePrimary}
+                testid="asset-modal-primary-chooser"
+            />
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700" onclick={requestCloseIdentifierPrimary} data-testid="asset-modal-primary-cancel">
+                    {$t('assets.identifiers.primaryChooser.cancel')}
+                </button>
+                <button type="button" class="rounded bg-libre-green px-3 py-1.5 text-sm font-medium text-white hover:opacity-90" onclick={confirmIdentifierPrimary} data-testid="asset-modal-primary-confirm">
+                    {$t('assets.identifiers.primaryChooser.confirm')}
+                </button>
+            </div>
+        </div>
+    </ModalBase>
+{/if}
+
+<ConfirmModal
+    open={identifierChoiceDiscardOpen}
+    title={$t('assets.identifiers.primaryChooser.discardTitle')}
+    message={$t('assets.identifiers.primaryChooser.discardMessage')}
+    confirmText={$t('assets.identifiers.primaryChooser.discardConfirm')}
+    warning={true}
+    onConfirm={closeIdentifierPrimary}
+    onCancel={() => (identifierChoiceDiscardOpen = false)}
+    zIndex={zIndex + 40}
 />
 
 <!-- Confirmation: Identifier change in edit mode -->

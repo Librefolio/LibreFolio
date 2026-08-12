@@ -84,14 +84,19 @@ export interface SimilarityGroup {
 // ============================================================================
 
 /**
- * Suffixes that describe a *phase* or *class* of an instrument rather than a different
- * instrument. Differences confined to these are neutral.
+ * Two names differ *marginally* when what separates them is small enough to be a phase or
+ * class marker rather than a different instrument — `CUM`, `EX`, `ACC`, a share-class letter.
  *
- * - `CUM` / `EX`: Italian retail BTP placement vs market phase (the loyalty-premium case);
- * - `ACC` / `DIST` and friends: accumulating vs distributing share classes;
- * - `A`…`D`, `I`, `R`: fund share classes.
+ * There is deliberately **no lexicon**. A hardcoded list of "neutral" words only recognises
+ * the markers someone thought of, silently rejects every other convention, and turns a
+ * general rule into a private dictionary that has to be maintained. The judgement is
+ * structural instead: by the time this flag is consulted the numeric guard has already run,
+ * so every date, coupon and maturity is known to match — and a couple of short alphabetic
+ * tokens on top of an otherwise identical name are not enough to claim two different
+ * securities. Not enough to *merge* either: this only ever produces a **proposal**.
  */
-const NEUTRAL_SUFFIX_TOKENS = new Set(['CUM', 'EX', 'ACC', 'ACCUMULATING', 'DIST', 'DISTRIBUTING', 'INC', 'HEDGED', 'HDG', 'A', 'B', 'C', 'D', 'I', 'R', 'EUR', 'USD', 'GBP', 'CHF']);
+const MINOR_TOKEN_MAX_LENGTH = 4;
+const MINOR_TOKEN_MAX_COUNT = 2;
 
 /** Corporate/legal noise that carries no identifying power. */
 const STOPWORD_TOKENS = new Set(['SPA', 'S', 'P', 'A', 'SRL', 'NV', 'SA', 'AG', 'PLC', 'INC', 'CORP', 'LTD', 'THE', 'DI', 'DE', 'DEL', 'DELLA']);
@@ -144,8 +149,11 @@ export interface NameComparison {
     score: number;
     /** True when the two names disagree on at least one numeric token. */
     numericMismatch: boolean;
-    /** True when every difference is confined to neutral suffix tokens. */
-    onlyNeutralSuffixDiff: boolean;
+    /**
+     * True when the names differ only by a couple of short alphabetic tokens — the shape of a
+     * phase or class marker (`CUM`, `EX`, `ACC`) rather than of a different instrument.
+     */
+    onlyMinorTokenDiff: boolean;
 }
 
 /**
@@ -159,7 +167,7 @@ export function compareAssetNames(a: string | null | undefined, b: string | null
     const tokensA = tokenizeAssetName(normalizeAssetName(a));
     const tokensB = tokenizeAssetName(normalizeAssetName(b));
     if (tokensA.length === 0 || tokensB.length === 0) {
-        return {score: 0, numericMismatch: false, onlyNeutralSuffixDiff: false};
+        return {score: 0, numericMismatch: false, onlyMinorTokenDiff: false};
     }
 
     const setA = new Set(tokensA);
@@ -174,11 +182,12 @@ export function compareAssetNames(a: string | null | undefined, b: string | null
     const union = new Set([...setA, ...setB]).size;
     const score = union === 0 ? 0 : shared / union;
 
-    // Everything present on one side but not the other.
+    // Everything present on one side but not the other. The non-numeric guard is explicit
+    // rather than inherited from the caller: this flag is exported, so it must hold on its own.
     const diff = [...new Set([...setA, ...setB])].filter((tk) => !setA.has(tk) || !setB.has(tk));
-    const onlyNeutralSuffixDiff = diff.length > 0 && diff.every((tk) => NEUTRAL_SUFFIX_TOKENS.has(tk)) && shared > 0;
+    const onlyMinorTokenDiff = diff.length > 0 && diff.length <= MINOR_TOKEN_MAX_COUNT && diff.every((tk) => !isNumericToken(tk) && tk.length <= MINOR_TOKEN_MAX_LENGTH) && shared > 0;
 
-    return {score, numericMismatch, onlyNeutralSuffixDiff};
+    return {score, numericMismatch, onlyMinorTokenDiff};
 }
 
 // ============================================================================
@@ -219,12 +228,12 @@ export function compareAssets(a: SimilarityInput, b: SimilarityInput): Similarit
     // exactly what tells `BTP 1/3/32` from `BTP 1/3/35`, no matter how similar they look.
     if (cmp.numericMismatch) return null;
 
-    if (cmp.score < WEAK_NAME_THRESHOLD && !cmp.onlyNeutralSuffixDiff) return null;
+    if (cmp.score < WEAK_NAME_THRESHOLD && !cmp.onlyMinorTokenDiff) return null;
 
-    // Weak: two different ISINs but the names differ only by a phase/class suffix.
+    // Weak: two different ISINs but the names differ only marginally.
     // This is the BTP "CUM" ↔ market pair — propose, never decide.
     if (isinA && isinB && isinA !== isinB) {
-        return cmp.onlyNeutralSuffixDiff ? link('nameSuffix', 'weak', cmp.score) : null;
+        return cmp.onlyMinorTokenDiff ? link('nameSuffix', 'weak', cmp.score) : null;
     }
 
     // Weak: one side has no ISIN at all and the names are close — the two-layout case,

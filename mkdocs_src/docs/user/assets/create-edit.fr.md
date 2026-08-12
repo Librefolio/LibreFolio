@@ -69,6 +69,52 @@ Le champ **Autres identifiants** est une liste modifiable d'identifiants alterna
 et les fournisseurs peuvent y ajouter des étiquettes de courtier, des codes techniques ou des identifiants
 de secours ; chaque valeur reste un élément de liste distinct.
 
+## 🏷️ Un instrument, plusieurs codes
+
+Un même titre peut être connu sous plusieurs codes. Dans ce cas, LibreFolio conserve **un seul
+actif** et enregistre les codes supplémentaires dans les **Autres identifiants**, où ils sont
+consultables et servent à reconnaître l'instrument lors des importations suivantes.
+
+Le code qui occupe le champ **ISIN** principal n'est pas une question de préférence :
+
+!!! tip "Gardez le code coté comme ISIN principal"
+
+    Un prix est la valeur de la dernière transaction : seul un code réellement négociable a donc un
+    prix. Placez le code négociable dans **ISIN** et tout le reste dans les **Autres identifiants**,
+    faute de quoi aucun fournisseur ne pourra valoriser l'actif.
+
+### Obligations d'État italiennes destinées aux particuliers (BTP Valore, BTP Più, BTP Italia)
+
+Ces obligations sont émises sous un ISIN et négociées sous un autre :
+
+| Phase | Code | Rôle |
+|---|---|---|
+| Souscription à l'émission | l'ISIN « CUM » | Donne droit à la **prime de fidélité** si vous conservez le titre jusqu'à l'échéance. **Non négociable**, donc coté par aucun fournisseur |
+| Marché secondaire | un ISIN différent | Librement échangeable et **coté** — c'est celui qui a un prix |
+
+Pour vendre avant l'échéance, le titre est converti vers le code de marché. Dans LibreFolio, les
+deux sont le même instrument :
+
+1. Placez l'**ISIN de marché** dans le champ **ISIN**.
+2. Placez l'**ISIN CUM** dans les **Autres identifiants**.
+3. Enregistrez la **prime de fidélité**, lorsqu'elle est versée, comme une transaction
+   **Intérêts** sur cet actif, à la date de réception.
+
+L'étape 3 fonctionne même après l'échéance, lorsque l'actif a été désactivé : un actif désactivé
+reste sélectionnable précisément pour que le dernier coupon, le remboursement et la prime puissent
+être saisis.
+
+!!! note "Pendant l'importation, on vous demande, on ne décide pas à votre place"
+
+    Si un fichier du courtier porte le code CUM alors que l'actif détient déjà celui du marché,
+    l'importation demande lequel des deux doit être le principal. Celui que vous ne choisissez pas
+    rejoint les **Autres identifiants** : rien n'est perdu, et l'importation suivante reconnaît le
+    titre à partir de l'un ou l'autre code.
+
+    Lorsque le même titre apparaît dans deux fichiers sous des codes différents, l'étape
+    **Unifier les actifs** de l'assistant d'importation les regroupe en un seul instrument avant
+    toute autre décision.
+
 ## 🔗 Liens associés
 
 - 📊 **[Page de détails de l'actif](detail/index.md)** — Consulter et analyser les données de l'actif

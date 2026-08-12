@@ -67,7 +67,8 @@ from backend.app.schemas.brokers import (
 )
 from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services import brim_provider
-from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates
+from backend.app.services.brim_parse_pool import parse_file_offloaded
+from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.file_preview import (
     FilePreviewLinks,
@@ -535,8 +536,12 @@ async def upload_file(
     # Get filename: prefer user-provided custom_filename over original file.filename
     filename = custom_filename.strip() if custom_filename and custom_filename.strip() else (file.filename or "unknown")
 
-    # Save file with user_id and broker_id
-    file_info = brim_provider.save_uploaded_file(
+    # Save file with user_id and broker_id.
+    # Writing the payload, sniffing the compatible plugins (which re-reads it) and writing
+    # the sidecar are all blocking filesystem I/O: run them off the loop, or a handful of
+    # simultaneous uploads freeze every other request in the application.
+    file_info = await asyncio.to_thread(
+        brim_provider.save_uploaded_file,
         content,
         filename,
         user_id=current_user.id,
@@ -760,11 +765,12 @@ async def parse_file(
     plugin_code = request.plugin_code
     if plugin_code == "auto":
         # Auto-detect plugin based on file content
-        file_path = brim_provider.get_file_path(file_id)
+        file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
         if not file_path:
             raise HTTPException(status_code=404, detail="File not found")
 
-        detected_plugin = BRIMProviderRegistry.auto_detect_plugin(file_path)
+        # Detection sniffs the file itself — blocking read, same rule as the parse below.
+        detected_plugin = await asyncio.to_thread(BRIMProviderRegistry.auto_detect_plugin, file_path)
         if detected_plugin:
             plugin_code = detected_plugin
             logger.info("Auto-detected plugin for file", file_id=file_id, detected_plugin=plugin_code)
@@ -775,7 +781,7 @@ async def parse_file(
 
     try:
         # 1. Parse file using plugin (plugin only reads file format)
-        parse_output = brim_provider.parse_file(file_id=file_id, plugin_code=plugin_code, broker_id=request.broker_id)
+        parse_output = await parse_file_offloaded(file_id, plugin_code, request.broker_id)
         transactions = parse_output.transactions
         warnings = parse_output.warnings
         validation_issues = parse_output.validation_issues
@@ -784,13 +790,19 @@ async def parse_file(
 
         # 2. Build asset mappings (CORE responsibility)
         # Search DB for candidates for each extracted asset
+        # One round-trip for the whole file: the per-asset helper issued up to five
+        # queries each, so a thirty-instrument report spent a hundred-odd sequential
+        # waits inside a single request.
+        bulk = await search_asset_candidates_bulk(
+            session,
+            [(info.extracted_symbol, info.extracted_isin, info.extracted_name) for info in extracted_assets.values()],
+        )
+
         asset_mappings = []
         for fake_id, info in extracted_assets.items():
-            candidates, auto_selected = await search_asset_candidates(
-                session=session,
-                extracted_symbol=info.extracted_symbol,
-                extracted_isin=info.extracted_isin,
-                extracted_name=info.extracted_name,
+            candidates, auto_selected = bulk.get(
+                (info.extracted_symbol, info.extracted_isin, info.extracted_name),
+                ([], None),
             )
             asset_mappings.append(
                 BRIMAssetMapping(

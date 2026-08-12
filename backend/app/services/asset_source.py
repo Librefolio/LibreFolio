@@ -4595,12 +4595,12 @@ class AssetSearchService:
 
     @staticmethod
     def _build_link_finder_queries(query: str, hints: Optional[list[str]] = None) -> list[str]:
-        """Ordered DDG queries for the link-finder: rich stringone first, base query last.
+        """Ordered web-search queries for the link-finder: rich stringone first, base query last.
 
         The rich query concatenates every hint (all report-extracted identifiers +
         candidate names) together with the base ``query``, in the order supplied, deduped
         and whitespace-collapsed. Nothing is sanitised, truncated or reordered — the whole
-        concatenation is handed to DuckDuckGo, which is left to do the ranking. If the rich
+        concatenation is handed to the web search, which is left to do the ranking. If the rich
         query yields no URLs the finder falls back to the bare base query. When no hints
         are supplied this returns just the base query (legacy behaviour).
         """

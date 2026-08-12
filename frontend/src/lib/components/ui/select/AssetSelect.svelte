@@ -72,7 +72,13 @@
             // P3/A6: `identifier_other` holds alternate codes (e.g. the non-tradeable
             // "CUM" ISIN of an Italian BTP). Omitting it made those codes unsearchable
             // even though they were stored on the asset.
-            searchText: [a.identifier_isin, a.identifier_ticker, ...(a.identifier_other ?? []), a.currency, a.asset_type].filter(Boolean).join(' '),
+            //
+            // Currency and asset type are deliberately *not* here. They are properties
+            // shared by hundreds of rows, so any query that is a prefix of one — `eur`,
+            // `bon`, `etf` — matched the whole list, and the search looked as if it only
+            // began working from the fourth letter. An identifier names an instrument;
+            // a currency describes it.
+            searchText: [a.identifier_isin, a.identifier_ticker, ...(a.identifier_other ?? [])].filter(Boolean).join(' '),
             // P3/A1: inactive assets stay selectable — imports are retroactive by nature,
             // and final coupons, redemptions and loyalty premiums land on matured
             // (hence deactivated) securities. Selecting one does NOT reactivate it.

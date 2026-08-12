@@ -40,9 +40,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 from pydantic import ValidationError
-from sqlalchemy import and_, or_, select
+from sqlalchemy import String, and_, cast, or_, select
 
-from backend.app.db.models import Transaction
+from backend.app.db.models import Asset, Transaction
 from backend.app.schemas.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import (
     BRIMAssetCandidate,
@@ -1128,30 +1128,10 @@ async def search_asset_candidates(
     """
     candidates: List[BRIMAssetCandidate] = []
     by_id: dict = {}
-    # Strongest first — used to decide whether a later, weaker match may override.
-    rank = {
-        BRIMMatchConfidence.EXACT: 0,
-        BRIMMatchConfidence.HIGH: 1,
-        BRIMMatchConfidence.MEDIUM: 2,
-        BRIMMatchConfidence.LOW: 3,
-    }
 
     def _add(asset, confidence: BRIMMatchConfidence) -> None:
         """Append a candidate, keeping the strongest confidence per asset."""
-        existing = by_id.get(asset.id)
-        if existing is not None:
-            if rank[confidence] < rank[existing.match_confidence]:
-                existing.match_confidence = confidence
-            return
-        candidate = BRIMAssetCandidate(
-            asset_id=asset.id,
-            symbol=asset.identifier_ticker,
-            isin=asset.identifier_isin,
-            name=asset.display_name,
-            match_confidence=confidence,
-        )
-        by_id[asset.id] = candidate
-        candidates.append(candidate)
+        _add_candidate(candidates, by_id, asset, confidence)
 
     # Priority 1: ISIN exact match on the primary column (EXACT confidence).
     if extracted_isin:
@@ -1194,6 +1174,196 @@ async def search_asset_candidates(
     auto_selected = candidates[0].asset_id if len(candidates) == 1 else None
 
     return candidates, auto_selected
+
+
+# =============================================================================
+# BULK CANDIDATE SEARCH
+# =============================================================================
+
+
+# Strongest first — used to decide whether a later, weaker match may override.
+_CONFIDENCE_RANK = {
+    BRIMMatchConfidence.EXACT: 0,
+    BRIMMatchConfidence.HIGH: 1,
+    BRIMMatchConfidence.MEDIUM: 2,
+    BRIMMatchConfidence.LOW: 3,
+}
+
+
+def _add_candidate(candidates: List, by_id: dict, asset, confidence: BRIMMatchConfidence) -> None:
+    """Append a candidate, keeping the strongest confidence per asset."""
+    existing = by_id.get(asset.id)
+    if existing is not None:
+        if _CONFIDENCE_RANK[confidence] < _CONFIDENCE_RANK[existing.match_confidence]:
+            existing.match_confidence = confidence
+        return
+    candidate = BRIMAssetCandidate(
+        asset_id=asset.id,
+        symbol=asset.identifier_ticker,
+        isin=asset.identifier_isin,
+        name=asset.display_name,
+        match_confidence=confidence,
+    )
+    by_id[asset.id] = candidate
+    candidates.append(candidate)
+
+
+def _like_to_regex(pattern: str) -> re.Pattern[str]:
+    """
+    Reproduce SQL ``LIKE`` semantics in Python, wildcards included.
+
+    Needed because the bulk path fetches once and classifies in memory: if the two
+    paths disagreed on what "matches" means, the same file would produce different
+    candidates depending on which function ran. Bond names are exactly where this
+    bites — ``BTP Valore 3,35%`` contains a ``%``, which SQL reads as *anything*.
+    """
+    out = ["^"]
+    for ch in pattern:
+        if ch == "%":
+            out.append(".*")
+        elif ch == "_":
+            out.append(".")
+        else:
+            out.append(re.escape(ch))
+    out.append("$")
+    return re.compile("".join(out), re.IGNORECASE | re.DOTALL)
+
+
+def _other_as_text(value: Optional[List[str]]) -> str:
+    """
+    Render ``identifier_other`` the way ``cast(col, String)`` sees it in SQL.
+
+    The column is a JSON list, and the SQL filter substring-matches its serialised
+    text. Codes and labels never straddle the separators, so reproducing the JSON
+    dump is enough to keep the two paths in agreement.
+    """
+    if not value:
+        return ""
+    return json.dumps(value)
+
+
+def _contains(haystack: Optional[str], needle: str) -> bool:
+    """SQL ``ilike('%needle%')`` — wildcards inside *needle* are honoured."""
+    if not haystack:
+        return False
+    return _like_to_regex(f"%{needle}%").match(haystack) is not None
+
+
+async def search_asset_candidates_bulk(
+    session,
+    extractions: List[Tuple[Optional[str], Optional[str], Optional[str]]],
+) -> Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]]:
+    """
+    Candidate search for many extracted assets in **one** database round-trip.
+
+    ``search_asset_candidates`` issues up to five queries per extracted asset. A
+    Crédit Agricole report with thirty instruments therefore spent a hundred-odd
+    sequential round-trips inside a single request, one waiting for the previous —
+    latency that is entirely structural, not work.
+
+    Here the superset of possibly-relevant assets is fetched once with the union of
+    every condition, and the *same* five-step priority is then applied in memory,
+    per extraction. The classification logic is duplicated on purpose rather than
+    approximated: ``test_brim_bulk_candidates.py`` asserts the two functions agree
+    row by row, which is what makes the duplication safe to keep.
+
+    Args:
+        session: AsyncSession for the single query.
+        extractions: ``(symbol, isin, name)`` triples, duplicates allowed.
+
+    Returns:
+        Mapping from each distinct triple to ``(candidates, auto_selected_id)``.
+    """
+    unique: List[Tuple[Optional[str], Optional[str], Optional[str]]] = []
+    seen: set = set()
+    for triple in extractions:
+        if triple in seen:
+            continue
+        seen.add(triple)
+        unique.append(triple)
+
+    if not unique:
+        return {}
+
+    # One query, the union of every condition the per-asset path would have issued.
+    conditions = []
+    for symbol, isin, name in unique:
+        if isin:
+            conditions.append(Asset.identifier_isin == isin.upper())
+            conditions.append(cast(Asset.identifier_other, String).like(f"%{isin}%"))
+        if symbol:
+            conditions.append(Asset.identifier_ticker == symbol.upper())
+        if name:
+            pattern = f"%{name}%"
+            conditions.append(
+                or_(
+                    Asset.identifier_isin.ilike(pattern),
+                    Asset.identifier_ticker.ilike(pattern),
+                    Asset.identifier_cusip.ilike(pattern),
+                    Asset.identifier_sedol.ilike(pattern),
+                    Asset.identifier_figi.ilike(pattern),
+                    Asset.identifier_uuid.ilike(pattern),
+                    cast(Asset.identifier_other, String).like(pattern),
+                )
+            )
+            conditions.append(Asset.display_name.ilike(pattern))
+
+    # Same ordering as the per-asset path, so the candidate lists come out identical.
+    result = await session.execute(select(Asset).where(or_(*conditions)).order_by(Asset.display_name.asc()))
+    universe = list(result.scalars().unique().all())
+
+    out: Dict[Tuple[Optional[str], Optional[str], Optional[str]], Tuple[List, Optional[int]]] = {}
+
+    for symbol, isin, name in unique:
+        candidates: List[BRIMAssetCandidate] = []
+        by_id: dict = {}
+
+        def _add(asset, confidence: BRIMMatchConfidence, _c=candidates, _b=by_id) -> None:
+            _add_candidate(_c, _b, asset, confidence)
+
+        # Priority 1 + 2: the ISIN, primary column then alternates. Run together and
+        # merged, exactly as in the per-asset path — see its docstring for why.
+        if isin:
+            for asset in universe:
+                if (asset.identifier_isin or "") == isin.upper():
+                    _add(asset, BRIMMatchConfidence.EXACT)
+            for asset in universe:
+                if _contains(_other_as_text(asset.identifier_other), isin):
+                    _add(asset, BRIMMatchConfidence.HIGH)
+
+        # Priority 3: ticker.
+        if symbol and not candidates:
+            for asset in universe:
+                if (asset.identifier_ticker or "") == symbol.upper():
+                    _add(asset, BRIMMatchConfidence.MEDIUM)
+
+        # Priority 4: the name, across identifiers first and display name second.
+        if name and not candidates:
+            hits = [
+                a
+                for a in universe
+                if _contains(a.identifier_isin, name)
+                or _contains(a.identifier_ticker, name)
+                or _contains(a.identifier_cusip, name)
+                or _contains(a.identifier_sedol, name)
+                or _contains(a.identifier_figi, name)
+                or _contains(a.identifier_uuid, name)
+                or _contains(_other_as_text(a.identifier_other), name)
+            ]
+            if not hits:
+                hits = [a for a in universe if _contains(a.display_name, name)]
+            for asset in hits:
+                _add(asset, BRIMMatchConfidence.LOW)
+
+        # Priority 5: the soft broker label saved on a previous import.
+        if name and not candidates:
+            for asset in universe:
+                if _contains(_other_as_text(asset.identifier_other), name):
+                    _add(asset, BRIMMatchConfidence.LOW)
+
+        out[(symbol, isin, name)] = (candidates, candidates[0].asset_id if len(candidates) == 1 else None)
+
+    return out
 
 
 # =============================================================================

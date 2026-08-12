@@ -443,8 +443,8 @@
                             <div class="flex flex-nowrap items-center gap-1 text-xs text-gray-500 dark:text-gray-400 overflow-x-auto [&>*]:shrink-0">
                                 {#if webRanks[i] > 0}
                                     <span class="font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.search.rankHint')}>
-                                        <span class="sm:hidden">DDG#{webRanks[i]}</span>
-                                        <span class="hidden sm:inline">DuckDuckGo#{webRanks[i]}</span>
+                                        <span class="sm:hidden">Web#{webRanks[i]}</span>
+                                        <span class="hidden sm:inline">WebSearch#{webRanks[i]}</span>
                                     </span>
                                     <span class="mx-0.5">·</span>
                                 {/if}

@@ -932,6 +932,7 @@ nav:
                       - Select & Dropdowns: developer/frontend/components/core-ui/select.md
                   - Transaction Form: developer/frontend/components/features/transaction-form.md
                   - Import Wizard: developer/frontend/components/features/import-wizard.md
+                  - Asset Identity: developer/frontend/components/features/asset-identity.md
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
                   - Live Ticker: developer/frontend/components/features/live-ticker.md

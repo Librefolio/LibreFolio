@@ -94,8 +94,10 @@ Le **causali** del conto sono classificate così:
 | Interessi/competenze a credito | **Interesse** (importo positivo) |
 | Canone, commissioni, spese di gestione, spese stacco cedola | **Commissione** (cassa in uscita) |
 | Capital gain, imposta di bollo, ritenuta, D.Lgs 461 | **Tassa** (cassa in uscita) |
-| Compravendita titoli/fondi, titoli scaduti o estratti | **Deposito/Prelievo** per segno + **avviso** di possibile doppio conteggio |
-| Pensione/emolumenti, POS, utenze, prelievi, giroconti, altro | **Deposito** (importo > 0) / **Prelievo** (importo < 0) per segno |
+| Compravendita titoli/fondi | **Acquisto/Vendita** quando descrizione e segno concordano e la quantità è ricavabile; altrimenti **deposito/prelievo** con **segnalazione bloccante** da completare nello step di correzione |
+| Titoli scaduti o estratti | **Vendita alla pari** che chiude la posizione |
+| Bonifico in entrata che rimborsa un fondo | **Deposito** + **segnalazione bloccante**: il fondo dichiara il controvalore, non le quote, quindi scegli tu il fondo e inserisci la quantità |
+| Pensione/emolumenti, POS, utenze, prelievi, altri giroconti | **Deposito** (importo > 0) / **Prelievo** (importo < 0) per segno |
 
 ## 🔗 Riferimento per sviluppatori
 

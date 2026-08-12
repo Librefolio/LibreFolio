@@ -286,6 +286,17 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Transaction service tests", verbose=verbose)
 
 
+def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that parsing off-loads to a process pool and degrades safely."""
+    print_section("Services: BRIM Parse Pool")
+    print_info("Testing: backend/app/services/brim_parse_pool.py")
+    print_info("Tests: real parse through the pool, pickle round-trip, thread fallback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_pool.py", test_names)
+
+    return run_command(cmd, "BRIM parse pool tests", verbose=verbose)
+
+
 def services_broker(verbose: bool = False, test_names: list = None) -> bool:
     """Test BrokerService CRUD operations, initial balances, and flag validation."""
     print_section("Services: Broker Service")
@@ -676,6 +687,7 @@ Note: No backend server required.
     add_test(cat, "fx-core", services_fx_core, name="FX Core Helpers", desc="normalize_rate, upsert/delete bulk, changes")
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
+    add_test(cat, "brim-parse-pool", services_brim_parse_pool, name="BRIM Parse Pool", desc="Process-pool off-loading, pickle round-trip, thread fallback")
     add_test(cat, "settings", services_settings, name="Settings Service", desc="get_session_ttl_sync")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
