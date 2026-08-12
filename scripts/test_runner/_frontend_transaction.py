@@ -14,6 +14,9 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/utils/__tests__/txPayloadHelpers.test.ts",
            "src/lib/utils/__tests__/txCommitApi.test.ts",
            "src/lib/utils/__tests__/promoteHelpers.test.ts",
+           "src/lib/utils/transactions/splitRowCharges.test.ts",
+           "src/lib/utils/transactions/fixRowLifecycle.test.ts",
+           "src/lib/utils/transactions/duplicateRecheckPayload.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -296,6 +299,30 @@ def front_tx_brim_import(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("transactions/tx-brim-import.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_ca_contract(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the plugin -> frontend contract E2E tests (CA fixture as the message)."""
+    print_section("Frontend TX Import Plugin Contract Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-ca-contract.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_asset_identity(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the asset identity E2E tests (unification step, dual-ISIN bonds)."""
+    print_section("Frontend TX Import Asset Identity Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-asset-identity.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_resolution(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Import Wizard Resolution E2E tests (resolve section, identifier prompt, create asset)."""
     print_section("Frontend TX Import Resolution Tests")
@@ -337,7 +364,9 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX WAC Unit Toggle", lambda: front_tx_wac_unit_toggle(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Event Picker", lambda: front_tx_event_picker(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX BRIM Import", lambda: front_tx_brim_import(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Asset Identity", lambda: front_tx_asset_identity(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Import Resolution", lambda: front_tx_import_resolution(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Import Plugin Contract", lambda: front_tx_ca_contract(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
@@ -374,7 +403,9 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-wac-unit-toggle", front_tx_wac_unit_toggle, name="TX WAC Unit Toggle Tests", desc="Cost basis Total/Per-unit display toggle, round-trip conversion, commit payload stays per-unit, localStorage persistence", tests="transactions/tx-wac-unit-toggle.spec.ts")
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
     add_test(cat, "tx-brim-import", front_tx_brim_import, name="TX BRIM Import Wizard Tests", desc="Import Wizard flow: open, select file, parse, resolve assets, import to BulkModal", tests="transactions/tx-brim-import.spec.ts")
+    add_test(cat, "tx-ca-contract", front_tx_ca_contract, name="TX Import Plugin Contract Tests", desc="plugin->frontend channels: notices, evidence, field todos, split hints, asset notices", tests="transactions/tx-import-ca-contract.spec.ts")
+    add_test(cat, "tx-asset-identity", front_tx_asset_identity, name="TX Import Asset Identity Tests", desc="Unification step: certain/proposed/lone states, merge, split, rename, primary ISIN election", tests="transactions/tx-import-asset-identity.spec.ts")
     add_test(cat, "tx-import-resolution", front_tx_import_resolution, name="TX Import Resolution Tests", desc="Advanced resolve flow: resolve section, AssetSelect, identifier prompt, create asset, full E2E", tests="transactions/tx-import-resolution.spec.ts")
-    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers", tests="vitest")
+    add_test(cat, "tx-unit", front_tx_unit, test_names=False, name="TX Unit Tests (Vitest)", desc="Pure unit tests: txPayloadHelpers + txCommitApi + promoteHelpers + splitRowCharges + fixRowLifecycle + duplicateRecheckPayload", tests="vitest")
     add_test(cat, "all", front_transaction_all, test_names=False, name="All Transaction Tests", desc="Run all Transaction E2E tests")
     registry["front-transaction"] = cat

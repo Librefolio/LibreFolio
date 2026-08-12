@@ -113,6 +113,27 @@ describe('applySignRules', () => {
         const {signedCash} = applySignRules('5', null, rule() as any);
         expect(signedCash).toBeNull();
     });
+
+    it('leaves an unparsable quantity as typed rather than inventing a number for it', () => {
+        // Coercion is a sign correction, not a parser: swallowing a malformed value here
+        // would hide it from the validator that is meant to report it. An empty string is
+        // the exception — `Number('')` is 0, so it normalises to a zero, which is the same
+        // thing the callers pass explicitly when a field is absent.
+        const r = rule({quantityRule: 'negative', cashSign: 'negative'});
+        expect(applySignRules('abc', cash('EUR', 'abc'), r as any).signedQty).toBe('abc');
+        expect(applySignRules('abc', cash('EUR', 'abc'), r as any).signedCash?.amount).toBe('abc');
+        expect(Number(applySignRules('', cash('EUR', ''), r as any).signedQty)).toBe(0);
+    });
+
+    it('never touches the currency, only the sign', () => {
+        const r = rule({quantityRule: 'negative', cashSign: 'negative'});
+        expect(applySignRules('10', cash('CHF', '100'), r as any).signedCash?.code).toBe('CHF');
+    });
+
+    it('keeps a zero unsigned, since -0 would serialise as "-0"', () => {
+        const r = rule({quantityRule: 'negative', cashSign: 'negative'});
+        expect(Number(applySignRules('0', cash('EUR', '0'), r as any).signedQty)).toBe(0);
+    });
 });
 
 // =============================================================================

@@ -20,6 +20,7 @@ These tests do NOT require a database connection.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -1762,6 +1763,244 @@ class TestBrokerParserCoverageHelpers:
         fee_txs = [tx for tx in out.transactions if tx.type == TransactionType.FEE]
         assert fee_txs, "sample must contain at least one FEE row"
         assert all(tx.asset_id is None for tx in fee_txs)
+
+
+# =============================================================================
+# PLUGIN -> FRONTEND CONTRACT
+# =============================================================================
+
+
+class TestPluginFrontendContract:
+    """The shape a plugin must speak so the wizard can render it.
+
+    The per-behaviour tests above assert *what* Crédit Agricole says about a given row.
+    These assert the *form* every plugin owes the frontend, on every sample we ship: a
+    todo the user cannot reach, a split hint with nothing to split, evidence with no
+    comment or a notice with no code are all silent breakages — the wizard renders an
+    empty panel and no test would otherwise notice.
+
+    They are deliberately written against the whole parse output rather than a chosen
+    row, so a new causale added tomorrow is covered the day it is written.
+    """
+
+    # Samples whose plugin emits the richest contract surface. Add a file here and the
+    # whole class applies to it.
+    CONTRACT_SAMPLES = [
+        ("broker_credit_agricole", CA_CONTI_SAMPLE),
+        ("broker_credit_agricole", CA_SAMPLE),
+    ]
+
+    KNOWN_ASSET_NOTICE_KINDS = {MATURITY_NOTICE_KIND}
+
+    # Every correction reason the frontend has a panel heading for.
+    KNOWN_REASON_CODES = {
+        "ca_account_charge_unallocated",
+        "ca_account_trade_bundled_amount",
+        "ca_account_trade_sell_quantity_presumed",
+        "ca_account_trade_unresolved",
+        "derived_quantity",
+    }
+
+    @staticmethod
+    def _parse(path):
+        return CreditAgricoleBrokerProvider().parse(path, broker_id=1)
+
+    @staticmethod
+    def _line_count(path) -> int:
+        with open(path, "r", encoding="utf-8-sig", errors="replace") as fh:
+            return sum(1 for _ in fh)
+
+    @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
+    def test_every_field_todo_is_addressable(self, plugin, path):
+        """A todo must point at a row the user can actually open, and name a field.
+
+        ``tx_index`` is a position in the returned transaction list: out of range, the
+        wizard shows a correction card wired to nothing.
+        """
+        out = self._parse(path)
+
+        for todo in out.field_todos:
+            assert 0 <= todo.tx_index < len(out.transactions), f"{todo.reason_code}: tx_index {todo.tx_index} outside 0..{len(out.transactions) - 1}"
+            assert todo.field, f"{todo.reason_code}: empty field"
+            assert todo.severity in {"blocker", "warning"}, f"{todo.reason_code}: severity {todo.severity!r}"
+            assert todo.message and todo.message.strip(), f"{todo.reason_code}: empty message"
+
+    @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
+    def test_every_todo_carries_a_stable_reason_code(self, plugin, path):
+        """The frontend groups the correction step by ``reason_code`` and titles each
+        panel from it. A missing or free-form code lands every todo in one anonymous
+        group, which is the state the step was built to replace.
+        """
+        out = self._parse(path)
+
+        for todo in out.field_todos:
+            assert todo.reason_code, f"todo on tx {todo.tx_index} has no reason_code"
+            assert re.fullmatch(r"[a-z][a-z0-9_]*", todo.reason_code), f"reason_code {todo.reason_code!r} is not a stable snake_case key"
+
+    def test_every_split_hint_comes_with_something_to_split(self):
+        """``split_hint`` opens the N-leg editor; ``split_suggestions`` is what it shows.
+
+        A hint without suggestions renders an editor with no guidance on a row the plugin
+        itself could not break down — the worst possible place to leave the user alone.
+
+        Only the account layout bundles several charges into one amount; the securities
+        layout states them separately and legitimately never opens this channel.
+        """
+        out = self._parse(CA_CONTI_SAMPLE)
+
+        hinted = [t for t in out.field_todos if isinstance(t.context, dict) and "split_hint" in t.context]
+        assert hinted, "account sample must exercise the split channel"
+
+        for todo in hinted:
+            assert todo.context["split_hint"], f"{todo.reason_code}: empty split_hint"
+            suggestions = todo.context.get("split_suggestions")
+            assert isinstance(suggestions, list) and suggestions, f"{todo.reason_code}: split_hint with no suggestions"
+            assert all(isinstance(s, str) and s.strip() for s in suggestions), f"{todo.reason_code}: blank suggestion"
+
+    @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
+    def test_every_referenced_source_row_exists(self, plugin, path):
+        """``row`` and ``nominale_row`` are line numbers the user is invited to go and read.
+
+        They are 1-based and must fall inside the file: the evidence table renders them as
+        a link, and a number past the end sends the reader nowhere.
+        """
+        out = self._parse(path)
+        lines = self._line_count(path)
+
+        for todo in out.field_todos:
+            if not isinstance(todo.context, dict):
+                continue
+            for key in ("row", "nominale_row"):
+                value = todo.context.get(key)
+                if value is None:
+                    continue
+                assert isinstance(value, int), f"{todo.reason_code}: {key} is {type(value).__name__}, not a line number"
+                assert 1 <= value <= lines, f"{todo.reason_code}: {key}={value} outside 1..{lines}"
+
+    @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
+    def test_every_notice_is_renderable(self, plugin, path):
+        """A notice is a headline plus, optionally, the data behind it.
+
+        The frontend keys its icon and its colour off ``severity``, and its i18n label off
+        ``code``; evidence is rendered as a table with the comment as its explanation, so
+        a table without one is a grid of numbers with no statement about them.
+        """
+        out = self._parse(path)
+
+        for notice in out.warnings:
+            assert notice.severity in {"info", "warning"}, f"{notice.code}: severity {notice.severity!r}"
+            assert notice.code and notice.code.strip(), "notice with no code"
+            assert notice.message and notice.message.strip(), f"{notice.code}: empty message"
+            for ev in notice.evidence:
+                assert ev.title and ev.title.strip(), f"{notice.code}: evidence with no title"
+                assert ev.comment and ev.comment.strip(), f"{notice.code}: evidence table with no comment"
+                assert all(len(row) == len(ev.headers) for row in ev.rows), f"{notice.code}: evidence row width does not match headers"
+                assert not ev.row_numbers or len(ev.row_numbers) == len(ev.rows), f"{notice.code}: row_numbers must be empty or aligned with rows"
+
+    @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
+    def test_every_todo_evidence_is_renderable(self, plugin, path):
+        """Same contract on the correction step's own evidence tables."""
+        out = self._parse(path)
+
+        for todo in out.field_todos:
+            for ev in todo.evidence:
+                assert ev.title and ev.title.strip(), f"{todo.reason_code}: evidence with no title"
+                assert ev.comment and ev.comment.strip(), f"{todo.reason_code}: evidence table with no comment"
+                assert all(len(row) == len(ev.headers) for row in ev.rows), f"{todo.reason_code}: evidence row width does not match headers"
+
+    def test_the_account_sample_exercises_every_reason_code_we_ship(self):
+        """The registry of correction reasons, asserted as a closed set.
+
+        Grouping, ordering and the per-panel wording are all keyed off these codes. A new
+        one appearing unannounced would render under a generic heading; one disappearing
+        would leave dead translations behind. Either way the change should be deliberate.
+
+        ``derived_quantity`` is raised by the shared maturity model rather than by the
+        account parser, so it is expected from the securities layout, not from this one.
+        """
+        out = self._parse(CA_CONTI_SAMPLE)
+
+        emitted = {t.reason_code for t in out.field_todos}
+        assert emitted == {
+            "ca_account_charge_unallocated",
+            "ca_account_trade_bundled_amount",
+            "ca_account_trade_sell_quantity_presumed",
+            "ca_account_trade_unresolved",
+        }, f"reason codes drifted: {sorted(emitted)}"
+        assert emitted <= self.KNOWN_REASON_CODES
+
+    @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))
+    def test_no_sample_invents_a_reason_code_outside_the_registry(self, plugin, path):
+        """Whatever the layout, the codes come from one declared list."""
+        out = self._parse(path)
+
+        assert {t.reason_code for t in out.field_todos} <= self.KNOWN_REASON_CODES
+
+    def test_every_correction_reason_shows_its_working(self):
+        """Each reason must arrive with at least one evidence table carrying a comment.
+
+        The step asks the user to overrule the plugin; doing that on an assertion alone,
+        with the source row not on screen, is guesswork.
+        """
+        out = self._parse(CA_CONTI_SAMPLE)
+
+        by_reason: dict = {}
+        for todo in out.field_todos:
+            by_reason.setdefault(todo.reason_code, []).append(todo)
+
+        for reason, todos in by_reason.items():
+            assert any(t.evidence for t in todos), f"{reason}: no todo carries evidence"
+            assert any(ev.comment for t in todos for ev in t.evidence), f"{reason}: evidence carries no comment"
+
+    def test_asset_notices_declare_a_known_kind_and_a_reason(self):
+        """The maturity advisory, as the frontend reads it.
+
+        ``kind`` selects the banner label and groups the bullets; ``reason`` is the bullet.
+        An unknown kind still renders — under a generic heading — so the assertion is here,
+        where a new kind can be paired with its translation, and not in the component.
+        """
+        out = self._parse(CA_CONTI_SAMPLE)
+
+        noticed = [(aid, n) for aid, info in out.extracted_assets.items() for n in info.notices]
+        assert noticed, "account sample must raise at least one asset notice"
+
+        for aid, notice in noticed:
+            assert notice.kind in self.KNOWN_ASSET_NOTICE_KINDS, f"asset {aid}: unknown notice kind {notice.kind!r}"
+            assert notice.reason and notice.reason.strip(), f"asset {aid}: notice with no reason"
+            assert all(0 <= i < len(out.transactions) for i in notice.transaction_indexes), f"asset {aid}: notice points outside the transaction list"
+
+    def test_an_unknown_causale_never_escalates_past_information(self):
+        """A causale we have never seen is news, not a fault.
+
+        It is reported so the user knows the row was booked on a guess, and so we can add
+        it to the registry; raising it to ``warning`` would put a red banner on a file that
+        parsed correctly. The shipped sample contains no unmapped causale on purpose, so
+        one is appended here — the same way the behavioural test does.
+        """
+        rows = read_rows(CA_CONTI_SAMPLE)
+        rows.append(["12/07/2026", "12/07/2026", "CAUSALE MAI VISTA", "MOVIMENTO IGNOTO", "'-10,00", "EUR"])
+        out = CreditAgricoleBrokerProvider()._parse_account_movements(rows, broker_id=1)
+
+        unknown = [n for n in out.warnings if n.code == "ca_unknown_causale"]
+        assert unknown, "an unmapped causale must be declared"
+        assert all(n.severity == "info" for n in unknown)
+        assert all(n.context and n.context.get("causali") for n in unknown), "the notice must name the causali it saw"
+        assert all(ev.row_numbers for n in unknown for ev in n.evidence), "the user must be able to go and read the row"
+
+    def test_a_blocker_always_names_a_field_the_user_can_edit(self):
+        """A blocker gates the step, so it must be answerable there.
+
+        The correction step edits type, date, quantity, the instrument and the cash leg;
+        blocking on anything else would be a wall with no door — the reason a cost-basis
+        complaint is deliberately left to the bulk editor.
+        """
+        editable = {"type", "date", "quantity", "asset_id", "cash", "cash.amount", "cash.code"}
+        out = self._parse(CA_CONTI_SAMPLE)
+
+        for todo in out.field_todos:
+            if todo.severity != "blocker":
+                continue
+            assert todo.field in editable, f"{todo.reason_code}: blocker on non-editable field {todo.field!r}"
 
 
 if __name__ == "__main__":

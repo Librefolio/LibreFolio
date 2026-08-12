@@ -227,8 +227,10 @@
     let hasTargets = $derived(getAllAssets().some(targetFilter));
 </script>
 
-<ModalBase {open} {zIndex} maxWidth="2xl" allowOverflow={true} onRequestClose={close} testId="asset-merge-modal">
-    <div class="p-6 space-y-5">
+<!-- Step 1 needs `allowOverflow` for the target dropdown; step 2 has no dropdown and is
+     long enough to need real scrolling, or its footer buttons fall off the viewport. -->
+<ModalBase {open} {zIndex} maxWidth="2xl" allowOverflow={step === 1} onRequestClose={close} testId="asset-merge-modal">
+    <div class="p-6 space-y-5 {step === 1 ? '' : 'max-h-[85vh] overflow-y-auto'}">
         <div>
             <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100" data-testid="asset-merge-title">
                 {$t('assets.merge.title')}

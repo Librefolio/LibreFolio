@@ -671,6 +671,10 @@ test.describe('Risk analysis functional integration', () => {
         await page.getByTestId('asset-detail-tab-risk').click();
         await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
 
+        // The comparison section renders only once the (mocked) capability catalog has
+        // landed: under load that arrives later than the panel itself, so wait for the
+        // section rather than clicking straight into its trigger.
+        await expect(page.getByTestId('risk-comparison-controls')).toBeVisible({timeout: 12_000});
         await page.getByTestId('risk-comparison-asset-select-trigger').click();
         const comparisonOption = page.getByTestId(/^search-select-option-\d+$/).first();
         await expect(comparisonOption).toBeVisible({timeout: 5_000});

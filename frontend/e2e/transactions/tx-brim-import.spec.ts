@@ -108,9 +108,13 @@ async function continueToReview(page: Page) {
     await page.waitForTimeout(300);
 }
 
-/** Clicks through the Corrections/Duplicates steps if the wizard decided to show them. */
+/**
+ * Clicks through the conditional steps if the wizard decided to show them: "Unify assets"
+ * (P3 — two entries that look like the same instrument), "Corrections" and "Duplicates".
+ * All three auto-skip when they have nothing to do, so their order is what matters here.
+ */
 export async function passOptionalWizardSteps(page: Page) {
-    for (const testid of ['import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
+    for (const testid of ['import-wizard-assets-continue', 'import-wizard-fix-continue', 'import-wizard-duplicates-continue']) {
         const button = page.getByTestId(testid);
         if (await button.isVisible({timeout: 1_500}).catch(() => false)) {
             await button.click();
@@ -303,19 +307,32 @@ test.describe('BRIM Import Wizard', () => {
         await expect(page.getByTestId('import-wizard-parse')).toBeDisabled();
     });
 
-    test('T8: stepper back-navigation from Step 4 goes back to Step 3', async ({page}) => {
+    test('T8: stepper back-navigation from Review walks back to the analysis step', async ({page}) => {
         await openBulkModalAndImport(page);
         await skipToStep2(page);
         await selectFirstAvailableFile(page);
         await parseFiles(page);
         await continueToReview(page);
 
-        // Click Back in footer
-        const backBtn = page.locator('button', {hasText: /Back/i});
-        await expect(backBtn).toBeVisible();
-        await backBtn.click();
+        // Back does not jump straight to the analysis any more: it lands on whichever
+        // conditional step was shown on the way in (unify assets / corrections /
+        // duplicates). Whatever the file triggered, walking back must always end on the
+        // analysis step and never on an empty screen.
+        for (let hop = 0; hop < 4; hop++) {
+            if (
+                await page
+                    .getByTestId('import-wizard-step3')
+                    .isVisible({timeout: 1_500})
+                    .catch(() => false)
+            ) {
+                break;
+            }
+            const backBtn = page.locator('button', {hasText: /Back/i}).first();
+            await expect(backBtn).toBeVisible();
+            await backBtn.click();
+            await page.waitForTimeout(400);
+        }
 
-        // Should return to Step 3
         await expect(page.getByTestId('import-wizard-step3')).toBeVisible({timeout: 3_000});
     });
 });

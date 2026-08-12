@@ -1,0 +1,9 @@
+Dossier: 987654321,,,,,,,,,,,,,,,
+Intestatario: VERDI ANNA,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,
+Titoli e operazioni,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,
+Operazione,Data valuta,Descrizione,Titolo,Isin,Segno,Quantita,Divisa,Prezzo,Cambio,Controvalore,Commissioni Fondi Sw/Ingr/Uscita,Commissioni Fondi Banca Corrispondente,Spese Fondi Sgr,Commissioni amministrato
+04/09/2023,06/09/2023,Compravendita titoli,BTP 20-25 1.40%,IT0005416570,A,5000,EUR,98.40,,4920.00,,,,3.50
+11/09/2023,13/09/2023,Compravendita titoli,ISHARES MSCI WORLD ACC,IE00B4L5Y983,A,2,EUR,104.10,,208.20,,,,2.95
+18/09/2023,20/09/2023,Compravendita titoli,ETF COVERED BOND ISH,IE00B3B8Q275,A,3,EUR,140.00,,420.00,,,,2.95

@@ -839,6 +839,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
                             headers=sec_evidence_headers,
                             rows=[sec_row_values(r) for _, r in succession_rows],
                             row_numbers=[num for num, _ in succession_rows],
+                            comment="Ogni riga qui sotto è un versamento titoli senza contropartita di cassa: nessun denaro è uscito dal conto, quindi la posizione è stata aperta come «Rettifica».",
                         )
                     ],
                 )

@@ -117,9 +117,10 @@ mentre lavoriamo — è un danno che cresce nel tempo.
 |---|---|---|
 | — | Analisi e classificazione dei rilievi | ✅ Completato (06/08/2026) |
 | — | Riconciliazione numerica Excel ↔ dashboard | ✅ Completato (06/08/2026) |
-| P1 | Plugin Crédit Agricole — compravendite | ⏳ Da iniziare |
+| P1 | Plugin Crédit Agricole — compravendite | ✅ Completato (08/08/2026) · Fase A+B implementate, collaudate dall'utente e blindate a test (48 backend + 13 di contratto + 12 E2E) |
+| P1‑bis | Ordine del flusso di import (7 step condizionali) | ✅ Completato (07/08/2026) · E2E riallineato al flusso a 7 step (12 test) |
 | P2 | Wizard di import | ⏳ Da iniziare |
-| P3 | Identità dell'asset: unificazione, identificativi, ciclo di vita | 🟢 Onda 1 (05/08) e Onda 2 (08/08) implementate · 🛑 checkpoint: prova estetica della UI, poi E2E |
+| P3 | Identità dell'asset: unificazione, identificativi, ciclo di vita | ✅ Completato (08/08/2026) · UI approvata dall'utente; E2E scritti: 7 `tx-import-asset-identity` + 3 `asset-merge` + 7 API di fusione |
 | P4 | Motore contabile e segnali | ⏳ Da iniziare |
 | P5 | UX transazioni | ⏳ Da iniziare |
 | P6 | i18n, font, documentazione | ⏳ Da iniziare |

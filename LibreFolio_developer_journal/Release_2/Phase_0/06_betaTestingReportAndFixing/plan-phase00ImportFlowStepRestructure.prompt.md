@@ -165,3 +165,48 @@ conteso.
 - La riparazione del plugin CA (Fase B di P1) — indipendente.
 - Il motore di similarità asset (WS‑C/C‑01) — altro piano.
 - Il rilevatore di duplicati in sé: si sposta, non si riscrive.
+
+---
+
+## Chiusura — blindatura a test (08/08/2026) ✅
+
+Il flusso a 7 step condizionali era coperto dagli API test ma **non** dagli E2E: l'unico spec che
+attraversava il wizard, `tx-import-resolution.spec.ts` (643 righe, 10 test), descriveva ancora il
+**flusso a 5 step**, superato. Costruirci sopra avrebbe significato aggiungere casi a un modello
+che non esiste più.
+
+### Fatto
+
+| Intervento | Esito |
+|---|---|
+| Riallineamento di `tx-import-resolution.spec.ts` ai 7 step | **12/12 verdi** |
+| Estrazione pura `duplicateRecheckPayload.ts` dal wizard + test | **8 vitest** |
+| Estrazione pura `fixRowLifecycle.ts` dal wizard + test | **13 vitest** |
+| Contratto dell'endpoint duplicati (`BUY` senza `asset_id` ⇒ 422) | **3 test API** |
+| Verifica che gli step condizionali compaiano **solo quando servono** | coperta da `tx-brim-import` + `tx-import-ca-contract` |
+
+### Perché l'estrazione
+
+`ImportWizardModal.svelte` è un file di 4400 righe conteso fra due piani. Le due funzioni
+estratte — sopravvivenza della riga nel fix step, e composizione del payload di ricontrollo —
+sono **pure**: nessun cambio di comportamento, ma ora un difetto lì si diagnostica in un secondo
+invece che in tre minuti di Playwright. Sono anche le due che avevano generato difetti reali.
+
+### Nota
+
+> **⚠️ Fuori pista** — il ricontrollo duplicati falliva in blocco se **una sola** riga restava
+> irrisolta (`transactions: BUY requires asset_id`), e il wizard ripiegava in silenzio sul
+> verdetto calcolato *prima* delle correzioni. Ora il filtro è in `duplicateRecheckPayload` e il
+> motivo per cui esiste è scritto in un test backend che pretende il 422.
+
+### Difetto trovato dalla suite completa
+
+> **⚠️ Fuori pista** — `tx-brim-import.spec.ts` conosceva solo due step condizionali
+> («Correzioni» e «Duplicati»): con P3 ne è comparso un **terzo prima degli altri**, «Unifica
+> strumenti». Sei test su otto restavano fermi lì aspettando il Review. Corretto
+> `passOptionalWizardSteps` con `import-wizard-assets-continue` in testa alla lista.
+>
+> Di conseguenza T8 codificava un'assunzione non più vera («Indietro dal Review torna
+> all'analisi»): ora l'Indietro atterra sullo step condizionale che era stato mostrato. Il test
+> è stato riscritto per provare l'invariante che conta davvero — *risalendo si arriva sempre
+> all'analisi, mai a una schermata vuota* — invece del numero di passi.

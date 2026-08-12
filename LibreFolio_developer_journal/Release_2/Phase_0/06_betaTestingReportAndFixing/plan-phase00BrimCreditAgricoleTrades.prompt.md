@@ -1146,3 +1146,60 @@ API sono di entrambi).
 | Asset 50 `Btpi Tf 0,15% Mg51` porta le cedole di `BTP 05/26 0.55FOICUM` | Sollevato una volta; il committente ha confermato che gli ISIN in prod sono corretti (quelli del file sono i codici d'emissione). **Non richiuso** |
 | `AssetModal.svelte:668/788` usa `toLowerCase()` grezzo invece di `normalizeAssetName` | Deriva nota, segnalata dal riepilogo di P3 come «nel percorso di P1». Non corretta |
 | I due BTP col rateo non scorporato | **Scelta del committente** («tieni com'è»). Sono 1.090,96 € dei 1.138,56 € di delta: scorporandoli il conto va a zero |
+
+---
+
+## 8. Chiusura — blindatura a test (08/08/2026) ✅
+
+> Il codice era già in produzione e collaudato a mano dal committente; la formalizzazione dei
+> test era stata **rinviata di proposito** finché la UI non fosse approvata. Approvata la UI,
+> questo capitolo chiude il piano.
+
+### Cosa si è deciso di provare
+
+Non il broker: il **contratto**. Parole del committente:
+
+> «i test su CA non dovrebbero servire tanto per testare CA, quanto per testare i molti nuovi
+> flag che abbiamo inventato per far comunicare il pars system con il frontend»
+
+Quindi ogni test punta a un canale plugin→frontend, non a un importo di Crédit Agricole.
+
+### Test scritti
+
+| Livello | File | Test | Cosa fissa |
+|---|---|---|---|
+| Backend | `test_brim_providers.py` → `TestPluginFrontendContract` | **13** | La *forma* che il frontend legge: `split_hint` ⇒ `split_suggestions` non vuoto · `nominale_row` punta a una riga reale · la scadenza arriva come `BRIMAssetNotice(kind="maturity_suspected")` · la causale ignota è `info`, mai `warning` · i 5 `reason_code` sono distinti e ognuno porta almeno una `evidence` con `comment` |
+| Backend | `test_api/test_asset_merge_api.py` | **7** | Il livello HTTP della fusione, che aveva solo test di servizio |
+| Backend | contratto endpoint duplicati | **3** | `BUY` senza `asset_id` ⇒ 422, cioè *perché* il frontend deve filtrare |
+| Vitest | `fixRowLifecycle.test.ts` | **13** | Il ciclo di vita della riga nel fix step, estratto puro dal wizard |
+| Vitest | `duplicateRecheckPayload.test.ts` | **8** | Chi entra e chi resta fuori dal ricontrollo duplicati |
+| Vitest | `splitRowCharges.test.ts` | **17** | Scorporo a N gambe, resto sull'ultima, somma discordante |
+| E2E | `tx-import-ca-contract.spec.ts` *(nuovo)* | **12** | CAC‑001…012 sui `data-testid` dei canali |
+
+Totale della superficie CA/provider a valle: **502 test** verdi.
+
+### Difetti trovati **dai test** (la parte interessante)
+
+1. **Evidenza muta** — `ca_succession_transfer_in` produceva una tabella di evidenza **senza
+   `comment=`**: nel frontend appariva una tabella senza spiegazione. Trovato dal test di
+   contratto n. 12, corretto nel plugin.
+2. **Riga riaperta che spariva** — il difetto già noto è ora **inchiodato** da CAC‑005 e dai
+   test di `rowSurvivesFixStep`: non può tornare senza rompere quattro test.
+
+### Fuori pista incontrati scrivendo gli E2E
+
+> **⚠️ Fuori pista** — Le `BRIMNotice` **non** sono visibili nello step di analisi: vivono nella
+> modale di conferma che si apre *uscendo* da quello step (`import-wizard-warning-confirm`,
+> `ImportWizardModal.svelte` ~4990‑5030). Ogni E2E che prosegue oltre il terzo step su un file
+> con warning **deve** chiuderla, o tutti gli step successivi semplicemente non compaiono. È il
+> singolo fatto che è costato più tempo di diagnosi: annotato qui perché il prossimo non lo
+> ripaghi.
+
+> **⚠️ Fuori pista** — `fix-step-reset` sta **dentro** il corpo espanso della riga
+> (`FixFlaggedStep.svelte:876`): la riga va aperta con `fix-step-row-toggle` prima di poterla
+> ripristinare.
+
+### Cosa resta da collaudare a mano
+
+Nulla di bloccante. I due punti del §7 restano aperti per scelta (rateo non scorporato, `reason`
+italiano hard-coded nel plugin).

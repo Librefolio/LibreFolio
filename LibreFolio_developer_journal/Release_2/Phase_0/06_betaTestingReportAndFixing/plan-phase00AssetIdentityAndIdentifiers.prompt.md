@@ -1649,3 +1649,53 @@ Non sono ipotesi: ognuno corrisponde a un difetto realmente trovato e corretto.
 | `AssetModal.svelte:668/788` usa `toLowerCase()` grezzo invece di `normalizeAssetName` per la collisione di nome | Deriva nota, non corretta: è nel percorso di P1 |
 | Le traduzioni `.it/.fr/.es` della documentazione sono indietro | **Per progetto**: la pipeline Aphra le rigenera dall'inglese |
 | Gli screenshot dei nuovi step non esistono su GitHub Pages | `gh-deploy` gira solo da `main`/release. Il fallback copre le immagini esistenti, non quelle nuove |
+
+---
+
+## Chiusura — blindatura a test (08/08/2026) ✅
+
+UI approvata dal committente ⇒ si formalizzano i test rinviati.
+
+### Test scritti
+
+| Livello | File | Test | Cosa fissa |
+|---|---|---|---|
+| Backend | `test_api/test_asset_merge_api.py` *(nuovo)* | **7** | `POST /assets/merge` aveva 12 test di servizio e **zero** test HTTP: dry‑run che non scrive, migrazione di transazioni/prezzi/eventi/assegnazioni, `identifier_other` come **unione** e non sostituzione, asset altrui ⇒ 403 (non 404: non deve rivelare l'esistenza), sorgente = destinazione ⇒ 400 |
+| E2E | `tx-import-asset-identity.spec.ts` *(nuovo)* | **7** | AID‑001…007 sullo step «Unifica strumenti»: i tre stati (certo/proposto/solo), conferma e separazione, ripristino, elezione del codice principale, rinomina, unione ed estrazione manuale dal menu ⋮, e la **sopravvivenza dell'override a un giro avanti/indietro** |
+| E2E | `assets/asset-merge.spec.ts` *(nuovo)* | **3** | AM‑001…003 sulla fusione di due asset già in archivio: anteprima da dry‑run, conferma che sposta la storia e ritira il duplicato, sopravvissuto che eredita entrambi gli ISIN |
+
+### La fixture del doppio ISIN
+
+Il caso che ha fatto nascere P3 — lo stesso BTP sotto codice di collocamento e codice quotato —
+**non è producibile** con il plugin generico: porta un solo identificativo per riga. Serve un
+formato che porti nome **e** ISIN insieme: **Fineco** (`Titolo,Isin`). Da qui due fixture nuove,
+`fineco_btp_placement.csv` e `fineco_btp_market.csv`, sondate direttamente sul provider **prima**
+di scrivere lo spec, per non inseguire un fallimento di fixture dentro Playwright.
+
+Insieme accendono i tre stati in un colpo solo: `BTP 20‑25 1.40% CUM` (IT0005410912) e
+`BTP 20‑25 1.40%` (IT0005416570) ⇒ gruppo **proposto**; lo stesso iShares in entrambi i file ⇒
+gruppo **certo**; il covered bond in uno solo ⇒ **singolo**.
+
+### Difetto trovato **dal test**
+
+> **⚠️ Fuori pista** — `AssetMergeModal` passava `allowOverflow={true}` a `ModalBase` per far
+> uscire il menu a tendina del bersaglio. Ma `allowOverflow` mette `overflow: visible` sul
+> contenitore, e con `overflow: visible` il `max-height: 90vh` **non genera scroll**: al secondo
+> step, che è lungo (anteprima + scelta dell'ISIN primario + spiegazione + avviso distruttivo),
+> i pulsanti «Indietro / Annulla / Unisci ed elimina» finivano **fuori dal viewport e
+> irraggiungibili**. Playwright lo ha detto senza ambiguità: *element is outside of the
+> viewport*, 222 tentativi di click. Corretto rendendo l'overflow condizionale allo step
+> (`allowOverflow={step === 1}`) e dando al corpo del secondo step
+> `max-h-[85vh] overflow-y-auto`.
+>
+> È un difetto che a mano si vede solo su schermi bassi o con zoom alto — esattamente la classe
+> di problemi per cui gli E2E valgono il loro costo.
+
+### Note per chi tornerà su questi spec
+
+- `POST /transactions/commit` risponde **200 anche quando rifiuta**: l'esito vero è
+  `committed: true/false` con le ragioni in `issues`. Un `expect(res.ok())` da solo non prova
+  niente — la fixture della fusione sembrava creata e invece l'acquisto era stato respinto per
+  saldo cassa negativo, e il dry‑run mostrava `transactions: 0`.
+- Non esiste `GET /assets/{id}`: l'esistenza si legge da `GET /assets?asset_ids=…`, ma **gli
+  identificativi no** — quelli stanno solo in `GET /assets/all`.
