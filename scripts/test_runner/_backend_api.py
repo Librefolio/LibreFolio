@@ -193,6 +193,16 @@ def api_assets_crud(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Assets CRUD API tests", verbose=verbose)
 
 
+def api_asset_merge(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Asset Merge API endpoint tests (P3 — asset identity)."""
+    print_section("Asset Merge API Endpoint Tests")
+    print_info("Testing POST /assets/merge: dry-run preview, execution, identifier union, refusals")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_merge_api.py", test_names)
+    return run_command(cmd, "Asset Merge API tests", verbose=verbose)
+
+
 def api_utilities(verbose: bool = False, test_names: list = None) -> bool:
     """Run Utilities API endpoint tests."""
     print_section("Utilities API Endpoint Tests")
@@ -623,6 +633,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "assets-events", api_assets_events, name="Assets Events API", desc="Bulk upsert, delete, query")
     add_test(api, "events-target-currency", api_events_target_currency, name="Events Target Currency", desc="FX conversion on events query (E.8)")
     add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets")
+    add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps")
     add_test(api, "backup", api_backup, name="Backup API", desc="Placeholder endpoints")

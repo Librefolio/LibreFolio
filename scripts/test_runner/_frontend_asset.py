@@ -26,6 +26,9 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/workers/__tests__/priceProcessingPool.test.ts",
         "src/lib/workers/__tests__/priceProcessing.worker.test.ts",
         "src/lib/stores/signalCatalogStore.test.ts",
+        "src/lib/utils/__tests__/assetSimilarity.test.ts",
+        "src/lib/utils/__tests__/assetGrouping.test.ts",
+        "src/lib/utils/__tests__/assetIdentifiers.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
@@ -85,6 +88,15 @@ def front_asset_classification(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("assets/asset-classification.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_merge(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Asset merge E2E tests (dry-run preview, confirm, identifier inheritance)."""
+    print_section("Frontend Asset Merge Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("assets/asset-merge.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_event_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset event delete E2E tests."""
     print_section("Frontend Asset Event Delete Tests")
@@ -105,6 +117,7 @@ def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = Fals
             ("Asset Modal", lambda: front_asset_modal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("Asset Data Editor", lambda: front_asset_data_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("Asset Classification", lambda: front_asset_classification(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("Asset Merge", lambda: front_asset_merge(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("Asset Event Delete", lambda: front_asset_event_delete(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
         ],
         verbose=verbose,
@@ -121,9 +134,10 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend Asset E2E & unit tests (list, detail, modal, classification)",
         description="""Frontend Asset Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, price/chart derived-state, chart aggregation, local signals, worker pool", tests="vitest")
+    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation, local signals, worker pool, asset identity engine", tests="vitest")
     add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters", tests="assets/asset-list.spec.ts")
     add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit", tests="assets/asset-detail.spec.ts")
+    add_test(cat, "asset-merge", front_asset_merge, name="Asset Merge", desc="Merge duplicate assets: dry-run preview counts, confirm, ISIN inheritance", tests="assets/asset-merge.spec.ts")
     add_test(cat, "asset-modal", front_asset_modal, name="Asset Modal", desc="Create/edit modal, provider, distributions", tests="assets/asset-modal.spec.ts")
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")

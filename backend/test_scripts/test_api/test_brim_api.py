@@ -652,6 +652,124 @@ class TestDuplicateCheckEndpoint:
             assert 1 in report["tx_unique_indices"]
 
     @pytest.mark.asyncio
+    async def test_duplicates_endpoint_rejects_a_buy_without_an_instrument(self, test_server):
+        """API-017: the contract that forces the frontend to filter unresolved rows.
+
+        The payload is validated as real transactions, so a BUY with no ``asset_id`` is
+        refused outright. One unresolved instrument in a 200-row import used to fail the
+        whole re-check with a 422, and the wizard fell back — silently — on the verdict
+        computed *before* the user's corrections. The frontend now leaves such rows out of
+        the question entirely; this test is why. A row with no instrument could not match
+        anything anyway: there is nothing for the comparison to key on.
+        """
+        async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
+            response = await client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={
+                    "broker_id": broker_id,
+                    "transactions": [
+                        {
+                            "broker_id": broker_id,
+                            "type": "BUY",
+                            "date": "2025-04-01",
+                            "quantity": "10",
+                            "cash": {"code": "EUR", "amount": "-1000"},
+                        }
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 422, f"Expected 422 for an instrument-less BUY, got {response.status_code}: {response.text}"
+
+    @pytest.mark.asyncio
+    async def test_duplicates_endpoint_accepts_cash_rows_without_an_instrument(self, test_server):
+        """API-018: the other half of the same contract.
+
+        The frontend keeps a row whose *type* does not require an instrument. If the
+        endpoint refused those too, the filter would have to drop everything and the
+        re-check would never run on a cash-only file.
+        """
+        async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
+            response = await client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={
+                    "broker_id": broker_id,
+                    "transactions": [
+                        {
+                            "broker_id": broker_id,
+                            "type": "DEPOSIT",
+                            "date": "2025-04-02",
+                            "quantity": "0",
+                            "cash": {"code": "EUR", "amount": "500"},
+                        }
+                    ],
+                },
+                timeout=TIMEOUT,
+            )
+
+            assert response.status_code == 200, response.text
+            assert response.json()["tx_unique_indices"] == [0]
+
+    @pytest.mark.asyncio
+    async def test_duplicates_endpoint_retyping_a_row_changes_what_it_collides_with(self, test_server):
+        """API-019: the defect that started P1-bis, reduced to its API core.
+
+        A Crédit Agricole ``COMPRAVENDITA`` row reaches the comparison as a cash
+        withdrawal with no instrument, and is therefore compared against *cash
+        movements*. Retyped into the purchase it always was, it must be compared against
+        *purchases* instead. The verdict is a function of the submitted state, not of
+        what the plugin first guessed.
+        """
+        async with httpx.AsyncClient() as client:
+            broker_id = await self._create_broker_for_test(client)
+
+            asset_resp = await client.post(
+                f"{API_BASE}/assets",
+                json=[{"display_name": f"BTP_dup_{uuid.uuid4().hex[:6]}", "currency": "EUR", "asset_type": "BOND"}],
+                timeout=TIMEOUT,
+            )
+            assert asset_resp.status_code in (200, 201), asset_resp.text
+            asset_id = asset_resp.json()["results"][0]["asset_id"]
+
+            commit = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-05-01", "quantity": "0", "cash": {"code": "EUR", "amount": "5000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-05-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                    ]
+                },
+                timeout=TIMEOUT,
+            )
+            assert commit.status_code == 200, commit.text
+            assert commit.json()["committed"] is True
+
+            misread = {"broker_id": broker_id, "type": "WITHDRAWAL", "date": "2025-05-02", "quantity": "0", "cash": {"code": "EUR", "amount": "-1000"}}
+            before = await client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={"broker_id": broker_id, "transactions": [misread]},
+                timeout=TIMEOUT,
+            )
+            assert before.status_code == 200, before.text
+            assert before.json()["tx_unique_indices"] == [0], "a withdrawal must not collide with a purchase"
+
+            corrected = {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-05-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}}
+            after = await client.post(
+                f"{API_BASE}/brokers/import/duplicates",
+                json={"broker_id": broker_id, "transactions": [corrected]},
+                timeout=TIMEOUT,
+            )
+            assert after.status_code == 200, after.text
+            report = after.json()
+            flagged = {c["tx_row_index"] for c in report["tx_likely_duplicates"] + report["tx_possible_duplicates"]}
+            assert flagged == {0}, f"the corrected row must now be seen as already imported, got {report}"
+
+    @pytest.mark.asyncio
     async def test_duplicates_endpoint_denies_foreign_broker(self, test_server, sample_csv_content):
         """API-016: A user without EDITOR access on the broker cannot probe it."""
         async with httpx.AsyncClient() as client:

@@ -61,6 +61,8 @@
     import type {TXReadItem} from '$lib/components/transactions';
     import {txStoreGet} from '$lib/stores/transactions/txStore.svelte';
     import {applySignRules, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
+    import {buildDuplicateRecheckPayload} from '$lib/utils/transactions/duplicateRecheckPayload';
+    import {isFixStepTodo, rowStaysInFixStep, todosAfterSettle, todosAfterReopen} from '$lib/utils/transactions/fixRowLifecycle';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
 
@@ -1125,25 +1127,8 @@
         try {
             for (const [brokerId, rows] of byBroker) {
                 // A row whose instrument is still unresolved is left out of the question
-                // entirely. Sending it with a null asset is not a neutral choice: the API
-                // validates the payload as real transactions, and a BUY or an ADJUSTMENT
-                // without an asset is rejected outright — one unresolved instrument used to
-                // fail the whole re-check with a 422 and fall back to the stale verdict.
-                // Nor could such a row match anything: with no instrument there is nothing
-                // for the database comparison to key on.
-                const asked = rows
-                    .map((m) => {
-                        const clone = {...m.tx} as TransactionCreateItem;
-                        const aid = typeof clone.asset_id === 'number' ? clone.asset_id : null;
-                        if (aid !== null && isFakeAssetId(aid)) {
-                            (clone as {asset_id?: number | null}).asset_id = resolvedByFakeId.get(aid) ?? null;
-                        }
-                        return {row: m, clone};
-                    })
-                    .filter(({clone}) => {
-                        if ((clone as {asset_id?: number | null}).asset_id !== null && (clone as {asset_id?: number | null}).asset_id !== undefined) return true;
-                        return getTypeRule(String((clone as {type?: string}).type ?? '')).assetField !== 'required';
-                    });
+                // entirely — see `buildDuplicateRecheckPayload` for why.
+                const asked = buildDuplicateRecheckPayload(rows, resolvedByFakeId, (t) => getTypeRule(t).assetField);
                 if (asked.length === 0) continue;
                 const report = await zodiosApi.check_duplicates_api_v1_brokers_import_duplicates_post({
                     broker_id: brokerId,
@@ -2665,43 +2650,6 @@ ${arrow}<span>${label}</span></span>`,
     // =========================================================================
 
     /**
-     * Fields whose value decides the duplicate comparison: type, date, quantity, asset and
-     * the cash leg. Only a blocker on one of these belongs in this step.
-     *
-     * A missing cost basis, by contrast, blocks the *import* but not the *comparison* — it
-     * is handled later, in the bulk editor, which has the per-unit tooling for it. Dragging
-     * it here would turn the step into a wall the editor cannot open.
-     */
-    const DUP_RELEVANT_FIELDS = new Set(['type', 'date', 'quantity', 'asset_id', 'cash', 'cash.amount', 'cash.code']);
-
-    function isDupRelevantBlocker(td: ImportTodo): boolean {
-        return td.severity === 'blocker' && DUP_RELEVANT_FIELDS.has(td.field);
-    }
-
-    /**
-     * A charge or an income the plugin could not attach to an instrument. Not a blocker —
-     * the file may genuinely never name it — but just as anomalous as a misread trade, and
-     * this is the one screen where the user can still fix it while the context is on screen.
-     */
-    function isUnallocatedAssetWarning(td: ImportTodo): boolean {
-        return td.severity === 'warning' && td.field === 'asset_id';
-    }
-
-    /**
-     * The file gave one amount where several things happened at once — a bond bought on the
-     * secondary market pays price, accrued interest and commissions in a single debit. The
-     * plugin will not invent the breakdown, but the user has it on their contract note, so
-     * the correction step offers to split the row once they type the net countervalue.
-     */
-    function isCashSplitWarning(td: ImportTodo): boolean {
-        return td.severity === 'warning' && (td.context as {split_hint?: string} | undefined)?.split_hint !== undefined;
-    }
-
-    function isFixStepTodo(td: ImportTodo): boolean {
-        return isDupRelevantBlocker(td) || isUnallocatedAssetWarning(td) || isCashSplitWarning(td);
-    }
-
-    /**
      * Rows the plugin could not fully understand: it booked them somehow, but said so.
      * They must be settled before the database comparison, because a purchase misread as
      * a cash withdrawal gets compared against cash withdrawals — the wrong question,
@@ -2713,7 +2661,7 @@ ${arrow}<span>${label}</span></span>`,
      */
     let fixStepRows = $derived(
         mergedTransactions
-            .filter((m) => m.todos.some(isFixStepTodo) || fixDecisions[m.index] != null)
+            .filter((m) => rowStaysInFixStep(m.todos, fixDecisions[m.index]))
             // Only the todos this step can actually act on are handed over: showing a row a
             // cost-basis complaint it cannot fix here would be noise at best.
             .map((m) => ({
@@ -2895,7 +2843,7 @@ ${arrow}<span>${label}</span></span>`,
                     dupMatches: [],
                 }));
             }
-            return {...m, tx, todos: m.todos.filter((td) => !isFixStepTodo(td))};
+            return {...m, tx, todos: todosAfterSettle(m.todos)};
         });
         // Re-applying with different charges replaces the legs instead of stacking new ones.
         const stale = new Set(legIndices(index));
@@ -2915,7 +2863,7 @@ ${arrow}<span>${label}</span></span>`,
         // A row that was never applied has no snapshot, and the reset is a no-op.
         resetFixRow(index);
         snapshotFixTodos(index);
-        mergedTransactions = mergedTransactions.map((m) => (m.index === index ? {...m, todos: m.todos.filter((td) => !isFixStepTodo(td))} : m));
+        mergedTransactions = mergedTransactions.map((m) => (m.index === index ? {...m, todos: todosAfterSettle(m.todos)} : m));
         markFixResolved(index, 'kept');
     }
 
@@ -2935,7 +2883,7 @@ ${arrow}<span>${label}</span></span>`,
         // deliberately untouched: the draft being edited was read off it.
         const todos = fixTodoSnapshot[index];
         if (!todos) return;
-        mergedTransactions = mergedTransactions.map((m) => (m.index === index ? {...m, todos: [...m.todos.filter((td) => !isFixStepTodo(td)), ...todos]} : m));
+        mergedTransactions = mergedTransactions.map((m) => (m.index === index ? {...m, todos: todosAfterReopen(m.todos, todos)} : m));
     }
 
     /** "Everything the plugin proposed is fine" — settles every row still waiting. */
@@ -3044,7 +2992,7 @@ ${arrow}<span>${label}</span></span>`,
                 return {
                     ...m,
                     tx: original ? ({...original} as TransactionCreateItem) : m.tx,
-                    todos: todos ? [...m.todos.filter((td) => !isFixStepTodo(td)), ...todos] : m.todos,
+                    todos: todosAfterReopen(m.todos, todos),
                 };
             });
         fixDecisions = Object.fromEntries(Object.entries(fixDecisions).filter(([k]) => Number(k) !== index));
@@ -4851,7 +4799,7 @@ ${arrow}<span>${label}</span></span>`,
             </div>
         {:else if currentStepId === 'select'}
             <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
                 {#if selectedFiles.length > 0 && !step2CanParse}
@@ -4871,7 +4819,7 @@ ${arrow}<span>${label}</span></span>`,
             </button>
         {:else if currentStepId === 'analyze'}
             <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
                 {#if parseParsing}
@@ -4911,7 +4859,7 @@ ${arrow}<span>${label}</span></span>`,
             -->
         {:else if currentStepId === 'assets'}
             <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
                 {#if assetGroupOpenProposals > 0}
@@ -4931,7 +4879,7 @@ ${arrow}<span>${label}</span></span>`,
             </button>
         {:else if currentStepId === 'fix'}
             <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
                 {#if fixStepPendingCount > 0}
@@ -4955,7 +4903,7 @@ ${arrow}<span>${label}</span></span>`,
             </button>
         {:else if currentStepId === 'duplicates'}
             <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
                 {#if resolverPartialCount > 0}
@@ -4975,7 +4923,7 @@ ${arrow}<span>${label}</span></span>`,
             </button>
         {:else}
             <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
                     ◀ {$t('common.back')}
                 </button>
                 {#if step4HasUnresolvedSelected}
