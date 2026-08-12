@@ -13,7 +13,7 @@
  *   - Apple has DIVIDEND event at today-3 (within ±7 default range)
  *   - e2e_test_user has OWNER on Interactive Brokers
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 

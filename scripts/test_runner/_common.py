@@ -27,7 +27,12 @@ from scripts.cli_base import pipenv_prefix
 from ._run_cache import clear_suite, is_passed, load_cache, mark_failed, mark_passed
 
 # Global flag for coverage mode (set by main())
+# Holds the requested language: "py", "js", "all" — or False when disabled.
 _COVERAGE_MODE = False
+# Languages actually collected, derived from _COVERAGE_MODE and from what the
+# selected suite is able to measure (a backend suite cannot produce JS data).
+_COVERAGE_PY = False
+_COVERAGE_JS = False
 # Coverage source: "backend", "frontend", or None (auto-detect)
 _COVERAGE_SOURCE = None
 # Global flag for resume mode (set by main())
@@ -199,7 +204,7 @@ def _run_test_suite(
         print(f"{Colors.YELLOW}⏳ {pending} test(s) not run (stopped early){Colors.NC}")
 
     # Combine coverage if requested
-    if combine_coverage and _COVERAGE_MODE:
+    if combine_coverage and _COVERAGE_PY:
         print_section("Combining Coverage Data")
         print_info("Merging coverage from test server subprocess...")
         try:
@@ -274,12 +279,12 @@ def run_command(cmd: list[str], description: str, verbose: bool = False, timeout
         verbose: If True, stream stdout/stderr live
         timeout: Max seconds per command (default 300s). Use 600 for E2E/frontend.
 
-    If _COVERAGE_MODE is True and the command is a pytest test, automatically
+    If _COVERAGE_PY is set and the command is a pytest test, automatically
     adds coverage tracking flags and updates the cumulative coverage database.
     """
     # Check if this is a pytest command and coverage is enabled
     is_pytest = "pytest" in " ".join(cmd)
-    use_coverage = _COVERAGE_MODE and is_pytest
+    use_coverage = _COVERAGE_PY and is_pytest
 
     # If coverage mode, enhance pytest command
     if is_pytest:
@@ -289,7 +294,7 @@ def run_command(cmd: list[str], description: str, verbose: bool = False, timeout
             if verbose:
                 flags_to_add.append("-s")
             if use_coverage:
-                html_dir = "htmlcov-backend" if _COVERAGE_SOURCE != "frontend" else "htmlcov-frontend"
+                html_dir = "htmlcov-backend" if _COVERAGE_SOURCE != "frontend" else "htmlcov-backend-e2e"
                 flags_to_add.extend(
                     [
                         "--cov=backend/app",

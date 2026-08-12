@@ -97,9 +97,15 @@ sequenceDiagram
     
     Note over Data, Reporter: finalization (_finalize_coverage)
     Reporter->>Data: Read .coverage_data/backend ➔ generate htmlcov-backend/
-    Reporter->>Data: Read .coverage_data/frontend ➔ generate htmlcov-frontend/
+    Reporter->>Data: Read .coverage_data/frontend ➔ generate htmlcov-backend-e2e/
     Reporter->>Data: Merge both databases ➔ generate combined htmlcov/
 ```
+
+!!! note "JS/Svelte coverage follows a parallel, independent path"
+
+    `_finalize_js_coverage()` merges monocart's `raw` output instead of coverage.py
+    databases, producing the reports under `frontend/coverage-js/`. The two pipelines
+    never share state — see [Coverage Model](coverage-model.md).
 
 ### Coverage File Invariants
 * `.coverage`: Active working copy. Stored in the root folder, updated during pytest runs, and combined dynamically.
@@ -116,7 +122,7 @@ sequenceDiagram
 | [`_cli.py`](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/scripts/test_runner/_cli.py) | Defines the argparse command hierarchy (e.g., `./dev.py test [category] [action]`), listings (`--list`), and executes the matched callback. |
 | [`_registry.py`](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/scripts/test_runner/_registry.py) | Imports and invokes the registry population hook for all modules to assemble `TEST_REGISTRY`. |
 | [`_suites.py`](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/scripts/test_runner/_suites.py) | Contains logic to run entire groups of tests (`all`, `all-backend`, `all-frontend`) and clean up coverage folders. |
-| [`_coverage.py`](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/scripts/test_runner/_coverage.py) | Implements database merging, report generation (`htmlcov-backend/`, `htmlcov-frontend/`, `htmlcov/`), and HTML viewer serving. |
+| [`_coverage.py`](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/scripts/test_runner/_coverage.py) | Implements database merging, report generation (`htmlcov-backend/`, `htmlcov-backend-e2e/`, `htmlcov/`), the JS/Svelte pipeline (`frontend/coverage-js/`), and HTML viewer serving. |
 | [`_common.py`](file:///home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/scripts/test_runner/_common.py) | Shared testing helpers: spawning backend servers, waiting for ports, checking database states, and executing test subprocess commands. |
 | `_backend_*.py` | Specific modules for launching pytest categories on the backend. |
 | `_frontend_*.py` | Specific modules for running Playwright E2E testing files on the frontend SPA. |

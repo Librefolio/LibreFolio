@@ -78,7 +78,9 @@ export default defineConfig({
         reuseExistingServer: process.env.COVERAGE_BACKEND ? false : !process.env.CI,
         timeout: 120 * 1000,
         // Send SIGTERM instead of SIGKILL so coverage run can flush .coverage.<pid>.
-        // Falls back to SIGKILL after 5s if the server doesn't shut down.
-        gracefulShutdown: {signal: 'SIGTERM', timeout: 5000},
+        // In coverage mode the flush itself takes time (writing the coverage data file), and a
+        // SIGKILL there silently discards the whole run's backend coverage — so the grace
+        // window is widened. Outside coverage there is nothing to flush: 5s stays.
+        gracefulShutdown: {signal: 'SIGTERM', timeout: process.env.COVERAGE_BACKEND ? 30000 : 5000},
     },
 });

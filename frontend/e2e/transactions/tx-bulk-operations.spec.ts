@@ -14,7 +14,7 @@
  * Mock data contract: populate_mock_data.py creates multiple TX types on
  * editable brokers (IB=OWNER, Directa=EDITOR). DEGIRO=VIEWER.
  */
-import {expect, test, type Page, type Locator} from '@playwright/test';
+import {expect, test, type Page, type Locator} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 

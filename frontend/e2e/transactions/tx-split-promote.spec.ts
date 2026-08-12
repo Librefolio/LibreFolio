@@ -23,7 +23,7 @@
  * - Row actions: kebab button [data-testid^="row-actions-"] → opens context menu with
  *   items at [data-testid="context-menu-action-{id}"] (e.g. "split", "edit", "view").
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 

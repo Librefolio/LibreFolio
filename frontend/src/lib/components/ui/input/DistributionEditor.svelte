@@ -169,7 +169,12 @@
         emitChange();
     }
 
-    function addEntry() {
+    async function addEntry() {
+        // Reference data is loaded asynchronously: clicking before it arrives used to
+        // produce an entry with an empty key, which the parent then dropped in silence.
+        if (kind === 'geographic' && countries.length === 0) {
+            await loadCountries($currentLanguage);
+        }
         let defaultKey = '';
         if (kind === 'sector') {
             defaultKey = getSectorKeysList().find((k) => !usedKeys.has(k)) ?? '';
@@ -177,6 +182,7 @@
             const firstUnused = countries.find((c) => !usedKeys.has(c.iso3));
             defaultKey = firstUnused?.iso3 ?? '';
         }
+        if (!defaultKey) return;
         const remaining = Math.max(0, Math.round((100 - totalPercent) * 100) / 100);
         entries = [...entries, {id: generateUUID(), key: defaultKey, weight: remaining}];
         emitChange();

@@ -27,7 +27,7 @@
  *   - "access-test" tagged TX: Asym-a (IB↔Directa), Asym-b (IB↔Coinbase),
  *     Asym-c (IB↔DEGIRO=viewer), Asym-d (IB↔Hidden)
  */
-import {expect, test, type Locator, type Page} from '@playwright/test';
+import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 

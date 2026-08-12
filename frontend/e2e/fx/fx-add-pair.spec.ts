@@ -8,7 +8,7 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage, openAddPairModal, selectCurrency} from './fx-helpers';

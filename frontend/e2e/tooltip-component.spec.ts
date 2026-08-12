@@ -16,7 +16,7 @@
  * Uses the "Cost basis override" info tooltip in the ADJUSTMENT transaction
  * form as a real, already-present trigger — no dedicated test page needed.
  */
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from './fixtures/playwright';
 import {login} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
 

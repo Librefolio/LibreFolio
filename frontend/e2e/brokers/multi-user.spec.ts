@@ -1,4 +1,4 @@
-import {Browser, BrowserContext, expect, Page, test} from '@playwright/test';
+import {type Browser, type BrowserContext, expect, type Page, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER, TEST_USER_2} from '../fixtures/test-users';
 

@@ -1,4 +1,4 @@
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from '../fixtures/playwright';
 
 import {login, logout, navigateTo, openMobileMenu, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER, TEST_USER_2} from '../fixtures/test-users';

@@ -15,6 +15,141 @@ from ._common import (
 )
 
 
+JS_COVERAGE_DIR = "coverage-js"
+
+
+def _js_dir() -> Path:
+    return PROJECT_ROOT / "frontend" / JS_COVERAGE_DIR
+
+
+def _clean_js_coverage_dirs() -> None:
+    """Wipe JS coverage data before a run.
+
+    Unlike Python coverage — which accumulates in ``.coverage_data`` across
+    invocations by design — JS data is rebuilt from scratch every time: the raw
+    V8 output is tied to a specific build, so mixing runs across a rebuild would
+    mean remapping bytes onto sources that have since moved.
+    """
+    js_dir = _js_dir()
+    if js_dir.exists():
+        shutil.rmtree(js_dir)
+        print(f"{Colors.GREEN}🗑️  Removed frontend/{JS_COVERAGE_DIR}/{Colors.NC}")
+
+
+def _run_mcr(args: list, label: str) -> bool:
+    """Run the monocart CLI from the frontend directory."""
+    return _run_frontend_cmd(["npx", "mcr", *args], label)
+
+
+def _run_frontend_cmd(cmd: list, label: str) -> bool:
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(PROJECT_ROOT / "frontend"),
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except FileNotFoundError:
+        print_warning(f"{cmd[0]} not found: skipping JS coverage report")
+        return False
+    except subprocess.TimeoutExpired:
+        print_warning(f"JS coverage ({label}) timed out")
+        return False
+
+    if result.returncode != 0:
+        print_warning(f"JS coverage ({label}) failed: {(result.stderr or result.stdout).strip()[-500:]}")
+        return False
+    return True
+
+
+def _finalize_js_coverage() -> None:
+    """Merge JS/Svelte coverage from vitest and Playwright into one report.
+
+    Mirrors what ``_finalize_coverage`` does for Python, with ``mcr merge``
+    playing the part of ``coverage combine`` and the ``raw`` directories the
+    part of the ``.coverage.*`` files.
+
+    Two sources feed in, and they arrive differently:
+
+    - **unit** — ``vitest-monocart-coverage`` calls ``generate()`` at the end of
+      every vitest process, and the runner launches vitest once per category.
+      Each run therefore writes to its own ``unit/<tag>/raw`` directory, and we
+      merge them here.
+    - **e2e** — the Playwright fixture only calls ``add()``, so data piles up in
+      monocart's cache across every spec and is turned into a report once, now.
+    """
+    js_dir = _js_dir()
+    if not js_dir.exists():
+        print_warning("No JS coverage data collected")
+        return
+
+    print_section("JS/Svelte Coverage")
+
+    raw_inputs = []
+
+    # --- unit: one raw directory per vitest process ---
+    unit_root = js_dir / "unit"
+    unit_raws = sorted(str(p.relative_to(PROJECT_ROOT / "frontend")) for p in unit_root.glob("*/raw") if p.is_dir())
+    if unit_raws:
+        ok = _run_mcr(
+            ["merge", "--inputDir", ",".join(unit_raws),
+             "--outputDir", f"{JS_COVERAGE_DIR}/unit-combined",
+             "--name", "LibreFolio — Unit Coverage (vitest)",
+             "--reports", "v8,json,console-summary"],
+            "unit",
+        )
+        if ok:
+            print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/unit-combined/ ({len(unit_raws)} run){Colors.NC}")
+        # The combined merge is fed the *original* raw directories, not the
+        # merged output: `mcr merge` does not re-emit a `raw` report, so a
+        # two-step merge would silently drop this whole source.
+        raw_inputs.extend(unit_raws)
+
+    # --- e2e: a single accumulated cache ---
+    e2e_dir = js_dir / "e2e"
+    if (e2e_dir / ".cache").is_dir() or (e2e_dir / "raw").is_dir():
+        ok = _run_frontend_cmd(
+            ["node", "scripts/mcr-generate.js", "v8,raw,json,console-summary"],
+            "e2e",
+        )
+        if ok:
+            print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/e2e/{Colors.NC}")
+        # `generate()` consumes the cache, so a second call in the same run
+        # fails. The raw output it already wrote is still valid — and the whole
+        # directory is wiped at the start of every run, so it cannot be stale.
+        if (e2e_dir / "raw").is_dir():
+            raw_inputs.append(f"{JS_COVERAGE_DIR}/e2e/raw")
+
+    if not raw_inputs:
+        print_warning("No JS coverage data to report")
+        return
+
+    # --- combined: the only report where `--all` makes sense ---
+    # Listing never-executed files is noise on the unit report (vitest cannot
+    # run .svelte components by construction) but it is the whole point here:
+    # it is what answers "which code does no test touch at all".
+    has_unit = bool(unit_raws)
+    has_e2e = any("e2e" in p for p in raw_inputs)
+    if has_unit and has_e2e:
+        ok = _run_mcr(
+            ["merge", "--inputDir", ",".join(raw_inputs),
+             "--outputDir", f"{JS_COVERAGE_DIR}/combined",
+             "--name", "LibreFolio — JS/Svelte Coverage (unit + E2E)",
+             "--reports", "v8,json,console-summary",
+             "--all", "src"],
+            "combined",
+        )
+        if ok:
+            print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/combined/{Colors.NC}")
+            print_info("   Open with: ./dev.py test coverage show js")
+            print_info("   Find the gaps: ./dev.py test coverage-report --lang js --summary")
+    else:
+        only = "unit-combined" if has_unit else "e2e"
+        print_info(f"   Single source only — see frontend/{JS_COVERAGE_DIR}/{only}/index.html")
+        print_info("   Find the gaps: ./dev.py test coverage-report --lang js --summary")
+
+
 def _finalize_coverage(is_front: bool, is_all: bool) -> str:
     """Finalize coverage data after test runs."""
     cwd = Path(os.getcwd())
@@ -23,7 +158,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
     data_dir.mkdir(exist_ok=True)
     backend_db = data_dir / "backend"
     frontend_db = data_dir / "frontend"
-    html_dir = "htmlcov-frontend" if is_front else "htmlcov-backend"
+    html_dir = "htmlcov-backend-e2e" if is_front else "htmlcov-backend"
 
     def _archive_db(db_path: Path, label: str):
         if db_path.exists():
@@ -80,7 +215,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
         if frontend_db.exists():
             shutil.copy2(str(frontend_db), str(main_cov))
             r_fe = subprocess.run(
-                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-frontend",
+                [*pipenv_prefix(), "coverage", "html", "-d", "htmlcov-backend-e2e",
                  "--title", "LibreFolio Frontend E2E → Backend Coverage",
                  "--ignore-errors"],
                 cwd=os.getcwd(), capture_output=True, text=True
@@ -88,7 +223,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
             if r_fe.returncode != 0:
                 print_warning(f"coverage html (frontend) failed: {r_fe.stderr.strip()}")
             else:
-                print(f"   {Colors.GREEN}📊 Generated htmlcov-frontend/{Colors.NC}")
+                print(f"   {Colors.GREEN}📊 Generated htmlcov-backend-e2e/{Colors.NC}")
 
         combine_srcs = [str(f) for f in (backend_db, frontend_db) if f.exists()]
         if combine_srcs:
@@ -173,8 +308,11 @@ def _coverage_show(target: str) -> int:
     """Open coverage HTML report for the given target."""
     dir_map = {
         "backend": "htmlcov-backend",
-        "frontend": "htmlcov-frontend",
+        "frontend": "htmlcov-backend-e2e",
         "combined": "htmlcov",
+        "js": "frontend/coverage-js/combined",
+        "js-unit": "frontend/coverage-js/unit-combined",
+        "js-e2e": "frontend/coverage-js/e2e",
     }
     title_map = {
         "backend": "LibreFolio Backend Test Coverage",
@@ -185,7 +323,13 @@ def _coverage_show(target: str) -> int:
     html_dir = PROJECT_ROOT / dir_map[target]
     index_file = html_dir / "index.html"
 
-    if target == "combined":
+    if target.startswith("js"):
+        if not index_file.exists():
+            print_error(f"No {target} coverage report found at {html_dir}/")
+            print_info("Run tests with JS coverage first:")
+            print_info("  ./dev.py test --coverage js front-asset all")
+            return 1
+    elif target == "combined":
         print(f"{Colors.YELLOW}📊 Combining all coverage data...{Colors.NC}")
         _coverage_combine_internal(html_dir=str(html_dir), title=title_map[target])
     elif not index_file.exists():

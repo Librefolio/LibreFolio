@@ -1,4 +1,4 @@
-import {expect, type Locator, type Page, type Request, type Response} from '@playwright/test';
+import {expect, type Locator, type Page, type Request, type Response} from '../fixtures/playwright';
 
 import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';

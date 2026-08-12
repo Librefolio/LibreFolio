@@ -1,4 +1,4 @@
-import {expect, Page, test} from '@playwright/test';
+import {expect, type Page, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
 

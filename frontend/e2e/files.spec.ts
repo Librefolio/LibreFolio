@@ -1,4 +1,4 @@
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
 import {readFileSync} from 'fs';

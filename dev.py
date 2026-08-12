@@ -2379,7 +2379,9 @@ Examples:
     if HAS_ARGCOMPLETE:
         argcomplete.autocomplete(parser)
 
-    args = parser.parse_args()
+    from scripts.test_runner._cli import normalize_coverage_argv
+
+    args = parser.parse_args(normalize_coverage_argv(sys.argv[1:], only_command="test"))
 
     if args.command is None:
         parser.print_help()

@@ -11,7 +11,7 @@
  *   - Run `./dev.py db populate --force` before generating gallery
  *   - This ensures brokers with icons exist for realistic screenshots
  */
-import {expect, type Locator, type Page, test} from '@playwright/test';
+import {expect, type Locator, type Page, test} from './fixtures/playwright';
 import {login, logout, navigateTo, openMobileMenu, setLanguage} from './fixtures/auth-helpers';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';

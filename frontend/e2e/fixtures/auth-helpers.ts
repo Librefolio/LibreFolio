@@ -1,4 +1,4 @@
-import {expect, Page} from '@playwright/test';
+import {expect, type Page} from './playwright';
 import {type Language, TEST_USER} from './test-users';
 
 /**

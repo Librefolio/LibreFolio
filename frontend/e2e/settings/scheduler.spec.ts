@@ -12,7 +12,7 @@
  * Test IDs: FSCH-001..FSCH-010
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN} from '../fixtures/test-users';
 

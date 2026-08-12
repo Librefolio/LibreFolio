@@ -3,6 +3,7 @@ CLI: argument parsers, dispatch, main entry point.
 """
 
 import argparse
+import os
 import re
 import sys
 import traceback
@@ -25,7 +26,7 @@ from ._common import (
     print_success,
     print_warning,
 )
-from ._coverage import _finalize_coverage, _handle_coverage_command
+from ._coverage import _clean_js_coverage_dirs, _finalize_coverage, _finalize_js_coverage, _handle_coverage_command
 from ._frontend_common import BACKEND_TEST_PATHS, _list_front_tests, _list_pytest_tests
 from ._registry import TEST_REGISTRY
 from ._run_cache import clear_all as _cache_clear_all
@@ -303,9 +304,16 @@ def _register_coverage_subparser(subparsers):
 Coverage Report Management
 
 View differentiated coverage reports:
-  show backend     Open backend test coverage (htmlcov-backend/)
-  show frontend    Open frontend E2E → backend coverage (htmlcov-frontend/)
+Python (what the backend executed):
+  show backend     Backend test coverage (htmlcov-backend/)
+  show frontend    Frontend E2E → backend coverage (htmlcov-backend-e2e/)
   show combined    Combine all data + open merged report (htmlcov/)
+
+JS/Svelte (what the frontend executed):
+  show js          Unit + E2E combined (frontend/coverage-js/combined/)
+  show js-unit     vitest only (frontend/coverage-js/unit-combined/)
+  show js-e2e      Playwright only (frontend/coverage-js/e2e/)
+
   combine          Combine .coverage.* files without opening browser
 """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -315,7 +323,7 @@ View differentiated coverage reports:
     show_parser = cov_sub.add_parser("show", help="Open coverage HTML report in browser")
     show_parser.add_argument(
         "target",
-        choices=["backend", "frontend", "combined"],
+        choices=["backend", "frontend", "combined", "js", "js-unit", "js-e2e"],
         help="Which coverage report to show",
     )
 
@@ -361,7 +369,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="LibreFolio Test Runner - Organized test execution", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=_generate_main_epilog())
 
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
-    parser.add_argument("--coverage", action="store_true", help="Run tests with code coverage tracking", default=False)
+    parser.add_argument("--coverage", nargs="?", const="all", choices=["py", "js", "all"], metavar="LANG", help=_COVERAGE_HELP, default=None)
     parser.add_argument("--cov-clean-backend", action="store_true", help="Clean backend coverage data", default=False)
     parser.add_argument("--cov-clean-frontend", action="store_true", help="Clean frontend coverage data", default=False)
     parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
@@ -398,7 +406,7 @@ def register_subparser(parent_subparsers):
     test_parser = parent_subparsers.add_parser("test", help="Run tests (api, db, external, schemas, services, utils, e2e, front-utility, front-broker, front-user, front-fx, front-transaction, all, all-backend, all-frontend)", description="LibreFolio Test Runner")
 
     test_parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
-    test_parser.add_argument("--coverage", action="store_true", help="Run tests with code coverage tracking", default=False)
+    test_parser.add_argument("--coverage", nargs="?", const="all", choices=["py", "js", "all"], metavar="LANG", help=_COVERAGE_HELP, default=None)
     test_parser.add_argument("--cov-clean-backend", action="store_true", help="Clean backend coverage data", default=False)
     test_parser.add_argument("--cov-clean-frontend", action="store_true", help="Clean frontend coverage data", default=False)
     test_parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
@@ -449,7 +457,8 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
         return _check_orphan_tests()
     elif category == "coverage-report":
         cov_args = argparse.Namespace(
-            input=getattr(args, "input", "/tmp/cov_report.json"),
+            input=getattr(args, "input", None),
+            lang=getattr(args, "lang", None),
             priority=getattr(args, "priority", None),
             category=getattr(args, "cov_category", None),
             threshold=getattr(args, "threshold", 0.0),
@@ -501,8 +510,120 @@ def _dispatch_test_command(args):
     return _dispatch_test_command_body(args)
 
 
+_COVERAGE_LANGS = ("py", "js", "all")
+
+_COVERAGE_HELP = "Track code coverage: 'py' (Python), 'js' (JS/Svelte), 'all' (both, default when the value is omitted)"
+
+
+def normalize_coverage_argv(argv: list, only_command: str | None = None) -> list:
+    """Make the optional value of ``--coverage`` unambiguous.
+
+    ``--coverage`` takes an optional language, but argparse's ``nargs='?'`` has
+    no lookahead: it swallows whatever token comes next, so the long-standing
+    ``./dev.py test --coverage api all`` would be read as language ``api`` on
+    suite ``all``. Inserting the default here keeps every existing invocation
+    working while still allowing ``--coverage js``.
+
+    ``only_command`` restricts the rewrite to a single sub-command. It matters:
+    ``./dev.py server --coverage`` is a plain boolean — a server can only ever
+    measure Python — and must not grow a value.
+    """
+    if only_command is not None:
+        command = next((t for t in argv if not t.startswith("-")), None)
+        if command != only_command:
+            return argv
+
+    out = []
+    for i, tok in enumerate(argv):
+        out.append(tok)
+        if tok == "--coverage":
+            nxt = argv[i + 1] if i + 1 < len(argv) else None
+            if nxt is None or nxt.startswith("-") or nxt not in _COVERAGE_LANGS:
+                out.append("all")
+    return out
+
+
+def _coverage_capabilities(category: str | None) -> set:
+    """Languages the given suite is able to measure.
+
+    Only the suites that drive a browser produce JavaScript data: everything
+    else runs Python and nothing else, so asking for ``js`` there is a mistake
+    worth reporting rather than an empty report worth puzzling over.
+    """
+    if category and (category.startswith("front-") or category in ("all-frontend", "all")):
+        return {"py", "js"}
+    return {"py"}
+
+
+def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> bool:
+    """Resolve the requested coverage languages and prime the runner globals.
+
+    Returns False when the request cannot be honoured (e.g. ``--coverage js``
+    on a backend-only suite), in which case the caller must abort.
+    """
+    _common._COVERAGE_MODE = coverage
+    _common._RESUME_MODE = resume
+
+    category = args.category
+    if category and category.startswith("front-"):
+        _common._COVERAGE_SOURCE = "frontend"
+    elif category == "all-frontend":
+        _common._COVERAGE_SOURCE = "frontend"
+    elif category and category not in ("all", "all-backend", "coverage-report", "coverage"):
+        _common._COVERAGE_SOURCE = "backend"
+    else:
+        _common._COVERAGE_SOURCE = None
+
+    if not coverage:
+        _common._COVERAGE_PY = False
+        _common._COVERAGE_JS = False
+        os.environ.pop("COVERAGE_JS", None)
+        return True
+
+    mode = coverage if isinstance(coverage, str) else "all"
+    wanted = {"py", "js"} if mode == "all" else {mode}
+    available = _coverage_capabilities(category)
+    unavailable = wanted - available
+
+    # Only an explicit request deserves an error: with 'all' the user asked for
+    # "everything measurable here", so silently narrowing is the right answer.
+    if unavailable and mode != "all":
+        lang = ", ".join(sorted(unavailable))
+        print_error(f"--coverage {mode}: the '{category}' suite cannot produce {lang} coverage.")
+        print_info("JS/Svelte coverage requires a browser-driven suite: front-*, all-frontend or all.")
+        return False
+
+    _common._COVERAGE_PY = "py" in wanted
+    _common._COVERAGE_JS = "js" in wanted and "js" in available
+
+    if _common._COVERAGE_JS:
+        # vitest is launched from 8 separate call sites; run_command passes
+        # env=None for non-pytest commands, so every one of them inherits this.
+        os.environ["COVERAGE_JS"] = "1"
+    else:
+        os.environ.pop("COVERAGE_JS", None)
+
+    langs = []
+    if _common._COVERAGE_PY:
+        langs.append("Python")
+    if _common._COVERAGE_JS:
+        langs.append("JS/Svelte")
+
+    print_header("LibreFolio Test Suite - Coverage Mode")
+    print(f"{Colors.YELLOW}📊 Tracking coverage for: {' + '.join(langs)}{Colors.NC}")
+    print(f"{Colors.BLUE}Coverage will accumulate across all test runs{Colors.NC}")
+    if _common._COVERAGE_PY:
+        print(f"{Colors.BLUE}Python report: htmlcov/index.html{Colors.NC}")
+    if _common._COVERAGE_JS:
+        print(f"{Colors.BLUE}JS report:     frontend/coverage-js/combined/index.html{Colors.NC}")
+    print()
+    _clean_coverage_dirs(cov_clean_be, cov_clean_fe)
+    if _common._COVERAGE_JS:
+        _clean_js_coverage_dirs()
+    return True
+
+
 def _dispatch_test_command_body(args):
-    """Dispatch test command from dev.py."""
     if not args.category:
         # Handle --run-status without category
         if getattr(args, "run_status", False):
@@ -518,7 +639,7 @@ def _dispatch_test_command_body(args):
 
     verbose = not getattr(args, "quiet", False)
     test_names = getattr(args, "test_names", None)
-    coverage = getattr(args, "coverage", False)
+    coverage = getattr(args, "coverage", None)
     cov_clean_be = getattr(args, "cov_clean_backend", False)
     cov_clean_fe = getattr(args, "cov_clean_frontend", False)
     resume = getattr(args, "resume", False)
@@ -535,24 +656,8 @@ def _dispatch_test_command_body(args):
         _cache_clear_all()
         print_info("🧹 Test run cache cleared. Starting fresh.")
 
-    _common._COVERAGE_MODE = coverage
-    _common._RESUME_MODE = resume
-    if args.category and args.category.startswith("front-"):
-        _common._COVERAGE_SOURCE = "frontend"
-    elif args.category == "all-frontend":
-        _common._COVERAGE_SOURCE = "frontend"
-    elif args.category and args.category not in ("all", "all-backend", "coverage-report", "coverage"):
-        _common._COVERAGE_SOURCE = "backend"
-    else:
-        _common._COVERAGE_SOURCE = None
-
-    if coverage:
-        print_header("LibreFolio Test Suite - Coverage Mode")
-        print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
-        print(f"{Colors.BLUE}Coverage will accumulate across all test runs{Colors.NC}")
-        print(f"{Colors.BLUE}Final report: htmlcov/index.html{Colors.NC}")
-        print()
-        _clean_coverage_dirs(cov_clean_be, cov_clean_fe)
+    if not _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe):
+        return 1
 
     result = dispatch_to_category(args.category, test_names, verbose, args)
     success = result == 0
@@ -571,7 +676,10 @@ def _dispatch_test_command_body(args):
         print()
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
-        _finalize_coverage(is_front, is_all)
+        if _common._COVERAGE_PY:
+            _finalize_coverage(is_front, is_all)
+        if _common._COVERAGE_JS:
+            _finalize_js_coverage()
 
     return 0 if success else 1
 
@@ -581,7 +689,7 @@ def main():
     parser = create_parser()
 
     argcomplete.autocomplete(parser)
-    args = parser.parse_args()
+    args = parser.parse_args(normalize_coverage_argv(sys.argv[1:]))
 
     log_file = getattr(args, "log_file", None)
     if log_file:
@@ -612,7 +720,7 @@ def _main_body(parser, args):
 
     verbose = not getattr(args, "quiet", False)
     test_names = getattr(args, "test_names", None)
-    coverage = getattr(args, "coverage", False)
+    coverage = getattr(args, "coverage", None)
     cov_clean_be = getattr(args, "cov_clean_backend", False)
     cov_clean_fe = getattr(args, "cov_clean_frontend", False)
     resume = getattr(args, "resume", False)
@@ -623,24 +731,8 @@ def _main_body(parser, args):
         _cache_clear_all()
         print_info("🧹 Test run cache cleared. Starting fresh.")
 
-    _common._COVERAGE_MODE = coverage
-    _common._RESUME_MODE = resume
-    if args.category and args.category.startswith("front-"):
-        _common._COVERAGE_SOURCE = "frontend"
-    elif args.category == "all-frontend":
-        _common._COVERAGE_SOURCE = "frontend"
-    elif args.category and args.category not in ("all", "all-backend", "coverage-report", "coverage"):
-        _common._COVERAGE_SOURCE = "backend"
-    else:
-        _common._COVERAGE_SOURCE = None
-
-    if coverage:
-        print_header("LibreFolio Test Suite - Coverage Mode")
-        print(f"{Colors.YELLOW}📊 Running tests with code coverage tracking{Colors.NC}")
-        print(f"{Colors.BLUE}Coverage will accumulate across all test runs{Colors.NC}")
-        print(f"{Colors.BLUE}Final report: htmlcov/index.html{Colors.NC}")
-        print()
-        _clean_coverage_dirs(cov_clean_be, cov_clean_fe)
+    if not _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe):
+        return 1
 
     result = dispatch_to_category(args.category, test_names, verbose, args)
     success = result == 0
@@ -659,6 +751,9 @@ def _main_body(parser, args):
         print()
         print(f"{Colors.GREEN}📊 Generating final coverage report...{Colors.NC}")
         print()
-        _finalize_coverage(is_front, is_all)
+        if _common._COVERAGE_PY:
+            _finalize_coverage(is_front, is_all)
+        if _common._COVERAGE_JS:
+            _finalize_js_coverage()
 
     return 0 if success else 1

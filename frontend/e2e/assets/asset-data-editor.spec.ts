@@ -14,7 +14,7 @@
  * - Database populated with at least one asset with prices
  */
 
-import {expect, test} from '@playwright/test';
+import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage, navigateToAssetByName} from './assets-helpers';

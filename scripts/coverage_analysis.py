@@ -22,7 +22,12 @@ Usage:
     python scripts/coverage_analysis.py --threshold 50   # Functions below 50%
 
     # Or via dev.py:
-    ./dev.py test coverage-report
+    ./dev.py test coverage-report          # backend (Python)
+    ./dev.py test coverage-report --lang js  # frontend (JS/Svelte)
+
+The frontend report is the same analysis over the istanbul JSON written by
+monocart: `coverage_js.py` converts the format and supplies frontend-specific
+classification rules. The two languages share every filter and output mode.
 
 Author: LibreFolio Contributors
 """
@@ -32,6 +37,11 @@ import json
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+
+try:
+    from scripts import coverage_js
+except ImportError:  # direct execution: python scripts/coverage_analysis.py
+    import coverage_js
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
@@ -197,6 +207,9 @@ CATEGORY_INFO = {
     "API_ENDPOINT":  ("🌐", "HIGH",     "HTTP endpoint handlers"),
     "UTILITY":       ("🔨", "MEDIUM",   "Pure utility functions"),
     "OTHER":         ("❓", "LOW",      "Other"),
+    # Frontend categories live in the same table so filters, sorting and the
+    # legend work identically whichever language is being analysed.
+    **coverage_js.JS_CATEGORY_INFO,
 }
 
 CATEGORY_ORDER = list(CATEGORY_INFO.keys())
@@ -206,7 +219,8 @@ CATEGORY_ORDER = list(CATEGORY_INFO.keys())
 # Analysis using native JSON `functions` data
 # ---------------------------------------------------------------------------
 
-def find_uncovered_functions(cov_data: dict, threshold: float = 0.0) -> list[dict]:
+def find_uncovered_functions(cov_data: dict, threshold: float = 0.0,
+                             priority_fn=None, category_fn=None) -> list[dict]:
     """
     Read function-level coverage from JSON and return functions below threshold.
 
@@ -216,10 +230,14 @@ def find_uncovered_functions(cov_data: dict, threshold: float = 0.0) -> list[dic
     Args:
         cov_data: Parsed coverage JSON
         threshold: Include functions with coverage <= this % (default 0 = only 0%)
+        priority_fn: Path → priority bucket (defaults to the Python rules)
+        category_fn: (path, name, stmts) → category (defaults to the Python rules)
 
     Returns:
         List of dicts with function info, sorted by category/priority.
     """
+    priority_fn = priority_fn or classify_priority
+    category_fn = category_fn or classify_category
     results = []
 
     for filepath, file_data in cov_data["files"].items():
@@ -239,8 +257,8 @@ def find_uncovered_functions(cov_data: dict, threshold: float = 0.0) -> list[dic
             if pct > threshold:
                 continue
 
-            category = classify_category(filepath, func_name, num_stmts)
-            priority = classify_priority(filepath)
+            category = category_fn(filepath, func_name, num_stmts)
+            priority = priority_fn(filepath)
 
             results.append({
                 "file": filepath,
@@ -373,7 +391,7 @@ def print_summary(results: list[dict]):
     print(f"  TOTAL:  {len(results):>3} funcs  {sum(r['stmts'] for r in results):>5} stmts")
 
     # Action summary
-    skip_cats = {"ABSTRACT", "PROVIDER_META", "SCHEMA_PROP", "INFRA", "NOT_IMPL"}
+    skip_cats = {"ABSTRACT", "PROVIDER_META", "SCHEMA_PROP", "INFRA", "NOT_IMPL", "JS_INFRA"}
     actionable = [r for r in results if r["category"] not in skip_cats]
     skip = [r for r in results if r["category"] in skip_cats]
     print(f"\n  ✅ Skip-safe:  {len(skip):>3} funcs  {sum(r['stmts'] for r in skip):>5} stmts")
@@ -386,7 +404,7 @@ def print_summary(results: list[dict]):
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Analyse backend coverage using native function-level data from coverage JSON.",
+        description="Analyse coverage using native function-level data from coverage JSON.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -401,16 +419,30 @@ Examples:
   python scripts/coverage_analysis.py --json                 # Machine-readable
   python scripts/coverage_analysis.py --summary              # Quick summary
 
-Categories:
+  # 3. Same analysis on the frontend (istanbul JSON from monocart)
+  python scripts/coverage_analysis.py --lang js --summary
+
+Categories (Python):
   ABSTRACT, PROVIDER_META, SCHEMA_PROP, MODEL_VALID, INFRA, NOT_IMPL,
   SCHEMA_VALID, BRIM_PROV, ASSET_PROV, FX_PROV, CORE_SVC, API_ENDPOINT,
   UTILITY, OTHER
+
+Categories (JS/Svelte):
+  JS_FEATURE, JS_STORE, JS_API, JS_UTILITY, JS_CHART, SVELTE_UI, JS_ROUTE,
+  JS_ACTION, JS_I18N, JS_INFRA, JS_OTHER
 """,
     )
     parser.add_argument(
         "--input", "-i",
-        default="/tmp/cov_report.json",
-        help="Path to coverage JSON file (default: /tmp/cov_report.json)",
+        default=None,
+        help="Path to coverage JSON file (default: /tmp/cov_report.json, "
+             "or the newest JS report when --lang js)",
+    )
+    parser.add_argument(
+        "--lang", "-l",
+        choices=["py", "js"],
+        default=None,
+        help="Which coverage to analyse (default: inferred from the file format)",
     )
     parser.add_argument(
         "--priority", "-p",
@@ -443,6 +475,26 @@ Categories:
     return parser
 
 
+JS_REPORT_CANDIDATES = (
+    "frontend/coverage-js/combined/coverage-final.json",
+    "frontend/coverage-js/e2e/coverage-final.json",
+    "frontend/coverage-js/unit-combined/coverage-final.json",
+)
+
+
+def resolve_input(explicit: str | None, lang: str | None) -> Path | None:
+    """Pick the coverage file to analyse, preferring the richest JS report available."""
+    if explicit:
+        return Path(explicit)
+    if lang == "js":
+        for candidate in JS_REPORT_CANDIDATES:
+            path = PROJECT_ROOT / candidate
+            if path.exists():
+                return path
+        return PROJECT_ROOT / JS_REPORT_CANDIDATES[0]
+    return Path("/tmp/cov_report.json")
+
+
 def run_analysis(args=None):
     """Run coverage analysis. Can be called programmatically or from CLI."""
     parser = create_parser()
@@ -451,15 +503,32 @@ def run_analysis(args=None):
     elif isinstance(args, list):
         args = parser.parse_args(args)
 
+    lang = getattr(args, "lang", None)
+
     # Load coverage data
-    input_path = Path(args.input)
+    input_path = resolve_input(getattr(args, "input", None), lang)
     if not input_path.exists():
         print(f"❌ Coverage data not found: {input_path}", file=sys.stderr)
-        print(f"   Generate it first: coverage json -o {input_path}", file=sys.stderr)
+        if lang == "js":
+            print("   Generate it first: ./dev.py test --coverage js front all", file=sys.stderr)
+        else:
+            print(f"   Generate it first: coverage json -o {input_path}", file=sys.stderr)
         return 1
 
     with open(input_path) as f:
         cov_data = json.load(f)
+
+    # The two formats are told apart by shape, so `--lang` stays optional: it only
+    # matters for choosing the default input path.
+    priority_fn = category_fn = None
+    if coverage_js.is_istanbul(cov_data):
+        cov_data = coverage_js.istanbul_to_analysis(cov_data)
+        priority_fn = coverage_js.classify_priority_js
+        category_fn = coverage_js.classify_category_js
+    elif lang == "js":
+        print(f"❌ {input_path} is not an istanbul report.", file=sys.stderr)
+        print("   Expected the JSON written by monocart (frontend/coverage-js/…).", file=sys.stderr)
+        return 1
 
     # Check if functions data is available
     sample_file = next(iter(cov_data.get("files", {})), None)
@@ -470,7 +539,8 @@ def run_analysis(args=None):
         return 1
 
     # Analyse
-    results = find_uncovered_functions(cov_data, threshold=args.threshold)
+    results = find_uncovered_functions(cov_data, threshold=args.threshold,
+                                       priority_fn=priority_fn, category_fn=category_fn)
 
     # Apply category filter
     category_filter = args.category.upper() if args.category else None
@@ -503,8 +573,15 @@ def register_subparser(subparsers):
     )
     p.add_argument(
         "--input", "-i",
-        default="/tmp/cov_report.json",
-        help="Path to coverage JSON (default: /tmp/cov_report.json)",
+        default=None,
+        help="Path to coverage JSON (default: /tmp/cov_report.json, "
+             "or the newest JS report with --lang js)",
+    )
+    p.add_argument(
+        "--lang", "-l",
+        choices=["py", "js"],
+        default=None,
+        help="Which coverage to analyse (default: inferred from the file format)",
     )
     p.add_argument(
         "--priority", "-p",
