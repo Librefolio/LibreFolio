@@ -367,6 +367,7 @@ def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool 
             ("TX Asset Identity", lambda: front_tx_asset_identity(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Import Resolution", lambda: front_tx_import_resolution(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("TX Import Plugin Contract", lambda: front_tx_ca_contract(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
+            ("TX Unit (Vitest)", lambda: front_tx_unit(verbose=verbose)),
         ],
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",

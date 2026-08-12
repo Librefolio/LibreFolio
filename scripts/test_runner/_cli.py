@@ -138,6 +138,20 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False, te
     return test_func(verbose=verbose)
 
 
+# Backend suite directories, mapped to the runner module that registers them.
+# Shared by the orphan check and the reachability check so the two cannot drift.
+# test_*.py files at the root of test_scripts/ are shared helpers, not suites.
+_BACKEND_SUITE_DIRS = {
+    "test_api": "_backend_api.py",
+    "test_services": "_backend_services.py",
+    "test_e2e": "_backend_api.py",  # e2e is in _backend_api
+    "test_schemas": "_backend_schemas.py",
+    "test_utilities": "_backend_utils.py",
+    "test_external": "_backend_external.py",
+    "test_db": "_backend_db.py",
+}
+
+
 def _check_orphan_tests() -> int:
     """Find test files not registered in the test runner.
 
@@ -156,16 +170,7 @@ def _check_orphan_tests() -> int:
     print(f"\n{Colors.CYAN}🔍 Checking for orphan test files...{Colors.NC}\n")
 
     # ── Backend: scan each test directory ──
-    backend_dirs = {
-        "test_api": "_backend_api.py",
-        "test_services": "_backend_services.py",
-        "test_e2e": "_backend_api.py",  # e2e is in _backend_api
-        "test_schemas": "_backend_schemas.py",
-        "test_utilities": "_backend_utils.py",
-        "test_external": "_backend_external.py",
-        "test_db": "_backend_db.py",
-    }
-
+    backend_dirs = {d: _BACKEND_SUITE_DIRS[d] for d in _BACKEND_SUITE_DIRS}
     # Collect all registered paths from ALL runner files (some tests cross-reference)
     all_runner_files = list(runner_dir.glob("_backend_*.py"))
     all_registered_paths = set()
@@ -251,6 +256,90 @@ def _check_orphan_tests() -> int:
     else:
         print(f"  {Colors.GREEN}✅ All test files are registered in the test runner.{Colors.NC}")
         return 0
+
+
+def _is_reachable(test_path: str, reachable: set) -> bool:
+    """A test is reachable if it is launched directly or via a parent directory."""
+    if test_path in reachable:
+        return True
+    return any(entry.endswith("/") and test_path.startswith(entry) for entry in reachable)
+
+
+def _check_unreachable_tests() -> int:
+    """Find test files that are registered but no ``all`` action ever runs.
+
+    Registration and reachability are different guarantees: a spec named in a
+    runner module passes the orphan check even when no ``all`` action reaches
+    it, so it silently stops running. This closes that gap by collecting what
+    the ``all`` actions would launch, without launching anything.
+
+    Returns 0 if everything registered is reachable, 1 otherwise.
+    """
+    from ._reachability import collect_reachable
+
+    project_root = Path(__file__).parent.parent.parent
+    unreachable_found = False
+
+    print(f"\n{Colors.CYAN}🔍 Checking that every test is reachable from an 'all' action...{Colors.NC}\n")
+
+    reached = collect_reachable()
+
+    if reached["errors"]:
+        print(f"  {Colors.YELLOW}⚠️  Could not collect some categories:{Colors.NC}")
+        for cat, err in sorted(reached["errors"].items()):
+            print(f"     • {cat}: {err}")
+        print()
+
+    checks = [
+        (
+            "frontend/e2e/",
+            sorted(
+                f.name
+                for f in (project_root / "frontend" / "e2e").rglob("*.spec.ts")
+                # gallery.spec.ts is a docs tool (./dev.py mkdocs gallery), not a test
+                if f.name != "gallery.spec.ts"
+            ),
+            reached["specs"],
+        ),
+        (
+            "frontend/src/**/*.test.ts",
+            sorted(
+                str(f.relative_to(project_root / "frontend")).replace("\\", "/")
+                for f in (project_root / "frontend" / "src").rglob("*.test.ts")
+            ),
+            reached["unit_tests"],
+        ),
+        (
+            "backend/test_scripts/",
+            sorted(
+                str(f.relative_to(project_root / "backend" / "test_scripts")).replace("\\", "/")
+                # Only the suite directories: test_*.py files sitting at the root
+                # of test_scripts/ are shared helpers, not test modules.
+                for d in _BACKEND_SUITE_DIRS
+                for f in (project_root / "backend" / "test_scripts" / d).rglob("test_*.py")
+            ),
+            reached["pytest_paths"],
+        ),
+    ]
+
+    for label, actual, reachable in checks:
+        if not actual:
+            continue
+        missing = [t for t in actual if not _is_reachable(t, reachable)]
+        if missing:
+            unreachable_found = True
+            print(f"  {Colors.RED}❌ {label}{Colors.NC}  ({len(missing)} unreachable)")
+            for t in missing:
+                print(f"     • {t}")
+        else:
+            print(f"  {Colors.GREEN}✓ {label}{Colors.NC}  (all {len(actual)} reachable from 'all')")
+
+    print()
+    if unreachable_found:
+        print(f"  {Colors.YELLOW}⚠️  Registered but never executed! Add them to the category's 'all' action.{Colors.NC}")
+        return 1
+    print(f"  {Colors.GREEN}✅ Every registered test is reachable from an 'all' action.{Colors.NC}")
+    return 0
 
 
 def create_subparser_from_registry(subparsers, category: str, extra_args: list = None):
@@ -454,7 +543,7 @@ def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
     elif category == "all-frontend":
         success = run_all_frontend_tests(verbose=verbose, resume=_common._RESUME_MODE)
     elif category == "check-orphans":
-        return _check_orphan_tests()
+        return _check_orphan_tests() or _check_unreachable_tests()
     elif category == "coverage-report":
         cov_args = argparse.Namespace(
             input=getattr(args, "input", None),

@@ -106,10 +106,11 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
     print_header("Frontend Utility Tests (Playwright)")
     if not _ensure_frontend_build(): return False
     if not _ensure_test_users(): return False
-    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "settings/scheduler.spec.ts", "tooltip-component.spec.ts"]
+    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "settings/scheduler.spec.ts", "tooltip-component.spec.ts", "utilities.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend Utility Tests",
-        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
+        tests=[("Core Store Unit", lambda: front_utility_unit(verbose=verbose))]
+        + [(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
         verbose=verbose,
         header_msg=None,
         summary_title="Frontend Utility Test Summary",
