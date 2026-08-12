@@ -78,6 +78,7 @@ def front_portfolio_all(verbose: bool = False, ui: bool = False, headed: bool = 
         suite_name="All Portfolio Frontend Tests",
         tests=[
             ("Risk Store Unit", lambda: front_portfolio_risk_unit(verbose=verbose)),
+            ("Portfolio Store Unit", lambda: front_portfolio_store_unit(verbose=verbose)),
             ("Risk Analysis", lambda: front_portfolio_risk(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("DataQualityBanner", lambda: front_portfolio_banners(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
             ("BrokerIcons", lambda: front_portfolio_broker_icons(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),

@@ -8,6 +8,10 @@
 > **Stato**: 🟢 Fasi 0, A, B, C, E completate. Fase D (analizzatore dei buchi lato JS) **aperta**,
 > in attesa di decisione.
 >
+> **Prosegue in** [`plan-phase00TestRunnerMigration.prompt.md`](plan-phase00TestRunnerMigration.prompt.md)
+> (P8): la macchina di coverage costruita qui è il vincolo attorno a cui è disegnata la
+> parallelizzazione del test runner.
+>
 > **Fuori scope**: livello C (component test in isolamento). Escluso su indicazione del
 > committente: richiederebbe mock e testerebbe il componente fuori dal suo contesto reale.
 

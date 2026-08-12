@@ -52,7 +52,8 @@ def front_user_all(verbose: bool = False, ui: bool = False, headed: bool = False
     specs = ["brokers/multi-user.spec.ts", "brokers/broker-sharing.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend User Tests",
-        tests=[(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
+        tests=[("User Store Unit", lambda: front_user_unit(verbose=verbose))]
+        + [(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
         verbose=verbose,
         header_msg=None,
         summary_title="Frontend User Test Summary",

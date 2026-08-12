@@ -90,6 +90,7 @@ che include la liquidità.
 | **P5** | [`plan-phase00TransactionsUxPolish.prompt.md`](plan-phase00TransactionsUxPolish.prompt.md) | UX transazioni | T1–T4 | 🟠 Media | ⏳ |
 | **P6** | [`plan-phase00I18nAndDocsAssets.prompt.md`](plan-phase00I18nAndDocsAssets.prompt.md) | i18n, font, documentazione | I1–I4 | 🟡 Bassa | ⏳ |
 | **P7** | [`plan-phase00FrontendCoverage.prompt.md`](plan-phase00FrontendCoverage.prompt.md) | **Coverage JavaScript**: misurare il frontend, non solo il backend | — | 🟠 Media | ✅ Completo (12/08) — fasi 0/A/B/C/D/E/F/G. Resta solo la prima misura vera, da fare a test E2E finiti. *Nasce da P3: i difetti si nascondevano in codice frontend non misurato* |
+| **P8** | [`plan-phase00TestRunnerMigration.prompt.md`](plan-phase00TestRunnerMigration.prompt.md) | **Migrazione del test runner**: inventario, scheduler, classi di isolamento, `--workers N` | — | 🟠 Media | 🟢 Tappa 0.3/0.4 ✅ (13/08) — **bug di raggiungibilità corretto**: 6 azioni registrate che nessun `all` eseguiva (~273 test) tornano a girare, e `check-orphans` ora lo verifica. Tappe 1–6 ⏳. *Nasce da P7 (eredita la macchina di coverage) e dal volume di test E2E scritti per P1/P3* |
 
 > **P1 è stato riorganizzato in due fasi con un collaudo in mezzo** (v3, 06/08/2026). La Fase A
 > costruisce la rete di pre-allarme *lasciando volutamente sbagliati i 4 trade*, che sono l'unico
@@ -126,6 +127,7 @@ mentre lavoriamo — è un danno che cresce nel tempo.
 | P5 | UX transazioni | ⏳ Da iniziare |
 | P6 | i18n, font, documentazione | ⏳ Da iniziare |
 | P7 | Coverage JavaScript (livelli A e B) | ✅ Fasi 0/A/B/C/E completate (12/08/2026) · `--coverage [py\|js\|all]`, 3 nuovi report JS, 64 spec migrati al barrel. Fase D (analizzatore buchi) aperta |
+| P8 | Migrazione del test runner (parallelizzazione) | 🟢 Tappa 0.3/0.4 (13/08/2026) · corretto il bug di raggiungibilità: 6 azioni registrate ma mai eseguite da un `all` (~273 test, tutti verdi) rimesse in circolo; nuovo `_reachability.py` + `check-orphans` esteso. Tappe 1–6 aperte |
 
 ---
 
