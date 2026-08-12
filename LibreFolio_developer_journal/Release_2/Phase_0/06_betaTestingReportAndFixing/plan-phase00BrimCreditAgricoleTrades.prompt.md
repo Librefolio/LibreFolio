@@ -366,6 +366,13 @@ Si consegna e **ci si ferma**. Import dei 3 file reali e verifica:
 
 > Solo dopo il checkpoint.
 
+**Ordine di esecuzione approvato (08/08/2026)**: `B1 → B2 → B4 → B3 + B5-lite → B6 → B7`.
+>
+> B4 precede B3 perché il rilevatore del rateo confronta la cassa con il nominale, e le ritenute
+> cambiano gli importi di cassa delle cedole da cui il nominale viene ricavato: misurare uno scarto
+> su numeri che stanno per cambiare significa doverlo rimisurare. B5-lite nasce attaccata a B3,
+> come azione della stessa evidenza.
+
 ## B1 — `COMPRAVENDITA` → BUY/SELL
 
 Sale al livello 1. Sotto-dispatch sulla descrizione — verificato sui dati reali: `NOTA INF. ACQ.` e
@@ -422,23 +429,53 @@ oggi.
 > Mantiene la cassa fedele al `Saldo Finale` della banca — la prova di quadratura più severa
 > disponibile.
 
-## B5 — Suddivisione in più transazioni
+> ⚠️ **Rompe la deduplica verso il passato**: una cedola già importata **netta** (93,52) non
+> corrisponde più alla stessa cedola letta **lorda** (106,88), quindi al re-import non risulta
+> duplicata e verrebbe contata due volte.
+>
+> ✅ **Deciso (08/08/2026, committente)**: rischio accettato, **nessun avviso e nessuna migrazione**.
+> Un solo utente usa Crédit Agricole: gli verrà chiesto di **cancellare e reimportare da zero**
+> quando la Fase B è completa. Da non trasformare in codice di compatibilità.
 
-Una riga → più transazioni. «+ transazione» aggiunge gambe, con il **residuo da allocare** sempre
-visibile.
+## B5 — Suddivisione in più transazioni ➡️ **ridotta a B5-lite** *(deciso 08/08/2026)*
 
-**Regola di approvazione, come da indicazione del committente:**
+L'idea originale: una riga → più transazioni, «+ transazione» aggiunge gambe, **residuo da
+allocare** sempre visibile, e
 
-> Un blocco di gambe **non è approvabile** finché la somma della loro cassa **non coincide** con
+> un blocco di gambe **non è approvabile** finché la somma della loro cassa **non coincide** con
 > l'importo della riga dell'estratto conto. Residuo ≠ 0 → non si chiude.
 
-È ciò che rende la funzione sicura: non si può spezzare una riga sbilanciandola. Ed è la stessa
-condizione che tiene vera la quadratura col `Saldo Finale`.
+Perché serve, in una riga: l'estratto conto porta **un solo importo netto che impacchetta eventi
+diversi**. Nel BTP del beta test quell'unico numero contiene *acquisto a corso secco + rateo +
+commissione*; registrato come un solo BUY, gonfia il **costo di carico di ~1.091 €**, e quel numero
+sbagliato entra nel FIFO e inquina ogni plusvalenza futura. Il committente lo ha già dovuto fare a
+mano (acquisto al controvalore netto, commissioni a parte).
 
-> ⚠️ Parte **più nuova e più rischiosa**: tocca l'invariante di cassa. Va **dopo** che il resto
-> quadra, come blocco separato. Se serve tagliare, è il candidato al rinvio: senza, il sistema è
-> *corretto ma approssimato di ~1.091 €* **e lo dichiara** (B3); con una suddivisione sbagliata
-> sarebbe *sbagliato in silenzio*.
+### Cosa manca oggi
+
+Il plugin **sa già** emettere più transazioni da una riga (gambe FEE/TAX, contropartite fittizie del
+*Deposito Titoli*). Manca il pezzo **guidato dall'utente**:
+
+- `FixPatch` (`FixFlaggedStep.svelte`) è `{type, asset_id, quantity}` → **una riga = una
+  transazione**: nessun campo cassa, nessun «+ gamba», nessun residuo;
+- il wizard non ha un modello «una riga di origine → N transazioni in anteprima»;
+- manca il collegamento riga→gambe per evidenza e deduplica.
+
+### La decisione: B5-lite
+
+> ✅ **Deciso (08/08/2026, committente)**: l'editor di gambe generico **non si fa**. Chi deve
+> aggiungere altro lo fa dalla **bulk transaction**, che esiste già ed è il posto giusto per
+> l'editing libero.
+>
+> Si fa invece **B5-lite**: B3 misura già lo scarto fra cassa e nominale. Invece di limitarsi a
+> dichiararlo, offre un bottone **«applica la rettifica»** che spezza *quel* caso in **due gambe
+> precalcolate** — BUY a corso secco + rateo — e nient'altro.
+>
+> Nessun editor generico, nessun residuo da gestire a mano: **il residuo è zero per costruzione**,
+> perché le due gambe sono derivate dallo stesso importo di riga. È l'unica forma di suddivisione
+> che non può sbilanciare la cassa.
+
+Copre il caso reale (~1.091 €, 2 titoli) a una frazione del costo e del rischio dell'editor libero.
 
 ## B6 — Fixture e test
 
@@ -488,9 +525,16 @@ Broker nuovo sul **prod locale**, import dei 3 file insieme, confronto con
 **Confronto col server Linux**: là 3 righe sono state corrette a mano, quindi i totali devono
 coincidere **salvo il BTP 01/03/35** (mai inserito) e salvo il rateo.
 
-> ⚠️ **Domanda aperta, da chiarire prima di dichiarare uno scostamento**: le correzioni manuali sono
-> state inserite **all'importo di cassa o al controvalore netto**? Cambia il confronto di ~426 €. Va
-> verificato, non dedotto.
+> ✅ **Risolta (08/08/2026, committente)**: le correzioni manuali sono state inserite **al
+> controvalore netto**, con le **commissioni aggiunte a parte**. Oltre a queste, l'unico movimento
+> inserito a mano è un **saldo iniziale fittizio**, che compensa il fatto che il conto titoli non
+> porta liquidità propria. Nient'altro.
+>
+> Due conseguenze dirette:
+> 1. il confronto col server Linux si fa **sul controvalore netto**, non sull'importo di cassa —
+>    lo scarto di ~426 € citato sopra non si applica;
+> 2. quella correzione manuale **è già una suddivisione B5 fatta a mano** (netto + commissione):
+>    B5 non introduce un concetto nuovo, automatizza ciò che il committente ha già dovuto fare.
 
 ---
 
@@ -532,19 +576,320 @@ coincidere **salvo il BTP 01/03/35** (mai inserito) e salvo il rateo.
 | A3 | Evidenza sui todo (riga di origine + commento) | ✅ 06/08/2026 |
 | A4 | Visibilità del blocco nel bulk modal (banner + evidenza) | ✅ 06/08/2026 — *pannello Step 3 rinviato al checkpoint* |
 | A5 | Messaggio rettifiche come INFO con evidenza | ✅ 06/08/2026 |
-| 🛑 | **Checkpoint: collaudo e consenso UI** | ⏳ **in corso** |
+| 🛑 | **Checkpoint: collaudo e consenso UI** | ✅ 12/08/2026 — UI approvata dal committente |
 
-### Fase B — riparazione del plugin ⏳
+### Fase B — riparazione del plugin ✅
 
 | Passo | Descrizione | Stato |
 |---|---|---|
-| B1 | `COMPRAVENDITA` → BUY/SELL | ⏳ |
-| B2 | Recupero nominale dalle cedole | ⏳ |
-| B3 | ⭐ Rilevatore «non comprato all'emissione» | ⏳ |
-| B4 | Ritenute | ⏳ |
-| B5 | Suddivisione con quadratura obbligatoria | ⏳ |
-| B6 | Fixture + test | ⏳ |
-| B7 | Verifica congiunta sul prod locale | ⏳ |
+| B1 | `COMPRAVENDITA` → BUY/SELL | ✅ 08/08/2026 |
+| B2 | Recupero nominale dalle cedole | ✅ 08/08/2026 |
+| B3 | ⭐ Rilevatore «non comprato all'emissione» | ✅ 08/08/2026 |
+| B4 | Ritenute | ✅ 08/08/2026 |
+| B5-lite | Scorporo in due gambe guidato dal netto | ✅ 08/08/2026 |
+| B5-full | ⭐ Scorporo a **N voci tipizzate** + rilevatore indipendente dalle cedole | ✅ 10/08/2026 |
+| B6 | Fixture + test | ✅ 08/08/2026 |
+| B7 | Verifica congiunta sul prod locale | ✅ 12/08/2026 — riconciliato al centesimo |
+| B10 | ➕ Disinvestimento fondi che arriva come bonifico | ✅ 12/08/2026 |
+| B11 | ➕ Segno sulle righe corrette + riga che spariva alla riapertura | ✅ 12/08/2026 |
+| B12 | ➕ Riconciliazione finale | ✅ 12/08/2026 |
+
+### Note implementazione B7 — primo giro di verifica sul prod locale (12/08/2026)
+
+Confronto fra il DB di prod (utente `marco`, broker 4) e `Andamento Portafoglio_CAI_20260805174957.xlsx`.
+
+**Carico totale: 540.674,69 € contro 529.887,94 € attesi.** Delta 10.786,75 €, scomposto per intero:
+
+| Voce | € | Verdetto |
+|---|---|---|
+| AMUNDI PRIMO INV LC ancora in posizione | +9.648,19 | file non importato — vedi sotto |
+| BTP 01/03/35: rateo + commissioni non scorporati | +665,02 | scelta dell'utente («tieni com'è») |
+| BTP 1/3/32: idem | +425,94 | idem |
+| prezzi a 2 decimali nel file sorgente | +47,60 | irriducibile |
+
+Il motore di carico è **corretto**: sulle posizioni arrivate per successione il costo
+coincide al centesimo con l'atteso della banca (BTP 17-11-28 → 81.659,20 vs 81.659,19;
+BTP FUT 16-11-33 e BTP FUT 27-04-37 esatti). Le tre tranche per titolo non sono una
+duplicazione: sono tre righe reali del file, con prezzi diversi, una per quota ereditaria.
+
+**Il caso AMUNDI PRIMO INV LC.** Il rimborso del fondo (−1.867,178 quote, 9.984,47 €) esiste
+come `SELL` corretta e già agganciata al titolo, ma solo in
+`Lista Movimenti Deposito Titoli_CAI_20260725173815.xlsx`, che **non è stato importato**: il
+DB contiene esattamente i 36 `ADJUSTMENT` prodotti da
+`Lista Movimenti Deposito Titoli_CAI_20240605-20240801.xlsx`, che di righe ne produce 36 e
+nient'altro. Nessuna riga `auto_cash` in DB conferma che il file recente non è mai passato.
+
+Nel file di conto lo stesso evento c'è, ma sotto causale `GIROCONTO/BONIFICO`
+(`ORD:AMUNDI PRIMO INVESTIMENTO … SCT::RIMBORSI`), e lì il plugin lo registra come `DEPOSIT`
+di sola cassa **senza alcun todo**. È l'asimmetria con la sottoscrizione della SICAV, che
+invece arriva come `COMPRAVENDITA TITOLI/FONDI/OPZIONI` e infatti produce il blocker
+`ca_account_trade_unresolved` che l'utente ha corretto a mano.
+
+> **⚠️ Fuori pista**: euristica proposta e **non** implementata. Riconoscere il rimborso di un
+> fondo da un bonifico in entrata è ambiguo: nello stesso file c'è un
+> `SCT:RIMBORSO IRPEF - 730` che qualunque match su «rimbors» prenderebbe per buono. Decisione
+> rimandata all'utente; l'alternativa più onesta è un avviso a livello di file quando si importa
+> un export di solo conto («questo export non contiene i movimenti del dossier titoli»).
+
+#### B10 — Il disinvestimento di un fondo arriva come bonifico ✅ 12/08/2026
+
+Approvata l'euristica e implementata. Il fondo non passa dal dossier: la casa di gestione
+**bonifica** il denaro, quindi la riga cade sotto `GIROCONTO/BONIFICO` ed è indistinguibile,
+*per sola causale*, da una pensione o da un rimborso fiscale.
+
+La parola chiave da sola **non basta**: su 4 righe reali `GIROCONTO/BONIFICO` ne prende 3.
+Il discriminante che regge è un altro — **chi paga è anche il soggetto del pagamento**:
+
+| # | Riga reale | Marcatore rimborso | Ordinante ricompare | Esito |
+|---|---|:---:|:---:|---|
+| 1 | `ORD:AMUNDI PRIMO INVESTIMENTO … RIMBORSI … SU AMUNDI PRIMO INVES TIMENTO CL B` | ✅ | ✅ | 🔴 **blocker** |
+| 2 | `ORD:DIVISIONE SERVIZI … RIMBORSO IRPEF - 730` | ✅ | ❌ | cassa silenziosa |
+| 3 | `ORD:NUOVE VIE … SALDO RIMB COSTO ENERGIA` | ✅ | ❌ | cassa silenziosa |
+| 4 | `ORD:AKLAMIO GMBH … RICOMPENSE AKLAMIO-SCT` | ❌ | ❌ | cassa silenziosa |
+
+Un fondo rimborsa **sé stesso**; un rimborso fiscale riguarda qualcos'altro. Il confronto
+**ignora gli spazi** (`_squash`) perché l'export spezza il nome a metà parola sulla larghezza
+di colonna — `AMUNDI PRIMO INVES TIMENTO` — ed è proprio la riga che ci interessa.
+
+Implementazione: `_sct_fund_redemption_name` + promozione da tier 3 a **tier 2** dentro
+`_classify_account_row`. Nessuna UI nuova: riusa il blocker `ca_account_trade_unresolved`
+già collaudato, con un `reason` dedicato (`fund_redemption`) e un messaggio proprio. La riga
+resta `DEPOSIT` con la cassa giusta — **le quote non si inventano**: un fondo dichiara il
+controvalore, non il numero di quote, e questo layout non ha cedole da cui ricavarlo.
+
+Verifica sul campo: **12 file reali dell'utente, ~2.100 righe → 1 solo allarme**, sulla riga
+giusta, zero falsi positivi. Test: `./dev.py test external brim-providers` → **484 passed**
+(+3 nuovi: la riga che scatta, il decoy che tace, il detector sul nome spezzato).
+
+#### B11 — Due bug trovati riprovando l'import da zero ✅ 12/08/2026
+
+**1. La correzione non applicava le regole di segno.** `applyFixToRow` scriveva tipo e quantità
+grezzi. Ritipizzare un deposito in vendita cambia ciò che i numeri hanno il diritto di
+significare, e il payload usciva con `quantity > 0`: il ricontrollo duplicati falliva in blocco
+(`transactions: SELL requires quantity < 0`) e ripiegava sul verdetto vecchio.
+
+`applySignRules` — l'helper già usato dal modale bulk — imponeva **solo** il verso negativo;
+`positive` era trattato come «libero». Reso simmetrico (una regola `positive` vincola quanto una
+`negative`, il backend rifiuta allo stesso modo) e i versi liberi (`free`/`any`, dove il segno
+*è* l'informazione: ADJUSTMENT, TRANSFER) restano intoccati. Poi agganciato al fix step: l'utente
+dichiara la **grandezza**, il segno è affare del tipo, esattamente come nel form transazioni.
+
+**2. Riaprendo una riga già decisa, la riga spariva.** `fixStepRows` tiene una riga se *ha todo
+di fix* **oppure** *porta una decisione*. Applicare una correzione ritira i todo, quindi da quel
+momento la riga viveva solo grazie alla decisione — e `reopenFixRow` la decisione la toglieva
+**senza restituire i todo**: la riga non soddisfaceva più nessuna delle due metà e svaniva sotto
+le mani dell'utente, recuperabile solo con un F5. Ora la riapertura rimette i todo dallo snapshot
+(la transazione resta com'è: la bozza in editing è stata letta da lì).
+
+Test: `vitest` → **598 passed** (+3 su `applySignRules`), `svelte-check` 0 errori, build OK.
+
+#### B12 — Riconciliazione finale: chiusa al centesimo ✅ 12/08/2026
+
+Reimportato da zero, l'AMUNDI è stato intercettato e completato. Carico **531.026,50 €** contro
+**529.887,94 €** attesi: delta **1.138,56 €**, che è *esattamente* la somma dei residui già noti e
+già accettati dall'utente:
+
+| Voce | € |
+|---|---:|
+| BTP 01/03/35 — rateo + commissioni non scorporati | 665,02 |
+| BTP 1/3/32 — idem | 425,94 |
+| Prezzi a 2 decimali nel file d'origine | 47,60 |
+| **Totale** | **1.138,56** |
+
+Nessuno scostamento macroscopico residuo. Il delta si azzera scorporando i due bond nello step
+di correzione; i 47,60 € sono irriducibili (il file non porta più decimali).
+
+**Bug trovato e corretto**: `/assets/all` filtra `active=True`, quindi un titolo scaduto
+archiviato come inattivo — l'esito verso cui spinge l'avviso di scadenza — non si apriva né
+dall'ispeziona del wizard né dalla propria pagina di dettaglio. Passati i tre lookup per id a
+`/assets/query` con `active` omesso.
+
+| B8 | Asserzione sulla riga `COMPRAVENDITA` già nel fixture (buco di copertura) | ✅ 08/08/2026 — coperto da B6 |
+| B9 | Avviso «titolo scaduto» anche dal layout *Movimenti Conto* | ✅ 12/08/2026 |
+
+> **Note implementazione (08/08/2026)**
+>
+> - **B1** — `_classify_trade_direction` (parola chiave + segno concorde, disaccordo ⇒ `blocker`),
+>   `_trade_asset_name` (dopo `TIT:` o dopo il riferimento d'ordine). `try_account_trade` crea il
+>   trade **senza contropartita di cassa** (rischio n.1: qui la riga *è* la cassa) con test dedicato.
+> - **B2** — indice `nominal_by_isin` costruito nella stessa pre-pass di `income_identity_by_date`,
+>   confronto per **prefisso normalizzato bidirezionale** (min 6 caratteri). Nome ambiguo o nominali
+>   discordi ⇒ `blocker`, mai un'ipotesi. Il trade riusa la stessa chiave `isin:` delle cedole, così
+>   acquisto e reddito finiscono sullo stesso strumento.
+> - **B3** — confronto `|cassa|` vs nominale nel ramo BUY: uguali ⇒ silenzio, diversi ⇒ `warning`
+>   `ca_account_trade_not_at_issuance` con **due tabelle** (riga d'acquisto + cedola che ha fornito
+>   il nominale). Verificato che l'acquisto alla pari **non** genera avvisi (bersaglio: pochi allarmi).
+> - **B4** — `_ACCOUNT_RITENUTA_RE`; cedola **lorda** + gamba `TAX` separata sullo stesso asset e
+>   sulla stessa data. Somma invariata ⇒ la cassa continua a quadrare col `Saldo Finale`. Lo storno
+>   di cedola (importo negativo) **non** viene lordizzato: inventerebbe un rimborso d'imposta.
+> - **Test**: `./dev.py test external brim-providers` → **478 passed**. Fixture estesa con acquisto
+>   alla pari, acquisto sopra la pari, vendita, fondo senza cedole, ritenuta.
+>
+> **⚠️ Fuori pista — la prima lettura di B5-lite era sbagliata.** Avevo concluso che lo scorporo
+> non fosse fattibile perché lo scarto misurato da B3 (`|cassa| − nominale`) **non è il rateo**:
+>
+> | Bond | Nominale | Cassa | `Ctv carico` banca | Rateo+comm. veri | Scarto B3 |
+> |---|---:|---:|---:|---:|---:|
+> | BTP 1/3/32 1,65% | 50.000 | 46.603,73 | 46.177,79 | **+425,94** | **−3.396,27** |
+> | BTP 01/03/35 3,35% | 50.000 | 50.683,13 | 50.018,11 | **+665,02** | **+683,13** |
+>
+> I numeri restano veri — il primo bond è stato comprato **sotto la pari**, quindi lo scarto B3 è
+> negativo e non ha niente a che vedere col rateo — ma la conclusione no. Correzione del committente:
+>
+> > *«lo split se viene fatto è valido solo se la somma degli importi delle transazioni è pari al
+> > valore della transazione; il fatto che sia sotto o sopra la pari non c'entra».*
+>
+> L'unico invariante è **somma delle gambe = importo della riga**. Un numero lo dà l'utente (il
+> controvalore netto, che è sulla nota informativa), **l'altra gamba è il resto**: il residuo è zero
+> per costruzione e non serve dedurre né il rateo né le commissioni. Lo scarto B3 non è un ingrediente
+> del calcolo — è solo ciò che **fa comparire la domanda**.
+
+> **Note implementazione B5-lite (08/08/2026)**
+>
+> - **B3 cambia canale**: da `BRIMNotice` a **field todo `warning` sul BUY** (`field="cash"`,
+>   `reason_code` invariato, `context` con cassa/nominale/delta/valuta). Motivo: un avviso che
+>   l'utente **può risolvere** deve stare dove si risolve. Un test verifica che lo stesso rilievo
+>   **non** compaia anche fra i notice: mostrarlo due volte insegna a saltarlo.
+> - **Terzo gruppo** nello step di correzione — «Importi che comprendono più cose» — separato dai
+>   trade (`blocker`) e dalle spese senza strumento: sono tre domande diverse.
+> - **Una gamba, non un editor**: l'utente digita il controvalore netto, la seconda gamba è il resto.
+>   Cassa in uscita ⇒ `FEE` (resta **fuori dal costo di carico FIFO** ma conta sul rendimento della
+>   posizione: è esattamente ciò che serve); cassa in entrata ⇒ `INTEREST`.
+> - **`splitRowAmount`** (`frontend/src/lib/utils/transactions/splitRowAmount.ts`, 8 test vitest):
+>   sottrazione a virgola fissa perché `50683.13 - 50018.11` in float dà `665.0199999999968`, e una
+>   gamba che non ricompone l'estratto conto è proprio ciò che la funzione deve impedire.
+> - **La gamba è una transazione vera** in anteprima, inserita subito dopo la riga madre, con indice
+>   in uno spazio dedicato (`1.000.000 + indice`): ri-applicare la sostituisce invece di duplicarla,
+>   **Ripristina** la elimina.
+> - Il ramo `INTEREST` (vendita con rateo incassato) è **implementato ma non provato sui dati reali**:
+>   nei 3 file del beta test non ci sono vendite. *(Superato da B5-full: le gambe di onere sono
+>   sempre in uscita, quindi `INTEREST` — che pretende cassa positiva — non serve più.)*
+
+> **Note implementazione B5-full (10/08/2026) — due correzioni di rotta chieste dal committente**
+>
+> **① Il messaggio spiegava troppo, e nel posto sbagliato.** La riga chiusa dell'elenco è ciò che
+> l'utente legge mentre scorre venti righe: ora dice solo *«Riga 282: acquisto di BTP 1/3/32 1,65% —
+> l'importo di questa riga potrebbe raggruppare più voci insieme.»*. Tutto il ragionamento (cosa è
+> stato cercato nel resto del file, cosa è stato trovato e dove) è passato al commento dell'evidenza,
+> che si legge solo aprendo la riga.
+>
+> **② Il rilevatore dipendeva da cosa altro c'era nell'export.** Domanda del committente:
+>
+> > *«se io avessi importato solo l'acquisto, senza ancora la cedola, tu come avresti capito le cose?»*
+>
+> Risposta: **non l'avrei capito.** B3 misurava uno scarto contro il nominale, e il nominale arriva
+> dalle cedole (B2). Senza cedole nello stesso file la riga finiva in `_TIER_UNRESOLVED` — bloccata
+> per quantità mancante — e la zona di scorporo **non compariva affatto**. Importando per periodi
+> successivi (prima l'acquisto, poi le cedole) l'avviso non sarebbe mai apparso, perché l'acquisto
+> è già stato importato quando la cedola arriva.
+>
+> Il trigger giusto non è *«ho colto una contraddizione»* ma **«questo è un trade, e questo tracciato
+> non separa mai il prezzo dagli oneri»**. Quindi:
+>
+> - `ca_account_trade_not_at_issuance` → **`ca_account_trade_bundled_amount`**, emesso su **ogni**
+>   compravendita risolta, acquisto o vendita, con o senza scarto. Il testo dell'evidenza ha tre
+>   varianti: scarto misurato, alla pari («sembra un acquisto all'emissione: se è così non c'è nulla
+>   da correggere»), vendita («l'accredito è già netto»).
+> - Anche le righe **bloccate** (`ca_account_trade_unresolved`) portano ora `split_hint`: sono trade
+>   anche loro, solo più incompleti. La zona compare appena l'utente sceglie acquisto o vendita.
+> - **Solo acquisti e vendite**: dividendi e cedole sono l'importo intero per definizione, non hanno
+>   nulla da scorporare (decisione del committente, `splitApplies`).
+> - **Rumore misurato prima di accettare la scelta**: sui 3 file veri passa da 2 a **3 avvisi su 507
+>   transazioni**. Il timore registrato in B3 («4 allarmi su 554, non 554») non si materializza perché
+>   le compravendite sul conto sono pochissime. Il test che proteggeva il caso alla pari è stato
+>   riscritto — non cancellato — per documentare l'inversione e il perché.
+>
+> **③ Suggerimenti letti dal file** (`split_suggestions`, mostrati come elenco nel pannello). Il più
+> importante **previene un errore vero**: se il file registra già una riga di spese a ±3 giorni,
+> scorporarla di nuovo dal totale del trade la **conta due volte**. Gli altri restringono il campo:
+> fondo ⇒ niente rateo; obbligazione ⇒ probabile rateo; totale = nominale al centesimo ⇒ forse
+> all'emissione. Nessuno è dedotto da dati di mercato: tutti si leggono nell'export.
+>
+> **④ Da due gambe fisse a N voci tipizzate.** `splitRowAmount` → **`splitRowCharges`** (9 test
+> vitest). L'utente elenca gli oneri che sa nominare — *Commissioni* (`FEE`), *Imposte e bolli*
+> (`TAX`), *Rateo cedolare* (`FEE`) — e **la gamba del trade è il resto**. Invariante identico e
+> più forte di prima: l'utente può solo spostare denaro **fra** le gambe, mai dentro o fuori
+> dall'import.
+>
+> Il **rateo** non può essere un `INTEREST`: `schemas/transactions.py` regola 11 impone `cash > 0`
+> per `INTEREST`, e un rateo pagato è cassa in uscita. `FEE` non è un ripiego: il rateo **non è
+> costo del titolo** (torna con la prima cedola lorda, cfr. B4), quindi deve stare fuori dal costo
+> di carico FIFO — che è esattamente dove `FEE` lo mette.
+>
+> Sulle **vendite** il segno si inverte: l'accredito è già netto, quindi la gamba del trade è
+> *maggiore* della riga (`totale + oneri`), mentre su un acquisto è minore. Una sola formula,
+> `main = totale ∓ Σ oneri`, con il tetto («gli oneri non possono mangiarsi tutto l'acquisto»)
+> applicato solo in uscita, dove ha senso.
+
+> **⑤ Rifinitura della UI (stessa giornata, secondo giro di riscontri).**
+>
+> - **Selettore del tipo di onere**: era un `<select>` nativo, ora è il `SearchSelect` di casa con
+>   l'**icona della transazione che verrà creata**. Il rateo porta l'icona di `FEE` ma il proprio
+>   nome: l'icona dice al sistema cosa sarà, l'etichetta dice all'utente cos'è. Le voci già usate
+>   **spariscono** dalle altre righe (`kindOptions`): due righe dello stesso tipo sarebbero due
+>   risposte alla stessa domanda, e la seconda si sommerebbe invece di correggere la prima.
+> - Le stesse icone compaiono nella **tabellina di riepilogo**, così la riga letta e la transazione
+>   che nascerà si riconoscono a colpo d'occhio.
+> - **Pannelli richiudibili, un colore per gruppo** (trade → rosa, scorporo → ambra, oneri →
+>   azzurro). Tingere tutto d'ambra equivaleva a non raggruppare: l'occhio legge la tinta prima del
+>   titolo, e una tinta uniforme dice «un mucchio solo» per quanti titoli ci siano dentro. I
+>   pannelli nascono **aperti**: una piega che nasconde lavoro in sospeso è una trappola.
+> - **«Tieni tutte» / «Ripristina tutte» anche nell'intestazione di ogni pannello**, oltre che
+>   nella barra globale. Con tre domande diverse sullo schermo, «tieni tutte» senza soggetto è una
+>   decisione che l'utente non può verificare prima di prenderla. `acceptAllPluginFallbacks` e
+>   `resetAllFixRows` accettano ora un elenco facoltativo di indici.
+>
+> **⑥ Bug vero trovato durante il collaudo: il ricontrollo duplicati falliva con 422.** Segnalato
+> dal committente come banner rosso *«Non è stato possibile ricontrollare i duplicati (transactions:
+> ADJUSTMENT requires asset_id · … +10 more)»* dopo «tieni tutte».
+>
+> Non era un passo saltato dall'utente. `refreshDuplicateReport` rimappava gli id fittizi degli
+> asset e, per quelli **non ancora risolti**, mandava `asset_id: null` — con l'intento di far
+> confrontare la riga sugli altri campi. Ma `POST /brokers/import/duplicates` valida il payload
+> come `TXCreateItem` veri, e la regola 5 pretende un asset per `ADJUSTMENT/BUY/SELL/DIVIDEND/
+> TRANSFER`: **una riga senza asset fa fallire l'intera chiamata**, non solo sé stessa. Le 15
+> violazioni del committente = 5 asset non risolti × 3 righe (il file di deposito titoli ne genera
+> 36 di `ADJUSTMENT`, da successione e `VERS.TITOLI`). Il verdetto mostrato restava quello vecchio,
+> cioè calcolato prima delle correzioni: **il caso peggiore**, perché sembrava aggiornato.
+>
+> Correzione: le righe il cui asset è ancora irrisolto vengono **escluse dalla domanda** (array
+> parallelo `asked`), invece di essere spedite monche. Non si può chiedere «questa è già nel
+> database?» di una transazione che non si sa a cosa si riferisca.
+>
+> ✅ **Sospetto secondo difetto — verificato e SMENTITO (12/08/2026).** Avevo segnalato che
+> `buildFinalTxList()` mantiene l'id **fittizio** quando l'asset resta irrisolto, quindi l'import
+> finale avrebbe spedito `asset_id: 2147483647`. Rilettura del codice: **non è raggiungibile**. Il
+> pulsante Importa è disabilitato da `step4CanImport = step4SelectedCount > 0 &&
+> !step4HasUnresolvedSelected`, e `step4HasUnresolvedSelected` usa **esattamente lo stesso filtro**
+> del payload (`t.selected && !beforeOpeningIndices.has(t.index)`). L'id fittizio sopravvive solo
+> nelle righe che non partono mai. Anche le gambe di scorporo sono coperte: stanno in
+> `mergedTransactions`, ereditano l'`asset_id` della madre, e sono `FEE`/`TAX` — che un asset non
+> lo pretendono. Nessuna correzione può creare un `BUY` senza asset: `draftIsValid` blocca
+> `rule.assetField === 'required' && d.asset_id == null`.
+>
+> Il ricontrollo duplicati era diverso proprio perché avviene **prima** di quel cancello: lì le
+> righe irrisolte esistono per costruzione, ed è per questo che vanno escluse dalla domanda.
+
+> **Note implementazione B9 (12/08/2026) — l'avviso di scadenza mancava metà dei casi**
+>
+> Segnalazione dal collaudo: `BTP 20-25 1.40FOICUM`, scaduto nel 2025, non mostrava il banner
+> «titolo probabilmente scaduto» alla creazione dell'asset. Non erano gli asset aggregati: la
+> fusione nel wizard **concatena** le notice (`leadRes.notices = [...leadRes.notices,
+> ...folded.notices]`) e `AssetModal` le deduplica per `reason`.
+>
+> Causa vera: `detect_maturity_hits` era cablato **solo** in `_parse_securities`. Il layout
+> *Movimenti Conto* creava correttamente la `SELL` da `TITOLI SCADUTI O ESTRATTI` ma **non** la
+> `BRIMAssetNotice`. È il caso più comune, non quello raro: il file di conto è quello che copre
+> anni, quindi è quasi sempre lì che si vede il rimborso.
+>
+> Estratto `_attach_maturity_notices(...)` a livello di modulo e chiamato da **entrambi** i rami.
+> Misura sui file veri: da **0** a **3** notice (`BTP 20-25 1.40FOICUM` e `BTP 05/26 0.55FOICUM`
+> nel file da 507 righe, `BTP 05/26` in quello da 79). Nessun falso positivo sul `SCT:RIMBORSO`
+> IRPEF: quella riga non ha asset, e `detect_maturity_hits` salta gli `asset_id` nulli — fatto
+> asserito da un test apposta, perché l'euristica cerca la parola «rimborso» che il file usa anche
+> per i rimborsi di cassa.
+>
+> Test: 2 nuovi → **481 passed**.
 
 ### File toccati in Fase A
 
@@ -587,3 +932,217 @@ coincidere **salvo il BTP 01/03/35** (mai inserito) e salvo il rateo.
 **File toccati dalle correzioni**: `ImportWizardModal.svelte` (banner, tooltip, cromia risolutore),
 `frontend/src/lib/i18n/{en,it,fr,es}.json` (`importWizard.parseErrorsTitle`).
 Verifiche: `./dev.py front check` → 0 errori / 0 warning; `tx-import-resolution` → **10 passed**.
+
+---
+
+# 🏁 Riepilogo finale di P1 — consegna e passaggio di consegne
+
+> **Documento di handoff.** Gemello del [riepilogo di P3](./plan-phase00AssetIdentityAndIdentifiers.prompt.md#-riepilogo-finale-di-p3--consegna-e-passaggio-di-consegne),
+> scritto per chi coordinerà la chiusura congiunta dei due piani.
+> Contiene: cosa è stato consegnato, i fuori pista (la parte più istruttiva),
+> e i **task residui — tutti e soli di test**.
+> Ultimo aggiornamento: **12/08/2026**.
+
+---
+
+## 1. Stato in una riga
+
+**Il codice di P1 è completo e validato sui dati reali del committente.** Fase A e Fase B sono
+chiuse, il checkpoint UI è approvato, e la riconciliazione con l'estratto della banca **torna al
+centesimo**. Ciò che resta è **esclusivamente la formalizzazione degli E2E**, rinviata per la
+stessa regola che governava P3: niente test UI finché l'interfaccia non è approvata. Ora lo è.
+
+---
+
+## 2. Il problema che P1 doveva risolvere
+
+Crédit Agricole è **banca e broker insieme**: lo stesso estratto conto porta la liquidità e i
+titoli. Il plugin classificava per causale, e tutto ciò che non riconosceva finiva in
+**deposito/prelievo per segno**.
+
+> Un acquisto da 50.000 € diventava un prelievo anonimo. La cassa restava giusta — ed è proprio
+> questo che rendeva il guasto invisibile: **la posizione spariva**, e la perdita riaffiorava
+> mesi dopo come un buco inspiegabile nel carico.
+
+L'invariante che ne discende governa tutto il resto:
+
+> **Meglio bloccare che indovinare.** Una riga che il plugin non sa leggere fino in fondo va
+> dichiarata e passata all'utente; una riga *indovinata male* apre una posizione fantasma che
+> avvelena in silenzio ogni match FIFO a valle.
+
+---
+
+## 3. Cosa è stato consegnato
+
+### 3.1 Il registro a 4 livelli (`broker_credit_agricole.py`)
+
+Ogni riga del conto finisce in uno di quattro livelli. **Tutti e quattro producono la cassa
+giusta**: differiscono solo in *quanto* dichiarano.
+
+| Livello | Cosa contiene | Voce dell'utente |
+|---|---|---|
+| 1 — tipizzato | Commissioni, imposte, cedole, dividendi, interessi | nessuna, è certo |
+| 2 — irrisolto | `COMPRAVENDITA` e i disinvestimenti fondi | 🔴 **blocker** da correggere |
+| 3 — cassa dichiarata | Stipendio, POS, utenze, bonifici | nessuna, è cassa vera |
+| 4 — sconosciuto | Tutto il resto | ℹ️ notice informativa |
+
+### 3.2 Fase A — la rete di pre-allarme
+
+| Passo | Cosa risolve |
+|---|---|
+| **A1** | Il registro stesso: prima non esisteva una tassonomia, solo un `if` gigante |
+| **A2** | `BRIMNotice` strutturata (codice + contesto + evidenza) al posto di stringhe, livello `INFO`, resa frontend |
+| **A3** | Ogni todo porta **la riga d'origine del file** e un commento che spiega perché è lì |
+| **A4** | Il blocco è visibile nel bulk modal, non solo nel wizard |
+| **A5** | Il messaggio delle rettifiche diventa INFO con evidenza |
+
+### 3.3 Fase B — la riparazione vera
+
+| Passo | Cosa risolve |
+|---|---|
+| **B1** | `COMPRAVENDITA` → BUY/SELL. Parola chiave **e** segno devono concordare: se litigano la riga **non** viene tipizzata |
+| **B2** | La quantità si recupera dalle **cedole dello stesso titolo** (confronto per prefisso normalizzato bidirezionale, min 6 caratteri). Nome ambiguo o nominali discordi ⇒ blocker |
+| **B3** | ⭐ Rilevatore «non comprato all'emissione»: `\|cassa\| ≠ nominale` ⇒ warning con **due tabelle** (riga d'acquisto + cedola che ha dato il nominale) |
+| **B4** | Le cedole arrivano nette ma il file scrive la ritenuta: import **lordo** + gamba `TAX` separata. La somma resta invariata ⇒ la cassa continua a quadrare col `Saldo Finale` |
+| **B5-full** | ⭐ Scorporo a **N voci tipizzate** (commissione / imposta / rateo). L'utente dà il netto, **l'ultima gamba è il resto**: il residuo è zero per costruzione |
+| **B9** | L'avviso «titolo scaduto» scatta anche dal layout *Movimenti Conto*, non solo dal dossier |
+| **B10** | ⭐ Il disinvestimento di un fondo che arriva **come bonifico** |
+| **B11** | Segno delle righe corrette + riga che spariva alla riapertura |
+
+### 3.4 Fuori pista che hanno prodotto lavoro reale
+
+Nessuno era nel piano iniziale; ognuno è nato da una prova del committente.
+
+| # | Fuori pista | Esito |
+|---|---|---|
+| **1** | **La prima lettura di B5-lite era sbagliata** | Avevo concluso che lo scorporo non fosse fattibile perché lo scarto di B3 non è il rateo. Vero, ma irrilevante: correzione del committente — *«lo split è valido solo se la somma delle gambe è pari al valore della transazione»*. L'unico invariante è quello. Lo scarto B3 non è un ingrediente del calcolo: è ciò che **fa comparire la domanda** |
+| **2** | **B3 cambia canale** | Da `BRIMNotice` a **field todo `warning` sul BUY**. Un avviso che l'utente **può risolvere** deve stare dove si risolve |
+| **3** | **Il ricontrollo duplicati andava in 422** | Una sola riga con asset irrisolto faceva fallire l'intera chiamata, che ripiegava in silenzio sul verdetto pre-correzione. Ora le righe senza strumento sono **escluse dalla domanda**: senza strumento non potrebbero comunque collidere con niente |
+| **4** | **Il disinvestimento di un fondo non passa dal dossier** | La casa di gestione **bonifica** il denaro: la riga cade sotto `GIROCONTO/BONIFICO` e per sola causale è identica a una pensione. La parola «rimborso» da sola prende **3 righe reali su 4** — il discriminante che regge è che **chi paga sia anche il soggetto del pagamento**. Un fondo rimborsa sé stesso; l'IRPEF no |
+| **5** | **`/assets/all` filtra `active=True`** | Un titolo scaduto archiviato come inattivo — l'esito verso cui spinge l'avviso di scadenza — non si apriva né dall'ispeziona del wizard né dalla propria pagina. Tre lookup per id passati a `/assets/query`. Stessa cecità trovata su `fx/[pair]`, **non** corretta: è un percorso di valute, fuori ambito |
+| **6** | **`applySignRules` era asimmetrico** | Imponeva solo il verso negativo, `positive` era trattato come libero. Ritipizzare un deposito in vendita mandava `quantity > 0` e il ricontrollo duplicati falliva in blocco. Reso simmetrico; i versi liberi (ADJUSTMENT, TRANSFER — dove il segno **è** l'informazione) restano intoccati |
+| **7** | **Riaprire una riga decisa la faceva sparire** | Una riga vive nel fix step se *ha todo* **o** *porta una decisione*; correggere ritira i todo, e riaprire ritirava la decisione **senza restituirli**. La riga svaniva sotto le mani, recuperabile solo con F5 |
+| **8** | **`duckduckgo#N` → `WebSearch#N`** | L'etichetta era vera al primo giorno; da quando la ricerca gira su 10 browser via `ddgs` era una firma falsa nei dati |
+
+---
+
+## 4. La prova che conta: riconciliazione col prod locale
+
+Confronto fra il DB di prod (utente `marco`, broker 4) e l'estratto della banca
+`Andamento Portafoglio_CAI_20260805174957.xlsx`, **dopo** import rifatto da zero.
+
+| Grandezza | Valore |
+|---|---:|
+| Carico calcolato da LibreFolio | **531.026,50 €** |
+| Carico atteso dalla banca | **529.887,94 €** |
+| **Delta** | **1.138,56 €** |
+
+Il delta è **interamente spiegato**, e sono tutte voci che il committente ha scelto di lasciare
+così:
+
+| Voce | € |
+|---|---:|
+| BTP 01/03/35 — rateo + commissioni non scorporati | 665,02 |
+| BTP 1/3/32 — idem | 425,94 |
+| Prezzi a 2 decimali nel file d'origine | 47,60 |
+| **Totale** | **1.138,56** |
+
+**Nessuno scostamento macroscopico residuo.** Le posizioni trasferite tornano al centesimo con la
+banca (BTP 17-11-28 → 81.659,20 contro 81.659,19; BTP FUT 16-11-33 e 27-04-37 **esatti**).
+
+> **Nota su un falso allarme.** Le «3 tranche per titolo» non sono un bug: sono **tre righe vere
+> nel file**, una successione divisa fra eredi, ciascuna col suo prezzo. Il piano ha rischiato di
+> inseguire un fantasma qui.
+
+---
+
+## 5. Verifiche già eseguite (tutte verdi)
+
+| Comando | Esito |
+|---|---|
+| `./dev.py test external brim-providers` | **484** passati |
+| `vitest` (frontend) | **598** passati su 54 file |
+| `./dev.py front check` | **0 errori / 0 warning** |
+| `./dev.py front build` | ok |
+| `./dev.py mkdocs build` | 0 warning, 0 link rotti, i18n it/fr/es |
+| `black` + `ruff` sui file toccati | puliti |
+| Rilevatore B10 su **12 file reali** (~2.100 righe) | **1 solo allarme**, riga giusta, 0 falsi positivi |
+
+---
+
+## 6. ⏳ Task residui — sono **tutti** di test
+
+> **Nessun task di produzione è aperto.** Come per P3, quanto segue è la formalizzazione
+> rinviata per decisione del committente: niente test UI durante lo sviluppo.
+
+### ⚠️ Vincolo di coordinamento — la suite va **una sola**
+
+Vale integralmente quanto scritto nel riepilogo di P3: gli E2E dei due piani condividono la
+porta backend **6041**, la **5173** del frontend e **lo stesso database di test**, quindi non
+possono girare in parallelo.
+
+Ma c'è di più, ed è la ragione per cui i due piani vanno chiusi insieme: **P1 e P3 attraversano
+lo stesso wizard, nello stesso ordine**. Un import Crédit Agricole passa *necessariamente* per lo
+step di unificazione asset di P3; e lo step di correzione di P1 **deriva il proprio picker dalle
+risoluzioni di P3**. Non sono due suite che si sovrappongono: è **un solo percorso** che i due
+piani hanno costruito da capi opposti.
+
+### G‑01 — Il percorso end-to-end Crédit Agricole
+
+1. Import del file *Lista Movimenti Conto*: gli step condizionali `assets`, `fix` e `duplicates`
+   compaiono tutti e tre.
+2. Una riga `COMPRAVENDITA` con quantità ricavabile dalle cedole diventa **BUY** da sola.
+3. Una riga `COMPRAVENDITA` su un fondo (niente cedole) resta **blocker**: si sceglie il titolo e
+   si scrive la quantità.
+4. Il **disinvestimento via bonifico** compare come blocker; i tre decoy (IRPEF, rimborso energia,
+   ricompense) **non** compaiono.
+5. Si ritipizza in **SELL**: la quantità esce **negativa** senza che l'utente scriva il segno.
+6. Lo **scorporo a N voci** produce gambe la cui somma è esattamente l'importo della riga.
+7. Il ricontrollo duplicati **non** va in errore con righe ancora irrisolte in lista.
+8. Il validatore finale intercetta una quantità sbagliata (posizione in negativo).
+
+### G‑02 — Regressioni che sono già state sbagliate una volta
+
+Non sono ipotesi: ognuna corrisponde a un difetto realmente trovato in beta.
+
+1. **Riaprire una riga decisa non la fa sparire** (fuori pista 7).
+2. **«Tieni com'è» azzera prima di accettare** — altrimenti la riga resta corretta sotto
+   un'etichetta che lo nega.
+3. **Un asset inattivo si apre dall'ispeziona del wizard** (fuori pista 5).
+4. **L'avviso «titolo scaduto» compare anche dal layout conto** (B9).
+5. **Le cedole lorde + gamba TAX sommano al netto della banca** (B4).
+6. **Un acquisto alla pari non genera avvisi** — il bersaglio è *pochi allarmi*, non *molti*.
+
+### G‑03 — Copertura E2E mancante, misurata
+
+Come per P3, nessuno dei `data-testid` introdotti da P1 compare negli spec esistenti:
+
+| `data-testid` | Spec che lo usano |
+|---|---|
+| `import-wizard-step-fix` | **0** |
+| `fix-step-split-kind` | **0** |
+| `asset-import-notice` | **0** |
+| `import-wizard-recheck-openings` | **0** |
+
+Gli spec da estendere sono gli stessi di P3 — `tx-brim-import.spec.ts` e
+`tx-import-resolution.spec.ts` — e **quest'ultimo descrive il flusso a 5 step, ormai superato**.
+Va riallineato ai 7 step condizionali *prima* di aggiungerci casi, o si costruisce sopra un
+modello che non esiste più.
+
+### G‑04 — Validazione finale congiunta
+
+`./dev.py front check` · backend `--filter brim` e `--filter asset` · frontend `--filter import` ·
+`i18n audit` · **`./dev.py api sync` una volta sola**, concordata fra i due piani (le modifiche
+API sono di entrambi).
+
+---
+
+## 7. Punti lasciati aperti di proposito
+
+| Punto | Stato |
+|---|---|
+| `fx/[pair]/+page.svelte:686` usa ancora `/assets/all` | Fuori ambito: è un percorso di coppie valutarie, non di strumenti |
+| Il `reason` dell'avviso di scadenza è **italiano hard-coded** nel plugin (`broker_credit_agricole.py:377`) | Debito i18n dichiarato. Titolo e piè di pagina sono già localizzati sul `kind`; solo il bullet no |
+| Asset 50 `Btpi Tf 0,15% Mg51` porta le cedole di `BTP 05/26 0.55FOICUM` | Sollevato una volta; il committente ha confermato che gli ISIN in prod sono corretti (quelli del file sono i codici d'emissione). **Non richiuso** |
+| `AssetModal.svelte:668/788` usa `toLowerCase()` grezzo invece di `normalizeAssetName` | Deriva nota, segnalata dal riepilogo di P3 come «nel percorso di P1». Non corretta |
+| I due BTP col rateo non scorporato | **Scelta del committente** («tieni com'è»). Sono 1.090,96 € dei 1.138,56 € di delta: scorporandoli il conto va a zero |

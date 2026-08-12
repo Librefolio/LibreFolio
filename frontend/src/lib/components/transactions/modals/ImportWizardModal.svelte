@@ -22,6 +22,9 @@
     import {isFakeAssetId, FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';
     import {getIndexColor, getStringColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
+    import IdentifierPrimaryChooser from '$lib/components/assets/IdentifierPrimaryChooser.svelte';
+    import {pendingIdentifier, needsPrimaryChoice, mergeOther, demotedValues} from '$lib/utils/assetIdentifiers';
+    import {electPrimary, groupExtractedAssets, groupSignature, orderedIdentifiers, representativeMap, representativeOf, type AssetGroup, type ExtractedAsset, type GroupOverride, type IdentifierKind, type PrimaryMap, type SimilarityLink} from '$lib/utils/assetGrouping';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import {getTransactionTypeIconUrl, getTypeRule, ensureTypesLoaded, TX_TYPES} from '$lib/stores/transactions/transactionTypeStore';
 
@@ -40,6 +43,7 @@
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
+    import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
@@ -50,11 +54,13 @@
     import type {BrimDuplicateMatch, BrimNotice} from '$lib/types/files';
     import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
     import FixFlaggedStep, {type FixPatch} from '$lib/components/transactions/import/FixFlaggedStep.svelte';
+    import AssetGroupStep from '$lib/components/transactions/import/AssetGroupStep.svelte';
+    import AssetMergeModal from '$lib/components/assets/AssetMergeModal.svelte';
     import TransactionCompareModal from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {CompareColumn, CompareField, CompareCell} from '$lib/components/transactions/modals/TransactionCompareModal.svelte';
     import type {TXReadItem} from '$lib/components/transactions';
     import {txStoreGet} from '$lib/stores/transactions/txStore.svelte';
-    import type {ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
+    import {applySignRules, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
 
@@ -93,16 +99,21 @@
      * without reading — which is exactly the habit that makes a review step useless.
      *
      * Order matters and encodes the invariant that motivated the split: nothing is
-     * compared against the database until the data is complete. Understand → correct →
-     * compare → review. An `assets` step ("Unifica asset") belongs between `analyze`
-     * and `fix`; add it to STEP_DEFS and to `stepIsActive` when it lands.
+     * compared against the database until the data is complete. Understand → unify →
+     * correct → compare → review.
+     *
+     * `assets` sits before `fix` deliberately. The correction step asks the user to attach an
+     * asset to a flagged row, and its list is derived from the resolutions: unify afterwards and
+     * the same security would appear twice there, indistinguishable, so half the rows would land
+     * on half the instrument. Unifying first makes that choice unambiguous and asks it once.
      */
-    type StepId = 'upload' | 'select' | 'analyze' | 'fix' | 'duplicates' | 'review';
+    type StepId = 'upload' | 'select' | 'analyze' | 'assets' | 'fix' | 'duplicates' | 'review';
 
     const STEP_DEFS: ReadonlyArray<{id: StepId; titleKey: string}> = [
         {id: 'upload', titleKey: 'step1Title'},
         {id: 'select', titleKey: 'step2Title'},
         {id: 'analyze', titleKey: 'step3Title'},
+        {id: 'assets', titleKey: 'stepAssetsTitle'},
         {id: 'fix', titleKey: 'stepFixTitle'},
         {id: 'duplicates', titleKey: 'stepDuplicatesTitle'},
         {id: 'review', titleKey: 'step4Title'},
@@ -277,6 +288,18 @@
         tier: DuplicateTier;
     }
 
+    /**
+     * One asset to resolve — after unification, **one per security**, not one per file.
+     *
+     * The wizard allocates a fake id per instrument per file, so the same BTP read from two
+     * layouts used to arrive here twice: two identical entries in every picker, two candidate
+     * searches, and two duplicates created at the end. The grouping step folds those members into
+     * a single resolution whose `extracted*` fields are the representative's and whose `group*`
+     * fields carry the **union** of everything the members knew.
+     *
+     * The union is provenance-ordered, not preference-ordered: electing which ISIN leads belongs
+     * to the second stage, when the group meets a database asset that has its own to defend.
+     */
     interface AssetResolution {
         fakeAssetId: number;
         extractedSymbol: string | null;
@@ -287,6 +310,17 @@
         txCount: number;
         sourceFiles: string[];
         notices: Array<{kind: string; reason: string}>;
+        /** Every code the group carries, representative included. */
+        groupIsins: string[];
+        groupSymbols: string[];
+        groupNames: string[];
+        /** The per-file assets folded into this one. A lone asset has exactly one. */
+        groupMembers: ExtractedAsset[];
+        groupState: AssetGroup['state'];
+        groupLinks: SimilarityLink[];
+        /** The user already elected the leading code on the unification step: do not ask again. */
+        groupPrimaryIsin: boolean;
+        groupPrimarySymbol: boolean;
     }
 
     const QUANTITY_TOLERANCE = 0.0001;
@@ -565,6 +599,25 @@
 
     let mergedTransactions = $state<MergedTx[]>([]);
     let assetResolutions = $state<AssetResolution[]>([]);
+
+    /*
+     * Unification state.
+     *
+     * `assetGroupOverride` holds the user's partition once they have touched the layout. It is a
+     * whole partition rather than a delta because the automatic grouping is recomputed from
+     * scratch on every re-merge, and a delta against a partition that no longer exists cannot be
+     * replayed. Members are addressed by content key, since fake ids are reallocated each time.
+     */
+    let assetGroups = $state<AssetGroup[]>([]);
+    let assetGroupOverride = $state<GroupOverride>(null);
+    /** Signatures of proposals the user accepted as they stood, without reshaping anything. */
+    let assetGroupConfirmed = $state<Set<string>>(new Set());
+    /**
+     * Which code leads its kind, per group. Keyed by cluster signature so the choice outlives the
+     * fake ids; the elected value is moved to the front of the group's list, which is how it
+     * reaches the creation form and the search hints without any of them learning a new concept.
+     */
+    let assetGroupPrimary = $state<PrimaryMap>({});
     let duplicateGroups = $state<DuplicateGroup[]>([]);
     let duplicateFilePriorityIds = $state<string[]>([]);
     let duplicateResolverTouchedKeys = $state<Set<string>>(new Set());
@@ -608,6 +661,17 @@
     /** True once the duplicate report has been recomputed on the corrected transactions. */
     let duplicateRecheckDone = $state(false);
     let createAssetForFakeId = $state<number | null>(null);
+    /**
+     * Which code leads on an asset about to be created from a unified group.
+     *
+     * A group that absorbed two files can carry two ISINs — the retail bond's non-tradeable
+     * issue code and its quoted one — and picking either by position would be a coin toss with
+     * a real cost: only the quoted code can ever return a price. So the question is asked once,
+     * before the form opens, and the form then arrives already correct.
+     */
+    let createPrimaryIsin = $state<string | null>(null);
+    let createPrimarySymbol = $state<string | null>(null);
+    let createPrimaryPending = $state<'identifier_isin' | 'identifier_ticker' | null>(null);
     let createBrokerOpen = $state(false);
     /** Tracks which context opened the create-broker modal: 'global' or a pendingFile id */
     let createBrokerContext = $state<'global' | string | null>(null);
@@ -644,17 +708,61 @@
     let nwCompareResetKept = $state<string[] | undefined>(undefined);
     let nwCompareOnKeep = $state<((keptIds: string[]) => void) | undefined>(undefined);
 
-    // Add-identifier prompt state — shown when user manually resolves an asset that is missing the extracted identifier
+    /*
+     * Add-identifier prompt — raised when the asset the user just picked does not already carry
+     * the identifier the report quoted.
+     *
+     * Two shapes, one modal:
+     *  - the asset holds no code of that type → a plain "save it as the primary?" confirmation;
+     *  - it holds a different one → `IdentifierPrimaryChooser`, because the right answer is never
+     *    to throw one away. An Italian retail bond bought at issue quotes its non-tradeable CUM
+     *    code in the report while the asset already holds the quoted one: both must survive, one
+     *    leads.
+     */
     let identifierPromptOpen = $state(false);
     let identifierPromptAssetId = $state<number | null>(null);
     let identifierPromptFakeAssetId = $state<number | null>(null);
     let identifierPromptField = $state<'identifier_ticker' | 'identifier_isin' | null>(null);
-    let identifierPromptValue = $state<string | null>(null);
+    /** The codes the group offers that the asset does not know. More than one after unification. */
+    let identifierPromptValues = $state<string[]>([]);
     let identifierPromptAssetName = $state<string | null>(null);
     let identifierPromptSaving = $state(false);
-    /** true = asset already has a different identifier (conflict); false = identifier missing (add) */
+    /** true = there is an election to hold (a stored code, or several offered) → chooser shown. */
     let identifierPromptIsConflict = $state(false);
+    /** Normalised: an empty column reads as `null`, never `''`, or every blank looks like a clash. */
     let identifierPromptExistingValue = $state<string | null>(null);
+    /** The asset's current `identifier_other`: the PATCH replaces the list, so it must travel whole. */
+    let identifierPromptExistingOther = $state<string[]>([]);
+    /** Extra search keys to merge in the same PATCH — the reuse-existing flow feeds these. */
+    let identifierPromptExtraOther = $state<string[]>([]);
+    /** The value elected as primary (bound to `IdentifierPrimaryChooser`). */
+    let identifierPromptPrimary = $state<string | null>(null);
+    /** Fields already settled in this chain, so a second pass cannot re-ask the same question. */
+    let identifierPromptSettled = $state<string[]>([]);
+    /**
+     * Cancel means "wrong asset" when the user reached the prompt by picking one from the list,
+     * so the row goes back to unresolved. After *creating* an asset there is nothing to undo —
+     * it exists, and unbinding it would only orphan it.
+     */
+    let identifierPromptClearOnCancel = $state(true);
+
+    /**
+     * Button labels for the two shapes of the prompt. Kept as plain `$t` calls rather than
+     * ternaries inside the markup so the i18n audit can see every key it needs to account for.
+     */
+    let identifierPromptLabels = $derived(
+        identifierPromptIsConflict
+            ? {
+                  cancel: $t('assets.identifiers.primaryChooser.cancel'),
+                  skip: $t('assets.identifiers.primaryChooser.skip'),
+                  confirm: $t('assets.identifiers.primaryChooser.confirm'),
+              }
+            : {
+                  cancel: $t('common.cancel'),
+                  skip: $t('importWizard.addIdentifier.skip'),
+                  confirm: $t('importWizard.addIdentifier.confirm'),
+              },
+    );
 
     function getBrokerIdForTx(mt: MergedTx): number | null {
         return parseResults.find((r) => r.fileId === mt.sourceFileId)?.brokerId ?? null;
@@ -761,6 +869,8 @@
     function mergeAllTransactions() {
         const txArr: MergedTx[] = [];
         const assetMap = new Map<number, AssetResolution>();
+        /** Which file each global fake id came from — the grouping layer needs the provenance. */
+        const fileIdOfFake = new Map<number, string>();
         let globalIndex = 0;
         // Global unique fake-id allocator. Each source file's plugin emits fake ids from the
         // same FAKE_ASSET_ID_BASE downward, so ids collide across files. Re-map every file's
@@ -779,7 +889,7 @@
             for (const ft of resp.field_todos ?? []) {
                 const idx = (ft as any).tx_index as number;
                 const list = todosMap.get(idx) ?? [];
-                list.push({field: (ft as any).field, severity: (ft as any).severity, reasonCode: (ft as any).reason_code, message: (ft as any).message, evidence: (ft as any).evidence ?? []});
+                list.push({field: (ft as any).field, severity: (ft as any).severity, reasonCode: (ft as any).reason_code, message: (ft as any).message, evidence: (ft as any).evidence ?? [], context: (ft as any).context ?? undefined});
                 todosMap.set(idx, list);
             }
 
@@ -828,6 +938,7 @@
                     if (globalFakeId === undefined) {
                         globalFakeId = nextFakeId--;
                         fakeRemap.set(origAssetId, globalFakeId);
+                        fileIdOfFake.set(globalFakeId, result.fileId);
                         const mapping = (resp.asset_mappings ?? []).find((m: any) => m.fake_asset_id === origAssetId);
                         if (mapping) {
                             const candidates = (mapping.candidates ?? []) as AssetResolution['candidates'];
@@ -843,6 +954,14 @@
                                 txCount: 0,
                                 sourceFiles: [],
                                 notices: ((mapping.notices ?? []) as Array<{kind?: string; reason?: string}>).map((n) => ({kind: String(n.kind ?? ''), reason: String(n.reason ?? '')})),
+                                groupIsins: [],
+                                groupSymbols: [],
+                                groupNames: [],
+                                groupMembers: [],
+                                groupState: 'single',
+                                groupLinks: [],
+                                groupPrimaryIsin: false,
+                                groupPrimarySymbol: false,
                             });
                         }
                     }
@@ -861,6 +980,11 @@
             }
         }
 
+        // Unification runs *before* anything else looks at assets: the duplicate report, the
+        // correction step and the review all read the resulting list, so a partition applied
+        // later would mean asking the user to pick an asset twice.
+        applyAssetGrouping(txArr, assetMap, fileIdOfFake);
+
         syncDuplicateFilePriority();
         rebuildDuplicateGroups(txArr, assetMap);
 
@@ -874,6 +998,81 @@
         mergedTransactions = txArr;
         assetResolutions = [...assetMap.values()];
         step4ShowResolveSection = assetMap.size > 0;
+    }
+
+    /**
+     * Fold the per-file extracted assets into one resolution per security, rewriting the
+     * transactions of the folded members onto the survivor.
+     *
+     * Rewriting `tx.asset_id` rather than keeping a parallel lookup is what makes the rest of the
+     * wizard correct for free: the duplicate detector finally sees two files' rows as the same
+     * instrument, the correction step's picker lists the security once, and the final import
+     * needs no translation table.
+     */
+    function applyAssetGrouping(txArr: MergedTx[], assetMap: Map<number, AssetResolution>, fileIdOfFake: Map<number, string>) {
+        const extracted: ExtractedAsset[] = [...assetMap.values()].map((res) => {
+            const fileId = fileIdOfFake.get(res.fakeAssetId) ?? '';
+            return {
+                fakeAssetId: res.fakeAssetId,
+                fileId,
+                fileName: parseResults.find((r) => r.fileId === fileId)?.fileName ?? fileId,
+                name: res.extractedName,
+                isin: res.extractedIsin,
+                symbol: res.extractedSymbol,
+            };
+        });
+
+        const groups = groupExtractedAssets(extracted, assetGroupOverride, assetGroupConfirmed);
+        assetGroups = groups;
+        const survivorOf = representativeMap(groups);
+
+        for (const group of groups) {
+            const lead = representativeOf(group.members);
+            const leadRes = assetMap.get(lead.fakeAssetId);
+            if (!leadRes) continue;
+            const primary = assetGroupPrimary[groupSignature(group)];
+            const identifiers = orderedIdentifiers(group.members, primary);
+
+            leadRes.groupIsins = identifiers.isins;
+            leadRes.groupSymbols = identifiers.symbols;
+            leadRes.groupNames = identifiers.names;
+            leadRes.groupMembers = group.members;
+            leadRes.groupState = group.state;
+            leadRes.groupLinks = group.links;
+            leadRes.groupPrimaryIsin = primary?.isin !== undefined;
+            leadRes.groupPrimarySymbol = primary?.symbol !== undefined;
+
+            for (const member of group.members) {
+                if (member.fakeAssetId === lead.fakeAssetId) continue;
+                const folded = assetMap.get(member.fakeAssetId);
+                if (!folded) continue;
+                // A member may have been the only one the backend could match: keep its
+                // candidates and its binding rather than losing them with the entry.
+                leadRes.candidates = mergeCandidates(leadRes.candidates, folded.candidates);
+                leadRes.resolvedAssetId = leadRes.resolvedAssetId ?? folded.resolvedAssetId;
+                leadRes.notices = [...leadRes.notices, ...folded.notices];
+                assetMap.delete(member.fakeAssetId);
+            }
+        }
+
+        // Rewriting the bindings through the map rather than per group is what keeps the two
+        // representations from drifting: a row can only point at a fake id the map knows.
+        for (const mt of txArr) {
+            const current = (mt.tx as {asset_id?: number | null}).asset_id;
+            if (typeof current !== 'number') continue;
+            const survivor = survivorOf.get(current);
+            if (survivor !== undefined && survivor !== current) (mt.tx as {asset_id?: number | null}).asset_id = survivor;
+        }
+    }
+
+    /** Union of two candidate lists, keeping the strongest confidence seen for each asset. */
+    function mergeCandidates(a: AssetResolution['candidates'], b: AssetResolution['candidates']): AssetResolution['candidates'] {
+        const byId = new Map<number, AssetResolution['candidates'][number]>();
+        for (const candidate of [...a, ...b]) {
+            const existing = byId.get(candidate.asset_id);
+            if (!existing || (CONF_ORDER[candidate.match_confidence] ?? 9) < (CONF_ORDER[existing.match_confidence] ?? 9)) byId.set(candidate.asset_id, candidate);
+        }
+        return [...byId.values()].sort((x, y) => (CONF_ORDER[x.match_confidence] ?? 9) - (CONF_ORDER[y.match_confidence] ?? 9));
     }
 
     /** Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly. */
@@ -925,19 +1124,30 @@
         const verdict = new Map<number, {status: DuplicateStatus; matches: BrimDuplicateMatch[]}>();
         try {
             for (const [brokerId, rows] of byBroker) {
-                const payload = rows.map((m) => {
-                    const clone = {...m.tx} as TransactionCreateItem;
-                    const aid = typeof clone.asset_id === 'number' ? clone.asset_id : null;
-                    // An unresolved fake id would be compared as a literal id that matches
-                    // nothing — send null so the row is compared on its other fields.
-                    if (aid !== null && isFakeAssetId(aid)) {
-                        (clone as {asset_id?: number | null}).asset_id = resolvedByFakeId.get(aid) ?? null;
-                    }
-                    return clone;
-                });
+                // A row whose instrument is still unresolved is left out of the question
+                // entirely. Sending it with a null asset is not a neutral choice: the API
+                // validates the payload as real transactions, and a BUY or an ADJUSTMENT
+                // without an asset is rejected outright — one unresolved instrument used to
+                // fail the whole re-check with a 422 and fall back to the stale verdict.
+                // Nor could such a row match anything: with no instrument there is nothing
+                // for the database comparison to key on.
+                const asked = rows
+                    .map((m) => {
+                        const clone = {...m.tx} as TransactionCreateItem;
+                        const aid = typeof clone.asset_id === 'number' ? clone.asset_id : null;
+                        if (aid !== null && isFakeAssetId(aid)) {
+                            (clone as {asset_id?: number | null}).asset_id = resolvedByFakeId.get(aid) ?? null;
+                        }
+                        return {row: m, clone};
+                    })
+                    .filter(({clone}) => {
+                        if ((clone as {asset_id?: number | null}).asset_id !== null && (clone as {asset_id?: number | null}).asset_id !== undefined) return true;
+                        return getTypeRule(String((clone as {type?: string}).type ?? '')).assetField !== 'required';
+                    });
+                if (asked.length === 0) continue;
                 const report = await zodiosApi.check_duplicates_api_v1_brokers_import_duplicates_post({
                     broker_id: brokerId,
-                    transactions: payload as never,
+                    transactions: asked.map(({clone}) => clone) as never,
                 });
                 const pendingDeleteSet = new Set(pendingDeleteTxIds);
                 const record = (entries: unknown[], status: DuplicateStatus) => {
@@ -946,7 +1156,7 @@
                         const surviving = all.filter((mm) => !pendingDeleteSet.has(mm.existing_tx_id));
                         // Every DB match is queued for deletion ⇒ nothing left to collide with.
                         if (all.length > 0 && surviving.length === 0) continue;
-                        const row = rows[raw.tx_row_index];
+                        const row = asked[raw.tx_row_index]?.row;
                         if (row) verdict.set(row.index, {status, matches: surviving});
                     }
                 };
@@ -1001,41 +1211,123 @@
         assetResolutions = assetResolutions.map((r) => (r.fakeAssetId === fakeAssetId ? {...r, resolvedAssetId: null} : r));
     }
 
-    /** All identified names for a resolution (extracted name + candidate names, deduped). */
+    /**
+     * Every name this resolution answers to: the group's names (elected one first, and any
+     * rename the user typed) plus the candidate names. They become search keys, so breadth is
+     * what matters here — a name that identified the instrument in *any* file must survive.
+     */
     function createNamesFor(res: AssetResolution | undefined): string[] {
-        return res ? [...new Set([res.extractedName, ...(res.candidates ?? []).map((c) => c.name)].filter((n): n is string => !!n && n.trim() !== ''))] : [];
+        return res ? [...new Set([...res.groupNames, res.extractedName, ...(res.candidates ?? []).map((c) => c.name)].filter((n): n is string => !!n && n.trim() !== ''))] : [];
+    }
+
+    /**
+     * Open the creation form for a resolution, electing the leading code first when the group
+     * offers more than one and nobody has ruled yet.
+     *
+     * The unification step is where the choice belongs — the codes are on screen there, next to
+     * the files that carried them. This prompt is the fallback for the user who walked past it.
+     */
+    function startCreateAsset(res: AssetResolution) {
+        createPrimaryIsin = null;
+        createPrimarySymbol = null;
+        createAssetForFakeId = res.fakeAssetId;
+        if (res.groupIsins.length > 1 && !res.groupPrimaryIsin) {
+            createPrimaryPending = 'identifier_isin';
+            identifierPromptPrimary = res.groupIsins[0];
+        } else if (res.groupSymbols.length > 1 && !res.groupPrimarySymbol) {
+            createPrimaryPending = 'identifier_ticker';
+            identifierPromptPrimary = res.groupSymbols[0];
+        } else {
+            createPrimaryPending = null;
+        }
+    }
+
+    /** Record the elected code and move on to the ticker if it too is contested. */
+    function confirmCreatePrimary() {
+        const res = assetResolutions.find((r) => r.fakeAssetId === createAssetForFakeId);
+        if (!res) return;
+        if (createPrimaryPending === 'identifier_isin') {
+            createPrimaryIsin = identifierPromptPrimary;
+            if (res.groupSymbols.length > 1 && !res.groupPrimarySymbol) {
+                createPrimaryPending = 'identifier_ticker';
+                identifierPromptPrimary = res.groupSymbols[0];
+                return;
+            }
+        } else if (createPrimaryPending === 'identifier_ticker') {
+            createPrimarySymbol = identifierPromptPrimary;
+        }
+        createPrimaryPending = null;
+    }
+
+    /** Everything the group knows that is not the elected primary, ready for `identifier_other`. */
+    function createOtherFor(res: AssetResolution | undefined, primaryIsin: string | null, primarySymbol: string | null): string[] {
+        if (!res) return [];
+        const norm = (v: string) => v.trim().toUpperCase();
+        const rest = [...res.groupIsins.filter((v) => norm(v) !== norm(primaryIsin ?? '')), ...res.groupSymbols.filter((v) => norm(v) !== norm(primarySymbol ?? ''))];
+        return [...new Set([...createNamesFor(res), ...rest])];
     }
 
     /**
      * Wizard create flow: the user selected a search result whose provider name matches an
      * existing asset and chose to reuse it (instead of creating a duplicate). Bind the fake id
-     * to the existing asset and, if requested, merge the import's search keys into its
-     * identifier_other (client-side union — the PATCH replaces the list, so send the full set).
+     * to the existing asset and, if requested, merge the import's identity into it.
+     *
+     * "Search keys" used to mean names only, so the ISIN and the ticker the report carried were
+     * dropped on the floor — and the next import of the same file asked the very same question
+     * again. They now go through the identifier prompt, which knows the difference between a code
+     * the asset is *missing* (it becomes the primary: an asset with no ISIN cannot be quoted) and
+     * one that *competes* with a code it already holds (the user elects, nothing is lost).
      */
     async function reuseExistingForCreate(existingAssetId: number, addKeys: boolean) {
         const fakeId = createAssetForFakeId;
         if (fakeId === null) return;
         const res = assetResolutions.find((r) => r.fakeAssetId === fakeId);
-        const names = createNamesFor(res);
         resolveAsset(fakeId, existingAssetId);
         createAssetForFakeId = null;
-        if (addKeys && names.length > 0) {
-            try {
-                const info = getAssetInfo(existingAssetId);
-                const current = info?.identifier_other ?? [];
-                const union = [...new Set([...current, ...names])];
-                await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: existingAssetId, identifier_other: union}]);
-                toasts.success($t('importWizard.reuseExisting.success'));
-                await refreshAllAssets();
-            } catch {
-                toasts.error($t('importWizard.reuseExisting.error'));
-            }
+        if (!addKeys || !res) {
+            await refreshCandidates(fakeId);
+            return;
         }
-        await refreshCandidates(fakeId);
+        await checkAndPromptIdentifier(fakeId, existingAssetId, res, {clearOnCancel: false, extraOther: createNamesFor(res)});
     }
 
     /** Confidence sort order for sorting candidates list. Keys match the API's lowercase enum values. */
     const CONF_ORDER: Record<string, number> = {exact: 0, high: 1, medium: 2, low: 3};
+
+    /**
+     * Two identifier-grade candidates for one extracted security almost always means the database
+     * holds the same instrument twice — typically the very duplicate an earlier import created
+     * before the identifier could be saved. Name matches are excluded: two funds from one issuer
+     * legitimately read alike, and offering to merge them would be dangerous advice.
+     *
+     * This is the moment the two are side by side, so it is the moment the fix costs least.
+     */
+    function duplicateCandidates(res: AssetResolution): AssetResolution['candidates'] {
+        const strong = res.candidates.filter((c) => c.match_confidence.toLowerCase() === 'exact' || c.match_confidence.toLowerCase() === 'high');
+        return strong.length >= 2 ? strong : [];
+    }
+
+    /** Asset offered for folding in the merge modal, opened from a resolution card. */
+    let mergeSourceAsset = $state<{id: number; display_name: string} | null>(null);
+    let mergeForFakeAssetId = $state<number | null>(null);
+
+    function openMergeFromCard(res: AssetResolution) {
+        const strong = duplicateCandidates(res);
+        // Fold the one the user is *not* keeping: the bound asset is their stated answer.
+        const source = strong.find((c) => c.asset_id !== res.resolvedAssetId) ?? strong[1];
+        if (!source) return;
+        mergeForFakeAssetId = res.fakeAssetId;
+        mergeSourceAsset = {id: source.asset_id, display_name: source.name ?? source.isin ?? `#${source.asset_id}`};
+    }
+
+    async function onCardMerged(targetId: number) {
+        const fakeId = mergeForFakeAssetId;
+        mergeSourceAsset = null;
+        mergeForFakeAssetId = null;
+        if (fakeId === null) return;
+        resolveAsset(fakeId, targetId);
+        await refreshCandidates(fakeId);
+    }
 
     /**
      * Replace candidates for a specific fakeAssetId with fresh results from the backend.
@@ -1045,14 +1337,31 @@
         const res = assetResolutions.find((r) => r.fakeAssetId === fakeAssetId);
         if (!res) return;
         try {
-            const fresh = await zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post({
-                extracted_symbol: res.extractedSymbol ?? undefined,
-                extracted_isin: res.extractedIsin ?? undefined,
-                extracted_name: res.extractedName ?? undefined,
-            });
+            // Search on every code the group carries, not just the representative's. A unified
+            // bond holds its issue code and its quoted one; querying one of them would quietly
+            // narrow the very union the unification step just built.
+            const isins = res.groupIsins.length > 0 ? res.groupIsins : [res.extractedIsin ?? ''];
+            const symbols = res.groupSymbols.length > 0 ? res.groupSymbols : [res.extractedSymbol ?? ''];
+            const queries = Math.max(isins.length, symbols.length);
+            let fresh: Awaited<ReturnType<typeof zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post>> = [];
+            for (let i = 0; i < queries; i++) {
+                const batch = await zodiosApi.get_asset_candidates_api_v1_brokers_import_asset_candidates_post({
+                    extracted_symbol: symbols[i] || undefined,
+                    extracted_isin: isins[i] || undefined,
+                    extracted_name: res.extractedName ?? undefined,
+                });
+                fresh = [...fresh, ...batch];
+            }
             // Sort by confidence and replace candidates in state
+            const seenAssetIds = new Set<number>();
             const sorted: AssetResolution['candidates'] = [...fresh]
                 .sort((a, b) => (CONF_ORDER[a.match_confidence] ?? 9) - (CONF_ORDER[b.match_confidence] ?? 9))
+                .filter((c) => {
+                    // Sorted first, so the entry kept is the strongest confidence for that asset.
+                    if (seenAssetIds.has(c.asset_id)) return false;
+                    seenAssetIds.add(c.asset_id);
+                    return true;
+                })
                 .map((c) => ({asset_id: c.asset_id, symbol: (Array.isArray(c.symbol) ? (c.symbol[0] ?? null) : c.symbol) as string | null, isin: (Array.isArray(c.isin) ? (c.isin[0] ?? null) : c.isin) as string | null, name: c.name, match_confidence: c.match_confidence as string}));
             assetResolutions = assetResolutions.map((r) => {
                 if (r.fakeAssetId !== fakeAssetId) return r;
@@ -1077,67 +1386,130 @@
 
     /**
      * Check if a resolved asset is missing the extracted identifier and, if so, open the prompt.
-     * Shared by resolveAssetManual and the oncreated callback (new asset from AssetModal).
+     * Shared by resolveAssetManual, the oncreated callback and the reuse-existing flow.
+     *
+     * `extraOther` are search keys to merge in the same PATCH as the decision; when there is
+     * nothing to decide they are still written, silently, because the user already asked for them.
      */
-    async function checkAndPromptIdentifier(fakeAssetId: number, realAssetId: number, res: AssetResolution) {
+    async function checkAndPromptIdentifier(fakeAssetId: number, realAssetId: number, res: AssetResolution, options: {clearOnCancel?: boolean; extraOther?: string[]; settled?: string[]} = {}) {
         let info = getAssetInfo(realAssetId);
         if (!info) {
             await refreshAllAssets();
             info = getAssetInfo(realAssetId);
             if (!info) return;
         }
-        // Priority: ISIN > symbol (ISIN is more precise)
-        let field: 'identifier_ticker' | 'identifier_isin' | null = null;
-        let value: string | null = null;
-        let existingValue: string | null = null;
-        if (res.extractedIsin && (!info.identifier_isin || info.identifier_isin !== res.extractedIsin)) {
-            field = 'identifier_isin';
-            value = res.extractedIsin;
-            existingValue = info.identifier_isin ?? null;
-        } else if (res.extractedSymbol && (!info.identifier_ticker || info.identifier_ticker !== res.extractedSymbol)) {
-            field = 'identifier_ticker';
-            value = res.extractedSymbol;
-            existingValue = info.identifier_ticker ?? null;
-        }
-        if (field && value) {
-            // Identifier missing or different — ask the user what to do before updating candidates.
-            identifierPromptAssetId = realAssetId;
-            identifierPromptFakeAssetId = fakeAssetId;
-            identifierPromptField = field;
-            identifierPromptValue = value;
-            identifierPromptAssetName = info.display_name ?? `#${realAssetId}`;
-            identifierPromptIsConflict = existingValue !== null;
-            identifierPromptExistingValue = existingValue;
-            identifierPromptOpen = true;
-        } else {
-            // Identifier already matches (or no extracted identifier) — refresh candidates from backend
-            // so confidence reflects current DB state.
+        const settled = options.settled ?? [];
+        const extraOther = options.extraOther ?? [];
+        const currentOther: string[] = Array.isArray(info.identifier_other) ? (info.identifier_other as string[]) : [];
+        // The whole group speaks, not just its representative: a unified BTP carries the CUM code
+        // and the quoted one, and offering only one of them would silently drop the other.
+        // ISIN before ticker: it is the more precise of the two, and one question at a time.
+        const isins = res.groupIsins.length > 0 ? res.groupIsins : [res.extractedIsin];
+        const symbols = res.groupSymbols.length > 0 ? res.groupSymbols : [res.extractedSymbol];
+        const pending = (settled.includes('identifier_isin') ? null : pendingIdentifier(isins, info.identifier_isin, currentOther, 'identifier_isin')) ?? (settled.includes('identifier_ticker') ? null : pendingIdentifier(symbols, info.identifier_ticker, currentOther, 'identifier_ticker'));
+
+        if (!pending) {
+            // Nothing to decide — but the search keys still have to land somewhere.
+            await mergeSearchKeys(realAssetId, currentOther, extraOther);
             await refreshCandidates(fakeAssetId);
+            return;
+        }
+
+        identifierPromptAssetId = realAssetId;
+        identifierPromptFakeAssetId = fakeAssetId;
+        identifierPromptField = pending.field;
+        identifierPromptValues = pending.extracted;
+        identifierPromptAssetName = info.display_name ?? `#${realAssetId}`;
+        identifierPromptIsConflict = needsPrimaryChoice(pending);
+        identifierPromptExistingValue = pending.existing;
+        identifierPromptExistingOther = currentOther;
+        identifierPromptExtraOther = extraOther;
+        identifierPromptSettled = settled;
+        // Default to what the asset already holds: the stored code is usually the quoted one,
+        // and demoting it without being asked is exactly the destructive act being removed here.
+        identifierPromptPrimary = pending.existing ?? pending.extracted[0];
+        identifierPromptClearOnCancel = options.clearOnCancel ?? true;
+        identifierPromptOpen = true;
+    }
+
+    /** Merge leftover search keys when the prompt had nothing to ask. The PATCH replaces the list. */
+    async function mergeSearchKeys(assetId: number, currentOther: string[], extra: string[]) {
+        const merged = mergeOther(currentOther, extra);
+        if (merged.length === currentOther.length) return;
+        try {
+            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: assetId, identifier_other: merged}]);
+            toasts.success($t('importWizard.reuseExisting.success'));
+            await refreshAllAssets();
+        } catch {
+            toasts.error($t('importWizard.reuseExisting.error'));
         }
     }
 
     /**
-     * Confirm the add-identifier prompt: PATCH the asset with the extracted identifier.
-     * After success, refresh the asset store and re-query candidates from the backend
-     * so confidence is derived from actual DB state — not assumed.
+     * Confirm the prompt: a single PATCH writes the elected primary and the full alternate list.
+     *
+     * Nothing is dropped. Whatever the user did not elect lands in `identifier_other`, where it no
+     * longer quotes but still *recognises* — which is what makes a dual-ISIN bond resolvable from
+     * either code on any future import. Then the store is refreshed (so the new code is visible to
+     * AssetSelect and to the second pass) and the candidates are re-queried, so confidence comes
+     * from the database rather than from an assumption.
      */
     async function confirmAddIdentifier() {
-        if (!identifierPromptAssetId || !identifierPromptField || !identifierPromptValue || identifierPromptFakeAssetId === null) return;
-        identifierPromptSaving = true;
+        const assetId = identifierPromptAssetId;
+        const field = identifierPromptField;
+        const extracted = identifierPromptValues;
         const fakeId = identifierPromptFakeAssetId;
+        if (assetId === null || !field || extracted.length === 0 || fakeId === null) return;
+
+        const primary = identifierPromptPrimary ?? extracted[0];
+        const demoted = demotedValues(primary, [identifierPromptExistingValue, ...extracted]);
+        const other = mergeOther(identifierPromptExistingOther, [...demoted, ...identifierPromptExtraOther]);
+
+        const res = assetResolutions.find((r) => r.fakeAssetId === fakeId);
+        const settled = [...identifierPromptSettled, field];
+        const clearOnCancel = identifierPromptClearOnCancel;
+        identifierPromptSaving = true;
         try {
-            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: identifierPromptAssetId, [identifierPromptField]: identifierPromptValue}]);
+            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([{asset_id: assetId, [field]: primary, identifier_other: other}]);
             toasts.success($t('importWizard.addIdentifier.success'));
-            // Refresh asset store (so ticker appears in AssetSelect and prompt won't re-fire)
-            // then re-query candidates from backend to get real confidence level.
             await refreshAllAssets();
-            await refreshCandidates(fakeId);
+            identifierPromptSaving = false;
+            identifierPromptOpen = false;
+            // A report can quote both an ISIN and a ticker; this pass settled one of the two.
+            if (res) await checkAndPromptIdentifier(fakeId, assetId, res, {clearOnCancel, settled});
+            else await refreshCandidates(fakeId);
         } catch {
             toasts.error($t('importWizard.addIdentifier.error'));
-        } finally {
             identifierPromptSaving = false;
             identifierPromptOpen = false;
         }
+    }
+
+    /**
+     * Cancel. Reaching the prompt by picking an asset from the list means cancelling is "wrong
+     * asset", so the row goes back to unresolved instead of silently keeping a binding the user
+     * just backed out of.
+     */
+    function cancelAddIdentifier() {
+        const fakeId = identifierPromptFakeAssetId;
+        const clear = identifierPromptClearOnCancel;
+        identifierPromptOpen = false;
+        if (clear && fakeId !== null) clearResolution(fakeId);
+    }
+
+    /**
+     * Keep the binding, decline the identifier — but still write the search keys. The user asked
+     * for those when they chose to reuse the asset, and declining one question is not declining
+     * both. Cancel is the gesture that discards everything.
+     */
+    async function skipAddIdentifier() {
+        const fakeId = identifierPromptFakeAssetId;
+        const assetId = identifierPromptAssetId;
+        const currentOther = identifierPromptExistingOther;
+        const extra = identifierPromptExtraOther;
+        identifierPromptOpen = false;
+        if (assetId !== null && extra.length > 0) await mergeSearchKeys(assetId, currentOther, extra);
+        if (fakeId !== null) await refreshCandidates(fakeId);
     }
 
     function buildFinalTxList(): Array<{tx: TransactionCreateItem; todos: ImportTodo[]}> {
@@ -1159,12 +1531,28 @@
         onImportBatch(creates);
     }
 
+    /**
+     * The one name a unified group answers to, everywhere it is shown.
+     *
+     * Order matters and is not arbitrary: the archive's own name wins once the group is bound,
+     * because that is the name the user will see forever after; then the name elected (or typed)
+     * on the unification step; only last the raw extraction of whichever file happened to be
+     * first. Labelling by the raw extraction is what made the corrections step look like it was
+     * still offering the pre-unification assets.
+     */
+    function resolutionLabel(res: AssetResolution): string {
+        if (res.resolvedAssetId !== null) {
+            const dbName = getAssetInfo(res.resolvedAssetId)?.display_name ?? res.candidates.find((c) => c.asset_id === res.resolvedAssetId)?.name;
+            if (dbName && dbName.trim() !== '') return dbName;
+        }
+        return res.groupNames[0] || res.extractedName || res.extractedSymbol || res.extractedIsin || `#${res.fakeAssetId}`;
+    }
+
     function getAssetDisplayName(assetId: number | null | undefined): string {
         if (assetId == null) return '—';
         if (isFakeAssetId(assetId)) {
             const res = assetResolutions.find((r) => r.fakeAssetId === assetId);
-            if (!res) return `#${assetId}`;
-            return res.extractedSymbol ?? res.extractedName ?? `#${assetId}`;
+            return res ? resolutionLabel(res) : `#${assetId}`;
         }
         return getAssetInfo(assetId)?.display_name ?? `#${assetId}`;
     }
@@ -2212,6 +2600,12 @@ ${arrow}<span>${label}</span></span>`,
         // Step 4 reset
         mergedTransactions = [];
         assetResolutions = [];
+        assetGroups = [];
+        // Only a full reset drops the user's unification: member keys are content-based, so a
+        // re-parse of the same files replays their decisions instead of asking again.
+        assetGroupOverride = null;
+        assetGroupConfirmed = new Set();
+        assetGroupPrimary = {};
         duplicateGroups = [];
         duplicateFilePriorityIds = [];
         duplicateResolverTouchedKeys = new Set();
@@ -2222,12 +2616,16 @@ ${arrow}<span>${label}</span></span>`,
         fixTxSnapshot = {};
         fixExpandedIndices = new Set();
         fixCreateAssetIndex = null;
+        fixCreateAssetQuery = '';
         fixCreatedAssets = {};
         duplicateRecheckRunning = false;
         duplicateRecheckDone = false;
         duplicateRecheckError = null;
         step4ShowResolveSection = true;
         createAssetForFakeId = null;
+        createPrimaryPending = null;
+        createPrimaryIsin = null;
+        createPrimarySymbol = null;
         editBrokerOpen = false;
         editBrokerId = null;
         editBrokerInitialData = {};
@@ -2289,8 +2687,18 @@ ${arrow}<span>${label}</span></span>`,
         return td.severity === 'warning' && td.field === 'asset_id';
     }
 
+    /**
+     * The file gave one amount where several things happened at once — a bond bought on the
+     * secondary market pays price, accrued interest and commissions in a single debit. The
+     * plugin will not invent the breakdown, but the user has it on their contract note, so
+     * the correction step offers to split the row once they type the net countervalue.
+     */
+    function isCashSplitWarning(td: ImportTodo): boolean {
+        return td.severity === 'warning' && (td.context as {split_hint?: string} | undefined)?.split_hint !== undefined;
+    }
+
     function isFixStepTodo(td: ImportTodo): boolean {
-        return isDupRelevantBlocker(td) || isUnallocatedAssetWarning(td);
+        return isDupRelevantBlocker(td) || isUnallocatedAssetWarning(td) || isCashSplitWarning(td);
     }
 
     /**
@@ -2326,10 +2734,85 @@ ${arrow}<span>${label}</span></span>`,
     let fixAnalysisAssets = $derived(
         assetResolutions.map((r) => ({
             id: r.fakeAssetId,
-            label: r.extractedName || r.extractedSymbol || r.extractedIsin || `#${r.fakeAssetId}`,
-            detail: [r.extractedSymbol, r.extractedIsin].filter(Boolean).join(' · '),
+            label: resolutionLabel(r),
+            // A unified entry shows every code it absorbed: two files, two ISINs, one instrument
+            // — and the user must be able to recognise it as the one they just unified.
+            detail: [...r.groupSymbols, ...r.groupIsins].join(' · ') || [r.extractedSymbol, r.extractedIsin].filter(Boolean).join(' · '),
+            // Already bound to an archived asset: the picker must not list it twice.
+            archiveId: r.resolvedAssetId,
         })),
     );
+
+    /** Transactions per member, so the unification step can weigh each group. */
+    let assetGroupTxCounts = $derived.by(() => {
+        const counts: Record<number, number> = {};
+        for (const mt of mergedTransactions) {
+            const id = (mt.tx as {asset_id?: number | null}).asset_id;
+            if (typeof id === 'number') counts[id] = (counts[id] ?? 0) + 1;
+        }
+        return counts;
+    });
+
+    /** Groups already bound to a real asset, so the step can offer the inspect pencil. */
+    let assetGroupResolvedIds = $derived.by(() => {
+        const ids: Record<number, number> = {};
+        for (const res of assetResolutions) if (res.resolvedAssetId !== null) ids[res.fakeAssetId] = res.resolvedAssetId;
+        return ids;
+    });
+
+    /**
+     * The archive's name for each bound group, so the unification step shows the same label the
+     * user will see everywhere else instead of whichever spelling one file happened to use.
+     */
+    let assetGroupResolvedNames = $derived.by(() => {
+        const names: Record<number, string> = {};
+        for (const res of assetResolutions) if (res.resolvedAssetId !== null) names[res.fakeAssetId] = resolutionLabel(res);
+        return names;
+    });
+
+    /**
+     * Store the user's partition and rebuild everything downstream from it.
+     *
+     * Re-merging is the right answer rather than patching the existing list in place: the fold
+     * rewrites transaction bindings, candidate unions and duplicate groups, and reproducing that
+     * by hand for one moved chip is how the two representations drift apart.
+     */
+    function applyGroupPartition(partition: string[][]) {
+        assetGroupOverride = partition;
+        mergeAllTransactions();
+    }
+
+    /** Accept a proposal as it stands — no reshaping, so the automatic partition still applies. */
+    function confirmGroupProposal(signature: string) {
+        assetGroupConfirmed = new Set([...assetGroupConfirmed, signature]);
+        mergeAllTransactions();
+    }
+
+    /** Promote one code to lead its kind for a group. */
+    function electGroupPrimary(signature: string, kind: IdentifierKind, value: string) {
+        assetGroupPrimary = electPrimary(assetGroupPrimary, signature, kind, value);
+        mergeAllTransactions();
+    }
+
+    /**
+     * Throw away every decision taken on this step and go back to what the engine proposes.
+     *
+     * The escape hatch matters because the partition is stored whole: once the user has touched
+     * anything the engine stops shaping the layout, so a few wrong drags leave a mess that no
+     * single undo can clear.
+     */
+    function resetGrouping() {
+        assetGroupOverride = null;
+        assetGroupConfirmed = new Set();
+        assetGroupPrimary = {};
+        mergeAllTransactions();
+    }
+
+    /** True once anything on the unification step has been decided by hand. */
+    let assetGroupingTouched = $derived(assetGroupOverride !== null || assetGroupConfirmed.size > 0 || Object.keys(assetGroupPrimary).length > 0);
+
+    /** Groups the engine is not confident enough to settle on its own. */
+    let assetGroupOpenProposals = $derived(assetGroups.filter((g) => g.state === 'proposed').length);
 
     /*
      * Collisions with the database are deliberately NOT listed here. They carry no
@@ -2351,29 +2834,114 @@ ${arrow}<span>${label}</span></span>`,
      * todos. The parse response itself is left untouched: it stays the plugin's objective
      * reading of the file, and a re-parse must be able to restore it.
      */
+    /**
+     * Index namespace for the legs the user carves out of a source row. A leg is not in the
+     * file, so it has no row of its own to be numbered by; keeping it far above the parse
+     * counter makes its index stable across re-applies (one leg per parent, replaced in
+     * place) and impossible to confuse with a row the plugin actually read.
+     */
+    const SPLIT_LEG_INDEX_BASE = 1_000_000;
+
+    /** Every index a given source row's legs can occupy, in order. */
+    function legIndices(index: number): number[] {
+        return Array.from({length: MAX_SPLIT_LEGS}, (_, k) => SPLIT_LEG_INDEX_BASE * (k + 1) + index);
+    }
+    const MAX_SPLIT_LEGS = 6;
+
     function applyFixToRow(index: number, patch: FixPatch) {
         snapshotFixTodos(index);
+        let legs: MergedTx[] = [];
         mergedTransactions = mergedTransactions.map((m) => {
             if (m.index !== index) return m;
             const tx = {...m.tx} as TransactionCreateItem;
             if (patch.type) (tx as {type?: string}).type = patch.type;
             if (patch.asset_id !== undefined) (tx as {asset_id?: number | null}).asset_id = patch.asset_id;
             if (patch.quantity !== undefined && patch.quantity !== '') (tx as {quantity?: string}).quantity = String(patch.quantity);
+            // Retyping a row changes what its numbers are allowed to mean: a deposit becoming
+            // a sale needs a negative quantity, a withdrawal becoming a purchase a negative
+            // amount. The user states magnitudes — the sign is the type's business, exactly as
+            // in the transaction form — and getting it wrong here fails the whole duplicate
+            // re-check with a validation error and falls back to a stale verdict.
+            const rule = getTypeRule(String((tx as {type?: string}).type ?? ''));
+            const signed = applySignRules(String((tx as {quantity?: string}).quantity ?? '0'), (tx as {cash?: {code: string; amount: string} | null}).cash ?? null, rule);
+            (tx as {quantity?: string}).quantity = signed.signedQty;
+            (tx as {cash?: {code: string; amount: string} | null}).cash = signed.signedCash;
+            if (patch.split) {
+                // The bank moved one amount and that amount is the one thing in the row we
+                // know to be right, so the legs are written as a share of it: what the user
+                // named, and the rest. Their sum is the original by construction — there is
+                // no arithmetic here that could drift away from the statement.
+                //
+                // The trade keeps the row's direction; a charge is always money leaving, on
+                // a purchase as much as on a sale, where it was withheld from the proceeds.
+                const cash = (tx as {cash?: {code: string; amount: string} | null}).cash ?? null;
+                const code = cash?.code ?? 'EUR';
+                const sign = Number(cash?.amount ?? '0') < 0 ? '-' : '';
+                (tx as {cash?: {code: string; amount: string} | null}).cash = {code, amount: `${sign}${patch.split.main}`};
+                legs = patch.split.legs.slice(0, MAX_SPLIT_LEGS).map((leg, k) => ({
+                    ...m,
+                    index: SPLIT_LEG_INDEX_BASE * (k + 1) + m.index,
+                    tx: {
+                        ...(tx as TransactionCreateItem),
+                        type: leg.type,
+                        quantity: '0',
+                        cash: {code, amount: `-${leg.amount}`},
+                        description: leg.description,
+                        tags: [...(((tx as {tags?: string[]}).tags ?? []) as string[]), 'split_leg'],
+                        cost_basis_override: null,
+                    } as TransactionCreateItem,
+                    todos: [],
+                    duplicateStatus: 'unique' as DuplicateStatus,
+                    dupMatches: [],
+                }));
+            }
             return {...m, tx, todos: m.todos.filter((td) => !isFixStepTodo(td))};
         });
+        // Re-applying with different charges replaces the legs instead of stacking new ones.
+        const stale = new Set(legIndices(index));
+        mergedTransactions = mergedTransactions.filter((m) => !stale.has(m.index));
+        if (legs.length > 0) {
+            const at = mergedTransactions.findIndex((m) => m.index === index);
+            mergedTransactions = [...mergedTransactions.slice(0, at + 1), ...legs, ...mergedTransactions.slice(at + 1)];
+        }
         markFixResolved(index, 'corrected');
     }
 
     /** The user judged the plugin's fallback good enough — record the decision, keep the row. */
     function acceptPluginFallback(index: number) {
+        // "Keep as read" is a statement about the plugin's reading, so a correction already
+        // applied — and the legs it created — has to be undone first. Without this the row
+        // kept the corrected transaction under a badge that denies it was ever corrected.
+        // A row that was never applied has no snapshot, and the reset is a no-op.
+        resetFixRow(index);
         snapshotFixTodos(index);
         mergedTransactions = mergedTransactions.map((m) => (m.index === index ? {...m, todos: m.todos.filter((td) => !isFixStepTodo(td))} : m));
         markFixResolved(index, 'kept');
     }
 
+    /**
+     * The user touched a field on a row they had already settled: the decision lapses, the row
+     * goes back to the colour and the wording it had when it was flagged. The transaction is
+     * deliberately left alone — the draft they are editing was read off it, so restoring it
+     * would move the values under their hands.
+     */
+    function reopenFixRow(index: number) {
+        if (fixDecisions[index] === undefined) return;
+        fixDecisions = Object.fromEntries(Object.entries(fixDecisions).filter(([k]) => Number(k) !== index));
+        // Settling a row retires its todos, so from that moment the row stayed in the step
+        // only because it carried a decision. Withdrawing the decision without giving the
+        // todos back left it matching neither half of the filter and the row vanished from
+        // under the user mid-edit, recoverable only by reloading. The transaction itself is
+        // deliberately untouched: the draft being edited was read off it.
+        const todos = fixTodoSnapshot[index];
+        if (!todos) return;
+        mergedTransactions = mergedTransactions.map((m) => (m.index === index ? {...m, todos: [...m.todos.filter((td) => !isFixStepTodo(td)), ...todos]} : m));
+    }
+
     /** "Everything the plugin proposed is fine" — settles every row still waiting. */
-    function acceptAllPluginFallbacks() {
-        for (const row of fixStepRows.filter((r) => r.decision === null)) acceptPluginFallback(row.index);
+    function acceptAllPluginFallbacks(indices?: number[]) {
+        const scope = indices ? new Set(indices) : null;
+        for (const row of fixStepRows.filter((r) => r.decision === null && (scope === null || scope.has(r.index)))) acceptPluginFallback(row.index);
     }
 
     /**
@@ -2383,6 +2951,8 @@ ${arrow}<span>${label}</span></span>`,
      * needs a way out that does not send the user off to another screen.
      */
     let fixCreateAssetIndex = $state<number | null>(null);
+    /** What the user had typed in the picker when they gave up looking — usually the name. */
+    let fixCreateAssetQuery = $state('');
     let fixCreatedAssets = $state<Record<number, number>>({});
 
     /** Bare ISIN detector: 2 country letters, 9 alphanumerics, 1 check digit. */
@@ -2400,7 +2970,10 @@ ${arrow}<span>${label}</span></span>`,
         if (inspectAssetLoading) return;
         inspectAssetLoading = true;
         try {
-            const assets = (await zodiosApi.get_all_assets_api_v1_assets_all_get()) as Array<Record<string, unknown>>;
+            // `/assets/all` hides inactive instruments, and an expired security created from
+            // this very wizard is usually filed as inactive on purpose — asking for it there
+            // returns nothing and the inspector silently refuses to open.
+            const assets = (await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}})) as Array<Record<string, unknown>>;
             const asset = assets.find((a) => a.id === assetId);
             if (!asset) return;
             const assignments = (await zodiosApi.get_provider_assignments_api_v1_assets_provider_assignments_get({queries: {asset_ids: [assetId]}})) as Array<Record<string, unknown>>;
@@ -2462,20 +3035,25 @@ ${arrow}<span>${label}</span></span>`,
     function resetFixRow(index: number) {
         const original = fixTxSnapshot[index];
         const todos = fixTodoSnapshot[index];
-        mergedTransactions = mergedTransactions.map((m) => {
-            if (m.index !== index) return m;
-            return {
-                ...m,
-                tx: original ? ({...original} as TransactionCreateItem) : m.tx,
-                todos: todos ? [...m.todos.filter((td) => !isFixStepTodo(td)), ...todos] : m.todos,
-            };
-        });
+        const staleLegs = new Set(legIndices(index));
+        mergedTransactions = mergedTransactions
+            // A leg only exists because of a correction, so undoing the correction removes it.
+            .filter((m) => !staleLegs.has(m.index))
+            .map((m) => {
+                if (m.index !== index) return m;
+                return {
+                    ...m,
+                    tx: original ? ({...original} as TransactionCreateItem) : m.tx,
+                    todos: todos ? [...m.todos.filter((td) => !isFixStepTodo(td)), ...todos] : m.todos,
+                };
+            });
         fixDecisions = Object.fromEntries(Object.entries(fixDecisions).filter(([k]) => Number(k) !== index));
         fixCreatedAssets = Object.fromEntries(Object.entries(fixCreatedAssets).filter(([k]) => Number(k) !== index));
     }
 
-    function resetAllFixRows() {
-        for (const row of fixStepRows.filter((r) => r.decision !== null)) resetFixRow(row.index);
+    function resetAllFixRows(indices?: number[]) {
+        const scope = indices ? new Set(indices) : null;
+        for (const row of fixStepRows.filter((r) => r.decision !== null && (scope === null || scope.has(r.index)))) resetFixRow(row.index);
     }
 
     function markFixResolved(index: number, decision: 'corrected' | 'kept') {
@@ -2486,6 +3064,10 @@ ${arrow}<span>${label}</span></span>`,
     }
 
     function stepIsActive(id: StepId): boolean {
+        // Nothing to unify means nothing to ask: a single-file import where every security is
+        // distinct never sees this step. It opens when two extractions were merged, or when the
+        // engine found a resemblance it is not confident enough to act on alone.
+        if (id === 'assets') return assetGroups.some((g) => g.members.length > 1 || g.state === 'proposed');
         if (id === 'fix') return fixStepRows.length > 0;
         // Database collisions do NOT open this step: there is nothing to arbitrate about
         // them here — they simply arrive at the review deselected. The step exists for the
@@ -2517,6 +3099,7 @@ ${arrow}<span>${label}</span></span>`,
     function resetDownstreamState() {
         mergedTransactions = [];
         assetResolutions = [];
+        assetGroups = [];
         duplicateGroups = [];
         duplicateFilePriorityIds = [];
         duplicateResolverTouchedKeys = new Set();
@@ -2526,6 +3109,7 @@ ${arrow}<span>${label}</span></span>`,
         fixTodoSnapshot = {};
         fixExpandedIndices = new Set();
         fixCreateAssetIndex = null;
+        fixCreateAssetQuery = '';
         fixCreatedAssets = {};
         duplicateRecheckDone = false;
         duplicateRecheckError = null;
@@ -2576,6 +3160,8 @@ ${arrow}<span>${label}</span></span>`,
             showWarningConfirm = false;
             mergeAllTransactions();
             enterNextActiveStep('analyze');
+        } else if (currentStepId === 'assets') {
+            enterNextActiveStep('assets');
         } else if (currentStepId === 'fix') {
             enterNextActiveStep('fix');
         } else if (currentStepId === 'duplicates') {
@@ -2641,6 +3227,9 @@ ${arrow}<span>${label}</span></span>`,
         dropZoneExpanded = false;
     }
 
+    // Uploads run in parallel, bounded: the browser will not open unlimited connections and
+    // the rest of the app still needs some. Each file writes its own row by id, so completion
+    // order is irrelevant — see requestConcurrency.ts.
     async function uploadAllPendingFiles() {
         const toUpload = pendingFiles.filter((f) => f.status === 'pending' && f.brokerId !== null);
         if (toUpload.length === 0) return;
@@ -2648,7 +3237,7 @@ ${arrow}<span>${label}</span></span>`,
         uploading = true;
         uploadError = null;
 
-        for (const entry of toUpload) {
+        await mapWithConcurrency(toUpload, async (entry) => {
             pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploading'} : f));
 
             const formData = new FormData();
@@ -2665,7 +3254,7 @@ ${arrow}<span>${label}</span></span>`,
                 const serverFileId = result.data?.data?.file_id ?? generateUUID();
                 pendingFiles = pendingFiles.map((f) => (f.id === entry.id ? {...f, status: 'uploaded', serverFileId} : f));
             }
-        }
+        });
 
         uploading = false;
     }
@@ -3042,6 +3631,7 @@ ${arrow}<span>${label}</span></span>`,
         usingCachedResults = false;
         mergedTransactions = [];
         assetResolutions = [];
+        assetGroups = [];
         duplicateGroups = [];
         duplicateFilePriorityIds = [];
         duplicateResolverTouchedKeys = new Set();
@@ -3071,26 +3661,34 @@ ${arrow}<span>${label}</span></span>`,
         lastParseHash = newHash;
     }
 
+    // Parses run in parallel too. The server off-loads each parse to its own process, so the
+    // concurrency is real and not just queued behind one event loop (brim_parse_pool.py).
+    // `parseResults` is mutated in place by reference, so order is untouched; the abort flag
+    // stops new parses without pretending to unsend the ones already in flight.
     async function doParseAll() {
         abortParsing = false;
-        for (const file of parseResults) {
-            if (abortParsing) break;
-            if (file.status !== 'pending') continue;
+        const pending = parseResults.filter((f) => f.status === 'pending');
 
-            file.status = 'parsing';
-            parseResults = [...parseResults];
+        await mapWithConcurrency(
+            pending,
+            async (file) => {
+                file.status = 'parsing';
+                parseResults = [...parseResults];
 
-            try {
-                const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: file.pluginUsed, broker_id: file.brokerId}, {params: {file_id: file.fileId}});
-                file.response = res as BrimParseResponse;
-                file.status = 'done';
-            } catch (e) {
-                file.status = 'error';
-                file.errorMessage = extractErrorMessage(e);
-            }
+                try {
+                    const res = await zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post({plugin_code: file.pluginUsed, broker_id: file.brokerId}, {params: {file_id: file.fileId}});
+                    file.response = res as BrimParseResponse;
+                    file.status = 'done';
+                } catch (e) {
+                    file.status = 'error';
+                    file.errorMessage = extractErrorMessage(e);
+                }
 
-            parseResults = [...parseResults];
-        }
+                parseResults = [...parseResults];
+            },
+            {shouldStop: () => abortParsing},
+        );
+
         if (!abortParsing && parseHasSuccess) mergeAllTransactions();
     }
 
@@ -3779,6 +4377,26 @@ ${arrow}<span>${label}</span></span>`,
             </div>
 
             <!-- ============================================================ -->
+            <!-- Step ASSETS: how many distinct securities are really here -->
+            <!-- ============================================================ -->
+        {:else if currentStepId === 'assets'}
+            <div class="space-y-4" data-testid="import-wizard-step-assets">
+                <AssetGroupStep
+                    groups={assetGroups}
+                    txCounts={assetGroupTxCounts}
+                    resolvedIds={assetGroupResolvedIds}
+                    resolvedNames={assetGroupResolvedNames}
+                    primaries={assetGroupPrimary}
+                    touched={assetGroupingTouched}
+                    onpartition={applyGroupPartition}
+                    onconfirm={confirmGroupProposal}
+                    onprimary={electGroupPrimary}
+                    onreset={resetGrouping}
+                    oninspect={openAssetInspector}
+                />
+            </div>
+
+            <!-- ============================================================ -->
             <!-- Step FIX: correct the rows the plugin flagged -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'fix'}
@@ -3794,7 +4412,11 @@ ${arrow}<span>${label}</span></span>`,
                     onacceptall={acceptAllPluginFallbacks}
                     onreset={resetFixRow}
                     onresetall={resetAllFixRows}
-                    oncreateasset={(index) => (fixCreateAssetIndex = index)}
+                    onreopen={reopenFixRow}
+                    oncreateasset={(index, query) => {
+                        fixCreateAssetQuery = query;
+                        fixCreateAssetIndex = index;
+                    }}
                     ongotosource={openSourceRow}
                 />
             </div>
@@ -4028,7 +4650,7 @@ ${arrow}<span>${label}</span></span>`,
                                             placeholder={$t('importWizard.searchAll')}
                                             compact={true}
                                             createLabel={$t('importWizard.createNew')}
-                                            onCreateNew={() => (createAssetForFakeId = res.fakeAssetId)}
+                                            onCreateNew={() => startCreateAsset(res)}
                                             suggestedIds={res.candidates.map((c) => ({
                                                 id: c.asset_id,
                                                 badge: $t(`importWizard.confidence.${c.match_confidence.toLowerCase()}`) || c.match_confidence,
@@ -4040,6 +4662,15 @@ ${arrow}<span>${label}</span></span>`,
                                                 else clearResolution(res.fakeAssetId);
                                             }}
                                         />
+                                        {#if duplicateCandidates(res).length >= 2}
+                                            <div class="mt-1.5 flex items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 dark:border-amber-700/60 dark:bg-amber-900/20" data-testid="import-wizard-duplicate-hint-{res.fakeAssetId}">
+                                                <AlertTriangle size={13} class="shrink-0 text-amber-500" />
+                                                <span class="min-w-0 flex-1 text-[11px] text-gray-600 dark:text-gray-300">{$t('importWizard.duplicateAssetHint')}</span>
+                                                <button type="button" class="shrink-0 rounded bg-amber-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-amber-700" onclick={() => openMergeFromCard(res)} data-testid="import-wizard-merge-assets-{res.fakeAssetId}">
+                                                    {$t('importWizard.duplicateAssetMerge')}
+                                                </button>
+                                            </div>
+                                        {/if}
                                         {#if res.resolvedAssetId !== null}
                                             <button
                                                 type="button"
@@ -4273,6 +4904,31 @@ ${arrow}<span>${label}</span></span>`,
             <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step3CanContinue} data-testid="import-wizard-continue">
                 {$t('common.continue')} ▶
             </button>
+            <!--
+              The unification step had no footer branch of its own and fell through to the review
+              one, which judges *transactions*: it announced "select at least one transaction" on a
+              step that has none and disabled the only way forward.
+            -->
+        {:else if currentStepId === 'assets'}
+            <div class="flex items-center gap-1">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
+                    ◀ {$t('common.back')}
+                </button>
+                {#if assetGroupOpenProposals > 0}
+                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                        <AlertTriangle size={14} />
+                        {$t('importWizard.assetUnify.openProposals', {values: {n: assetGroupOpenProposals}})}
+                    </span>
+                {:else}
+                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle size={14} />
+                        {$t('importWizard.assetUnify.allSettled', {values: {n: assetGroups.length}})}
+                    </span>
+                {/if}
+            </div>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={goNext} data-testid="import-wizard-assets-continue">
+                {$t('common.continue')} ▶
+            </button>
         {:else if currentStepId === 'fix'}
             <div class="flex items-center gap-1">
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack}>
@@ -4463,32 +5119,29 @@ ${arrow}<span>${label}</span></span>`,
 />
 
 <!-- Asset creation modal (Step 4 Zone C) -->
-{#if createAssetForFakeId !== null}
+{#if createAssetForFakeId !== null && createPrimaryPending === null}
     {@const _createRes = assetResolutions.find((r) => r.fakeAssetId === createAssetForFakeId)}
+    {@const _createIsin = createPrimaryIsin ?? _createRes?.groupIsins[0] ?? _createRes?.extractedIsin ?? null}
+    {@const _createSymbol = createPrimarySymbol ?? _createRes?.groupSymbols[0] ?? _createRes?.extractedSymbol ?? null}
     {@const _createNames = createNamesFor(_createRes)}
-    {@const _createDesc = _createRes
-        ? [$t('importWizard.createAsset.identifiedNames'), ..._createNames.map((n) => `• ${n}`), _createRes.extractedSymbol ? `Ticker: ${_createRes.extractedSymbol}` : '', _createRes.extractedIsin ? `ISIN: ${_createRes.extractedIsin}` : ''].filter((l) => l !== '').join('\n')
-        : ''}
+    <!-- The name elected (or typed) on the unification step, or the raw extraction if nobody ruled. -->
+    {@const _createName = _createRes?.groupNames[0] || _createRes?.extractedName || ''}
+    {@const _createOther = createOtherFor(_createRes, _createIsin, _createSymbol)}
+    {@const _createDesc = _createRes ? [$t('importWizard.createAsset.identifiedNames'), ..._createNames.map((n) => `• ${n}`), _createSymbol ? `Ticker: ${_createSymbol}` : '', _createIsin ? `ISIN: ${_createIsin}` : ''].filter((l) => l !== '').join('\n') : ''}
     <AssetModal
         open={true}
         editMode={false}
         prefillData={_createRes
             ? {
-                  display_name: _createRes.extractedName ?? '',
-                  identifier_ticker: _createRes.extractedSymbol ?? undefined,
-                  identifier_isin: _createRes.extractedIsin ?? undefined,
-                  identifier_other: _createNames.length > 0 ? _createNames : undefined,
+                  display_name: _createName,
+                  identifier_ticker: _createSymbol ?? undefined,
+                  identifier_isin: _createIsin ?? undefined,
+                  identifier_other: _createOther.length > 0 ? _createOther : undefined,
                   classification_params: _createDesc ? {short_description: _createDesc} : undefined,
               }
             : null}
-        initialSearchBadges={_createRes
-            ? [
-                  ...(_createRes.extractedSymbol ? [{label: `Ticker: ${_createRes.extractedSymbol}`, value: _createRes.extractedSymbol}] : []),
-                  ...(_createRes.extractedIsin ? [{label: `ISIN: ${_createRes.extractedIsin}`, value: _createRes.extractedIsin}] : []),
-                  ...(_createRes.extractedName ? [{label: _createRes.extractedName, value: _createRes.extractedName}] : []),
-              ]
-            : []}
-        searchHints={_createRes ? [...(_createRes.extractedIsin ? [_createRes.extractedIsin] : []), ...(_createRes.extractedSymbol ? [_createRes.extractedSymbol] : []), ..._createNames] : []}
+        initialSearchBadges={_createRes ? [...(_createSymbol ? [{label: `Ticker: ${_createSymbol}`, value: _createSymbol}] : []), ...(_createIsin ? [{label: `ISIN: ${_createIsin}`, value: _createIsin}] : []), ...(_createName ? [{label: _createName, value: _createName}] : [])] : []}
+        searchHints={_createRes ? [...(_createIsin ? [_createIsin] : []), ...(_createSymbol ? [_createSymbol] : []), ..._createNames] : []}
         initialSearchQuery=""
         zIndex={90}
         initialNoProvider={true}
@@ -4500,12 +5153,48 @@ ${arrow}<span>${label}</span></span>`,
             resolveAsset(fakeId, assetId);
             createAssetForFakeId = null;
             if (res) {
-                // Trigger identifier prompt if the new asset is missing the extracted identifier.
-                void checkAndPromptIdentifier(fakeId, assetId, res);
+                // The asset was just created, so cancelling the prompt must not unbind it.
+                void checkAndPromptIdentifier(fakeId, assetId, res, {clearOnCancel: false});
             }
         }}
         onclose={() => (createAssetForFakeId = null)}
     />
+{/if}
+
+<!--
+  Which code leads, asked before the creation form opens.
+
+  A unified group can bring two ISINs for one bond; the form has a single primary field, so the
+  choice has to be made somewhere. Making it here means the form arrives already correct instead
+  of being corrected afterwards.
+-->
+{#if createAssetForFakeId !== null && createPrimaryPending !== null}
+    {@const _primaryRes = assetResolutions.find((r) => r.fakeAssetId === createAssetForFakeId)}
+    <ModalBase open={true} maxWidth="lg" onRequestClose={() => (createAssetForFakeId = null)} zIndex={zIndex + 30}>
+        <div class="p-6">
+            <IdentifierPrimaryChooser
+                choices={(createPrimaryPending === 'identifier_isin' ? (_primaryRes?.groupIsins ?? []) : (_primaryRes?.groupSymbols ?? [])).map((v) => ({value: v, origin: 'report' as const}))}
+                assetName={_primaryRes?.extractedName ?? ''}
+                typeLabel={createPrimaryPending === 'identifier_ticker' ? 'Ticker' : 'ISIN'}
+                isIsin={createPrimaryPending === 'identifier_isin'}
+                bind:primary={identifierPromptPrimary}
+                testid="create-primary-chooser"
+            />
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700" onclick={() => (createAssetForFakeId = null)} data-testid="create-primary-cancel">
+                    {$t('assets.identifiers.primaryChooser.cancel')}
+                </button>
+                <button type="button" class="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" onclick={confirmCreatePrimary} data-testid="create-primary-confirm">
+                    {$t('assets.identifiers.primaryChooser.confirm')}
+                </button>
+            </div>
+        </div>
+    </ModalBase>
+{/if}
+
+<!-- Duplicate assets, merged from the resolution card where the two are visible side by side -->
+{#if mergeSourceAsset !== null}
+    <AssetMergeModal open={true} sourceAsset={mergeSourceAsset} zIndex={zIndex + 30} onmerged={(targetId) => void onCardMerged(targetId)} onclose={() => ((mergeSourceAsset = null), (mergeForFakeAssetId = null))} />
 {/if}
 
 <!-- Asset inspection from the resolution step — the picked instrument, in full -->
@@ -4532,13 +5221,13 @@ ${arrow}<span>${label}</span></span>`,
         open={true}
         editMode={false}
         prefillData={{
-            display_name: '',
+            display_name: fixCreateAssetQuery,
             identifier_isin: _fixIsin ?? undefined,
             classification_params: _fixDesc ? {short_description: _fixDesc} : undefined,
         }}
         initialSearchBadges={_fixHints.slice(0, 8).map((h) => ({label: h, value: h}))}
         searchHints={_fixHints}
-        initialSearchQuery=""
+        initialSearchQuery={fixCreateAssetQuery}
         zIndex={zIndex + 30}
         initialNoProvider={true}
         onReuseExisting={(existingAssetId) => {
@@ -4574,52 +5263,52 @@ ${arrow}<span>${label}</span></span>`,
     onClose={() => (nwCompareOpen = false)}
 />
 
-<!-- Add identifier prompt — 3 options: Cancel / Assign only / Assign + update -->
-<ModalBase open={identifierPromptOpen} maxWidth="lg" onRequestClose={() => (identifierPromptOpen = false)} zIndex={zIndex + 30}>
+<!--
+  Identifier prompt. Two shapes: a plain confirmation when the asset holds no code of that type,
+  the primary chooser when it already holds a different one — because the answer to two ISINs for
+  one bond is never to throw one away.
+-->
+<ModalBase open={identifierPromptOpen} maxWidth="lg" onRequestClose={cancelAddIdentifier} zIndex={zIndex + 30}>
     <div class="p-6">
-        <!-- Conflict: amber banner at top -->
-        <h2 class="text-base font-semibold {identifierPromptIsConflict ? 'text-amber-700 dark:text-amber-400' : 'text-gray-800 dark:text-gray-100'} mb-3">
-            {$t(identifierPromptIsConflict ? 'importWizard.addIdentifier.titleConflict' : 'importWizard.addIdentifier.title')}
-        </h2>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-5 leading-relaxed">
-            {@html $t(identifierPromptIsConflict ? 'importWizard.addIdentifier.bodyConflict' : 'importWizard.addIdentifier.body', {
-                values: {
-                    asset: `<strong>${identifierPromptAssetName ?? ''}</strong>`,
-                    value: `<strong>${identifierPromptValue ?? ''}</strong>`,
-                    existing: `<strong>${identifierPromptExistingValue ?? ''}</strong>`,
-                    type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
-                },
-            })}
-        </p>
-        <div class="flex justify-end gap-2 flex-nowrap">
-            <button
-                type="button"
-                class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap"
-                onclick={() => (identifierPromptOpen = false)}
-                data-testid="identifier-prompt-cancel"
-            >
-                {$t('common.cancel')}
+        {#if identifierPromptIsConflict}
+            <IdentifierPrimaryChooser
+                choices={[...(identifierPromptExistingValue ? [{value: identifierPromptExistingValue, origin: 'stored' as const}] : []), ...identifierPromptValues.map((v) => ({value: v, origin: 'report' as const}))]}
+                assetName={identifierPromptAssetName ?? ''}
+                typeLabel={identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN'}
+                isIsin={identifierPromptField === 'identifier_isin'}
+                bind:primary={identifierPromptPrimary}
+                testid="identifier-prompt-chooser"
+            />
+        {:else}
+            <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-3">
+                {$t('importWizard.addIdentifier.title')}
+            </h2>
+            <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed" data-testid="identifier-prompt-body">
+                {@html $t('importWizard.addIdentifier.body', {
+                    values: {
+                        asset: `<strong>${identifierPromptAssetName ?? ''}</strong>`,
+                        value: `<strong>${identifierPromptValues[0] ?? ''}</strong>`,
+                        type: identifierPromptField === 'identifier_ticker' ? 'Ticker' : 'ISIN',
+                    },
+                })}
+            </p>
+        {/if}
+
+        {#if identifierPromptExtraOther.length > 0}
+            <p class="mt-3 text-xs text-gray-500 dark:text-gray-400" data-testid="identifier-prompt-extra-keys">
+                {$t('importWizard.addIdentifier.alsoKeys', {values: {keys: identifierPromptExtraOther.join(', ')}})}
+            </p>
+        {/if}
+
+        <div class="flex justify-end gap-2 flex-nowrap mt-5">
+            <button type="button" class="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors whitespace-nowrap" onclick={cancelAddIdentifier} data-testid="identifier-prompt-cancel">
+                {identifierPromptLabels.cancel}
             </button>
-            <button
-                type="button"
-                class="px-3 py-1.5 text-sm rounded-lg border border-libre-green/40 text-libre-green hover:bg-libre-green/10 transition-colors whitespace-nowrap"
-                onclick={async () => {
-                    const fakeId = identifierPromptFakeAssetId;
-                    identifierPromptOpen = false;
-                    if (fakeId !== null) await refreshCandidates(fakeId);
-                }}
-                data-testid="identifier-prompt-skip"
-            >
-                {$t('importWizard.addIdentifier.skip')}
+            <button type="button" class="px-3 py-1.5 text-sm rounded-lg border border-libre-green/40 text-libre-green hover:bg-libre-green/10 transition-colors whitespace-nowrap" onclick={skipAddIdentifier} data-testid="identifier-prompt-skip">
+                {identifierPromptLabels.skip}
             </button>
-            <button
-                type="button"
-                disabled={identifierPromptSaving}
-                class="px-3 py-1.5 text-sm rounded-lg {identifierPromptIsConflict ? 'bg-amber-500 hover:bg-amber-600' : 'bg-libre-green hover:bg-libre-green/90'} text-white disabled:opacity-50 transition-colors whitespace-nowrap"
-                onclick={confirmAddIdentifier}
-                data-testid="identifier-prompt-confirm"
-            >
-                {identifierPromptSaving ? '…' : $t(identifierPromptIsConflict ? 'importWizard.addIdentifier.confirmConflict' : 'importWizard.addIdentifier.confirm')}
+            <button type="button" disabled={identifierPromptSaving} class="px-3 py-1.5 text-sm rounded-lg bg-libre-green hover:bg-libre-green/90 text-white disabled:opacity-50 transition-colors whitespace-nowrap" onclick={confirmAddIdentifier} data-testid="identifier-prompt-confirm">
+                {identifierPromptSaving ? '…' : identifierPromptLabels.confirm}
             </button>
         </div>
     </div>

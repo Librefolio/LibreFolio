@@ -94,8 +94,10 @@ Les **libellés d'opérations** du compte sont catégorisés comme suit :
 | Intérêts / avoirs | **Intérêt** (montant positif) |
 | Cotisation compte, commissions, frais de gestion, frais de détachement de coupon | **Frais** (sortie de trésorerie) |
 | Plus-values, droits de timbre, précompte mobilier, D.Lgs 461 | **Taxe** (sortie de trésorerie) |
-| Achat/vente de titres/fonds, titres échus ou tirés | **Dépôt/Retrait** selon le signe + **avertissement** de risque de double comptabilisation |
-| Retraite/salaires, POS, factures, retraits, virements, autres | **Dépôt** (montant > 0) / **Retrait** (montant < 0) selon le signe |
+| Achat/vente de titres/fonds | **Achat/Vente** quand le libellé et le signe concordent et que la quantité est récupérable ; sinon **dépôt/retrait** avec un **signalement bloquant** à compléter à l'étape de correction |
+| Titres échus ou tirés | **Vente au pair** qui solde la position |
+| Virement entrant qui rembourse un fonds | **Dépôt** + **signalement bloquant** : le fonds indique la contre-valeur, pas les parts, c'est donc à vous de choisir le fonds et de saisir la quantité |
+| Retraite/salaires, POS, factures, retraits, autres virements | **Dépôt** (montant > 0) / **Retrait** (montant < 0) selon le signe |
 
 ## 🔗 Référence pour développeurs
 

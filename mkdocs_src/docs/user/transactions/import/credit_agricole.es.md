@@ -94,8 +94,10 @@ Los **conceptos de operación** de la cuenta se clasifican del siguiente modo:
 | Intereses / abonos a favor | **Interés** (importe positivo) |
 | Comisión de cuenta, comisiones, gastos de gestión, gastos de cobro de cupón | **Comisión** (salida de caja) |
 | Impuesto sobre ganancias de capital, impuesto de timbre, retención, D.Lgs 461 | **Impuesto** (salida de caja) |
-| Compraventa de valores/fondos, valores vencidos o sorteados | **Depósito/Retiro** por signo + **aviso** de posible doble contabilización |
-| Pensión/salarios, TPV, facturas, retiradas, transferencias, otros | **Depósito** (importe > 0) / **Retiro** (importe < 0) por signo |
+| Compraventa de valores/fondos | **Compra/Venta** cuando el concepto y el signo coinciden y la cantidad es recuperable; en caso contrario **depósito/retiro** con un **aviso bloqueante** que completas en el paso de corrección |
+| Valores vencidos o sorteados | **Venta a la par** que cierra la posición |
+| Transferencia recibida que reembolsa un fondo | **Depósito** + **aviso bloqueante**: el fondo indica el contravalor, no las participaciones, así que eliges el fondo e introduces la cantidad |
+| Pensión/salarios, TPV, facturas, retiradas, otras transferencias | **Depósito** (importe > 0) / **Retiro** (importe < 0) por signo |
 
 ## 🔗 Referencia para desarrolladores
 

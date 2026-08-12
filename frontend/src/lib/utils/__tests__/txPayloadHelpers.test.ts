@@ -10,8 +10,8 @@ import type {TxFields, TxOriginal, CashValue, ResolvedOp, TxDualSide} from '../t
 // =============================================================================
 
 interface MockRule {
-    quantityRule: 'positive' | 'negative' | 'zero';
-    cashSign: 'positive' | 'negative' | 'optional';
+    quantityRule: 'positive' | 'negative' | 'zero' | 'free' | 'any';
+    cashSign: 'positive' | 'negative' | 'optional' | 'free' | 'any';
     cashField: 'required' | 'optional' | 'forbidden';
     assetField: 'required' | 'optional' | 'forbidden';
     requiresPair: boolean;
@@ -80,6 +80,33 @@ describe('applySignRules', () => {
         const {signedQty, signedCash} = applySignRules(qty, cash('EUR', '100'), r as any);
         expect(signedQty).toBe(expectedQty);
         expect(signedCash?.amount).toBe(expectedAmt);
+    });
+
+    it('forces a positive rule too, not only a negative one', () => {
+        // A "positive" rule binds exactly as hard as a "negative" one: the backend rejects
+        // `BUY requires quantity > 0` the same way it rejects `SELL requires quantity < 0`.
+        const r = rule({quantityRule: 'positive', cashSign: 'positive'});
+        const {signedQty, signedCash} = applySignRules('-10', cash('EUR', '-100'), r as any);
+        expect(signedQty).toBe('10');
+        expect(signedCash?.amount).toBe('100');
+    });
+
+    it('leaves a free-sign rule alone in both directions', () => {
+        // On ADJUSTMENT and TRANSFER the sign *is* the information — it says which way the
+        // position moved — so coercing it would silently reverse the user's meaning.
+        const r = rule({quantityRule: 'free', cashSign: 'any'});
+        expect(applySignRules('-10', cash('EUR', '-100'), r as any).signedQty).toBe('-10');
+        expect(applySignRules('-10', cash('EUR', '-100'), r as any).signedCash?.amount).toBe('-100');
+    });
+
+    it('retypes a deposit into a sale with the sale sign', () => {
+        // The import wizard case: a fund redemption arrives as a deposit, the user retypes it
+        // to SELL and states the units as a magnitude. Sending them unsigned failed the whole
+        // duplicate re-check with "SELL requires quantity < 0".
+        const r = rule({quantityRule: 'negative', cashSign: 'positive'});
+        const {signedQty, signedCash} = applySignRules('1867.178', cash('EUR', '9984.47'), r as any);
+        expect(signedQty).toBe('-1867.178');
+        expect(signedCash?.amount).toBe('9984.47');
     });
 
     it('returns null cash when input is null', () => {

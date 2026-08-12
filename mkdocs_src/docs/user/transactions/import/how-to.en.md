@@ -16,11 +16,11 @@ Learn how to use the Broker Report Import Module (BRIM) to import your transacti
 <div class="lf-screenshot-carousel" data-carousel="carousel-import-wizard" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="import-modal" data-title="📥 Quick Import Modal" alt="Quick Import Modal">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step1" data-title="🧙 Step 1: Upload Report File" alt="Wizard Step 1">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Step 2: Parser Configuration" alt="Wizard Step 2">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Step 3: Analysis" alt="Wizard Step 3">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🔍 Step 4: Asset Resolution" alt="Wizard Step 4">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Step 4: Duplicate Detection" alt="Duplicate Detection">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Step 5: Bulk Staging Review" alt="Bulk Staging">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step2" data-title="⚙️ Step 2: Select Files &amp; Parser" alt="Wizard Step 2">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step3" data-title="🧠 Step 3: Analysis &amp; Parsing" alt="Wizard Step 3">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-step4-resolution" data-title="🗂️ Asset Resolution" alt="Asset Resolution">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-wizard-duplicate" data-title="⚠️ Duplicate Detection" alt="Duplicate Detection">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="import-bulk-staging" data-title="📦 Step 4: Review &amp; Import" alt="Review and Import">
 </div>
 
 !!! tip "On-the-fly Broker & Asset Creation"
@@ -35,7 +35,29 @@ Learn how to use the Broker Report Import Module (BRIM) to import your transacti
 
 ## 🧙 The Import Wizard Steps
 
-The guided wizard contains 5 operational steps designed to parse, validate, resolve and import your transaction history safely.
+The wizard has **four steps you always see** and **three that appear only when your files
+actually need them**. The progress bar shows only the steps that apply to your import, so a
+clean single-file report stays a short flow, while a messy multi-file one gets exactly the extra
+questions it deserves — and no others.
+
+| Step | Always shown? | Appears when |
+| :--- | :--- | :--- |
+| 1 · Upload Report File | ✅ Always | — |
+| 2 · Select Files & Parser | ✅ Always | — |
+| 3 · Analysis & Parsing | ✅ Always | — |
+| 🧬 Unify Assets | ⚪ Optional | The same security was found under more than one name or code |
+| 🔧 Corrections | ⚪ Optional | The parser booked rows it could not fully understand |
+| 🧹 Duplicates | ⚪ Optional | The same movement appears in two of the files you are importing together |
+| 4 · Review & Import | ✅ Always | — |
+
+!!! info "The optional steps run in this order for a reason"
+
+    Each one is built on the answers of the one before it. Securities are unified **first**, so
+    that when you later attach an instrument to a corrected row you pick from a clean list
+    instead of from three copies of the same bond. Corrections come **before** the duplicate
+    check, because a purchase the parser could only read as a cash withdrawal would otherwise be
+    compared against cash withdrawals — missing a real duplicate, or inventing one that does not
+    exist.
 
 ### 🧙 Step 1: Upload Report File
 
@@ -45,9 +67,9 @@ This step accepts CSV, XLSX or PDF reports exported from your broker. You can se
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step1" alt="Wizard Step 1: Upload" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-### ⚙️ Step 2: Parser Configuration
+### ⚙️ Step 2: Select Files & Parser
 
-The system automatically detects the broker format (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole). If you upload a generic spreadsheet, you can use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields.
+This step lists the reports stored for each broker, so you can pick exactly which ones to parse — including files uploaded in an earlier session. Each file gets its own parser: the system detects the broker format automatically (e.g. Degiro, Directa, Interactive Brokers, Intesa Sanpaolo, Crédit Agricole), and you can override the choice per file. If you upload a generic spreadsheet, use the **Generic CSV** parser to manually map your columns (date, type, quantity, asset, net cash) to LibreFolio fields.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="import-wizard-step2" alt="Wizard Step 2: Parser Configuration" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -72,56 +94,103 @@ At the end of parsing, the table displays a summary of the processing for each f
 | `🔧` | **Action Required (TODOs)** | Fields or attributes requiring attention (red if blocking, orange for warning/info level actions). These are not necessarily errors: they simply indicate missing data that cannot be extracted automatically from the statement alone, which you can easily fill in manually in the bulk transaction form at the end of the wizard. |
 | `⚠️` | **Warnings** | General notifications or warning messages generated by the parser during processing. |
 
-### 🔍 Step 4: Asset Mapping & Duplicate Detection
+??? abstract "🧬 Unify Assets — appears when the same security was found under more than one name or code"
 
-This is the reconciliation phase. The wizard performs two core checks:
+    **When you will see it.** Whenever two or more of the instruments read from your files look
+    like the same security — because they share an ISIN, a ticker or a name — or when your files
+    describe one bond under two different codes. A single-file import in which every security is
+    distinct never shows this step.
 
-#### 🗂️ Asset Resolution
+    **Why it exists.** Each file is read independently, so the same BTP appearing in a holdings
+    report *and* in a movements report arrives as two unrelated instruments. Left alone, that
+    becomes two duplicate assets in your library — and two identical-looking entries in every
+    list that follows, where half your rows would silently attach to half the instrument.
 
-If the statement contains ticker symbols or ISINs that are not in your library, the wizard flags them. You can:
+    **What you do here.** The wizard proposes a grouping and you confirm, adjust or reject it.
+    Each card is one security, and its border tells you who decided:
 
-- Map them to an existing asset in your database.
-- Create them **on-the-fly** directly inside the wizard.
+    | Border | Meaning |
+    | :--- | :--- |
+    | 🟩 solid green | **Unified** — the engine is certain (same ISIN, ticker or name), or you said so |
+    | 🟨 dashed amber | **To confirm** — a resemblance the engine will not act on by itself |
+    | ⬜ plain grey | **On its own** — nothing to decide |
+
+    - **Merge or separate** with the `⋮` menu on each card, or by dragging one card onto another.
+    - **Elect the leading code** by clicking one of the coloured badges: it takes a ⭐ and becomes
+      the identifier the asset will be known by. The codes that lose are kept as alternative
+      identifiers, so nothing your files knew is thrown away.
+    - **Rename** a group with the pencil. A group already matching something in your library
+      carries an **in archive** badge, and your library's own name wins.
+    - **Restore automatic grouping**, at the top, undoes every merge, split and code election in
+      one click if you want to start over.
+
+    !!! tip "This is where dual-code bonds get settled"
+
+        Italian retail bonds (BTP Valore, BTP Più, BTP Italia) are subscribed under one ISIN and
+        traded under another. Elect the **tradeable** code as the leading one — it is the only
+        one a price provider can quote — and leave the subscription ("CUM") code as an
+        alternative. See [Create & Edit Assets](../../assets/create-edit.md) for the full story.
+
+??? warning "🔧 Corrections — appears when the parser booked rows it could not fully understand"
+
+    **When you will see it.** When your report contains lines the plugin recorded but could not
+    read completely: a trade whose instrument or quantity the file simply does not carry, or a
+    fee or tax it could not attach to any security. Reports that parse cleanly skip this step.
+
+    **Why it exists.** A purchase the plugin could only record as a cash withdrawal — because the
+    file gave it neither a quantity nor an instrument — would be compared against cash
+    withdrawals in the duplicate check. A genuine duplicate would be missed, or an imaginary one
+    invented. Fixing these rows *before* the comparison is the only moment it works.
+
+    **What you do here.** Rows are grouped by the nature of the question, so you settle similar
+    cases together. For each one you can:
+
+    - **Correct it** — choose the right transaction type and, where it applies, the instrument
+      and quantity. Only the types that make sense for that row are offered; a fee or tax has no
+      quantity field and may legitimately have **no instrument at all** ("broker charge").
+    - **Split it** — when one line bundles a trade together with its fees or taxes.
+    - **Keep it as read** — you agree with what the plugin did. The row greys out and stays in
+      the list, so you can always see, and revise, what you decided.
+    - **Reset** a single row, or every row in a group, and start again.
+
+    A **show-me-the-source** button highlights every original line behind a warning in the file
+    preview, so you can check the statement itself before deciding.
+
+    !!! danger "Blocking rows"
+
+        Rows marked in **red** are blocking: the import cannot be saved until you settle them.
+        Amber rows are advisory — you may leave them exactly as they are.
+
+??? note "🧹 Duplicates — appears when the same movement is in two of the files you are importing together"
+
+    **When you will see it.** Only when two or more files in this import overlap in time and
+    contain the same movement. Duplicates against transactions **already in your database** do
+    *not* open this step — they simply arrive at the final review already unchecked.
+
+    **Why it exists.** Overlapping exports are normal: you download a full-year statement, then a
+    quarterly one repeating part of it. Unchecking twins one at a time is tedious and easy to get
+    wrong, so the wizard groups them and lets you decide once.
+
+    **What you do here.**
+
+    - **Order your files by priority.** Drag them into the order you trust: the copy kept for each
+      group is taken from the highest-priority file.
+    - **Recalculate** after re-ordering, to re-derive every choice from the new priority.
+    - **Override individually** in the group table, where each member shows which file it came
+      from and whether it is the copy being kept.
+    - **Compare side by side** when two copies differ and you want to see exactly how before
+      choosing.
+
+    Each group is labelled **Total** (the files agree on every detail — a pure overlap) or
+    **Partial** (something differs, so it deserves a look).
+
+### 📦 Step 4: Review & Import
+
+The final review shows every transaction to be imported in a spreadsheet-like grid, and is where
+each instrument is finally matched to your library.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Wizard Step 4: Asset Resolution" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-#### ⛔ Broker Opening Date
-
-If the target broker has an opening date, the wizard flags rows whose date is **strictly before** it with the status `Before opening`. Those rows are deselected and cannot be imported; a row on the opening day remains valid. Use **Edit broker date** and then re-check/refresh if the date is wrong.
-
-#### ⚠️ Asset Notices
-
-Some plugins attach advisory notices to extracted assets. For example, Intesa Sanpaolo and Crédit Agricole can warn that a security may be matured or redeemed. These notices appear as amber banners when you create/map the asset; they do not block the import.
-
-#### ⚠️ Duplicate Detection
-
-The system compares parsed entries with your database to find potential duplicates based on type, date, amount, quantity, and description.
-
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Wizard Step 4: Duplicate Detection" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
-Duplicates are flagged in the UI using two status badges based on 4 confidence levels:
-
-| UI Badge | Confidence Level | Criteria / Matching Rules |
-| :--- | :--- | :--- |
-| <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY_WITH_ASSET` | Basic fields and description match, and asset auto-resolved (highly confident duplicate). |
-| <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY` | Basic fields and description match, but asset is not resolved. |
-| <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE_WITH_ASSET` | Basic fields match, and asset is auto-resolved (but description differs or is empty). |
-| <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE` | Basic fields (type, date, quantity, amount) match, but asset is not resolved. |
-| <span style="background-color: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">✅ UNIQUE</span> | — | The transaction has no matching records in the database and is classified as new (no duplicate detected). |
-| <span style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">❌ UNRESOLVED</span> | — | The broker or financial instrument was not matched to an existing entity in the database (requires resolution in Step 4 before importing). |
-
-By default, the wizard automatically unchecks "Likely" duplicates to prevent double-entry, but you can override this choice.
-
-### 📦 Step 5: Bulk Staging Review
-
-The final review shows the parsed list in a spreadsheet-like grid.
-
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Wizard Step 5: Bulk Review" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" data-category="brokers" data-name="import-bulk-staging" alt="Review and Import grid" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 The table displays:
@@ -133,5 +202,71 @@ The table displays:
 - **Price**: The unit price.
 - **Net Amount**: The total cash impact.
 - **Fees/Taxes**: Commissions and taxes included.
+
+#### 🗂️ Asset Resolution
+
+A collapsible panel above the grid lists every instrument found in your files and lets you say
+what it is in your library. One search field covers everything, in two sections:
+
+- **In this import** — the instruments read from your files, already unified by the step above.
+  One that is already linked to your library shows an **in archive** badge and appears here only,
+  never twice.
+- **In archive** — everything else in your asset library.
+
+If neither section has what you need, the **Create «…»** button at the bottom of the list is
+always visible and already carries whatever you typed — you never have to go looking for it.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-step4-resolution" alt="Asset resolution panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+The ✏️ pencil next to a matched instrument opens the full asset editor without leaving the
+wizard, so you can fix an identifier or a name and come straight back.
+
+!!! question "«Which code is the main one?»"
+
+    When your report carries an identifier and the asset — or the price provider — carries a
+    different one of the same kind, LibreFolio does not overwrite anything. It asks which one
+    should lead, showing where each value came from: **from the provider**, **already saved** or
+    **from the report**. The one you elect becomes the asset's identifier; the others are kept as
+    alternative identifiers, so the next import recognises the security either way.
+
+    The provider's value is preselected, because it is the only one with a price feed behind it.
+
+#### ⛔ Broker Opening Date
+
+If the target broker has an opening date, the wizard flags rows whose date is **strictly before**
+it with the status `Before opening`. Those rows are deselected and cannot be imported; a row on
+the opening day remains valid. Use **Edit broker date** and then re-check/refresh if the date is
+wrong.
+
+#### ⚠️ Asset Notices
+
+Some plugins attach advisory notices to extracted assets. For example, Intesa Sanpaolo and
+Crédit Agricole can warn that a security may be matured or redeemed. These notices appear as
+amber banners when you create or map the asset; they do not block the import.
+
+#### ⚠️ Duplicates Against Your Database
+
+Independently of the optional **Duplicates** step — which compares the imported files *with each
+other* — every row is also compared with the transactions already in your database, on type,
+date, amount, quantity and description. These do not open a step of their own: they are flagged
+right here with a status badge.
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-duplicate" alt="Duplicate detection badges" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+| UI Badge | Confidence Level | Criteria / Matching Rules |
+| :--- | :--- | :--- |
+| <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY_WITH_ASSET` | Basic fields and description match, and asset auto-resolved (highly confident duplicate). |
+| <span style="background-color: rgba(217, 119, 6, 0.15); color: #d97706; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">⚠️ LIKELY</span> | `LIKELY` | Basic fields and description match, but asset is not resolved. |
+| <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE_WITH_ASSET` | Basic fields match, and asset is auto-resolved (but description differs or is empty). |
+| <span style="background-color: rgba(37, 99, 235, 0.15); color: #2563eb; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">ℹ️ POSSIBLE</span> | `POSSIBLE` | Basic fields (type, date, quantity, amount) match, but asset is not resolved. |
+| <span style="background-color: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">✅ UNIQUE</span> | — | The transaction has no matching records in the database and is classified as new (no duplicate detected). |
+| <span style="background-color: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85em; white-space: nowrap;">❌ UNRESOLVED</span> | — | The broker or financial instrument was not matched to an existing entity in the database (requires resolution in Step 4 before importing). |
+
+By default, the wizard automatically unchecks "Likely" duplicates to prevent double-entry, but
+you can override this choice.
 
 Click **Import** to finalize the import and write the transactions to your ledger.

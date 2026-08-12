@@ -46,7 +46,7 @@ describe('compareAssetNames', () => {
     it('does not flag a numeric mismatch when the numbers agree', () => {
         const cmp = compareAssetNames('BTP Piu 1/3/32 CUM', 'BTP Piu 1/3/32');
         expect(cmp.numericMismatch).toBe(false);
-        expect(cmp.onlyNeutralSuffixDiff).toBe(true);
+        expect(cmp.onlyMinorTokenDiff).toBe(true);
     });
 
     it('treats a missing coupon as a numeric mismatch', () => {
@@ -57,6 +57,26 @@ describe('compareAssetNames', () => {
     it('scores 0 when either side is empty', () => {
         expect(compareAssetNames('', 'BTP').score).toBe(0);
         expect(compareAssetNames(null, null).score).toBe(0);
+    });
+
+    // The neutrality of a suffix is judged by shape, not by a dictionary of known markers:
+    // a couple of short alphabetic tokens on an otherwise identical name.
+    it('accepts an unlisted short suffix, not just the ones somebody thought of', () => {
+        expect(compareAssetNames('Btp Piu Fb33', 'Btp Piu Fb33 Ptf').onlyMinorTokenDiff).toBe(true);
+    });
+
+    it('rejects a long distinguishing token', () => {
+        // "World" vs "Emerging" is a different index, not a different share class.
+        expect(compareAssetNames('Amundi MSCI World', 'Amundi MSCI Emerging').onlyMinorTokenDiff).toBe(false);
+    });
+
+    it('rejects more than a couple of differing tokens', () => {
+        expect(compareAssetNames('Btp Piu Fb33 Cum', 'Btp Piu Fb33 Ex Acc Hdg').onlyMinorTokenDiff).toBe(false);
+    });
+
+    it('never calls a numeric difference minor', () => {
+        // Guard held on its own: the flag is exported, so it cannot lean on the caller's checks.
+        expect(compareAssetNames('Btp Ag30', 'Btp St27').onlyMinorTokenDiff).toBe(false);
     });
 });
 

@@ -85,7 +85,7 @@ che include la liquidità.
 | **P1** | [`plan-phase00BrimCreditAgricoleTrades.prompt.md`](plan-phase00BrimCreditAgricoleTrades.prompt.md) | Plugin BRIM Crédit Agricole | B1–B8 | 🔴 Bloccante | **Fase A ✅ · 🛑 checkpoint di collaudo · Fase B ⏳** |
 | **P1‑bis** | [`plan-phase00ImportFlowStepRestructure.prompt.md`](plan-phase00ImportFlowStepRestructure.prompt.md) | **Ordine del flusso di import**: correzione prima del confronto duplicati | — | 🔴 Alta | ✅ **fatto** 2026‑08‑07 — endpoint `/brokers/import/duplicates`, macchina a stati per id con auto‑skip, step «Correzioni» e step «Duplicati» (cross‑file + collisioni DB). Test: 27 API · 463 provider · 18 E2E. *Slot libero per «Unifica asset» (WS‑C) fra `analyze` e `fix`* |
 | **P2** | [`plan-phase00ImportWizardUx.prompt.md`](plan-phase00ImportWizardUx.prompt.md) | Wizard di import | W1–W12 | 🟠 Alta | ⏳ |
-| **P3** | [`plan-phase00AssetIdentityAndIdentifiers.prompt.md`](plan-phase00AssetIdentityAndIdentifiers.prompt.md) | **Identità dell'asset**: unificazione, identificativi, ciclo di vita | A1–A5, **A6** ➕, **W2** *(da P2)*, **W6** *(assorbito da P2)* | 🔴 Alta (A1 grave) | **Onda 1 ✅ · Onda 2 ⏸️ attende commit Fase A di P1** |
+| **P3** | [`plan-phase00AssetIdentityAndIdentifiers.prompt.md`](plan-phase00AssetIdentityAndIdentifiers.prompt.md) | **Identità dell'asset**: unificazione, identificativi, ciclo di vita | A1–A5, **A6** ➕, **W2** *(da P2)*, **W6** *(assorbito da P2)* | 🔴 Alta (A1 grave) | **Onda 1 ✅ · Onda 2 ✅ codice completo (08/08) — resta il collaudo estetico + E2E (F‑01)** |
 | **P4** | [`plan-phase00EngineAccountingAndSignals.prompt.md`](plan-phase00EngineAccountingAndSignals.prompt.md) | Motore contabile e segnali | E1–E2 | 🟠 Media | ⏳ |
 | **P5** | [`plan-phase00TransactionsUxPolish.prompt.md`](plan-phase00TransactionsUxPolish.prompt.md) | UX transazioni | T1–T4 | 🟠 Media | ⏳ |
 | **P6** | [`plan-phase00I18nAndDocsAssets.prompt.md`](plan-phase00I18nAndDocsAssets.prompt.md) | i18n, font, documentazione | I1–I4 | 🟡 Bassa | ⏳ |
@@ -119,7 +119,7 @@ mentre lavoriamo — è un danno che cresce nel tempo.
 | — | Riconciliazione numerica Excel ↔ dashboard | ✅ Completato (06/08/2026) |
 | P1 | Plugin Crédit Agricole — compravendite | ⏳ Da iniziare |
 | P2 | Wizard di import | ⏳ Da iniziare |
-| P3 | Identità dell'asset: unificazione, identificativi, ciclo di vita | 🟢 Onda 1 completata (05/08/2026) · Onda 2 in attesa di P1 |
+| P3 | Identità dell'asset: unificazione, identificativi, ciclo di vita | 🟢 Onda 1 (05/08) e Onda 2 (08/08) implementate · 🛑 checkpoint: prova estetica della UI, poi E2E |
 | P4 | Motore contabile e segnali | ⏳ Da iniziare |
 | P5 | UX transazioni | ⏳ Da iniziare |
 | P6 | i18n, font, documentazione | ⏳ Da iniziare |

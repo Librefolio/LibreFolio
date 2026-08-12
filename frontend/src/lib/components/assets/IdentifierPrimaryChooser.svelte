@@ -9,12 +9,13 @@
   The missing third outcome is the one users actually want: **keep both, choose which
   one leads**.
 
-  The motivating case is the Italian retail government bond. A BTP bought at issue
-  carries a non-tradeable "CUM" ISIN that grants the loyalty premium; to be sold it must
-  be converted into a different, quoted ISIN. In LibreFolio the two are one asset: the
-  quoted code goes in `identifier_isin` (it is the only one a price provider can index,
-  since a price *is* the last trade), the CUM code goes in `identifier_other` so every
-  future import that quotes it still finds the asset.
+  The motivating case is a security bought at issue under a placement code that grants a
+  hold-to-maturity bonus and, precisely because it is not meant to be traded, has no market
+  price; selling it means converting into the tradeable line, which carries a different ISIN.
+  (Italian retail BTPs are the case that surfaced it, but the pattern is not Italian.) In
+  LibreFolio the two are one asset: the quoted code goes in `identifier_isin` — the only one
+  a price provider can index, since a price *is* the last trade — and the placement code goes
+  in `identifier_other`, so every future import quoting it still finds the asset.
 
   Nothing is lost on the pricing side: `AssetProviderAssignment` carries its own
   identifier, decoupled from `Asset.identifier_isin`. Choosing the primary is an
@@ -27,8 +28,10 @@
     Without the origin the user has no basis to decide.
   - The default preselects the provider's value when present: that is the quoted one.
     The typical case is therefore two clicks — open, confirm.
-  - The BTP note appears only when it is pertinent (ISIN type, ≥ 2 values), so it is not
-    a permanent wall of text.
+  - An opening line states the disagreement in plain terms before asking about it; it is
+    shown only when a provider value actually sits opposite another source.
+  - The issuance note appears only when it is pertinent (ISIN type, ≥ 2 values), so it is
+    not a permanent wall of text.
 
   Callers: the import wizard (assign / create) and the provider-comparison modal.
 
@@ -59,8 +62,10 @@
         assetName: string;
         /** Human label of the identifier type (e.g. "ISIN", "Ticker"). */
         typeLabel?: string;
-        /** True when the values are ISINs — enables the BTP explanation. */
+        /** True when the values are ISINs — enables the placement-code explanation. */
         isIsin?: boolean;
+        /** Human name of the provider that proposed a value, for the opening line. */
+        providerName?: string;
         /** Currently selected primary value (bindable). */
         primary?: string | null;
         /** Test id prefix. */
@@ -69,7 +74,7 @@
         onchange?: (primary: string, alternates: string[]) => void;
     }
 
-    let {choices, assetName, typeLabel, isIsin = false, primary = $bindable(null), testid = 'identifier-primary-chooser', onchange}: Props = $props();
+    let {choices, assetName, typeLabel, isIsin = false, providerName, primary = $bindable(null), testid = 'identifier-primary-chooser', onchange}: Props = $props();
 
     /**
      * Collapse duplicates case-insensitively, keeping the strongest provenance.
@@ -116,6 +121,11 @@
     /** Everything that is not primary becomes an alternate — that is the whole point. */
     let alternates = $derived(primary ? alternatesFor(primary) : []);
 
+    /** An alternate keeps the colour of where it came from, so the badge stays readable. */
+    function originOf(value: string): IdentifierOrigin {
+        return uniqueChoices.find((c) => c.value === value)?.origin ?? 'report';
+    }
+
     function select(value: string): void {
         primary = value;
         onchange?.(value, alternatesFor(value));
@@ -127,28 +137,54 @@
         return $t('assets.identifiers.primaryChooser.originStored');
     }
 
+    /**
+     * Colour ranks the *authority* of a source, not its novelty: the provider is the only
+     * origin that comes with a price feed behind it, so it gets the loudest badge. What the
+     * archive already holds keeps the brand colour — it is yours. The report is plain: it is a
+     * document, informative but mute.
+     */
     function originClass(origin: IdentifierOrigin): string {
-        if (origin === 'provider') return 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20';
-        if (origin === 'report') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+        if (origin === 'provider') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+        if (origin === 'stored') return 'bg-libre-green/10 text-libre-green dark:bg-libre-green/20';
         return 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300';
     }
+
+    /**
+     * One factual line before the question: *why* there is something to decide at all.
+     * Only shown when a provider value actually sits opposite something else — otherwise the
+     * disagreement it describes does not exist.
+     */
+    let preamble = $derived.by<string | null>(() => {
+        const fromProvider = uniqueChoices.some((c) => c.origin === 'provider');
+        const others = uniqueChoices.filter((c) => c.origin !== 'provider');
+        if (!fromProvider || others.length === 0) return null;
+        const values = {
+            provider: providerName?.trim() || $t('assets.identifiers.primaryChooser.providerGeneric'),
+            type: typeLabel || $t('assets.identifiers.primaryChooser.typeGeneric'),
+        };
+        const key = others.some((c) => c.origin === 'report') ? 'preambleReport' : 'preambleStored';
+        return $t(`assets.identifiers.primaryChooser.${key}`, {values});
+    });
 
     let title = $derived(typeLabel ? $t('assets.identifiers.primaryChooser.title', {values: {type: typeLabel, asset: assetName}}) : $t('assets.identifiers.primaryChooser.titleGeneric', {values: {asset: assetName}}));
 
     /** Only worth explaining when there is an actual ISIN choice to make. */
-    let showBtpNote = $derived(isIsin && uniqueChoices.length >= 2);
+    let showIssuanceNote = $derived(isIsin && uniqueChoices.length >= 2);
 
     /**
      * Render `**bold**` segments from the translated note without `{@html}`.
      * The note is the one place where emphasis carries the recommendation.
      */
-    let btpNoteParts = $derived.by<Array<{text: string; bold: boolean}>>(() => {
-        const raw = $t('assets.identifiers.primaryChooser.btpNote');
+    let issuanceNoteParts = $derived.by<Array<{text: string; bold: boolean}>>(() => {
+        const raw = $t('assets.identifiers.primaryChooser.issuanceNote');
         return raw.split(/\*\*(.+?)\*\*/g).map((segment, i) => ({text: segment, bold: i % 2 === 1}));
     });
 </script>
 
 <div data-testid={testid} class="space-y-3">
+    {#if preamble}
+        <p data-testid="{testid}-preamble" class="text-xs text-gray-600 dark:text-gray-400">{preamble}</p>
+    {/if}
     <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{title}</p>
 
     <div class="space-y-1.5" role="radiogroup" aria-label={title}>
@@ -180,17 +216,19 @@
     <p class="text-xs text-gray-600 dark:text-gray-400">{$t('assets.identifiers.primaryChooser.hint')}</p>
 
     {#if alternates.length > 0}
-        <p data-testid="{testid}-alternates" class="text-xs text-gray-500 dark:text-gray-400">
+        <div data-testid="{testid}-alternates" class="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
             <span class="font-medium">{$t('assets.identifiers.primaryChooser.keepAlternates')}</span>
-            <span class="font-mono">{alternates.join(', ')}</span>
-        </p>
+            {#each alternates as value (value)}
+                <span class="font-mono text-[11px] px-1.5 py-0.5 rounded {originClass(originOf(value))}">{value}</span>
+            {/each}
+        </div>
     {/if}
 
-    {#if showBtpNote}
-        <div data-testid="{testid}-btp-note" class="flex gap-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-[11px] leading-relaxed text-blue-800 dark:text-blue-200">
+    {#if showIssuanceNote}
+        <div data-testid="{testid}-issuance-note" class="flex gap-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-[11px] leading-relaxed text-blue-800 dark:text-blue-200">
             <Info class="w-3.5 h-3.5 shrink-0 mt-0.5" />
             <p>
-                {#each btpNoteParts as part, i (i)}{#if part.bold}<strong>{part.text}</strong>{:else}{part.text}{/if}{/each}
+                {#each issuanceNoteParts as part, i (i)}{#if part.bold}<strong>{part.text}</strong>{:else}{part.text}{/if}{/each}
             </p>
         </div>
     {/if}

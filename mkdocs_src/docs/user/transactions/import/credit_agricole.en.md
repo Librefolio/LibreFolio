@@ -94,8 +94,10 @@ Account **transaction types** are categorized as follows:
 | Interest / credit fees | **Interest** (positive amount) |
 | Account fee, commissions, management fees, coupon detachment fees | **Fee** (cash outflow) |
 | Capital gains tax, stamp duty, withholding tax, D.Lgs 461 | **Tax** (cash outflow) |
-| Securities/funds trading, matured or drawn securities | **Deposit/Withdrawal** by sign + **warning** of possible double counting |
-| Pension/salaries, POS, utilities, withdrawals, transfers, other | **Deposit** (amount > 0) / **Withdrawal** (amount < 0) by sign |
+| Securities/funds trading | **Buy/Sell** when description and sign agree and the quantity is recoverable; otherwise **deposit/withdrawal** with a **blocking flag** to complete in the correction step |
+| Matured or drawn securities | **Sale at par** closing the position |
+| Incoming transfer that redeems a fund | **Deposit** + **blocking flag**: the fund states the countervalue, not the units, so you choose the fund and enter the quantity |
+| Pension/salaries, POS, utilities, withdrawals, other transfers | **Deposit** (amount > 0) / **Withdrawal** (amount < 0) by sign |
 
 ## 🔗 Developer Reference
 

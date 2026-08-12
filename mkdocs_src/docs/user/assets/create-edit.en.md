@@ -69,6 +69,86 @@ The **Other identifiers** field is an editable list of alternative identifiers. 
 providers can add broker labels, technical codes, or fallback identifiers there; each value remains a
 separate list item.
 
+## 🏷️ One instrument, several codes
+
+The same security can be known by more than one code. When that happens, LibreFolio keeps **one
+asset** and stores the extra codes under **Other identifiers**, where they are searchable and are
+used to recognise the instrument on later imports.
+
+Which code goes in the main **ISIN** field is not a matter of taste:
+
+!!! tip "Keep the quoted code as the main ISIN"
+
+    A price is the value of the last trade, so only a code that can actually be traded has a
+    price. Put the tradeable code in **ISIN** and everything else in **Other identifiers** —
+    otherwise the asset cannot be priced by any provider.
+
+### Italian retail government bonds (BTP Valore, BTP Più, BTP Italia)
+
+These bonds are issued under one ISIN and traded under another:
+
+| Phase | Code | What it does |
+|---|---|---|
+| Subscription at issue | the "CUM" ISIN | Entitles you to the **loyalty premium** if you hold to maturity. **Not tradeable**, so no provider quotes it |
+| Secondary market | a different ISIN | Freely traded and **quoted** — this is the one with a price |
+
+To sell before maturity the bond is converted to the market code. In LibreFolio the two are the
+same instrument, so:
+
+1. Put the **market ISIN** in the **ISIN** field.
+2. Put the **CUM ISIN** in **Other identifiers**.
+3. Record the **loyalty premium**, when it is paid, as an **Interest** transaction on that asset,
+   dated the day you receive it.
+
+Step 3 works even after the bond has matured and the asset has been deactivated: a deactivated
+asset stays selectable precisely so the last coupon, the redemption and the premium can be
+entered.
+
+!!! note "During an import you are asked, not overruled"
+
+    If a broker file carries the CUM code and the asset already holds the market one, the import
+    asks which of the two should lead. The one you do not pick is added to **Other identifiers** —
+    nothing is discarded, and the next import recognises the bond from either code.
+
+    When the same bond appears in two files under different codes, the **Unify assets** step of the
+    import wizard groups them into a single instrument before anything else is decided.
+
+## 🧲 Merging duplicate assets
+
+If the same instrument ended up in your library twice — a common outcome of importing a bond
+under its subscription code once and its market code another time — you can fold one into the
+other from the **Merge** action, available on the asset list and on the asset detail page.
+
+The operation is **destructive**, so it happens in two deliberate steps:
+
+1. **Choose the asset to keep.** The one you started from is the one that will disappear; you
+   pick its survivor from the whole catalogue, deactivated assets included — a matured bond is
+   exactly the sort of thing being merged.
+2. **See what moves, then settle the identity.** LibreFolio runs a dry run first and shows the
+   real counts: how many transactions, prices and events will be reassigned, and what happens to
+   the price provider. Where both assets carry a value for the same identifier, it asks which one
+   should lead; the other is kept under **Other identifiers**.
+
+| What moves | What happens |
+|---|---|
+| Transactions | Reassigned to the surviving asset |
+| Price history | Reassigned; if both assets have a price on the same day, the survivor's wins |
+| Corporate events (dividends, coupons) | Reassigned; identical events are collapsed, and the transactions pointing at them follow |
+| Provider assignment | Moved only if the survivor has none — otherwise the survivor keeps its own |
+| Identifiers | **Merged**, never dropped: everything the deleted asset knew survives as an alternative identifier |
+
+!!! warning "The source asset is deleted"
+
+    Merging cannot be undone from the interface. Read the preview before confirming — it is an
+    exact count, not an estimate.
+
+!!! tip "You may be offered a merge during an import"
+
+    When an import finds **two** assets answering to the same code — the classic signature of a
+    duplicate created by an earlier import — the wizard shows a discreet notice with a **Merge**
+    button, right where you can see both of them side by side. Name-only resemblances are never
+    offered: two funds from the same issuer are supposed to look alike.
+
 ## 🔗 Related
 
 - 📊 **[Asset Detail Page](detail/index.md)** — View and analyze asset data

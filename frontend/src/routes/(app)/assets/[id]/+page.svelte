@@ -1042,7 +1042,9 @@
 
     async function loadAssetInfo() {
         try {
-            const response = await zodiosApi.get_all_assets_api_v1_assets_all_get();
+            // Tri-state `active` omitted on purpose: an expired or delisted instrument is
+            // filed as inactive and must still be able to open its own detail page.
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}});
             const items = response as any[];
             const asset = items.find((a: any) => a.id === data.assetId);
             if (asset) {
@@ -1205,7 +1207,7 @@
 
     async function loadAssetList() {
         try {
-            const response = await zodiosApi.get_all_assets_api_v1_assets_all_get();
+            const response = await zodiosApi.list_assets_api_v1_assets_query_get({queries: {}});
             allAssets = (response as any[]).map((a: any) => ({
                 id: a.id,
                 display_name: a.display_name,

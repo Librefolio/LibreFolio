@@ -32,6 +32,10 @@
         getCellRect?: (col: number, row: number) => {left: number; width: number};
         getElement?: () => HTMLElement;
         invalidate?: () => void;
+        /** Recompute the grid's own idea of how wide its content is. */
+        updateSize?: () => void;
+        /** Re-fit the scrollbars to that width. */
+        updateScroll?: () => boolean;
         scrollLeft?: number;
         listen?: (type: string, listener: (event: {col: number; row: number; event: MouseEvent}) => void) => void;
     };
@@ -268,6 +272,11 @@
                     if (event.row !== 0 || !gridInstance) return;
                     const target = columnAtBorder(gridInstance, event.col, event.event);
                     gridInstance.setColWidth?.(target, fitColumnWidth(target, records, cols));
+                    // The grid caches its own scrollable extent, so a wider column would
+                    // otherwise push the columns after it past a scrollbar that still stops
+                    // where it did before — the far right of the file becomes unreachable.
+                    gridInstance.updateSize?.();
+                    gridInstance.updateScroll?.();
                     // Widening a column moves every column after it, and the grid only
                     // repaints the cells it thinks changed — without this the old text
                     // stays on screen until something else forces a redraw.

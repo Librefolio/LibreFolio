@@ -116,6 +116,80 @@ che il fallback avrebbe dovuto salvare la situazione — se non fosse rotto anch
 
 ---
 
+### ✅ Risolto e verificato sul campo (12/08/2026)
+
+Diagnosi confermata **empiricamente** sulla nightly self-hosted, non più per sola lettura del
+codice:
+
+| Prova | Esito |
+|---|---|
+| `alfystar.github.io/…/import-modal.png` | **404** |
+| `librefolio.github.io/…/import-modal.png` | **200** |
+| Le 22 immagini referenziate da `/mkdocs/it/`, in `en` **e** `it` | **200 tutte** |
+| JS servito dal container | conteneva ancora `alfystar` |
+| PNG locale sul server | 404 |
+| CSP che blocchi immagini di terze parti | **nessuna** (né header, né backend) |
+
+L'assenza di CSP è ciò che rende il guasto 1 *sufficiente*: corretto l'hostname, non serve
+altro.
+
+#### Correzione alla diagnosi del guasto 2
+
+Il piano attribuiva le immagini mancanti a `_docker_ensure_assets_built()`, che non chiama
+`mkdocs gallery`. È vero per un `./dev.py docker build` locale, **ma la nightly non nasce da
+lì**: la costruisce `release.yml` su push a `dev`, e quel workflow la gallery la invoca
+(riga 130). Il vero meccanismo è un altro:
+
+```yaml
+- name: Generate Screenshots with Playwright
+  continue-on-error: ${{ github.ref_name == 'dev' }}
+```
+
+Su `dev` la generazione screenshot **può fallire e la pipeline prosegue**, pubblicando `nightly`
+lo stesso. Non è un difetto: è la scelta deliberata di non far cadere la nightly per un
+Playwright ballerino — ed è **esattamente lo scenario per cui il fallback esiste**. Il fallback
+era l'unica rete, e aveva il buco.
+
+> **Il fix 2 proposto dal piano va quindi scartato.** Aggiungere `mkdocs gallery` a
+> `_docker_ensure_assets_built()` imporrebbe a ogni `docker build` locale una suite Playwright
+> da `timeout-minutes: 120`. Con il fallback funzionante non serve: le immagini arrivano da
+> Pages, che è precisamente il compito che gli era stato assegnato.
+
+#### Cosa è stato fatto
+
+Applicata la variante robusta indicata dal piano stesso — **derivare l'URL da `site_url`**, non
+riscriverlo a mano:
+
+- **`mkdocs_src/overrides/main.html`** (nuovo, la `custom_dir` era già configurata e vuota):
+  pubblica `window.LF_GALLERY_FALLBACK_BASE` da `config.site_url` nel blocco `extrahead`.
+- **`gallery-img-loader.js:18`**: legge il valore iniettato e normalizza lo slash finale. La
+  costante letterale resta **solo** come rete per una pagina resa senza il template.
+
+Verificato prima che `site_url` non sia mai sovrascritto per ambiente (`dev.py`, `Dockerfile`,
+workflow): il sito servito dal container porta già `<link rel="canonical">` su Pages. Derivarlo
+è quindi corretto in ogni deploy, e i due valori non possono più divergere.
+
+#### Verifica end-to-end
+
+Riprodotta la nightly in locale — sito costruito servito da un server che restituisce **404 per
+ogni PNG della gallery** — e caricata la home in Chromium via Playwright:
+
+```
+prima dello scroll:  8 / 11 caricate
+dopo lo scroll:     11 / 11 caricate
+src finale: https://librefolio.github.io/LibreFolio/gallery/desktop/it/light/dashboard/main.png
+```
+
+Le 3 iniziali non erano rotte: sono `loading="lazy"` sotto la piega, non ancora richieste. Il
+`onerror` scatta alla prima richiesta reale e la catena di fallback le recupera.
+
+> **Limite residuo, da conoscere**: `gh-deploy` gira solo da `main` o da una release, quindi
+> Pages contiene gli screenshot dell'ultimo rilascio. Il fallback copre le immagini esistenti,
+> **non quelle nuove**: le schermate dei nuovi step del wizard non compariranno finché non si
+> rilascia. Non è un difetto del fallback, è il suo perimetro.
+
+---
+
 ## 🟡 I3 — I messaggi del backend sono sempre in inglese
 
 > *"il warning sul prezzo corrente nel fondo di borsa italiana è in inglese sempre, dovrebbe
