@@ -17,7 +17,6 @@ Autocompletion setup:
 
 import argparse
 import hashlib
-import math
 import os
 import platform
 import re
@@ -167,6 +166,7 @@ def cmd_server(args):
     port_override = getattr(args, 'port', None)
     coverage_mode = getattr(args, 'coverage', False)
     no_scheduler = getattr(args, 'no_scheduler', False)
+    no_reload = getattr(args, 'no_reload', False)
 
     if test_mode:
         port = get_test_server_port()
@@ -308,16 +308,34 @@ def cmd_server(args):
         #   Without exec at ANY level, subprocess.run() creates a child process,
         #   SIGTERM only reaches the parent, the child becomes an orphan, and
         #   no coverage data is ever written.
+        #
+        #   MULTIPLE WORKERS: uvicorn --workers spawns child processes, and
+        #   'coverage run' tracks only the process it starts — the same reason
+        #   --reload is excluded above. Left alone, asking for N workers under
+        #   coverage would measure the supervisor (which executes no app code)
+        #   and silently discard everything the workers did.
+        #
+        #   .coveragerc declares 'concurrency = thread,gevent' for the common
+        #   single-process case; adding 'multiprocessing' there would change the
+        #   pytest runs too, so it is passed on the command line instead, only
+        #   when it is actually needed. Measured with 2 workers: supervisor 0
+        #   lines, each worker 224 — i.e. the children are fully tracked.
         coveragerc = str(PROJECT_ROOT / ".coveragerc")
         uvicorn_cmd = [
             *pipenv_prefix(), "coverage", "run",
             "--parallel-mode",
             f"--rcfile={coveragerc}",
+            ]
+        if workers > 1:
+            uvicorn_cmd.extend(["--concurrency", "multiprocessing,thread,gevent"])
+        uvicorn_cmd.extend([
             "-m", "uvicorn",
             "backend.app.main:app",
             "--host", host,
             "--port", str(port),
-            ]
+            ])
+        if workers > 1:
+            uvicorn_cmd.extend(["--workers", str(workers)])
         print(f"{Colors.YELLOW}📊 Coverage tracking enabled via 'coverage run'{Colors.NC}")
         print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
         print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
@@ -351,7 +369,9 @@ def cmd_server(args):
             # An ephemeral test server needs no reload anyway, so only enable it
             # when watchfiles is present; otherwise run a plain, stable server.
             import importlib.util
-            if importlib.util.find_spec("watchfiles") is not None:
+            if no_reload:
+                pass  # caller wants a single, plainly-killable process
+            elif importlib.util.find_spec("watchfiles") is not None:
                 uvicorn_cmd.append("--reload")
                 # Exclude the git directory and the configured data directory
                 uvicorn_cmd.extend([
@@ -843,8 +863,10 @@ def cmd_mkdocs_gallery(args):
     explicit_workers = getattr(args, 'workers', None)
     cpu_count = os.cpu_count() or 2
     worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
-    # Server workers: 1 per 4 browser workers, minimum 1
-    server_workers = max(1, math.ceil(worker_count / 4))
+    # Server workers: browser workers here spend most of their time rendering,
+    # so one server per four of them (vs one per two for API/E2E).
+    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, server_workers_for
+    server_workers = server_workers_for(worker_count, CLIENTS_PER_SERVER_WORKER_GALLERY)
     print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
 
     # --- Port conflict check ---
@@ -2097,6 +2119,8 @@ Examples:
     p.add_argument("--coverage", action="store_true", help="Enable backend code coverage tracking (writes .coverage.<pid>)")
     p.add_argument("--no-scheduler", action="store_true", dest="no_scheduler",
                    help="Disable the market data scheduler (no background sync jobs)")
+    p.add_argument("--no-reload", action="store_true", dest="no_reload",
+                   help="Never enable uvicorn --reload (the reloader adds a supervisor process that outlives SIGTERM)")
     p.set_defaults(func=cmd_server)
 
     # Database

@@ -432,6 +432,8 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
     parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
+    parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived)", default=None)
+    parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
 
     subparsers = parser.add_subparsers(dest="category", help="Test category to run", required=False)
 
@@ -473,6 +475,8 @@ def register_subparser(parent_subparsers):
     test_parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     test_parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
     test_parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
+    test_parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived)", default=None)
+    test_parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
 
     test_subparsers = test_parser.add_subparsers(dest="category", title="Test categories", metavar="")
 
@@ -499,8 +503,32 @@ def register_subparser(parent_subparsers):
     return test_parser
 
 
+#: Categories whose units talk HTTP to a running backend. They used to start one
+#: uvicorn each; now the runner starts a single server around the whole category.
+_SERVER_BACKED_CATEGORIES = {"api", "e2e", "all", "all-backend"}
+
+
 def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
     """Dispatch to the appropriate test handler. Returns 0 on success, 1 on failure."""
+    if category in _SERVER_BACKED_CATEGORIES and not getattr(args, "no_shared_server", False):
+        from ._scheduler import resolve_workers
+        from ._server import SharedTestServer
+
+        client_workers = resolve_workers(getattr(args, "workers", "1"))
+        try:
+            with SharedTestServer(
+                coverage=bool(_common._COVERAGE_PY),
+                client_workers=client_workers,
+                verbose=False,
+            ):
+                return _dispatch_to_category_body(category, test_names, verbose, args)
+        except RuntimeError as exc:
+            print_error(str(exc))
+            return 1
+    return _dispatch_to_category_body(category, test_names, verbose, args)
+
+
+def _dispatch_to_category_body(category: str, test_names, verbose: bool, args) -> int:
     success = False
 
     if category == "all":
@@ -564,10 +592,18 @@ def _dispatch_test_command(args):
     if log_file:
         with _common.tee_output(log_file):
             print_info(f"📝 Full run log → {log_file}")
-            rc = _dispatch_test_command_body(args)
+            _activate_log_dir(args)
+            try:
+                rc = _dispatch_test_command_body(args)
+            finally:
+                _snapshot_log_dir_db()
             print_info(f"📝 Full run log saved to {log_file}")
         return rc
-    return _dispatch_test_command_body(args)
+    _activate_log_dir(args)
+    try:
+        return _dispatch_test_command_body(args)
+    finally:
+        _snapshot_log_dir_db()
 
 
 _COVERAGE_LANGS = ("py", "js", "all")
@@ -890,10 +926,44 @@ def main():
     if log_file:
         with _common.tee_output(log_file):
             print_info(f"📝 Full run log → {log_file}")
+            _activate_log_dir(args)
             rc = _main_body(parser, args)
+            _snapshot_log_dir_db()
             print_info(f"📝 Full run log saved to {log_file}")
         return rc
-    return _main_body(parser, args)
+    _activate_log_dir(args)
+    try:
+        return _main_body(parser, args)
+    finally:
+        _snapshot_log_dir_db()
+
+
+def _snapshot_log_dir_db() -> None:
+    """Freeze the test DB next to the logs, once the run is over."""
+    log_dir = _common.get_log_dir()
+    if not log_dir:
+        return
+    from ._archive import snapshot_test_db
+
+    dest = snapshot_test_db(log_dir)
+    if dest:
+        print_info(f"🗄️  Test DB snapshot → {dest.parent.name}/{dest.name}")
+
+
+def _activate_log_dir(args) -> None:
+    """Prepare the per-unit log directory, archiving whatever a previous run left."""
+    log_dir = getattr(args, "log_dir", None)
+    if not log_dir:
+        return
+    from ._archive import prepare_log_dir
+
+    try:
+        prepared = prepare_log_dir(log_dir)
+    except Exception as exc:  # never let logging break a run
+        print_warning(f"Could not prepare --log-dir {log_dir}: {exc}")
+        return
+    _common.set_log_dir(prepared, getattr(args, "category", None) or "run")
+    print_info(f"📂 Per-unit logs → {prepared}")
 
 
 def _main_body(parser, args):

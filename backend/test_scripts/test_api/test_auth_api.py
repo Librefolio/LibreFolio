@@ -26,12 +26,30 @@ TIMEOUT = 10.0
 
 
 async def set_registration_enabled(enabled: bool) -> None:
-    """Set registration gate for auth API tests."""
+    """
+    Put the registration gate in the state this module needs.
+
+    The row is created when missing instead of being asserted into existence.
+    Asserting worked only by accident: every module used to start its own server,
+    whose startup re-seeded the global settings, so a neighbour that wiped the
+    table was silently repaired before the next module looked. With one server for
+    the whole run nobody repairs anything — and a fixture whose job is to *set* a
+    value has no business requiring someone else to have created it first.
+    """
+    from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
         result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == "enable_registration"))
         setting = result.scalar_one_or_none()
-        assert setting is not None, "enable_registration setting was not initialized"
+        if setting is None:
+            spec = GLOBAL_SETTINGS_DEFAULTS.get("enable_registration", {})
+            setting = GlobalSetting(
+                key="enable_registration",
+                value="true",
+                value_type=spec.get("type", "bool"),
+                description=spec.get("description"),
+            )
         setting.value = "true" if enabled else "false"
         session.add(setting)
         await session.commit()
