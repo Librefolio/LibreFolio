@@ -24,7 +24,6 @@ test.describe('FX CSV Import', () => {
     async function openDataEditor(page: import('@playwright/test').Page) {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
     }
 
@@ -241,7 +240,6 @@ test.describe('FX CSV Import', () => {
 
         const textarea = modal.locator('textarea');
         await textarea.fill('date;GBP>JPY\n2020-01-15;188.45');
-        await page.waitForTimeout(200);
 
         await expect(modal.getByTestId('fx-import-header-mismatch-error')).toHaveText("Header currencies don't match");
         await expect(modal.locator('button', {hasText: 'Import (1)'})).not.toBeVisible();
@@ -274,7 +272,6 @@ test.describe('FX CSV Import', () => {
 
         // Cancel should close immediately (no dirty data)
         await modal.locator('button', {hasText: 'Cancel'}).click();
-        await page.waitForTimeout(200);
         await expect(modal).not.toBeVisible();
     });
 
@@ -331,7 +328,6 @@ test.describe('FX CSV Import', () => {
         // Navigate to USD-EUR (inverted direction)
         await goToFxDetailPage(page, 'USD-EUR');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
 
         await page.getByTestId('fx-data-import-btn').click();
@@ -513,7 +509,6 @@ test.describe('FX CSV Import', () => {
 
         // Change back to EUR>USD
         await textarea.fill('date;EUR>USD');
-        await page.waitForTimeout(200);
 
         await expect(comboboxes.first()).toHaveText(/EUR/);
         await expect(comboboxes.last()).toHaveText(/USD/);

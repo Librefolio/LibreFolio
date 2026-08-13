@@ -19,6 +19,7 @@ A SIGKILL anywhere along it discards the whole run's backend coverage without a
 word — which is precisely how coverage vanished twice during P7.
 """
 
+import contextlib
 import math
 import os
 import signal
@@ -241,9 +242,54 @@ class SharedTestServer:
         if not self.start():
             raise RuntimeError("shared test backend failed to start")
         os.environ[SHARED_SERVER_ENV] = "1"
+        _set_active(self)
         return self
 
     def __exit__(self, *exc):
+        _set_active(None)
         os.environ.pop(SHARED_SERVER_ENV, None)
         self.stop()
         return False
+
+
+#: The server this invocation is running, if any. A destructive database
+#: operation needs to reach it, and threading a handle through six call sites
+#: that do not otherwise care about servers would be worse than a module global.
+_ACTIVE: "SharedTestServer | None" = None
+
+
+def _set_active(server) -> None:
+    global _ACTIVE
+    _ACTIVE = server
+
+
+@contextlib.contextmanager
+def database_file_owned_exclusively(reason: str):
+    """Step the shared backend aside for an operation that owns the database file.
+
+    ``db create`` deletes ``app.db`` and rebuilds it from the migrations. A server
+    attached to the old inode keeps writing to a file nobody can see, and
+    ``dev.sh db:upgrade`` rightly refuses to run at all — so, before this existed,
+    ``./dev.py test all-backend`` could not get past its own database category.
+
+    Restarting is cheap and, under coverage, safe: ``stop()`` waits for
+    ``coverage run`` to flush its ``.coverage.<pid>``, and the second process
+    writes its own, which ``coverage combine`` merges. Nothing is discarded.
+    """
+    server = _ACTIVE
+    if server is None:
+        yield
+        return
+
+    print_info(f"Pausing the shared backend — {reason} needs the database file to itself")
+    os.environ.pop(SHARED_SERVER_ENV, None)
+    server.stop()
+    try:
+        yield
+    finally:
+        if server.start():
+            os.environ[SHARED_SERVER_ENV] = "1"
+            print_success("Shared backend resumed")
+        else:
+            _set_active(None)
+            print_error("Shared backend did not come back up — the units that need it will say so")

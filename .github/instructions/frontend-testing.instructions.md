@@ -102,6 +102,95 @@ Tests are organized **per concern**, not monolithically per page. Each spec file
 - **Mock data**: tests rely on `populate_mock_data.py` — all asymmetric access pairs use tag `access-test`
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads (Bug 14 pattern)
 
+## ⛔ The three rules — normative
+
+Specs share **one database** and **one backend** with every other spec, and will
+increasingly share it *concurrently*. A spec that assumes it is alone is not
+simpler — it is broken, and running one worker was only hiding it.
+
+### 1. Never locate by position
+
+A bare `.first()`, `.nth(0)`, "the first row". Another spec creates a record, the
+sort order shifts, and the click lands somewhere else.
+
+```ts
+// ✘ whatever the DOM happens to put first
+await page.getByTestId('asset-row').first().click();
+
+// ✔ filtered to the row this spec created
+const name = `E2E asset ${Date.now()}`;
+await page.getByTestId('asset-row').filter({ hasText: name }).click();
+```
+
+`.first()` is fine **on an already-filtered locator**, where it resolves to one
+element by construction. It is the *unfiltered* `.first()` that is the defect.
+
+If the table pages, walk the pages until the row is found and fail with a message
+saying so. Do not assert on page 1.
+
+### 2. Never assert a count you did not create
+
+```ts
+// ✘ a neighbour adding one row breaks this
+await expect(page.getByTestId('asset-row')).toHaveCount(4);
+
+// ✔ says what it means
+await expect(page.getByTestId('asset-row').filter({ hasText: name })).toHaveCount(1);
+```
+
+### 3. Never wait on the clock
+
+`waitForTimeout()` is **forbidden** in new specs. It is a bet on machine speed
+that concurrency loses.
+
+```ts
+// ✘ — and note the trap: this waits for the field to exist, not to be filled
+await page.waitForTimeout(2000);
+await expect(input).toBeVisible();
+
+// ✔ wait for the condition that actually matters
+await expect(input).not.toHaveValue('');
+```
+
+The real case this comes from (W9, `transfer-same-currency`): the comment said
+*"wait for WAC value to populate"*, the code waited for visibility, the blur then
+fired against an empty field and flipped the mode. The spec did not find a bug —
+**it created the condition it then reported.**
+
+### 4. If there is nothing to wait for, the product is missing a state
+
+Do not hunt for a cleverer selector. If no observable signal says the operation
+finished, the **user** cannot tell either. Make the state explicit in the
+component (`idle | pending | done | error`), surface it, and have the spec read
+the same attribute. One change, two beneficiaries. **If the right way to surface
+it isn't obvious, stop and ask** — it is an interface decision.
+
+Two worked examples from this tree, both found by asking *why* a sleep was there:
+
+```ts
+// ✘ the list page loads in two waves — rows first, prices after — and said so nowhere
+await page.waitForSelector('[data-testid="assets-page"]');
+await page.waitForTimeout(1000);      // "wait for loading to complete (skeleton → content)"
+
+// ✔ the page now reports the state it already had
+await page.waitForSelector('[data-testid="assets-page"][data-busy="false"]');
+```
+
+The second is worth reading twice, because the signal existed and **was lying**:
+`ImageEditModal` sets `data-cropper-ready` as soon as it can paint, then keeps
+discarding change events for another ~500 ms while it runs its own reset. Edits
+made in that window vanish — for the spec *and for the user*, who can close the
+modal and lose them with no warning. The spec slept 1500 ms; the fix was to
+publish the state that decides (`data-edit-ready`), not to sleep longer.
+
+**The tell is in the comment.** When you catch yourself writing *"extra settle
+time"*, *"let it load"*, *"wait for X to finish"* — you have just named a state
+the product does not expose. Publish it.
+
+> When a spec fails and the cause is not obvious, use the **`test-triage`** skill.
+> First hypothesis is always *"was it the shape of the response?"*. **`flaky` is
+> not a verdict.**
+
 ## How to Add New Transaction Tests
 
 1. **Create** `frontend/e2e/transactions/tx-{concern}.spec.ts`

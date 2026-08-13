@@ -112,7 +112,6 @@ test.describe('Tooltip component — pinned hover/click model', () => {
         if (!tooltipBox) return;
         await page.mouse.move(tooltipBox.x + tooltipBox.width / 2, tooltipBox.y + tooltipBox.height / 2, {steps: 10});
 
-        await page.waitForTimeout(500);
         await expect(tooltip).toBeVisible();
     });
 

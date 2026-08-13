@@ -150,7 +150,6 @@ test.describe('Brokers', () => {
             await expect(page.getByTestId('delete-broker-dialog')).not.toBeVisible({timeout: 5000});
 
             // Verify broker is gone
-            await page.waitForTimeout(500);
             await expect(page.locator(`[data-testid="broker-card-${brokerId}"]`)).not.toBeVisible({timeout: 5000});
         });
     });

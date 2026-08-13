@@ -124,6 +124,8 @@ def utils_ai_export_probe_helpers(verbose: bool = False, test_names: list = None
 
 def utils_all(verbose: bool = False) -> bool:
     """Run all utility tests."""
+    if _common.nothing_left_to_run("utils"):
+        return _common.consolidated_verdict("utils")
     return _run_test_suite(
         suite_name="Utility Tests",
         tests=_get_category_tests_for_all("utils", verbose),
@@ -146,6 +148,10 @@ Tests for utility modules and helper functions:
   • Currency utilities, Cache utilities
   • Provider core cache & thread isolation
 """,
+        # These are functions over values. The three the static classifier could
+        # not prove pure only touch a database because they import a helper that
+        # mentions one.
+        default_isolation="write-scoped",
     )
     add_test(cat, "decimal-precision", utils_decimal_precision, name="Decimal Precision", desc="Model precision, truncation, edge cases")
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")

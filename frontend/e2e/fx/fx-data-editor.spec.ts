@@ -24,7 +24,6 @@ test.describe('FX Data Editor', () => {
     test('can open data editor', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
     });
 
@@ -50,12 +49,10 @@ test.describe('FX Data Editor', () => {
     test('closing editor hides the panel', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('fx-detail-editor-panel')).toBeVisible();
 
         // Click the edit button again to close (toggle)
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('fx-detail-editor-panel')).not.toBeVisible();
     });
 });

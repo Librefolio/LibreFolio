@@ -65,7 +65,8 @@ const TX_ENDPOINT = '/api/v1/transactions';
 /** Extra time granted to the test that happens to pay for a repopulate. */
 const REPOPULATE_BUDGET_MS = 25_000;
 
-async function loggedInApi(baseURL: string | undefined): Promise<APIRequestContext | null> {    if (!baseURL) return null;
+async function loggedInApi(baseURL: string | undefined): Promise<APIRequestContext | null> {
+    if (!baseURL) return null;
     try {
         const ctx = await playwrightRequest.newContext({baseURL});
         const res = await ctx.post('/api/v1/auth/login', {

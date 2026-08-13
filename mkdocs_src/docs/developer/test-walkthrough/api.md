@@ -8,11 +8,33 @@ To ensure that the API endpoints are reachable, return the correct status codes,
 
 ## ✅ Prerequisites
 
-The backend server must be running in **test mode**:
+**Do not start a server.** The runner starts one, once, and every module talks to it over
+`API_BASE`. A module that starts its own uvicorn takes port 6041 from everyone else and makes the
+whole category serial by construction. The only thing to check before a run is that the port is
+free: `lsof -ti:6041` must come back empty.
 
-```bash
-./dev.py server --test
-```
+That single shared backend is what lets the category run concurrently — and what makes the run test
+something the old design could not: **whether the application actually holds up under concurrent
+requests**. It has already answered twice, both times with a product defect rather than a test one
+(a cache that silently stopped caching, and a SQLite `busy_timeout` left at zero so a second writer
+failed instead of waiting).
+
+## ⛔ The semantics: verify, never assume
+
+Modules share one database, and now share it *at the same time*. Three consequences, normative in
+`.github/instructions/backend-testing.instructions.md`:
+
+- **Never identify data by position.** `response.json()[0]` is a claim about everybody else's rows.
+  Search the response for the id you created.
+- **Never assert a count you did not create.** `len(items) == 4` breaks the moment a neighbour adds
+  one; `len([i for i in items if i["id"] == mine]) == 1` says what you mean.
+- **Never reach a third party over the network.** A test that calls the real ECB is testing today's
+  weather. `MOCKFX` and `MOCKFX_FAIL` exist for this, and return fixed values — which lets the
+  assertion be exact instead of "some number arrived".
+
+A unit that genuinely cannot share the database declares `exclusive_because=` with the surface it
+mutates. There is currently **one** in the whole backend; see `runner_architecture.md` for what
+justifies a second.
 
 ## 🔑 Key Tests
 

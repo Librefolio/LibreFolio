@@ -37,8 +37,9 @@ async function uploadImageAndWaitForModal(page: import('@playwright/test').Page,
     await expect(page.getByTestId('image-edit-modal')).toBeVisible({timeout: 5000});
     // Wait for cropper to be fully initialized (data-cropper-ready attribute)
     await expect(page.locator('[data-cropper-ready="true"]')).toBeVisible({timeout: 8000});
-    // Extra settle time for init events (resetAll + suppressChanges window ~500ms)
-    await page.waitForTimeout(1500);
+    // `cropper-ready` only means it can paint: the modal keeps discarding change events until
+    // its own init pass is done, and that is what `data-edit-ready` reports.
+    await expect(page.locator('[data-edit-ready="true"]')).toBeVisible({timeout: 8000});
 }
 
 // Helper: Upload a non-image file via FileUploader
@@ -46,7 +47,7 @@ async function uploadNonImageFile(page: import('@playwright/test').Page, filePat
     const fileInput = page.getByTestId('file-input');
     await fileInput.setInputFiles(filePath);
     // Wait for file to appear in pending list
-    await page.waitForTimeout(500);
+    await expect(page.locator('.file-item')).toBeVisible({timeout: 3000});
 }
 
 // =============================================================================
@@ -316,8 +317,8 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
     });
 
     test('C2: closing without changes closes immediately', async ({page}) => {
-        // Wait for init settle (suppressChanges window must pass)
-        await page.waitForTimeout(1500);
+        // Changes are only recorded once init has settled; beforeEach already waited for it.
+        await expect(page.locator('[data-edit-ready="true"]')).toBeVisible();
 
         // Click cancel (no changes made after init)
         await page.getByTestId('image-edit-cancel').click();
@@ -336,7 +337,6 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
         const eyeToggle = page.getByTestId('image-edit-ellipse-toggle');
         if (await eyeToggle.isVisible().catch(() => false)) {
             await eyeToggle.click();
-            await page.waitForTimeout(300);
             // Toggle again
             await eyeToggle.click();
         }
@@ -510,7 +510,6 @@ test.describe('AssetPickerModal', () => {
                 const listBtn = page.locator('.toggle-btn').last();
                 if (await gridBtn.isVisible().catch(() => false)) {
                     await listBtn.click();
-                    await page.waitForTimeout(300);
                     await gridBtn.click();
                 }
             }
@@ -559,7 +558,6 @@ test.describe('Avatar - Profile Settings', () => {
         const profileTab = page.getByTestId('settings-tab-profile');
         await expect(profileTab).toBeVisible({timeout: 5000});
         await profileTab.click();
-        await page.waitForTimeout(500);
         // Avatar section should exist (has data-testid="profile-avatar")
         await expect(page.getByTestId('profile-avatar')).toBeVisible({timeout: 5000});
     });

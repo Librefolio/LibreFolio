@@ -26,12 +26,21 @@ def set_sqlite_pragma(dbapi_conn, _connection_record):
     - journal_mode=WAL: Write-Ahead Logging — allows concurrent readers and
       one writer without blocking. Essential for the FX sync pipeline that
       reads route config in one session while writing rates in parallel sessions.
+    - busy_timeout: WAL still admits **one writer at a time**, and SQLite's
+      default on contention is to fail immediately rather than wait. Without
+      this, a second writer arriving during another's transaction gets
+      `database is locked` straight away — not after trying. That is reachable
+      in production, not only under test: the scheduler refreshes prices in the
+      background while the user saves a transaction, and uvicorn now runs with
+      several workers. Five seconds is far beyond any transaction this app
+      opens, so it converts a spurious error into a short wait.
 
     Note: This event listener applies to ALL sync engines (including the one backing async).
     """
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
 
 

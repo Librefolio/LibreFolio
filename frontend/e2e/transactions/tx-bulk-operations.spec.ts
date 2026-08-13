@@ -191,7 +191,6 @@ test.describe('Transaction Bulk Operations', () => {
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
@@ -253,7 +252,6 @@ test.describe('Transaction Bulk Operations', () => {
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
         const formModal = page.getByTestId('tx-form-modal');
@@ -306,7 +304,6 @@ test.describe('Transaction Bulk Operations', () => {
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
@@ -363,7 +360,6 @@ test.describe('Transaction Bulk Operations', () => {
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
@@ -426,7 +422,6 @@ test.describe('Transaction Bulk Operations', () => {
         const addBtn = page.getByTestId('tx-add-button');
         await expect(addBtn).toBeVisible({timeout: 2_000});
         await addBtn.click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
@@ -473,7 +468,6 @@ test.describe('Transaction Bulk Operations', () => {
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
         // Close FormModal if auto-opened
@@ -543,7 +537,6 @@ test.describe('Transaction Bulk Operations', () => {
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
         // Close FormModal if auto-opened (happens for single visible row)
@@ -571,7 +564,6 @@ test.describe('Transaction Bulk Operations', () => {
 
         // Edit row 1: dblclick → change description → Save
         await bulkRows.nth(1).dblclick();
-        await page.waitForTimeout(500);
         await expect(formModal).toBeVisible({timeout: 5_000});
         if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
             await optionalToggle.click();
@@ -627,7 +619,6 @@ test.describe('Transaction Bulk Operations', () => {
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
         await expect(editBtn).toBeVisible({timeout: 2_000});
         await editBtn.click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
         // Close FormModal if auto-opened

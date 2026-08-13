@@ -204,7 +204,6 @@ test.describe('Import Wizard — plugin contract', () => {
         const toggle = page.getByTestId('brim-evidence-toggle').first();
         if (await toggle.isVisible({timeout: 2_000}).catch(() => false)) {
             await toggle.click();
-            await page.waitForTimeout(300);
             await expect(page.getByTestId('brim-evidence').first()).toBeVisible({timeout: 4_000});
             await expect(page.getByTestId('brim-evidence-comment').first()).toBeVisible();
         }
@@ -293,7 +292,6 @@ test.describe('Import Wizard — plugin contract', () => {
         // from under the user — the defect this asserts is gone. The withdrawal lives
         // inside the row, so the row has to be opened first.
         await rows.first().getByTestId('fix-step-row-toggle').click();
-        await page.waitForTimeout(400);
         await rows.first().getByTestId('fix-step-reset').click();
         await page.waitForTimeout(600);
         expect(await rows.count()).toBe(before);
@@ -332,7 +330,6 @@ test.describe('Import Wizard — plugin contract', () => {
 
         // One leg to begin with; typing an amount computes the trade leg as the rest.
         await splitRow!.getByTestId('fix-step-split-amount').first().fill('40');
-        await page.waitForTimeout(400);
         await expect(splitRow!.getByTestId('fix-step-split-preview')).toBeVisible();
         await expect(splitRow!.getByTestId('fix-step-split-main')).toBeVisible();
 
@@ -345,12 +342,10 @@ test.describe('Import Wizard — plugin contract', () => {
 
         // A charge larger than the trade itself would leave nothing bought.
         await splitRow!.getByTestId('fix-step-split-amount').first().fill('999999');
-        await page.waitForTimeout(500);
         await expect(splitRow!.getByTestId('fix-step-split-error')).toBeVisible({timeout: 3_000});
 
         // Back to a sane value, and the correction can be applied.
         await splitRow!.getByTestId('fix-step-split-amount').first().fill('40');
-        await page.waitForTimeout(500);
         await expect(splitRow!.getByTestId('fix-step-split-error')).toHaveCount(0);
     });
 
@@ -404,10 +399,8 @@ test.describe('Import Wizard — plugin contract', () => {
 
         const row = page.getByTestId('fix-step-row').first();
         await row.getByTestId('fix-step-row-toggle').click();
-        await page.waitForTimeout(300);
 
         await row.getByTestId('fix-step-accept').click();
-        await page.waitForTimeout(500);
 
         await expect(row).toHaveAttribute('data-decision', 'kept');
         await expect(row.getByTestId('fix-step-row-badge')).toBeVisible();
@@ -423,7 +416,6 @@ test.describe('Import Wizard — plugin contract', () => {
         // That check validates the payload as real transactions, so a wrong sign shows
         // up there as "SELL requires quantity < 0" — the regression this guards.
         await page.getByTestId('fix-step-accept-all').click();
-        await page.waitForTimeout(800);
         await page.getByTestId('import-wizard-fix-continue').click();
         await page.waitForTimeout(1_500);
 
@@ -442,7 +434,6 @@ test.describe('Import Wizard — plugin contract', () => {
         // Sending them as-is used to fail the whole call with a 422 and silently fall back
         // on the pre-correction verdict.
         await page.getByTestId('fix-step-accept-all').click();
-        await page.waitForTimeout(800);
         await page.getByTestId('import-wizard-fix-continue').click();
         await page.waitForTimeout(2_000);
 

@@ -94,6 +94,8 @@ def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
 
 def schemas_all(verbose: bool = False) -> bool:
     """Run all schema validation tests."""
+    if _common.nothing_left_to_run("schemas"):
+        return _common.consolidated_verdict("schemas")
     return _run_test_suite(
         suite_name="Schema Validation Tests",
         tests=_get_category_tests_for_all("schemas", verbose),
@@ -116,6 +118,8 @@ Tests for Pydantic/SQLModel schema validation:
   • Computed fields, Common schemas, Asset schemas
   • Transaction schemas, Broker schemas
 """,
+        # Pydantic validation: no shared state to contend for.
+        default_isolation="write-scoped",
     )
     add_test(cat, "computed-fields", schemas_computed_fields, name="Computed Fields", desc="Computed properties across all schemas")
     add_test(cat, "common", schemas_common, name="Common Schemas", desc="Currency, DateRangeModel, OldNew")

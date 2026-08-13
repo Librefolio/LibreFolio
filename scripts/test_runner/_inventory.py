@@ -88,6 +88,9 @@ class TestUnit:
     category: str
     action: str
     isolation: str
+    #: Why this unit stays WRITE_GLOBAL on purpose. Empty means "nobody has
+    #: looked yet", which is not the same claim and must not be treated as one.
+    exclusive_because: str = ""
 
     @property
     def key(self) -> str:
@@ -319,7 +322,15 @@ def build_inventory() -> tuple:
     launches, errors = collect_launches()
     units = []
     for (cat, action), items in sorted(launches.items()):
-        declared = TEST_REGISTRY.get(cat, {}).get(action, {}).get("isolation")
+        entry = TEST_REGISTRY.get(cat, {}).get(action, {})
+        # `exclusive_because` *is* the WRITE_GLOBAL declaration — the class and
+        # its justification are one statement, not a flag with a comment beside
+        # it. Written this way a category default cannot silently promote a unit
+        # that somebody has already explained must not be promoted.
+        if entry.get("exclusive_because"):
+            declared = WRITE_GLOBAL
+        else:
+            declared = entry.get("isolation") or TEST_REGISTRY.get(cat, {}).get("_meta", {}).get("default_isolation")
         for engine, path, _project in items:
             units.append(
                 TestUnit(
@@ -328,6 +339,7 @@ def build_inventory() -> tuple:
                     category=cat,
                     action=action,
                     isolation=classify(engine, path, declared),
+                    exclusive_because=entry.get("exclusive_because", ""),
                 )
             )
     return units, errors

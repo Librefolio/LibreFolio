@@ -116,10 +116,8 @@ async function chooseTarget(page: Page, pair: Pair) {
 
     const input = select.locator('input[type="text"]').first();
     await input.fill(pair.targetName);
-    await page.waitForTimeout(700);
 
     await page.getByTestId(`search-select-option-${pair.targetId}`).click();
-    await page.waitForTimeout(400);
     await expect(page.getByTestId('asset-merge-target')).toContainText(pair.targetName);
 }
 
@@ -147,7 +145,6 @@ test.describe('Assets — merge', () => {
 
         // Backing out of the preview must leave the archive exactly as it was.
         await page.getByTestId('asset-merge-back').click();
-        await page.waitForTimeout(300);
         await page.getByTestId('asset-merge-cancel').click();
         await page.waitForTimeout(500);
 

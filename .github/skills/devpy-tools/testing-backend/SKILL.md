@@ -307,9 +307,19 @@ scripts/test_runner/
 ./dev.py test --workers auto all-backend      # auto = cpu_count/2
 ```
 
-Only PURE units run in parallel; anything that writes a shared surface stays serial, so
 `--workers N` never changes *which* tests run — verify that with the count, not with the colour.
 See `runner_architecture.md` for the isolation classes and the scheduler.
+
+What runs in parallel is what the catalogue **declares** safe: PURE always, plus every unit given a
+`isolation=` (or a category `default_isolation=`). `api`, `services`, `utils` and `schemas` are all
+declared `write-scoped` — each unit creates its own user and addresses its own rows by id — with two
+exceptions that carry a written `exclusive_because`.
+
+!!! warning "Do not promote a category by reading it — promote it by running it"
+    `--assume-scoped` ignores the catalogue and runs everything concurrently. That is how you find
+    out what the catalogue was wrong about, and it belongs to that one experiment, not to daily use.
+    Read the reds with the `test-triage` skill *before* writing any declaration: on `api` the
+    thirteen reds all pointed at the two files that were failing, and the cause was a third one.
 
 Measured on the whole backend: 4654 tests both ways, 0 failures both ways, coverage identical to the
 statement (37336 / 3224 / 91.36 %), 38 min 52 s → 31 min 03 s. The parallel pass itself is fast —
@@ -331,10 +341,15 @@ them. **Coverage going quietly down is a symptom, not a fluctuation.**
 the parallel pass, the consolidation pass and the serial suite, so one flag answers "how wide is the
 damage".
 
-!!! danger "Free port 6041 before a `--fresh-run` backend run"
-    `db create` unlinks the database *before* `db:upgrade` runs, and `db:upgrade` refuses to migrate
-    while a server holds port 6041. The visible result is around a dozen unrelated-looking failures
-    from a database that no longer exists. `lsof -ti:6041` must come back empty.
+!!! info "Port 6041 and `db create` — fixed, and worth knowing why"
+    `db create` used to unlink the database *before* `db:upgrade` ran, and `db:upgrade` refuses to
+    migrate while a server holds port 6041 — so a run with the shared backend up destroyed the
+    database and then failed to rebuild it, producing 116 `no such table: users` errors twenty lines
+    below the one message that named the cause.
+
+    Now the precondition is checked **before** anything is destroyed, `db create` pauses the shared
+    backend for the duration, and a failed setup is **fatal to its category** instead of a warning
+    followed by a hundred misleading errors.
 
 ### Adding a new backend test
 

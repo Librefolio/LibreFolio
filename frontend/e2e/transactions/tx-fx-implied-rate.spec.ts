@@ -104,7 +104,6 @@ async function openBulkModal(page: Page) {
     const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
     await expect(editBtn).toBeVisible({timeout: 3_000});
     await editBtn.click();
-    await page.waitForTimeout(500);
     await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 }
 

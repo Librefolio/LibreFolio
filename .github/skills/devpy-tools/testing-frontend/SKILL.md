@@ -279,6 +279,37 @@ Two caveats when reading it:
 - **No hardcoded login**: always use `login()` from `auth-helpers.ts`
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads
 - **Whoever commits, cleans up**: see below — a spec that writes must restore what it wrote
+- **Never `waitForTimeout()`**: see below — it is a bet on machine speed that concurrency loses
+
+### ⚠️ No clock waits — and what to do when there is nothing to wait for
+
+`waitForTimeout()` is forbidden in new specs. Assertions and actions in Playwright already retry to
+their own timeout, so a sleep before one is dead weight; a sleep *instead* of one is a guess.
+
+Most removals are mechanical. The interesting case is when there is genuinely no signal to wait
+for — and the answer is **not** a cleverer selector:
+
+> If nothing observable says the operation finished, the **user** cannot tell either. The sleep is
+> the symptom; the diagnosis is that a state of the system is invisible. Publish it once and both
+> get it: an attribute for the spec, `aria-busy`/an indicator for the user.
+
+```svelte
+<!-- the list loads in two waves: rows first, then prices per row -->
+<div data-testid="assets-page" aria-busy={busy} data-busy={busy ? 'true' : 'false'}>
+```
+
+```ts
+await page.waitForSelector('[data-testid="assets-page"][data-busy="false"]');
+```
+
+A signal can also exist and **be wrong**: `ImageEditModal` set `data-cropper-ready` while it was
+still discarding change events for another ~500 ms, so edits made in that window disappeared — for
+the spec and for the user, who could close the modal and lose them without a warning.
+`data-edit-ready` reports the state that actually decides.
+
+**The tell is in the comment.** *"extra settle time"*, *"let it load"*, *"wait for X to finish"* —
+each one names a state the product does not expose. **If how to surface it is not obvious, stop and
+ask**: it is an interface decision, not a test detail.
 
 ### ⚠️ Whoever commits, cleans up
 

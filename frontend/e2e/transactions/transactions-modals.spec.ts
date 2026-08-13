@@ -618,7 +618,6 @@ test.describe('Transactions', () => {
             // Select SELL type (quantityRule = 'negative', auto-flip active)
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
             await page.getByTestId('search-select-option-SELL').click();
             await page.waitForTimeout(300);
 
@@ -664,7 +663,6 @@ test.describe('Transactions', () => {
             // Select ADJUSTMENT type
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
             await page.getByTestId('search-select-option-ADJUSTMENT').click();
             await page.waitForTimeout(300);
 

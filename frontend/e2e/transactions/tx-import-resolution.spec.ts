@@ -107,7 +107,6 @@ async function parseGenericSimple(page: Page) {
         const count = await brokerHeaders.count();
         for (let i = 0; i < count; i++) {
             await brokerHeaders.nth(i).click();
-            await page.waitForTimeout(300);
             if (await fileRow.isVisible({timeout: 1_000}).catch(() => false)) break;
         }
     }
@@ -119,7 +118,6 @@ async function parseGenericSimple(page: Page) {
     const checkbox = fileRow.locator('td.td-select button.checkbox-btn');
     await checkbox.scrollIntoViewIfNeeded();
     await page.keyboard.press('Escape'); // dismiss any open dropdown
-    await page.waitForTimeout(200);
     await checkbox.click();
 
     await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 3_000});
@@ -225,10 +223,8 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
 
     if (await skipBtn.isVisible({timeout: 2_000}).catch(() => false)) {
         await skipBtn.click();
-        await page.waitForTimeout(300);
     } else if (await confirmBtn.isVisible({timeout: 500}).catch(() => false)) {
         await confirmBtn.click();
-        await page.waitForTimeout(800);
     } else if (await cancelBtn.isVisible({timeout: 500}).catch(() => false)) {
         await cancelBtn.click();
         await page.waitForTimeout(300);
@@ -468,7 +464,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
                     await skipBtn.click();
                 } else if (await confirmBtn.isVisible({timeout: 500}).catch(() => false)) {
                     await confirmBtn.click();
-                    await page.waitForTimeout(600);
                 } else if (await cancelBtn.isVisible({timeout: 500}).catch(() => false)) {
                     await cancelBtn.click();
                 }
@@ -481,7 +476,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Click import and verify wizard closes
         await importBtn.click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('import-wizard-stepper')).not.toBeVisible({timeout: 5_000});
         // BulkModal should still be open with imported rows
         await expect(page.getByTestId('tx-bulk-modal-root')).toBeVisible();

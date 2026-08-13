@@ -124,7 +124,6 @@ test.describe('FX List Page', () => {
     test('column menu stays compact and lists daily delta after rate', async ({page}) => {
         await goToFxPage(page);
         await page.getByTestId('view-mode-list').click();
-        await page.waitForTimeout(300);
 
         await page.getByTestId('column-visibility-toggle').click();
         const dropdown = page.getByTestId('column-visibility-dropdown');

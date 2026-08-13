@@ -16,8 +16,8 @@ export const API_BASE = '/api/v1';
 export async function goToFxPage(page: import('@playwright/test').Page) {
     await navigateTo(page, '/fx');
     await page.waitForSelector('[data-testid="fx-page"]', {timeout: 15_000});
-    // Wait for loading to complete (skeleton → content)
-    await page.waitForTimeout(1000);
+    // The page loads in two waves — pair list, then rates per pair — and says so via `data-busy`.
+    await page.waitForSelector('[data-testid="fx-page"][data-busy="false"]', {timeout: 20_000});
 }
 
 /**

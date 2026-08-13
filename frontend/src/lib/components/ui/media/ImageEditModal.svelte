@@ -83,6 +83,15 @@
     // Track first initialization to auto-resetAll
     let needsInit: boolean = true;
 
+    /**
+     * The cropper reports `data-cropper-ready` as soon as it can paint, but this modal keeps
+     * discarding change events for ~500ms after that while it runs its own `resetAll` pass.
+     * Edits made in that window are silently dropped (`hasChanges` stays false), so the state
+     * has to be observable: `aria-busy` for assistive tech, `data-edit-ready` for anything
+     * that needs to know when an edit will actually be recorded.
+     */
+    let editReady: boolean = false;
+
     // Initialize when file changes
     $: if (file && open) {
         const nameParts = file.name.split('.');
@@ -100,6 +109,7 @@
         showCloseConfirm = false;
         showEllipsePreview = preset === 'avatar' || preset === 'broker-icon';
         needsInit = true;
+        editReady = false;
     }
 
     // Computed config from preset
@@ -200,6 +210,7 @@
                 // Keep suppressing for a bit longer to catch post-resetAll events
                 setTimeout(() => {
                     suppressChanges = false;
+                    editReady = true;
                 }, 300);
             }, 200);
             return;
@@ -310,7 +321,7 @@
 </script>
 
 <ModalBase maxWidth="800px" noTransition={false} onRequestClose={requestClose} open={open && !!imageSrc} zIndex={50}>
-    <div aria-labelledby="modal-title" aria-modal="true" class="modal-content-inner" data-testid="image-edit-modal" role="dialog">
+    <div aria-labelledby="modal-title" aria-modal="true" aria-busy={!editReady} class="modal-content-inner" data-edit-ready={editReady || undefined} data-testid="image-edit-modal" role="dialog">
         <!-- Header -->
         <div class="modal-header">
             <h2 class="modal-title" id="modal-title">{modalTitle}</h2>

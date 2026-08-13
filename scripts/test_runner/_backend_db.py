@@ -23,12 +23,33 @@ from ._common import (
 
 def db_create(verbose: bool = False) -> bool:
     """Create fresh database."""
+    from ._server import database_file_owned_exclusively
+
+    with database_file_owned_exclusively("creating a clean test database"):
+        return _db_create_body(verbose)
+
+
+def _db_create_body(verbose: bool = False) -> bool:
     print_section("Database Creation")
 
     setup_test_database()
 
     print_info(f"This test operates on: {TEST_DB_PATH}")
     print_info("The backend server is NOT used in this test")
+
+    # The precondition is checked *before* the destructive step, not by the
+    # migration that follows it. `dev.sh db:upgrade` refuses to run while a
+    # server holds the test port — correct, but by then the file would already be
+    # gone, and the run would continue against a database with no tables.
+    # Measured on `all-backend`: 13 failures and 116 `no such table: users`
+    # errors, none of which named the cause. The caller now steps the shared
+    # backend aside, so this guard should no longer fire — it stays because the
+    # order it enforces (check, then destroy) is the point.
+    from scripts.cli_base import check_server_running, get_test_server_port
+
+    if not check_server_running("creating a clean test database", port=get_test_server_port()):
+        print_error("Test database creation aborted — the database was left untouched")
+        return False
 
     if TEST_DB_PATH.exists():
         print_warning(f"Removing existing test database: {TEST_DB_PATH}")

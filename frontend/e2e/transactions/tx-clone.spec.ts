@@ -258,7 +258,6 @@ test.describe('Transaction Clone', () => {
         const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
         await expect(cloneBtn).toBeVisible({timeout: 2_000});
         await cloneBtn.click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
