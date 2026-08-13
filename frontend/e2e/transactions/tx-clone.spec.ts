@@ -15,6 +15,7 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {deleteTransactionsCreatedSince, snapshotTransactionIds} from '../fixtures/db-cleanup';
 
 test.setTimeout(25_000);
 
@@ -77,9 +78,19 @@ function todayIso(): string {
 // ---------------------------------------------------------------------------
 
 test.describe('Transaction Clone', () => {
+    // Cloning commits real rows into a global table. Without this the clone of the
+    // "delete-safe" ETH pair survives the spec and breaks tx-delete's A2-confirm as
+    // soon as the two specs share a Playwright invocation.
+    let txBefore: Set<number>;
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
+        txBefore = await snapshotTransactionIds(page);
         await goToTransactions(page);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteTransactionsCreatedSince(page, txBefore);
     });
 
     test('clone standalone → 1 row new, date=today', async ({page}) => {

@@ -31,8 +31,28 @@ All tests are executed through `dev.py`:
 |------|-------------|
 | `--verbose` / `-v` | Show full pytest output |
 | `--coverage [py\|js\|all]` | Run with code coverage tracking. The language is optional and defaults to `all` |
-| `--cov-clean-backend` | Clean backend coverage data (`htmlcov-backend/` + `.coverage` files) |
-| `--cov-clean-frontend` | Clean E2E-driven Python coverage data (`htmlcov-backend-e2e/` + `.coverage` files) |
+| `--cov-clean-backend` | Clean Python coverage from backend tests (`htmlcov-backend/` + `.coverage_data/backend`) |
+| `--cov-clean-backend-e2e` | Clean Python coverage collected during E2E runs (`htmlcov-backend-e2e/` + `.coverage_data/frontend`) |
+| `--cov-clean-js` | Clean JS/Svelte coverage (`coverage-js/`). Manual utility only — a `--coverage js` run cleans it by itself |
+| `--workers N\|auto` | Run isolation-safe backend units in parallel. Default `1` — the serial path, unchanged. `auto` is half the cores |
+| `--no-fail-fast` | Run everything and report every failure, instead of handing out no further work after the first red |
+| `--no-consolidate` | Keep the one-invocation-per-action shape on the frontend instead of grouping a category into a single Playwright and vitest run |
+
+!!! note "Where the flags go"
+
+    They belong to `./dev.py test`, so they come **before** the category:
+    `./dev.py test --workers 4 --coverage py services all`.
+
+!!! warning "`--cov-clean-frontend` is deprecated"
+
+    It still works as an alias for `--cov-clean-backend-e2e`, but the old name was
+    misleading: it never cleaned JavaScript coverage. It cleans the **Python**
+    coverage collected while Playwright drives the backend.
+
+    JS coverage has no accumulate-or-clean choice to make. It is raw V8 data whose
+    byte offsets only mean anything for the bundle that produced them, so it cannot
+    survive a frontend rebuild — a `--coverage js|all` run therefore always wipes it
+    first. `--cov-clean-js` exists only to clean it outside a run.
 
 !!! tip "Two axes, not one"
 
@@ -191,7 +211,7 @@ LibreFolio/
 ./dev.py test --coverage all
 
 # Clean stale data before a fresh run
-./dev.py test --coverage --cov-clean-backend --cov-clean-frontend all
+./dev.py test --coverage --cov-clean-backend --cov-clean-backend-e2e all
 ```
 
 #### Incremental Runs (append to existing)

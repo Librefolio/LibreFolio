@@ -141,15 +141,7 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False, te
 # Backend suite directories, mapped to the runner module that registers them.
 # Shared by the orphan check and the reachability check so the two cannot drift.
 # test_*.py files at the root of test_scripts/ are shared helpers, not suites.
-_BACKEND_SUITE_DIRS = {
-    "test_api": "_backend_api.py",
-    "test_services": "_backend_services.py",
-    "test_e2e": "_backend_api.py",  # e2e is in _backend_api
-    "test_schemas": "_backend_schemas.py",
-    "test_utilities": "_backend_utils.py",
-    "test_external": "_backend_external.py",
-    "test_db": "_backend_db.py",
-}
+from ._inventory import BACKEND_SUITE_DIRS as _BACKEND_SUITE_DIRS
 
 
 def _check_orphan_tests() -> int:
@@ -258,81 +250,49 @@ def _check_orphan_tests() -> int:
         return 0
 
 
-def _is_reachable(test_path: str, reachable: set) -> bool:
-    """A test is reachable if it is launched directly or via a parent directory."""
-    if test_path in reachable:
-        return True
-    return any(entry.endswith("/") and test_path.startswith(entry) for entry in reachable)
-
-
 def _check_unreachable_tests() -> int:
     """Find test files that are registered but no ``all`` action ever runs.
 
     Registration and reachability are different guarantees: a spec named in a
     runner module passes the orphan check even when no ``all`` action reaches
-    it, so it silently stops running. This closes that gap by collecting what
-    the ``all`` actions would launch, without launching anything.
+    it, so it silently stops running. This closes that gap by asking the
+    inventory what the ``all`` actions would launch, without launching anything.
 
     Returns 0 if everything registered is reachable, 1 otherwise.
     """
-    from ._reachability import collect_reachable
+    from ._inventory import is_covered, on_disk, reachable_paths
 
-    project_root = Path(__file__).parent.parent.parent
     unreachable_found = False
 
     print(f"\n{Colors.CYAN}🔍 Checking that every test is reachable from an 'all' action...{Colors.NC}\n")
 
-    reached = collect_reachable()
+    reached, errors = reachable_paths()
+    actual = on_disk()
 
-    if reached["errors"]:
+    if errors:
         print(f"  {Colors.YELLOW}⚠️  Could not collect some categories:{Colors.NC}")
-        for cat, err in sorted(reached["errors"].items()):
+        for cat, err in sorted(errors.items()):
             print(f"     • {cat}: {err}")
         print()
 
-    checks = [
-        (
-            "frontend/e2e/",
-            sorted(
-                f.name
-                for f in (project_root / "frontend" / "e2e").rglob("*.spec.ts")
-                # gallery.spec.ts is a docs tool (./dev.py mkdocs gallery), not a test
-                if f.name != "gallery.spec.ts"
-            ),
-            reached["specs"],
-        ),
-        (
-            "frontend/src/**/*.test.ts",
-            sorted(
-                str(f.relative_to(project_root / "frontend")).replace("\\", "/")
-                for f in (project_root / "frontend" / "src").rglob("*.test.ts")
-            ),
-            reached["unit_tests"],
-        ),
-        (
-            "backend/test_scripts/",
-            sorted(
-                str(f.relative_to(project_root / "backend" / "test_scripts")).replace("\\", "/")
-                # Only the suite directories: test_*.py files sitting at the root
-                # of test_scripts/ are shared helpers, not test modules.
-                for d in _BACKEND_SUITE_DIRS
-                for f in (project_root / "backend" / "test_scripts" / d).rglob("test_*.py")
-            ),
-            reached["pytest_paths"],
-        ),
-    ]
+    labels = {
+        "playwright": "frontend/e2e/",
+        "vitest": "frontend/src/**/*.test.ts",
+        "pytest": "backend/test_scripts/",
+    }
 
-    for label, actual, reachable in checks:
-        if not actual:
+    for engine, label in labels.items():
+        files = actual[engine]
+        if not files:
             continue
-        missing = [t for t in actual if not _is_reachable(t, reachable)]
+        missing = [t for t in files if not is_covered(t, reached[engine])]
         if missing:
             unreachable_found = True
             print(f"  {Colors.RED}❌ {label}{Colors.NC}  ({len(missing)} unreachable)")
             for t in missing:
                 print(f"     • {t}")
         else:
-            print(f"  {Colors.GREEN}✓ {label}{Colors.NC}  (all {len(actual)} reachable from 'all')")
+            print(f"  {Colors.GREEN}✓ {label}{Colors.NC}  (all {len(files)} reachable from 'all')")
 
     print()
     if unreachable_found:
@@ -459,8 +419,15 @@ def create_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
     parser.add_argument("--coverage", nargs="?", const="all", choices=["py", "js", "all"], metavar="LANG", help=_COVERAGE_HELP, default=None)
-    parser.add_argument("--cov-clean-backend", action="store_true", help="Clean backend coverage data", default=False)
-    parser.add_argument("--cov-clean-frontend", action="store_true", help="Clean frontend coverage data", default=False)
+    parser.add_argument("--cov-clean-backend", action="store_true", help="Clean Python coverage from backend tests", default=False)
+    # The E2E bucket holds Python coverage collected while Playwright drives the
+    # backend. It was called "frontend" before the JS coverage of P7 existed;
+    # the old spelling stays as a deprecated alias so scripts keep working.
+    parser.add_argument("--cov-clean-backend-e2e", "--cov-clean-frontend", action="store_true", dest="cov_clean_backend_e2e", help="Clean Python coverage collected during E2E runs", default=False)
+    parser.add_argument("--cov-clean-js", action="store_true", help="Clean JS/Svelte coverage (raw V8 data and reports)", default=False)
+    parser.add_argument("--workers", metavar="N", default="1", help="Parallel workers for isolation-safe units (N or 'auto'; default 1 = serial)")
+    parser.add_argument("--no-fail-fast", action="store_true", help="Run everything and report every failure instead of stopping at the first", default=False)
+    parser.add_argument("--no-consolidate", action="store_true", help="Run one frontend invocation per action instead of one per category", default=False)
     parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
@@ -496,8 +463,12 @@ def register_subparser(parent_subparsers):
 
     test_parser.add_argument("-q", "--quiet", action="store_true", help="Suppress detailed test output (default: verbose)", default=False)
     test_parser.add_argument("--coverage", nargs="?", const="all", choices=["py", "js", "all"], metavar="LANG", help=_COVERAGE_HELP, default=None)
-    test_parser.add_argument("--cov-clean-backend", action="store_true", help="Clean backend coverage data", default=False)
-    test_parser.add_argument("--cov-clean-frontend", action="store_true", help="Clean frontend coverage data", default=False)
+    test_parser.add_argument("--cov-clean-backend", action="store_true", help="Clean Python coverage from backend tests", default=False)
+    test_parser.add_argument("--cov-clean-backend-e2e", "--cov-clean-frontend", action="store_true", dest="cov_clean_backend_e2e", help="Clean Python coverage collected during E2E runs", default=False)
+    test_parser.add_argument("--cov-clean-js", action="store_true", help="Clean JS/Svelte coverage (raw V8 data and reports)", default=False)
+    test_parser.add_argument("--workers", metavar="N", default="1", help="Parallel workers for isolation-safe units (N or 'auto'; default 1 = serial)")
+    test_parser.add_argument("--no-fail-fast", action="store_true", help="Run everything and report every failure instead of stopping at the first", default=False)
+    test_parser.add_argument("--no-consolidate", action="store_true", help="Run one frontend invocation per action instead of one per category", default=False)
     test_parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     test_parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     test_parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
@@ -652,6 +623,12 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     """
     _common._COVERAGE_MODE = coverage
     _common._RESUME_MODE = resume
+    _common.set_fail_fast(not getattr(args, "no_fail_fast", False))
+
+    # --cov-clean-js is a manual utility: it works without --coverage, because
+    # during a JS coverage run the cleanup happens by itself anyway.
+    if getattr(args, "cov_clean_js", False):
+        _clean_js_coverage_dirs()
 
     category = args.category
     if category and category.startswith("front-"):
@@ -708,8 +685,131 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     print()
     _clean_coverage_dirs(cov_clean_be, cov_clean_fe)
     if _common._COVERAGE_JS:
+        # JS coverage is raw V8 data whose byte offsets only mean anything for
+        # the bundle that produced them, so it can never survive a rebuild:
+        # cleaning it every run is the only safe policy, not an oversight.
         _clean_js_coverage_dirs()
     return True
+
+
+def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
+    """Run the isolation-safe units concurrently before the serial pass.
+
+    Returns ``(ok, covered_actions)``. When nothing qualifies — a frontend
+    category, or ``--workers 1`` — this is a no-op and the run takes exactly
+    the path it takes today.
+    """
+    from ._executor import combine_coverage, read_unit_durations, run_groups
+    from ._scheduler import load_durations, plan, save_durations
+
+    category = args.category
+    if category in TEST_REGISTRY:
+        # A single registry category: parallelise it only if it is a backend one.
+        if category.startswith("front"):
+            return True, set()
+        scope = category
+    elif category in ("all", "all-backend"):
+        # Every backend category.
+        scope = None
+    else:
+        # all-frontend, coverage-report, check-orphans and friends: nothing here
+        # is a pytest unit, and scope=None would wrongly sweep in the backend.
+        return True, set()
+
+    p = plan(scope, workers)
+    if p["errors"]:
+        print_warning(f"⚠️  Inventory incomplete, running serially: {sorted(p['errors'])}")
+        return True, set()
+    if len(p["groups"]) <= 1 or not p["parallel_paths"]:
+        return True, set()
+
+    print_header(f"Parallel pass — {len(p['parallel_paths'])} isolation-safe unit(s) across {len(p['groups'])} worker(s)")
+    outcome = run_groups(p["groups"], verbose=verbose, coverage=_common._COVERAGE_PY)
+
+    if _common._COVERAGE_PY:
+        combine_coverage(_common._COVERAGE_SOURCE or "backend")
+
+    # Record what each unit cost so the next plan balances on measurement rather
+    # than on a guess. The junit reports give exact per-unit times; a group's
+    # wall time shared evenly would erase the very differences LPT needs.
+    measured = read_unit_durations(set(p["parallel_paths"]))
+    if measured:
+        durations = load_durations()
+        durations.update(measured)
+        save_durations(durations)
+
+    return outcome["ok"], p["covered_actions"]
+
+
+def _frontend_consolidation_scope(args) -> tuple:
+    """Decide whether this invocation may consolidate frontend units.
+
+    Returns ``(enabled, scope)``. Consolidation only applies when the user asked
+    for a whole category or a whole frontend suite: a single named action still
+    means a single invocation, so `./dev.py test front-fx fx-list` is untouched.
+    """
+    if getattr(args, "no_consolidate", False):
+        return False, None
+    # Naming one test by name, or driving the UI, must keep the 1:1 shape.
+    if getattr(args, "test_names", None) or getattr(args, "ui", False) or getattr(args, "headed", False) or getattr(args, "debug", False):
+        return False, None
+
+    category = args.category
+    action = getattr(args, "action", None)
+    if category in TEST_REGISTRY and category.startswith("front"):
+        return (action in (None, "all")), category
+    if category in ("all", "all-frontend"):
+        return True, None
+    return False, None
+
+
+def _run_consolidation_prepass(args, verbose: bool) -> tuple:
+    """Run each frontend category in one invocation instead of one per action."""
+    from ._consolidate import run_consolidated
+    from . import _frontend_common
+
+    enabled, scope = _frontend_consolidation_scope(args)
+    if not enabled:
+        return True, set()
+
+    _frontend_common.reset_setup_scope()
+    print_header("Consolidated frontend pass — one invocation per category")
+    ok, covered, outcome = run_consolidated(
+        scope,
+        coverage=bool(getattr(args, "coverage", None)),
+        resume=bool(getattr(args, "resume", False)),
+    )
+    _common._FAILED_ACTIONS |= {unit for unit, passed in outcome.items() if not passed}
+    return ok, covered
+
+
+def _apply_parallel(args, verbose: bool) -> tuple:
+    """Run the pre-passes if requested. Returns ``(ok, continue_serial)``."""
+    from ._scheduler import resolve_workers
+
+    covered: set = set()
+    ok = True
+
+    workers = resolve_workers(getattr(args, "workers", "1"))
+    if workers > 1:
+        ok, parallel_covered = _run_parallel_prepass(args, workers, verbose)
+        covered |= parallel_covered
+        if not ok and not getattr(args, "no_fail_fast", False):
+            # Fail-fast means "hand out no more work", not "abandon what ran": the
+            # workers already running all finished and reported before we got here.
+            _common._SKIP_ACTIONS = covered
+            print_error("Parallel pass failed — stopping before the serial pass (use --no-fail-fast to continue)")
+            return False, False
+
+    front_ok, front_covered = _run_consolidation_prepass(args, verbose)
+    covered |= front_covered
+    ok = ok and front_ok
+
+    _common._SKIP_ACTIONS = covered
+    if not ok and not getattr(args, "no_fail_fast", False):
+        print_error("A pre-pass failed — stopping before the serial pass (use --no-fail-fast to continue)")
+        return False, False
+    return ok, True
 
 
 def _dispatch_test_command_body(args):
@@ -730,7 +830,7 @@ def _dispatch_test_command_body(args):
     test_names = getattr(args, "test_names", None)
     coverage = getattr(args, "coverage", None)
     cov_clean_be = getattr(args, "cov_clean_backend", False)
-    cov_clean_fe = getattr(args, "cov_clean_frontend", False)
+    cov_clean_fe = getattr(args, "cov_clean_backend_e2e", False)
     resume = getattr(args, "resume", False)
     fresh_run = getattr(args, "fresh_run", False)
     run_status = getattr(args, "run_status", False)
@@ -748,8 +848,14 @@ def _dispatch_test_command_body(args):
     if not _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe):
         return 1
 
+    parallel_ok, go_on = _apply_parallel(args, verbose)
+    if not go_on:
+        return 1
+
     result = dispatch_to_category(args.category, test_names, verbose, args)
-    success = result == 0
+    success = result == 0 and parallel_ok
+    _common._SKIP_ACTIONS = set()
+    _common._FAILED_ACTIONS = set()
 
     if _common._COVERAGE_MODE:
         print()
@@ -811,7 +917,7 @@ def _main_body(parser, args):
     test_names = getattr(args, "test_names", None)
     coverage = getattr(args, "coverage", None)
     cov_clean_be = getattr(args, "cov_clean_backend", False)
-    cov_clean_fe = getattr(args, "cov_clean_frontend", False)
+    cov_clean_fe = getattr(args, "cov_clean_backend_e2e", False)
     resume = getattr(args, "resume", False)
     fresh_run = getattr(args, "fresh_run", False)
 
@@ -823,8 +929,14 @@ def _main_body(parser, args):
     if not _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe):
         return 1
 
+    parallel_ok, go_on = _apply_parallel(args, verbose)
+    if not go_on:
+        return 1
+
     result = dispatch_to_category(args.category, test_names, verbose, args)
-    success = result == 0
+    success = result == 0 and parallel_ok
+    _common._SKIP_ACTIONS = set()
+    _common._FAILED_ACTIONS = set()
 
     if _common._COVERAGE_MODE:
         print()

@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import Colors, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import _get_category_tests_for_all, Colors, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_portfolio_banners(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -74,15 +74,12 @@ def front_portfolio_risk(verbose: bool = False, ui: bool = False, headed: bool =
 
 def front_portfolio_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Portfolio frontend tests."""
+    if _common.nothing_left_to_run("front-portfolio"):
+        return _common.consolidated_verdict("front-portfolio")
+    reset_setup_scope()
     return _run_test_suite(
         suite_name="All Portfolio Frontend Tests",
-        tests=[
-            ("Risk Store Unit", lambda: front_portfolio_risk_unit(verbose=verbose)),
-            ("Portfolio Store Unit", lambda: front_portfolio_store_unit(verbose=verbose)),
-            ("Risk Analysis", lambda: front_portfolio_risk(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("DataQualityBanner", lambda: front_portfolio_banners(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("BrokerIcons", lambda: front_portfolio_broker_icons(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-        ],
+        tests=_get_category_tests_for_all("front-portfolio", verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage),
         verbose=verbose,
         header_msg="All Portfolio Frontend Tests",
         summary_title="Portfolio Frontend Test Summary",

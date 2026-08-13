@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import _get_category_tests_for_all, PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -339,36 +339,12 @@ def front_tx_import_resolution(verbose: bool = False, ui: bool = False, headed: 
 
 def front_transaction_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Transaction E2E tests."""
+    if _common.nothing_left_to_run("front-transaction"):
+        return _common.consolidated_verdict("front-transaction")
+    reset_setup_scope()
     return _run_test_suite(
         suite_name="All Transaction Tests (E2E)",
-        tests=[
-            ("Transactions", lambda: front_transactions_modals(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TransactionsTable", lambda: front_transactions_table(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Broker Access", lambda: front_tx_broker_access(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Paired Edit", lambda: front_tx_paired_edit(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Tooltips", lambda: front_tx_tooltips(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Delete", lambda: front_tx_delete(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Picker Pagination", lambda: front_tx_picker_pagination(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Clone", lambda: front_tx_clone(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Bulk Operations", lambda: front_tx_bulk_operations(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Split & Promote", lambda: front_tx_split_promote(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX CRUD Full", lambda: front_tx_crud_full(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Commit All Types", lambda: front_tx_commit_all_types(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Bulk Suggest UX", lambda: front_tx_bulk_suggest_ux(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX FX Implied Rate", lambda: front_tx_fx_implied_rate(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX WAC Preview", lambda: front_tx_wac(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX WAC BulkModal", lambda: front_tx_wac_bulk(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX WAC FormModal", lambda: front_tx_wac_formmodal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX WAC FX", lambda: front_tx_wac_fx(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX WAC Mode", lambda: front_tx_wac_mode(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX WAC Unit Toggle", lambda: front_tx_wac_unit_toggle(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Event Picker", lambda: front_tx_event_picker(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX BRIM Import", lambda: front_tx_brim_import(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Asset Identity", lambda: front_tx_asset_identity(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Import Resolution", lambda: front_tx_import_resolution(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Import Plugin Contract", lambda: front_tx_ca_contract(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("TX Unit (Vitest)", lambda: front_tx_unit(verbose=verbose)),
-        ],
+        tests=_get_category_tests_for_all("front-transaction", verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage),
         verbose=verbose,
         header_msg="All Transaction Tests (E2E)",
         summary_title="Transaction Test Summary",

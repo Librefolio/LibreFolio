@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _run_test_suite, add_test, make_category, print_error, print_section, print_success
-from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, add_test, make_category, print_error, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 AI_EXPORT_UNIT_TEST_PATHS = (
     "src/lib/features/ai-export/__tests__/aiExportClient.test.ts",
@@ -96,12 +96,12 @@ def front_ai_export_cutover(verbose: bool = False, ui: bool = False, headed: boo
 
 def front_ai_export_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all AI Export frontend tests."""
+    if _common.nothing_left_to_run("front-ai-export"):
+        return _common.consolidated_verdict("front-ai-export")
+    reset_setup_scope()
     return _run_test_suite(
         suite_name="All AI Export Tests (Unit + Concern-Based E2E)",
-        tests=[
-            ("AI Export + Signal Unit (Vitest)", lambda: front_ai_export_unit(verbose=verbose)),
-            ("AI Export E2E", lambda: front_ai_export_cutover(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-        ],
+        tests=_get_category_tests_for_all("front-ai-export", verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage),
         verbose=verbose,
         summary_title="AI Export Test Summary",
         success_msg="All AI Export tests passed! 🎉",
@@ -131,6 +131,7 @@ def populate_registry(registry: dict) -> None:
         name="AI Export Panel Tests",
         desc="Panel selectors, focus, close behavior, portal, layout, help, and warning flow",
         tests=AI_EXPORT_E2E_SPECS[0],
+        in_all=False,  # run by "cutover" in a single Playwright invocation
     )
     add_test(
         cat,
@@ -139,6 +140,7 @@ def populate_registry(registry: dict) -> None:
         name="AI Export Catalog Tests",
         desc="Exact V1 Dataset/Analysis IDs, domain visibility, labels, and icons",
         tests=AI_EXPORT_E2E_SPECS[1],
+        in_all=False,  # run by "cutover" in a single Playwright invocation
     )
     add_test(
         cat,
@@ -147,6 +149,7 @@ def populate_registry(registry: dict) -> None:
         name="AI Export Memory Tests",
         desc="10-minute session drafts, login reset, canonical FX, periods, detail, and notes",
         tests=AI_EXPORT_E2E_SPECS[2],
+        in_all=False,  # run by "cutover" in a single Playwright invocation
     )
     add_test(
         cat,
@@ -155,6 +158,7 @@ def populate_registry(registry: dict) -> None:
         name="AI Export Contract Tests",
         desc="V1 public contracts and Dataset/Analysis clipboard boundaries",
         tests=AI_EXPORT_E2E_SPECS[3],
+        in_all=False,  # run by "cutover" in a single Playwright invocation
     )
     add_test(
         cat,

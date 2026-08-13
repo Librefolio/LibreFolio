@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import Colors, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import _get_category_tests_for_all, Colors, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -108,18 +108,12 @@ def front_asset_event_delete(verbose: bool = False, ui: bool = False, headed: bo
 
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
+    if _common.nothing_left_to_run("front-asset"):
+        return _common.consolidated_verdict("front-asset")
+    reset_setup_scope()
     return _run_test_suite(
         suite_name="All Asset Tests (Unit + E2E)",
-        tests=[
-            ("Asset Unit (Vitest)", lambda: front_asset_unit(verbose=verbose)),
-            ("Asset List Page", lambda: front_asset_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("Asset Detail Page", lambda: front_asset_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("Asset Modal", lambda: front_asset_modal(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("Asset Data Editor", lambda: front_asset_data_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("Asset Classification", lambda: front_asset_classification(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("Asset Merge", lambda: front_asset_merge(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("Asset Event Delete", lambda: front_asset_event_delete(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-        ],
+        tests=_get_category_tests_for_all("front-asset", verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage),
         verbose=verbose,
         header_msg="All Asset Tests (Unit + E2E)",
         summary_title="Asset Test Summary",

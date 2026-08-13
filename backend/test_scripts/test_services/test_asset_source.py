@@ -1114,6 +1114,27 @@ def fx_asset_ids():
     asset_id = asyncio.run(_setup())
     yield asset_id
 
+    # Committed rows on a shared table must be undone by whoever committed them.
+    # fx_rates is keyed (date, base, quote), so leaving 2025-02-0x EUR/USD behind
+    # makes any later test that seeds the same key fail on a UNIQUE violation —
+    # which is exactly what happened once the suite ran consolidated in one
+    # process instead of one process per action.
+    async def _teardown():
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id == asset_id))
+            await session.execute(
+                delete(FxRate).where(
+                    FxRate.base == "EUR",
+                    FxRate.quote == "USD",
+                    FxRate.source == "TEST",
+                    FxRate.date.in_([date(2025, 2, 1), date(2025, 2, 2), date(2025, 2, 5)]),
+                )
+            )
+            await session.execute(delete(Asset).where(Asset.id == asset_id))
+            await session.commit()
+
+    asyncio.run(_teardown())
+
 
 @pytest.mark.asyncio
 async def test_get_prices_with_target_currency(fx_asset_ids: int):

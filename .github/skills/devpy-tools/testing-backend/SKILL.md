@@ -241,9 +241,32 @@ together before proposing any removal. See
 - **Naming**: `test_*.py` for files, `test_*` for functions, `Test*` for classes
 - **Isolation**: each test creates its own temporary user (`unique_id`)
 - **No side effects**: tests must not depend on execution order
+- **Whoever commits, cleans up**: see below — this is now enforced by consolidation, not by luck
 - **Formatted output**: use `print_section()`, `print_success()`, `print_error()` from `test_utils.py`
 - **Timeout**: `TIMEOUT = 30` seconds for API calls
 - **Status codes**: check for both 200 and 201 on creation endpoints (`assert resp.status_code in (200, 201)`)
+
+### ⚠️ Whoever commits, cleans up
+
+Most `session` fixtures flush and roll back, so most tests are compliant for free. **The rule only
+bites fixtures that deliberately call `commit()`** — and those must undo their writes after `yield`:
+
+```python
+@pytest_asyncio.fixture(scope="module")
+async def fx_asset_ids():
+    ...                          # writes and commits
+    yield asset_id
+    async with ... as session:   # and now puts it back
+        await session.execute(delete(FxRate).where(...))
+        await session.execute(delete(Asset).where(Asset.id == asset_id))
+        await session.commit()
+```
+
+Why it matters now: the runner used to spend one process per action, so leftovers were invisible.
+Under `--workers N` units share invocations, and committed rows become the **next** unit's input.
+A committed `('2025-02-01','EUR','USD')` FX row made a test fail *in another file* with
+`UNIQUE constraint failed` — the expensive kind of bug, because the failure names the victim rather
+than the culprit.
 
 ## Test Runner Architecture (`scripts/test_runner/`)
 
@@ -252,6 +275,9 @@ All tests are orchestrated by a modular Python test runner, invoked via `./dev.p
 ```text
 scripts/test_runner/
 ├── _registry.py          # TEST_REGISTRY — single source of truth for all tests
+├── _inventory.py         # Derives what exists: units, isolation classes, reachability
+├── _scheduler.py         # inventory + --workers N → execution plan (LPT balanced)
+├── _executor.py          # Runs a plan; one resource lot per worker; combines coverage
 ├── _cli.py               # Argument parsing + dispatch (argparse + argcomplete)
 ├── _common.py            # Shared: run_command, _build_pytest_cmd, _run_test_suite
 ├── _suites.py            # Aggregate suites: all, all-backend, all-frontend
@@ -272,6 +298,44 @@ scripts/test_runner/
 3. `_cli.py` auto-generates argparse subcommands from `TEST_REGISTRY` entries
 4. `./dev.py test <category> <action>` dispatches to the registered function via `run_test_from_registry()`
 
+### Running in parallel
+
+`--workers` goes **before** the category, because it belongs to `test` and not to the action:
+
+```bash
+./dev.py test --workers 4 services all
+./dev.py test --workers auto all-backend      # auto = cpu_count/2
+```
+
+Only PURE units run in parallel; anything that writes a shared surface stays serial, so
+`--workers N` never changes *which* tests run — verify that with the count, not with the colour.
+See `runner_architecture.md` for the isolation classes and the scheduler.
+
+Measured on the whole backend: 4654 tests both ways, 0 failures both ways, coverage identical to the
+statement (37336 / 3224 / 91.36 %), 38 min 52 s → 31 min 03 s. The parallel pass itself is fast —
+51 units and 1494 tests in 32.2 s, workers landing within 0.1 s of each other — so the ceiling is set
+by the serial WRITE-GLOBAL remainder, not by the balancing.
+
+Compare coverage **per file**, not on the total: the two live-network provider modules
+(`asset_source.py`, `borsa_italiana.py`) vary by a handful of statements between runs depending on
+what the remote site returns, so the total carries ~0.01 % of noise that would otherwise be
+indistinguishable from lost data. Every other module is reproducible exactly.
+
+That tolerance is a *handful* of statements, and knowing its size is what makes a larger gap
+readable. A full `--coverage all --workers 4 all` run reported 91.38 %, then 91.64 % after a frontend
+crash was fixed — 98 statements, twenty times the noise floor, and in the direction that looks
+harmless. Three frontend specs had been dying mid-run and taking their backend E2E coverage with
+them. **Coverage going quietly down is a symptom, not a fluctuation.**
+
+`--no-fail-fast` runs everything and reports every red instead of stopping at the first. It covers
+the parallel pass, the consolidation pass and the serial suite, so one flag answers "how wide is the
+damage".
+
+!!! danger "Free port 6041 before a `--fresh-run` backend run"
+    `db create` unlinks the database *before* `db:upgrade` runs, and `db:upgrade` refuses to migrate
+    while a server holds port 6041. The visible result is around a dozen unrelated-looking failures
+    from a database that no longer exists. `lsof -ti:6041` must come back empty.
+
 ### Adding a new backend test
 
 Backend API tests are **auto-discovered** by pytest — no manual registration needed:
@@ -286,6 +350,9 @@ For a new **category** (not just a new test), create `_backend_{name}.py` with `
 
 | Function | Module | Purpose |
 |----------|--------|---------|
+| `build_inventory()` | `_inventory.py` | Every unit with its category and isolation class |
+| `plan(units, workers)` | `_scheduler.py` | Splits parallel vs serial, balances by measured duration |
+| `run_groups(...)` | `_executor.py` | Executes a plan, one `COVERAGE_FILE` per worker |
 | `_build_pytest_cmd(path, test_names)` | `_common.py` | Builds pytest command with optional `-k` filter |
 | `run_command(cmd, description, verbose)` | `_common.py` | Runs subprocess with coverage tracking integration |
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a named test in a category dict |

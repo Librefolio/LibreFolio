@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import _get_category_tests_for_all, PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -107,19 +107,12 @@ def front_fx_settings(verbose: bool = False, ui: bool = False, headed: bool = Fa
 
 def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all FX tests (unit + E2E)."""
+    if _common.nothing_left_to_run("front-fx"):
+        return _common.consolidated_verdict("front-fx")
+    reset_setup_scope()
     return _run_test_suite(
         suite_name="All FX Tests (Unit + E2E)",
-        tests=[
-            ("FX Unit (Vitest)", lambda: front_fx_unit(verbose=verbose)),
-            ("FX List Page", lambda: front_fx_list(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Add Pair Modal", lambda: front_fx_add_pair(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Detail Page", lambda: front_fx_detail(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Data Editor", lambda: front_fx_editor(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Sync Modal", lambda: front_fx_sync(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX API Routes", lambda: front_fx_api(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX Chart Settings", lambda: front_fx_settings(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-            ("FX CSV Import", lambda: front_fx_csv_import(verbose=verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)),
-        ],
+        tests=_get_category_tests_for_all("front-fx", verbose, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage),
         verbose=verbose,
         header_msg="All FX Tests (Unit + E2E)",
         summary_title="FX Test Summary",

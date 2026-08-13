@@ -70,13 +70,15 @@ async function selectFirstAvailableFile(page: Page) {
     // DataTable uses <button class="checkbox-btn"> inside <td class="td-select">,
     // NOT input[type="checkbox"]. Brokers are auto-expanded when they have files.
     const step2 = page.getByTestId('import-wizard-step2');
-    await page.waitForTimeout(400); // wait for broker files to load
 
+    // Wait for the row to exist instead of sleeping and hoping. The first test of
+    // the file loads the broker file list cold, which took longer than the old
+    // 400 ms nap; the selection was then skipped silently and the failure surfaced
+    // one line later as an inscrutable "Parse (0)".
     const firstCheckbox = step2.locator('td.td-select button.checkbox-btn').first();
-    if (await firstCheckbox.isVisible({timeout: 3_000}).catch(() => false)) {
-        await firstCheckbox.click();
-        await page.waitForTimeout(300);
-    }
+    await expect(firstCheckbox, 'no importable file listed — check populate --with-reports').toBeVisible({timeout: 15_000});
+    await firstCheckbox.click();
+    await page.waitForTimeout(300);
 }
 
 /** Parse selected files and wait for parse to complete. */

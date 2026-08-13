@@ -69,6 +69,33 @@ frontend/
 ./dev.py mkdocs gallery -l              # list available tests
 ```
 
+### Consolidation is on by default
+
+A category no longer launches one Playwright process per action. `_consolidate.py` groups every unit
+of a category by `(category, project)` and launches **one** invocation per group — 8 categories go
+from roughly 120 invocations to 16 — with the database populated and the users created **once** for
+the whole run rather than once per action.
+
+```bash
+./dev.py test --no-consolidate front-fx all   # the old one-process-per-action route
+./dev.py test --no-fail-fast all-frontend     # run everything, report every red
+```
+
+`--no-consolidate` exists as the escape hatch, not as the recommended path: the consolidated route is
+what the 8 categories are verified against (629 Playwright + 687 vitest passing).
+
+!!! warning "Under `--coverage js` the groups are split into batches of 8"
+    A consolidated worker accumulates V8 coverage for its whole lifetime. Measured: 8 specs finish
+    comfortably, 25 specs die at the heap limit — and the failure lands on an innocent test with a
+    duration of `0ms`. So with JS coverage on, a group runs in batches of `_JS_COVERAGE_CHUNK` (8)
+    specs. If a run starts dying again, lower that constant; do **not** raise
+    `--max-old-space-size`, which only postpones the crash.
+
+!!! warning "Never run two Playwright invocations at once"
+    Consolidation reduces the number of invocations; it does not make them concurrent. They share one
+    backend, one database and one set of E2E users, so a second simultaneous invocation corrupts
+    both. Frontend parallelism lives **inside** Playwright (`fullyParallel`), never above it.
+
 ## Playwright Config
 
 - **2 projects**: `desktop` (1280×720, Chrome) + `mobile` (iPhone 14 Pro Max viewport, Chromium)
@@ -205,6 +232,22 @@ Key files:
 Reports: `frontend/coverage-js/e2e/`, merged with the vitest level into
 `frontend/coverage-js/combined/`. Open with `./dev.py test coverage show js`.
 
+### The cleaning flags, and why there are only three
+
+| Flag | What it actually deletes |
+|---|---|
+| `--cov-clean-backend` | `htmlcov-backend` + `.coverage_data/backend` — Python from backend suites |
+| `--cov-clean-backend-e2e` | `htmlcov-backend-e2e` + `.coverage_data/frontend` — **Python** from E2E runs |
+| `--cov-clean-js` | `frontend/coverage-js/` — the JS/Svelte data |
+
+`--cov-clean-frontend` still works as a deprecated alias for `--cov-clean-backend-e2e`; it was the
+last thing in the system calling a Python measurement "frontend".
+
+`--cov-clean-js` is a **manual convenience only**. During any run with `--coverage js|all` the JS
+directories are wiped unconditionally anyway, because V8 offsets belong to one specific bundle: kept
+across a rebuild they would be remapped onto moved sources and the report would lie without failing.
+There is no separate flag for vitest — its data lives in `coverage-js/unit/`, under the same roof.
+
 > **No blocking thresholds**: Svelte 5 compiles templates into closures, so the data
 > is reliable about *"was this component reached"*, less so per-line.
 
@@ -235,6 +278,73 @@ Two caveats when reading it:
 - **Mobile awareness**: handle hamburger menu with `openMobileMenu()`
 - **No hardcoded login**: always use `login()` from `auth-helpers.ts`
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads
+- **Whoever commits, cleans up**: see below — a spec that writes must restore what it wrote
+
+### ⚠️ Whoever commits, cleans up
+
+Do **not** assume the database was just populated. It used to be true by accident — one Playwright
+process per action, and `globalSetup` re-populated before each one — but once specs share an
+invocation, what one spec leaves behind becomes the next one's input.
+
+`Transaction` has no `user_id`: a committed transaction is visible to every later spec. Use
+`e2e/fixtures/db-cleanup.ts`:
+
+```ts
+import {deleteTransactionsCreatedSince, snapshotTransactionIds} from '../fixtures/db-cleanup';
+
+let txBefore: Set<number>;
+
+test.beforeEach(async ({page}) => {
+    await login(page, TEST_USER);
+    txBefore = await snapshotTransactionIds(page);   // after login: page.request shares the cookie jar
+    await goToTransactions(page);
+});
+
+test.afterEach(async ({page}) => {
+    await deleteTransactionsCreatedSince(page, txBefore);
+});
+```
+
+Snapshot the ids and delete the difference — don't delete the ids you *think* you created. The
+difference also catches rows created indirectly (the other half of a linked pair, a promoted
+transfer), and those are the ones that get forgotten.
+
+Real case: `tx-clone` commits a clone of "the first paired giver row on editable brokers" — which is
+the `delete-safe` ETH transfer — and `tx-delete` then asserts no such row survives its own delete.
+Neither spec was wrong; the implicit contract between them was.
+
+#### The automatic net, and why it works per file
+
+Under a consolidated run (`LF_TX_HYGIENE=1`, set by `./dev.py test front-transaction all`) the
+`txHygiene` fixture in `e2e/fixtures/playwright.ts` does this for every spec without any per-spec
+code — but **between spec files, not between tests**.
+
+That distinction is not a detail. Specs are written sequentially: `tx-commit-all-types` commits a BUY
+and then sells part of it; `tx-delete` creates a pair in one test and deletes it in the next.
+Cleaning between tests breaks those chains — measured on the whole `transactions/` directory, it
+turned three reds into five. What consolidation removed was the reset *between files*, so that is
+what gets restored and nothing more.
+
+So the explicit `db-cleanup.ts` recipe above is still the right tool when a spec needs finer control
+than "restore at the end of the file". The automatic fixture is the floor, not a replacement.
+
+#### If a spec *destroys* mock rows, the fixture repopulates
+
+Dropping what a spec added is only half the invariant. `tx-delete` destroys mock rows by design, and
+no API call resurrects a row with its original id and its original half of a linked pair. So
+`restore()` compares against the opening snapshot: if a baseline id has vanished it runs the full
+`populate_mock_data --force --with-reports`, replays `initGlobalSettings()` (the global settings are
+the one part of `globalSetup` that `populate_mock_data` does not recreate) and logs the worker API
+context back in, because the users get new ids.
+
+Why it matters: on the database the suite leaves behind, `tx-picker-pagination` fails 4 tests; on a
+fresh one it passes 5. With fewer rows its first two clicks land on a linked pair, the bulk modal
+auto-opens a form modal, and the tests time out clicking behind a backdrop. The error blames
+`tx-form-modal` and never mentions `tx-delete`. Row *deflation*, the mirror of row inflation.
+
+The repopulate costs ~20 s, charged to whichever test triggers it, so the fixture grants
+`testInfo.setTimeout(+25 s)` **only when it actually ran** — a blanket increase would mask real
+slowness.
 
 ## Test Runner Architecture (`scripts/test_runner/`)
 
@@ -243,6 +353,10 @@ All tests are orchestrated by a modular Python test runner, invoked via `./dev.p
 ```text
 scripts/test_runner/
 ├── _registry.py              # TEST_REGISTRY — single source of truth
+├── _inventory.py             # Derives what exists: units, isolation classes, reachability
+├── _scheduler.py             # inventory + --workers N → execution plan
+├── _executor.py              # Runs a plan; one resource lot per worker
+├── _consolidate.py           # Groups a frontend category into one Playwright + one vitest run
 ├── _cli.py                   # Argument parsing + dispatch
 ├── _common.py                # Shared utilities (run_command, add_test, _run_test_suite)
 ├── _suites.py                # Aggregate suites (all, all-backend, all-frontend)
@@ -262,24 +376,29 @@ scripts/test_runner/
 3. `_cli.py` auto-generates argparse subcommands from `TEST_REGISTRY`
 4. `./dev.py test <category> <action>` dispatches to the registered function
 
+Every `{domain}_all()` suite is **derived from the registry**, not hand-written. Registering an
+action is therefore enough to make it run — "registered but unreachable" is no longer a state that
+can exist. (It used to: six registered actions worth ~259 tests were never executed by any `all`.)
+
 ### Adding a new frontend test spec
 
 1. Create `frontend/e2e/{domain}/tx-{concern}.spec.ts` (or `{domain}.spec.ts`)
 2. In the appropriate `_frontend_{domain}.py`:
    - Add a runner function that calls `_run_playwright("path/to/spec.ts", ...)`
-   - Add to the `{domain}_all()` suite
    - Register with `add_test(cat, "action-name", runner_func, ...)`
-3. The new action becomes available as `./dev.py test front-{domain} action-name`
+3. The new action becomes available as `./dev.py test front-{domain} action-name`, **and the `all`
+   suite picks it up on its own** — do not add it to a list by hand
 
 ### Key functions
 
 | Function | Module | Purpose |
 |----------|--------|---------|
 | `_run_playwright(spec, ...)` | `_frontend_common.py` | Runs Playwright with ui/headed/debug/coverage flags |
-| `_ensure_db_populated()` | `_frontend_common.py` | Calls `db populate --force` before tests |
-| `_ensure_test_users()` | `_frontend_common.py` | Creates 8 E2E users if missing |
-| `_ensure_frontend_build()` | `_frontend_common.py` | Auto-builds frontend if stale |
+| `_ensure_db_populated()` | `_frontend_common.py` | Calls `db populate --force --with-reports` before tests (memoised per run) |
+| `_ensure_test_users()` | `_frontend_common.py` | Creates 8 E2E users if missing (memoised per run); sets `LF_SETUP_DONE=1` once the DB is ready too |
+| `_ensure_frontend_build()` | `_frontend_common.py` | Auto-builds frontend if stale (memoised per run) |
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a test entry in a category dict |
 | `make_category(help, desc)` | `_common.py` | Creates the `_meta` entry for a new category |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs tests sequentially with summary report |
+
 
