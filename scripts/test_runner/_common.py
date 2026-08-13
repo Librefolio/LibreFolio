@@ -37,6 +37,24 @@ _COVERAGE_JS = False
 _COVERAGE_SOURCE = None
 # Global flag for resume mode (set by main())
 _RESUME_MODE = False
+# (category, action) pairs a parallel pre-pass has already executed. The serial
+# pass skips them, which is how the two passes divide the work without either
+# of them needing to know the other exists.
+_SKIP_ACTIONS: set = set()
+# Actions the consolidated (or parallel) pre-pass ran and found red. Kept apart from
+# _SKIP_ACTIONS because the two answer different questions: "was it already run?" and
+# "did it pass?". Conflating them is how a red becomes a green summary.
+_FAILED_ACTIONS: set = set()
+# Whether a failing action stops the suite. False under --no-fail-fast, where the
+# point is to learn how wide the damage is instead of discovering it one red at a
+# time. Kept as module state rather than a parameter because _run_test_suite is
+# called from ~15 `*_all` functions that have no business knowing about it.
+_FAIL_FAST = True
+
+
+def set_fail_fast(enabled: bool) -> None:
+    global _FAIL_FAST
+    _FAIL_FAST = enabled
 
 
 @contextmanager
@@ -178,6 +196,9 @@ def _run_test_suite(
         else:
             mark_failed(suite_key, test_name)
             print_error(f"Test failed: {test_name}")
+            if not _FAIL_FAST:
+                print_warning("Continuing (--no-fail-fast)")
+                continue
             print_warning(f"Stopping {suite_name.lower()} execution")
             if resume:
                 print_info("💡 Fix the issue and re-run with --resume to continue from here")
@@ -227,12 +248,17 @@ def _run_test_suite(
         return False
 
 
-def _get_category_tests_for_all(category: str, verbose: bool) -> list:
+def _get_category_tests_for_all(category: str, verbose: bool, **passthrough) -> list:
     """
     Generate list of (name, lambda) tuples for a category's all test.
 
     Automatically excludes the 'all' action itself and uses registry
-    as single source of truth.
+    as single source of truth: an action that is registered is, by
+    construction, executed by its category's ``all``.
+
+    ``passthrough`` carries the frontend options (ui, headed, debug, coverage)
+    and is filtered per action, because the registered functions do not all
+    accept the same keywords.
 
     NOTE: Uses lazy import of TEST_REGISTRY to avoid circular imports.
     """
@@ -245,10 +271,62 @@ def _get_category_tests_for_all(category: str, verbose: bool) -> list:
     for action, info in TEST_REGISTRY[category].items():
         if action == "_meta" or action == "all":
             continue
+        if not info.get("in_all", True):
+            continue
+        if (category, action) in _SKIP_ACTIONS:
+            continue
         func = info["func"]
         name = info.get("name", action)
-        tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
+        try:
+            params = inspect.signature(func).parameters
+        except (TypeError, ValueError):
+            params = {}
+        kwargs = {"verbose": verbose}
+        kwargs.update({k: v for k, v in passthrough.items() if k in params})
+        tests.append((name, lambda f=func, kw=kwargs: f(**kw)))
     return tests
+
+
+def nothing_left_to_run(category: str) -> bool:
+    """True when the consolidated pass already ran every action of this category.
+
+    Without this guard the serial suite still builds the frontend, repopulates the
+    database and creates the E2E users before discovering it has nothing to execute
+    — about ten seconds per category, and a "Populating test DB" line that reads as
+    if work were still pending. It is also misleading in a way that matters: the
+    repopulation happens *after* the consolidated pass, so anyone reading the log
+    top-down sees the database wiped after the tests that used it.
+    """
+    from ._registry import TEST_REGISTRY
+
+    actions = TEST_REGISTRY.get(category)
+    if not actions:
+        return False
+    runnable = [
+        a
+        for a, info in actions.items()
+        if a not in ("_meta", "all") and info.get("in_all", True)
+    ]
+    if not runnable:
+        return False
+    return all((category, a) in _SKIP_ACTIONS for a in runnable)
+
+
+def consolidated_verdict(category: str) -> bool:
+    """Report the consolidated outcome in place of the skipped serial suite.
+
+    Returns what the category's ``all`` must return, so a unit that failed in the
+    consolidated pass still turns its category red. Without this the pre-pass would
+    print ``✘`` and the suite summary would then print "ALL TESTS PASSED" a few
+    lines below — the exit code was already correct, but a summary that contradicts
+    it is worse than no summary at all.
+    """
+    failed = sorted(a for (c, a) in _FAILED_ACTIONS if c == category)
+    if not failed:
+        print_info("Already covered by the consolidated pass")
+        return True
+    print_error(f"Failed in the consolidated pass: {', '.join(failed)}")
+    return False
 
 
 def _build_pytest_cmd(test_path: str, test_names: list = None) -> list:
@@ -372,9 +450,16 @@ def make_category(help_text: str, description: str) -> dict:
     return {"_meta": {"help": help_text, "description": description}}
 
 
-def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None) -> None:
-    """Add a single test entry to a category dict."""
-    entry = {"func": func, "test_names": test_names, "name": name, "desc": desc}
+def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None, in_all: bool = True) -> None:
+    """Add a single test entry to a category dict.
+
+    ``in_all=False`` marks an action whose tests another action already runs —
+    an aggregate alias, or a concern folded into one consolidated invocation.
+    The derived ``all`` skips it to avoid executing the same spec twice; the
+    reachability check is unaffected, because it reasons about launched paths
+    rather than actions.
+    """
+    entry = {"func": func, "test_names": test_names, "name": name, "desc": desc, "in_all": in_all}
     if prereq:
         entry["prereq"] = prereq
     if tests:

@@ -89,6 +89,25 @@ class TestNamedCache:
         assert len(cache) == 0
         cache.close()
 
+    def test_clear_keeps_the_cache_usable_after_it_filled_up(self):
+        """A cleared cache must still store — theine's own clear() does not.
+
+        theine empties the entry map but keeps the W-TinyLFU admission filter
+        loaded with the frequencies of the keys it dropped, so once the cache has
+        reached maxsize every later set() is refused against those ghosts and the
+        cache silently stops caching. Regression guard for the fix that rebuilds
+        the underlying instance instead.
+        """
+        cache = NamedCache("test", maxsize=20, ttl=60)
+        for i in range(40):  # more than maxsize: this is what arms the defect
+            cache.set(f"k{i}", i)
+        cache.clear()
+
+        cache.set("after", "v")
+        assert cache.get("after") == ("v", True)
+        assert len(cache) == 1
+        cache.close()
+
     def test_len(self):
         cache = NamedCache("test", maxsize=100, ttl=60)
         cache.set("a", 1)

@@ -3,7 +3,6 @@ External service tests: FX providers, asset providers, BRIM providers.
 Includes provider discovery for dynamic CLI help.
 """
 
-import inspect
 import re
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from . import _common
 from ._common import (
     PROJECT_ROOT,
     _build_pytest_cmd,
+    _get_category_tests_for_all,
     _run_test_suite,
     add_test,
     make_category,
@@ -232,24 +232,11 @@ def external_brim_providers(verbose: bool = False, test_names: list = None,
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
-    from ._registry import TEST_REGISTRY
-
-    tests = []
-    for action, info in TEST_REGISTRY.get("external", {}).items():
-        if action in ("_meta", "all"):
-            continue
-        func = info["func"]
-        name = info.get("name", action)
-        func_params = inspect.signature(func).parameters
-        if "providers" in func_params:
-            tests.append((name, lambda f=func, v=verbose, p=providers, ep=exclude_providers:
-                          f(verbose=v, providers=p, exclude_providers=ep)))
-        else:
-            tests.append((name, lambda f=func, v=verbose: f(verbose=v)))
-
     return _run_test_suite(
         suite_name="External Tests",
-        tests=tests,
+        tests=_get_category_tests_for_all(
+            "external", verbose, providers=providers, exclude_providers=exclude_providers
+        ),
         verbose=verbose,
         info_msgs=[
             "Testing external provider integrations",

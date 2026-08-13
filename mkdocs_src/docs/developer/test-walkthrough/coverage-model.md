@@ -217,7 +217,7 @@ whichever exists. Pass `--input` to point elsewhere.
 ## Cleaning
 
 ```bash
-./dev.py test --coverage --cov-clean-backend --cov-clean-frontend all
+./dev.py test --coverage --cov-clean-backend --cov-clean-backend-e2e all
 ```
 
 JS coverage directories are cleaned automatically at the start of every run that

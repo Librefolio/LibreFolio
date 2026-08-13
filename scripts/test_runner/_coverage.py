@@ -5,6 +5,7 @@ Coverage finalization, reporting, and management commands.
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from scripts.cli_base import pipenv_prefix
@@ -29,11 +30,33 @@ def _clean_js_coverage_dirs() -> None:
     invocations by design — JS data is rebuilt from scratch every time: the raw
     V8 output is tied to a specific build, so mixing runs across a rebuild would
     mean remapping bytes onto sources that have since moved.
+
+    The retry is not defensive padding. ``shutil.rmtree`` lists a directory,
+    empties what it saw, then ``rmdir``s it — and on macOS the Finder drops a
+    fresh ``.DS_Store`` into any folder it is looking at, including one being
+    deleted. The window is milliseconds wide and the result was an unhandled
+    ``OSError: Directory not empty`` that killed the whole test command before a
+    single test ran.
+
+    Failing to clean must still be loud: stale V8 offsets remapped onto a rebuilt
+    bundle produce a report that is wrong without being broken.
     """
     js_dir = _js_dir()
-    if js_dir.exists():
-        shutil.rmtree(js_dir)
-        print(f"{Colors.GREEN}🗑️  Removed frontend/{JS_COVERAGE_DIR}/{Colors.NC}")
+    if not js_dir.exists():
+        return
+    for attempt in (1, 2, 3):
+        try:
+            shutil.rmtree(js_dir)
+            print(f"{Colors.GREEN}🗑️  Removed frontend/{JS_COVERAGE_DIR}/{Colors.NC}")
+            return
+        except OSError as exc:
+            if attempt == 3:
+                raise RuntimeError(
+                    f"Could not remove frontend/{JS_COVERAGE_DIR}/ ({exc}). JS coverage "
+                    "cannot be reused across a rebuild, so the run is stopped rather "
+                    "than left to report stale data. Remove the directory by hand and retry."
+                ) from exc
+            time.sleep(0.2)
 
 
 def _run_mcr(args: list, label: str) -> bool:

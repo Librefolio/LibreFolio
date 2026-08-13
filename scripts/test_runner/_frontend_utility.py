@@ -3,8 +3,8 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright
+from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
+from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -104,13 +104,14 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
     """Run all frontend utility/component E2E tests."""
     from ._common import print_header
     print_header("Frontend Utility Tests (Playwright)")
+    if _common.nothing_left_to_run("front-utility"):
+        return _common.consolidated_verdict("front-utility")
+    reset_setup_scope()
     if not _ensure_frontend_build(): return False
     if not _ensure_test_users(): return False
-    specs = ["auth.spec.ts", "settings.spec.ts", "files.spec.ts", "select-components.spec.ts", "image-crop.spec.ts", "settings/scheduler.spec.ts", "tooltip-component.spec.ts", "utilities.spec.ts"]
     return _run_test_suite(
         suite_name="Frontend Utility Tests",
-        tests=[("Core Store Unit", lambda: front_utility_unit(verbose=verbose))]
-        + [(spec.replace('.spec.ts', '').title(), lambda s=spec: _run_playwright(s, ui=ui, headed=headed, debug=debug, coverage=coverage)) for spec in specs],
+        tests=_get_category_tests_for_all("front-utility", verbose, ui=ui, headed=headed, debug=debug, coverage=coverage),
         verbose=verbose,
         header_msg=None,
         summary_title="Frontend Utility Test Summary",

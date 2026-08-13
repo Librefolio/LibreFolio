@@ -63,8 +63,24 @@ class NamedCache:
         self._cache.delete(key)
 
     def clear(self) -> None:
-        """Remove all entries."""
-        self._cache.clear()
+        """Remove all entries.
+
+        theine's own ``clear()`` empties the entry map but leaves the W-TinyLFU
+        admission filter loaded with the frequencies of the keys it just dropped.
+        Once the cache has reached ``maxsize`` at least once, every subsequent
+        ``set()`` is refused admission against those ghosts and the cache stops
+        storing anything at all — permanently, and without raising. Measured on
+        theine 2.0.0: 19 entries before a clear recover, 20 do not.
+
+        Rebuilding the instance is therefore the only sound way to empty it. The
+        old one is closed so its timer-wheel thread does not leak.
+        """
+        old = self._cache
+        self._cache = Cache(self._maxsize)
+        try:
+            old.close()
+        except Exception:  # a cache that cannot be closed must not break a clear
+            pass
 
     def close(self) -> None:
         """Stop the timer wheel thread (call on shutdown)."""

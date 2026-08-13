@@ -3,6 +3,7 @@ Frontend common: build checks, DB population, test user creation, Playwright run
 """
 
 import inspect
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -15,6 +16,23 @@ from ._common import (
     print_section, print_info, print_success, print_error, print_warning,
 )
 from ._backend_db import db_populate
+
+
+# Setup already performed in the current scope. A scope is one run of one
+# category: `reset_setup_scope()` opens it, and the first `_ensure_*` call
+# inside it does the real work while the rest find it warm.
+#
+# This is what lets an `all` action be derived from the registry instead of
+# hand-written. Without it, calling the registered actions would repopulate the
+# database and recreate the eight users once per action; with it, the cost is
+# paid exactly once per category — which is what the hand-written lists did.
+_SETUP_DONE: set[str] = set()
+
+
+def reset_setup_scope() -> None:
+    """Open a new setup scope, so the next ``_ensure_*`` call works for real."""
+    _SETUP_DONE.clear()
+    os.environ.pop("LF_SETUP_DONE", None)
 
 
 def _ensure_frontend_build() -> bool:
@@ -33,11 +51,15 @@ def _ensure_frontend_build() -> bool:
 
     from dev import cmd_fe_build
 
+    if "build" in _SETUP_DONE:
+        return True
+
     result = auto_build_frontend(
         debug=False,
         build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
     )
     if result is None or result == 0:
+        _SETUP_DONE.add("build")
         return True
     else:
         print_error("Frontend build failed!")
@@ -45,13 +67,33 @@ def _ensure_frontend_build() -> bool:
 
 
 def _ensure_db_populated() -> bool:
-    """Ensure test database has been populated with mock data."""
+    """Ensure test database has been populated with mock data.
+
+    ``with_reports=True`` matters: Playwright's ``globalSetup`` has always used
+    it, and the broker import-history specs need those sample BRIM files to have
+    anything to show. Without it here, the Python populate would be a *subset* of
+    the JS one, and telling `globalSetup` to stand down (``LF_SETUP_DONE``) would
+    quietly remove data those specs depend on.
+    """
+    if "db" in _SETUP_DONE:
+        return True
+
     print_info("Populating test DB with mock data...")
-    return db_populate(verbose=False, force=True)
+    if not db_populate(verbose=False, force=True, with_reports=True):
+        return False
+
+    _SETUP_DONE.add("db")
+    # Repopulating drops the E2E users, so they must be recreated after it.
+    _SETUP_DONE.discard("users")
+    os.environ.pop("LF_SETUP_DONE", None)
+    return True
 
 
 def _ensure_test_users() -> bool:
     """Ensure E2E test users exist in test database."""
+    if "users" in _SETUP_DONE:
+        return True
+
     print_info("Ensuring E2E test users exist...")
 
     users = [
@@ -82,6 +124,12 @@ def _ensure_test_users() -> bool:
         capture_output=True
     )
 
+    _SETUP_DONE.add("users")
+    # Both halves of what globalSetup would redo are now in place, so it can skip
+    # them. It still initialises the global settings over the API — nothing on the
+    # Python side does that, and `populate --force` wipes them.
+    if "db" in _SETUP_DONE:
+        os.environ["LF_SETUP_DONE"] = "1"
     print_success("Test users ready")
     return True
 
@@ -140,8 +188,6 @@ def _run_playwright(
     try:
         env = None
         if cov_py or cov_js:
-            import os
-
             env = os.environ.copy()
             if cov_py:
                 env['COVERAGE_BACKEND'] = '1'

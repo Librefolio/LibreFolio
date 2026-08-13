@@ -74,8 +74,6 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
 
 def run_all_tests(verbose: bool = False, providers: list = None, exclude_providers: list = None, resume: bool = False) -> bool:
     """Run all tests (backend + frontend) in optimal order."""
-    from ._backend_external import external_all
-
     all_tests = []
 
     # Backend categories
