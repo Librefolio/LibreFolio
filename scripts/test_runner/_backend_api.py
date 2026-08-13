@@ -549,19 +549,29 @@ def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Portfolio WAC API tests", verbose=verbose)
 
 
-def api_test(verbose: bool = False) -> bool:
-    """Run all API tests."""
-    # The `services` category recreates the database empty (see services_all →
-    # db_create), so by the time this category runs in a full suite the fixture
-    # users seeded by `db populate` are gone. Tests that assert against real
-    # portfolio data (risk analytics) look up `e2e_test_user` and would fail with
-    # an opaque NoResultFound. Reseed here, mirroring the frontend runner.
+def _api_setup() -> bool:
+    """Reseed the fixture data the API units assert against.
+
+    The `services` category recreates the database empty (see services_all →
+    db_create), so by the time this category runs in a full suite the fixture
+    users seeded by `db populate` are gone. Tests that assert against real
+    portfolio data (risk analytics) look up `e2e_test_user` and would fail with
+    an opaque NoResultFound.
+    """
     print_info("\n⚙️  Populating test database for API tests...")
     if db_populate(verbose=False, force=True):
         print_success("Test database populated\n")
-    else:
-        print_error("Failed to populate test database")
-        print_warning("API tests needing fixture data (risk analytics) will fail")
+        return True
+    print_error("Failed to populate test database")
+    print_warning("API tests needing fixture data (risk analytics) will fail")
+    return False
+
+
+def api_test(verbose: bool = False) -> bool:
+    """Run all API tests."""
+    if _common.nothing_left_to_run("api"):
+        return _common.consolidated_verdict("api")
+    _common.run_category_setup("api")
 
     return _run_test_suite(
         suite_name="API Tests",
@@ -589,6 +599,8 @@ def e2e_brim(verbose: bool = False, test_names: list = None) -> bool:
 
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
+    if _common.nothing_left_to_run("e2e"):
+        return _common.consolidated_verdict("e2e")
     return _run_test_suite(
         suite_name="E2E Tests",
         tests=_get_category_tests_for_all("e2e", verbose),
@@ -614,6 +626,13 @@ API Endpoint Tests
 Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
 """,
+        setup=_api_setup,
+        # Earned, not assumed: 50 of the 51 units ran concurrently on one shared
+        # backend across two full runs with 4 workers — 579 tests, zero reds —
+        # before this line was written. They are scoped because each creates its
+        # own user and addresses its own rows by id. The two that are not say so
+        # below, each with the run that proved it.
+        default_isolation="write-scoped",
     )
     add_test(api, "fx", api_fx, name="FX API", desc="Conversion, providers, pair sources")
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
@@ -656,7 +675,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
-    add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me")
+    add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.enable_registration, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
     add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")

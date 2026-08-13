@@ -887,9 +887,15 @@
         pairs = pairs.map((p) => ({...p, data: [], loading: true}));
         await fetchAllPairData();
     }
+
+    /**
+     * Same two-wave load as the assets page: the pair list first, then rates per pair. See the
+     * note there — until this is false, the rates on screen are not the final ones.
+     */
+    let busy = $derived(loading || pairs.some((p) => p.loading));
 </script>
 
-<div class="space-y-6" data-testid="fx-page">
+<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
     <!-- Header: Title left, ViewModeToggle + Add Pair right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room, the opposite of what "wrap only when space is

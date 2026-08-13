@@ -44,7 +44,6 @@ test.describe('Asset Data Editor', () => {
         const editDataBtn = page.getByTestId('asset-detail-editdata-btn');
         await expect(editDataBtn).toBeVisible({timeout: 5_000});
         await editDataBtn.click();
-        await page.waitForTimeout(300);
         await expect(page.getByTestId('asset-detail-editor-panel')).toBeVisible();
     }
 
@@ -66,7 +65,6 @@ test.describe('Asset Data Editor', () => {
     async function openEventImportModal(page: import('@playwright/test').Page) {
         await openDataEditor(page);
         await page.getByTestId('asset-editor-events-tab').click();
-        await page.waitForTimeout(200);
         await page.getByTestId('fx-data-import-btn').click();
         await page.waitForTimeout(200);
         const modal = page.getByTestId('data-import-modal');
@@ -117,7 +115,6 @@ test.describe('Asset Data Editor', () => {
         await openDataEditor(page);
         const eventsTab = page.getByTestId('asset-editor-events-tab');
         await eventsTab.click();
-        await page.waitForTimeout(200);
         // Events tab should now be active
         await expect(eventsTab).toHaveClass(/text-libre-green|text-emerald/);
     });
@@ -192,7 +189,6 @@ test.describe('Asset Data Editor', () => {
         await expect(panel).toBeVisible();
         // Click close button
         await panel.locator('button:has-text("✕")').click();
-        await page.waitForTimeout(300);
         await expect(panel).not.toBeVisible();
     });
 
@@ -224,7 +220,6 @@ test.describe('Asset Data Editor', () => {
         await expect(pricesTab.locator('span.rounded-full')).toHaveText('1');
         // Switch to events tab and back
         await page.getByTestId('asset-editor-events-tab').click();
-        await page.waitForTimeout(200);
         await pricesTab.click();
         await page.waitForTimeout(200);
         // Save button should still be enabled
@@ -240,10 +235,8 @@ test.describe('Asset Data Editor', () => {
         const panel = page.getByTestId('asset-detail-editor-panel');
         // Add row
         await page.getByTestId('fx-data-add-row-btn').click();
-        await page.waitForTimeout(200);
         // Click cancel
         await panel.locator('button:has-text("Cancel")').click();
-        await page.waitForTimeout(300);
         // Editor should be hidden
         await expect(panel).not.toBeVisible();
     });

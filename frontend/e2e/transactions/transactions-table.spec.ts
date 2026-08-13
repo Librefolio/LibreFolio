@@ -231,7 +231,6 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('selecting a row shows toolbar with Edit/Clone/Delete', async ({page}) => {
         const cb = page.locator('[data-testid="tx-table"] tbody tr[data-row-id] .checkbox-btn').first();
         await cb.click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('toolbar-action-edit')).toBeVisible({timeout: 3_000});
         await expect(page.getByTestId('toolbar-action-clone')).toBeVisible();
         await expect(page.getByTestId('toolbar-action-delete')).toBeVisible();
@@ -241,7 +240,6 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('toolbar Edit opens BulkModal with auto-opened FormModal', async ({page}) => {
         const cb = page.locator('[data-testid="tx-table"] tbody tr[data-row-id] .checkbox-btn').first();
         await cb.click();
-        await page.waitForTimeout(200);
         await page.getByTestId('toolbar-action-edit').click();
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
         await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
@@ -251,7 +249,6 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('toolbar Clone opens BulkModal', async ({page}) => {
         const cb = page.locator('[data-testid="tx-table"] tbody tr[data-row-id] .checkbox-btn').first();
         await cb.click();
-        await page.waitForTimeout(200);
         await page.getByTestId('toolbar-action-clone').click();
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
     });
@@ -260,7 +257,6 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('toolbar Delete opens delete confirmation', async ({page}) => {
         const cb = page.locator('[data-testid="tx-table"] tbody tr[data-row-id] .checkbox-btn').first();
         await cb.click();
-        await page.waitForTimeout(200);
         await page.getByTestId('toolbar-action-delete').click();
         // Delete now opens BulkModal in delete mode (B23 rewrite), or
         // falls back to the legacy confirm modals.
@@ -272,11 +268,9 @@ test.describe('TransactionsTable (main read-view)', () => {
     test('header checkbox selects all → toolbar appears', async ({page}) => {
         const headerCb = page.locator('[data-testid="tx-table"] thead .checkbox-btn').first();
         await headerCb.click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('toolbar-action-edit')).toBeVisible({timeout: 3_000});
         // Deselect
         await headerCb.click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('toolbar-action-edit')).not.toBeVisible({timeout: 3_000});
     });
 

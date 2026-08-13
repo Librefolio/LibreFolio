@@ -1054,9 +1054,18 @@
     }
 
     let hasActiveFilters = $derived(!!searchText || filterTypes.size > 0 || filterCurrencies.size > 0);
+
+    /**
+     * The page renders in two waves: the asset list arrives first, then each row fetches its
+     * own prices. Until both are done the numbers on screen are placeholders, and nothing in
+     * the DOM said so — the only way to know was to wait and hope. Exposed here so the state
+     * is readable by assistive tech (`aria-busy`) and by anything else that needs to know
+     * whether what it is looking at is final.
+     */
+    let busy = $derived(loading || assets.some((a) => a.loadingPrices));
 </script>
 
-<div class="space-y-6" data-testid="assets-page">
+<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="assets-page">
     <!-- Header: Title left, ViewModeToggle + Add Asset right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN

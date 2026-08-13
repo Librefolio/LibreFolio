@@ -219,7 +219,6 @@ test.describe('DataQualityBanner — FX Detail (flat mode)', () => {
 
     test('FX detail uses flat mode: no grouped banner container', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
-        await page.waitForTimeout(1500);
         // Flat mode never renders a grouped "data-quality-banner" container
         await expect(page.getByTestId('data-quality-banner')).toHaveCount(0);
     });

@@ -196,7 +196,6 @@ test.describe('Import Wizard — asset identity', () => {
         const card = proposedCard(page);
         const groupId = await groupIdOf(card);
         await page.getByTestId(`asset-group-confirm-${groupId}`).click();
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId(`asset-group-${groupId}`)).toHaveAttribute('data-state', 'confirmed');
         // A settled group has nothing left to confirm.
@@ -241,7 +240,6 @@ test.describe('Import Wizard — asset identity', () => {
         // Electing the quoted code is the whole point: a CUM code has no price feed
         // behind it, so leading with it means an asset that never updates.
         await market.click();
-        await page.waitForTimeout(400);
         await expect(market).toHaveAttribute('data-primary', 'true');
         await expect(placement).toHaveAttribute('data-primary', 'false');
     });
@@ -259,7 +257,6 @@ test.describe('Import Wizard — asset identity', () => {
         await expect(input).toBeVisible({timeout: 3_000});
         await input.fill('BTP 2025 unificato');
         await input.press('Enter');
-        await page.waitForTimeout(500);
 
         await expect(page.getByTestId(`asset-group-name-${groupId}`)).toHaveText('BTP 2025 unificato');
     });
@@ -298,15 +295,12 @@ test.describe('Import Wizard — asset identity', () => {
 
         const groupId = await groupIdOf(proposedCard(page));
         await page.getByTestId(`asset-group-confirm-${groupId}`).click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId(`asset-group-${groupId}`)).toHaveAttribute('data-state', 'confirmed');
 
         // Forward, then back: the step is rebuilt from the parse, so an override that is
         // not stored quietly evaporates and the user is asked the same question twice.
         await page.getByTestId('import-wizard-assets-continue').click();
-        await page.waitForTimeout(800);
         await page.getByTestId('import-wizard-back').click();
-        await page.waitForTimeout(800);
 
         await page.getByTestId('asset-group-step').waitFor({state: 'visible', timeout: 8_000});
         await expect(page.getByTestId(`asset-group-${groupId}`)).toHaveAttribute('data-state', 'confirmed');

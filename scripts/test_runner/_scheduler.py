@@ -13,7 +13,7 @@ costs time, and time is cheap compared with an intermittent red.
 import json
 
 
-from ._inventory import PURE, PROJECT_ROOT, build_inventory
+from ._inventory import PURE, READ, WRITE_SCOPED, PROJECT_ROOT, build_inventory
 
 DURATIONS_FILE = PROJECT_ROOT / ".coverage_data" / "unit_durations.json"
 
@@ -63,12 +63,17 @@ def balance(paths: list, workers: int, durations: dict = None) -> list:
     return [g for g in groups if g]
 
 
-def plan(scope: str = None, workers: int = 1) -> dict:
+def plan(scope: str = None, workers: int = 1, classes: tuple = (PURE,), assume_scoped: bool = False) -> dict:
     """Build an execution plan.
 
     ``scope`` restricts to one category (e.g. ``"services"``); ``None`` means
     every backend category. Returns the parallel groups, the actions that must
     stay serial, and the inventory the plan was derived from.
+
+    ``classes`` is which isolation classes may run in the parallel pass. PURE
+    alone is always safe: those units touch neither database nor server. READ and
+    WRITE_SCOPED additionally need a **shared backend already running**, because
+    they talk to one — so the caller decides, not this function.
     """
     units, errors = build_inventory()
 
@@ -81,7 +86,22 @@ def plan(scope: str = None, workers: int = 1) -> dict:
     for u in pytest_units:
         by_action.setdefault((u.category, u.action), []).append(u.path)
 
-    pure = {u.path for u in pytest_units if u.isolation == PURE}
+    if assume_scoped:
+        # The experiment of tappa 3.2: run everything concurrently and read what
+        # breaks. A unit that fails here is not a regression — it is a unit that
+        # was only ever green because nothing else was touching the database at
+        # the same time, and the run has just said so out loud.
+        #
+        # Units with a written `exclusive_because` are the exception, and the
+        # distinction is the whole point: the flag overrides the *classifier's
+        # default*, which is a guess, not a *decision somebody justified*. The
+        # first run of this experiment produced 13 reds in two files, all caused
+        # by a third — `api auth` flipping `enable_registration` off — which is
+        # exactly what its `exclusive_because` had predicted in writing.
+        pure = {u.path for u in pytest_units if not u.exclusive_because}
+    else:
+        pure = {u.path for u in pytest_units if u.isolation in classes}
+
 
     # An action can only be lifted out of the serial pass when *every* path it
     # launches runs in the parallel one — a mixed action would silently lose its

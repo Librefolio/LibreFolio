@@ -35,7 +35,6 @@ async function openAdjustmentWithCostBasis(page: Page, quantity: string) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 
     await page.getByTestId('tx-form-type').click();
-    await page.waitForTimeout(300);
     await page.getByTestId('search-select-option-ADJUSTMENT').click();
     await page.waitForTimeout(300);
 
@@ -53,7 +52,6 @@ async function openAdjustmentWithCostBasis(page: Page, quantity: string) {
 
     const qtyInput = page.getByTestId('tx-form-quantity');
     await qtyInput.fill(quantity);
-    await page.waitForTimeout(400);
 
     await expect(page.getByTestId('tx-form-cost-basis-inline')).toBeVisible({timeout: 3_000});
 }
@@ -104,14 +102,11 @@ test.describe('Cost Basis Override — Total/Per unit toggle', () => {
 
         // Switch to Total — per-unit 100 x qty 5 = 500
         await page.getByTestId('tx-form-cost-basis-unit-toggle-total').click();
-        await page.waitForTimeout(200);
         await expect(cbInput).toHaveValue('500');
 
         // Type a new TOTAL (600) then switch back to Per unit — expect 120 (600 / 5)
         await cbInput.fill('600');
-        await page.waitForTimeout(200);
         await page.getByTestId('tx-form-cost-basis-unit-toggle-unit').click();
-        await page.waitForTimeout(200);
         await expect(cbInput).toHaveValue('120');
     });
 
@@ -124,7 +119,6 @@ test.describe('Cost Basis Override — Total/Per unit toggle', () => {
         // Total cost basis for the whole 4-unit adjustment: 200 → per-unit must be 50.
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await cbInput.fill('200');
-        await page.waitForTimeout(200);
         await expect(cbInput).toHaveValue('200');
 
         await applyFormModal(page);
@@ -144,7 +138,6 @@ test.describe('Cost Basis Override — Total/Per unit toggle', () => {
     test('toggle choice persists across closing and reopening the form (localStorage)', async ({page}) => {
         await openAdjustmentWithCostBasis(page, '3');
         await page.getByTestId('tx-form-cost-basis-unit-toggle-total').click();
-        await page.waitForTimeout(200);
         await expect(page.getByTestId('tx-form-cost-basis-unit-toggle-total')).toHaveClass(/bg-libre-green/);
 
         // Cancel the form (discards this draft) — a "Discard changes?" confirm appears

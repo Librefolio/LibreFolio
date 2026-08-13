@@ -3,6 +3,7 @@ CLI: argument parsers, dispatch, main entry point.
 """
 
 import argparse
+import contextlib
 import os
 import re
 import sys
@@ -427,13 +428,14 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cov-clean-js", action="store_true", help="Clean JS/Svelte coverage (raw V8 data and reports)", default=False)
     parser.add_argument("--workers", metavar="N", default="1", help="Parallel workers for isolation-safe units (N or 'auto'; default 1 = serial)")
     parser.add_argument("--no-fail-fast", action="store_true", help="Run everything and report every failure instead of stopping at the first", default=False)
-    parser.add_argument("--no-consolidate", action="store_true", help="Run one frontend invocation per action instead of one per category", default=False)
+    parser.add_argument("--no-consolidate", action="store_true", help="Run one invocation per action instead of one per category (backend and frontend)", default=False)
     parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
     parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
     parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived)", default=None)
     parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
+    parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
 
     subparsers = parser.add_subparsers(dest="category", help="Test category to run", required=False)
 
@@ -470,13 +472,14 @@ def register_subparser(parent_subparsers):
     test_parser.add_argument("--cov-clean-js", action="store_true", help="Clean JS/Svelte coverage (raw V8 data and reports)", default=False)
     test_parser.add_argument("--workers", metavar="N", default="1", help="Parallel workers for isolation-safe units (N or 'auto'; default 1 = serial)")
     test_parser.add_argument("--no-fail-fast", action="store_true", help="Run everything and report every failure instead of stopping at the first", default=False)
-    test_parser.add_argument("--no-consolidate", action="store_true", help="Run one frontend invocation per action instead of one per category", default=False)
+    test_parser.add_argument("--no-consolidate", action="store_true", help="Run one invocation per action instead of one per category (backend and frontend)", default=False)
     test_parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     test_parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     test_parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
     test_parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
     test_parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived)", default=None)
     test_parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
+    test_parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
 
     test_subparsers = test_parser.add_subparsers(dest="category", title="Test categories", metavar="")
 
@@ -508,23 +511,67 @@ def register_subparser(parent_subparsers):
 _SERVER_BACKED_CATEGORIES = {"api", "e2e", "all", "all-backend"}
 
 
+@contextlib.contextmanager
+def shared_backend_for(category: str, args):
+    """One backend for everything this invocation runs — pre-passes included.
+
+    The context has to open *before* the pre-passes, not just around the serial
+    dispatch. The consolidated pass runs the api units itself, and a test module
+    that does not see ``LIBREFOLIO_TEST_SHARED_SERVER`` in its environment
+    force-kills whatever holds the port and starts its own uvicorn. Measured with
+    the context opened too late: the consolidated api pass took 6m09 and started
+    47 servers inside one pytest process, silently undoing the whole point of
+    sharing one.
+    """
+    if category not in _SERVER_BACKED_CATEGORIES or getattr(args, "no_shared_server", False):
+        yield
+        return
+
+    from ._scheduler import resolve_workers
+    from ._server import SharedTestServer
+
+    with SharedTestServer(
+        coverage=bool(_common._COVERAGE_PY),
+        client_workers=resolve_workers(getattr(args, "workers", "1")),
+        verbose=False,
+    ):
+        yield
+
+
+def _categories_in_scope(args) -> list:
+    """The registry categories this invocation will actually run, in suite order."""
+    from ._consolidate_backend import CONSOLIDATABLE
+
+    category = args.category
+    if category in ("all", "all-backend"):
+        return list(CONSOLIDATABLE)
+    return [category] if category in TEST_REGISTRY else []
+
+
+def _run_exclusive_setups(args) -> bool:
+    """Run the setups that own the database file, before the server ever starts.
+
+    ``services`` deletes the SQLite file and rebuilds it from the migrations, and
+    it is the first category the consolidated pass runs — so doing it here means
+    the shared backend is started once, against the database it will actually
+    serve, instead of being stopped and restarted five seconds into the run.
+
+    This is an optimisation, not the safety net: ``db_create`` protects itself
+    with ``database_file_owned_exclusively()`` wherever it is called from. What
+    this adds is the knowledge of *which* setups are destructive, declared next to
+    the category instead of discovered at the moment of damage.
+    """
+    for category in _categories_in_scope(args):
+        if not _common.setup_is_exclusive(category):
+            continue
+        if not _common.run_category_setup(category):
+            print_error(f"{category}: setup failed before the shared backend — aborting")
+            return False
+    return True
+
+
 def dispatch_to_category(category: str, test_names, verbose: bool, args) -> int:
     """Dispatch to the appropriate test handler. Returns 0 on success, 1 on failure."""
-    if category in _SERVER_BACKED_CATEGORIES and not getattr(args, "no_shared_server", False):
-        from ._scheduler import resolve_workers
-        from ._server import SharedTestServer
-
-        client_workers = resolve_workers(getattr(args, "workers", "1"))
-        try:
-            with SharedTestServer(
-                coverage=bool(_common._COVERAGE_PY),
-                client_workers=client_workers,
-                verbose=False,
-            ):
-                return _dispatch_to_category_body(category, test_names, verbose, args)
-        except RuntimeError as exc:
-            print_error(str(exc))
-            return 1
     return _dispatch_to_category_body(category, test_names, verbose, args)
 
 
@@ -728,6 +775,36 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     return True
 
 
+def _parallel_classes(args, scope: str = None) -> tuple:
+    """Which isolation classes the parallel pass may run for this invocation.
+
+    PURE always: those units open no database and reach no server. READ and
+    WRITE_SCOPED only when this invocation names **one backend category**, for a
+    single reason: the database must already be in the shape that category's
+    setup guarantees.
+
+    Under ``all-backend`` it is not. The suite deliberately oscillates the file
+    (``db`` populates → ``services`` empties → ``api`` repopulates), and each
+    category's setup restores its own precondition just before it runs. A
+    parallel pass that ran ``api`` units up front would meet the empty database
+    ``services`` left behind. So the pre-pass runs the category's own setup
+    first, which is only meaningful when there is exactly one category to set up.
+
+    Server-backed categories additionally need the shared backend, but that is
+    already guaranteed: ``shared_backend_for()`` opens before the pre-passes.
+
+    Widening this to whole-suite scope means interleaving the parallel pass with
+    the consolidated one, category by category, instead of hoisting it in front.
+    """
+    from ._inventory import PURE, READ, WRITE_SCOPED
+
+    scope = scope or args.category
+    backend = scope in TEST_REGISTRY and not scope.startswith("front")
+    if backend and not getattr(args, "no_shared_server", False):
+        return (PURE, READ, WRITE_SCOPED)
+    return (PURE,)
+
+
 def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
     """Run the isolation-safe units concurrently before the serial pass.
 
@@ -735,29 +812,59 @@ def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
     category, or ``--workers 1`` — this is a no-op and the run takes exactly
     the path it takes today.
     """
-    from ._executor import combine_coverage, read_unit_durations, run_groups
-    from ._scheduler import load_durations, plan, save_durations
-
     category = args.category
     if category in TEST_REGISTRY:
         # A single registry category: parallelise it only if it is a backend one.
         if category.startswith("front"):
             return True, set()
-        scope = category
-    elif category in ("all", "all-backend"):
-        # Every backend category.
-        scope = None
-    else:
-        # all-frontend, coverage-report, check-orphans and friends: nothing here
-        # is a pytest unit, and scope=None would wrongly sweep in the backend.
-        return True, set()
+        return _parallel_for_scope(args, category, workers, verbose)
+    if category in ("all", "all-backend"):
+        # One scope per category, in suite order, each preceded by its own setup.
+        # A single scope=None pass cannot work above PURE: the suite oscillates
+        # the database on purpose (`db` populates → `services` empties → `api`
+        # repopulates), so there is no one moment at which every category's
+        # precondition holds. Walking the categories restores each in turn, which
+        # is the same thing the consolidated pass does — and because
+        # `run_category_setup` is once-per-invocation, it is not done twice.
+        from ._consolidate_backend import CONSOLIDATABLE
 
-    p = plan(scope, workers)
+        ok, covered = True, set()
+        for cat in CONSOLIDATABLE:
+            cat_ok, cat_covered = _parallel_for_scope(args, cat, workers, verbose)
+            ok = ok and cat_ok
+            covered |= cat_covered
+            if not cat_ok and not getattr(args, "no_fail_fast", False):
+                break
+        return ok, covered
+    # all-frontend, coverage-report, check-orphans and friends: nothing here
+    # is a pytest unit, and scope=None would wrongly sweep in the backend.
+    return True, set()
+
+
+def _parallel_for_scope(args, scope: str, workers: int, verbose: bool) -> tuple:
+    """The parallel pass for one category. Returns ``(ok, covered_actions)``."""
+    from ._executor import combine_coverage, read_unit_durations, run_groups
+    from ._scheduler import load_durations, plan, save_durations
+
+    classes = _parallel_classes(args, scope)
+    assume = bool(getattr(args, "assume_scoped", False)) and len(classes) > 1
+    p = plan(scope, workers, classes=classes, assume_scoped=assume)
     if p["errors"]:
         print_warning(f"⚠️  Inventory incomplete, running serially: {sorted(p['errors'])}")
         return True, set()
     if len(p["groups"]) <= 1 or not p["parallel_paths"]:
         return True, set()
+
+    if len(classes) > 1:  # noqa: SIM102 — server-backed scope needs its precondition
+        # Server-backed units are about to run before the category's serial pass,
+        # so nobody has yet guaranteed their precondition. Do it here — it is the
+        # same setup the consolidated pass would run, and `run_category_setup`
+        # is once-per-invocation, so this does not double it.
+        from ._common import run_category_setup
+
+        if not run_category_setup(scope):
+            print_error(f"Setup for '{scope}' failed — skipping the parallel pass")
+            return True, set()
 
     print_header(f"Parallel pass — {len(p['parallel_paths'])} isolation-safe unit(s) across {len(p['groups'])} worker(s)")
     outcome = run_groups(p["groups"], verbose=verbose, coverage=_common._COVERAGE_PY)
@@ -775,6 +882,47 @@ def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
         save_durations(durations)
 
     return outcome["ok"], p["covered_actions"]
+
+
+def _backend_consolidation_scope(args) -> tuple:
+    """Decide whether this invocation may consolidate backend units.
+
+    Same rule as the frontend: consolidation applies when the user asked for a
+    whole category or a whole suite. Naming a single action, or filtering by test
+    name, keeps the 1:1 shape — `./dev.py test api auth` must stay one file.
+    """
+    if getattr(args, "no_consolidate", False):
+        return False, None
+    if getattr(args, "test_names", None):
+        return False, None
+
+    category = args.category
+    action = getattr(args, "action", None)
+    if category in TEST_REGISTRY and not category.startswith("front"):
+        return (action in (None, "all")), category
+    if category in ("all", "all-backend"):
+        return True, None
+    return False, None
+
+
+def _run_backend_consolidation_prepass(args, verbose: bool, skip: set) -> tuple:
+    """Run each backend category's units in one invocation instead of one each."""
+    from ._consolidate_backend import run_backend_consolidated
+
+    enabled, scope = _backend_consolidation_scope(args)
+    if not enabled:
+        return True, set()
+
+    print_header("Consolidated backend pass — one invocation per category")
+    ok, covered, outcome = run_backend_consolidated(
+        scope,
+        coverage=bool(_common._COVERAGE_PY),
+        resume=bool(getattr(args, "resume", False)),
+        verbose=verbose,
+        skip=skip,
+    )
+    _common._FAILED_ACTIONS |= {unit for unit, passed in outcome.items() if not passed}
+    return ok, covered
 
 
 def _frontend_consolidation_scope(args) -> tuple:
@@ -819,6 +967,26 @@ def _run_consolidation_prepass(args, verbose: bool) -> tuple:
     return ok, covered
 
 
+def _run_passes(args, test_names, verbose: bool) -> tuple:
+    """Run the pre-passes and the serial dispatch under one shared backend.
+
+    Returns ``(result, parallel_ok, go_on)``. Both entry points go through here
+    so the order — backend up, then pre-passes, then serial — cannot drift apart
+    between them.
+    """
+    try:
+        if not _run_exclusive_setups(args):
+            return 1, False, False
+        with shared_backend_for(args.category, args):
+            parallel_ok, go_on = _apply_parallel(args, verbose)
+            if not go_on:
+                return 1, parallel_ok, False
+            return dispatch_to_category(args.category, test_names, verbose, args), parallel_ok, True
+    except RuntimeError as exc:
+        print_error(str(exc))
+        return 1, False, False
+
+
 def _apply_parallel(args, verbose: bool) -> tuple:
     """Run the pre-passes if requested. Returns ``(ok, continue_serial)``."""
     from ._scheduler import resolve_workers
@@ -836,6 +1004,15 @@ def _apply_parallel(args, verbose: bool) -> tuple:
             _common._SKIP_ACTIONS = covered
             print_error("Parallel pass failed — stopping before the serial pass (use --no-fail-fast to continue)")
             return False, False
+
+    # After the parallel pass, so the units it already ran are not run twice.
+    back_ok, back_covered = _run_backend_consolidation_prepass(args, verbose, covered)
+    covered |= back_covered
+    ok = ok and back_ok
+    if not ok and not getattr(args, "no_fail_fast", False):
+        _common._SKIP_ACTIONS = covered
+        print_error("Consolidated backend pass failed — stopping before the serial pass (use --no-fail-fast to continue)")
+        return False, False
 
     front_ok, front_covered = _run_consolidation_prepass(args, verbose)
     covered |= front_covered
@@ -884,11 +1061,10 @@ def _dispatch_test_command_body(args):
     if not _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe):
         return 1
 
-    parallel_ok, go_on = _apply_parallel(args, verbose)
+    result, parallel_ok, go_on = _run_passes(args, test_names, verbose)
     if not go_on:
         return 1
 
-    result = dispatch_to_category(args.category, test_names, verbose, args)
     success = result == 0 and parallel_ok
     _common._SKIP_ACTIONS = set()
     _common._FAILED_ACTIONS = set()
@@ -999,11 +1175,10 @@ def _main_body(parser, args):
     if not _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe):
         return 1
 
-    parallel_ok, go_on = _apply_parallel(args, verbose)
+    result, parallel_ok, go_on = _run_passes(args, test_names, verbose)
     if not go_on:
         return 1
 
-    result = dispatch_to_category(args.category, test_names, verbose, args)
     success = result == 0 and parallel_ok
     _common._SKIP_ACTIONS = set()
     _common._FAILED_ACTIONS = set()

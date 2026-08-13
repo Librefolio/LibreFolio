@@ -21,6 +21,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/parseDecimalInput.test.ts",
             "src/lib/utils/__tests__/parseTypedDate.test.ts",
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
+            "src/lib/utils/core/__tests__/formatDecimal.test.ts",
         ],
         cwd="frontend",
         capture_output=not verbose,

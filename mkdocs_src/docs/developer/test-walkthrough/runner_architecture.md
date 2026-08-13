@@ -90,6 +90,67 @@ intermittent red, while a wrong WRITE-GLOBAL only costs time.
 READ and WRITE-SCOPED must be **declared** before they can be trusted; a textual heuristic was tried
 and misclassified real cases, so until a unit is declared it stays serial.
 
+### Declaring a class — and earning it
+
+The default is correct but it is not free: left alone, it serialised **50 of the 51 `api` units and
+37 of the 85 `services` units** for no reason at all. The debt was never in the tests — it was in
+the catalogue, which had no way to be told it was wrong.
+
+Declare per unit, or on the category when the property holds for all of it:
+
+```python
+make_category(
+    "api", ...,
+    # every unit creates its own user and addresses its own rows by id
+    default_isolation="write-scoped",
+)
+
+add_test(
+    "auth", ...,
+    exclusive_because="rewrites global_settings.enable_registration; while it is False "
+                      "every concurrent user creation fails",
+)
+```
+
+`exclusive_because` **is** the WRITE-GLOBAL declaration, not a comment next to a flag. Storing the
+class and its justification as one statement means a category default cannot silently promote a unit
+somebody already explained must not be promoted — and the catalogue of exceptions is generated
+rather than maintained by hand.
+
+!!! tip "A class claim is earned by a passing parallel run, not asserted"
+
+    `--assume-scoped` ignores the catalogue and runs everything concurrently. Use it **once per
+    category** to find out what the catalogue was getting wrong, read the reds with the
+    `test-triage` skill, then write down what you learnt. It is experiment instrumentation, never a
+    default.
+
+    On `api` that experiment produced **14 reds out of 603 tests**, thirteen of which had a single
+    cause: `test_auth_api.py` turning registration off while its neighbours were creating users.
+    The fourteenth had nothing to do with concurrency — it reached the real ECB over the internet.
+
+### How to ask for an exclusive, and what justifies one
+
+The whole backend currently has **one** exclusive unit. That number is the point of the section: it
+is small because an exclusive has to survive being written down.
+
+| Unit | Why it cannot be scoped |
+|---|---|
+| `api auth` | rewrites `global_settings.enable_registration` — an **instance-wide flag**, not a per-user row. While it is `False` every concurrent user creation fails, and a test that verifies closed registration necessarily owns the instance. |
+
+Two claims that look like reasons and are not:
+
+- *"It reaches a third party over the network, so it is slow and fragile."* That is a reason to stop
+  reaching the third party, not to take the database. `api fx` held an exclusive on exactly this
+  argument until the three syncs were pointed at `MOCKFX`; it now runs with everyone else, and its
+  assertions became exact in the process.
+- *"It failed when I ran it in parallel."* Say **what** it mutates. If you cannot name the shared
+  surface, the cause is somewhere else — read the reds with the `test-triage` skill first, because
+  the loudest failure is usually not the one doing the damage.
+
+The test is simple: name the surface, and say why it has no per-user equivalent. If the sentence
+works, it belongs in `exclusive_because` and the exclusive is granted by the same act. If it does
+not, the unit is not exclusive — it is unfinished.
+
 ---
 
 ## 🧹 Shared state: whoever commits, cleans up

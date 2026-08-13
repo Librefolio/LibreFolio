@@ -39,7 +39,6 @@ async function openNewTransactionForm(page: Page) {
 async function selectType(page: Page, type: string) {
     const typeSelect = page.getByTestId('tx-form-type');
     await typeSelect.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     await page.getByTestId(`search-select-option-${type}`).click();
     await page.waitForTimeout(300);
 }

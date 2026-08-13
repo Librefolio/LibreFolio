@@ -482,12 +482,67 @@ def _run_command_body(cmd: list[str], description: str, verbose: bool = False, t
 # ── Registry builder helpers ────────────────────────────────────────────
 
 
-def make_category(help_text: str, description: str) -> dict:
-    """Create the _meta entry for a registry category."""
-    return {"_meta": {"help": help_text, "description": description}}
+def make_category(help_text: str, description: str, setup=None, setup_exclusive: bool = False, default_isolation: str = None) -> dict:
+    """Create the _meta entry for a registry category.
+
+    ``setup`` is what the category must do to its environment before any of its
+    units runs — ``services`` recreates the database empty, ``api`` reseeds it.
+    It used to live inline inside the ``all`` action, which was fine while that
+    action was the only entry point. It no longer is: the consolidated pass runs
+    the same units without going through it, and a second copy of "populate
+    first" would be a copy free to drift. Declaring it here gives both callers
+    one definition.
+
+    ``setup_exclusive`` marks a setup that cannot run while the shared backend
+    holds the database file. ``services`` deletes the SQLite file and rebuilds it
+    from the migrations: with a server attached to the old inode, the migration
+    is refused and the run continues against a database with no tables. Such a
+    setup is hoisted to before the server starts. ``api``'s is not exclusive — it
+    only inserts rows, and concurrent writers on WAL are fine.
+
+    ``default_isolation`` states what is true of the category as a whole, so the
+    exceptions are the only thing written down. ``api`` is ``write-scoped``
+    because its units create their own user and their own rows and address them
+    by id — the property is a *convention of the category*, and declaring it
+    fifty times would hide the two units that do not have it behind the
+    forty-eight that do. Overriding it per unit still works, and an
+    ``exclusive_because`` still wins.
+    """
+    meta = {"help": help_text, "description": description}
+    if setup is not None:
+        meta["setup"] = setup
+        meta["setup_exclusive"] = setup_exclusive
+    if default_isolation:
+        meta["default_isolation"] = default_isolation
+    return {"_meta": meta}
 
 
-def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None, in_all: bool = True) -> None:
+#: Categories whose setup already ran in this invocation. A setup is declared
+#: once but reachable from three callers (the ``all`` action, the consolidated
+#: pass, the hoist before the shared server); it must still happen exactly once.
+_SETUP_DONE: set = set()
+
+
+def setup_is_exclusive(category: str) -> bool:
+    """True when this category's setup needs the database file to itself."""
+    from ._registry import TEST_REGISTRY
+
+    meta = TEST_REGISTRY.get(category, {}).get("_meta", {})
+    return bool(meta.get("setup") and meta.get("setup_exclusive"))
+
+
+def run_category_setup(category: str) -> bool:
+    """Run a category's declared setup, once per invocation. True when it is fine."""
+    from ._registry import TEST_REGISTRY
+
+    setup = TEST_REGISTRY.get(category, {}).get("_meta", {}).get("setup")
+    if setup is None or category in _SETUP_DONE:
+        return True
+    _SETUP_DONE.add(category)
+    return bool(setup())
+
+
+def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None, in_all: bool = True, isolation: str = None, exclusive_because: str = None) -> None:
     """Add a single test entry to a category dict.
 
     ``in_all=False`` marks an action whose tests another action already runs —
@@ -495,6 +550,17 @@ def add_test(category: dict, action: str, func, *, test_names: bool = True, name
     The derived ``all`` skips it to avoid executing the same spec twice; the
     reachability check is unaffected, because it reasons about launched paths
     rather than actions.
+
+    ``isolation`` overrides the classifier, which defaults every pytest unit that
+    touches a database to ``write-global``. Declaring ``read`` or
+    ``write-scoped`` is a claim that has to be **earned by a passing parallel
+    run**, not asserted: a wrong ``write-global`` costs seconds, a wrong ``read``
+    costs an intermittent red that will be blamed on something else.
+
+    ``exclusive_because`` is the one line the catalogue requires from a unit that
+    stays ``write-global`` on purpose. It must name what the unit mutates that
+    cannot be scoped — "it rewrites `global_settings`, a single row shared by
+    every user" — not that sharing would be inconvenient.
     """
     entry = {"func": func, "test_names": test_names, "name": name, "desc": desc, "in_all": in_all}
     if prereq:
@@ -503,4 +569,8 @@ def add_test(category: dict, action: str, func, *, test_names: bool = True, name
         entry["tests"] = tests
     if note:
         entry["note"] = note
+    if isolation:
+        entry["isolation"] = isolation
+    if exclusive_because:
+        entry["exclusive_because"] = exclusive_because
     category[action] = entry

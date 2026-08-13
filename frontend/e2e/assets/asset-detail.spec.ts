@@ -201,7 +201,6 @@ test.describe('Asset Detail Page', () => {
         const toggle = page.getByTestId('asset-detail-measures-toggle');
         await expect(toggle).toBeVisible();
         await toggle.click();
-        await page.waitForTimeout(300);
         await expect(page.getByTestId('asset-detail-measures-panel')).toBeVisible();
     });
 
@@ -213,7 +212,6 @@ test.describe('Asset Detail Page', () => {
         const toggle = page.getByTestId('asset-detail-metadata-toggle');
         await expect(toggle).toBeVisible();
         await toggle.click();
-        await page.waitForTimeout(300);
         await expect(page.getByTestId('asset-detail-metadata-panel')).toBeVisible();
     });
 
@@ -382,7 +380,6 @@ test.describe('Asset Detail Page', () => {
 
         // Switch back to line — candlestick div disappears
         await lineBtn.click();
-        await page.waitForTimeout(500);
         await expect(chartWrapper.getByTestId('candlestick-chart')).not.toBeVisible();
     });
 

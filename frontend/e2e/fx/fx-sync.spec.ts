@@ -46,7 +46,6 @@ test.describe('FX Sync', () => {
 
         // Close via Escape or close button
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
         await expect(modal).not.toBeVisible();
     });
 

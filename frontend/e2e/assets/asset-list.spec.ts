@@ -59,7 +59,6 @@ test.describe('Asset List Page', () => {
         await expect(searchInput).toBeVisible();
         // Type a search query that should match at least one mock asset
         await searchInput.fill('Apple');
-        await page.waitForTimeout(500);
         // Should still have the page visible (even if filtered)
         await expect(page.getByTestId('assets-page')).toBeVisible();
     });
@@ -81,7 +80,6 @@ test.describe('Asset List Page', () => {
         const toggle = page.getByTestId('assets-active-toggle');
         await expect(toggle).toBeVisible();
         await toggle.click();
-        await page.waitForTimeout(300);
         // Page should still be visible after toggle
         await expect(page.getByTestId('assets-page')).toBeVisible();
     });
@@ -152,14 +150,12 @@ test.describe('Asset List Page', () => {
 
         // Switch back to grid
         await gridBtn.click();
-        await page.waitForTimeout(500);
         await expect(page.getByTestId('assets-page')).toBeVisible();
     });
 
     test('column menu stays compact and lists daily delta after price', async ({page}) => {
         await goToAssetsPage(page);
         await page.getByTestId('view-mode-list').click();
-        await page.waitForTimeout(300);
 
         await page.getByTestId('column-visibility-toggle').click();
         const dropdown = page.getByTestId('column-visibility-dropdown');

@@ -157,7 +157,6 @@ test.describe('Transaction Broker Access Visibility', () => {
         test('view paired tx with OWNER/EDITOR partner shows normal broker info', async ({page}) => {
             // Asym-a: Apple Inc. TRANSFER on Directa (EDITOR role) — use description to match
             await openViewByTexts(page, 'Asym-a');
-            await page.waitForTimeout(500);
 
             await expect(page.getByTestId('tx-form-dual-split')).toBeVisible({timeout: 5_000});
             await expect(page.getByTestId('tx-form-partner-locked')).not.toBeVisible({timeout: 1_000});

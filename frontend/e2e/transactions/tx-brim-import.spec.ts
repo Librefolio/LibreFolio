@@ -175,7 +175,6 @@ test.describe('BRIM Import Wizard', () => {
         const isEnabled = await importBtn.isEnabled();
         if (isEnabled) {
             await importBtn.click();
-            await page.waitForTimeout(500);
             // Wizard should close
             await expect(page.getByTestId('import-wizard-stepper')).not.toBeVisible({timeout: 3_000});
             // BulkModal should still be visible with imported rows

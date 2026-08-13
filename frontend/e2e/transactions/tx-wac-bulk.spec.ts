@@ -44,7 +44,6 @@ async function openCreateFlow(page: Page) {
 async function selectType(page: Page, typeCode: string) {
     const typeButton = page.getByTestId('tx-form-type');
     await typeButton.click();
-    await page.waitForTimeout(300);
     await page.getByTestId(`search-select-option-${typeCode}`).click();
     await page.waitForTimeout(300);
 }

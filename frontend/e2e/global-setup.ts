@@ -147,7 +147,7 @@ export async function initGlobalSettings(): Promise<void> {
         if (timedOut) {
             console.error(`   ⚠️  Global settings init timed out after ${SETUP_FETCH_TIMEOUT_MS / 1000}s.`);
             console.error(`   ⚠️  ${BASE_URL} accepts connections but does not answer — a stale test server`);
-            console.error("   ⚠️  is probably still holding the port. Kill it and let this run start its own.");
+            console.error('   ⚠️  is probably still holding the port. Kill it and let this run start its own.');
         } else {
             console.error(`   ⚠️  Global settings init error: ${e}`);
         }
