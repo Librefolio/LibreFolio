@@ -13,7 +13,7 @@ _exit_status = None
 
 @pytest.fixture(scope="session", autouse=True)
 def restore_registration_setting():
-    """Re-enable user registration in the test DB before the session starts.
+    """Make sure the global settings exist, and that registration is on.
 
     Almost every API test creates its own user through POST /auth/register, so
     the whole suite depends on `enable_registration` being true. The auth tests
@@ -24,9 +24,17 @@ def restore_registration_setting():
     "New user registration is disabled" — an error that points nowhere near the
     real cause.
 
-    This is cheap insurance, not a substitute for the per-test cleanup: it runs
-    once at session start, so tests that deliberately disable registration
-    during the session are unaffected.
+    Seeding the rows, and not merely updating them, matters just as much. The
+    settings are created by the app's startup hook, and every API module used to
+    start its own server — so a module that wiped `global_settings` was silently
+    repaired by the next module's startup. With one server for the whole run
+    nobody repairs anything, and an `UPDATE` on a missing row does nothing at
+    all: the tests then fail far from the wipe that caused it, with a 404 or an
+    assertion about a setting "not initialized".
+
+    The insert mirrors the app's own `initialize_global_settings()`, which is
+    likewise "create only what is missing", so a suite that deliberately changes
+    a value during the session is unaffected.
     """
     if not is_test_mode():
         return
@@ -36,7 +44,18 @@ def restore_registration_setting():
         return
 
     try:
+        from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
+    except Exception:
+        GLOBAL_SETTINGS_DEFAULTS = {}
+
+    try:
         with sqlite3.connect(db_path) as conn:
+            for key, config in GLOBAL_SETTINGS_DEFAULTS.items():
+                conn.execute(
+                    "INSERT OR IGNORE INTO global_settings (key, value, value_type, description, updated_at) "
+                    "VALUES (?, ?, ?, ?, datetime('now'))",
+                    (key, config["value"], config["type"], config.get("description")),
+                )
             conn.execute("UPDATE global_settings SET value = 'true' WHERE key = 'enable_registration'")
     except sqlite3.Error:
         # The DB may not be migrated yet on a first run; the suite's own

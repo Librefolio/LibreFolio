@@ -51,6 +51,21 @@ _FAILED_ACTIONS: set = set()
 # called from ~15 `*_all` functions that have no business knowing about it.
 _FAIL_FAST = True
 
+# Destination for per-unit logs, or None when --log-dir was not requested.
+_LOG_DIR = None
+_LOG_CATEGORY = "run"
+
+
+def set_log_dir(path, category: str = "run") -> None:
+    """Enable per-unit logging into ``path`` (already prepared by the caller)."""
+    global _LOG_DIR, _LOG_CATEGORY
+    _LOG_DIR = Path(path) if path else None
+    _LOG_CATEGORY = category or "run"
+
+
+def get_log_dir():
+    return _LOG_DIR
+
 
 def set_fail_fast(enabled: bool) -> None:
     global _FAIL_FAST
@@ -348,6 +363,28 @@ def _build_pytest_cmd(test_path: str, test_names: list = None) -> list:
 
 # TODO: riscrivere in maniera sensata questa funzione affinchè per i test si prenda solo il path e aggiunga tutto lei
 def run_command(cmd: list[str], description: str, verbose: bool = False, timeout: int = 600) -> bool:
+    """
+    Run a command and return True if successful.
+
+    When ``--log-dir`` is active every invocation also lands in its own file, so
+    a failure can be read afterwards without re-running it. The tee works at the
+    file-descriptor level, so it captures the child's output too.
+    """
+    if _LOG_DIR is None:
+        return _run_command_body(cmd, description, verbose, timeout)
+
+    from ._archive import log_file_for
+
+    try:
+        log_path = log_file_for(_LOG_DIR, _LOG_CATEGORY, description)
+    except Exception:
+        return _run_command_body(cmd, description, verbose, timeout)
+
+    with tee_output(log_path):
+        return _run_command_body(cmd, description, verbose, timeout)
+
+
+def _run_command_body(cmd: list[str], description: str, verbose: bool = False, timeout: int = 600) -> bool:
     """
     Run a command and return True if successful.
 

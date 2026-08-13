@@ -87,6 +87,33 @@ def read_unit_durations(known_paths: set) -> dict:
     return {p: round(t, 3) for p, t in totals.items()}
 
 
+def _write_worker_logs(results: list) -> None:
+    """Deposit each worker's captured output when --log-dir is active.
+
+    The parallel pass captures output by design (it cannot interleave several
+    workers on one terminal), so without this the detail of a green worker was
+    simply discarded — exactly the material needed to explain an intermittent red.
+    """
+    from ._archive import log_file_for
+    from ._common import get_log_dir
+
+    log_dir = get_log_dir()
+    if not log_dir:
+        return
+    for r in results:
+        try:
+            path = log_file_for(log_dir, "backend-parallel", f"worker{r['index']}")
+            header = (
+                f"# worker {r['index']} | exit={r['returncode']} | {r['elapsed']:.1f}s\n"
+                f"# units ({len(r['paths'])}):\n"
+                + "".join(f"#   {p}\n" for p in r["paths"])
+                + "\n"
+            )
+            path.write_text(header + (r["output"] or ""), encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def run_groups(groups: list, verbose: bool = False, coverage: bool = False, timeout: int = 3600) -> dict:
     """Run each group in its own process; return per-group outcomes.
 
@@ -138,6 +165,8 @@ def run_groups(groups: list, verbose: bool = False, coverage: bool = False, time
     results.sort(key=lambda r: r["index"])
     wall = time.time() - started
     ok = all(r["returncode"] == 0 for r in results)
+
+    _write_worker_logs(results)
 
     for r in results:
         summary = (r["output"].strip().splitlines() or ["(no output)"])[-1]

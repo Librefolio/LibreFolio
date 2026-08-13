@@ -45,14 +45,9 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
 
     def _archive_and_remove(db_path: Path, label: str):
         if db_path.exists():
-            archive_dir = data_dir / "archive"
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            from datetime import datetime as _dt
+            from ._archive import archive_path
 
-            ts = _dt.now().strftime("%Y%m%d_%H%M")
-            archive_name = f"{label}_{ts}_clean"
-            shutil.move(str(db_path), str(archive_dir / archive_name))
-            print(f"{Colors.GREEN}📦 Archived .coverage_data/{label} → archive/{archive_name}{Colors.NC}")
+            archive_path(db_path, target_dir=data_dir, label=f"{label}_clean", move=True)
 
     if clean_backend:
         be_dir = cwd / "htmlcov-backend"

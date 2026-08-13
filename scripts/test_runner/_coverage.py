@@ -10,6 +10,7 @@ from pathlib import Path
 
 from scripts.cli_base import pipenv_prefix
 
+from ._archive import archive_path
 from ._common import (
     PROJECT_ROOT, Colors,
     print_header, print_section, print_info, print_success, print_error, print_warning,
@@ -184,13 +185,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
     html_dir = "htmlcov-backend-e2e" if is_front else "htmlcov-backend"
 
     def _archive_db(db_path: Path, label: str):
-        if db_path.exists():
-            archive_dir = data_dir / "archive"
-            archive_dir.mkdir(exist_ok=True)
-            from datetime import datetime as _dt
-            ts = _dt.now().strftime("%Y%m%d_%H%M")
-            shutil.copy2(str(db_path), str(archive_dir / f"{label}_{ts}"))
-            print(f"   {Colors.GREEN}📦 Archived {label} → archive/{label}_{ts}{Colors.NC}")
+        archive_path(db_path, target_dir=data_dir, label=label)
 
     if is_front or is_all:
         if main_cov.exists():
