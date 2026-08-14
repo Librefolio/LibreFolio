@@ -220,7 +220,6 @@ test.describe('ImageEditModal - Controls & Settings', () => {
         const avatarPreset = page.locator('.preset-btn', {hasText: /avatar/i});
         if (await avatarPreset.isVisible().catch(() => false)) {
             await avatarPreset.click();
-            await page.waitForTimeout(300);
         }
     });
 
@@ -240,7 +239,6 @@ test.describe('ImageEditModal - Controls & Settings', () => {
 
         // Rotate first to make a change (this triggers hasChanges = true)
         await page.getByTestId('cropper-rotate-right').click();
-        await page.waitForTimeout(500);
 
         // Wait for the reset button to become visible — confirms hasChanges flipped to true
         // Cropper v2 Web Components may fire change events asynchronously
@@ -248,7 +246,6 @@ test.describe('ImageEditModal - Controls & Settings', () => {
 
         // Click reset
         await resetBtn.click();
-        await page.waitForTimeout(500);
 
         // After reset, hasChanges should be false, so reset button disappears
         // No crash means success — visual state is restored
@@ -273,7 +270,6 @@ test.describe('ImageEditModal - Controls & Settings', () => {
             const options = await formatSelect.locator('option').allTextContents();
             if (options.some((o) => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))) {
                 await formatSelect.selectOption({label: options.find((o) => o.toLowerCase().includes('jpg') || o.toLowerCase().includes('jpeg'))!});
-                await page.waitForTimeout(200);
                 // Quality control should appear
                 const qualityControl = page.locator('[class*="quality"], input[type="number"]');
                 await expect(qualityControl.first()).toBeVisible();
@@ -303,14 +299,12 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
     test('C1: closing with changes shows confirmation dialog', async ({page}) => {
         // Make a change — rotate right triggers hasChanges = true via dispatchCurrentChange
         await page.getByTestId('cropper-rotate-right').click();
-        await page.waitForTimeout(500);
 
         // Wait for hasChanges to be true — the reset button appears when hasChanges is true
         await expect(page.getByTestId('image-edit-reset')).toBeVisible({timeout: 10000});
 
         // Click the close (X) button — this calls requestClose which checks hasChanges
         await page.getByTestId('image-edit-close').click();
-        await page.waitForTimeout(500);
 
         // Confirmation dialog should appear
         await expect(page.getByTestId('image-edit-confirm-dialog')).toBeVisible({timeout: 8000});
@@ -365,7 +359,6 @@ test.describe('AssetPickerModal', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             // Click on the icon area
             const iconTrigger = page.getByTestId('broker-icon-trigger');
@@ -382,7 +375,6 @@ test.describe('AssetPickerModal', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             const iconTrigger = page.getByTestId('broker-icon-trigger');
             if (await iconTrigger.isVisible().catch(() => false)) {
@@ -391,7 +383,6 @@ test.describe('AssetPickerModal', () => {
 
                 // Click existing tab
                 await page.getByTestId('asset-picker-existing-tab').click();
-                await page.waitForTimeout(500);
 
                 // Search input should be visible
                 await expect(page.getByTestId('asset-picker-search')).toBeVisible();
@@ -405,7 +396,6 @@ test.describe('AssetPickerModal', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             const iconTrigger = page.getByTestId('broker-icon-trigger');
             if (await iconTrigger.isVisible().catch(() => false)) {
@@ -414,12 +404,10 @@ test.describe('AssetPickerModal', () => {
 
                 // Click URL tab
                 await page.getByTestId('asset-picker-url-tab').click();
-                await page.waitForTimeout(300);
 
                 // Type a URL
                 const urlInput = page.locator('input[type="text"], input[type="url"]').last();
                 await urlInput.fill('https://example.com/icon.png');
-                await page.waitForTimeout(300);
 
                 // Confirm button should be enabled
                 await expect(page.getByTestId('asset-picker-confirm')).toBeEnabled();
@@ -433,7 +421,6 @@ test.describe('AssetPickerModal', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             const iconTrigger = page.getByTestId('broker-icon-trigger');
             if (await iconTrigger.isVisible().catch(() => false)) {
@@ -452,7 +439,6 @@ test.describe('AssetPickerModal', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             const iconTrigger = page.getByTestId('broker-icon-trigger');
             if (await iconTrigger.isVisible().catch(() => false)) {
@@ -472,19 +458,16 @@ test.describe('AssetPickerModal', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             const iconTrigger = page.getByTestId('broker-icon-trigger');
             if (await iconTrigger.isVisible().catch(() => false)) {
                 await iconTrigger.click();
                 await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
                 await page.getByTestId('asset-picker-existing-tab').click();
-                await page.waitForTimeout(500);
 
                 // Type in search
                 const searchInput = page.getByTestId('asset-picker-search');
                 await searchInput.fill('nonexistent-file-abc123');
-                await page.waitForTimeout(300);
                 // Should show empty state or filtered results
             }
         }
@@ -496,14 +479,12 @@ test.describe('AssetPickerModal', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             const iconTrigger = page.getByTestId('broker-icon-trigger');
             if (await iconTrigger.isVisible().catch(() => false)) {
                 await iconTrigger.click();
                 await expect(page.getByTestId('asset-picker-modal')).toBeVisible({timeout: 3000});
                 await page.getByTestId('asset-picker-existing-tab').click();
-                await page.waitForTimeout(500);
 
                 // Toggle buttons should exist
                 const gridBtn = page.locator('.toggle-btn').first();
@@ -519,19 +500,16 @@ test.describe('AssetPickerModal', () => {
     test('D8: circular preview overlay for avatar/icon context', async ({page}) => {
         // Go to settings, profile tab, click avatar to open AssetPickerModal with circular=true
         await navigateTo(page, '/settings');
-        await page.waitForTimeout(500);
 
         // Find and click profile tab
         const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
         if (await profileTab.isVisible().catch(() => false)) {
             await profileTab.click();
-            await page.waitForTimeout(300);
 
             // Unlock editing
             const editLock = page.locator('[data-testid="profile-edit-toggle"], button', {hasText: /edit|pencil/i}).first();
             if (await editLock.isVisible().catch(() => false)) {
                 await editLock.click();
-                await page.waitForTimeout(300);
 
                 // Click avatar
                 const avatarTrigger = page.getByTestId('profile-avatar-trigger');
@@ -566,7 +544,6 @@ test.describe('Avatar - Profile Settings', () => {
         const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
         if (await profileTab.isVisible().catch(() => false)) {
             await profileTab.click();
-            await page.waitForTimeout(300);
 
             // Avatar container should be visible (always present)
             await expect(page.getByTestId('profile-avatar')).toBeVisible();
@@ -579,13 +556,11 @@ test.describe('Avatar - Profile Settings', () => {
         const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
         if (await profileTab.isVisible().catch(() => false)) {
             await profileTab.click();
-            await page.waitForTimeout(300);
 
             // Unlock editing
             const editLock = page.locator('[data-testid="profile-edit-toggle"], [class*="edit-toggle"]').first();
             if (await editLock.isVisible().catch(() => false)) {
                 await editLock.click();
-                await page.waitForTimeout(300);
 
                 const avatarTrigger = page.getByTestId('profile-avatar-trigger');
                 if (await avatarTrigger.isVisible().catch(() => false)) {
@@ -600,13 +575,11 @@ test.describe('Avatar - Profile Settings', () => {
         const profileTab = page.locator('[data-testid="settings-tab-profile"], [role="tab"]', {hasText: /profile/i}).first();
         if (await profileTab.isVisible().catch(() => false)) {
             await profileTab.click();
-            await page.waitForTimeout(300);
 
             // Unlock editing
             const editLock = page.locator('[data-testid="profile-edit-toggle"], [class*="edit-toggle"]').first();
             if (await editLock.isVisible().catch(() => false)) {
                 await editLock.click();
-                await page.waitForTimeout(300);
 
                 // Check if remove button exists (only if avatar is set)
                 const removeBtn = page.getByTestId('avatar-remove-btn');
@@ -646,7 +619,6 @@ test.describe('Dark Mode - Image Crop Components', () => {
                 .catch(() => false);
             if (!isDark) {
                 await themeToggle.click();
-                await page.waitForTimeout(300);
             }
         }
     });
@@ -681,7 +653,6 @@ test.describe('Dark Mode - Image Crop Components', () => {
         const addBtn = page.getByTestId('add-broker-button');
         if (await addBtn.isVisible().catch(() => false)) {
             await addBtn.click();
-            await page.waitForTimeout(500);
 
             const iconTrigger = page.getByTestId('broker-icon-trigger');
             if (await iconTrigger.isVisible().catch(() => false)) {
@@ -725,7 +696,6 @@ test.describe('Files Page - Grid View', () => {
             .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
-            await page.waitForTimeout(300);
 
             // Grid cards should be visible
             const cards = page.locator('.file-card');
@@ -745,13 +715,11 @@ test.describe('Files Page - Grid View', () => {
             .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
-            await page.waitForTimeout(300);
 
             // Search bar should be visible
             const searchInput = page.locator('.grid-search-input');
             if (await searchInput.isVisible().catch(() => false)) {
                 await searchInput.fill('nonexistent-file-xyz');
-                await page.waitForTimeout(300);
 
                 // Should show empty state
                 const emptyState = page.locator('.empty-state');
@@ -767,7 +735,6 @@ test.describe('Files Page - Grid View', () => {
             .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
-            await page.waitForTimeout(300);
 
             const cards = page.locator('.file-card');
             const count = await cards.count();
@@ -787,7 +754,6 @@ test.describe('Files Page - Grid View', () => {
             .catch(() => false);
         if (hasViewToggle) {
             await page.getByTestId('view-mode-grid').click();
-            await page.waitForTimeout(300);
 
             const cards = page.locator('.file-card');
             if (

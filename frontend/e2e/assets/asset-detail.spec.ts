@@ -11,6 +11,7 @@
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 
 /**
@@ -25,7 +26,7 @@ async function goToFirstAssetDetail(page: import('@playwright/test').Page) {
     await expect(firstCard).toBeVisible({timeout: 5_000});
     await firstCard.click();
     await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
-    await page.waitForTimeout(1000);
+    await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
 }
 
 /**
@@ -82,6 +83,10 @@ test.describe('Asset Detail Page', () => {
     });
 
     test('AI Export lives in the shared toolbar across Overview and Risk', async ({page}) => {
+        // Two full `/risk/query` round-trips plus the AI Export menu. Risk is the
+        // most expensive computation in the app and slows down further when four
+        // workers share one backend, so the default 30s budget is not enough.
+        test.setTimeout(120_000);
         await goToFirstAssetDetail(page);
         const controls = page.getByTestId('asset-detail-controls');
         const toolbar = controls.getByTestId('asset-detail-filter-bar');
@@ -96,16 +101,23 @@ test.describe('Asset Detail Page', () => {
         await expect(page.getByTestId('ai-export-menu-panel')).toBeHidden();
         await expect(page.getByTestId('asset-detail-signals-header').getByTestId('ai-export-button')).toHaveCount(0);
 
-        const initialRiskResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/risk/query');
+        // The subject here is the toolbar, not the network. Waiting on
+        // `POST /risk/query` made the test hostage to `queryRisk`'s cache: if the
+        // same canonical request already went out during page load, the tab click
+        // is served from memory and no request ever appears — the test then waits
+        // for something that will never happen. Wait for the panel, which is the
+        // state the assertions below actually need.
         await controls.getByTestId('asset-detail-tab-risk').click();
-        await initialRiskResponse;
-        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 10_000});
+        await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 30_000});
+        await expect(page.getByTestId('asset-detail-risk-loading')).toHaveCount(0);
         await expect(controls.getByTestId('asset-detail-tab-risk')).toHaveAttribute('aria-selected', 'true');
         await expect(toolbar).toBeVisible();
         await expect(toolbar.getByTestId('ai-export-button')).toBeVisible();
         await expect(page.getByTestId('risk-sync-button')).toHaveCount(0);
         await expect(page.getByTestId('risk-refresh-button')).toHaveCount(0);
 
+        // The refresh *is* about the request: it must reach the server rather than
+        // be answered from the cache, so here the network is the subject.
         const refreshedRiskRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/risk/query');
         await toolbar.getByTestId('asset-detail-refresh-btn').click();
         await refreshedRiskRequest;
@@ -147,15 +159,15 @@ test.describe('Asset Detail Page', () => {
         await goToFirstAssetDetail(page);
         const toggle = page.getByTestId('asset-detail-signals-toggle');
         await expect(toggle).toBeVisible();
-        await toggle.click();
-        await page.waitForTimeout(300);
         const panel = page.getByTestId('asset-detail-signals-panel');
-        await panel.isVisible();
-        // Toggle again
+        const openedByDefault = await panel.isVisible();
+
         await toggle.click();
-        await page.waitForTimeout(300);
-        // State should have changed
-        expect(true).toBeTruthy(); // Panel toggled without error
+        await expect(panel).toBeVisible({visible: !openedByDefault, timeout: 5_000});
+
+        // Toggle back — the panel must return to where it started
+        await toggle.click();
+        await expect(panel).toBeVisible({visible: openedByDefault, timeout: 5_000});
     });
 
     test('risk signals render and beta requests only after selecting a comparison asset', async ({page}) => {
@@ -317,7 +329,7 @@ test.describe('Asset Detail Page', () => {
 
         // Click sync — may show toast, spinner, or no-op if no provider
         await syncBtn.click();
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
 
         // Page should still be intact (no crash)
         await expect(page.getByTestId('asset-detail-page')).toBeVisible();
@@ -332,7 +344,7 @@ test.describe('Asset Detail Page', () => {
         await expect(refreshBtn).toBeVisible();
 
         await refreshBtn.click();
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
 
         // Page should still be intact
         await expect(page.getByTestId('asset-detail-page')).toBeVisible();
@@ -372,7 +384,6 @@ test.describe('Asset Detail Page', () => {
 
         // Switch to candlestick
         await candleBtn.click();
-        await page.waitForTimeout(500);
 
         // Candlestick chart container must appear inside asset-detail-chart
         const chartWrapper = page.getByTestId('asset-detail-chart');
@@ -392,7 +403,6 @@ test.describe('Asset Detail Page', () => {
 
         await goToFirstAssetDetail(page);
         await page.getByTestId('chart-type-candlestick').click();
-        await page.waitForTimeout(800);
 
         // ECharts must have initialised without throwing
         await expect(page.getByTestId('asset-detail-chart').getByTestId('candlestick-chart')).toBeVisible({timeout: 5000});

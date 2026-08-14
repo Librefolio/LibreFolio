@@ -1003,7 +1003,8 @@
     "deleteBlockedTitle": "Impossibile eliminare il broker",
     "deleteBlockedMessage": "Impossibile eliminare: questo broker ha {count} transazione/i.",
     "forceCascadeDelete": "Elimina broker e transazioni",
-    "goToTransactions": "Vai alle transazioni"
+    "goToTransactions": "Vai alle transazioni",
+    "deleteFailed": "Impossibile eliminare il broker"
   },
   "chart": {
     "tooltip": {

@@ -1330,9 +1330,14 @@
         // Parametric providers (e.g. scheduled_investment) generate their own data and don't
         // need a historical fetch. Errors are non-blocking (chart just stays empty until the
         // next scheduled sync); we intentionally do NOT await this.
+        //
+        // `start: 'min'` is the sentinel the backend defines for "whatever history the provider
+        // has" (SyncStartDate = date | Literal["min"]). It must not be replaced by a concrete
+        // date: each provider resolves it its own way, and the shared fallback for those that
+        // need a literal bound is 1900-01-01 — any hardcoded date here silently truncates.
         if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
             const end = new Date().toISOString().slice(0, 10);
-            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: '1975-01-01', end}} as any]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'min', end}}]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
         }
     }
 
@@ -1476,10 +1481,20 @@
             try {
                 const today = new Date();
                 const end = today.toISOString().slice(0, 10);
-                const startD = new Date(today);
-                startD.setFullYear(startD.getFullYear() - 5);
-                const start = startD.toISOString().slice(0, 10);
-                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start, end}} as any]);
+                // A parametric regenerate makes the backend wipe EVERY price row for the asset
+                // (asset_source.py: "params changed … wiped N price row(s)"), so anything short
+                // of a full re-sync leaves the pre-window years permanently empty. A provider
+                // change keeps the existing rows, so a 5-year refresh of the visible range is
+                // enough and avoids paying a full-history fetch on every provider switch.
+                let start: string;
+                if (didRegenerate) {
+                    start = 'min';
+                } else {
+                    const startD = new Date(today);
+                    startD.setFullYear(startD.getFullYear() - 5);
+                    start = startD.toISOString().slice(0, 10);
+                }
+                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start, end}}]);
             } catch (syncErr) {
                 console.warn('Post-save auto-sync failed (non-blocking):', syncErr);
                 // Non-blocking: the user can manually re-sync if needed.
@@ -1907,6 +1922,8 @@
         <div class="border border-gray-200 dark:border-slate-700 rounded-lg">
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
+                data-testid="asset-modal-provider-header"
+                data-expanded={providerExpanded}
                 class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 transition-colors select-none {providerNoProvider ? '' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}"
                 role="button"
                 tabindex="0"
@@ -1920,7 +1937,7 @@
                     }
                 }}
             >
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2" data-testid="asset-modal-provider-status" data-status={providerTestStatus}>
                     {#if !providerNoProvider}
                         {#if providerExpanded}
                             <ChevronDown size={16} />

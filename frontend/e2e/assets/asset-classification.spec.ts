@@ -11,6 +11,7 @@
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage, openCreateAssetModal} from './assets-helpers';
 
 /** Helper: create asset, return to detail page, open edit modal */
@@ -29,15 +30,19 @@ async function createAssetAndOpenEdit(page: import('@playwright/test').Page, nam
     await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
 
     // Navigate to the new asset via search
-    await page.waitForTimeout(1000);
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
     const searchInput = page.getByTestId('assets-search-input');
     if (await searchInput.isVisible({timeout: 3000}).catch(() => false)) {
         await searchInput.fill(name);
-        await page.waitForTimeout(800);
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
     }
 
-    // Click the card
-    const card = page.locator('[data-testid^="asset-card-"]').first();
+    // Click *our* card, not whatever happens to be first: other workers create
+    // assets too, and the search filter is debounced, so `.first()` can still be
+    // showing the unfiltered list. Matching on the (unique) name is both the
+    // ownership guarantee and the barrier — it retries until the list catches up.
+    const card = page.locator('[data-testid^="asset-card-"]').filter({hasText: name}).first();
+    await expect(card).toBeVisible({timeout: 15_000});
     await card.click();
     await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 
@@ -46,12 +51,15 @@ async function createAssetAndOpenEdit(page: import('@playwright/test').Page, nam
     await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 }
 
-/** Helper: expand "More Info" section if collapsed */
+/** Helper: ensure the "More Info" section is expanded (it is a toggle, not a button). */
 async function expandMoreInfo(page: import('@playwright/test').Page) {
-    const moreInfo = page.getByTestId('asset-modal-more-info');
-    await moreInfo.click();
-    // Wait for the classification section to appear
-    await expect(page.getByTestId('distribution-editor-geographic')).toBeVisible({timeout: 3000});
+    // AssetModal opens this section by itself when the asset already carries
+    // identifiers (`moreInfoExpanded = identifierRows.length > 0`), so clicking
+    // unconditionally would *close* it. Ask for the end state, not the click.
+    const editor = page.getByTestId('distribution-editor-geographic');
+    if (await editor.isVisible({timeout: 1500}).catch(() => false)) return;
+    await page.getByTestId('asset-modal-more-info').click();
+    await expect(editor).toBeVisible({timeout: 5000});
 }
 
 test.describe('Asset Classification Round-Trip', () => {
@@ -72,7 +80,6 @@ test.describe('Asset Classification Round-Trip', () => {
         // Add geographic entry
         const addGeoBtn = page.getByTestId('distribution-add-geographic');
         await addGeoBtn.click();
-        await page.waitForTimeout(500);
 
         // The new entry should appear in the distribution editor
         const geoEditor = page.getByTestId('distribution-editor-geographic');
@@ -114,7 +121,6 @@ test.describe('Asset Classification Round-Trip', () => {
         // Add sector entry
         const addSectorBtn = page.getByTestId('distribution-add-sector');
         await addSectorBtn.click();
-        await page.waitForTimeout(500);
 
         // Verify total badge appears
         const sectorTotal = page.getByTestId('distribution-total-sector');
@@ -151,7 +157,6 @@ test.describe('Asset Classification Round-Trip', () => {
         // Add geo entry
         const addGeoBtn = page.getByTestId('distribution-add-geographic');
         await addGeoBtn.click();
-        await page.waitForTimeout(500);
 
         // Save with entry
         await page.getByTestId('asset-modal-save').click();
@@ -173,7 +178,6 @@ test.describe('Asset Classification Round-Trip', () => {
         if (await rowActionsBtn.isVisible({timeout: 2000}).catch(() => false)) {
             await rowActionsBtn.click();
             await page.getByTestId('context-menu-action-delete').click();
-            await page.waitForTimeout(300);
         }
 
         // Save (now empty)

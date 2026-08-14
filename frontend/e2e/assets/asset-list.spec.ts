@@ -11,6 +11,7 @@
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 
 test.describe('Asset List Page', () => {
@@ -135,7 +136,7 @@ test.describe('Asset List Page', () => {
 
         // Switch to table view
         await tableBtn.click();
-        await page.waitForTimeout(500);
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
         // Table should be visible OR cards should disappear (depending on data)
         const tableVisible = await page
@@ -183,7 +184,6 @@ test.describe('Asset List Page', () => {
 
         // Click to open dropdown (custom multi-checkbox with role="listbox")
         await typeFilter.click();
-        await page.waitForTimeout(300);
 
         // Should show a listbox with checkbox items
         const listbox = page.locator('[role="listbox"]');

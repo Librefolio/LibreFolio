@@ -9,7 +9,7 @@
  */
 
 import {expect, test} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage, openCreateAssetModal} from './assets-helpers';
 
@@ -296,78 +296,106 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
         await login(page, TEST_USER);
     });
 
-    test('sync_prices_bulk called after saveCreate with non-parametric provider', async ({page}) => {
-        // This test has never actually run, on two independent counts, and both
-        // were hidden behind `test.skip` — which reports green:
-        //
-        //  1. `GET /api/v1/assets?page_size=200` is not a route. The listing
-        //     endpoint is `/api/v1/assets/query`; the old URL answers 422, so the
-        //     first guard fired every single time.
-        //  2. Even past that, the body makes the provider "dirty" by typing a
-        //     space and deleting it. `providerDirty` is a $derived value
-        //     comparison (AssetModal.svelte:358), not an event flag, so restoring
-        //     the original string makes it false again and Save stays disabled.
-        //
-        // Writing it for real means driving the provider "test connection" gate
-        // (AssetModal.svelte:1212 blocks Save until providerTestStatus === 'passed')
-        // on an asset the test creates itself, with the provider-test call
-        // intercepted so it stays offline. Until then this is declared broken
-        // rather than silently passing.
-        test.fixme(true, 'Never executed: wrong endpoint + providerDirty is a value comparison. See comment.');
-        // Skip if no non-parametric provider assets exist in test env
-        const resp = await page.request.get('/api/v1/assets/query');
-        if (!resp.ok()) {
-            test.skip(true, 'Could not fetch assets list');
-            return;
-        }
-        type AssetItem = {asset_id: number; display_name: string; provider_code: string | null};
-        const data = (await resp.json()) as AssetItem[];
-        const withProvider = data.find((a) => a.provider_code && a.provider_code !== 'scheduled_investment');
-        if (!withProvider) {
-            test.skip(true, 'No non-parametric provider asset in test env');
-            return;
-        }
+    // What this must prove: creating an asset with a price provider asks the backend for the
+    // provider's WHOLE history, not a recent window. That is `date_range.start = 'min'`, the
+    // backend sentinel (`SyncStartDate = date | Literal["min"]`), and it has no visible
+    // effect in the UI — a truncated start just leaves older years quietly empty.
+    //
+    // The previous version never executed a line. It was skipped, and behind the skip it
+    // queried `GET /assets?page_size=200` (not a route → 422 → the guard fired every time)
+    // and tried to dirty the provider by typing a space and deleting it — but `providerDirty`
+    // is a $derived value comparison, so restoring the string clears it and Save stays
+    // disabled.
+    //
+    // Why this asserts the request and not the resulting price rows: the only provider that
+    // answers without network is `mockprov`, and the UI filters it out of the dropdown on
+    // purpose (ProviderAssignmentSection.svelte:144) because it must never be user-selectable.
+    // An outcome assertion would therefore need either that filter removed — changing
+    // production behaviour to suit a test — or a real network fetch, which is exactly the
+    // flakiness the offline suite exists to avoid. So the provider probe and the sync are
+    // both intercepted, and the contract checked is the one the frontend actually owns:
+    // *which range it asks for, for the asset it just created*.
+    test('create with provider asks the backend for the full history, not a recent window', async ({page}) => {
+        const assetName = `E2E BugK ${Date.now()}`;
+        let assetId: number | null = null;
+        let syncPayload: Array<{asset_id: number; date_range: {start: string; end: string}}> | null = null;
 
-        // Intercept the sync call before navigating (route must be installed first)
-        let syncPayload: unknown = null;
-        await page.route('**/assets/prices/sync', async (route) => {
+        // Keep the whole test offline: the probe only has to satisfy the Save gate, and the
+        // sync must not reach a real provider.
+        await page.route('**/api/v1/assets/provider/probe', async (route) => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                // Shape must satisfy the generated Zod schema (FAProviderProbeResponse):
+                // the client validates at runtime, and a rejected body lands in the catch
+                // that sets testStatus = 'failed'.
+                body: JSON.stringify({
+                    provider_code: 'e2e',
+                    identifier: 'E2E-BUGK',
+                    total_execution_time_ms: 2,
+                    current_price: {success: true, execution_time_ms: 1, value: '100.00', currency: 'USD', as_of_date: '2024-01-02'},
+                    history: {success: true, execution_time_ms: 1, points_count: 2, date_range: '2024-01-01 → 2024-01-02'},
+                }),
+            });
+        });
+        await page.route('**/api/v1/assets/prices/sync', async (route) => {
             syncPayload = route.request().postDataJSON();
-            // Fulfill to avoid actual network call
             await route.fulfill({status: 200, contentType: 'application/json', body: '[]'});
         });
 
-        // Navigate to the asset detail page and open edit
-        await navigateTo(page, `/assets/${withProvider.asset_id}`);
-        await page.getByTestId('asset-detail-edit-btn').click();
-        await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
+        // Pick whatever real provider the registry offers rather than hardcoding one, so the
+        // test survives providers being added or retired.
+        const listRes = await page.request.get('/api/v1/assets/provider');
+        expect(listRes.ok(), 'provider list must be reachable').toBeTruthy();
+        const providers = (await listRes.json()) as Array<{code: string; accepted_identifier_types?: string[]}>;
+        const provider = providers.find((p) => p.code !== 'mockprov' && p.code !== 'scheduled_investment');
+        expect(provider, 'a non-parametric provider must exist').toBeTruthy();
 
-        // Make the provider dirty by clearing and re-entering the identifier
-        // (so saveEdit triggers the sync path)
-        // Locate provider identifier input (aria-label or placeholder-based)
-        const identifierInput = page.getByTestId('asset-modal-form').locator('input[placeholder*="identifier"], input[placeholder*="ISIN"], input[id*="identifier"]').first();
+        await goToAssetsPage(page);
+        await openCreateAssetModal(page);
+        await page.getByTestId('asset-modal-display-name').fill(assetName);
 
-        if (await identifierInput.isVisible({timeout: 2000}).catch(() => false)) {
-            const currentVal = await identifierInput.inputValue();
-            await identifierInput.fill(currentVal + ' ');
-            await identifierInput.fill(currentVal); // restore (still dirty due to intermediate change)
+        const providerHeader = page.getByTestId('asset-modal-provider-header');
+        if ((await providerHeader.getAttribute('data-expanded')) !== 'true') {
+            await providerHeader.click();
+        }
+        await page.getByTestId('provider-code-select-button').click();
+        await page.getByTestId(`provider-option-${provider!.code}`).click();
+
+        const identifier = page.getByTestId('provider-identifier');
+        if (await identifier.isVisible().catch(() => false)) {
+            await identifier.fill('E2E-BUGK');
         }
 
-        // Save — if providerDirty=true, saveEdit calls sync
-        const saveBtn = page.getByTestId('asset-modal-save');
-        if (await saveBtn.isEnabled({timeout: 3000}).catch(() => false)) {
-            await saveBtn.click();
-            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 15_000});
-            // If sync was called, verify the payload structure
-            if (syncPayload !== null) {
-                const payload = syncPayload as Array<{asset_id: number; date_range: {start: string; end: string}}>;
-                expect(Array.isArray(payload)).toBeTruthy();
-                // For saveEdit with providerDirty, start is 5-years-ago (not 1975)
-                // For saveCreate with provider, start is '1975-01-01'
-                expect(payload[0]?.date_range?.start).toBeTruthy();
+        // Save is gated on a passing connection test whenever a provider is set
+        // (AssetModal.svelte:1212), so the gate is driven rather than bypassed.
+        await page.getByTestId('provider-test-config').click();
+        await expect(page.getByTestId('asset-modal-provider-status')).toHaveAttribute('data-status', 'passed', {timeout: 20_000});
+
+        const createResponse = page.waitForResponse((r) => r.url().endsWith('/api/v1/assets') && r.request().method() === 'POST');
+        await page.getByTestId('asset-modal-save').click();
+        const created = (await (await createResponse).json()) as {results?: Array<{asset_id?: number}>};
+        assetId = created.results?.[0]?.asset_id ?? null;
+        expect(assetId, 'create response must carry the new asset id').not.toBeNull();
+
+        try {
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
+
+            // The sync is deliberately fire-and-forget (`void ….catch(…)`), so it is polled
+            // for rather than awaited on the save path.
+            await expect.poll(() => syncPayload !== null, {message: 'create with a provider must trigger a price sync', timeout: 15_000}).toBeTruthy();
+
+            const item = syncPayload![0];
+            expect(item.asset_id).toBe(assetId);
+            // The whole point: 'min' means "everything the provider has". Any literal date
+            // here is a silent truncation — the previous code sent '1975-01-01', which would
+            // have discarded every earlier year without a word.
+            expect(item.date_range.start).toBe('min');
+            expect(item.date_range.end).toBe(new Date().toISOString().slice(0, 10));
+        } finally {
+            if (assetId !== null) {
+                await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
             }
-        } else {
-            await page.getByTestId('asset-modal-cancel').click();
-            test.skip(true, 'Provider identifier input not found or save not enabled');
         }
     });
 });

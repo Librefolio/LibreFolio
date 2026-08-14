@@ -505,7 +505,7 @@
     });
 </script>
 
-<div class="space-y-4" data-testid="dashboard-page">
+<div class="space-y-4" data-testid="dashboard-page" aria-busy={reportLoading || contributionLoading || syncLoading} data-busy={reportLoading || contributionLoading || syncLoading ? 'true' : 'false'}>
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar

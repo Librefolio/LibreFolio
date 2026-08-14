@@ -188,10 +188,12 @@
                         type: 'container',
                         target: host,
                         src: sourceUrl,
-                        disabledCategories: ['annotation'],
-                        ui: {
-                            disabledCategories: ['panel-comment'],
-                        },
+                        // One list, not two: `ui.disabledCategories` *overrides* the
+                        // global one rather than adding to it (see the plugin config
+                        // docs), so declaring both silently dropped `panel-comment`
+                        // and the comment button stayed in the toolbar of a preview
+                        // that cannot save anything.
+                        disabledCategories: ['annotation', 'panel-comment'],
                     }),
                 );
             } catch (err) {

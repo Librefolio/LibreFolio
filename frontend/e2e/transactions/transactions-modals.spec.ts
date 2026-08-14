@@ -9,10 +9,27 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** The option list is present and has finished loading its catalogue. */
+async function optionListReady(page: Page) {
+    const list = page.locator('[role="listbox"]');
+    await expect(list.first()).toBeVisible({timeout: 5_000});
+    await expect(list.first()).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
+}
+
+/**
+ * The option list is gone — the teardown that follows a pick. It happens after
+ * the dependent-field cascade has re-rendered, so it doubles as the barrier for
+ * whatever the chosen type/broker/asset changed on the form.
+ */
+async function optionListClosed(page: Page) {
+    await expect(page.locator('[data-testid^="search-select-option-"]')).toHaveCount(0, {timeout: 10_000});
+}
 
 /** Navigate to the Transactions page and wait for table to appear. */
 async function goToTransactions(page: Page) {
@@ -21,8 +38,11 @@ async function goToTransactions(page: Page) {
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
         /* either is fine */
     });
-    // Extra wait for data to settle after loading
-    await page.waitForTimeout(500);
+    // The page publishes `data-busy` while it loads; wait for that rather than
+    // for a duration chosen to be "probably enough".
+    await page.waitForSelector('[data-testid="transactions-page"][data-busy="false"]', {timeout: 20_000}).catch(() => {
+        /* the error state never clears the flag */
+    });
 }
 
 /** Open "Create" flow: click the + button → BulkModal + FormModal open. */
@@ -40,7 +60,9 @@ async function fillCashAmount(page: Page, amount: string) {
     await amountInput.click();
     await amountInput.fill(amount);
     await amountInput.press('Tab');
-    await page.waitForTimeout(300);
+    // Blur commits the value through the locale parser; assert the commit
+    // instead of sleeping through it.
+    await expect(amountInput).not.toBeFocused({timeout: 3_000});
 }
 
 /** Fill a minimal BUY transaction in the FormModal (assumes it's already open). */
@@ -52,13 +74,15 @@ async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: bo
     // Pick first available broker
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
-    // Pick first option
+    // Pick first option — the locator below already waits for the list to open.
     const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
     if (await brokerOption.isVisible({timeout: 2_000}).catch(() => false)) {
         await brokerOption.click();
+        // The chosen broker closes the list; that is the signal the pick landed.
+        await expect(brokerOption)
+            .not.toBeVisible({timeout: 3_000})
+            .catch(() => {});
     }
-    await page.waitForTimeout(300);
 
     // Quantity
     await page.getByTestId('tx-form-quantity').fill(qty);
@@ -76,16 +100,15 @@ async function fillBuyTransaction(page: Page, opts: {qty?: string; skipCash?: bo
         const assetTrigger = assetWrap.locator('button, [role="combobox"]').first();
         if (await assetTrigger.isVisible()) {
             await assetTrigger.click();
-            await page.waitForTimeout(300);
             const assetOption = page.locator('[data-testid^="search-select-option-"]').first();
             if (await assetOption.isVisible({timeout: 2_000}).catch(() => false)) {
                 await assetOption.click();
+                await expect(assetOption)
+                    .not.toBeVisible({timeout: 3_000})
+                    .catch(() => {});
             }
         }
     }
-
-    // Wait for form reactivity to settle
-    await page.waitForTimeout(300);
 }
 
 /** Click the Apply/Save button in the FormModal. */
@@ -93,7 +116,9 @@ async function clickApply(page: Page) {
     // Wait for the Apply button to become enabled (form completeness)
     await expect(page.getByTestId('tx-form-save')).toBeEnabled({timeout: 5_000});
     await page.getByTestId('tx-form-save').click();
-    await page.waitForTimeout(500);
+    // Apply hands the row back to the BulkModal and closes the form; that
+    // closure is the outcome, and it is observable.
+    await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 5_000});
 }
 
 /** Close all open modals (FormModal → BulkModal), handling discard dialogs. */
@@ -102,7 +127,6 @@ async function closeAllModals(page: Page) {
     const formCancel = page.getByTestId('tx-form-cancel');
     if (await formCancel.isVisible({timeout: 500}).catch(() => false)) {
         await formCancel.click();
-        await page.waitForTimeout(300);
     }
     // Handle FormModal's "Discard changes?" dialog
     await handleDiscardDialog(page);
@@ -110,7 +134,6 @@ async function closeAllModals(page: Page) {
     const bulkCancel = page.getByTestId('tx-bulk-cancel');
     if (await bulkCancel.isVisible({timeout: 500}).catch(() => false)) {
         await bulkCancel.click();
-        await page.waitForTimeout(300);
     }
     // Handle BulkModal's "Discard changes?" dialog
     await handleDiscardDialog(page);
@@ -128,7 +151,9 @@ async function handleDiscardDialog(page: Page) {
     const discardBtn = page.getByTestId('confirm-modal-confirm');
     if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) {
         await discardBtn.click();
-        await page.waitForTimeout(300);
+        await expect(discardBtn)
+            .not.toBeVisible({timeout: 3_000})
+            .catch(() => {});
     }
 }
 
@@ -227,7 +252,7 @@ test.describe('Transactions', () => {
 
             // Open the type dropdown and check options
             await typeSelect.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
 
             // Should see limited options (swap group), NOT all types
             const options = page.locator('[data-testid^="search-select-option-"]');
@@ -260,7 +285,7 @@ test.describe('Transactions', () => {
             const colToggle = page.locator('[data-testid="column-visibility-toggle"]');
             if (await colToggle.isVisible({timeout: 1_000}).catch(() => false)) {
                 await colToggle.click();
-                await page.waitForTimeout(300);
+                await expect(page.locator('[data-testid^="col-toggle-"]').first()).toBeVisible({timeout: 5_000});
                 const labels = await page.locator('[data-testid^="col-toggle-"]').allTextContents();
                 const eventIdx = labels.findIndex((l) => /event/i.test(l));
                 const costIdx = labels.findIndex((l) => /cost.*basis/i.test(l));
@@ -281,12 +306,11 @@ test.describe('Transactions', () => {
             // Change type to INTEREST
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
 
             const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
             if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
                 await searchInput.fill('INTEREST');
-                await page.waitForTimeout(300);
             }
             const interestOption = page
                 .locator('[data-testid^="search-select-option-"]')
@@ -294,7 +318,7 @@ test.describe('Transactions', () => {
                 .first();
             if (await interestOption.isVisible({timeout: 2_000}).catch(() => false)) {
                 await interestOption.click();
-                await page.waitForTimeout(300);
+                await optionListClosed(page);
 
                 const assetWrap = page.getByTestId('tx-form-asset-wrap');
                 await expect(assetWrap).toBeVisible({timeout: 2_000});
@@ -329,7 +353,7 @@ test.describe('Transactions', () => {
             const validateBtn = page.getByTestId('tx-form-validate-now');
             if (await validateBtn.isVisible({timeout: 2_000}).catch(() => false)) {
                 await validateBtn.click();
-                await page.waitForTimeout(2_000);
+                await waitForSettled(page.getByTestId('tx-form-modal-root'), 20_000);
 
                 const warningBanner = page.locator('[data-testid="tx-form-issues"]');
                 if (await warningBanner.isVisible({timeout: 3_000}).catch(() => false)) {
@@ -352,12 +376,11 @@ test.describe('Transactions', () => {
 
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
 
             const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
             if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
                 await searchInput.fill('CASH');
-                await page.waitForTimeout(300);
             }
             const cashOption = page
                 .locator('[data-testid^="search-select-option-"]')
@@ -365,7 +388,7 @@ test.describe('Transactions', () => {
                 .first();
             if (await cashOption.isVisible({timeout: 2_000}).catch(() => false)) {
                 await cashOption.click();
-                await page.waitForTimeout(500);
+                await optionListClosed(page);
 
                 const dualFrom = page.getByTestId('tx-form-dual-from');
                 const dualTo = page.getByTestId('tx-form-dual-to');
@@ -379,11 +402,10 @@ test.describe('Transactions', () => {
 
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
             const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
             if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
                 await searchInput.fill('CASH');
-                await page.waitForTimeout(300);
             }
             const cashOption = page
                 .locator('[data-testid^="search-select-option-"]')
@@ -391,29 +413,29 @@ test.describe('Transactions', () => {
                 .first();
             await expect(cashOption).toBeVisible({timeout: 3_000});
             await cashOption.click();
-            await page.waitForTimeout(500);
+            await optionListClosed(page);
 
             // From broker
             const fromSection = page.getByTestId('tx-form-dual-from');
             await expect(fromSection).toBeVisible({timeout: 3_000});
             const fromBrokerCombobox = fromSection.locator('[role="combobox"]').first();
             await fromBrokerCombobox.click();
-            await page.waitForTimeout(500);
+            await optionListReady(page);
             const fromBrokerOpt = page.locator('[data-testid^="search-select-option-"]').first();
             await expect(fromBrokerOpt).toBeVisible({timeout: 3_000});
             await fromBrokerOpt.click();
-            await page.waitForTimeout(300);
+            await optionListClosed(page);
 
             // To broker
             const toSection = page.getByTestId('tx-form-dual-to');
             const toBrokerCombobox = toSection.locator('[role="combobox"]').first();
             await toBrokerCombobox.click();
-            await page.waitForTimeout(500);
+            await optionListReady(page);
             const toOptions = page.locator('[data-testid^="search-select-option-"]');
             const toCount = await toOptions.count();
             expect(toCount, 'Need at least 2 brokers — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
             await toOptions.nth(toCount - 1).click();
-            await page.waitForTimeout(300);
+            await optionListClosed(page);
 
             // Cash amount
             await fillCashAmount(page, '100');
@@ -444,11 +466,10 @@ test.describe('Transactions', () => {
             // Switch to INTEREST type
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
             const searchInput = page.locator('[data-testid="tx-form-type"] input[type="text"]');
             if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
                 await searchInput.fill('INTEREST');
-                await page.waitForTimeout(300);
             }
             const opt = page
                 .locator('[data-testid^="search-select-option-"]')
@@ -456,7 +477,7 @@ test.describe('Transactions', () => {
                 .first();
             if (await opt.isVisible({timeout: 2_000}).catch(() => false)) {
                 await opt.click();
-                await page.waitForTimeout(300);
+                await optionListClosed(page);
 
                 const assetWrap = page.getByTestId('tx-form-asset-wrap');
                 if (await assetWrap.isVisible({timeout: 2_000}).catch(() => false)) {
@@ -475,11 +496,10 @@ test.describe('Transactions', () => {
             // Switch to INTEREST again
             const typeSelect2 = page.getByTestId('tx-form-type');
             await typeSelect2.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
             const searchInput2 = page.locator('[data-testid="tx-form-type"] input[type="text"]');
             if (await searchInput2.isVisible({timeout: 1_000}).catch(() => false)) {
                 await searchInput2.fill('INTEREST');
-                await page.waitForTimeout(300);
             }
             const opt2 = page
                 .locator('[data-testid^="search-select-option-"]')
@@ -487,7 +507,7 @@ test.describe('Transactions', () => {
                 .first();
             if (await opt2.isVisible({timeout: 2_000}).catch(() => false)) {
                 await opt2.click();
-                await page.waitForTimeout(300);
+                await optionListClosed(page);
 
                 const assetWrap2 = page.getByTestId('tx-form-asset-wrap');
                 if (await assetWrap2.isVisible({timeout: 2_000}).catch(() => false)) {
@@ -550,10 +570,9 @@ test.describe('Transactions', () => {
                 const confirmBtn = page.getByTestId('confirm-modal-confirm');
                 if (await confirmBtn.isVisible({timeout: 3_000}).catch(() => false)) {
                     await confirmBtn.click();
-                    await page.waitForTimeout(2_000);
-
-                    const countAfter = await countBadge.textContent().catch(() => '0');
-                    expect(Number(countAfter)).toBeLessThan(Number(countBefore));
+                    await expect
+                        .poll(async () => Number(await countBadge.textContent().catch(() => '0')), {timeout: 15_000})
+                        .toBeLessThan(Number(countBefore));
                 }
             }
         });
@@ -598,16 +617,12 @@ test.describe('Transactions', () => {
             // Enter negative value → border-color should have red hue (~25 in oklch)
             await qtyInput.fill('');
             await qtyInput.type('-5');
-            await page.waitForTimeout(500);
-            const borderNeg = await qtyInput.evaluate((el) => el.style.borderColor);
-            expect(borderNeg, `Negative qty on BUY should have red border-color, got: "${borderNeg}"`).toContain('25.331');
+            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Negative qty on BUY should have red border-color'}).toContain('25.331');
 
             // Enter positive value → green hue (~163 in oklch)
             await qtyInput.fill('');
             await qtyInput.type('5');
-            await page.waitForTimeout(500);
-            const borderPos = await qtyInput.evaluate((el) => el.style.borderColor);
-            expect(borderPos, `Positive qty on BUY should have green border-color, got: "${borderPos}"`).toContain('163.223');
+            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Positive qty on BUY should have green border-color'}).toContain('163.223');
 
             await closeAllModals(page);
         });
@@ -619,7 +634,7 @@ test.describe('Transactions', () => {
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
             await page.getByTestId('search-select-option-SELL').click();
-            await page.waitForTimeout(300);
+            await optionListClosed(page);
 
             const qtyInput = page.getByTestId('tx-form-quantity');
             await expect(qtyInput).toBeVisible({timeout: 2_000});
@@ -631,16 +646,12 @@ test.describe('Transactions', () => {
             // Enter positive → green (auto-negated = correct)
             await qtyInput.fill('');
             await qtyInput.type('10');
-            await page.waitForTimeout(500);
-            const borderPos = await qtyInput.evaluate((el) => el.style.borderColor);
-            expect(borderPos, `Positive qty on SELL should show green, got: "${borderPos}"`).toContain('163.223');
+            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Positive qty on SELL should show green'}).toContain('163.223');
 
             // Enter negative → red (double-negative = wrong)
             await qtyInput.fill('');
             await qtyInput.type('-10');
-            await page.waitForTimeout(500);
-            const borderNeg = await qtyInput.evaluate((el) => el.style.borderColor);
-            expect(borderNeg, `Negative qty on SELL should show red, got: "${borderNeg}"`).toContain('25.331');
+            await expect.poll(() => qtyInput.evaluate((el: HTMLElement) => el.style.borderColor), {timeout: 10_000, message: 'Negative qty on SELL should show red'}).toContain('25.331');
 
             await closeAllModals(page);
         });
@@ -664,31 +675,31 @@ test.describe('Transactions', () => {
             const typeSelect = page.getByTestId('tx-form-type');
             await typeSelect.locator('button, [role="combobox"]').first().click();
             await page.getByTestId('search-select-option-ADJUSTMENT').click();
-            await page.waitForTimeout(300);
+            await optionListClosed(page);
 
             // Pick first broker
             const brokerWrap = page.getByTestId('tx-form-broker-wrap');
             await brokerWrap.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
             const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
             await expect(brokerOption).toBeVisible({timeout: 3_000});
             await brokerOption.click();
-            await page.waitForTimeout(300);
+            await optionListClosed(page);
 
             // Set qty to 5 (positive)
             await page.getByTestId('tx-form-quantity').fill('5');
-            await page.waitForTimeout(300);
+            await expect(page.getByTestId('tx-form-quantity')).toHaveValue('5');
 
             // Pick an asset (required for the form to be complete)
             const assetWrap = page.getByTestId('tx-form-asset-wrap');
             await expect(assetWrap).toBeVisible({timeout: 3_000});
             const assetTrigger = assetWrap.locator('button, [role="combobox"]').first();
             await assetTrigger.click();
-            await page.waitForTimeout(300);
+            await optionListReady(page);
             const assetOption = page.locator('[data-testid^="search-select-option-"]').first();
             await expect(assetOption).toBeVisible({timeout: 3_000});
             await assetOption.click();
-            await page.waitForTimeout(500);
+            await optionListClosed(page);
 
             // Apply the TX (push to BulkModal workspace)
             const applyBtn = page.getByTestId('tx-form-save');

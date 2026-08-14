@@ -66,7 +66,80 @@ export async function waitForEvent(page: Page, name: string, opts: {since?: numb
  * latter would match a neighbour that was never busy to begin with.
  */
 export async function waitForSettled(scope: Page | Locator, timeout = 15_000): Promise<void> {
-    const busy = scope.locator('[data-busy]').first();
+    // `:scope` first, so passing the busy container *itself* works as naturally
+    // as passing an ancestor. Without it `locator()` only searches descendants,
+    // and handing this function the very element that carries the flag would
+    // silently wait out the full timeout — the exact failure mode it exists to
+    // remove. In DOM order the scope element precedes its descendants, so
+    // `.first()` still prefers it when both match.
+    const busy = scope.locator('css=:scope[data-busy], [data-busy]').first();
     await busy.waitFor({state: 'attached', timeout});
     await expect(busy).toHaveAttribute('data-busy', 'false', {timeout});
+}
+
+/**
+ * Wait until an ECharts container has finished drawing.
+ *
+ * `attachChartReady` (src/lib/utils/chartReady.ts) flips `data-chart-ready` on
+ * the container once ECharts fires `finished` — i.e. after the render *and* its
+ * animations. Waiting for the attribute replaces the `waitForTimeout(400)`-style
+ * guesses that were really "long enough for the animation, probably".
+ *
+ * `scope` may be the container itself or any ancestor: the first descendant
+ * carrying the attribute is used, which is how the panel-level test ids in the
+ * suite already address their charts.
+ */
+export async function waitForChart(scope: Page | Locator, timeout = 15_000): Promise<void> {
+    const chart = scope.locator('[data-chart-ready]').first();
+    // Two stages on purpose. "Is there a chart here at all?" is answered in a
+    // second — pages legitimately without one must not pay the full budget —
+    // while "has it finished drawing?" gets the real timeout.
+    await chart.waitFor({state: 'attached', timeout: Math.min(2_000, timeout)});
+    await expect(chart).toHaveAttribute('data-chart-ready', 'true', {timeout});
+}
+
+/**
+ * Wait for a chart to draw *again*.
+ *
+ * `data-chart-ready` stays `true` once set, so a test that changes the range and
+ * then waits for it would be satisfied by the previous drawing. `renders`
+ * increments on every completed pass, so the caller can read it before acting
+ * and wait for it to move afterwards.
+ */
+export async function chartRenders(scope: Page | Locator): Promise<number> {
+    const chart = scope.locator('[data-chart-ready]').first();
+    const raw = await chart.getAttribute('data-chart-renders');
+    return Number(raw ?? '0');
+}
+
+export async function waitForChartRerender(scope: Page | Locator, since: number, timeout = 15_000): Promise<void> {
+    const chart = scope.locator('[data-chart-ready]').first();
+    await expect(async () => {
+        const raw = await chart.getAttribute('data-chart-renders');
+        expect(Number(raw ?? '0')).toBeGreaterThan(since);
+    }).toPass({timeout});
+}
+
+/**
+ * Count the validate runs a transaction modal has completed.
+ *
+ * The FormModal and the BulkModal validate server-side behind a debounce, so
+ * "has the verdict been recomputed?" cannot be answered by a busy flag alone:
+ * a reader arriving between the edit and the debounce firing sees `false` and
+ * concludes, wrongly, that the numbers on screen are current. The counter is
+ * read before acting and awaited afterwards, which no timing can defeat.
+ *
+ * `scope` is the modal root (`tx-form-modal-root` or `tx-bulk-modal-root`).
+ */
+export async function validateRuns(scope: Locator): Promise<number> {
+    const raw = await scope.getAttribute('data-validate-runs');
+    return Number(raw ?? '0');
+}
+
+export async function waitForValidateRun(scope: Locator, since: number, timeout = 20_000): Promise<void> {
+    await expect(async () => {
+        const raw = await scope.getAttribute('data-validate-runs');
+        expect(Number(raw ?? '0')).toBeGreaterThan(since);
+    }).toPass({timeout});
+    await waitForSettled(scope, timeout);
 }

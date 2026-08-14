@@ -6,9 +6,10 @@
     import {isAxiosError} from 'axios';
     import {goto} from '$app/navigation';
     import {debug} from '$lib/debug';
-    import {Calendar, Camera, CheckCircle, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
+    import {Calendar, Camera, Key, Mail, Pencil, PencilOff, Save, Trash2, Undo, User} from 'lucide-svelte';
     import PasswordChangeModal from '$lib/components/settings/PasswordChangeModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
 
@@ -58,7 +59,6 @@
     // Profile editing state
     let saving = false;
     let error: string | null = null;
-    let successItems: string[] = []; // Array of saved field names for bullet list
 
     // Original values (from server)
     let originalUsername = $currentUser?.username ?? '';
@@ -113,7 +113,6 @@
         debug.log('ProfileTab', 'saveField', field);
         saving = true;
         error = null;
-        successItems = [];
 
         try {
             const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail};
@@ -122,8 +121,11 @@
             await auth.checkAuth();
 
             const fieldName = field === 'username' ? $_('auth.username') : $_('auth.email');
-            successItems = [fieldName];
-            setTimeout(() => (successItems = []), 3000);
+            notify({
+                name: 'settings.profile.saved',
+                detail: {fields: 1, field: fieldName},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[fieldName].map((l) => `<li>${l}</li>`).join('')}</ul>`},
+            });
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
             const detail = isAxiosError(e) ? e.response?.data?.detail : null;
@@ -148,7 +150,6 @@
         debug.log('ProfileTab', 'saveAll');
         saving = true;
         error = null;
-        successItems = [];
 
         const saved: string[] = [];
 
@@ -164,8 +165,11 @@
 
             if (saved.length > 0) {
                 await auth.checkAuth();
-                successItems = saved;
-                setTimeout(() => (successItems = []), 4000);
+                notify({
+                    name: 'settings.profile.saved',
+                    detail: {fields: saved.length},
+                    toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${saved.map((l) => `<li>${l}</li>`).join('')}</ul>`},
+                });
             }
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveAll failed', e);
@@ -195,7 +199,6 @@
     async function saveAvatarField() {
         saving = true;
         error = null;
-        successItems = [];
 
         try {
             await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({avatar_url: editedAvatarUrl});
@@ -209,8 +212,11 @@
                     avatar_url: editedAvatarUrl,
                 });
             }
-            successItems = [$_('common.avatar')];
-            setTimeout(() => (successItems = []), 3000);
+            notify({
+                name: 'settings.profile.avatar.saved',
+                detail: {},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[$_('common.avatar')].map((l) => `<li>${l}</li>`).join('')}</ul>`},
+            });
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveAvatarField failed', e);
             const detail = isAxiosError(e) ? e.response?.data?.detail : null;
@@ -287,24 +293,6 @@
         <div data-testid="profile-error">
             <InfoBanner variant="error">
                 <span class="text-sm">{error}</span>
-            </InfoBanner>
-        </div>
-    {/if}
-
-    {#if successItems.length > 0}
-        <div data-testid="profile-success">
-            <InfoBanner variant="success">
-                <div class="text-sm">
-                    <div class="flex items-center gap-2 mb-2">
-                        <CheckCircle size={18} />
-                        <span class="font-medium">{$_('settings.savedSuccessfully')}:</span>
-                    </div>
-                    <ul class="list-disc list-inside ml-6 space-y-0.5">
-                        {#each successItems as item}
-                            <li>{item}</li>
-                        {/each}
-                    </ul>
-                </div>
             </InfoBanner>
         </div>
     {/if}

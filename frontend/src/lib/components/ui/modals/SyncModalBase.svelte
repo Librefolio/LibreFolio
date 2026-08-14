@@ -272,7 +272,7 @@
     </div>
 
     <!-- Body -->
-    <div class="px-6 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
+    <div class="px-6 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto" data-busy={syncing ? 'true' : 'false'} data-testid="sync-modal-body">
         <p class="text-sm text-gray-600 dark:text-gray-400">
             {description}
         </p>
@@ -358,33 +358,39 @@
                 </div>
             {/each}
 
-            <!-- Summary -->
-            <InfoBanner variant={successCount === allResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
-                <span class="text-sm font-medium flex items-center gap-1 flex-wrap">
-                    {$t('fx.sync.synced') ?? 'Synced'}
-                    {successCount}/{allResults.length}
-                    ·
-                    <span>{totalPointsFetched}↓</span>
-                    <Tooltip text={$t('fx.sync.tooltipFetched')} position="top">
-                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
-                    </Tooltip>
-                    <span>{totalPointsChanged}Δ</span>
-                    <Tooltip text={$t('fx.sync.tooltipChanged')} position="top">
-                        <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
-                    </Tooltip>
-                </span>
-            </InfoBanner>
+            <!-- Summary. This is where the sync says how it went: the modal
+                 reports in place instead of raising a toast, so this banner is
+                 the outcome, and `data-testid` makes it addressable as such. -->
+            <div data-testid="sync-modal-results">
+                <InfoBanner variant={successCount === allResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
+                    <span class="text-sm font-medium flex items-center gap-1 flex-wrap">
+                        {$t('fx.sync.synced') ?? 'Synced'}
+                        {successCount}/{allResults.length}
+                        ·
+                        <span>{totalPointsFetched}↓</span>
+                        <Tooltip text={$t('fx.sync.tooltipFetched')} position="top">
+                            <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                        </Tooltip>
+                        <span>{totalPointsChanged}Δ</span>
+                        <Tooltip text={$t('fx.sync.tooltipChanged')} position="top">
+                            <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                        </Tooltip>
+                    </span>
+                </InfoBanner>
+            </div>
         {/if}
     </div>
 
     <!-- Footer -->
     <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
-        <button class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" onclick={onclose}>
+        <button class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" data-testid="sync-modal-close" onclick={onclose}>
             {hasResults || isTimeout ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
         </button>
         {#if !hasResults || failedItems.length > 0}
             <button
                 class="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50"
+                data-busy={syncing}
+                data-testid="sync-modal-start"
                 onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}
                 disabled={syncing || itemCount === 0}
             >

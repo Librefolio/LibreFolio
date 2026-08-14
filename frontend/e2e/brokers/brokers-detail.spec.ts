@@ -307,7 +307,7 @@ test.describe('Broker Detail Page', () => {
             await page.getByTestId('lot-wac-toggle-percentage').click();
             await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
 
-            await page.getByTestId('wac-toggle-absolute').click();
+            await page.getByTestId('lot-wac-toggle-absolute').click();
             await expect(page.getByTestId('lot-wac-price-chart')).toBeVisible();
         });
 

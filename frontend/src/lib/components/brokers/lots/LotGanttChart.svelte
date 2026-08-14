@@ -1,6 +1,7 @@
 <script lang="ts">
     import {tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
@@ -1394,6 +1395,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'lot-gantt');
             tooltipCleanup?.();
             tooltipCleanup = setupTooltipAutoHide(chartContainer, () => chartInstance);
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);

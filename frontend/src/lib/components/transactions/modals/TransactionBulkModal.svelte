@@ -1128,6 +1128,12 @@
             upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
             const result = await validateTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
+            // A response that lands after the draft moved on describes a state
+            // that no longer exists: applying it overwrites fresher numbers
+            // (a WAC cell falling back to its "…" placeholder is the visible
+            // symptom). The change that moved the key already armed a newer
+            // run, so dropping this one loses nothing.
+            if (lastDraftKey !== sentKey) return {issuesCount: issues.length};
             if (result.networkError) {
                 issues = [{operation: 'create', index: 0, error: result.networkError}];
             } else {
@@ -2368,7 +2374,9 @@
     }
 
     // cashAmountsCancel is imported from '$lib/utils/transactions/promoteHelpers'
-    // (extracted for unit-testability — see promoteHelpers.ts)
+    // (extracted for unit-testability — see promoteHelpers.ts). It takes `getTypeRule`
+    // because a cash amount cannot be compared without knowing the sign its type implies:
+    // pool rows arrive signed, DB rows arrive normalised to a magnitude by fieldsFromTx.
 
     /** Selection-based promote detection — 2 standalone rows with matching promote rule. */
     let selectedForPromote = $derived.by(() => {
@@ -2382,7 +2390,7 @@
         if (!match) return null;
         // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
         // For FX_CONVERSION: amounts are in different currencies — no cancel check.
-        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) return null;
+        if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
         return {...match, opA: a, opB: b};
     });
 
@@ -2534,7 +2542,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j]))) {
+                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2570,7 +2578,7 @@
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
                 if (!match) continue;
                 // CASH_TRANSFER: amounts must cancel. FX_CONVERSION: different currencies, no cancel check.
-                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b)) continue;
+                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);
@@ -2736,7 +2744,7 @@
 </script>
 
 <ModalBase {open} maxWidth="none" onRequestClose={requestClose} testId="tx-bulk-modal" allowOverflow={true} contentClass="max-w-[95vw] w-[95vw]">
-    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-bulk-modal-root">
+    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-bulk-modal-root" data-busy={scheduler.state.isPending || scheduler.state.isValidating || committing} data-validate-runs={scheduler.state.validateRuns}>
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title">
@@ -3130,7 +3138,7 @@
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now" title={$t('transactions.validate.now')}>
                     ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                 </button>
-                {#if scheduler.state.isValidating}
+                {#if scheduler.state.isValidating || scheduler.state.isPending}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid && !formError && !commitFailed}
                     <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-bulk-valid">

@@ -215,7 +215,7 @@ test.describe('Broker Sharing', () => {
             if (await editBtn.isVisible({timeout: 2000})) {
                 await editBtn.click();
                 // Edit modal/form should appear
-                await page.waitForTimeout(500);
+                await expect(page.locator('[role="dialog"], [data-testid$="-modal"]').first()).toBeVisible({timeout: 10_000});
             }
         });
     });
@@ -254,7 +254,6 @@ test.describe('Broker Sharing', () => {
             const themeToggle = page.getByTestId('theme-toggle');
             if (await themeToggle.isVisible({timeout: 3000})) {
                 await themeToggle.click();
-                await page.waitForTimeout(300);
             }
 
             // Navigate to broker detail and open the sharing panel (Info tab)

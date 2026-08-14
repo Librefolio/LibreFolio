@@ -11,6 +11,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {goto} from '$app/navigation';
     import {ExternalLink, Layers} from 'lucide-svelte';
     import {t} from '$lib/i18n';
@@ -1065,6 +1066,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'performance');
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
             tooltipCleanup?.();

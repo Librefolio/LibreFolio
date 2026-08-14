@@ -906,7 +906,7 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="fx-detail-page">
+<div class="space-y-4" data-testid="fx-detail-page" data-busy={loading}>
     <!-- ======================================================================= -->
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->

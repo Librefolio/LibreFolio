@@ -84,7 +84,6 @@ test.describe('Select Components', () => {
             // Navigate to Preferences tab
             const prefsTab = page.getByRole('tab').filter({hasText: /Preferences|Preferenze/i});
             await prefsTab.click();
-            await page.waitForTimeout(500);
         });
 
         test('currency select opens with search field', async ({page}) => {
@@ -119,7 +118,6 @@ test.describe('Select Components', () => {
             const searchInput = currencySelect.locator('input[type="text"]');
             await searchInput.waitFor({state: 'visible', timeout: 1000});
             await searchInput.focus();
-            await page.waitForTimeout(100);
 
             // Press Escape to close
             await page.keyboard.press('Escape');
@@ -184,7 +182,6 @@ test.describe('Select Components', () => {
             const globalTab = page.getByRole('tab').filter({hasText: /Global|Globali|Admin/i});
             await expect(globalTab).toBeVisible({timeout: 5000});
             await globalTab.click();
-            await page.waitForTimeout(500);
         });
 
         test('global settings tab loads for admin', async ({page}) => {
@@ -240,7 +237,6 @@ test.describe('Select Components', () => {
             await page.goto('/settings');
             const prefsTab = page.getByRole('tab').filter({hasText: /Preferences|Preferenze/i});
             await prefsTab.click();
-            await page.waitForTimeout(500);
 
             const currencySelect = page.getByTestId('preference-currency');
             await currencySelect.locator('[role="combobox"]').click();

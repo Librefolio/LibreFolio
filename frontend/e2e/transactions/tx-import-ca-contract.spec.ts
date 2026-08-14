@@ -25,7 +25,9 @@ import {expect, test, type Page} from '../fixtures/playwright';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(120_000);
 
@@ -44,7 +46,7 @@ const API = 'http://localhost:6041/api/v1';
  * run so repeated runs against a persistent database do not collide.
  */
 async function createBrokerWithFixture(page: Page): Promise<{brokerName: string; fileName: string}> {
-    const suffix = Date.now().toString().slice(-6);
+    const suffix = uniqueSuffix();
     const brokerName = `CA Contract ${suffix}`;
     const fileName = `ca-contract-${suffix}.csv`;
 
@@ -68,7 +70,7 @@ async function createBrokerWithFixture(page: Page): Promise<{brokerName: string;
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
-    await page.waitForTimeout(400);
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 async function openImportWizard(page: Page) {
@@ -83,7 +85,6 @@ async function openImportWizard(page: Page) {
     const formClose = page.getByTestId('tx-form-close');
     if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
         await formClose.click();
-        await page.waitForTimeout(300);
     }
 
     await page.getByTestId('tx-bulk-import').click();
@@ -94,7 +95,6 @@ async function openImportWizard(page: Page) {
 async function parseFixture(page: Page, target: {brokerName: string; fileName: string}) {
     await page.getByTestId('import-wizard-next').click();
     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(800);
 
     // Each broker owns a foldable panel; a brand-new one may start folded.
     const panel = page.getByTestId('import-wizard-step2').locator('div.rounded-lg').filter({hasText: target.brokerName}).first();
@@ -103,7 +103,6 @@ async function parseFixture(page: Page, target: {brokerName: string; fileName: s
     let row = panel.locator('tr[data-row-id]').first();
     if (!(await row.isVisible({timeout: 1_500}).catch(() => false))) {
         await panel.locator('> button').first().click();
-        await page.waitForTimeout(500);
     }
 
     const named = panel.locator('tr[data-row-id]').filter({hasText: target.fileName}).first();
@@ -128,7 +127,7 @@ async function confirmNotices(page: Page) {
     const confirm = page.getByTestId('import-wizard-warning-confirm');
     if (await confirm.isVisible({timeout: 2_500}).catch(() => false)) {
         await confirm.click();
-        await page.waitForTimeout(400);
+        await expect(confirm).toBeHidden({timeout: 5_000});
     }
 }
 
@@ -143,10 +142,9 @@ async function walkToReview(page: Page) {
         if (await button.isVisible({timeout: 2_000}).catch(() => false)) {
             if (testid === 'import-wizard-fix-continue') {
                 await page.getByTestId('fix-step-accept-all').click();
-                await page.waitForTimeout(800);
+                await expect(page.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(0, {timeout: 10_000});
             }
             await button.click();
-            await page.waitForTimeout(600);
         }
     }
     await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 10_000});
@@ -163,7 +161,6 @@ async function goToFixStep(page: Page, target: {brokerName: string; fileName: st
     const assetsContinue = page.getByTestId('import-wizard-assets-continue');
     if (await assetsContinue.isVisible({timeout: 2_000}).catch(() => false)) {
         await assetsContinue.click();
-        await page.waitForTimeout(400);
     }
     await page.getByTestId('import-wizard-step-fix').waitFor({state: 'visible', timeout: 8_000});
 }
@@ -237,22 +234,19 @@ test.describe('Import Wizard — plugin contract', () => {
         const first = groups.first();
         const rowsBefore = await first.getByTestId('fix-step-row').count();
         await first.getByTestId('fix-step-group-toggle').click();
-        await page.waitForTimeout(300);
-        expect(await first.getByTestId('fix-step-row').filter({visible: true}).count()).toBeLessThan(rowsBefore);
+        await expect.poll(() => first.getByTestId('fix-step-row').filter({visible: true}).count()).toBeLessThan(rowsBefore);
         await first.getByTestId('fix-step-group-toggle').click();
-        await page.waitForTimeout(300);
+        await expect(first.getByTestId('fix-step-row').filter({visible: true})).toHaveCount(rowsBefore);
 
         // "Keep all" inside a panel settles that panel only: the whole point of grouping
         // is that a user can accept one class of finding and still examine another.
         await first.getByTestId('fix-step-group-accept-all').click();
-        await page.waitForTimeout(500);
-        expect(await first.locator('[data-testid="fix-step-row"][data-decision="kept"]').count()).toBe(rowsBefore);
+        await expect(first.locator('[data-testid="fix-step-row"][data-decision="kept"]')).toHaveCount(rowsBefore);
         expect(await page.locator('[data-testid="fix-step-row"][data-decision="pending"]').count()).toBeGreaterThan(0);
 
         // And the panel can be put back exactly as it was.
         await first.getByTestId('fix-step-group-reset-all').click();
-        await page.waitForTimeout(500);
-        expect(await first.locator('[data-testid="fix-step-row"][data-decision="pending"]').count()).toBe(rowsBefore);
+        await expect(first.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(rowsBefore);
     });
 
     // -----------------------------------------------------------------------
@@ -262,15 +256,13 @@ test.describe('Import Wizard — plugin contract', () => {
         await goToFixStep(page, fixture);
 
         await page.getByTestId('fix-step-accept-all').click();
-        await page.waitForTimeout(800);
 
-        expect(await page.locator('[data-testid="fix-step-row"][data-decision="pending"]').count()).toBe(0);
+        await expect(page.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(0, {timeout: 10_000});
         await expect(page.getByTestId('import-wizard-fix-continue')).toBeEnabled({timeout: 5_000});
 
         // Reset puts every row back to pending, and the gate closes again.
         await page.getByTestId('fix-step-reset-all').click();
-        await page.waitForTimeout(800);
-        expect(await page.locator('[data-testid="fix-step-row"][data-decision="pending"]').count()).toBeGreaterThan(0);
+        await expect.poll(() => page.locator('[data-testid="fix-step-row"][data-decision="pending"]').count()).toBeGreaterThan(0);
         await expect(page.getByTestId('import-wizard-fix-continue')).toBeDisabled();
     });
 
@@ -284,7 +276,9 @@ test.describe('Import Wizard — plugin contract', () => {
         const before = await rows.count();
 
         await page.getByTestId('fix-step-accept-all').click();
-        await page.waitForTimeout(800);
+        // The barrier is the settling itself: `rows.count()` is the invariant under test
+        // and would hold trivially if read before the action landed.
+        await expect(page.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(0, {timeout: 10_000});
         expect(await rows.count()).toBe(before);
 
         // Settling retires the row's todos; withdrawing the decision has to give them
@@ -293,7 +287,7 @@ test.describe('Import Wizard — plugin contract', () => {
         // inside the row, so the row has to be opened first.
         await rows.first().getByTestId('fix-step-row-toggle').click();
         await rows.first().getByTestId('fix-step-reset').click();
-        await page.waitForTimeout(600);
+        await expect(rows.first()).toHaveAttribute('data-decision', 'pending', {timeout: 5_000});
         expect(await rows.count()).toBe(before);
         expect(await page.locator('[data-testid="fix-step-row"][data-decision="pending"]').count()).toBeGreaterThan(0);
     });
@@ -310,7 +304,6 @@ test.describe('Import Wizard — plugin contract', () => {
         for (let i = 0; i < (await rows.count()); i++) {
             const row = rows.nth(i);
             await row.getByTestId('fix-step-row-toggle').click();
-            await page.waitForTimeout(250);
             if (
                 await row
                     .getByTestId('fix-step-split')
@@ -321,7 +314,6 @@ test.describe('Import Wizard — plugin contract', () => {
                 break;
             }
             await row.getByTestId('fix-step-row-toggle').click();
-            await page.waitForTimeout(150);
         }
         expect(splitRow, 'the fixture must offer at least one splittable row').not.toBeNull();
 
@@ -335,10 +327,8 @@ test.describe('Import Wizard — plugin contract', () => {
 
         // A second leg can be added, and its nature chosen from the custom select.
         await splitRow!.getByTestId('fix-step-split-add').click();
-        await page.waitForTimeout(300);
-        expect(await splitRow!.getByTestId('fix-step-split-line').count()).toBe(2);
+        await expect(splitRow!.getByTestId('fix-step-split-line')).toHaveCount(2);
         await splitRow!.getByTestId('fix-step-split-amount').nth(1).fill('12');
-        await page.waitForTimeout(400);
 
         // A charge larger than the trade itself would leave nothing bought.
         await splitRow!.getByTestId('fix-step-split-amount').first().fill('999999');
@@ -360,7 +350,6 @@ test.describe('Import Wizard — plugin contract', () => {
         for (let i = 0; i < (await rows.count()); i++) {
             const row = rows.nth(i);
             await row.getByTestId('fix-step-row-toggle').click();
-            await page.waitForTimeout(250);
             if (
                 await row
                     .getByTestId('fix-step-split')
@@ -371,20 +360,19 @@ test.describe('Import Wizard — plugin contract', () => {
                 break;
             }
             await row.getByTestId('fix-step-row-toggle').click();
-            await page.waitForTimeout(150);
         }
         expect(splitRow).not.toBeNull();
 
         await splitRow!.getByTestId('fix-step-split-add').click();
-        await page.waitForTimeout(300);
+        await expect(splitRow!.getByTestId('fix-step-split-line')).toHaveCount(2);
 
         // Open the second line's select: the first line's nature must be gone from it —
         // two "commissioni" legs on one row would be two transactions saying the same thing.
         const secondKind = splitRow!.getByTestId('fix-step-split-kind').nth(1);
         await secondKind.click();
-        await page.waitForTimeout(400);
 
         const options = page.locator('[data-testid^="search-select-option-"]');
+        await expect(options.first()).toBeVisible({timeout: 5_000});
         const optionCount = await options.count();
         expect(optionCount).toBeGreaterThan(0);
         expect(optionCount).toBeLessThan(3); // three natures exist, one is taken
@@ -417,6 +405,8 @@ test.describe('Import Wizard — plugin contract', () => {
         // up there as "SELL requires quantity < 0" — the regression this guards.
         await page.getByTestId('fix-step-accept-all').click();
         await page.getByTestId('import-wizard-fix-continue').click();
+        // Deliberate: this proves an error banner *never* appears. A retrying assertion
+        // would pass instantly on the empty page, before the re-check has even answered.
         await page.waitForTimeout(1_500);
 
         // The re-check may report duplicates, or nothing at all; what it must not do is
@@ -435,6 +425,8 @@ test.describe('Import Wizard — plugin contract', () => {
         // on the pre-correction verdict.
         await page.getByTestId('fix-step-accept-all').click();
         await page.getByTestId('import-wizard-fix-continue').click();
+        // Deliberate, same reason as CAC-009: absence is only meaningful after the
+        // re-check has had a window in which it could have complained.
         await page.waitForTimeout(2_000);
 
         await expect(page.getByText(/ADJUSTMENT requires asset_id/i)).toHaveCount(0);
@@ -457,13 +449,11 @@ test.describe('Import Wizard — plugin contract', () => {
         const resolveSection = step4.getByTestId('import-wizard-resolve-section');
         if (!(await resolveSection.isVisible({timeout: 3_000}).catch(() => false))) {
             await step4.getByTestId('import-wizard-resolve-toggle').click();
-            await page.waitForTimeout(400);
         }
         await resolveSection.scrollIntoViewIfNeeded();
 
         const select = resolveSection.locator('[data-testid="asset-select"]').first();
         await select.click();
-        await page.waitForTimeout(400);
         const createNew = page.getByTestId('search-select-create-new');
         if (await createNew.isVisible({timeout: 2_000}).catch(() => false)) {
             await createNew.click();
@@ -491,13 +481,13 @@ test.describe('Import Wizard — plugin contract', () => {
     test('CAC-012: transactions predating the broker are reported and can be fixed', async ({page}) => {
         // The fixture's earliest movement is from 2025; a broker opened after it makes
         // every earlier row unimportable until the date is moved back.
-        const lateBroker = `CA Late ${Date.now().toString().slice(-6)}`;
+        const lateBroker = `CA Late ${uniqueSuffix()}`;
         const created = await page.request.post(`${API}/brokers`, {
             data: [{name: lateBroker, opened_at: '2026-08-01', default_import_plugin: 'broker_credit_agricole'}],
         });
         expect(created.ok()).toBeTruthy();
         const brokerId = (await created.json()).results[0].broker_id;
-        const lateFile = `ca-late-${Date.now().toString().slice(-6)}.csv`;
+        const lateFile = `ca-late-${uniqueSuffix()}.csv`;
         const upload = await page.request.post(`${API}/brokers/import/upload`, {
             multipart: {broker_id: String(brokerId), file: {name: lateFile, mimeType: 'text/csv', buffer: readFileSync(FIXTURE)}},
         });
@@ -511,6 +501,7 @@ test.describe('Import Wizard — plugin contract', () => {
         await confirmNotices(page);
         await walkToReview(page);
 
+        const step4 = page.getByTestId('import-wizard-step4');
         const issues = page.getByTestId('import-wizard-broker-opening-issues');
         await expect(issues).toBeVisible({timeout: 8_000});
 
@@ -519,11 +510,14 @@ test.describe('Import Wizard — plugin contract', () => {
         const autofix = page.locator('[data-testid^="broker-opening-autofix"]').first();
         if (await autofix.isVisible({timeout: 3_000}).catch(() => false)) {
             await autofix.click();
-            await page.waitForTimeout(1_000);
+            // The auto-fix re-checks by itself once the PATCH lands, so its own busy
+            // flag is the barrier: reading the toolbar before it clears catches the
+            // re-check button mid-life and Playwright loses it to the re-render.
+            await waitForSettled(step4);
             const recheck = page.getByTestId('import-wizard-recheck-openings');
             if (await recheck.isVisible({timeout: 2_000}).catch(() => false)) {
                 await recheck.click();
-                await page.waitForTimeout(1_500);
+                await waitForSettled(step4);
             }
             await expect(issues).toHaveCount(0, {timeout: 8_000});
         }

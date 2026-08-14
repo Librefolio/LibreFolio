@@ -68,17 +68,16 @@ test.describe('FX List Page', () => {
 
         const firstFilter = filterContainers.first();
         await firstFilter.locator('[role="combobox"]').click();
-        await page.waitForTimeout(200);
         const searchInput = firstFilter.locator('input[type="text"]');
         await searchInput.fill('EUR');
-        await page.waitForTimeout(500);
 
         // SearchSelect uses <button> inside [role="listbox"], not [role="option"]
         const listbox = page.locator('[role="listbox"]');
         await expect(listbox).toBeVisible();
+        await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
         const option = listbox.locator('button').filter({hasText: 'EUR'}).first();
         await option.click();
-        await page.waitForTimeout(500);
+        await expect(listbox).toHaveCount(0, {timeout: 10_000});
 
         // All visible cards should contain "EUR"
         const filtered = page.locator('[data-testid^="fx-card-"]');
@@ -99,26 +98,23 @@ test.describe('FX List Page', () => {
         const filterContainers = page.locator('[data-testid="fx-currency-filter"]');
         const firstFilter = filterContainers.first();
         await firstFilter.locator('[role="combobox"]').click();
-        await page.waitForTimeout(200);
         const searchInput = firstFilter.locator('input[type="text"]');
         await searchInput.fill('EUR');
-        await page.waitForTimeout(500);
 
         // SearchSelect uses <button> inside [role="listbox"], not [role="option"]
         const listbox = page.locator('[role="listbox"]');
+        await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
         const option = listbox.locator('button').filter({hasText: 'EUR'}).first();
         await option.click();
-        await page.waitForTimeout(500);
+        await expect(listbox).toHaveCount(0, {timeout: 10_000});
 
         // Click reset filters button
         const resetBtn = page.getByTestId('fx-reset-filters');
         await expect(resetBtn).toBeVisible();
         await resetBtn.click();
-        await page.waitForTimeout(500);
 
         // All cards should be restored
-        const afterReset = await allCards.count();
-        expect(afterReset).toBe(totalBefore);
+        await expect(allCards).toHaveCount(totalBefore, {timeout: 10_000});
     });
 
     test('column menu stays compact and lists daily delta after rate', async ({page}) => {
@@ -153,7 +149,6 @@ test.describe('FX List Page', () => {
         const yearPreset = datePicker.getByRole('button', {name: /1Y/});
         await expect(yearPreset).toBeVisible();
         await yearPreset.click();
-        await page.waitForTimeout(500);
 
         // After clicking 1Y, the preset should be active (styled differently)
         // Verify the 1Y button has the active class
@@ -177,11 +172,9 @@ test.describe('FX List Page', () => {
         const swapBtn = firstCard.locator('[data-testid$="-swap-btn"]');
         await expect(swapBtn).toBeVisible();
         await swapBtn.click();
-        await page.waitForTimeout(500);
 
-        const labelAfter = await pairLabel.textContent();
-        // Labels should differ after swap
-        expect(labelAfter).not.toBe(labelBefore);
+        // Labels should differ after swap — the retrying assertion *is* the wait
+        await expect(pairLabel).not.toHaveText(labelBefore ?? '', {timeout: 10_000});
     });
 
     // ========================================================================
@@ -200,10 +193,8 @@ test.describe('FX List Page', () => {
             // Fallback: click the card itself
             await firstCard.click();
         }
-        await page.waitForTimeout(1000);
-
         // URL should contain /fx/ followed by a pair slug
-        await expect(page).toHaveURL(/\/fx\/[A-Z]+-[A-Z]+/);
+        await expect(page).toHaveURL(/\/fx\/[A-Z]+-[A-Z]+/, {timeout: 10_000});
     });
 
     // ========================================================================

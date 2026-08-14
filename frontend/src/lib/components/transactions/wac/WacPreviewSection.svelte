@@ -363,7 +363,7 @@
         <!-- Toggle Auto/Manual — always visible -->
         {#if !disabled}
             <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="{testid}-toggle">
-                <button type="button" class="px-1.5 py-0.5 rounded {isAuto && !forcedManual ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} disabled={disabled || forcedManual} data-testid="{testid}-toggle-auto"
+                <button type="button" class="px-1.5 py-0.5 rounded {isAuto && !forcedManual ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={setAutoMode} disabled={disabled || forcedManual} aria-pressed={isAuto && !forcedManual} data-testid="{testid}-toggle-auto"
                     >{$t('transactions.wacPreview.toggleAuto')}{forcedManual ? ' ⚠️' : ''}</button
                 >
                 <span class="text-gray-300 dark:text-gray-600">|</span>
@@ -372,6 +372,7 @@
                     class="px-1.5 py-0.5 rounded {!isAuto || forcedManual ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
                     onclick={switchToManual}
                     {disabled}
+                    aria-pressed={!isAuto || forcedManual}
                     data-testid="{testid}-toggle-manual">{$t('transactions.wacPreview.toggleManual')}</button
                 >
             </div>
@@ -384,7 +385,7 @@
     {#if !disabled}
         <div class="flex items-center gap-1 text-[10px]" data-testid="{testid}-unit-toggle">
             <span class="text-gray-400 dark:text-gray-500">{$t('transactions.wacPreview.unitModeLabel') ?? 'Show as:'}</span>
-            <button type="button" class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={() => setUnitMode('total')} data-testid="{testid}-unit-toggle-total"
+            <button type="button" class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}" onclick={() => setUnitMode('total')} aria-pressed={unitMode === 'total'} data-testid="{testid}-unit-toggle-total"
                 >{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
             >
             <span class="text-gray-300 dark:text-gray-600">|</span>
@@ -392,6 +393,7 @@
                 type="button"
                 class="px-1.5 py-0.5 rounded {unitMode === 'unit' ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
                 onclick={() => setUnitMode('unit')}
+                aria-pressed={unitMode === 'unit'}
                 data-testid="{testid}-unit-toggle-unit">{$t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit'}</button
             >
         </div>

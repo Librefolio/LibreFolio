@@ -12,6 +12,7 @@
  */
 import {expect, test, type Page, type Locator} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 import {API_BASE} from '../assets/assets-helpers';
 
@@ -46,7 +47,7 @@ const BROKER_EDITOR = 'Directa SIM'; // EDITOR
 async function goToTransactions(page: Page, query = '') {
     await navigateTo(page, `/transactions${query}`);
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
-    await page.waitForTimeout(500);
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
 }
 
 /**
@@ -84,21 +85,28 @@ async function openCreateFlow(page: Page) {
 }
 
 /** Select a transaction type in the FormModal type dropdown by code (e.g. 'DEPOSIT'). */
+/**
+ * A SearchSelect has no "I committed" event, but its option list is torn down
+ * when a choice lands — and the field cascade the choice triggers re-renders
+ * before that. Waiting for the list to go is therefore a real barrier.
+ */
+async function optionListClosed(page: Page) {
+    await expect(page.locator('[data-testid^="search-select-option-"]')).toHaveCount(0, {timeout: 5_000});
+}
+
 async function selectType(page: Page, typeCode: string) {
     const typeButton = page.getByTestId('tx-form-type');
     await typeButton.click();
-    await page.waitForTimeout(300);
     const option = page.getByTestId(`search-select-option-${typeCode}`);
     await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 /** Pick the first available broker (OWNER/EDITOR). */
 async function pickFirstBroker(page: Page) {
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     // Prefer a known OWNER broker by visible text; fall back to first available
     const knownOption = page.locator('[data-testid^="search-select-option-"]', {hasText: BROKER_OWNER_A});
     if ((await knownOption.count()) > 0) {
@@ -108,7 +116,7 @@ async function pickFirstBroker(page: Page) {
         await expect(option).toBeVisible({timeout: 2_000});
         await option.click();
     }
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 /** Pick a broker inside a specific dual-form panel (From/To) by known name. */
@@ -117,12 +125,11 @@ async function pickBrokerInPanel(page: Page, panelTestid: string, brokerName: st
     const trigger = panel.locator('[role="combobox"]').first();
     await expect(trigger).toBeVisible({timeout: 3_000});
     await trigger.click();
-    await page.waitForTimeout(500);
     // Select by visible broker name — stable across re-populate
     const option = page.locator('[data-testid^="search-select-option-"]', {hasText: brokerName});
     await expect(option.first()).toBeVisible({timeout: 3_000});
     await option.first().click();
-    await page.waitForTimeout(500);
+    await optionListClosed(page);
 }
 
 /** Fill the cash amount in the standard (non-dual) cash wrapper. */
@@ -132,7 +139,8 @@ async function fillCash(page: Page, amount: string) {
     const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
     await expect(cashInput).toBeVisible({timeout: 1_000});
     await cashInput.fill(amount);
-    await page.waitForTimeout(200);
+    await cashInput.blur();
+    await expect(cashInput).not.toHaveValue('');
 }
 
 /** Fill the dual-form "From" cash amount (click + fill + blur). */
@@ -142,7 +150,7 @@ async function fillCashFrom(page: Page, amount: string) {
     await input.click();
     await input.fill(amount);
     await input.press('Tab');
-    await page.waitForTimeout(300);
+    await expect(input).not.toHaveValue('');
 }
 
 /** Fill the dual-form "To" cash amount (click + fill + blur). */
@@ -152,7 +160,7 @@ async function fillCashTo(page: Page, amount: string) {
     await input.click();
     await input.fill(amount);
     await input.press('Tab');
-    await page.waitForTimeout(300);
+    await expect(input).not.toHaveValue('');
 }
 
 /** Fill the quantity field. */
@@ -160,37 +168,37 @@ async function fillQuantity(page: Page, qty: string) {
     const qtyInput = page.getByTestId('tx-form-quantity');
     await expect(qtyInput).toBeVisible({timeout: 2_000});
     await qtyInput.fill(qty);
-    await page.waitForTimeout(200);
+    await qtyInput.blur();
+    await expect(qtyInput).not.toHaveValue('');
 }
 
 /** Pick the first available asset in the asset selector. */
 async function pickFirstAsset(page: Page) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     // Pick the first available — asset choice doesn't matter for these tests
     // (BUY/SELL use small qty, DIVIDEND/ADJUSTMENT are cash/qty only)
     const option = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(option).toBeVisible({timeout: 2_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 /** Pick a specific asset by searching for its name (e.g. "Apple"). */
 async function pickAssetByName(page: Page, name: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     // Type to filter
     const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
     if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
         await searchInput.fill(name);
-        await page.waitForTimeout(500);
+        // The list is debounced; the named entry arriving *is* the settle.
+        await expect(page.locator('[data-testid^="search-select-option-"]', {hasText: name}).first()).toBeVisible({timeout: 5_000});
     }
     const option = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionListClosed(page);
 }
 
 /**
@@ -270,19 +278,6 @@ async function commitBulkModal(page: Page): Promise<{payload: CommitPayload; cre
     const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000}).catch(() => null);
 
     await commitBtn.click();
-    await page.waitForTimeout(200);
-
-    // If the button is still visible and enabled, it may not have responded — retry click
-    const stillVisible = await page
-        .getByTestId('tx-bulk-modal')
-        .isVisible({timeout: 500})
-        .catch(() => false);
-    if (stillVisible) {
-        const stillEnabled = await commitBtn.isEnabled({timeout: 300}).catch(() => false);
-        if (stillEnabled) {
-            await commitBtn.click();
-        }
-    }
 
     const req = await commitPromise;
     const payload = req.postDataJSON() as CommitPayload;
@@ -427,7 +422,6 @@ test.describe('Create + Commit — Paired Types', () => {
     test('FX_CONVERSION create → apply to BulkModal (dual form)', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'FX_CONVERSION');
-        await page.waitForTimeout(500);
 
         // Dual form should be visible
         const dualTo = page.getByTestId('tx-form-dual-to');
@@ -442,7 +436,7 @@ test.describe('Create + Commit — Paired Types', () => {
         // Verify BulkModal shows the FX row with both sides
         const bulkModal = page.getByTestId('tx-bulk-modal');
         await expect(bulkModal).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         // Should have at least 1 row (paired shown as single row)
         const bulkRows = bulkModal.locator('tbody tr[data-row-id]');
@@ -471,7 +465,6 @@ test.describe('Create + Commit — Paired Types', () => {
     test('CASH_TRANSFER create → commit (dual brokers + shared cash)', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'CASH_TRANSFER');
-        await page.waitForTimeout(500);
 
         // Dual form: From/To have broker selectors, shared cash outside
         const dualFrom = page.getByTestId('tx-form-dual-from');
@@ -491,7 +484,7 @@ test.describe('Create + Commit — Paired Types', () => {
         // BulkModal should be visible with the paired row
         const bulkModal = page.getByTestId('tx-bulk-modal');
         await expect(bulkModal).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         const {payload} = await commitBulkModal(page);
         // CASH_TRANSFER creates 2 linked TX (Withdrawal + Deposit)
@@ -501,7 +494,6 @@ test.describe('Create + Commit — Paired Types', () => {
     test('TRANSFER (asset) create → commit (dual brokers + asset + qty)', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'TRANSFER');
-        await page.waitForTimeout(500);
 
         const dualFrom = page.getByTestId('tx-form-dual-from');
         const dualTo = page.getByTestId('tx-form-dual-to');
@@ -520,7 +512,7 @@ test.describe('Create + Commit — Paired Types', () => {
 
         const bulkModal = page.getByTestId('tx-bulk-modal');
         await expect(bulkModal).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(1000);
+        await waitForSettled(page.getByTestId('tx-bulk-modal-root'));
 
         const {payload} = await commitBulkModal(page);
         // TRANSFER creates 2 linked TX (TRANSFER_OUT + TRANSFER_IN)
@@ -710,7 +702,6 @@ test.describe('Cost Basis Override', () => {
         const costBasis = '42.50';
         await openCreateFlow(page);
         await selectType(page, 'TRANSFER');
-        await page.waitForTimeout(500);
 
         // Pick different brokers for From/To
         await pickBrokerInPanel(page, 'tx-form-dual-from', BROKER_OWNER_A);
@@ -723,7 +714,8 @@ test.describe('Cost Basis Override', () => {
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await expect(cbInput).toBeVisible({timeout: 2_000});
         await cbInput.fill(costBasis);
-        await page.waitForTimeout(200);
+        await cbInput.blur();
+        await expect(cbInput).not.toHaveValue('');
 
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
@@ -741,7 +733,6 @@ test.describe('Cost Basis Override', () => {
     test('ADJUSTMENT shows cost_basis field + tooltip icon visible', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'ADJUSTMENT');
-        await page.waitForTimeout(500);
 
         // Pick broker and asset
         await pickFirstBroker(page);
@@ -760,7 +751,6 @@ test.describe('Cost Basis Override', () => {
     test('ADJUSTMENT empty cost_basis → payload sends null (not empty object)', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'ADJUSTMENT');
-        await page.waitForTimeout(500);
 
         await pickFirstBroker(page);
         await pickFirstAsset(page);
@@ -787,7 +777,6 @@ test.describe('Cost Basis Override', () => {
     test('ADJUSTMENT with cost_basis_override → value persists in payload', async ({page}) => {
         await openCreateFlow(page);
         await selectType(page, 'ADJUSTMENT');
-        await page.waitForTimeout(500);
 
         await pickFirstBroker(page);
         await pickFirstAsset(page);
@@ -799,7 +788,7 @@ test.describe('Cost Basis Override', () => {
         await cbInput.click();
         await cbInput.fill('99.99');
         await cbInput.press('Tab'); // ensure blur fires and mode switches
-        await page.waitForTimeout(500);
+        await expect(cbInput).not.toHaveValue('');
 
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});

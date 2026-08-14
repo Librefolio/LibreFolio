@@ -17,6 +17,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
@@ -314,6 +315,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'line');
             needsInitialLayoutStabilityPass = true;
 
             if (onPointClick) {

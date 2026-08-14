@@ -19,6 +19,7 @@ A SIGKILL anywhere along it discards the whole run's backend coverage without a
 word — which is precisely how coverage vanished twice during P7.
 """
 
+import atexit
 import contextlib
 import math
 import os
@@ -243,13 +244,64 @@ class SharedTestServer:
             raise RuntimeError("shared test backend failed to start")
         os.environ[SHARED_SERVER_ENV] = "1"
         _set_active(self)
+        _install_last_resort_teardown()
         return self
 
     def __exit__(self, *exc):
         _set_active(None)
         os.environ.pop(SHARED_SERVER_ENV, None)
         self.stop()
+        _remove_last_resort_teardown()
         return False
+
+
+#: Signals that end the runner without unwinding the stack. `with` already covers
+#: a normal return and any exception — including Ctrl-C, which arrives as
+#: KeyboardInterrupt — but Python's default handling of SIGTERM and SIGHUP calls
+#: no `__exit__` at all. The server was started with `start_new_session=True`, so
+#: it is deliberately outside the terminal's foreground group: nothing else will
+#: reach it. That is the whole of how a backend ends up reparented to init and
+#: sitting on port 6041 for hours, serving stale code to every later run.
+_TEARDOWN_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
+
+_previous_handlers: dict = {}
+_atexit_registered = False
+
+
+def _teardown_active(*_args) -> None:
+    server = _ACTIVE
+    if server is not None:
+        server.stop()
+
+
+def _signal_teardown(signum, _frame):
+    _teardown_active()
+    # Restore the default and re-raise, so the exit status still says "killed by
+    # this signal" instead of pretending the run ended on its own terms.
+    signal.signal(signum, _previous_handlers.get(signum, signal.SIG_DFL))
+    os.kill(os.getpid(), signum)
+
+
+def _install_last_resort_teardown() -> None:
+    global _atexit_registered
+    if not _atexit_registered:
+        atexit.register(_teardown_active)
+        _atexit_registered = True
+    for sig in _TEARDOWN_SIGNALS:
+        try:
+            _previous_handlers[sig] = signal.signal(sig, _signal_teardown)
+        except (ValueError, OSError):
+            # Not the main thread, or the platform has no such signal.
+            pass
+
+
+def _remove_last_resort_teardown() -> None:
+    for sig, previous in list(_previous_handlers.items()):
+        try:
+            signal.signal(sig, previous)
+        except (ValueError, OSError):
+            pass
+        _previous_handlers.pop(sig, None)
 
 
 #: The server this invocation is running, if any. A destructive database

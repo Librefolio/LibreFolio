@@ -201,6 +201,94 @@ test.describe.configure({mode: 'serial'});
 "It's easier" is not a reason. `exclusive_because` **is** the declaration, not a comment
 beside a flag.
 
+### 12. A unique name must actually be unique
+
+```ts
+const suffix = Date.now().toString().slice(-6);   // ✘ four workers, one millisecond
+const suffix = uniqueSuffix();                     // ✔ e2e/fixtures/unique.ts
+```
+
+Workers start in bursts. This is not theory: it produced
+`UNIQUE constraint failed: brokers.name` on `CA Contract 313578`, and the collision was
+read as a product bug for an afternoon. A suffix must mix time **with worker identity and
+randomness**, never time alone.
+
+### 13. On a toggle, assert the end state — never click blind
+
+```ts
+// ✘ closes the section for every asset that opens it by itself
+await page.getByTestId('more-info-toggle').click();
+
+// ✔ ask for the state, act only if it is not already there
+if (!(await panel.isVisible())) await toggle.click();
+await expect(panel).toBeVisible();
+```
+
+`AssetModal.svelte:595` does `moreInfoExpanded = identifierRows.length > 0`: the section
+opens itself when the asset has identifiers. A helper that clicks unconditionally works
+on the fixtures it was written against and inverts everywhere else.
+
+### 14. `waitForSettled` needs the container to publish `data-busy`
+
+It waits for a `[data-busy]` **descendant** to attach. Point it at a container that never
+publishes the flag and it burns the whole timeout, then fails — 11 tests died at ~23s
+each this way. Check the component first; if the flag is missing, **adding it is the fix**
+(see rule 4), not switching to a different wait.
+
+### 15. A counter barrier samples before the action
+
+```ts
+// ✘ proves *a* run happened, not that it covered your change
+await expect(modal).toHaveAttribute('data-validate-runs', /^[1-9]/);
+
+// ✔ proves a run happened *after* you acted
+const before = await validateRuns(page);
+await applyButton.click();
+await expect.poll(() => validateRuns(page)).toBeGreaterThan(before);
+```
+
+A monotonic counter is strictly better than a boolean flag, but only if read as a
+**delta**. `!= '0'` is the same bet as a sleep, wearing a counter's clothes.
+
+### 16. An absence assertion needs a presence barrier
+
+```ts
+// ✘ also passes when the PDF viewer has not mounted yet
+await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0);
+
+// ✔ prove the thing is there, *then* prove the part you want gone is not
+await expect(page.getByTestId('pdf-viewer-toolbar')).toBeVisible();
+await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0);
+```
+
+`toHaveCount(0)` is satisfied by "nothing rendered". A test written this way passes
+**because** the app was slow — the exact inverse of a sleep, and just as false. One did:
+the PDF preview's comment button had been visible for as long as the option that was
+meant to hide it had been misconfigured, and the suite reported green throughout.
+
+Before writing a negative assertion, ask what makes the *positive* observable, and assert
+that first.
+
+### 17. A cached call is not an observable event
+
+```ts
+// ✘ the request only happens on a cache miss; on a hit this waits forever
+const res = page.waitForResponse((r) => r.url().includes('/risk/query'));
+await tab.click();
+await res;
+
+// ✔ wait for the state the click produces, whatever served it
+await tab.click();
+await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible();
+await expect(page.getByTestId('asset-detail-risk-loading')).toHaveCount(0);
+```
+
+`queryRisk` keeps a module-level cache: the panel's mount calls it with `force=false`, the
+refresh button with `force=true`. The same click therefore emits a request or not depending
+on what the page already fetched, and under load the ordering changes. Waiting on the
+network is right only when the request **is** the subject (proving a refresh really reaches
+the server); when it is scaffolding, wait for the state.
+
 ---
 
 ## Parallelism — how a test declares what it shares
@@ -345,6 +433,20 @@ means nothing.
 > condition normal, and a *user-facing* bug fell out of a test run.
 >
 > The fix was in the product, not the spec. Consider that outcome every time.
+
+> And a second one, same shape. Four WAC tests were red only under load, always the same
+> four, green in isolation. `useValidateScheduler` sampled its anti-bounce key **when the
+> response arrived** instead of when the request left, so an edit made while the server
+> was thinking got marked as already-validated and was never re-checked. For a user on a
+> slow connection: *the change you make while it is loading is silently not verified.*
+> Four tests waiting on a preview that would never update looked exactly like four flaky
+> tests.
+
+**How to tell them apart, cheaply.** The backend traceback is in the E2E log on the
+`[WebServer]` lines — `grep -E "Traceback|IntegrityError|OperationalError"` on the run log
+separates "the product threw" from "the test guessed" in one command. And read
+`test-results/**/error-context.md` (the accessibility snapshot of the failing moment)
+**before** relaunching: the directory is wiped at the start of every run.
 
 ---
 

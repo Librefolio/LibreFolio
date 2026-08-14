@@ -23,6 +23,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
@@ -260,6 +261,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'geography-map');
             needsInitialLayoutStabilityPass = true;
             chartInstance.on('georoam', () => {
                 const opt = chartInstance?.getOption() as {series?: Array<{zoom?: number}>} | undefined;

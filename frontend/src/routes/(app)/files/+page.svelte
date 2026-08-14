@@ -23,6 +23,7 @@
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, type BrokerInfo as StoreBrokerInfo} from '$lib/stores/reference/brokerStore';
     import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
@@ -330,8 +331,12 @@
             showUploader = false;
             pendingStaticFiles = [];
             await loadFiles();
+            // No toast: the new rows appear in the list, which is the confirmation.
+            notify({name: 'file.uploaded', detail: {count: files.length}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Upload failed';
+            // No toast: `error` is rendered in the page.
+            notify({name: 'file.upload.failed', detail: {reason: error}});
         }
     }
 
@@ -583,8 +588,10 @@
                 await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
             }
             await loadFiles();
+            notify({name: 'file.deleted', detail: {fileId, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
+            notify({name: 'file.delete.failed', detail: {fileId, isBrim, reason: error}});
         }
     }
 
@@ -598,11 +605,14 @@
                     await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
                 }
             }
+            const deletedCount = selectedFileIds.length;
             selectedFileIds = [];
             activeTableRef?.getTableRef()?.clearSelection();
             await loadFiles();
+            notify({name: 'file.deleted.bulk', detail: {count: deletedCount, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
+            notify({name: 'file.delete.failed', detail: {isBrim, reason: error}});
         }
     }
 

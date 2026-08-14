@@ -33,6 +33,7 @@
 
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 
 test.setTimeout(90_000);
@@ -41,10 +42,22 @@ test.setTimeout(90_000);
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** The option list is present and has finished loading its catalogue. */
+async function optionListReady(page: Page) {
+    const list = page.locator('[role="listbox"]');
+    await expect(list.first()).toBeVisible({timeout: 5_000});
+    await expect(list.first()).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
+}
+
+/** The option list is gone — the teardown that follows a pick or an Escape. */
+async function optionListClosed(page: Page) {
+    await expect(page.locator('[data-testid^="search-select-option-"]')).toHaveCount(0, {timeout: 10_000});
+}
+
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
-    await page.waitForTimeout(400);
+    await waitForSettled(page.getByTestId('transactions-page'), 20_000);
 }
 
 /** Open BulkModal → click Import → ImportWizard opens */
@@ -62,7 +75,7 @@ async function openImportWizard(page: Page) {
     const formClose = page.getByTestId('tx-form-close');
     if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
         await formClose.click();
-        await page.waitForTimeout(300);
+        await expect(formClose).toHaveCount(0, {timeout: 5_000});
     }
 
     await page.getByTestId('tx-bulk-import').click();
@@ -79,7 +92,7 @@ async function skipStepIfPresent(page: Page, continueTestId: string) {
     const button = page.getByTestId(continueTestId);
     if (await button.isVisible({timeout: 1_500}).catch(() => false)) {
         await button.click();
-        await page.waitForTimeout(300);
+        await expect(button).toHaveCount(0, {timeout: 5_000});
     }
 }
 
@@ -88,11 +101,11 @@ async function parseGenericSimple(page: Page) {
     // Step 1: skip (no new uploads)
     await page.getByTestId('import-wizard-next').click();
     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(600); // wait for broker files to load and panels to auto-expand
+    await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
 
     // Dismiss any open dropdown (e.g. column-visibility panel) before interacting
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(200);
+    await optionListClosed(page);
 
     const step2 = page.getByTestId('import-wizard-step2');
 
@@ -140,7 +153,7 @@ async function goToStep4WithGenericSimple(page: Page) {
         await skipStepIfPresent(page, testid);
     }
     await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(500);
+    await waitForSettled(page.getByTestId('import-wizard-step4'), 20_000);
 }
 
 /**
@@ -154,7 +167,6 @@ async function openFirstAssetSelectDropdown(page: Page) {
 
     // Scroll resolve section into view (it may be above the visible area in the modal)
     await resolveSection.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(300);
 
     // Wait for AssetSelect in the first UNRESOLVED card.
     // Resolved cards have 'border-emerald-200'; unresolved cards have 'border-gray-200'.
@@ -175,7 +187,7 @@ async function openFirstAssetSelectDropdown(page: Page) {
     }
 
     await assetSelect.click();
-    await page.waitForTimeout(400); // wait for dropdown to open
+    await optionListReady(page);
 
     return step4;
 }
@@ -195,17 +207,15 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
     if (!(await searchInput.isVisible({timeout: 2_000}).catch(() => false))) {
         // Dropdown might not be open yet; click the select again
         await resolveSection.locator('[data-testid="asset-select"]').first().click();
-        await page.waitForTimeout(400);
+        await optionListReady(page);
     }
 
     // Type to trigger search
     await searchInput.fill('e');
-    await page.waitForTimeout(600);
 
     const firstOption = page.locator('[data-testid^="search-select-option-"]').first();
     if (!(await firstOption.isVisible({timeout: 3_000}).catch(() => false))) {
         await searchInput.fill('a');
-        await page.waitForTimeout(600);
     }
 
     const option = page.locator('[data-testid^="search-select-option-"]').first();
@@ -214,7 +224,7 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
     }
 
     await option.click();
-    await page.waitForTimeout(500);
+    await optionListClosed(page);
 
     // Handle identifier prompt (skip or confirm)
     const skipBtn = page.getByTestId('identifier-prompt-skip');
@@ -227,7 +237,6 @@ async function resolveFirstAssetManually(page: Page): Promise<boolean> {
         await confirmBtn.click();
     } else if (await cancelBtn.isVisible({timeout: 500}).catch(() => false)) {
         await cancelBtn.click();
-        await page.waitForTimeout(300);
     }
 
     return true;
@@ -280,7 +289,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Close dropdown by pressing Escape
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(200);
+        await optionListClosed(page);
     });
 
     // -----------------------------------------------------------------------
@@ -294,7 +303,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Click the "Create new" footer button
         await page.getByTestId('search-select-create-new').click();
-        await page.waitForTimeout(500);
 
         // AssetModal must open
         const assetModal = page.getByTestId('asset-modal-form');
@@ -306,7 +314,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Cancel the modal — we're just verifying the pre-fill
         await page.getByTestId('asset-modal-cancel').click();
-        await page.waitForTimeout(300);
+        await expect(page.getByTestId('asset-modal-form')).toHaveCount(0, {timeout: 5_000});
 
         // Wizard still open
         await expect(page.getByTestId('import-wizard-step4')).toBeVisible();
@@ -328,13 +336,12 @@ test.describe('Import Wizard — Asset Resolution', () => {
         // Type a search to get options
         const searchInput = resolveSection.locator('[data-testid="asset-select"] input[type="text"]').first();
         await searchInput.fill('e');
-        await page.waitForTimeout(600);
 
         // Pick the first available asset option
         const firstOption = page.locator('[data-testid^="search-select-option-"]').first();
         await expect(firstOption).toBeVisible({timeout: 5_000});
         await firstOption.click();
-        await page.waitForTimeout(500);
+        await optionListClosed(page);
 
         // One of: identifier prompt appears OR asset is directly resolved
         const skipBtn = page.getByTestId('identifier-prompt-skip');
@@ -349,7 +356,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
                 // Cancel if skip not available
                 await page.getByTestId('identifier-prompt-cancel').click();
             }
-            await page.waitForTimeout(400);
+            await expect(skipBtn).toHaveCount(0, {timeout: 5_000});
         }
 
         // Either way the asset should now be resolved (emerald border on card)
@@ -372,18 +379,18 @@ test.describe('Import Wizard — Asset Resolution', () => {
         await openFirstAssetSelectDropdown(page);
         const searchInput = resolveSection.locator('[data-testid="asset-select"] input[type="text"]').first();
         await searchInput.fill('e');
-        await page.waitForTimeout(600);
 
         const firstOption = page.locator('[data-testid^="search-select-option-"]').first();
         await expect(firstOption).toBeVisible({timeout: 5_000});
         await firstOption.click();
-        await page.waitForTimeout(500);
+        await optionListClosed(page);
 
         // If identifier prompt appears, use Confirm (not Skip)
         const confirmBtn = page.getByTestId('identifier-prompt-confirm');
         if (await confirmBtn.isVisible({timeout: 2_000}).catch(() => false)) {
             await confirmBtn.click();
-            await page.waitForTimeout(800); // wait for API call to complete
+            await expect(confirmBtn).toHaveCount(0, {timeout: 10_000});
+            await waitForSettled(page.getByTestId('import-wizard-step4'), 20_000);
 
             // Asset should be resolved
             const resolvedCard = resolveSection.locator('.border-emerald-200, [class*="border-emerald"]').first();
@@ -433,27 +440,25 @@ test.describe('Import Wizard — Asset Resolution', () => {
                 }
 
                 await assetSelectLocator.click();
-                await page.waitForTimeout(400);
+                await optionListReady(page);
 
                 // Search and pick
                 const searchInput = resolveSection.locator('.border-gray-200 [data-testid="asset-select"] input[type="text"]').first();
                 if (await searchInput.isVisible({timeout: 2_000}).catch(() => false)) {
                     await searchInput.fill('e');
-                    await page.waitForTimeout(600);
                 }
 
                 const option = page.locator('[data-testid^="search-select-option-"]').first();
                 if (!(await option.isVisible({timeout: 3_000}).catch(() => false))) {
                     if (await searchInput.isVisible({timeout: 500}).catch(() => false)) {
                         await searchInput.fill('a');
-                        await page.waitForTimeout(600);
                     }
                 }
 
                 const opt = page.locator('[data-testid^="search-select-option-"]').first();
                 if (await opt.isVisible({timeout: 2_000}).catch(() => false)) {
                     await opt.click();
-                    await page.waitForTimeout(500);
+                    await optionListClosed(page);
                 }
 
                 // Handle identifier prompt — skip
@@ -467,7 +472,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
                 } else if (await cancelBtn.isVisible({timeout: 500}).catch(() => false)) {
                     await cancelBtn.click();
                 }
-                await page.waitForTimeout(400);
+                await waitForSettled(page.getByTestId('import-wizard-step4'), 20_000);
             }
         } // end if (startedDisabled)
 
@@ -534,7 +539,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         if (await dupBadge.isVisible({timeout: 3_000}).catch(() => false)) {
             await dupBadge.click();
-            await page.waitForTimeout(600);
 
             // TransactionFormModal should open in view mode
             // ModalBase renders testId="tx-form-modal" as data-testid on the backdrop
@@ -586,13 +590,12 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         // Open the BrokerSearchSelect dropdown
         await brokerSelectWrapper.click();
-        await page.waitForTimeout(400);
+        await optionListReady(page);
 
         // Click "Create new" in the dropdown footer
         const createNewBtn = page.getByTestId('search-select-create-new');
         await expect(createNewBtn).toBeVisible({timeout: 3_000});
         await createNewBtn.click();
-        await page.waitForTimeout(400);
 
         // BrokerModal should open
         const brokerModal = page.locator('[data-testid="broker-modal"]');
@@ -603,18 +606,17 @@ test.describe('Import Wizard — Asset Resolution', () => {
         await expect(nameInput).toBeVisible({timeout: 3_000});
         const uniqueName = `E2E Test Broker ${Date.now()}`;
         await nameInput.fill(uniqueName);
-        await page.waitForTimeout(200);
+        await expect(nameInput).toHaveValue(uniqueName);
 
         // Save
         await page.getByTestId('broker-form-submit').click();
-        await page.waitForTimeout(800);
 
         // BrokerModal should close
         await expect(brokerModal).not.toBeVisible({timeout: 5_000});
 
         // Open the BrokerSearchSelect dropdown again — new broker should appear
         await brokerSelectWrapper.click();
-        await page.waitForTimeout(400);
+        await optionListReady(page);
 
         // Verify the newly created broker appears in the options
         const newBrokerOption = page.locator(`[data-testid^="search-select-option-"]`).filter({hasText: uniqueName});
@@ -633,7 +635,7 @@ test.describe('Import Wizard — Asset Resolution', () => {
         // Step 1: skip to Step 2 where files are listed with a preview action
         await page.getByTestId('import-wizard-next').click();
         await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-        await page.waitForTimeout(500);
+        await waitForSettled(page.getByTestId('import-wizard-step2'), 20_000);
 
         const step2 = page.getByTestId('import-wizard-step2');
 
@@ -649,7 +651,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
 
         await previewBtn.click();
         await page.getByTestId('context-menu-action-preview').click();
-        await page.waitForTimeout(600);
 
         // FilePreviewModal should open (ModalBase with testId="file-preview-modal")
         const previewModal = page.locator('[data-testid="file-preview-modal"]');
@@ -705,7 +706,6 @@ test.describe('Import Wizard — Asset Resolution', () => {
         await goToStep4WithGenericSimple(page);
 
         await page.getByTestId('import-wizard-back').click();
-        await page.waitForTimeout(500);
 
         // The previous step is whichever conditional step was raised, or the analysis if
         // none was. An empty panel — the symptom of a step machine counting by number
