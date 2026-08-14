@@ -107,6 +107,30 @@ export function buildSignedCash(cash: CashValue | null | undefined, rule: string
     return {code: cash.code, amount: applySign(cash.amount, resolved)};
 }
 
+/** Canonical signed cash amount for a transaction, whatever representation it arrives in.
+ *
+ * Two representations of the same money coexist in the app, and this is what reconciles them:
+ *   - **import pool rows** carry the amount already signed, as parsed from the broker file;
+ *   - **rows read from the DB** are normalised to a magnitude by the edit form (see
+ *     `fieldsFromTx`), because the form shows a magnitude and the *type* carries the sign.
+ *
+ * Applying the type's sign rule is safe on both, because `applySign` is idempotent: `'negative'`
+ * maps to `-Math.abs(n)`, so a value that is already negative comes back unchanged. Free-sign
+ * rules (`free`/`any`/`nonzero` — ADJUSTMENT, TRANSFER legs) pass through untouched, which is
+ * required rather than incidental: there the sign *is* information.
+ *
+ * Anything that compares, sums or pairs cash amounts must go through here. Reading
+ * `fields.cash.amount` directly silently works for one representation and fails for the other.
+ *
+ * @returns the signed amount, or `null` when there is no cash or it is not a finite number.
+ */
+export function signedCashAmount(cash: CashValue | null | undefined, rule: TypeRule): number | null {
+    const signed = buildSignedCash(cash, rule.cashSign);
+    if (!signed) return null;
+    const n = Number(signed.amount);
+    return Number.isFinite(n) ? n : null;
+}
+
 // =============================================================================
 //  Field-level equality — type-aware normalization
 // =============================================================================

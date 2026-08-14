@@ -7,6 +7,7 @@
 
 import {expect} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
+import {waitForChart} from '../fixtures/app-events';
 
 export const API_BASE = '/api/v1';
 
@@ -42,7 +43,9 @@ export async function navigateToAssetByName(page: import('@playwright/test').Pag
     const searchInput = page.getByTestId('assets-search-input');
     if (await searchInput.isVisible({timeout: 3000}).catch(() => false)) {
         await searchInput.fill(assetName);
-        await page.waitForTimeout(800);
+        // The list republishes `data-busy` while it refilters; wait for that
+        // rather than for a duration long enough to cover the debounce.
+        await page.waitForSelector('[data-testid="assets-page"][data-busy="false"]', {timeout: 20_000});
     }
 
     // Click the first matching card
@@ -58,9 +61,11 @@ export async function navigateToAssetByName(page: import('@playwright/test').Pag
     }
 
     await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 20_000});
-    // Wait for ECharts canvas to render
-    await page.waitForSelector('canvas', {timeout: 18_000}).catch(() => null);
-    await page.waitForTimeout(1500);
+    await page.waitForSelector('[data-testid="asset-detail-page"][data-busy="false"]', {timeout: 20_000});
+    // The chart says when it has finished drawing (data-chart-ready), so the
+    // 1.5s that used to stand in for "the animation is probably over" is gone.
+    // Kept tolerant: a few asset pages legitimately have no chart to draw.
+    await waitForChart(page, 12_000).catch(() => null);
 }
 
 /**

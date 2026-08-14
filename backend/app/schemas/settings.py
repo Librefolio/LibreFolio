@@ -126,6 +126,11 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Rolling horizon in days for history sync (1-365)",
     },
+    "scheduler_timezone": {
+        "value": "UTC",
+        "type": "str",
+        "description": "IANA timezone used to display and enter scheduler times (storage stays UTC)",
+    },
     # Display
     "default_currency": {
         "value": "EUR",

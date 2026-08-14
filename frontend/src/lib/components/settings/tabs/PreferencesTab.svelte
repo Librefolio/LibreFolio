@@ -14,6 +14,7 @@
     import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
     import SettingTheme from '$lib/components/settings/SettingTheme.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
 
     // Category definitions
@@ -48,7 +49,6 @@
     let isLoading = true;
     let isSaving = false;
     let error: string | null = null;
-    let success: string | null = null;
     let selectedCategory: string = '';
 
     // Language options
@@ -145,7 +145,6 @@
     async function saveField(field: keyof typeof editedValues) {
         isSaving = true;
         error = null;
-        success = null;
 
         try {
             if (field === 'language') {
@@ -177,8 +176,11 @@
             }
 
             originalValues = {...originalValues, [field]: editedValues[field]};
-            success = $_('settings.savedSuccessfully');
-            setTimeout(() => (success = null), 3000);
+            notify({
+                name: 'settings.preferences.saved',
+                detail: {fields: 1, field, value: editedValues[field]},
+                toast: {variant: 'success', message: $_('settings.savedSuccessfully')},
+            });
         } catch (e) {
             if (isAxiosError(e)) {
                 error = e.message;
@@ -202,7 +204,6 @@
     async function saveAll() {
         isSaving = true;
         error = null;
-        success = null;
 
         const saved: string[] = [];
 
@@ -234,9 +235,14 @@
                     base_currency: editedValues.default_currency,
                     theme: editedValues.theme,
                 });
-                success = `${$_('settings.savedSuccessfully')}: ${saved.join(', ')}`;
+                // The base-currency change is the exact case that had no signal: the value
+                // is cached from login and nothing said when the new one took effect.
+                notify({
+                    name: 'settings.preferences.saved',
+                    detail: {fields: saved.length, language: editedValues.language, currency: editedValues.default_currency, theme: editedValues.theme},
+                    toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${saved.map((l) => `<li>${l}</li>`).join('')}</ul>`},
+                });
             }
-            setTimeout(() => (success = null), 4000);
         } catch (e) {
             if (isAxiosError(e)) {
                 error = e.message;
@@ -258,12 +264,7 @@
 </script>
 
 <SettingsLayout bind:selectedCategory {categories} {hasChanges} hasNonDefaults={false} isLocked={false} on:resetAll={resetAll} on:saveAll={saveAll} on:undoAll={undoAll} showLock={false} title={$_('settings.userPreferences')}>
-    <!-- Success/Error Messages -->
-    {#if success}
-        <div class="mb-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
-            {success}
-        </div>
-    {/if}
+    <!-- Error message (success is a toast: see notify() above) -->
     <InfoBanner class="mb-4" dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
     <!-- Settings Fields -->

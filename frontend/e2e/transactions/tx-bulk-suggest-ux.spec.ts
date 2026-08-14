@@ -325,6 +325,82 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
         return [editable[0].id, editable[1].id];
     }
 
+    // -- FormModal driving, for the rows that must be created inside the modal ------
+    // Kept assertion-based on purpose: every wait below is a wait for a condition, not for
+    // a duration. The older copies of these helpers in sibling specs sleep instead, which is
+    // what the parallel suite punishes.
+
+    /** Open the FormModal from inside an already-open BulkModal. */
+    async function addBulkRow(page: Page) {
+        await page.getByTestId('tx-bulk-add-row').click();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+    }
+
+    /** Select a transaction type in the FormModal by code. */
+    async function selectType(page: Page, typeCode: string) {
+        await page.getByTestId('tx-form-type').click();
+        const option = page.getByTestId(`search-select-option-${typeCode}`);
+        await expect(option).toBeVisible({timeout: 3_000});
+        await option.click();
+        await expect(option).not.toBeVisible({timeout: 3_000});
+    }
+
+    /** Pick a broker in the FormModal by its exact id. */
+    async function pickBrokerById(page: Page, brokerId: number) {
+        const brokerWrap = page.getByTestId('tx-form-broker-wrap');
+        await brokerWrap.locator('button, [role="combobox"]').first().click();
+        const option = page.getByTestId(`search-select-option-${brokerId}`);
+        await expect(option).toBeVisible({timeout: 3_000});
+        await option.click();
+        await expect(option).not.toBeVisible({timeout: 3_000});
+    }
+
+    /** Fill the FormModal cash amount. */
+    async function fillCash(page: Page, amount: string) {
+        const cashWrap = page.getByTestId('tx-form-cash-wrap');
+        await expect(cashWrap).toBeVisible({timeout: 3_000});
+        const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
+        await expect(cashInput).toBeVisible({timeout: 3_000});
+        await cashInput.fill(amount);
+        await cashInput.press('Tab');
+    }
+
+    /** Apply the FormModal and wait for it to close. */
+    async function applyFormModal(page: Page) {
+        const saveBtn = page.getByTestId('tx-form-save');
+        await expect(saveBtn).toBeEnabled({timeout: 5_000});
+        await saveBtn.click();
+        await expect(page.getByTestId('tx-form-modal')).not.toBeVisible({timeout: 10_000});
+    }
+
+    /** Add one cash-only row (DEPOSIT/WITHDRAWAL) to the open BulkModal. */
+    async function addCashRow(page: Page, type: string, brokerId: number, amount: string) {
+        await addBulkRow(page);
+        await selectType(page, type);
+        await pickBrokerById(page, brokerId);
+        await fillCash(page, amount);
+        await applyFormModal(page);
+    }
+
+    /** Select exactly the given rows inside the BulkModal table. */
+    async function selectModalRows(page: Page, count: number) {
+        const modalRows = page.locator('[data-testid="tx-bulk-modal"] tr[data-row-id]');
+        await expect(modalRows).toHaveCount(count, {timeout: 5_000});
+        for (let i = 0; i < count; i++) {
+            await modalRows.nth(i).locator('.checkbox-btn').first().click();
+        }
+    }
+
+    /** Close the BulkModal, discarding whatever is pending. */
+    async function closeBulkModal(page: Page) {
+        await page.getByTestId('tx-bulk-close').click();
+        const discardBtn = page
+            .locator('[data-testid="confirm-modal"] button')
+            .filter({hasText: /discard|confirm/i})
+            .first();
+        if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
+    }
+
     test('NR-D1: no promote banner when cash amounts differ', async ({page}) => {
         const [depositBrokerId, withdrawalBrokerId] = await findTwoBrokerIds(page);
 
@@ -366,23 +442,131 @@ test.describe('NR-D — Promote false-positive guard (Bug D)', () => {
         }
     });
 
-    test('NR-D2: promote localSuggestions fires for new ops with exact-cancel amounts', async ({page}) => {
-        // NR-D2 verifies the POSITIVE case for cashAmountsCancel:
-        // new (import) ops with exactly opposite amounts DO produce a promote suggestion.
+    test('NR-D2: promote banner and toolbar fire for an edit+edit pair with exact-cancel amounts', async ({page}) => {
+        // The positive counterpart of NR-D1, and for a long time the reason this test was
+        // skipped: BulkModal compared the *stored* cash strings, but `fieldsFromTx` normalises
+        // a DB-sourced WITHDRAWAL to a magnitude (the form shows a magnitude, the type carries
+        // the sign). +11 and +11 never sum to zero, so two saved transactions could never be
+        // paired — while the very same pair worked during an import, where the amounts arrive
+        // already signed. The comparison now goes through `signedCashAmount`, so both
+        // representations give the same answer.
         //
-        // Note: for *edit* ops, fieldsFromTx() normalises WITHDRAWAL cash to positive,
-        // so cashAmountsCancel() always returns false for edit+edit pairs in BulkModal.
-        // This is a known design limitation — edit+edit promote via banner is out of scope.
-        // The unit test in promoteHelpers.test.ts already covers the algorithm correctness.
+        // Both promote surfaces are asserted because they are fed by different code paths:
+        // the banner by `bannerSuggestions`, the toolbar button by `selectedForPromote`.
+        const [depositBrokerId, withdrawalBrokerId] = await findTwoBrokerIds(page);
+
+        let created: {pair: [number, number]; all: number[]} | null = null;
+        try {
+            // Exactly opposite amounts on different brokers: the money moved, it did not leave.
+            created = await createTestPair(page, depositBrokerId, withdrawalBrokerId, '11.00', '-11.00');
+
+            await goToTransactionsByIds(page, created.all);
+
+            for (const id of created.pair) {
+                const row = page.locator(`tr[data-row-id="tx-${id}"]`);
+                await row.locator('.checkbox-btn').first().click();
+            }
+
+            const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
+            await expect(editBtn).toBeEnabled({timeout: 5_000});
+            await editBtn.click();
+            await page.getByTestId('tx-bulk-modal').waitFor({state: 'visible', timeout: 5_000});
+
+            // Surface 1 — the suggestion banner (bannerSuggestions, local edit+edit loop).
+            await expect(page.getByTestId('promote-suggest-banner')).toBeVisible({timeout: 10_000});
+
+            // Surface 2 — the toolbar action, which needs the two rows selected *inside* the
+            // modal. Selecting them there is a different act from selecting them in the table.
+            const modalRows = page.locator('[data-testid="tx-bulk-modal"] tr[data-row-id]');
+            await expect(modalRows).toHaveCount(2, {timeout: 5_000});
+            for (let i = 0; i < 2; i++) {
+                await modalRows.nth(i).locator('.checkbox-btn').first().click();
+            }
+            await expect(page.getByTestId('promote-toolbar-confirm')).toBeVisible({timeout: 5_000});
+
+            await page.getByTestId('tx-bulk-close').click();
+            const discardBtn = page
+                .locator('[data-testid="confirm-modal"] button')
+                .filter({hasText: /discard|confirm/i})
+                .first();
+            if (await discardBtn.isVisible({timeout: 1_000}).catch(() => false)) await discardBtn.click();
+        } finally {
+            if (created) await cleanup(page, ...created.all);
+        }
+    });
+
+    test('NR-D2b: promote fires for a new+new pair created inside the modal', async ({page}) => {
+        // The pool representation: rows built by the FormModal, never saved. This pair was
+        // believed to work — but the only proof was a unit test on already-signed strings,
+        // and the E2E that should have covered it was skipped. It is asserted here so the
+        // three op combinations are held to the same standard, not just the broken one.
+        const [brokerA, brokerB] = await findTwoBrokerIds(page);
+
+        await goToTransactions(page);
+        await page.getByTestId('tx-add-button').click();
+        await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
+        await selectType(page, 'DEPOSIT');
+        await pickBrokerById(page, brokerA);
+        await fillCash(page, '11');
+        await applyFormModal(page);
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+
+        // Same amount, opposite direction, different broker: the money moved.
+        await addCashRow(page, 'WITHDRAWAL', brokerB, '11');
+
+        await expect(page.getByTestId('promote-suggest-banner')).toBeVisible({timeout: 10_000});
+
+        await closeBulkModal(page);
+    });
+
+    test('NR-D2c: promote fires for a mixed new+edit pair', async ({page}) => {
+        // The combination that used to answer correctly only by accident: one side signed
+        // (the row typed here), one side normalised (the row loaded from the database).
+        // Which of the two happened to be the withdrawal decided the outcome. Only the
+        // selection toolbar can reach a mixed pair — the banner matches new+new and
+        // edit+edit, never a mix.
         //
-        // For the E2E positive case we use the existing "promote-test" DB rows (DEPOSIT +
-        // WITHDRAWAL from populate_mock_data.py), which are tested via the main-table
-        // promote path in tx-split-promote.spec.ts.
-        //
-        // Therefore this test validates the *main-table* positive promote case indirectly:
-        // if NR-D1 passes (no false positive) AND the unit test passes (algorithm correct),
-        // the E2E coverage is sufficient. This test explicitly documents the gap.
-        test.skip(true, 'Positive promote E2E covered by tx-split-promote.spec.ts (main-table path). ' + 'Edit-op amounts are normalised by fieldsFromTx → cashAmountsCancel always false ' + 'for edit+edit pairs in BulkModal — known design limitation.');
+        // Two saved rows are opened rather than one, because selecting a single row goes
+        // straight to the single-row edit form instead of the bulk table. The second row is
+        // the funding deposit: same broker as the withdrawal and a different amount, so it
+        // cannot pair with anything and leaves the mixed pair as the only match in the modal.
+        const [brokerA, brokerB] = await findTwoBrokerIds(page);
+
+        let created: {pair: [number, number]; all: number[]} | null = null;
+        try {
+            created = await createTestPair(page, brokerA, brokerB, '11.00', '-11.00');
+            const fundingId = created.all[0];
+            const withdrawalId = created.pair[1];
+            await goToTransactionsByIds(page, created.all);
+
+            for (const id of [fundingId, withdrawalId]) {
+                await page.locator(`tr[data-row-id="tx-${id}"]`).locator('.checkbox-btn').first().click();
+            }
+
+            const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
+            await expect(editBtn).toBeEnabled({timeout: 5_000});
+            await editBtn.click();
+            await page.getByTestId('tx-bulk-modal').waitFor({state: 'visible', timeout: 5_000});
+
+            const modalRows = page.locator('[data-testid="tx-bulk-modal"] tr[data-row-id]');
+            await expect(modalRows).toHaveCount(2, {timeout: 5_000});
+
+            // Nothing pairs yet: both saved rows sit on the same broker.
+            await expect(page.getByTestId('promote-suggest-banner')).not.toBeVisible({timeout: 2_000});
+
+            // The new row arrives as typed; the saved withdrawal arrives normalised to "11.00".
+            await addCashRow(page, 'DEPOSIT', brokerA, '11');
+            await expect(modalRows).toHaveCount(3, {timeout: 5_000});
+
+            await modalRows.filter({hasText: 'NR-D test WITHDRAWAL'}).first().locator('.checkbox-btn').first().click();
+            await modalRows.last().locator('.checkbox-btn').first().click();
+
+            await expect(page.getByTestId('promote-toolbar-confirm')).toBeVisible({timeout: 5_000});
+
+            await closeBulkModal(page);
+        } finally {
+            if (created) await cleanup(page, ...created.all);
+        }
     });
 
     test('NR-D3: BulkModal pagination bar always visible', async ({page}) => {

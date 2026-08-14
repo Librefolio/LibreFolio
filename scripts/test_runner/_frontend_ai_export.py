@@ -66,7 +66,10 @@ def _run_ai_export_e2e(specs: str | list[str], section: str, ui: bool = False, h
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright(specs, ui=ui, headed=headed, debug=debug, project=None, test_names=test_names, coverage=coverage)
+    # Desktop only, like every other frontend category. These four specs were the single
+    # exception, and it was an omission rather than a decision: `project=None` runs them on
+    # desktop *and* mobile, doubling the work to verify a layout that is checked by hand.
+    return _run_playwright(specs, ui=ui, headed=headed, debug=debug, project="desktop", test_names=test_names, coverage=coverage)
 
 
 def front_ai_export_panel(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:

@@ -22,14 +22,41 @@
  * **Whoever commits, cleans up.** A spec that writes to a global surface must
  * restore it, in its own `test.afterAll`, without depending on a fresh database.
  *
- * The mechanism below is deliberately id-based rather than response-based: take a
- * snapshot before, delete whatever is new after. It therefore also catches rows
- * created indirectly (a paired half, a promoted transfer) that the spec never
- * named — which is exactly the kind of write that gets forgotten.
+ * ## Why "everything new" is not the same as "mine"
+ *
+ * The first version of this helper took a snapshot before and deleted whatever was new
+ * after. That reads "new" as "mine", which was true only while one Playwright process ran
+ * at a time. Under concurrent workers the rows a neighbour is *currently using* are also
+ * new, and this helper deleted them — or tried to, and failed with a 500 on a row the
+ * neighbour had already removed, which is how the problem finally became visible.
+ *
+ * So ownership is now the **intersection** of two independent facts:
+ *
+ *   1. the id was reported by a `/transactions/commit` this page performed — proving it
+ *      is ours, and catching rows created indirectly (a paired half, a promoted transfer)
+ *      that the spec never named, because the commit response lists them too;
+ *   2. the id was absent from the snapshot taken before the spec ran — proving we created
+ *      it rather than merely touching it, so a split or promote of fixture data can never
+ *      delete the fixture row it was derived from.
+ *
+ * Either fact alone is unsafe. Together they are exact.
  */
 import type {Page} from './playwright';
 
 const TX_ENDPOINT = '/api/v1/transactions';
+
+/** Operations whose reported ids are rows that came into existence. */
+const CREATING_OPERATIONS = new Set(['create', 'split', 'promote']);
+
+interface CommitResultItem {
+    operation: string;
+    ids?: number[];
+}
+
+interface CommitBody {
+    committed?: boolean;
+    results?: CommitResultItem[];
+}
 
 /**
  * Every transaction id currently visible to the logged-in user.
@@ -47,23 +74,68 @@ export async function snapshotTransactionIds(page: Page): Promise<Set<number>> {
     return new Set(rows.map((r) => r.id));
 }
 
-/**
- * Delete every transaction that appeared after `before` was taken.
- *
- * Returns how many rows were removed, so a spec can assert it cleaned up what it
- * thinks it created. Deleting one half of a linked pair removes both, so ids that
- * have already gone are skipped rather than retried.
- */
-export async function deleteTransactionsCreatedSince(page: Page, before: Set<number>): Promise<number> {
-    const now = await snapshotTransactionIds(page);
-    const created = [...now].filter((id) => !before.has(id));
-    if (created.length === 0) return 0;
+/** Handle returned by {@link trackTransactionWrites}. */
+export interface TransactionWriteTracker {
+    /** Delete the rows this page created since tracking began. Returns how many were removed. */
+    cleanup: () => Promise<number>;
+    /** Stop listening. Called by `cleanup`; exposed for specs that end tracking early. */
+    stop: () => void;
+}
 
-    const res = await page.request.post(`${TX_ENDPOINT}/commit`, {
-        data: {creates: [], updates: [], deletes: created},
-    });
-    if (!res.ok()) {
-        throw new Error(`Transaction cleanup failed: ${res.status()} ${res.statusText()} — leftover ids ${created.join(', ')}`);
-    }
-    return created.length;
+/**
+ * Start recording the transactions this page creates, and return the handle that removes
+ * them again.
+ *
+ * Takes the "before" snapshot itself so the two halves of the ownership test cannot drift
+ * apart: a caller that forgot the snapshot would silently fall back to deleting by response
+ * alone, which is the unsafe half.
+ */
+export async function trackTransactionWrites(page: Page): Promise<TransactionWriteTracker> {
+    const preexisting = await snapshotTransactionIds(page);
+    const created = new Set<number>();
+
+    const onResponse = (res: {url: () => string; ok: () => boolean; json: () => Promise<unknown>}) => {
+        if (!res.url().includes(`${TX_ENDPOINT}/commit`) || !res.ok()) return;
+        // Not awaited: Playwright buffers the body, and awaiting here would serialise the
+        // handler against the page's own navigation.
+        void res
+            .json()
+            .then((raw) => {
+                const body = raw as CommitBody;
+                if (body.committed !== true) return;
+                for (const item of body.results ?? []) {
+                    if (!CREATING_OPERATIONS.has(item.operation)) continue;
+                    for (const id of item.ids ?? []) {
+                        if (!preexisting.has(id)) created.add(id);
+                    }
+                }
+            })
+            .catch(() => {
+                /* body unavailable (navigation, non-JSON): nothing to record */
+            });
+    };
+
+    page.on('response', onResponse);
+    const stop = () => page.off('response', onResponse);
+
+    return {
+        stop,
+        async cleanup(): Promise<number> {
+            stop();
+            const ids = [...created];
+            if (ids.length === 0) return 0;
+            // A row may already be gone: deleting one half of a linked pair removes both.
+            const stillThere = await snapshotTransactionIds(page);
+            const deletes = ids.filter((id) => stillThere.has(id));
+            if (deletes.length === 0) return 0;
+            const res = await page.request.post(`${TX_ENDPOINT}/commit`, {
+                data: {creates: [], updates: [], deletes},
+            });
+            if (!res.ok()) {
+                throw new Error(`Transaction cleanup failed: ${res.status()} ${res.statusText()} — leftover ids ${deletes.join(', ')}`);
+            }
+            created.clear();
+            return deletes.length;
+        },
+    };
 }

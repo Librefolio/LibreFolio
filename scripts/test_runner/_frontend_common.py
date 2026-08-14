@@ -15,6 +15,7 @@ from ._common import (
     PROJECT_ROOT, Colors,
     print_section, print_info, print_success, print_error, print_warning,
 )
+from ._archive import log_file_for
 from ._backend_db import db_populate
 
 
@@ -143,7 +144,57 @@ def _run_playwright(
     test_names: list = None,
     coverage: bool = False,
 ) -> bool:
-    """Run Playwright tests with given options."""
+    """
+    Run Playwright tests with given options.
+
+    When ``--log-dir`` is active the whole run is teed to its own file, exactly
+    like ``run_command`` does for the Python side. Playwright is invoked through
+    ``subprocess.run`` rather than ``run_command``, so without this the E2E
+    output — the part a CI artifact is actually needed for — was the only thing
+    the log dir did not capture.
+    """
+    log_dir = _common.get_log_dir()
+    if log_dir is None:
+        return _run_playwright_body(spec_file, ui, headed, debug, project, test_names, coverage)
+
+    spec_files = spec_file if isinstance(spec_file, list) else ([spec_file] if spec_file else [])
+    unit = _playwright_log_unit(spec_files, test_names)
+    try:
+        log_path = log_file_for(log_dir, _common.get_log_category(), unit)
+    except Exception:
+        return _run_playwright_body(spec_file, ui, headed, debug, project, test_names, coverage)
+
+    with _common.tee_output(log_path):
+        return _run_playwright_body(spec_file, ui, headed, debug, project, test_names, coverage)
+
+
+def _playwright_log_unit(spec_files: list[str], test_names: list | None) -> str:
+    """
+    Name the log after what was run: the spec file's stem, or the count when a
+    single invocation carries several specs. Falls back to the grep pattern so a
+    filtered run is still identifiable.
+    """
+    stems = [Path(sf).name.replace(".spec.ts", "") for sf in spec_files]
+    if len(stems) == 1:
+        base = stems[0]
+    elif stems:
+        base = f"e2e-{len(stems)}-specs"
+    elif test_names:
+        base = "-".join(test_names)[:60]
+    else:
+        base = "e2e"
+    return base
+
+
+def _run_playwright_body(
+    spec_file: str | list[str] | None = None,
+    ui: bool = False,
+    headed: bool = False,
+    debug: bool = False,
+    project: str = "desktop",
+    test_names: list = None,
+    coverage: bool = False,
+) -> bool:
     cmd = ["npm", "run"]
 
     if ui:

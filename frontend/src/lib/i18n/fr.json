@@ -1003,7 +1003,8 @@
     "deleteBlockedTitle": "Impossible de supprimer le courtier",
     "deleteBlockedMessage": "Impossible de supprimer : ce courtier a {count} transaction(s).",
     "forceCascadeDelete": "Supprimer le courtier et les transactions",
-    "goToTransactions": "Aller aux transactions"
+    "goToTransactions": "Aller aux transactions",
+    "deleteFailed": "Impossible de supprimer le courtier"
   },
   "chart": {
     "tooltip": {

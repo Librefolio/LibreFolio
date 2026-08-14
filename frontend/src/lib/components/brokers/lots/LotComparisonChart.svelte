@@ -1,6 +1,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_} from '$lib/i18n';
@@ -1509,6 +1510,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'lot-comparison');
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
             tooltipCleanup?.();

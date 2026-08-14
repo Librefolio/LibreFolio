@@ -239,7 +239,6 @@ test.describe('Asset Event Delete', () => {
         const moreBtn = firstCard.locator('button[title*="more" i], button[aria-label*="more" i], button[data-testid*="more"]').first();
         if (await moreBtn.isVisible({timeout: 2_000}).catch(() => false)) {
             await moreBtn.click();
-            await page.waitForTimeout(300);
             const deleteOption = page
                 .locator('[role="menuitem"]')
                 .filter({hasText: /delete|elimina/i})
@@ -258,18 +257,16 @@ test.describe('Asset Event Delete', () => {
     // ===================================================================
     test('event badge reflects current link state', async ({page}) => {
         await navigateTo(page, '/transactions');
-        await page.waitForTimeout(2000);
 
-        // Event dots should exist (Apple DIVIDEND tx is linked to an AssetEvent)
+        // The dots appear only once the transactions table has its rows. Waiting for the
+        // first one *is* the assertion: the previous fixed 2s sleep followed by a one-shot
+        // count() lost that race under concurrent load and read an empty list, reporting a
+        // missing fixture that was never missing.
         const eventDots = page.locator('[data-testid^="tx-event-dot-"]');
-        const dotCount = await eventDots.count();
-        expect(dotCount, 'Event dots must exist — check populate_mock_data.py link_transactions_to_events()').toBeGreaterThan(0);
-
-        const firstDot = eventDots.first();
-        expect(await firstDot.isVisible()).toBe(true);
+        await expect(eventDots.first(), 'Event dots must exist — check populate_mock_data.py link_transactions_to_events()').toBeVisible({timeout: 15_000});
 
         // Verify the dot has proper test-id format
-        const testId = await firstDot.getAttribute('data-testid');
+        const testId = await eventDots.first().getAttribute('data-testid');
         expect(testId).toMatch(/^tx-event-dot-\d+$/);
     });
 });

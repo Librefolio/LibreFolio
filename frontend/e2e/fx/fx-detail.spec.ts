@@ -56,8 +56,7 @@ test.describe('FX Detail Page', () => {
     test('swap direction changes URL', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-swap-btn').click();
-        await page.waitForTimeout(500);
-        await expect(page).toHaveURL(/\/fx\/USD-EUR/);
+        await expect(page).toHaveURL(/\/fx\/USD-EUR/, {timeout: 10_000});
     });
 
     // ========================================================================
@@ -132,14 +131,24 @@ test.describe('FX Detail Page', () => {
     // ========================================================================
     // Test 11: Sync single pair
     // ========================================================================
-    test('sync single pair shows toast', async ({page}) => {
+    test('sync single pair reports its outcome in the modal', async ({page}) => {
+        // A real provider round-trip for every pair on the page; the default 30s
+        // budget is spent before the sync answers.
+        test.setTimeout(120_000);
         await goToFxDetailPage(page, 'EUR-USD');
+        // The button opens the sync modal — it does not sync. And the modal it
+        // opens is the *page* one (assets + FX for this page), not `fx-sync-modal`,
+        // which belongs to the FX list. The test has to go all the way: open,
+        // start, and read the verdict. Reading a locator without asserting on it,
+        // as this did before, is a green that proves nothing.
         await page.getByTestId('fx-detail-sync-btn').click();
-        // Wait for toast (success or error)
-        await page.waitForTimeout(3000);
-        // Check that a toast appeared (any message)
-        const toast = page.locator('[data-testid="toast-container"] [role="alert"], .toast-message, [class*="toast"]');
-        // Toast may or may not be visible depending on provider availability
+        const syncModal = page.getByTestId('page-sync-modal');
+        await expect(syncModal).toBeVisible({timeout: 10_000});
+
+        await syncModal.getByTestId('sync-modal-start').click();
+        // No toast here, by design: the modal reports in place, so the summary
+        // banner *is* the notification. Success or failure, it always appears.
+        await expect(syncModal.getByTestId('sync-modal-results')).toBeVisible({timeout: 60_000});
     });
 
     // ========================================================================
@@ -148,8 +157,8 @@ test.describe('FX Detail Page', () => {
     test('refresh triggers loading indicator', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-refresh-btn').click();
-        // The button should have spinning animation briefly
-        await page.waitForTimeout(500);
+        // The refresh is fire-and-forget; the page must survive it without error
+        await expect(page.getByTestId('fx-detail-refresh-btn')).toBeVisible({timeout: 10_000});
     });
 
     // ========================================================================
@@ -158,7 +167,6 @@ test.describe('FX Detail Page', () => {
     test('provider config modal opens', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-provider-btn').click();
-        await page.waitForTimeout(500);
         // The FxPairAddModal should be visible
         const modal = page.getByTestId('fx-add-pair-modal');
         await expect(modal).toBeVisible({timeout: 3000});
@@ -170,7 +178,6 @@ test.describe('FX Detail Page', () => {
     test('back button navigates to FX list', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-back-btn').click();
-        await page.waitForTimeout(500);
-        await expect(page).toHaveURL(/\/fx$/);
+        await expect(page).toHaveURL(/\/fx$/, {timeout: 10_000});
     });
 });

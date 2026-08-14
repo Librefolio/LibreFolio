@@ -14,6 +14,7 @@
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {refreshAllBrokers, getAllBrokers, getAccessibleBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import type {Broker} from '$lib/types';
 
     type CurrencyLike = {code: string; amount: number | string};
@@ -255,24 +256,42 @@
             if (!isClientSessionCurrent(sessionGeneration)) return;
             const deleteResult = result.results[0];
             if (!deleteResult) {
-                console.error('Failed to delete broker: missing delete result');
+                notify({
+                    name: 'broker.delete.failed',
+                    detail: {brokerId: deletingBroker.id, reason: 'missing-result'},
+                    toast: {variant: 'error', message: $_('brokers.deleteFailed')},
+                });
                 return;
             }
             const transactionCount = deleteResult.transaction_count ?? 0;
             if (!deleteResult.success && !event.detail.force && transactionCount > 0) {
                 deletingTransactionCount = transactionCount;
                 deleteBlocked = true;
+                // No toast: the dialog switches to its "blocked" state, which says more
+                // than a toast could and offers the way out.
+                notify({name: 'broker.delete.blocked', detail: {brokerId: deletingBroker.id, transactionCount}});
                 return;
             }
             if (!deleteResult.success) {
-                console.error('Failed to delete broker:', deleteResult.message);
+                notify({
+                    name: 'broker.delete.failed',
+                    detail: {brokerId: deletingBroker.id, reason: deleteResult.message ?? 'unknown'},
+                    toast: {variant: 'error', message: deleteResult.message ? `${$_('brokers.deleteFailed')}: ${deleteResult.message}` : $_('brokers.deleteFailed')},
+                });
                 return;
             }
-            invalidateBroker(deletingBroker.id);
+            const deletedId = deletingBroker.id;
+            invalidateBroker(deletedId);
             closeDeleteDialog();
             await loadBrokers();
+            // No toast: the broker disappears from the list, which is the confirmation.
+            notify({name: 'broker.deleted', detail: {brokerId: deletedId}});
         } catch (e) {
-            console.error('Failed to delete broker:', e);
+            notify({
+                name: 'broker.delete.failed',
+                detail: {brokerId: deletingBroker.id, reason: (e as Error)?.message ?? 'exception'},
+                toast: {variant: 'error', message: $_('brokers.deleteFailed')},
+            });
         } finally {
             deleteLoading = false;
         }

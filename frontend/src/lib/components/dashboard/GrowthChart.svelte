@@ -20,6 +20,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {_, locale} from '$lib/i18n';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
@@ -639,6 +640,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, chartContainer, 'growth');
             needsInitialLayoutStabilityPass = true;
             // Setup mobile tooltip auto-hide
             tooltipCleanup?.();

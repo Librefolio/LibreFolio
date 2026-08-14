@@ -23,6 +23,7 @@ import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(120_000);
 
@@ -39,7 +40,7 @@ const API = 'http://localhost:6041/api/v1';
 
 /** Create a Fineco-bound broker and upload both reports to it, over the API. */
 async function createBrokerWithFixtures(page: Page): Promise<{brokerName: string; fileNames: string[]}> {
-    const suffix = Date.now().toString().slice(-6);
+    const suffix = uniqueSuffix();
     const brokerName = `Identity ${suffix}`;
 
     const created = await page.request.post(`${API}/brokers`, {

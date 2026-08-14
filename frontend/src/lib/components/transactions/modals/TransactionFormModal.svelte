@@ -874,6 +874,10 @@
             upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
             const result = await validateTransactions(payload, {fallback: $t('transactions.form.saveFailed')});
+            // Superseded response: the draft moved on while the server was
+            // thinking, so this verdict is about a state that no longer exists.
+            // The change that moved the key already armed a newer run.
+            if (lastDraftKey !== sentKey) return {issuesCount: issues.length};
 
             if (result.networkError) {
                 issues = [{operation: myOperation, index: 0, error: result.networkError}];
@@ -1361,7 +1365,7 @@
 </script>
 
 <ModalBase {open} maxWidth="3xl" onRequestClose={requestClose} testId="tx-form-modal" allowOverflow={true} {zIndex}>
-    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-form-modal-root">
+    <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-form-modal-root" data-busy={scheduler.state.isPending || scheduler.state.isValidating || committing || loadingPartner} data-validate-runs={scheduler.state.validateRuns}>
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
@@ -2104,7 +2108,7 @@
                         ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                     </button>
                 {/if}
-                {#if scheduler.state.isValidating}
+                {#if scheduler.state.isValidating || scheduler.state.isPending}
                     <span class="text-[11px] text-gray-500 dark:text-gray-400">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid}
                     <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-form-valid-inline">

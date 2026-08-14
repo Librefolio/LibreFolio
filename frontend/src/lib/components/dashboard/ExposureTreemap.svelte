@@ -11,6 +11,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {ExternalLink, Layers, RotateCcw} from 'lucide-svelte';
     import {goto} from '$app/navigation';
     import {_} from '$lib/i18n';
@@ -564,6 +565,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer);
+            attachChartReady(chartInstance, chartContainer, 'exposure-treemap');
             needsInitialLayoutStabilityPass = true;
             zoomGuard = attachTreemapZoomGuard(chartInstance, () => ({width: chartContainer?.clientWidth ?? 0, height: chartContainer?.clientHeight ?? 0}), {
                 minScale: 0.9,

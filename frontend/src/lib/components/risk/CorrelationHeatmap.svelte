@@ -1,6 +1,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
 
     import {_ as t} from '$lib/i18n';
     import type {RiskCorrelationOutput} from '$lib/risk/riskTypes';
@@ -38,6 +39,7 @@
         if (!container || output.asset_ids.length === 0) return;
         if (!chart) {
             chart = echarts.init(container);
+            attachChartReady(chart, container, 'correlation-heatmap');
             resizeObserver = new ResizeObserver(() => chart?.resize());
             resizeObserver.observe(container);
         }

@@ -32,6 +32,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -165,7 +166,20 @@ async def create_brokers(
     response = await service.create_bulk(items, user_id=user_id)
 
     if not response.errors:
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            # The duplicate-name check inside `create_bulk` is a SELECT followed
+            # by an INSERT, so two requests racing on the same name both pass it
+            # and the loser only finds out at flush time. Without this the user
+            # gets a bare 500 instead of the reason, which is the one thing that
+            # would let them fix it.
+            await session.rollback()
+            logger.warning("Broker creation lost a uniqueness race", user_id=user_id)
+            raise HTTPException(
+                status_code=409,
+                detail="A broker with that name already exists. Choose a different name.",
+            ) from None
         logger.info(f"Created {response.success_count} brokers successfully", user_id=user_id)
     else:
         await session.rollback()

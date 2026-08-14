@@ -26,7 +26,6 @@ test.describe('FX Chart Settings', () => {
         const settingsBtn = page.getByTestId('fx-chart-settings-button');
         if (await settingsBtn.isVisible()) {
             await settingsBtn.click();
-            await page.waitForTimeout(500);
             const modal = page.getByTestId('chart-settings-modal');
             await expect(modal).toBeVisible({timeout: 3000});
         }
@@ -40,7 +39,6 @@ test.describe('FX Chart Settings', () => {
         const settingsBtn = page.getByTestId('fx-chart-settings-button');
         if (await settingsBtn.isVisible()) {
             await settingsBtn.click();
-            await page.waitForTimeout(500);
 
             const modal = page.getByTestId('chart-settings-modal');
             if (await modal.isVisible()) {
@@ -48,12 +46,10 @@ test.describe('FX Chart Settings', () => {
                 const checkbox = modal.locator('input[type="checkbox"]').first();
                 if (await checkbox.isVisible()) {
                     await checkbox.click();
-                    await page.waitForTimeout(200);
                 }
 
                 // Press Escape — should show confirm
                 await page.keyboard.press('Escape');
-                await page.waitForTimeout(300);
                 // Either the confirm modal appears or the settings modal closes
                 // (depends on dirty state detection)
             }
@@ -68,7 +64,6 @@ test.describe('FX Chart Settings', () => {
         const settingsBtn = page.getByTestId('fx-chart-settings-button');
         if (await settingsBtn.isVisible()) {
             await settingsBtn.click();
-            await page.waitForTimeout(500);
 
             const modal = page.getByTestId('chart-settings-modal');
             if (await modal.isVisible()) {

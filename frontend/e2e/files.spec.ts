@@ -1,6 +1,7 @@
 import {expect, test, type Page} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_USER} from './fixtures/test-users';
+import {waitForEvent} from './fixtures/app-events';
 import {readFileSync} from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
@@ -223,35 +224,9 @@ test.describe('Files Page', () => {
             // Wait for tab to be selected
             await expect(page.getByTestId('files-tab-brim')).toHaveAttribute('aria-selected', 'true');
 
-            // Wait a bit for content to load
-            await page.waitForTimeout(500);
-
-            // Either files table is visible OR empty state is shown
-            const hasTable = await page
-                .getByTestId('files-table-brim')
-                .isVisible()
-                .catch(() => false);
-            const hasEmptyState = await page
-                .getByTestId('brim-empty-state')
-                .isVisible()
-                .catch(() => false);
-
-            // If neither, check for loading state
-            if (!hasTable && !hasEmptyState) {
-                // Maybe still loading - wait more
-                await page.waitForTimeout(1000);
-                const hasTableRetry = await page
-                    .getByTestId('files-table-brim')
-                    .isVisible()
-                    .catch(() => false);
-                const hasEmptyRetry = await page
-                    .getByTestId('brim-empty-state')
-                    .isVisible()
-                    .catch(() => false);
-                expect(hasTableRetry || hasEmptyRetry).toBeTruthy();
-            } else {
-                expect(hasTable || hasEmptyState).toBeTruthy();
-            }
+            // Either the table or the empty state has to land — the two-stage
+            // "look, sleep, look again" this replaced was a hand-rolled retry.
+            await expect(page.getByTestId('files-table-brim').or(page.getByTestId('brim-empty-state')).first()).toBeVisible({timeout: 15_000});
         });
     });
 
@@ -276,8 +251,10 @@ test.describe('Files Page', () => {
             // Click the upload submit button
             await page.getByTestId('file-upload-submit').click();
 
-            // Wait for upload to complete and uploader to clear
-            await page.waitForTimeout(3000);
+            // The page now reports the upload (`file.uploaded`, no toast: the
+            // list itself is the user-visible proof). Waiting on the event is
+            // waiting on the thing, not on a duration.
+            await waitForEvent(page, 'file.uploaded', {timeout: 30_000});
 
             // The uploader should have cleared after successful upload
             // or show a success state. Check if file-item is gone (cleared)
@@ -292,7 +269,6 @@ test.describe('Files Page', () => {
                 const searchInput = page.locator('input[placeholder*="Search"], input[type="search"]').first();
                 if (await searchInput.isVisible().catch(() => false)) {
                     await searchInput.fill('generic_simple');
-                    await page.waitForTimeout(500);
                 }
 
                 // Check that file appears in the files table

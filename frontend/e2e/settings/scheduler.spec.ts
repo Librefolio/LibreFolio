@@ -16,6 +16,7 @@ import {expect, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN} from '../fixtures/test-users';
 import {API_BASE, goToAssetDetailPage, openEditAssetModal} from '../assets/assets-helpers';
+import {eventSeq, waitForEvent} from '../fixtures/app-events';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -107,7 +108,6 @@ test.describe('Scheduler — Config Modal', () => {
         const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
         if (await lockBtn.isVisible()) {
             await lockBtn.click();
-            await page.waitForTimeout(200);
         }
 
         await configureBtn.click();
@@ -119,7 +119,6 @@ test.describe('Scheduler — Config Modal', () => {
         const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
         if (await lockBtn.isVisible()) {
             await lockBtn.click();
-            await page.waitForTimeout(200);
         }
 
         // Open config modal
@@ -131,6 +130,7 @@ test.describe('Scheduler — Config Modal', () => {
         await freqInput.fill('15');
 
         // Intercept the PATCH request
+        const since = await eventSeq(page);
         const patchPromise = page.waitForRequest((req) => req.method() === 'PATCH' && req.url().includes('/settings/global/bulk'), {timeout: 5_000});
 
         // Save
@@ -144,6 +144,38 @@ test.describe('Scheduler — Config Modal', () => {
         const freqItem = items.find((i) => i.key === 'scheduler_current_price_frequency_minutes');
         expect(freqItem).toBeDefined();
         expect(freqItem?.value).toBe('15');
+
+        // The modal closes on success and the schedule is shown nowhere else, so the toast
+        // is the only thing separating "saved" from "dismissed".
+        await expect(page.getByTestId('toast-success')).toBeVisible({timeout: 5_000});
+        const saved = await waitForEvent(page, 'settings.scheduler.saved', {since});
+        expect(saved.detail?.frequencyMinutes).toBe(15);
+    });
+
+    test('FSCH-006b: a toast can be dismissed by swiping it away', async ({page}) => {
+        // Riding on the one operation that already writes: no extra mutation, and the toast
+        // it raises is a real one rather than a fabricated fixture.
+        const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
+        if (await lockBtn.isVisible()) await lockBtn.click();
+
+        await page.getByTestId('scheduler-config-row').getByRole('button', {name: 'Configure'}).click();
+        await expect(page.getByTestId('scheduler-config-frequency')).toBeVisible({timeout: 5_000});
+        await page.getByTestId('scheduler-config-frequency').locator('input').fill('20');
+        await page.getByTestId('scheduler-config-save').click();
+
+        const toast = page.getByTestId('toast-success');
+        await expect(toast).toBeVisible({timeout: 5_000});
+
+        const box = await toast.boundingBox();
+        expect(box, 'toast must have a box to drag').toBeTruthy();
+        const y = box!.y + box!.height / 2;
+        // Start left of centre so the drag cannot begin on the ✕ in the top-right corner.
+        await page.mouse.move(box!.x + 20, y);
+        await page.mouse.down();
+        await page.mouse.move(box!.x + 20 + 140, y, {steps: 12});
+        await page.mouse.up();
+
+        await expect(toast).toBeHidden({timeout: 3_000});
     });
 
     test('FSCH-007: Cancel discards changes without PATCH request', async ({page}) => {
@@ -151,7 +183,6 @@ test.describe('Scheduler — Config Modal', () => {
         const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
         if (await lockBtn.isVisible()) {
             await lockBtn.click();
-            await page.waitForTimeout(200);
         }
 
         // Open config modal
@@ -171,11 +202,10 @@ test.describe('Scheduler — Config Modal', () => {
 
         // Cancel
         await page.getByTestId('scheduler-config-cancel').click();
-        await page.waitForTimeout(500);
-
+        // Assert the close first: "no PATCH was sent" is only meaningful once
+        // the modal has actually finished doing whatever it was going to do.
+        await expect(page.getByTestId('scheduler-config-frequency')).not.toBeVisible({timeout: 10_000});
         expect(patchCalled).toBe(false);
-        // Modal should be closed
-        await expect(page.getByTestId('scheduler-config-frequency')).not.toBeVisible();
     });
 
     test('FSCH-008: add time slot appears in the list', async ({page}) => {
@@ -183,7 +213,6 @@ test.describe('Scheduler — Config Modal', () => {
         const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
         if (await lockBtn.isVisible()) {
             await lockBtn.click();
-            await page.waitForTimeout(200);
         }
 
         // Open config modal
@@ -197,11 +226,9 @@ test.describe('Scheduler — Config Modal', () => {
         // Add a new time slot
         await page.getByTestId('scheduler-config-time-input').fill('12:00');
         await page.getByTestId('scheduler-config-time-add').click();
-        await page.waitForTimeout(300);
 
         // Slot count should have increased
-        const newSlots = await timesSection.locator('span.rounded-full').count();
-        expect(newSlots).toBeGreaterThan(initialSlots);
+        await expect.poll(() => timesSection.locator('span.rounded-full').count(), {timeout: 10_000}).toBeGreaterThan(initialSlots);
     });
 
     test('FSCH-009: delete time slot removes it from list', async ({page}) => {
@@ -209,7 +236,6 @@ test.describe('Scheduler — Config Modal', () => {
         const lockBtn = page.getByTestId('global-settings-tab').locator('button[title="Click to unlock and edit"]');
         if (await lockBtn.isVisible()) {
             await lockBtn.click();
-            await page.waitForTimeout(200);
         }
 
         // Open config modal
@@ -225,17 +251,15 @@ test.describe('Scheduler — Config Modal', () => {
             // Need at least 2 to delete one — add a slot first
             await page.getByTestId('scheduler-config-time-input').fill('14:00');
             await page.getByTestId('scheduler-config-time-add').click();
-            await page.waitForTimeout(300);
+            await expect.poll(() => timesSection.locator('span.rounded-full').count(), {timeout: 10_000}).toBeGreaterThan(initialCount);
             initialCount = await timesSection.locator('span.rounded-full').count();
         }
 
         // Delete first slot via its remove button (the <button> inside the span badge)
         const firstSlotDeleteBtn = timesSection.locator('span.rounded-full button').first();
         await firstSlotDeleteBtn.click();
-        await page.waitForTimeout(300);
 
-        const afterCount = await timesSection.locator('span.rounded-full').count();
-        expect(afterCount).toBeLessThan(initialCount);
+        await expect.poll(() => timesSection.locator('span.rounded-full').count(), {timeout: 10_000}).toBeLessThan(initialCount);
     });
 });
 

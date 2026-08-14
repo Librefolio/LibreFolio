@@ -1003,7 +1003,8 @@
     "deleteBlockedTitle": "No se puede eliminar el bróker",
     "deleteBlockedMessage": "No se puede eliminar: este bróker tiene {count} transacción(es).",
     "forceCascadeDelete": "Eliminar bróker y transacciones",
-    "goToTransactions": "Ir a transacciones"
+    "goToTransactions": "Ir a transacciones",
+    "deleteFailed": "No se pudo eliminar el bróker"
   },
   "chart": {
     "tooltip": {

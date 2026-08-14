@@ -10,6 +10,7 @@
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import SettingToggle from '$lib/components/settings/SettingToggle.svelte';
     import SettingNumber from '$lib/components/settings/SettingNumber.svelte';
     import SchedulerConfigModal from '$lib/components/settings/SchedulerConfigModal.svelte';
@@ -57,7 +58,6 @@
     let isLoading = true;
     let isSaving = false;
     let error: string | null = null;
-    let success: string | null = null;
     let selectedCategory: string = 'all';
 
     // Scheduler UI state
@@ -125,7 +125,6 @@
     async function saveSetting(key: string) {
         isSaving = true;
         error = null;
-        success = null;
         try {
             await zodiosApi.axios.patch('/api/v1/settings/global/bulk', {
                 items: [{key, value: editedValues[key]}],
@@ -142,8 +141,11 @@
             syncGlobalSettingsStore();
 
             const label = getSettingLabel(key);
-            success = `"${label}" ${$_('settings.savedSuccessfully')}`;
-            setTimeout(() => (success = null), 3000);
+            notify({
+                name: 'settings.global.saved',
+                detail: {keys: [key], count: 1},
+                toast: {variant: 'success', message: `"${label}" ${$_('settings.savedSuccessfully')}`},
+            });
         } catch (e) {
             if (isAxiosError(e)) {
                 if (e.response?.status === 403) {
@@ -212,8 +214,17 @@
             // Sync globalSettings store
             syncGlobalSettingsStore();
 
-            success = `${$_('settings.savedSuccessfully')}:\n• ${savedLabels.join('\n• ')}`;
-            setTimeout(() => (success = null), 4000);
+            // A saved global setting is invisible: the control already showed the new value
+            // before Save, so the page looks identical whether the write landed or not.
+            // That silence is what made the base-currency change untestable and, worse,
+            // unnoticeable. The list of what was actually persisted is the payload.
+            notify({
+                name: 'settings.global.saved',
+                detail: {keys: keysToSave, count: savedLabels.length},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${savedLabels.map((l) => `<li>${l}</li>`).join('')}</ul>`},
+            });
+        } else if (error) {
+            notify({name: 'settings.global.save.failed', detail: {reason: error}});
         }
     }
 
@@ -509,12 +520,6 @@
         {#if error}
             <InfoBanner variant="error">
                 <span>{error}</span>
-            </InfoBanner>
-        {/if}
-
-        {#if success}
-            <InfoBanner variant="success">
-                <span class="whitespace-pre-line">{success}</span>
             </InfoBanner>
         {/if}
 

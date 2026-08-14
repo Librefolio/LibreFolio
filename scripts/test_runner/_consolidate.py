@@ -36,6 +36,7 @@ precondition: `tx-clone` committing a clone of the `delete-safe` ETH pair broke
 `tx-delete` the first time these two shared an invocation.
 """
 
+import contextlib
 import json
 import os
 import subprocess
@@ -43,6 +44,7 @@ import tempfile
 from pathlib import Path
 
 from . import _common
+from ._archive import log_file_for
 from ._common import PROJECT_ROOT, Colors, print_error, print_info, print_success, print_warning
 
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
@@ -144,7 +146,25 @@ def _chunk(specs: list[str], size: int) -> list[list[str]]:
     return [specs[i : i + size] for i in range(0, len(specs), size)]
 
 
-def run_playwright_group(specs: list[str], coverage: bool, project: str | None = "desktop") -> dict[str, bool]:
+def _group_log(category: str | None, unit: str):
+    """
+    Tee this consolidated run into ``--log-dir`` when one was requested.
+
+    The frontend groups run through ``subprocess.run``, so without an explicit
+    tee the log dir captured only the Python-side steps — that is, everything
+    except the output a CI artifact is collected for. ``tee_output`` works at the
+    file-descriptor level, so the npx child's stdout lands in the file too.
+    """
+    log_dir = _common.get_log_dir()
+    if log_dir is None:
+        return contextlib.nullcontext()
+    try:
+        return _common.tee_output(log_file_for(log_dir, category or _common.get_log_category(), unit))
+    except Exception:
+        return contextlib.nullcontext()
+
+
+def run_playwright_group(specs: list[str], coverage: bool, project: str | None = "desktop", category: str | None = None) -> dict[str, bool]:
     """Run several specs in one Playwright invocation; return the per-spec verdict.
 
     ``project=None`` runs every configured project, which is what the AI Export
@@ -188,7 +208,8 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd[:4])} … ({len(specs)} specs)")
 
     try:
-        subprocess.run(cmd, cwd=FRONTEND_DIR, text=True, env=env)
+        with _group_log(category, f"e2e-{project or 'all-projects'}"):
+            subprocess.run(cmd, cwd=FRONTEND_DIR, text=True, env=env)
     except Exception as exc:
         print_error(f"Playwright error: {exc}")
         return {s: False for s in specs}
@@ -220,7 +241,7 @@ def _vitest_results(report_path: Path, known: list[str]) -> dict[str, bool]:
     return outcome
 
 
-def run_vitest_group(paths: list[str], coverage: bool) -> dict[str, bool]:
+def run_vitest_group(paths: list[str], coverage: bool, category: str | None = None) -> dict[str, bool]:
     """Run several vitest files in one invocation; return the per-file verdict.
 
     Coverage is *not* passed on the command line: ``vitest.config.ts`` reads
@@ -236,7 +257,8 @@ def run_vitest_group(paths: list[str], coverage: bool) -> dict[str, bool]:
     print(f"{Colors.BLUE}Running: vitest — {len(paths)} file(s) in one invocation{Colors.NC}")
 
     try:
-        subprocess.run(cmd, cwd=FRONTEND_DIR, text=True)
+        with _group_log(category, "vitest"):
+            subprocess.run(cmd, cwd=FRONTEND_DIR, text=True)
     except Exception as exc:
         print_error(f"vitest error: {exc}")
         return {p: False for p in paths}
@@ -319,7 +341,7 @@ def run_consolidated(scope: str | None, coverage: bool, resume: bool = False) ->
             suffix = f" in {len(batches)} batches" if len(batches) > 1 else ""
             print_info(f"▸ {category}: {len(specs)} spec(s) in one Playwright run ({label}){suffix}")
             for batch in batches:
-                verdict = run_playwright_group(batch, coverage, project=proj)
+                verdict = run_playwright_group(batch, coverage, project=proj, category=category)
                 for spec, passed in verdict.items():
                     claim(category, specs_by_path[spec], passed)
 
@@ -331,7 +353,7 @@ def run_consolidated(scope: str | None, coverage: bool, resume: bool = False) ->
                 claim(category, actions, True)
         if files:
             print_info(f"▸ {category}: {len(files)} vitest file(s) in one run")
-            verdict = run_vitest_group(files, coverage)
+            verdict = run_vitest_group(files, coverage, category=category)
             for path, passed in verdict.items():
                 claim(category, files_by_path[path], passed)
 

@@ -436,7 +436,7 @@
             {/if}
 
             <!-- Options List -->
-            <div class="overflow-y-auto options-list" id={listboxId} role="listbox" style="max-height: {dynamicMaxHeight}px">
+            <div class="overflow-y-auto options-list" id={listboxId} role="listbox" aria-busy={loading} style="max-height: {dynamicMaxHeight}px">
                 {#if loading}
                     <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                         {$_('common.loading')}

@@ -17,7 +17,9 @@
 
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {uniqueToken} from '../fixtures/unique';
 
 test.setTimeout(120_000);
 
@@ -37,10 +39,11 @@ interface Pair {
  * dry run has something to count.
  */
 async function createDuplicatePair(page: Page): Promise<Pair> {
-    const suffix = Date.now().toString().slice(-6);
+    const suffix = uniqueToken(6);
     const sourceName = `BTP Merge CUM ${suffix}`;
     const targetName = `BTP Merge MKT ${suffix}`;
-    // An ISIN is exactly 12 characters — the schema enforces it, so the fixture must too.
+    // An ISIN is exactly 12 characters — the schema enforces it, so the fixture must
+    // too: `IT0` + 6 + `AAA`. Hence a fixed-width token instead of `uniqueSuffix()`.
     const sourceIsin = `IT0${suffix}AAA`;
     const targetIsin = `IT0${suffix}BBB`;
 
@@ -86,11 +89,11 @@ async function assetExists(page: Page, assetId: number): Promise<boolean> {
 async function openMergeModal(page: Page, pair: Pair) {
     await navigateTo(page, '/assets');
     await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
-    await page.waitForTimeout(800);
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
     const search = page.getByTestId('assets-search-input');
     await search.fill(pair.sourceName);
-    await page.waitForTimeout(800);
+    await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
     const card = page.locator(`[data-testid="asset-card-${pair.sourceId}"]`).first();
     if (await card.isVisible({timeout: 3_000}).catch(() => false)) {
@@ -112,7 +115,7 @@ async function openMergeModal(page: Page, pair: Pair) {
 async function chooseTarget(page: Page, pair: Pair) {
     const select = page.getByTestId('asset-merge-target-select');
     await select.click();
-    await page.waitForTimeout(300);
+    await expect(page.locator('[role="listbox"]').first()).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
 
     const input = select.locator('input[type="text"]').first();
     await input.fill(pair.targetName);
@@ -146,7 +149,7 @@ test.describe('Assets — merge', () => {
         // Backing out of the preview must leave the archive exactly as it was.
         await page.getByTestId('asset-merge-back').click();
         await page.getByTestId('asset-merge-cancel').click();
-        await page.waitForTimeout(500);
+        await expect(page.getByTestId('asset-merge-modal')).toHaveCount(0, {timeout: 10_000});
 
         expect(await assetExists(page, pair.sourceId)).toBe(true);
     });

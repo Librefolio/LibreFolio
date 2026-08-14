@@ -12,7 +12,7 @@
     import {zodiosApi} from '$lib/api';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
-    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {Clock, Calendar, Search, Lightbulb, Plus, X, Globe} from 'lucide-svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
@@ -184,10 +184,17 @@
             });
             onsave();
             open = false;
+            // The modal closes on success and the schedule it wrote is not shown anywhere
+            // else, so without this the user cannot tell a save from a dismiss.
+            notify({
+                name: 'settings.scheduler.saved',
+                detail: {frequencyMinutes: frequency, horizonDays: horizon, timezone: selectedTz, times: utcTimes.length},
+                toast: {variant: 'success', message: $_('settings.savedSuccessfully')},
+            });
         } catch (e: any) {
             const msg = e?.response?.data?.detail || e?.message || 'Save failed';
             error = msg;
-            toasts.error(msg);
+            notify({name: 'settings.scheduler.save.failed', detail: {reason: msg}, toast: {variant: 'error', message: msg}});
         } finally {
             saving = false;
         }

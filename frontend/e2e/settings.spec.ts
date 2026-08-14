@@ -218,7 +218,6 @@ test.describe('Settings', () => {
         test('toggle switch changes value when clicked (SettingToggle)', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             // Find toggle within global-settings-tab (excludes mobile menu toggle)
             const toggleBtn = gs(page).locator('button[aria-label^="Toggle"]').first();
@@ -233,15 +232,13 @@ test.describe('Settings', () => {
             // Click toggle
             await toggleBtn.click();
 
-            // State should have changed
-            const newState = await stateText.textContent();
-            expect(newState).not.toBe(initialState);
+            // State should have changed — the retrying assertion *is* the wait
+            await expect(stateText).not.toHaveText(initialState ?? '', {timeout: 5_000});
         });
 
         test('save and undo buttons appear after toggling', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             // Click a toggle
             await gs(page).locator('button[aria-label^="Toggle"]').first().click();
@@ -258,7 +255,6 @@ test.describe('Settings', () => {
         test('undo reverts toggle to original value', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             // Find first toggle setting-row
             const settingRow = gs(page)
@@ -274,7 +270,7 @@ test.describe('Settings', () => {
 
             // Toggle
             await toggleBtn.click();
-            expect(await stateText.textContent()).not.toBe(initialState);
+            await expect(stateText).not.toHaveText(initialState ?? '', {timeout: 5_000});
 
             // Undo
             await settingRow.locator('button[title="Undo"]').click();
@@ -284,7 +280,6 @@ test.describe('Settings', () => {
         test('number input can be edited and undone (SettingNumber)', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
-            await page.waitForTimeout(300);
 
             const numberInput = gs(page).locator('.setting-row input[type="number"]').first();
             await expect(numberInput).toBeVisible();
@@ -365,14 +360,15 @@ test.describe('Settings', () => {
 
             if (await darkButton.isVisible().catch(() => false)) {
                 await darkButton.click();
-                await page.waitForTimeout(500);
             }
 
             // Save if needed - look for save button and click it
             const saveButton = themeContainer.locator('button[title*="Save"], [data-testid*="save"]');
             if (await saveButton.isVisible().catch(() => false)) {
                 await saveButton.click();
-                await page.waitForTimeout(1000);
+                // The settings tabs now report what they persisted; wait for that
+                // instead of hoping a second is enough before the reload below.
+                await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
             }
 
             // Reload the page
@@ -429,7 +425,6 @@ test.describe('Settings', () => {
             const langTrigger = langContainer.locator('button, [role="combobox"]').first();
             if (await langTrigger.isVisible().catch(() => false)) {
                 await langTrigger.click();
-                await page.waitForTimeout(300);
 
                 // Select Italian if available
                 const italianOption = page
@@ -438,13 +433,12 @@ test.describe('Settings', () => {
                     .first();
                 if (await italianOption.isVisible().catch(() => false)) {
                     await italianOption.click();
-                    await page.waitForTimeout(500);
 
                     // Save if there's a save button
                     const saveBtn = langContainer.locator('button[title*="Save"], [data-testid*="save"]');
                     if (await saveBtn.isVisible().catch(() => false)) {
                         await saveBtn.click();
-                        await page.waitForTimeout(1000);
+                        await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
                     }
                 }
             }

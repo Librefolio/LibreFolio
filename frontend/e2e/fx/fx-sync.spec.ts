@@ -25,7 +25,6 @@ test.describe('FX Sync', () => {
         await goToFxPage(page);
         const syncBtn = page.getByTestId('fx-sync-all-button');
         await syncBtn.click();
-        await page.waitForTimeout(500);
 
         // FxSyncModal should be visible
         const modal = page.getByTestId('fx-sync-modal');
@@ -39,7 +38,6 @@ test.describe('FX Sync', () => {
         await goToFxPage(page);
         const syncBtn = page.getByTestId('fx-sync-all-button');
         await syncBtn.click();
-        await page.waitForTimeout(500);
 
         const modal = page.getByTestId('fx-sync-modal');
         await expect(modal).toBeVisible({timeout: 3000});
@@ -53,12 +51,24 @@ test.describe('FX Sync', () => {
     // Test 7: Sync from detail page triggers toast
     // ========================================================================
     test('sync from detail page triggers action', async ({page}) => {
+        // A real provider round-trip for every pair on the page; the default 30s
+        // budget is spent before the sync answers.
+        test.setTimeout(120_000);
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-sync-btn').click();
-        // Wait for sync to complete (may take a while for external providers)
-        await page.waitForTimeout(5000);
-        // Verify the button is no longer in spinning state (sync completed)
+        // The detail page opens the *page* sync modal (assets + FX for this page);
+        // `fx-sync-modal` is the list page's.
+        const syncModal = page.getByTestId('page-sync-modal');
+        await expect(syncModal).toBeVisible({timeout: 10_000});
+
+        // "Still enabled" is true before the click too, so it cannot be the
+        // barrier. The summary banner is what marks the end of the sync — the
+        // modal reports in place and raises no toast.
+        await syncModal.getByTestId('sync-modal-start').click();
+        await expect(syncModal.getByTestId('sync-modal-results')).toBeVisible({timeout: 60_000});
+
+        await syncModal.getByTestId('sync-modal-close').click();
         const syncBtn = page.getByTestId('fx-detail-sync-btn');
-        await expect(syncBtn).toBeEnabled({timeout: 10000});
+        await expect(syncBtn).toBeEnabled({timeout: 10_000});
     });
 });

@@ -2033,9 +2033,16 @@
      * Refreshes the broker list (so `beforeOpeningIndices` recomputes) and re-selects rows
      * that just became importable (no longer before-opening and not a likely duplicate).
      */
+    let recheckingOpenings = $state(false);
+
     async function recheckOpenings() {
-        await refreshEditableBrokers();
-        mergedTransactions = mergedTransactions.map((t) => (!isBeforeOpening(t) && isRowAssetResolved(t) && !t.selected && duplicateStatusAllowsAutoSelect(t.duplicateStatus) ? {...t, selected: true} : t));
+        recheckingOpenings = true;
+        try {
+            await refreshEditableBrokers();
+            mergedTransactions = mergedTransactions.map((t) => (!isBeforeOpening(t) && isRowAssetResolved(t) && !t.selected && duplicateStatusAllowsAutoSelect(t.duplicateStatus) ? {...t, selected: true} : t));
+        } finally {
+            recheckingOpenings = false;
+        }
     }
 
     let autoFixingBrokerId = $state<number | null>(null);
@@ -3999,7 +4006,7 @@ ${arrow}<span>${label}</span></span>`,
         <!-- Step 1: Upload & Assign Broker -->
         <!-- ============================================================ -->
         {#if currentStepId === 'upload'}
-            <div class="space-y-4" data-testid="import-wizard-step1">
+            <div class="space-y-4" data-testid="import-wizard-step1" data-busy={brokersLoading || uploading}>
                 <!-- Info hint -->
                 <p class="text-xs text-gray-500 dark:text-gray-400 italic">{$t('importWizard.step1Optional')}</p>
 
@@ -4101,7 +4108,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 2: Select Files from Broker Panels (DataTable) -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'select'}
-            <div class="space-y-4" data-testid="import-wizard-step2">
+            <div class="space-y-4" data-testid="import-wizard-step2" data-busy={brokerFilesLoading || uploading}>
                 {#if brokerFilesLoading}
                     <div class="py-8 text-center">
                         <LoadingSpinner size="md" />
@@ -4535,7 +4542,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 4: Review & Import -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'review'}
-            <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4">
+            <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4" data-busy={autoFixingBrokerId !== null || recheckingOpenings}>
                 <!-- ── Resolve Assets section ─────────────────────────── -->
                 {#if assetResolutions.length > 0}
                     <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
@@ -4700,8 +4707,8 @@ ${arrow}<span>${label}</span></span>`,
                         </div>
                         <div class="flex items-center gap-2">
                             {#if step4BeforeOpeningCount > 0}
-                                <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={() => void recheckOpenings()} data-testid="import-wizard-recheck-openings" title={$t('importWizard.recheckOpeningsTip')}>
-                                    <RefreshCw size={12} /><span class="hidden sm:inline">{$t('importWizard.recheckOpenings')}</span>
+                                <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1 disabled:opacity-50" onclick={() => void recheckOpenings()} disabled={recheckingOpenings} data-testid="import-wizard-recheck-openings" title={$t('importWizard.recheckOpeningsTip')}>
+                                    <RefreshCw size={12} class={recheckingOpenings ? 'animate-spin' : ''} /><span class="hidden sm:inline">{$t('importWizard.recheckOpenings')}</span>
                                 </button>
                                 <span class="text-gray-300 dark:text-gray-600">|</span>
                             {/if}

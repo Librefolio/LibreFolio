@@ -1003,7 +1003,8 @@
     "deleteBlockedTitle": "Cannot delete broker",
     "deleteBlockedMessage": "Cannot delete: this broker has {count} transaction(s).",
     "forceCascadeDelete": "Delete broker and transactions",
-    "goToTransactions": "Go to transactions"
+    "goToTransactions": "Go to transactions",
+    "deleteFailed": "Could not delete broker"
   },
   "chart": {
     "tooltip": {

@@ -92,6 +92,10 @@ def get_log_dir():
     return _LOG_DIR
 
 
+def get_log_category() -> str:
+    return _LOG_CATEGORY
+
+
 def set_fail_fast(enabled: bool) -> None:
     global _FAIL_FAST
     _FAIL_FAST = enabled

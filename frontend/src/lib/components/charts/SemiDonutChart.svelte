@@ -20,6 +20,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
 
@@ -176,6 +177,7 @@
 
         if (!chartInstance || chartInstance.isDisposed()) {
             chartInstance = echarts.init(container, undefined, {renderer: 'canvas'});
+            attachChartReady(chartInstance, container, 'semi-donut');
             needsInitialLayoutStabilityPass = true;
         }
         const currentInstance = chartInstance;
