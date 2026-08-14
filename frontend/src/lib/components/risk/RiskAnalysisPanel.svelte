@@ -766,7 +766,14 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="risk-analysis-panel">
+<!--
+    `data-catalog` publishes whether the capability catalog has landed. Every
+    section below is gated on it (`supportsComparison`, `supportsStress`, …), so
+    a caller that clicks straight into one of them is really betting on a fetch
+    it cannot see. Absence of a section means "not supported" *or* "not loaded
+    yet"; this attribute separates the two.
+-->
+<div class="space-y-4" data-testid="risk-analysis-panel" data-catalog={catalog ? 'ready' : 'pending'} data-busy={initialLoading ? 'true' : 'false'}>
     {#if showBetaBanner}
         <RiskBetaBanner />
     {/if}

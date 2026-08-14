@@ -1549,6 +1549,20 @@ class TransactionService:
 
         # 8. Decision
         success_count = sum(1 for r in results if r.status == "success")
+        if commit and issues:
+            # A commit was asked for and the batch is about to be rolled back.
+            # Leaving per-item status at "success" tells the caller the opposite
+            # of what happened — and a client that trusts it (reading `ids` as
+            # if the rows existed) acts on phantom rows.
+            #
+            # Deliberately NOT applied to dry-runs (`commit=False`): there the
+            # caller never asked to persist anything, so "success" means "this
+            # item would apply cleanly", which is the whole answer `/validate`
+            # exists to give. The bulk editor relies on it to mark the batch's
+            # own rows as pending (TransactionBulkModal.svelte:1146).
+            for r in results:
+                if r.status == "success":
+                    r.status = "simulated"
         if issues:
             return TXBatchResponse(committed=False, issues=issues, results=results, success_count=success_count, wac_results=wac_results)
         elif not commit:

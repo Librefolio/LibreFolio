@@ -314,17 +314,23 @@
             pairs = Array.from(pairMap.values()).map((config) => ({
                 config,
                 data: getFxStore(config.slug).getAllSorted(),
-                loading: false,
+                // Born already waiting for wave 2, so the card/row draws its own
+                // skeleton the instant it appears instead of a bare empty chart.
+                loading: true,
             }));
-
-            // Fetch chart data for all pairs
-            await fetchAllPairData();
         } catch (e: any) {
             console.error('Failed to load pair sources:', e);
             error = e?.message || 'Failed to load FX pairs';
         } finally {
             loading = false;
         }
+
+        // Wave 2 — rates, signals, "All" resolution — deliberately OUTSIDE the
+        // `loading` window: routes and rates are two separate calls, so the page
+        // renders as soon as the pairs are known and each card fills in on its
+        // own (loading={pair.loading}). fetchAllPairData() owns its own errors
+        // and clears `loading` on every path.
+        if (!error) await fetchAllPairData();
     }
 
     /**
@@ -399,8 +405,10 @@
 
             const needsRates = store.getMissingIntervals(dateStart, dateEnd).length > 0;
             if (!needsRates) {
-                // Fast path: already cached — update data without loading indicator
-                pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data};
+                // Fast path: already cached — nothing to wait for, so clear the
+                // per-card skeleton here too (this branch never reaches the bulk
+                // call below, which is the only other place that clears it).
+                pairs[i] = {...pair, data: store.getRange(dateStart, dateEnd).data, loading: false};
             } else {
                 needFetch.push({index: i, slug: pair.config.slug});
                 pairs[i] = {...pair, loading: true};

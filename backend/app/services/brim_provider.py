@@ -491,6 +491,29 @@ def get_broker_reports_dir() -> Path:
     return get_data_dir() / "broker_reports"
 
 
+def _write_metadata_atomic(meta_path: Path, metadata: Dict[str, Any]) -> None:
+    """
+    Write a BRIM metadata file atomically.
+
+    ``Path.write_text`` truncates first and writes after, so a concurrent reader
+    can observe an empty or half-written file, and a crash in between leaves the
+    metadata permanently corrupt. Writing to a sibling temp file and renaming it
+    makes the swap atomic on POSIX: a reader sees either the old content or the
+    new one, never a mixture.
+
+    This does not make read-modify-write sequences safe against each other — two
+    writers still race for last-writer-wins — but it removes the failure mode
+    where the loser leaves unparseable JSON behind.
+    """
+    tmp_path = meta_path.with_suffix(meta_path.suffix + f".tmp.{uuid.uuid4().hex}")
+    try:
+        tmp_path.write_text(json.dumps(metadata, indent=2))
+        tmp_path.replace(meta_path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+
+
 def _ensure_dirs(broker_id: Optional[int] = None) -> None:
     """
     Create storage directories if they don't exist.
@@ -583,7 +606,7 @@ def save_uploaded_file(
 
     # Write metadata JSON
     meta_path = uploaded_dir / f"{file_id}.json"
-    meta_path.write_text(json.dumps(metadata, indent=2))
+    _write_metadata_atomic(meta_path, metadata)
 
     logger.info(
         "Saved uploaded file",
@@ -923,7 +946,7 @@ def save_parse_result(
         if plugin is not None:
             plugin_version = plugin.plugin_version
             metadata["parsed_plugin_version"] = plugin_version
-    meta_path.write_text(json.dumps(metadata, indent=2))
+    _write_metadata_atomic(meta_path, metadata)
 
     logger.info(
         "Saved parse result to metadata",
@@ -1003,7 +1026,7 @@ def _move_file(file_id: str, target_status: BRIMFileStatus, error_message: Optio
         metadata["processed_at"] = utcnow().isoformat()
         if error_message:
             metadata["error_message"] = error_message
-        dst_meta.write_text(json.dumps(metadata, indent=2))
+        _write_metadata_atomic(dst_meta, metadata)
         src_meta.unlink()
 
     logger.info(

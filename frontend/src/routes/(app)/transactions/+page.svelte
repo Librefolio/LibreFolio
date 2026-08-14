@@ -859,7 +859,7 @@
     });
 </script>
 
-<div class="space-y-6">
+<div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div>

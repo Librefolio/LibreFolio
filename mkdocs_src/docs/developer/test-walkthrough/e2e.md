@@ -87,6 +87,88 @@ await page.waitForSelector('[data-testid="assets-page"][data-busy="false"]');
     When you write *"extra settle time"*, *"let it load"*, *"wait for X to finish"* in a comment,
     you have just named a state the product does not expose.
 
+## 🧵 Parallelism: earned, not assumed
+
+The suite runs **fully parallel**, and the unit of parallelism is the *test*, not the file: one
+worker interleaves tests from many spec files against one backend and one database. That was not
+the starting point — it was earned, category by category, by running each at four workers until it
+was green and fixing what came out.
+
+```bash
+./dev.py test --workers 4 front-fx all      # the runner decides E2E_WORKERS for Playwright
+```
+
+| what | means |
+|---|---|
+| `--workers N` | how many browsers. The backend follows: **one uvicorn worker per two browsers**, never fewer than one |
+| `fullyParallel: true` | the default. Tests are distributed individually; a worker does not own a file |
+| `test.describe.configure({mode: 'serial'})` | this block opts **out** — **and says why in a comment** |
+
+The order that got us here still applies to any new area: first run it parallel, then read the reds,
+then fix them, and only then declare an exception. A declaration added without a run behind it is a
+guess with better syntax.
+
+!!! warning "`E2E_FORCE_PARALLEL` is gone"
+
+    It existed to override `fullyParallel: false`, which no longer exists. And it never could have
+    overridden a `mode: 'serial'` block — Playwright gives the config no such knob. Re-testing an
+    exception means commenting its declaration out, running the category, and deciding with the
+    result in hand.
+
+### What the reds actually turned out to be
+
+Across every category promoted, **not one red was a write conflict between two specs**. They were
+all specs asking a question whose answer happened to be stable at one worker:
+
+- *"is it on the first page?"* asked as if it meant *"does it exist?"* — the tables paginate
+  client-side over the whole dataset, so a neighbour's row changes the answer;
+- *"has it finished?"* asked with `waitForTimeout` — a bet on machine speed that four workers lose;
+- *"did the write succeed?"* asked as `response.ok()` — `POST /transactions/commit` answers **200
+  with a rolled-back batch** when a business rule fails, and reports the ids the rows *would* have
+  had. Check `committed`, and treat per-item `status: "simulated"` as "this row does not exist";
+- *"is the row still gone?"* asked by id — SQLite reuses the highest rowid the moment you delete it,
+  so an id you freed is very likely already someone else's row. Assert absence on a marker **you**
+  generated;
+- *"do I still own this position?"* asked by selling a fixture holding — `SELL create → commit` sold
+  a quantity a neighbour had already consumed. A test that needs a precondition creates it: the
+  batch now deposits, buys and sells in one commit;
+- *"is this feature supported?"* asked by looking for the section that a capability catalog gates —
+  the section is absent while the catalog is in flight too, so the question silently became *"has
+  the fetch landed yet?"*. The panel now publishes `data-catalog="pending|ready"` and the test waits
+  on that instead.
+
+!!! danger "A conditional render driven by a fetch must publish that the fetch landed"
+
+    This one is a product defect, not a test defect. Whenever `{#if someCapability}` depends on data
+    that arrives asynchronously, **absence has two meanings** — "not supported" and "not loaded yet"
+    — and nothing in the DOM separates them. Every observer, test or human, is then measuring
+    network latency and calling it functionality. Publish the distinction (`data-catalog`,
+    `data-busy`, a skeleton) and the ambiguity disappears for everyone.
+
+### Cleanup is where interleaving bites hardest
+
+A fixture that deletes "everything created since I opened this file" was correct exactly while a
+worker owned the file from start to finish. It no longer does, so the same sentence now describes
+**another worker's in-flight rows** — and the repopulate path would wipe the database under three
+running tests. `e2e/fixtures/playwright.ts` therefore disables transaction hygiene above one worker,
+and any new cleanup must either do the same or delete only ids the test itself created.
+
+### Staying serial is a legitimate answer — but it is the second-best one
+
+`multi-user.spec.ts` shares two browser contexts across its tests. `tx-brim-import.spec.ts` parses
+the same two sample files in every test, and parsing rewrites the file's metadata JSON. Neither is
+fixable with a better timeout, and both say so in a comment above the declaration — the frontend
+twin of the backend catalogue's `exclusive_because`.
+
+`asset-event-delete.spec.ts` was the third, and is the instructive one. Its first test deleted one
+of Apple's two *unlinked* mock events, so it worked exactly twice: on the third run the oldest row
+was a linked event, the API answered `in_use`, and the suite went red for a reason unrelated to any
+code change. Serialising the block hid the interference but not the expiry date. The test now
+creates the event it deletes, and the declaration is gone.
+
+> A test that consumes fixture data is a test with an expiry date. Declaring it serial buys time;
+> making it create what it needs removes the problem.
+
 ## 🔍 When a spec fails
 
 Use the **`test-triage`** skill. Its first hypothesis is *"was it the shape of the response?"* —

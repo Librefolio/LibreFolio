@@ -102,7 +102,7 @@ Tests are organized **per concern**, not monolithically per page. Each spec file
 - **Mock data**: tests rely on `populate_mock_data.py` — all asymmetric access pairs use tag `access-test`
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads (Bug 14 pattern)
 
-## ⛔ The three rules — normative
+## ⛔ The rules — normative
 
 Specs share **one database** and **one backend** with every other spec, and will
 increasingly share it *concurrently*. A spec that assumes it is alone is not
@@ -186,6 +186,140 @@ publish the state that decides (`data-edit-ready`), not to sleep longer.
 **The tell is in the comment.** When you catch yourself writing *"extra settle
 time"*, *"let it load"*, *"wait for X to finish"* — you have just named a state
 the product does not expose. Publish it.
+
+**The same trap without a sleep: a section that isn't there yet.** When a block is
+rendered conditionally on data that arrives asynchronously, its absence means
+**two different things** — the feature is unsupported, or the fetch hasn't landed.
+Waiting for the section to appear therefore asks *"has the network finished?"*
+while looking like it asks *"is this supported?"*. `RiskAnalysisPanel` hides every
+section behind a capability catalog and now publishes `data-catalog="pending|ready"`;
+the spec waits on that, and a section still missing afterwards is a real red.
+
+```ts
+// ✘ green at 1 worker, red at 4 — and the red looks like a broken feature
+await expect(page.getByTestId('risk-comparison-controls')).toBeVisible({timeout: 12_000});
+
+// ✔ ask whether the gate has opened, then assert on what's behind it
+await expect(page.getByTestId('risk-analysis-panel')).toHaveAttribute('data-catalog', 'ready');
+await expect(page.getByTestId('risk-comparison-controls')).toBeVisible();
+```
+
+### 5. Never assert on translated text
+
+The UI ships in EN/IT/FR/ES. Any assertion on a user-facing string is a bet on
+the active locale.
+
+```ts
+// ✘ breaks the day someone runs the suite in Italian
+await expect(page.getByText('Import completed')).toBeVisible();
+
+// ✔ the variant is a contract; the text is not
+await expect(page.getByTestId('toast-success')).toBeVisible();
+
+// ✔ better still, the structured half of the same notification
+const since = await eventSeq(page);
+await commitButton.click();
+const ev = await waitForEvent(page, 'tx.import.committed', {since});
+expect(ev.detail.imported).toBe(47);
+```
+
+This is why an event exists **even when a toast exists**: the toast is the human
+half, the event is the machine half, and only one of them is safe to assert on.
+Helpers live in `e2e/fixtures/app-events.ts`, the product side in
+`$lib/stores/app/notify.svelte.ts`.
+
+`waitForSettled(page)` is the third helper: it reads `data-busy` on the nearest
+container and returns when the page says every load wave is in.
+
+### 6. Never let a probe decide whether to act
+
+A conditional with a short timeout does not ask "is this here?" — it asks "is
+this here *within 1 s*?". Under four workers the honest answer is often no, and
+then the spec skips its own setup **in silence** and fails somewhere else
+entirely.
+
+```ts
+// ✘ turns "slow" into "absent", then carries on as if nothing happened
+if (await field.isVisible({timeout: 1000}).catch(() => false)) {
+    await field.fill('changed');
+}
+await expect(saveButton).toBeEnabled();   // fails: the form was never dirtied
+
+// ✔ if the field is genuinely always there, say so and let the timeout speak
+await expect(field).toBeVisible({timeout: 5_000});
+await field.fill('changed');
+```
+
+Before writing the conditional, check the component: if the element is always
+rendered on that path, the defensiveness is not caution — it is a silencer.
+Real case: `tx-commit-all-types`, where `TransactionFormModal` always renders
+the section the spec was tiptoeing around.
+
+### 7. Verify the precondition, do not assume it
+
+Related to rule 1 but distinct: filtering to the *right kind* of row is not the
+same as filtering to a row that can still do what you need. A neighbouring spec
+may have already consumed it.
+
+```ts
+// ✘ paired is necessary, not sufficient — someone may have split this one already
+const rowId = await findPairedRowId(page);
+await openMenu(rowId);
+await page.getByTestId('context-menu-action-split').click();   // never appears
+
+// ✔ scan candidates and keep the first that actually offers the action
+const rowId = await findSplittableRowId(page);
+```
+
+The general form: **if the spec depends on a state it did not create, it must
+check for that state, not infer it.** The alternative — demanding exclusive
+access — is a real option, but it costs the whole suite parallelism and has to
+be justified in writing.
+
+## Parallelism
+
+`fullyParallel` is **`true`**, and the unit of parallelism is the *test*, not the
+file. Concurrency is the default; a block that genuinely shares state **opts
+out** and says why.
+
+```ts
+test.describe.configure({mode: 'serial'});   // + a comment naming what is shared
+```
+
+This is the frontend twin of the backend catalogue's `exclusive_because=`. The
+default flipped only after every non-gallery category was run at four workers
+until it was green — the reds were fixed, not declared away.
+
+| backend | frontend |
+|---|---|
+| `isolation=WRITE_SCOPED` (the norm) | nothing to write: parallel is the default |
+| `exclusive_because="…"` | `mode: 'serial'` **with a written reason** |
+
+Current exceptions, and they are the whole list: `brokers/multi-user.spec.ts`
+(two browser contexts shared across tests) and `tx-brim-import.spec.ts` (the two
+sample BRIM files, whose parse rewrites their metadata). `asset-event-delete`
+used to be a third until its first test stopped eating the fixture and started
+creating the event it deletes — which is the shape a fix should usually take.
+
+!!! warning "There is no flag to un-serialise a block"
+
+    `E2E_FORCE_PARALLEL` is obsolete — it set `fullyParallel`, which no longer
+    needs setting, and Playwright offers no config override for a describe-level
+    `mode`. Re-testing an exception is a source edit: comment the declaration
+    out, run the category at four workers, then delete it with the run as
+    evidence or restore it with the reason updated.
+
+!!! danger "Anything that resets shared state must check the worker count"
+
+    A worker now interleaves tests from many files, so "clean up what appeared
+    since I opened this file" also covers rows another worker is still using. The
+    transaction-hygiene fixture disables itself above one worker for exactly this
+    reason (`e2e/fixtures/playwright.ts`). Any new cleanup must do the same, or
+    be scoped to ids the test itself created.
+
+Measured through the runner at `--workers 4`: `front-transaction` 16,7 min → 5,6
+min, `front-fx` 3,2 → 1,4, `front-asset` → 2,3. Every red exposed along the way
+was a defect in a spec or in the product — none was a genuine write conflict.
 
 > When a spec fails and the cause is not obvious, use the **`test-triage`** skill.
 > First hypothesis is always *"was it the shape of the response?"*. **`flaky` is

@@ -137,23 +137,15 @@ test.describe('Asset Modal', () => {
 
         const searchInput = page.locator('input[placeholder*="Search by name"]');
         await searchInput.fill('Apple');
-        await page.waitForTimeout(1500);
 
-        // Should show either results dropdown, loading spinner, or "no results"
-        const form = page.getByTestId('asset-modal-form');
-        const hasDropdown = await form
-            .locator('.shadow-lg, [class*="shadow-lg"]')
-            .first()
-            .isVisible()
-            .catch(() => false);
-        const hasLoading = await form
-            .locator('.animate-spin')
-            .first()
-            .isVisible()
-            .catch(() => false);
-
-        // At least one of: results dropdown appeared or loading showed
-        expect(hasDropdown || hasLoading).toBeTruthy();
+        // The dropdown is the one container for every outcome — spinner while
+        // searching, rows, "no results", error — so its presence *is* "the
+        // search reacted". Sampling two CSS classes 1,5 s after typing asked a
+        // different question ("is it in one of these two states right now?"),
+        // which under load is false while nothing at all is wrong.
+        const results = page.getByTestId('asset-search-results');
+        await expect(results).toBeVisible({timeout: 10_000});
+        await expect(results).toHaveAttribute('data-state', /searching|results|empty|error/);
 
         await page.getByTestId('asset-modal-cancel').click();
     });
@@ -215,6 +207,11 @@ test.describe('Asset Modal', () => {
 test.describe('NR — Currency default from userSettings (Bug G)', () => {
     const API = '/api/v1';
 
+    // This block mutates a *shared* global: `base_currency` belongs to the test user,
+    // and every worker logs in as that same user. It is tolerable only because the
+    // window is a few seconds and no neighbour asserts on the base currency — if one
+    // ever does, this test needs its own user, not a longer timeout.
+
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
@@ -229,8 +226,14 @@ test.describe('NR — Currency default from userSettings (Bug G)', () => {
         const r = await page.request.put(`${API}/settings/user`, {data: {base_currency: 'GBP'}});
         expect(r.ok()).toBeTruthy();
 
-        // Full page navigation to reload the userSettings store
+        // The PUT went through the API context; the browser still holds the value it
+        // cached at login (`auth.ts` → `userSettings.setDirect`). A reload refetches it,
+        // but the modal reads the currency once when it opens, so opening before the
+        // GET lands captures the stale EUR. Arm the wait first, then navigate.
+        const settingsReloaded = page.waitForResponse(async (res) => res.url().includes('/settings/user') && res.request().method() === 'GET' && res.ok() && (await res.json().catch(() => ({})))?.base_currency === 'GBP', {timeout: 20_000});
         await goToAssetsPage(page);
+        await settingsReloaded;
+
         await openCreateAssetModal(page);
 
         // Currency combobox (the SearchSelect trigger inside the currency group)
@@ -294,15 +297,32 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
     });
 
     test('sync_prices_bulk called after saveCreate with non-parametric provider', async ({page}) => {
+        // This test has never actually run, on two independent counts, and both
+        // were hidden behind `test.skip` — which reports green:
+        //
+        //  1. `GET /api/v1/assets?page_size=200` is not a route. The listing
+        //     endpoint is `/api/v1/assets/query`; the old URL answers 422, so the
+        //     first guard fired every single time.
+        //  2. Even past that, the body makes the provider "dirty" by typing a
+        //     space and deleting it. `providerDirty` is a $derived value
+        //     comparison (AssetModal.svelte:358), not an event flag, so restoring
+        //     the original string makes it false again and Save stays disabled.
+        //
+        // Writing it for real means driving the provider "test connection" gate
+        // (AssetModal.svelte:1212 blocks Save until providerTestStatus === 'passed')
+        // on an asset the test creates itself, with the provider-test call
+        // intercepted so it stays offline. Until then this is declared broken
+        // rather than silently passing.
+        test.fixme(true, 'Never executed: wrong endpoint + providerDirty is a value comparison. See comment.');
         // Skip if no non-parametric provider assets exist in test env
-        const resp = await page.request.get('/api/v1/assets?page_size=200');
+        const resp = await page.request.get('/api/v1/assets/query');
         if (!resp.ok()) {
             test.skip(true, 'Could not fetch assets list');
             return;
         }
         type AssetItem = {asset_id: number; display_name: string; provider_code: string | null};
-        const data = (await resp.json()) as {items: AssetItem[]};
-        const withProvider = data.items?.find((a) => a.provider_code && a.provider_code !== 'scheduled_investment');
+        const data = (await resp.json()) as AssetItem[];
+        const withProvider = data.find((a) => a.provider_code && a.provider_code !== 'scheduled_investment');
         if (!withProvider) {
             test.skip(true, 'No non-parametric provider asset in test env');
             return;

@@ -13,6 +13,7 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {maximisePageSize} from '../fixtures/paging';
 
 test.setTimeout(25_000);
 
@@ -191,27 +192,32 @@ test.describe('PickerModal Tooltip', () => {
 
         const picker = page.getByTestId('tx-picker-modal');
 
-        // Find disabled row icons
+        // Find disabled row icons. The picker paginates at 20 over the whole
+        // dataset — asking page 1 is asking "did we get lucky?", not "do they
+        // exist?".
+        await maximisePageSize(page, picker);
         const disabledIcons = picker.locator('.disabled-select-icon');
-        const disabledCount = await disabledIcons.count();
-        expect(disabledCount, 'VIEWER broker rows must exist — check populate_mock_data.py').toBeGreaterThan(0);
+        await expect(disabledIcons.first(), 'VIEWER broker rows must exist — check populate_mock_data.py').toBeVisible({timeout: 5_000});
 
-        // Hover on the first disabled icon to trigger tooltip
+        // Dismiss any pinned tooltip before hovering. A click on a trigger pins
+        // its tooltip for PINNED_LEAVE_GRACE_MS = 30 s (Tooltip.svelte:72,119),
+        // so moving the pointer away is not enough — only a click outside is
+        // (handleClickOutside, :179). Tooltips are portaled to document.body,
+        // so they cannot be scoped to the modal either.
+        await page.evaluate(() => document.body.click());
+        await expect.poll(async () => page.getByTestId('tooltip-content').count(), {timeout: 5_000}).toBe(0);
         await disabledIcons.first().hover();
-        await page.waitForTimeout(500);
 
         // Tooltip content should contain HTML with icons
         const tooltipContent = page.getByTestId('tooltip-content');
-        const isTooltipVisible = await tooltipContent.isVisible({timeout: 2_000}).catch(() => false);
-        if (isTooltipVisible) {
-            const html = (await tooltipContent.innerHTML()) ?? '';
-            // Should contain <strong> (broker name rendered as HTML)
-            expect(html).toContain('<strong>');
-            // Should contain SVG role icons
-            expect(html).toContain('<svg');
-            // Should contain "required" or locale equivalent
-            expect(html.toLowerCase()).toMatch(/required|richiesto|requis|requerido/);
-        }
+        await expect(tooltipContent).toBeVisible({timeout: 5_000});
+        const html = (await tooltipContent.innerHTML()) ?? '';
+        // Should contain <strong> (broker name rendered as HTML)
+        expect(html).toContain('<strong>');
+        // Should contain SVG role icons
+        expect(html).toContain('<svg');
+        // Should contain "required" or locale equivalent
+        expect(html.toLowerCase()).toMatch(/required|richiesto|requis|requerido/);
     });
 });
 

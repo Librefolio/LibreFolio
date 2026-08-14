@@ -298,7 +298,7 @@
     }
 </script>
 
-<div class="space-y-6" data-testid="brokers-page">
+<div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="brokers-page">
     <!-- Header: Title left, controls right. Round 14.1 bugfix: `lg:` is a VIEWPORT breakpoint
          (1024px) — wraps unconditionally below that width regardless of whether the actual
          header row has room. Plain `flex-wrap` reacts to the row's OWN available width instead

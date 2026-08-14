@@ -15,6 +15,7 @@
 import {expect, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN} from '../fixtures/test-users';
+import {API_BASE, goToAssetDetailPage, openEditAssetModal} from '../assets/assets-helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +41,11 @@ async function goToSchedulerSettings(page: import('@playwright/test').Page) {
 // ---------------------------------------------------------------------------
 // FSCH-001: Scheduler status row visible for admin
 // ---------------------------------------------------------------------------
+
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
 
 test.describe('Scheduler — Visibility', () => {
     test('FSCH-001: scheduler status row is visible for admin', async ({page}) => {
@@ -240,30 +246,22 @@ test.describe('Scheduler — Config Modal', () => {
 test.describe('Scheduler — Regression (fetch_interval removed)', () => {
     test('FSCH-010: provider assignment form has no fetch_interval field', async ({page}) => {
         await login(page, TEST_ADMIN);
-        await navigateTo(page, '/assets');
 
-        // Open the first asset in the list
-        const firstAssetRow = page.locator('[data-testid="asset-table"] tbody tr').first();
-        if (!(await firstAssetRow.isVisible({timeout: 5_000}))) {
-            // Fallback: no assets — check via card view
-            const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-            if (!(await firstCard.isVisible({timeout: 3_000}))) {
-                test.skip(true, 'No assets found in test database — skipping fetch_interval regression test');
-                return;
-            }
-            await firstCard.click();
-        } else {
-            await firstAssetRow.click();
-        }
+        // Ask the API for an asset instead of hunting the list. The list has two
+        // interchangeable views (table/cards, persisted in localStorage), so probing
+        // for one and falling back to the other used to end in `test.skip()` whenever
+        // both probes timed out under load — the regression silently unguarded.
+        const response = await page.request.get(`${API_BASE}/assets/query?active=true`);
+        expect(response.ok(), `GET ${API_BASE}/assets/query returned ${response.status()}`).toBe(true);
+        const assets = (await response.json()) as Array<{id: number}>;
+        const assetId = assets[0]?.id;
+        expect(assetId, 'the seeded database must contain at least one active asset').toBeDefined();
 
-        // Open the edit modal (pencil icon / Edit button)
-        const editBtn = page.locator('button[data-testid="asset-edit-button"], button[title*="Edit"], button[aria-label*="edit"]').first();
-        if (await editBtn.isVisible({timeout: 3_000})) {
-            await editBtn.click();
-        }
+        await goToAssetDetailPage(page, String(assetId));
+        await openEditAssetModal(page);
 
         // There must be no input with name/id/placeholder related to fetch_interval
         const fetchIntervalInput = page.locator('input[name="fetch_interval"], input[id*="fetch_interval"], input[placeholder*="fetch interval" i]');
-        await expect(fetchIntervalInput).not.toBeVisible();
+        await expect(fetchIntervalInput).toHaveCount(0);
     });
 });

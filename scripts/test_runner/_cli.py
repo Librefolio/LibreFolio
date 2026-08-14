@@ -995,6 +995,10 @@ def _apply_parallel(args, verbose: bool) -> tuple:
     ok = True
 
     workers = resolve_workers(getattr(args, "workers", "1"))
+    # `--workers` is one flag: it must mean the same thing to pytest and to
+    # Playwright. The browser half reads it from here, not from the ambient
+    # environment.
+    _common._E2E_WORKERS = workers
     if workers > 1:
         ok, parallel_covered = _run_parallel_prepass(args, workers, verbose)
         covered |= parallel_covered

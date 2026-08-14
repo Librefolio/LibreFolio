@@ -4,6 +4,11 @@ import {API_TIMEOUT, assertPanelAboveOverlay, assertPanelWithinViewport, gotoDas
 
 test.setTimeout(120_000);
 
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
 test.describe('AI Export panel', () => {
     test.beforeEach(async ({context, page}) => {
         await context.grantPermissions(['clipboard-read', 'clipboard-write']);

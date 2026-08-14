@@ -30,6 +30,7 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {maximisePageSize} from '../fixtures/paging';
 
 test.setTimeout(25_000);
 
@@ -391,29 +392,34 @@ test.describe('PickerModal disabled rows', () => {
 
         const picker = page.getByTestId('tx-picker-modal');
         await expect(picker).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(500);
 
-        // ⊘ icons should exist for VIEWER broker rows (DEGIRO, eToro, Recrowd)
+        // ⊘ icons should exist for VIEWER broker rows (DEGIRO, eToro, Recrowd).
+        // The picker paginates at 20 over every transaction in the database, so
+        // "they are on the first page" stops being true as soon as a neighbour
+        // adds rows. Show them all instead of guessing.
+        await maximisePageSize(page, picker);
         const disabledIcons = picker.locator('.disabled-select-icon');
-        const disabledCount = await disabledIcons.count();
-        expect(disabledCount).toBeGreaterThan(0);
+        await expect(disabledIcons.first(), 'VIEWER broker rows must exist — check populate_mock_data.py').toBeVisible({timeout: 5_000});
 
         // Select-all should skip disabled rows
         const selectAllBtn = picker.locator('th .checkbox-btn');
-        if ((await selectAllBtn.count()) > 0) {
-            await selectAllBtn.click();
-            await page.waitForTimeout(300);
+        expect(await selectAllBtn.count(), 'the picker header must offer select-all').toBeGreaterThan(0);
+        await selectAllBtn.click();
 
-            // "Add N selected" should have fewer than total rows
-            const addBtn = picker.getByTestId('tx-picker-add');
-            const addText = (await addBtn.textContent()) ?? '';
-            const match = addText.match(/(\d+)/);
-            if (match) {
-                const selectedCount = parseInt(match[1]);
-                const totalRows = await picker.locator('tbody tr[data-row-id]').count();
-                expect(selectedCount).toBeLessThan(totalRows);
-            }
-        }
+        // "Add N selected" should have fewer than total rows
+        const addBtn = picker.getByTestId('tx-picker-add');
+        const totalRows = await picker.locator('tbody tr[data-row-id]').count();
+        await expect
+            .poll(
+                async () => {
+                    const match = ((await addBtn.textContent()) ?? '').match(/(\d+)/);
+                    return match ? parseInt(match[1]) : -1;
+                },
+                {timeout: 5_000},
+            )
+            .toBeGreaterThan(0);
+        const selectedCount = parseInt(((await addBtn.textContent()) ?? '').match(/(\d+)/)![1]);
+        expect(selectedCount, 'select-all must skip the disabled rows').toBeLessThan(totalRows);
 
         // Close
         await picker.getByTestId('tx-picker-cancel').click();

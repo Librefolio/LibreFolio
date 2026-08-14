@@ -494,11 +494,22 @@ async function installRiskMocks(page: Page, options: RiskMockOptions = {}): Prom
     return requests;
 }
 
+/**
+ * Every section of the risk panel is gated on the capability catalog, so an
+ * absent section means "unsupported" *or* "not loaded yet". The panel publishes
+ * which one via `data-catalog`; wait for it before asserting on any section, or
+ * the assertion is really a bet on fetch latency.
+ */
+async function waitForRiskCatalog(page: Page): Promise<void> {
+    await expect(page.getByTestId('risk-analysis-panel').first()).toHaveAttribute('data-catalog', 'ready', {timeout: 20_000});
+}
+
 async function openDashboardRisk(page: Page): Promise<void> {
     await navigateTo(page, '/dashboard');
     await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
     await page.getByTestId('dashboard-tab-risk').click();
     await expect(page.getByTestId('dashboard-risk-tab')).toBeVisible({timeout: 8_000});
+    await waitForRiskCatalog(page);
 }
 
 async function openFirstBrokerRisk(page: Page): Promise<number> {
@@ -511,6 +522,7 @@ async function openFirstBrokerRisk(page: Page): Promise<number> {
     if (!match) throw new Error('Broker detail URL must contain a numeric broker ID.');
     await page.getByTestId('broker-tab-risk').click();
     await expect(page.getByTestId('broker-risk-tab')).toBeVisible({timeout: 8_000});
+    await waitForRiskCatalog(page);
     return Number(match[1]);
 }
 
@@ -552,6 +564,20 @@ async function brokerWithHoldings(page: Page): Promise<{brokerId: number; assetI
     throw new Error('No seeded broker has holdings. Check populate_mock_data.py.');
 }
 
+/** The asset IDs the panel currently shows as selected, sorted and capped like the request payload. */
+async function selectedAssetIds(page: Page): Promise<number[]> {
+    const ids = await page.getByTestId(/^risk-selected-asset-\d+$/).evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-testid')?.replace('risk-selected-asset-', ''))));
+    return ids
+        .filter(Number.isInteger)
+        .sort((left, right) => left - right)
+        .slice(0, 100);
+}
+
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
 test.describe('Risk analysis functional integration', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
@@ -574,11 +600,13 @@ test.describe('Risk analysis functional integration', () => {
         await expect(page.getByTestId('risk-frontier-capability')).toHaveAttribute('data-available', 'false');
 
         await expect
-            .poll(() =>
-                requests
-                    .filter((request) => request.scope.kind === 'portfolio')
-                    .map((request) => request.mode)
-                    .sort(),
+            .poll(
+                () =>
+                    requests
+                        .filter((request) => request.scope.kind === 'portfolio')
+                        .map((request) => request.mode)
+                        .sort(),
+                {timeout: 15_000},
             )
             .toEqual(['current_composition', 'historical']);
 
@@ -607,9 +635,12 @@ test.describe('Risk analysis functional integration', () => {
         await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: 8_000});
 
         const selectedAssets = page.getByTestId(/^risk-selected-asset-\d+$/);
-        const initialCount = await selectedAssets.count();
-        if (initialCount < 2) throw new Error('Need at least two seeded active assets for the correlation asset-set test.');
+        // The chips arrive with the correlation payload, not with the heatmap frame:
+        // sampling count() once here reads whatever had rendered by that instant.
+        await expect.poll(() => selectedAssets.count(), {timeout: 10_000}).toBeGreaterThanOrEqual(2); // needs two seeded active assets to remove one and add it back
 
+        // Any chip works: the test removes one and puts it back, so it reads the ID
+        // off whichever it picked rather than assuming a particular asset.
         const firstChip = selectedAssets.first();
         const firstChipTestId = await firstChip.getAttribute('data-testid');
         const removedAssetId = Number(firstChipTestId?.replace('risk-selected-asset-', ''));
@@ -625,12 +656,31 @@ test.describe('Risk analysis functional integration', () => {
         await page.getByTestId('risk-broker-filter-button').click();
         await page.getByTestId(`risk-broker-option-${brokerSelection.brokerId}`).click();
 
+        // The oracle is the panel's own selection, not the /portfolio/report snapshot
+        // taken above. The panel freezes its holdings at page load, so a neighbouring
+        // spec that touches this shared broker in between makes the two disagree
+        // forever — no timeout can fix a comparison against data the page never saw.
+        // Re-reading the chips on every iteration also absorbs the mid-update frame.
         await expect
-            .poll(() => {
-                const matching = requests.filter((request) => request.scope.kind === 'asset_set' && [...request.scope.asset_ids].sort((left, right) => left - right).join(',') === brokerSelection.assetIds.slice(0, 100).join(','));
-                return matching.length;
-            })
-            .toBeGreaterThan(0);
+            .poll(
+                async () => {
+                    const selected = await selectedAssetIds(page);
+                    if (selected.length === 0) return false;
+                    const wanted = selected.join(',');
+                    return requests.some((request) => request.scope.kind === 'asset_set' && [...request.scope.asset_ids].sort((left, right) => left - right).join(',') === wanted);
+                },
+                {timeout: 15_000, intervals: [300, 500, 1_000]},
+            )
+            .toBe(true);
+
+        // …and the filter really mapped to *that* broker. Exact equality with the
+        // snapshot above is not assertable: the page reloaded the holdings after the
+        // helper read them, so a neighbour writing to this shared broker shifts one
+        // side only. A non-empty overlap survives drift in either direction and still
+        // fails if the filter selected the wrong broker's assets.
+        const afterFilter = await selectedAssetIds(page);
+        expect(afterFilter.length).toBeGreaterThan(0);
+        expect(afterFilter.some((id) => brokerSelection.assetIds.includes(id))).toBe(true);
     });
 
     test('broker tab sends a single-broker portfolio subset and labels it', async ({page}) => {
@@ -641,7 +691,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
         await expect(page.getByTestId('risk-scope-label')).toBeVisible();
         await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
-        await expect.poll(() => requests.some((request) => request.scope.kind === 'portfolio' && request.scope.broker_ids?.length === 1 && request.scope.broker_ids[0] === brokerId)).toBe(true);
+        await expect.poll(() => requests.some((request) => request.scope.kind === 'portfolio' && request.scope.broker_ids?.length === 1 && request.scope.broker_ids[0] === brokerId), {timeout: 15_000}).toBe(true);
     });
 
     test('asset detail preserves Overview and exposes Risk through its dedicated tab', async ({page}) => {
@@ -671,9 +721,10 @@ test.describe('Risk analysis functional integration', () => {
         await page.getByTestId('asset-detail-tab-risk').click();
         await expect(page.getByTestId('asset-detail-risk-panel')).toBeVisible({timeout: 12_000});
 
-        // The comparison section renders only once the (mocked) capability catalog has
-        // landed: under load that arrives later than the panel itself, so wait for the
-        // section rather than clicking straight into its trigger.
+        // The comparison section renders only once the capability catalog has landed:
+        // wait for the panel to say so, rather than for the section to appear — an
+        // absent section is otherwise indistinguishable from an unsupported one.
+        await waitForRiskCatalog(page);
         await expect(page.getByTestId('risk-comparison-controls')).toBeVisible({timeout: 12_000});
         await page.getByTestId('risk-comparison-asset-select-trigger').click();
         const comparisonOption = page.getByTestId(/^search-select-option-\d+$/).first();
@@ -685,7 +736,7 @@ test.describe('Risk analysis functional integration', () => {
         const stressBucketInputs = page.getByTestId(/^risk-stress-bucket-input-/);
         await expect(stressBucketInputs).toHaveCount(1, {timeout: 8_000});
         await page.getByTestId('risk-stress-show-all').check();
-        await expect.poll(() => stressBucketInputs.count()).toBeGreaterThan(1);
+        await expect.poll(() => stressBucketInputs.count(), {timeout: 8_000}).toBeGreaterThan(1);
         const stressBucketInput = stressBucketInputs.first();
         await expect(stressBucketInput).toBeVisible({timeout: 8_000});
         const stressBucketTestId = await stressBucketInput.getAttribute('data-testid');
@@ -728,10 +779,13 @@ test.describe('Risk analysis functional integration', () => {
         await expect(page.getByTestId('risk-simulation-terminal-distribution')).toBeVisible({timeout: 5_000});
 
         await expect
-            .poll(() => {
-                const assetRequests = requests.filter((request) => request.scope.kind === 'asset' && request.scope.asset_id === assetId);
-                return new Set(assetRequests.flatMap((request) => request.analytics.map((analytic) => analytic.analytic_code)));
-            })
+            .poll(
+                () => {
+                    const assetRequests = requests.filter((request) => request.scope.kind === 'asset' && request.scope.asset_id === assetId);
+                    return new Set(assetRequests.flatMap((request) => request.analytics.map((analytic) => analytic.analytic_code)));
+                },
+                {timeout: 15_000},
+            )
             .toEqual(new Set(['comparison', 'historical_kpi', 'historical_var', 'simulation', 'stress']));
 
         const hypotheticalRequest = requests.flatMap((request) => request.analytics).find((analytic) => analytic.analytic_code === 'stress' && analytic.parameters?.method === 'hypothetical');

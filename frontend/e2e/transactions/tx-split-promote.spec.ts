@@ -90,6 +90,46 @@ async function findStandaloneRowId(page: Page): Promise<string | null> {
     return null;
 }
 
+/**
+ * Find a row that actually offers the split action, trying rows matching
+ * `prefer` first and then any paired row.
+ *
+ * Picking a paired row and assuming it can be split is precisely the
+ * assumption that broke: a neighbouring spec had already split the row this
+ * one reached for, and the menu opened without the entry. Being paired is a
+ * necessary condition, not a sufficient one — the only way to know a row is
+ * splittable is to open its menu and look.
+ */
+async function findSplittableRowId(page: Page, prefer: string[] = []): Promise<string | null> {
+    const rows = page.locator('[data-testid="tx-table"] tr[data-row-id^="tx-"]');
+    const count = await rows.count();
+    const menu = page.locator('[data-testid="context-menu"]');
+
+    for (const includes of prefer.length ? [prefer, []] : [[]]) {
+        for (let i = 0; i < count; i++) {
+            const row = rows.nth(i);
+            if (includes.length) {
+                const text = (await row.textContent()) ?? '';
+                if (!includes.every((s) => text.includes(s))) continue;
+            }
+            if ((await row.locator('.tx-link-icon').count()) === 0) continue;
+
+            const kebab = row.getByTestId(/^row-actions-/);
+            if ((await kebab.count()) === 0) continue;
+
+            await row.hover();
+            await kebab.first().click();
+            await expect(menu).toBeVisible({timeout: 3_000});
+            const hasSplit = (await menu.locator('[data-testid="context-menu-action-split"]').count()) > 0;
+            await page.keyboard.press('Escape');
+            await expect(menu).toBeHidden({timeout: 2_000});
+
+            if (hasSplit) return await row.getAttribute('data-row-id');
+        }
+    }
+    return null;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -127,12 +167,9 @@ test.describe('Split & Promote', () => {
     test('Split from Main Table → confirm modal appears', async ({page}) => {
         await goToTransactions(page);
 
-        // Find a paired row — prefer delete-safe tagged ones
-        let pairedRowId = await findRowId(page, ['delete-safe'], []);
-        if (!pairedRowId) {
-            pairedRowId = await findPairedRowId(page);
-        }
-        expect(pairedRowId, 'Need at least 1 paired TX for split test').toBeTruthy();
+        // Find a row that offers the split action — verified, not assumed.
+        const pairedRowId = await findSplittableRowId(page, ['delete-safe']);
+        expect(pairedRowId, 'Need at least 1 splittable TX for split test').toBeTruthy();
 
         // Hover to show actions, click split
         const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="${pairedRowId}"]`);
@@ -265,9 +302,10 @@ test.describe('Split & Promote', () => {
     test('C3: Split + edit quantity → commit payload has splits + updates without type', async ({page}) => {
         await goToTransactions(page);
 
-        // Find a paired "delete-safe" row (Asset Transfer)
-        const pairedRowId = await findRowId(page, ['delete-safe'], []);
-        expect(pairedRowId, 'delete-safe paired TX must exist — check populate_mock_data.py').toBeTruthy();
+        // Find a splittable "delete-safe" row (Asset Transfer). Verified, not
+        // assumed: a neighbour may already have split the obvious candidate.
+        const pairedRowId = await findSplittableRowId(page, ['delete-safe']);
+        expect(pairedRowId, 'splittable delete-safe TX must exist — check populate_mock_data.py').toBeTruthy();
 
         // Select the row and open BulkModal via Edit toolbar
         await selectRow(page, pairedRowId!);

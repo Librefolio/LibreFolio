@@ -163,6 +163,7 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
 
     env = os.environ.copy()
     env["PLAYWRIGHT_JSON_OUTPUT_NAME"] = str(report)
+    _common.apply_e2e_workers(env)
     # Specs now share one database, so each test must start from the transaction
     # set populate_mock_data produced. See the fixture in e2e/fixtures/playwright.ts.
     env["LF_TX_HYGIENE"] = "1"

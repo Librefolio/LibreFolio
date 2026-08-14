@@ -35,6 +35,11 @@ _COVERAGE_PY = False
 _COVERAGE_JS = False
 # Coverage source: "backend", "frontend", or None (auto-detect)
 _COVERAGE_SOURCE = None
+# Browser workers for Playwright, resolved from --workers by main(). The
+# frontend used to read E2E_WORKERS straight from the ambient environment, so
+# `--workers 4` sped up the backend and left the browser serial: the same flag
+# meant two different things on the two halves of the suite.
+_E2E_WORKERS = 1
 # Global flag for resume mode (set by main())
 _RESUME_MODE = False
 # (category, action) pairs a parallel pre-pass has already executed. The serial
@@ -54,6 +59,26 @@ _FAIL_FAST = True
 # Destination for per-unit logs, or None when --log-dir was not requested.
 _LOG_DIR = None
 _LOG_CATEGORY = "run"
+
+
+def apply_e2e_workers(env: dict) -> dict:
+    """
+    Put the runner's `--workers` into a Playwright child's environment.
+
+    There are two places that launch Playwright — the per-unit path in
+    `_frontend_common._run_playwright` and the consolidated path in
+    `_consolidate._run_playwright_batch` — and wiring only one of them is a
+    silent bug: the run stays green and simply takes three times as long, which
+    nothing reports. Both call this.
+
+    An `E2E_WORKERS` already present in the environment wins, so a probe can
+    override a single run without going through the runner.
+    """
+    workers = getattr(sys.modules[__name__], "_E2E_WORKERS", 1)
+    if workers > 1 and "E2E_WORKERS" not in os.environ:
+        env["E2E_WORKERS"] = str(workers)
+        print(f"{Colors.YELLOW}🧵 Playwright workers: {workers}{Colors.NC}")
+    return env
 
 
 def set_log_dir(path, category: str = "run") -> None:

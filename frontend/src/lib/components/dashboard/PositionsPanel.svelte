@@ -130,7 +130,7 @@
     let showPerformanceEmpty = $derived(semanticMode === 'performance' && (!contribution || (contributionPositions.length === 0 && otherEffects.length === 0)));
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col" data-testid="positions-panel">
+<div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col" data-testid="positions-panel" aria-busy={showLoading} data-busy={showLoading ? 'true' : 'false'}>
     <!-- Header -->
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">

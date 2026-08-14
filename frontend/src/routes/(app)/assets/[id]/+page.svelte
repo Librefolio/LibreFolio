@@ -1736,7 +1736,7 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="asset-detail-page">
+<div class="space-y-4" data-testid="asset-detail-page" aria-busy={loading} data-busy={loading ? 'true' : 'false'}>
     <!-- ======================================================================= -->
     <!-- Header: asset info + back button -->
     <!-- ======================================================================= -->

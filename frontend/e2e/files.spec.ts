@@ -86,6 +86,20 @@ async function openStaticGridView(page: Page): Promise<void> {
     await expect(page.getByTestId('view-mode-grid')).toHaveClass(/active/);
 }
 
+/**
+ * Wait for the preview modal to be open *and* done fetching.
+ *
+ * The modal renders a "Loading…" placeholder while the preview request is in
+ * flight, so asserting on its body straight after it opens turns a slow backend
+ * into "the element does not exist" — which is what four concurrent workers
+ * produced. The shell publishes `data-busy`, so we wait for the state instead of
+ * guessing a bigger number.
+ */
+async function waitForPreviewReady(page: Page): Promise<void> {
+    await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+    await expect(page.getByTestId('file-preview-shell')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+}
+
 test.describe('Files Page', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
@@ -329,7 +343,7 @@ test.describe('Files Page', () => {
             await expect(row).toBeVisible({timeout: 8_000});
             await row.dblclick();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-markdown-rendered')).toBeVisible({
                 timeout: 8_000,
             });
@@ -347,7 +361,7 @@ test.describe('Files Page', () => {
             await expect(previewButton).toBeVisible({timeout: 8_000});
             await previewButton.click();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-image')).toBeVisible({timeout: 8_000});
         });
 
@@ -368,7 +382,7 @@ test.describe('Files Page', () => {
             await expect(row).toBeVisible({timeout: 8_000});
             await row.dblclick();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-modal')).toContainText('Legacy .xls preview requires xlrd on server');
         });
 
@@ -381,6 +395,7 @@ test.describe('Files Page', () => {
             await expect(previewButton).toBeVisible({timeout: 8_000});
             await previewButton.click();
 
+            await waitForPreviewReady(page);
             const imageStage = page.getByTestId('file-preview-image');
             await expect(imageStage).toBeVisible({timeout: 8_000});
 
@@ -402,7 +417,7 @@ test.describe('Files Page', () => {
             await expect(previewButton).toBeVisible({timeout: 8_000});
             await previewButton.click();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0, {timeout: 8_000});
         });
 
@@ -417,7 +432,7 @@ test.describe('Files Page', () => {
             await expect(row).toBeVisible({timeout: 8_000});
             await row.dblclick();
 
-            await expect(page.getByTestId('file-preview-modal')).toBeVisible({timeout: 8_000});
+            await waitForPreviewReady(page);
             await expect(page.getByTestId('file-preview-grid')).toBeVisible({timeout: 8_000});
         });
     });

@@ -10,15 +10,18 @@ async function ensureBrokerExists(page: Page): Promise<void> {
     await navigateTo(page, '/brokers');
     const brokerCards = page.locator('[data-testid^="broker-card-"]');
 
-    // Wait a moment for cards to render (they load asynchronously)
-    await page.waitForTimeout(1000);
+    // The page says when its list has landed; a fixed sleep used to report zero cards
+    // under load and send this helper down the "create one" path it never needed.
+    await page.waitForSelector('[data-testid="brokers-page"][data-busy="false"]', {timeout: 20_000});
     const count = await brokerCards.count();
 
     if (count === 0) {
-        // Create a broker so the detail tests have something to work with
+        // Create a broker so the detail tests have something to work with. The name must
+        // be unique: a fixed one collides with a concurrent worker doing the same, and
+        // the modal then stays open on the validation error.
         await page.getByTestId('add-broker-button').click();
         await expect(page.getByTestId('broker-modal')).toBeVisible();
-        await page.getByTestId('broker-name-input').fill('E2E Detail Test Broker');
+        await page.getByTestId('broker-name-input').fill(`E2E Detail Test Broker ${Date.now()}-${process.pid}`);
         await page.getByTestId('broker-form-submit').click();
         await expect(page.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
         // Wait for the card to appear
@@ -66,6 +69,11 @@ async function goToPosizioniTab(page: Page): Promise<void> {
     await page.getByTestId('broker-tab-posizioni').click();
     await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5000});
 }
+
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
 
 test.describe('Broker Detail Page', () => {
     test.beforeEach(async ({page}) => {
