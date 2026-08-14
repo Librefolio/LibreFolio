@@ -674,11 +674,20 @@ class TXDeleteItem(BaseModel):
 
 
 # Per-item diagnostic status for atomic bulk operations.
-# - "success":       item applied AND the whole batch committed.
-# - "simulated":     item applied in-session but batch was rolled back (another
-#                    item failed or balance validation triggered).
+# - "success":       item applied cleanly — and, when a commit was requested,
+#                    the whole batch committed. On a dry-run (`/validate`,
+#                    commit=False) it means "this item would apply cleanly":
+#                    the caller never asked to persist, so there is nothing to
+#                    be misled about.
+# - "simulated":     a commit WAS requested, the item applied in-session, but
+#                    the batch was rolled back (another item failed or balance
+#                    validation triggered). The `ids` are the ids the rows
+#                    would have had — they do not exist.
 # - "failed":        the item itself raised the error that caused the rollback.
 # - "not_attempted": processing stopped before this item was considered.
+#
+# A caller that wants "do my rows exist?" must read `committed`. `status` alone
+# answers "was this item acceptable?".
 TXItemStatus = Literal["success", "simulated", "failed", "not_attempted"]
 
 # Batch operation types — single source of truth for all operation Literals.

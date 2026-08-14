@@ -4,6 +4,11 @@ import {TEST_USER} from '../fixtures/test-users';
 
 const RECROWD_ICON_DATA_URL = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#1a4031"/><text x="8" y="11" text-anchor="middle" font-size="8" fill="#f5f4ef">R</text></svg>');
 
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
 test.describe('Portfolio broker icons', () => {
     test.beforeEach(async ({page}) => {
         await page.route('**/api/v1/transactions**', async (route) => {
@@ -39,6 +44,12 @@ test.describe('Portfolio broker icons', () => {
 
         await page.getByTestId('positions-toggle-holdings').click();
         await page.getByTestId('positions-toggle-table').click();
+
+        // The panel renders skeletons until the portfolio report lands, and that report
+        // costs real work (FIFO at runtime) so under a loaded backend it takes far longer
+        // than the assertion below would allow. Wait for the panel's own busy flag rather
+        // than picking a bigger number.
+        await expect(page.getByTestId('positions-panel')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
         await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 10_000});
 
         const positionsPanel = page.getByTestId('positions-panel');

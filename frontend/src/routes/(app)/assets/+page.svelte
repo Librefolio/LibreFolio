@@ -445,17 +445,26 @@
                 deltaPercent: null,
                 chartData: [],
                 deltas: {},
-                loadingPrices: false,
+                // Born already waiting for wave 2, so the row draws its own
+                // skeleton the instant it appears instead of a bare empty cell.
+                loadingPrices: true,
             }));
-
-            // Fetch price data for all assets via bulk query
-            await fetchAllPriceData();
         } catch (e: any) {
             console.error('Failed to load assets:', e);
             error = e?.message || 'Failed to load assets';
         } finally {
             loading = false;
         }
+
+        // Wave 2 — prices, signals, "All" resolution — deliberately OUTSIDE the
+        // `loading` window. The list and the prices are two separate calls, so
+        // there is no reason to hold the whole page behind a spinner until both
+        // are back: rows render at once and fill in per-row (loading=
+        // {asset.loadingPrices}). fetchAllPriceData() owns its own errors and
+        // clears loadingPrices on every path, so nothing here can strand a row.
+        // `data-busy` (loading || any loadingPrices) stays the single signal for
+        // "both waves finished".
+        if (!error) await fetchAllPriceData();
     }
 
     /**

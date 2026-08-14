@@ -233,6 +233,41 @@ and those are precisely the ones that get forgotten.
     asserts nothing matching survives — and found the clone. Neither test was wrong; the implicit
     contract between them was.
 
+#### `--workers` reaches Playwright too
+
+The frontend has **two** worker counts, and they are derived from the same number:
+
+```text
+./dev.py test front-transaction --workers 4
+        │
+        ├─ _apply_parallel  → _common._E2E_WORKERS = 4
+        │                       └─ _run_playwright injects E2E_WORKERS=4
+        │                            └─ playwright.config.ts: workers: 4   (browser contexts)
+        │
+        └─ playwright.config.ts: SERVER_WORKERS = max(1, ⌊4 / 2⌋) = 2      (uvicorn processes)
+```
+
+One uvicorn worker per two browser workers, minimum one. The ratio is deliberate: browser workers
+spend most of their time rendering and waiting, so pairing them onto a single backend keeps the
+backend *usefully* contended — which is the point. A suite that never makes the backend queue is
+not testing concurrency, it is only testing itself faster.
+
+!!! warning "The environment variable is not the interface"
+
+    `E2E_WORKERS` existed long before `--workers` wrote it. That gap meant
+    `./dev.py test front-transaction --workers 4` gave four **uvicorn** workers and one **browser**
+    worker: the flag was half-obeyed, silently. If you set `E2E_WORKERS` in your shell it still
+    wins — the runner does not overwrite a value you chose deliberately.
+
+!!! danger "Do not edit the repository while an E2E run is in flight"
+
+    Playwright's `webServer` starts the backend itself, and it must be started with `--no-reload`
+    (it is, since this was found the hard way). Under `--reload` uvicorn watches the **repo root**:
+    a single saved file restarts the backend mid-run, and every test that happens to be logging in
+    at that moment dies at 20 s. The signature is unmistakable — a burst of `login()` timeouts in
+    the tests scheduled first, scattered across unrelated files. It reads exactly like a
+    concurrency bug, and it is not one.
+
 ---
 
 ## 🧮 The Scheduler (`_scheduler.py`)
@@ -283,6 +318,8 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
   WRITE-GLOBAL unit stays serial even at `--workers 8`.
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
+- On a **frontend** category the same flag sets Playwright's browser workers and, derived from it,
+  the number of uvicorn processes behind them (see *[`--workers` reaches Playwright too](#--workers-reaches-playwright-too)*).
 
 The flag belongs to `./dev.py test`, so it goes **before** the category:
 
@@ -371,6 +408,15 @@ So the units of a category are grouped into one Playwright invocation and one vi
 The `after` column is the shape without JS coverage. With `--coverage js` the Playwright side is run
 in batches of 8 specs (see below), so `front-transaction` costs 4 invocations instead of 1 and the
 total is 21 rather than 16.
+
+!!! tip "Consolidation is now also what makes parallelism possible"
+
+    The startup saving above was the original reason. Since `fullyParallel: true`, there is a second
+    one that matters more: **a Playwright invocation can only distribute the tests it was given.**
+    One spec file per invocation means one unit of work, and `--workers 4` buys nothing at all —
+    three browsers sit idle. Consolidation is what turns a category into a pool the scheduler can
+    spread. On `front-transaction` the two effects are not comparable: grouping alone was worth
+    ~0,2 min, grouping *plus* four workers is worth 11.
 
 ### A long-lived worker exposes what a short-lived one hid
 

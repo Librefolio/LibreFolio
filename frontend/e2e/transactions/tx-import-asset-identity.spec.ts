@@ -300,6 +300,11 @@ test.describe('Import Wizard — asset identity', () => {
         // Forward, then back: the step is rebuilt from the parse, so an override that is
         // not stored quietly evaporates and the user is asked the same question twice.
         await page.getByTestId('import-wizard-assets-continue').click();
+        // Wait until the step is actually gone before going back. Playwright waits
+        // for the back button to be clickable, not for the wizard to have finished
+        // changing step — so clicking straight away can hit the button still
+        // mounted on this step and land one step further back than intended.
+        await page.getByTestId('asset-group-step').waitFor({state: 'hidden', timeout: 8_000});
         await page.getByTestId('import-wizard-back').click();
 
         await page.getByTestId('asset-group-step').waitFor({state: 'visible', timeout: 8_000});

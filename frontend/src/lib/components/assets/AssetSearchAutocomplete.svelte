@@ -80,6 +80,12 @@
     let searchId = 0;
     /** Last initialQuery auto-searched, so the auto-trigger fires once per query (even on 0 results) */
     let lastAutoSearchedQuery: string | null = null;
+
+    // A query typed before the provider list has arrived used to vanish in
+    // silence: executeSearch() bailed on an empty selectedProviders and the
+    // debounce had already fired, so nothing ever retried — the box just looked
+    // dead. Hold the query and run it the moment providers land.
+    let pendingQuery = $state<string | null>(null);
     /** Controller of the in-flight streamed request, aborted when a newer search starts */
     let activeController: AbortController | null = null;
 
@@ -129,8 +135,19 @@
             providersLoaded = true;
         } catch (e: any) {
             console.error('Failed to load providers:', e);
+            // Finished, badly. Still mark it: a query held back waiting for
+            // providers must not spin forever on a list that will never come.
+            providersLoaded = true;
         }
     }
+
+    // Run the query that was typed while the providers were still in flight.
+    $effect(() => {
+        if (!providersLoaded || pendingQuery === null) return;
+        const q = untrack(() => pendingQuery);
+        pendingQuery = null;
+        if (q) executeSearch(q);
+    });
 
     // =========================================================================
     // Search
@@ -157,7 +174,23 @@
     const SEARCH_TIMEOUT_MS = 30000;
 
     async function executeSearch(q: string) {
-        if (q.trim().length === 0 || selectedProviders.size === 0) return;
+        if (q.trim().length === 0) return;
+
+        if (!providersLoaded) {
+            // Providers still in flight. Open the dropdown in its searching
+            // state and let the effect above re-run this once they land, so the
+            // user sees the search happening instead of nothing at all.
+            pendingQuery = q;
+            showResults = true;
+            loading = true;
+            return;
+        }
+        if (selectedProviders.size === 0) {
+            // Nothing to search against — clear the spinner so the dropdown can
+            // fall through to "no results" instead of spinning forever.
+            loading = false;
+            return;
+        }
 
         // Increment search ID and capture it for this request
         const mySearchId = ++searchId;
@@ -406,6 +439,8 @@
     <!-- Results dropdown -->
     {#if showResults}
         <div
+            data-testid="asset-search-results"
+            data-state={loading ? 'searching' : error ? 'error' : hasResults ? 'results' : 'empty'}
             class="border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800
                     shadow-lg max-h-60 overflow-y-auto"
         >

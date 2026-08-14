@@ -57,6 +57,11 @@ async function expandDataQualityBanner(page: import('@playwright/test').Page) {
 // Dashboard Banner Tests (grouped mode)
 // ============================================================================
 
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
 test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);

@@ -77,24 +77,26 @@ test.describe('Transaction Linked Pair Tooltips', () => {
 
     test('paired tooltip for hidden broker shows lock icon', async ({page}) => {
         // Asym-d: IB→HiddenBroker — find a row with "access-test" tag on IB
-        // whose tooltip contains "Hidden Admin Broker"
-        const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+        // whose tooltip contains "Hidden Admin Broker".
+        //
+        // The rows are found by their tag, never by their position: every spec
+        // that commits a transaction pushes the seeded ones further down, and a
+        // scan capped at the first 20 rows simply stopped finding them.
+        const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').filter({hasText: 'access-test'});
         const count = await rows.count();
+        expect(count, 'No access-test row on the page. Check populate_mock_data.py.').toBeGreaterThan(0);
+
+        const tooltip = page.locator('[data-testid="tooltip-content"]');
         let foundHiddenTooltip = false;
 
-        for (let i = 0; i < Math.min(count, 20); i++) {
+        for (let i = 0; i < count; i++) {
             const row = rows.nth(i);
-            const text = (await row.textContent()) ?? '';
-            if (!text.includes('access-test')) continue;
-
             const linkIcon = row.locator('.tx-link-icon, .tx-links-slot').first();
             if (!(await linkIcon.isVisible().catch(() => false))) continue;
 
             await linkIcon.hover();
-            await page.waitForTimeout(500);
 
-            const tooltip = page.locator('[data-testid="tooltip-content"]');
-            if (await tooltip.isVisible({timeout: 1_000}).catch(() => false)) {
+            if (await tooltip.isVisible({timeout: 2_000}).catch(() => false)) {
                 const html = await tooltip.innerHTML();
                 if (html.includes('Hidden Admin Broker')) {
                     expect(html, 'Hidden broker tooltip should have SVG lock').toContain('<svg');
@@ -102,9 +104,10 @@ test.describe('Transaction Linked Pair Tooltips', () => {
                     break;
                 }
             }
-            // Move mouse away to close tooltip
+            // Move away and let the tooltip close before hovering the next row,
+            // otherwise the one still on screen answers for its successor.
             await page.mouse.move(0, 0);
-            await page.waitForTimeout(200);
+            await expect(tooltip).toBeHidden({timeout: 2_000});
         }
         expect(foundHiddenTooltip, 'Should find tooltip with Hidden Admin Broker').toBe(true);
     });

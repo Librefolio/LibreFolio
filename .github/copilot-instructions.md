@@ -160,6 +160,22 @@ The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/gra
 - `./dev.py graph query "TOPIC"` — quick BFS query from the CLI
 - Full semantic rebuild (new .md files): invoke the `graphify` skill through the AI assistant
 
+## Writing Tests
+
+**Every test runs against one shared database and one shared backend, alongside its
+neighbours.** So a test may never *assume* — it must *verify*: no fixed positions, no
+global counts, no clock waits, no assertions on translated text.
+
+**Agent**: for writing, rewriting or repairing any test (backend or frontend), invoke the
+`test-author` agent — the rules, the isolation classes, the runner registration and the
+definition of done are embedded in `.github/agents/test-author.agent.md`.
+
+| Skill | When |
+|-------|------|
+| `testing-backend` | pytest suites, coverage, catalogue |
+| `testing-frontend` | Playwright E2E, Vitest, parallelism per block |
+| `test-triage` | a red whose cause is not obvious — **before** calling anything "flaky" |
+
 ## Test Users
 
 | Username | Password | Role |

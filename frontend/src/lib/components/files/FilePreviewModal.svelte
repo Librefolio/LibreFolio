@@ -618,7 +618,7 @@
 </script>
 
 <ModalBase {open} {onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal" {zIndex}>
-    <div class="preview-shell">
+    <div class="preview-shell" data-testid="file-preview-shell" aria-busy={loading} data-busy={loading}>
         <div class="preview-header">
             <div class="preview-heading">
                 <div class="preview-title-row">

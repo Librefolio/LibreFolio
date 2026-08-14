@@ -64,9 +64,55 @@ frontend/
 | `countryStore`, `sectorStore`, `currencyStore` | `.ts` | Writable | Backend data caches |
 | `currencyGraphStore` | `.ts` | Writable | Currency conversion graph for triangulation |
 | `toastStore` | `.svelte.ts` | Svelte 5 runes | Toast notifications with auto-dismiss |
+| `notify` | `.svelte.ts` | Svelte 5 runes | One notification, two halves: event ring buffer (machine) + optional toast (human) |
 | `auth`, `settings`, `language`, `globalSettings` | `.ts` | Writable | Global app state |
 
 **Pattern**: `.svelte.ts` = Svelte 5 runes; `.ts` = Svelte 4 writable or plain class.
+
+## Telling the user (and the machine) that something happened
+
+Use `notify()` from `$lib/stores/app/notify.svelte.ts`. It always records a
+structured event; it raises a toast only when one is owed.
+
+```ts
+notify({
+    name: 'tx.import.committed',          // stable, NEVER translated
+    detail: {imported: 47, skipped: 3},   // structured
+    toast: {variant: 'success', message: $t('tx.import.done', {n: 47})},  // optional
+});
+```
+
+The toast and the event are **not alternative channels** — they are the human
+half and the machine half of one notification. `toast` is a *field*, not another
+call. The message stays free-form HTML (AI Export puts the prompt size in it);
+the structured payload lives in `detail`, which is what tests read, because the
+toast text is translated into four languages.
+
+### When a toast is owed
+
+A toast is owed when the outcome is **not already visible**, or is
+**irreversible**, or is **partial**. Everything else is a silent event.
+
+| # | case | toast | example |
+|---|------|-------|---------|
+| 1 | outcome already visible in the current view | ✗ | inline cell save — the value changes under the user's eyes; a deleted row disappears |
+| 2 | outcome invisible | ✓ | copy to clipboard, file download, background sync started, a save that does not change the current view |
+| 3 | irreversible or costly | ✓ with the count | bulk delete, asset merge, committed import — "47 imported, 3 skipped" |
+| 4 | partial / degraded | ✓ always | 10 assets synced, 2 failed. Silence here would be a lie |
+| 5 | error | ✓ always | already the practice: 45 of the 98 existing call sites |
+| 6 | internal transition | ✗ | cache invalidated, store reloaded, wizard step, debounce fired |
+
+### Publish state, do not print it
+
+Every container that reloads publishes `data-busy` (`'true'`/`'false'`) plus
+`aria-busy` on its root. It is the one signal for "all load waves are in" — the
+assets and fx pages load rows first and prices second, and only `data-busy`
+knows about both. A console line cannot do this job: it is an edge, so a reader
+that arrives late has already missed it, and `debug` is compiled out of the
+production build the E2E suite runs against.
+
+Naming: `area.thing.past-tense` — `asset.saved`, `fx.rates.synced`,
+`tx.import.committed`.
 
 ## Chart Components (`lib/components/charts/`)
 

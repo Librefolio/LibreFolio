@@ -280,6 +280,59 @@ Two caveats when reading it:
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads
 - **Whoever commits, cleans up**: see below — a spec that writes must restore what it wrote
 - **Never `waitForTimeout()`**: see below — it is a bet on machine speed that concurrency loses
+- **Never assert on translated text**: assert the toast *variant* (`toast-success`) or the event, never the message
+- **Never let a probe decide whether to act**: a short-timeout `isVisible().catch(() => false)` turns *slow* into *absent* and skips the spec's own setup in silence
+- **Verify the precondition, do not infer it**: filtering to the right *kind* of row is not the same as finding one that can still do what you need
+
+### ⚠️ Parallelism is the default; serialisation is opted out of
+
+`fullyParallel` is **`true`**, and the unit is the *test*, not the file: one worker interleaves
+tests from many spec files against one shared backend and database. A block that genuinely shares
+state opts **out**, and says what it shares:
+
+```ts
+test.describe.configure({mode: 'serial'});   // + a comment naming the shared resource
+```
+
+The twin of the backend's `exclusive_because`. The whole exception list today: `multi-user.spec.ts`
+and `tx-brim-import.spec.ts`. `asset-event-delete.spec.ts` was a third until its first test stopped
+consuming a mock event and started creating the one it deletes — prefer that fix to a declaration.
+
+`E2E_FORCE_PARALLEL` is **obsolete** — it only set `fullyParallel`, and Playwright has no config
+override for a describe-level `mode`. Re-testing an exception is a source edit: comment the
+declaration out, run the category at `--workers 4`, then delete it with the run as evidence.
+
+**Cleanup code must check the worker count.** "Delete what appeared since I opened this file" is
+only true when a worker owns the file, which is no longer the case: it would delete rows another
+worker is mid-test with. The tx-hygiene fixture disables itself above one worker for that reason.
+
+Measured through the runner at `--workers 4`: `front-transaction` 16,7 → 5,6 min, `front-fx` 3,2 →
+1,4 min. Every red surfaced along the way was a defect — in a spec, or in the product. None was a
+genuine write conflict.
+
+> Note the second kind. `AssetSearchAutocomplete` dropped a query typed before the provider list had
+> loaded: the debounce had fired, nothing retried, and the search box just sat there dead. At one
+> worker the providers always won the race. Concurrency did not break it — it made a rare condition
+> normal.
+
+### ⚠️ Signals: read state, never an edge
+
+`notify()` (`$lib/stores/app/notify.svelte.ts`) records every notable action into a retained ring
+buffer, and raises a toast only when the user is owed one. Helpers in `e2e/fixtures/app-events.ts`:
+
+```ts
+const since = await eventSeq(page);
+await commitButton.click();
+const ev = await waitForEvent(page, 'tx.import.committed', {since});
+expect(ev.detail.imported).toBe(47);
+
+await waitForSettled(page);   // reads data-busy: every load wave is in
+```
+
+Why not `page.on('console')`: a console message is an **edge** — it must be armed before the action,
+so a spec that clicks first has already lost it, which is the exact flakiness we are removing. And
+`debug` is compiled out of the production build the E2E suite runs against, so it does not exist in
+the binary under test. The ring buffer is a **state**: arriving late costs nothing.
 
 ### ⚠️ No clock waits — and what to do when there is nothing to wait for
 
@@ -310,6 +363,13 @@ the spec and for the user, who could close the modal and lose them without a war
 **The tell is in the comment.** *"extra settle time"*, *"let it load"*, *"wait for X to finish"* —
 each one names a state the product does not expose. **If how to surface it is not obvious, stop and
 ask**: it is an interface decision, not a test detail.
+
+**A section that is not there yet is the same trap without a sleep.** When a block is rendered
+conditionally on data fetched at runtime, its absence carries **two meanings at once** — unsupported,
+or not loaded yet — so waiting for it to appear asks *"has the network finished?"* while reading like
+*"is this supported?"*. `RiskAnalysisPanel` gates every section on a capability catalog and publishes
+`data-catalog="pending|ready"`; specs wait on the gate, then assert on what is behind it. Anything
+still missing at that point is a genuine red.
 
 ### ⚠️ Whoever commits, cleans up
 

@@ -32,8 +32,21 @@ const ASSET_NAME = 'Apple';
 
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
-    await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
-    await page.waitForTimeout(500);
+    // The previous version raced two waits and swallowed the failure with
+    // `.catch(() => {})`, then slept 500 ms. Under load it returned with an
+    // empty table, and every "scan the rows" loop below found nothing and
+    // reported a missing fixture instead of a slow one.
+    await expect(page.locator('[data-testid="transactions-page"][data-busy="false"]')).toBeVisible({timeout: 20_000});
+    await expect(page.locator('[data-testid="tx-table"] tbody tr[data-row-id]').first()).toBeVisible({timeout: 15_000});
+}
+
+/** Open the table narrowed to the given IDs — the rows this test owns. */
+async function goToTransactionsByIds(page: Page, ids: number[]) {
+    const min = Math.min(...ids);
+    const max = Math.max(...ids);
+    await navigateTo(page, `/transactions?page_size=200&id_min=${min}&id_max=${max}`);
+    await expect(page.locator('[data-testid="transactions-page"][data-busy="false"]')).toBeVisible({timeout: 20_000});
+    await expect(page.locator(`tr[data-row-id="tx-${ids[0]}"]`)).toBeVisible({timeout: 15_000});
 }
 
 async function openCreateFlow(page: Page) {
@@ -121,18 +134,26 @@ async function dblClickBulkRow(page: Page, rowIndex: number) {
     await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
 }
 
-async function commitBulkModal(page: Page) {
+async function commitBulkModal(page: Page): Promise<number[]> {
     const commitBtn = page.getByTestId('tx-bulk-commit');
     await expect(commitBtn).toBeEnabled({timeout: 8_000});
 
     const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000});
     await commitBtn.click();
     const resp = await responsePromise;
-    const body = await resp.json();
-    expect(body.committed).toBe(true);
+    const body = (await resp.json()) as {
+        committed: boolean;
+        issues?: Array<{error: string}>;
+        results?: Array<{operation: string; ids?: number[]; status?: string}>;
+    };
+    expect(body.committed, `commit was rolled back: ${JSON.stringify(body.issues ?? [])}`).toBe(true);
 
     // Wait for BulkModal to close
     await expect(page.getByTestId('tx-bulk-modal')).not.toBeVisible({timeout: 10_000});
+
+    // The ids the backend assigned — the only way for the test to know which
+    // rows it owns rather than scanning the table and hoping.
+    return (body.results ?? []).filter((r) => r.operation === 'create' && r.status === 'success').flatMap((r) => r.ids ?? []);
 }
 
 // ---------------------------------------------------------------------------
@@ -313,42 +334,40 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await waitForWacResolved(page);
 
         // Commit
-        await commitBulkModal(page);
+        const createdIds = await commitBulkModal(page);
+        expect(createdIds.length, 'the commit must report the rows it created').toBeGreaterThan(0);
 
-        // Reload transactions page
-        await goToTransactions(page);
+        // Open the table narrowed to the rows we just created. Scanning the
+        // whole table for "a paired row with this asset and broker" could land
+        // on a neighbour's row, which has no saved cost_basis and would fail
+        // the assertion below for the wrong reason.
+        await goToTransactionsByIds(page, createdIds);
 
-        // Find a paired giver row on our brokers (newest rows at top, search by asset name)
+        // Among our own rows, find the giver of the pair (the row followed by a receiver)
         const allRows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-        const count = await allRows.count();
         let giverRowId: string | null = null;
-
+        const count = await allRows.count();
         for (let i = 0; i < count - 1; i++) {
             const nextCls = (await allRows.nth(i + 1).getAttribute('class')) ?? '';
             if (nextCls.includes('tx-row-receiver')) {
-                const text = (await allRows.nth(i).textContent()) ?? '';
-                if (text.includes(ASSET_NAME) && (text.includes(BROKER_FROM) || text.includes(BROKER_TO))) {
-                    giverRowId = await allRows.nth(i).getAttribute('data-row-id');
-                    break;
-                }
+                giverRowId = await allRows.nth(i).getAttribute('data-row-id');
+                break;
             }
         }
-        expect(giverRowId, 'Must find the committed paired row from today').toBeTruthy();
+        expect(giverRowId, 'the committed TRANSFER must render as a giver + receiver pair').toBeTruthy();
 
         // Select and open in BulkModal (Edit)
         const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${giverRowId}"]`);
         await row.locator('.checkbox-btn').first().click();
-        await page.waitForTimeout(300);
 
         const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
-        await expect(editBtn).toBeVisible({timeout: 2_000});
+        await expect(editBtn).toBeEnabled({timeout: 5_000});
         await editBtn.click();
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(1000);
 
         // Assert: cost_basis cell shows manual value (DB-saved = manual)
         const manualCell = page.locator('[data-testid="tx-bulk-cost-basis-manual"]').first();
-        await expect(manualCell).toBeVisible({timeout: 5_000});
+        await expect(manualCell).toBeVisible({timeout: 10_000});
     });
 
     test('WB5 — Clone paired from DB, WAC auto cell appears (inline validate)', async ({page}) => {

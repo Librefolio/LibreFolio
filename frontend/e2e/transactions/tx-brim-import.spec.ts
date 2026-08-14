@@ -130,6 +130,23 @@ export async function passOptionalWizardSteps(page: Page) {
 // ---------------------------------------------------------------------------
 
 test.describe('BRIM Import Wizard', () => {
+    // SERIAL — shared, finite, mutable fixture.
+    //
+    // Every test here parses "the first available file", and there are only the
+    // two sample files populate_mock_data.py uploads. Parsing is documented as a
+    // preview that persists nothing to the *database*, but it does rewrite the
+    // file's metadata JSON (`last_parse_result`, `parsed_plugin_code`) — a
+    // read-modify-write on a file two workers can enter at once. Concurrent runs
+    // produced a file whose parse never reached a terminal status, and the only
+    // visible symptom was Continue staying disabled for 30 s: a red that names
+    // nothing.
+    //
+    // The write itself is now atomic (brim_provider._write_metadata_atomic), so
+    // a loser can no longer corrupt the metadata — but last-writer-wins is still
+    // the semantics, and these tests read back what they just wrote. Promoting
+    // this block needs per-test uploaded files, not a smaller sleep.
+    test.describe.configure({mode: 'serial'});
+
     test.beforeEach(async ({page}) => {
         await login(page);
         await goToTransactions(page);

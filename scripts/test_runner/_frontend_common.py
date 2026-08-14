@@ -187,8 +187,12 @@ def _run_playwright(
 
     try:
         env = None
+        # `--workers` decided by the runner, not read from the shell.
+        if getattr(_common, "_E2E_WORKERS", 1) > 1 and "E2E_WORKERS" not in os.environ:
+            env = _common.apply_e2e_workers(os.environ.copy())
         if cov_py or cov_js:
-            env = os.environ.copy()
+            if env is None:
+                env = os.environ.copy()
             if cov_py:
                 env['COVERAGE_BACKEND'] = '1'
             if cov_js:

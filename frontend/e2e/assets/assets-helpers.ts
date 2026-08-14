@@ -26,7 +26,8 @@ export async function goToAssetsPage(page: import('@playwright/test').Page) {
 export async function goToAssetDetailPage(page: import('@playwright/test').Page, assetId: string) {
     await navigateTo(page, `/assets/${assetId}`);
     await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
-    await page.waitForTimeout(1000);
+    // The page says when it has finished loading; don't guess a duration for it.
+    await page.waitForSelector('[data-testid="asset-detail-page"][data-busy="false"]', {timeout: 20_000});
 }
 
 /**

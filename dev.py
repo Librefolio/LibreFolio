@@ -284,6 +284,14 @@ def cmd_server(args):
     # would generate its own random secret → tokens invalid across workers.
     env.setdefault("JWT_SECRET", secrets.token_urlsafe(64))
 
+    # uvicorn closes idle keep-alive connections after 5 s by default. A test
+    # client that reuses a socket the server has just closed gets ECONNRESET on
+    # a POST, which is not retried — it surfaces as a lone, unreproducible red.
+    # Parallel E2E workers make it likelier: each context sits idle between
+    # steps while the others work. 65 s is the usual browser/proxy figure and
+    # outlives any gap inside a test.
+    keepalive_args = ["--timeout-keep-alive", "65"] if test_mode else []
+
     if coverage_mode:
         # Use 'coverage run --parallel-mode -m uvicorn' to track backend code
         # coverage during E2E tests.
@@ -336,6 +344,7 @@ def cmd_server(args):
             ])
         if workers > 1:
             uvicorn_cmd.extend(["--workers", str(workers)])
+        uvicorn_cmd.extend(keepalive_args)
         print(f"{Colors.YELLOW}📊 Coverage tracking enabled via 'coverage run'{Colors.NC}")
         print(f"{Colors.YELLOW}   Config: {coveragerc}{Colors.NC}")
         print(f"{Colors.YELLOW}   Coverage data will be written to .coverage.<pid> on shutdown{Colors.NC}")
@@ -396,6 +405,7 @@ def cmd_server(args):
                 print(f"{Colors.YELLOW}⚠️  watchfiles not installed → running WITHOUT --reload "
                       f"(StatReload ignores --reload-exclude and can reload-loop).{Colors.NC}")
 
+        uvicorn_cmd.extend(keepalive_args)
         return run_command_live(uvicorn_cmd, env=env)
 
 

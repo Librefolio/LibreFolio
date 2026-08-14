@@ -75,6 +75,11 @@ async function expectOwnershipChartCanvas(page: Page) {
         .toBe('non-zero');
 }
 
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
 test.describe('Broker Sharing', () => {
     test.describe('Share Button Visibility', () => {
         test('S1: share button visible for OWNER on broker detail', async ({page}) => {

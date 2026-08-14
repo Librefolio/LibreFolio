@@ -2,6 +2,11 @@ import {expect, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 
+// Earned parallel: this file's blocks own the data they touch and wait on published
+// state, so they share the backend with their neighbours instead of queueing behind
+// them. Verified by a green run of the whole category at 4 workers.
+test.describe.configure({mode: 'parallel'});
+
 test.describe('Brokers', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
@@ -117,7 +122,6 @@ test.describe('Brokers', () => {
             await expect(page.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
 
             // Find the newly created broker card
-            await page.waitForTimeout(1000);
             const newBrokerCard = page.locator('[data-testid^="broker-card-"]').filter({hasText: brokerName});
             await expect(newBrokerCard).toBeVisible({timeout: 5000});
 
@@ -137,7 +141,6 @@ test.describe('Brokers', () => {
             await expect(page.getByTestId('broker-modal')).not.toBeVisible({timeout: 5000});
 
             // Verify edited name appears
-            await page.waitForTimeout(500);
             const editedBrokerCard = page.locator('[data-testid^="broker-card-"]').filter({hasText: editedName});
             await expect(editedBrokerCard).toBeVisible({timeout: 5000});
 
@@ -149,8 +152,12 @@ test.describe('Brokers', () => {
             await page.getByTestId('delete-broker-confirm').click();
             await expect(page.getByTestId('delete-broker-dialog')).not.toBeVisible({timeout: 5000});
 
-            // Verify broker is gone
-            await expect(page.locator(`[data-testid="broker-card-${brokerId}"]`)).not.toBeVisible({timeout: 5000});
+            // Verify the broker is gone — by the name this test owns, not by its ID.
+            // The models declare `INTEGER PRIMARY KEY` with no AUTOINCREMENT, so SQLite
+            // recycles the highest rowid: deleting the newest broker frees its ID, and a
+            // concurrent create takes it straight back. Asserting "card <id> is absent"
+            // then fails on a *different* broker while this one really was deleted.
+            await expect(page.locator('[data-testid^="broker-card-"]').filter({hasText: editedName})).toHaveCount(0, {timeout: 5000});
         });
     });
 });

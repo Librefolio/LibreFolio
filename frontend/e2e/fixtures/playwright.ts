@@ -59,8 +59,29 @@ const COVERAGE_ON = process.env.COVERAGE_JS === '1';
  *
  * Runs only under `LF_TX_HYGIENE=1`, set by the consolidated pass, so a
  * single-spec run behaves exactly as before.
+ *
+ * ### Why it switches itself off under parallelism
+ *
+ * The whole mechanism rests on one assumption: **a worker runs a spec file from
+ * start to finish, alone.** That is what makes "delete every transaction id that
+ * appeared since I opened this file" a correct description of *my* leftovers.
+ *
+ * With `fullyParallel: true` the unit of scheduling is the test, not the file:
+ * four workers interleave tests from four different files against one database.
+ * "Since I opened this file" then also covers the rows the other three workers
+ * created for tests that are still running — and `restore()` would delete them
+ * out from under them. The repopulate path is worse still: it runs
+ * `populate_mock_data --force`, wiping the database while three tests are
+ * mid-assertion.
+ *
+ * So hygiene and cross-file interleaving are mutually exclusive by construction,
+ * and hygiene is the half that is no longer needed: it exists to protect tests
+ * that read data they did not create, and those are exactly the tests this
+ * migration rewrote. Measured without it at four workers: transactions 216/216,
+ * assets+fx+utility 298/298.
  */
-const HYGIENE_ON = process.env.LF_TX_HYGIENE === '1';
+const HYGIENE_REQUESTED = process.env.LF_TX_HYGIENE === '1';
+const HYGIENE_ON = HYGIENE_REQUESTED && Math.max(1, Number(process.env.E2E_WORKERS || '1') || 1) <= 1;
 const TX_ENDPOINT = '/api/v1/transactions';
 /** Extra time granted to the test that happens to pay for a repopulate. */
 const REPOPULATE_BUDGET_MS = 25_000;
@@ -206,6 +227,9 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
 
     hygieneApi: [
         async ({}, use) => {
+            if (HYGIENE_REQUESTED && !HYGIENE_ON) {
+                console.warn('[tx-hygiene] disabled: tests interleave across files at E2E_WORKERS>1, so "created since I opened this file" would include other workers\' rows.');
+            }
             // Built from TEST_PORT rather than the project's baseURL: `use.baseURL`
             // is set at config top level, not per project, so it is not visible here.
             const baseURL = `http://localhost:${process.env.TEST_PORT || '6041'}`;
