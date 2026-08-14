@@ -134,7 +134,7 @@ async function waitForWacResolved(page: Page) {
     // "at least one run completed" is a state, safe to read late.
     await expect(root).not.toHaveAttribute('data-validate-runs', '0', {timeout: 25_000});
     await waitForSettled(root, 25_000);
-    await expect(page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first()).toBeVisible({timeout: 20_000});
+    await expect(page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first()).toBeVisible({timeout: 20_000});
 }
 
 /** Double-click on a row in the BulkModal grid to open FormModal for editing it. */
@@ -258,7 +258,7 @@ test.describe('FormModal WAC Payload Tests', () => {
         await waitForWacResolved(page);
 
         // WAC auto cell should show a calculated value
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first();
+        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
         const cellText = await autoCell.textContent();
         expect(cellText).toMatch(/💡\s*[\d.,]+/);
     });

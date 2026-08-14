@@ -265,6 +265,48 @@ class TestNavIncompleteIssue:
         report = views.build_data_quality_report()
         assert date(2025, 1, 1) in report.incomplete_nav_dates
 
+    def test_nav_incomplete_outside_period_is_not_reported(self):
+        """A gap before the displayed window must not raise an issue.
+
+        ``daily_states`` always starts at the first transaction, so a dashboard
+        showing the last three months still carries years of older states. A gap
+        out there changes nothing on screen: every period figure is re-based to
+        the window, so reporting it asks the user to fix something invisible.
+        """
+        states = [_incomplete_state("2019-03-04"), _complete_state("2025-06-01"), _complete_state("2025-06-30")]
+        views = _make_views(states)
+        report = views.build_data_quality_report(period_from=date(2025, 6, 1), period_to=date(2025, 6, 30))
+        assert not any(i.code == IssueCode.NAV_INCOMPLETE for i in report.issues)
+        assert report.incomplete_nav_dates == []
+
+    def test_nav_incomplete_inside_period_is_reported(self):
+        states = [_incomplete_state("2019-03-04"), _incomplete_state("2025-06-10"), _complete_state("2025-06-30")]
+        views = _make_views(states)
+        report = views.build_data_quality_report(period_from=date(2025, 6, 1), period_to=date(2025, 6, 30))
+        issue = next(i for i in report.issues if i.code == IssueCode.NAV_INCOMPLETE)
+        assert issue.count == 1
+        assert issue.message_params["date_from"] == "2025-06-10"
+
+    def test_nav_incomplete_on_the_opening_day_is_reported(self):
+        """The state at ``period_from`` is the opening balance of the period.
+
+        ``_compute_period_summary_metrics`` reads it to derive period P&L, so an
+        incomplete NAV there does move what the user is looking at.
+        """
+        states = [_incomplete_state("2025-06-01"), _complete_state("2025-06-30")]
+        views = _make_views(states)
+        report = views.build_data_quality_report(period_from=date(2025, 6, 1), period_to=date(2025, 6, 30))
+        issue = next(i for i in report.issues if i.code == IssueCode.NAV_INCOMPLETE)
+        assert issue.count == 1
+
+    def test_nav_incomplete_without_period_scans_everything(self):
+        """No bounds means no window: callers that want the whole history still get it."""
+        states = [_incomplete_state("2019-03-04"), _incomplete_state("2025-06-10")]
+        views = _make_views(states)
+        report = views.build_data_quality_report()
+        issue = next(i for i in report.issues if i.code == IssueCode.NAV_INCOMPLETE)
+        assert issue.count == 2
+
 
 # =============================================================================
 # MWRR_NOT_CALCULABLE

@@ -1331,13 +1331,13 @@
         // need a historical fetch. Errors are non-blocking (chart just stays empty until the
         // next scheduled sync); we intentionally do NOT await this.
         //
-        // `start: 'min'` is the sentinel the backend defines for "whatever history the provider
-        // has" (SyncStartDate = date | Literal["min"]). It must not be replaced by a concrete
-        // date: each provider resolves it its own way, and the shared fallback for those that
-        // need a literal bound is 1900-01-01 — any hardcoded date here silently truncates.
+        // `start: 'resume'` is the backend sentinel for "the day after the last price I already
+        // have, or the provider's full history if I have none". A just-created asset has none,
+        // so this is a full-history fetch — expressed as the same rule every other auto-sync
+        // uses, instead of a hardcoded date that silently truncates whatever precedes it.
         if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
             const end = new Date().toISOString().slice(0, 10);
-            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'min', end}}]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
         }
     }
 
@@ -1479,22 +1479,16 @@
         const shouldAutoSync = (didRegenerate && isParametricProvider(providerCode)) || providerChanged;
         if (shouldAutoSync && !providerNoProvider) {
             try {
-                const today = new Date();
-                const end = today.toISOString().slice(0, 10);
-                // A parametric regenerate makes the backend wipe EVERY price row for the asset
-                // (asset_source.py: "params changed … wiped N price row(s)"), so anything short
-                // of a full re-sync leaves the pre-window years permanently empty. A provider
-                // change keeps the existing rows, so a 5-year refresh of the visible range is
-                // enough and avoids paying a full-history fetch on every provider switch.
-                let start: string;
-                if (didRegenerate) {
-                    start = 'min';
-                } else {
-                    const startD = new Date(today);
-                    startD.setFullYear(startD.getFullYear() - 5);
-                    start = startD.toISOString().slice(0, 10);
-                }
-                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start, end}}]);
+                const end = new Date().toISOString().slice(0, 10);
+                // One rule for both cases: resume from the day after the last price we already
+                // have, and fall back to the provider's full history when there is none.
+                //
+                // It covers the parametric regenerate without a special case, because the backend
+                // wipes every price row before this runs (asset_source.py: "params changed … wiped
+                // N price row(s)") — nothing left to resume from, so 'resume' resolves to 'min' by
+                // itself. A provider change wipes nothing, so the old series stays and the new
+                // provider only fills the gap.
+                await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]);
             } catch (syncErr) {
                 console.warn('Post-save auto-sync failed (non-blocking):', syncErr);
                 // Non-blocking: the user can manually re-sync if needed.

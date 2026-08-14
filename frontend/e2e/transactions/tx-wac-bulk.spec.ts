@@ -143,7 +143,7 @@ async function waitForWacResolved(page: Page) {
     // which is exactly what a 4-worker run needs.
     await expect(root).not.toHaveAttribute('data-validate-runs', '0', {timeout: 25_000});
     await waitForSettled(root, 25_000);
-    await expect(page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first()).toBeVisible({timeout: 20_000});
+    await expect(page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first()).toBeVisible({timeout: 20_000});
 }
 
 /** Double-click on a row in the BulkModal grid to open FormModal for editing it. */
@@ -213,7 +213,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await waitForWacResolved(page);
 
         // Step 4: Assert cell shows 💡 + a number
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first();
+        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
         const cellText = await autoCell.textContent();
         expect(cellText).toMatch(/💡\s*[\d.,]+/);
     });
@@ -323,7 +323,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await waitForWacResolved(page);
 
         // Assert: back to auto cell with calculated value
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first();
+        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
         const cellText = await autoCell.textContent();
         expect(cellText).toMatch(/💡\s*[\d.,]+/);
     });
@@ -419,7 +419,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
 
         // WAC now comes from the validate response (no separate /wac-preview call).
         // Wait for the auto cell to become visible — proves WAC inline works.
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').first();
+        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
         await expect(autoCell).toBeVisible({timeout: 8_000});
     });
 
@@ -448,7 +448,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await waitForWacResolved(page);
 
         // Capture value
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first();
+        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
         const value1 = await autoCell.textContent();
         expect(value1).toMatch(/💡\s*[\d.,]+/);
 
@@ -499,7 +499,7 @@ test.describe('BulkModal WAC Cell Rendering', () => {
 
         // Assert WAC contains a number (the exact value depends on existing DB data
         // but with pending BUYs 10@100 + 5@200 the contribution should be around 133)
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').filter({hasNotText: '…'}).first();
+        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
         const cellText = await autoCell.textContent();
         expect(cellText).toMatch(/💡\s*[\d.,]+/);
     });

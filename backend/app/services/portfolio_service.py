@@ -1495,6 +1495,8 @@ class PortfolioService:
             mwrr_available=mwrr_result is not None,
             configured_fx_pairs=configured_fx_pairs,
             real_provider_fx_pairs=real_provider_fx_pairs,
+            period_from=date_from,
+            period_to=valuation_date,
         )
 
         return PortfolioSummary(
@@ -2319,6 +2321,8 @@ class PortfolioService:
                 mwrr_available=False,
                 configured_fx_pairs=configured_fx_pairs,
                 real_provider_fx_pairs=real_provider_fx_pairs,
+                period_from=date_from,
+                period_to=date_to,
             )
 
         # Append MWRR series unreliable issue if needed
