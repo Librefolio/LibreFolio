@@ -297,9 +297,15 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
     });
 
     // What this must prove: creating an asset with a price provider asks the backend for the
-    // provider's WHOLE history, not a recent window. That is `date_range.start = 'min'`, the
-    // backend sentinel (`SyncStartDate = date | Literal["min"]`), and it has no visible
-    // effect in the UI — a truncated start just leaves older years quietly empty.
+    // provider's WHOLE history, not a recent window. Since the unified sync rule landed, the
+    // frontend expresses that as `date_range.start = 'resume'` — "carry on from the last price
+    // you have, or fetch everything if you have none". A just-created asset has none, so this
+    // IS the full-history request; the resolution simply happens server-side, in one round trip
+    // instead of a query-then-decide dance the frontend would have to race.
+    //
+    // The other half of the chain — that 'resume' with no stored prices resolves to 'min' — is
+    // owned by the backend, in test_asset_source_refresh.py::
+    // test_resume_falls_back_to_min_without_stored_prices. Neither half is provable here alone.
     //
     // The previous version never executed a line. It was skipped, and behind the skip it
     // queried `GET /assets?page_size=200` (not a route → 422 → the guard fired every time)
@@ -387,10 +393,11 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
 
             const item = syncPayload![0];
             expect(item.asset_id).toBe(assetId);
-            // The whole point: 'min' means "everything the provider has". Any literal date
-            // here is a silent truncation — the previous code sent '1975-01-01', which would
-            // have discarded every earlier year without a word.
-            expect(item.date_range.start).toBe('min');
+            // The whole point: for an asset that has no prices yet, 'resume' means "everything
+            // the provider has". Any literal date here is a silent truncation — the original
+            // code sent '1975-01-01', which would have discarded every earlier year without a
+            // word.
+            expect(item.date_range.start).toBe('resume');
             expect(item.date_range.end).toBe(new Date().toISOString().slice(0, 10));
         } finally {
             if (assetId !== null) {

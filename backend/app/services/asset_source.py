@@ -2639,6 +2639,17 @@ class AssetSourceManager:
         asset_res = await session.execute(asset_stmt)
         asset_map: Dict[int, Asset] = {a.id: a for a in asset_res.scalars().all()}
 
+        # Batch query: last stored price per asset, but only for the items that
+        # asked to resume. Resolving the sentinel here rather than in the caller
+        # keeps it to one round trip and leaves no window for another writer to
+        # land a price between "what do I have?" and "fetch from there".
+        resume_ids = [r.asset_id for r in requests if r.date_range.start == "resume"]
+        last_price_map: Dict[int, date_type] = {}
+        if resume_ids:
+            last_stmt = select(PriceHistory.asset_id, func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(resume_ids)).group_by(PriceHistory.asset_id)
+            last_res = await session.execute(last_stmt)
+            last_price_map = {row[0]: row[1] for row in last_res.all() if row[1] is not None}
+
         # Build prepared items and generate immediate SKIPPED/FAILED results
         prepared_items: Dict[int, dict] = {}  # asset_id → {assignment, asset, prov, params, ...}
         immediate_results: list[FARefreshResult] = []
@@ -2709,6 +2720,30 @@ class AssetSourceManager:
                 )
                 continue
 
+            # Resolve the "resume" sentinel now that the asset is known to be
+            # syncable. No stored price means nothing to resume from — a new
+            # asset, or one whose series was just wiped by a parametric param
+            # change — so the honest answer is the provider's full history.
+            resolved_start = item.date_range.start
+            if resolved_start == "resume":
+                last_date = last_price_map.get(asset_id)
+                resolved_start = last_date + timedelta(days=1) if last_date else "min"
+
+            # Resuming past the requested end means the series already covers it.
+            # Reporting this as SKIPPED rather than sending an inverted range keeps
+            # the "nothing to do" case out of the provider and out of the error path.
+            if isinstance(resolved_start, date_type) and resolved_start > item.date_range.end:
+                immediate_results.append(
+                    FARefreshResult(
+                        asset_id=asset_id,
+                        status=SyncStatus.SKIPPED,
+                        provider_used=provider_code,
+                        message="Already up to date",
+                        elapsed_ms=(time.monotonic_ns() - t_bulk_start_ns) // 1_000_000,
+                    )
+                )
+                continue
+
             prepared_items[asset_id] = {
                 "assignment": assignment,
                 "asset": asset,
@@ -2717,7 +2752,7 @@ class AssetSourceManager:
                 "provider_params": provider_params,
                 "identifier": assignment.identifier,
                 "identifier_type": assignment.identifier_type,
-                "start": item.date_range.start,
+                "start": resolved_start,
                 "end": item.date_range.end,
             }
 

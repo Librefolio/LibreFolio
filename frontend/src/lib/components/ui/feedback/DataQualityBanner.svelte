@@ -61,6 +61,15 @@
     let errorCount = $derived(issues.filter((i) => i.severity === 'error').length);
     let warningCount = $derived(issues.filter((i) => i.severity === 'warning').length);
 
+    /**
+     * Grouped mode splits the list in two. Errors and warnings ask the user to do
+     * something; info items only say what the app noticed. Mixing them at the same
+     * indent made the header ("1 warning") look like it was miscounting the rows
+     * below it, so the info block sits apart, un-indented, under its own rule.
+     */
+    let actionableIssues = $derived(sortedIssues.filter((i) => i.severity !== 'info'));
+    let infoIssues = $derived(sortedIssues.filter((i) => i.severity === 'info'));
+
     /** Per-asset navigation targets (id + display name), zipping the two aligned backend arrays. */
     function assetTargets(issue: DataQualityIssue): {id: number; name: string}[] {
         const ids = issue.affected_asset_ids ?? [];
@@ -138,6 +147,61 @@
     }
 </script>
 
+{#snippet issueRow(issue: DataQualityIssue, buttonClass: string)}
+    {@const Icon = getIcon(issue.severity)}
+    {@const CtaIcon = getCtaIcon(issue.cta_action)}
+    {@const targets = issue.cta_action === 'navigate_asset' ? assetTargets(issue) : []}
+    <div class="flex flex-col gap-1 text-xs" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity}>
+        <!-- Message + FX context -->
+        <div class="flex items-center gap-2 flex-wrap min-w-0">
+            <Icon size={13} class="shrink-0" />
+            <span>{$_(issue.message_i18n_key, {values: issue.message_params ?? {}})}</span>
+            {#if (issue.affected_fx_pairs?.length ?? 0) > 0}
+                <span class="inline-flex items-center gap-1 opacity-70 text-[11px]">
+                    {#each (issue.affected_fx_pairs ?? []).slice(0, 3) as pair}
+                        {@const fx = formatFxPair(pair)}
+                        <span class="inline-flex items-center gap-0.5">
+                            <span class="emoji-flag">{fx.baseFlag}</span>{fx.baseCode}<ArrowLeftRight size={9} /><span class="emoji-flag">{fx.quoteFlag}</span>{fx.quoteCode}
+                        </span>
+                    {/each}
+                    {#if (issue.affected_fx_pairs?.length ?? 0) > 3}
+                        <span>+{(issue.affected_fx_pairs?.length ?? 0) - 3}</span>
+                    {/if}
+                </span>
+            {/if}
+        </div>
+
+        <!-- Actions: navigate_asset → one "go to asset" link per affected asset;
+             any other action (sync / add / navigate_fx) → a single aggregate CTA. -->
+        {#if targets.length > 0}
+            <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-nav-assets-{issue.code}">
+                {#each targets as tgt}
+                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {buttonClass} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]" onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)} title={tgt.name} data-testid="data-quality-nav-asset-{tgt.id}">
+                        <ArrowUpRight size={11} class="shrink-0" />
+                        <span class="truncate">{tgt.name}</span>
+                    </button>
+                {/each}
+            </div>
+        {:else if issue.cta_action}
+            <div class="mt-0.5">
+                <button
+                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded {buttonClass} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                    onclick={() => handleCta(issue)}
+                    disabled={busyCode === issue.code}
+                    data-testid="data-quality-cta-{issue.code}"
+                >
+                    {#if busyCode === issue.code}
+                        <Loader2 size={11} class="animate-spin" />
+                    {:else}
+                        <CtaIcon size={11} />
+                    {/if}
+                    {getCtaLabel(issue.cta_action)}
+                </button>
+            </div>
+        {/if}
+    </div>
+{/snippet}
+
 {#if issues.length === 0}
     <!-- No issues — render nothing -->
 {:else if mode === 'grouped'}
@@ -162,67 +226,22 @@
 
         <!-- Issue rows (revealed on expand) -->
         {#if expanded}
-            <div class="flex flex-col gap-2.5 px-4 pb-4 ml-6">
-                {#each sortedIssues as issue (issue.code + (issue.group_key ?? ''))}
-                    {@const Icon = getIcon(issue.severity)}
-                    {@const CtaIcon = getCtaIcon(issue.cta_action)}
-                    {@const targets = issue.cta_action === 'navigate_asset' ? assetTargets(issue) : []}
-                    <div class="flex flex-col gap-1 text-xs" data-testid="data-quality-issue-{issue.code}">
-                        <!-- Message + FX context -->
-                        <div class="flex items-center gap-2 flex-wrap min-w-0">
-                            <Icon size={13} class="shrink-0" />
-                            <span>{$_(issue.message_i18n_key, {values: issue.message_params ?? {}})}</span>
-                            {#if (issue.affected_fx_pairs?.length ?? 0) > 0}
-                                <span class="inline-flex items-center gap-1 opacity-70 text-[11px]">
-                                    {#each (issue.affected_fx_pairs ?? []).slice(0, 3) as pair}
-                                        {@const fx = formatFxPair(pair)}
-                                        <span class="inline-flex items-center gap-0.5">
-                                            <span class="emoji-flag">{fx.baseFlag}</span>{fx.baseCode}<ArrowLeftRight size={9} /><span class="emoji-flag">{fx.quoteFlag}</span>{fx.quoteCode}
-                                        </span>
-                                    {/each}
-                                    {#if (issue.affected_fx_pairs?.length ?? 0) > 3}
-                                        <span>+{(issue.affected_fx_pairs?.length ?? 0) - 3}</span>
-                                    {/if}
-                                </span>
-                            {/if}
-                        </div>
-
-                        <!-- Actions: navigate_asset → one "go to asset" link per affected asset;
-                             any other action (sync / add / navigate_fx) → a single aggregate CTA. -->
-                        {#if targets.length > 0}
-                            <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-nav-assets-{issue.code}">
-                                {#each targets as tgt}
-                                    <button
-                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]"
-                                        onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)}
-                                        title={tgt.name}
-                                        data-testid="data-quality-nav-asset-{tgt.id}"
-                                    >
-                                        <ArrowUpRight size={11} class="shrink-0" />
-                                        <span class="truncate">{tgt.name}</span>
-                                    </button>
-                                {/each}
-                            </div>
-                        {:else if issue.cta_action}
-                            <div class="mt-0.5">
-                                <button
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.button} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                                    onclick={() => handleCta(issue)}
-                                    disabled={busyCode === issue.code}
-                                    data-testid="data-quality-cta-{issue.code}"
-                                >
-                                    {#if busyCode === issue.code}
-                                        <Loader2 size={11} class="animate-spin" />
-                                    {:else}
-                                        <CtaIcon size={11} />
-                                    {/if}
-                                    {getCtaLabel(issue.cta_action)}
-                                </button>
-                            </div>
-                        {/if}
-                    </div>
-                {/each}
-            </div>
+            {#if actionableIssues.length > 0}
+                <!-- Indented under the header: these are the ones the header counts. -->
+                <div class="flex flex-col gap-2.5 px-4 pb-4 ml-6" data-testid="data-quality-actionable">
+                    {#each actionableIssues as issue (issue.code + (issue.group_key ?? ''))}
+                        {@render issueRow(issue, styles.button)}
+                    {/each}
+                </div>
+            {/if}
+            {#if infoIssues.length > 0}
+                <!-- Notes: not counted in the header, so not indented under it either. -->
+                <div class="flex flex-col gap-2.5 px-4 pb-4 opacity-90 {actionableIssues.length > 0 ? 'pt-3 border-t border-current/15' : ''}" data-testid="data-quality-info">
+                    {#each infoIssues as issue (issue.code + (issue.group_key ?? ''))}
+                        {@render issueRow(issue, styles.button)}
+                    {/each}
+                </div>
+            {/if}
         {/if}
     </div>
 {:else}

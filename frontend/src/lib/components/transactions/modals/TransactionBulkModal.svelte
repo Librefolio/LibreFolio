@@ -1678,11 +1678,23 @@
                             // Auto-calculated value present
                             return {
                                 type: 'html',
-                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
+                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto" data-state="ready">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
                             };
                         }
-                        // Loading/pending
-                        return {type: 'html', html: '<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto">💡 …</span>'};
+                        // No amount. Two different facts used to share one glyph: the value is
+                        // still being computed, or it was computed and there is nothing to
+                        // propose (a BUY has no cost basis to match, a SELL may find no lot).
+                        // `…` now means only the first, `—` the second — the lightbulb stays in
+                        // both because the cell is still in automatic mode.
+                        //
+                        // `validateRuns === 0` belongs with "unknown", not with "empty": before
+                        // the first run nobody has asked yet, so an em-dash would be a verdict
+                        // the app has not reached.
+                        const unknown = scheduler.state.isPending || scheduler.state.isValidating || scheduler.state.validateRuns === 0;
+                        return {
+                            type: 'html',
+                            html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto" data-state="${unknown ? 'pending' : 'empty'}">💡 ${unknown ? '…' : '—'}</span>`,
+                        };
                     }
 
                     // mode 'manual'

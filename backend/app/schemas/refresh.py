@@ -62,13 +62,26 @@ FXSyncStatus = SyncStatus
 
 SyncStartDate = date | Literal["min"]
 
+# Asset price sync additionally accepts "resume": start the day after the last
+# price already stored for that asset, or fall back to "min" when there is none.
+#
+# It exists so the caller does not have to ask "what do I already have?" in a
+# separate round trip and then race whoever writes prices in between — and so the
+# one rule covers every case by itself. A brand-new asset has no rows, so it gets
+# the full history; a parametric regenerate wipes the rows before the sync runs,
+# so it also gets the full history; everything else just fills the gap.
+#
+# FX sync deliberately keeps the narrower ``SyncStartDate``: it resolves nothing
+# of the sort, and a type that accepts a value the endpoint ignores is a lie.
+AssetSyncStartDate = date | Literal["min", "resume"]
+
 
 class SyncDateRangeModel(BaseModel):
     """Sync date range with required end and sentinel-aware start."""
 
     model_config = ConfigDict(extra="forbid")
 
-    start: SyncStartDate = Field(..., description="Start date (inclusive) or 'min' for provider-defined full history")
+    start: AssetSyncStartDate = Field(..., description="Start date (inclusive), 'min' for provider-defined full history, or 'resume' for the day after the last stored price")
     end: date = Field(..., description="End date (inclusive)")
 
     @model_validator(mode="before")

@@ -1713,6 +1713,8 @@ class DerivedViewsBuilder:
         mwrr_available: bool = True,
         configured_fx_pairs: set[str] | None = None,
         real_provider_fx_pairs: set[str] | None = None,
+        period_from: date_type | None = None,
+        period_to: date_type | None = None,
     ) -> DataQualityReport:
         """Aggregate per-day data quality into a DataQualityReport DTO.
 
@@ -1720,11 +1722,28 @@ class DerivedViewsBuilder:
         pre-built DTO lists (caller constructs them with full asset/broker info).
         transaction_implied_assets_dto: assets valued at cost (no market price but WAC present).
         If None, the report still populates date-level fields.
+
+        period_from / period_to bound the window the caller is actually showing.
+        ``daily_states`` always starts at the first transaction — ``get_summary``
+        runs the engine with ``date_from=None`` on purpose, because cumulative
+        figures need the whole history — so without these bounds a NAV gap from
+        years ago is reported on a dashboard showing the last three months, and
+        the user is told to fix something that changes nothing on screen. Every
+        period figure is re-based (``_compute_period_summary_metrics`` reads only
+        the state at ``date_from`` and the one at ``date_to``; TWRR and MWRR are
+        chained over period-scoped inputs), so a gap outside the window is
+        genuinely invisible here. The day at ``period_from`` is kept: it is the
+        opening state, and its NAV does move the period P&L.
         """
         incomplete_nav: list[date_type] = []
         for s in self.daily_states:
-            if not s.nav_complete:
-                incomplete_nav.append(s.date)
+            if s.nav_complete:
+                continue
+            if period_from is not None and s.date < period_from:
+                continue
+            if period_to is not None and s.date > period_to:
+                continue
+            incomplete_nav.append(s.date)
 
         # Build structured issues list
         issues: list[DataQualityIssue] = []
