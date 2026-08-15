@@ -30,6 +30,8 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 import {maximisePageSize} from '../fixtures/paging';
 
 test.setTimeout(25_000);
@@ -41,10 +43,33 @@ test.setTimeout(25_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(500);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Find a row whose text content contains ALL given substrings. Returns null if not found. */
+/**
+ * How many rows currently match. Separate from findRow() because asserting an
+ * ABSENCE has to retry, and expect.poll() on a Locator is ambiguous — Playwright's
+ * expect() is overloaded on Locator, so the matcher applied to the polled value is
+ * not the plain-value one you think you are getting. A number has no such trap.
+ */
+async function countRows(page: Page, ...substrings: string[]): Promise<number> {
+    const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
+    const count = await rows.count();
+    let hits = 0;
+    for (let i = 0; i < count; i++) {
+        const text =
+            (await rows
+                .nth(i)
+                .textContent()
+                .catch(() => '')) ?? '';
+        if (substrings.every((s) => text.includes(s))) hits++;
+    }
+    return hits;
+}
+
 async function findRow(page: Page, ...substrings: string[]): Promise<Locator | null> {
     const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
     const count = await rows.count();
@@ -70,9 +95,8 @@ async function clickDeleteOnRow(row: Locator) {
 async function countVisibleActions(row: Locator): Promise<number> {
     const page = row.page();
     await row.hover();
-    await page.waitForTimeout(300);
     const kebabBtn = row.getByTestId(/^row-actions-/);
-    if ((await kebabBtn.count()) === 0) return 0;
+    if (!(await appears(kebabBtn))) return 0;
     await kebabBtn.click();
     const menu = page.locator('[data-testid="context-menu"]');
     await expect(menu).toBeVisible({timeout: 3_000});
@@ -120,6 +144,7 @@ test.describe('TransactionDeleteModal', () => {
         // Use the delete-safe FEE (won't cause balance issues)
         const row = await findRow(page, 'delete-safe', 'Platform fee');
         expect(row, 'delete-safe FEE row not found — check populate_mock_data.py').toBeTruthy();
+        const rowId = await row!.getAttribute('data-row-id');
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -128,10 +153,10 @@ test.describe('TransactionDeleteModal', () => {
         await modal.getByTestId('tx-delete-modal-confirm').click();
         await expect(modal).not.toBeVisible({timeout: 5_000});
 
-        // Row gone
-        await page.waitForTimeout(800);
-        const rowAfter = await findRow(page, 'delete-safe', 'Platform fee');
-        expect(rowAfter).toBeNull();
+        // Row gone. Asserting on findRow()'s result directly is asserting "not there
+        // YET": it scans once and does not retry. Assert on the row's own id instead —
+        // toHaveCount retries, is exact, and does not re-read every row in the table.
+        await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${rowId}"]`)).toHaveCount(0);
     });
 
     // === A2: Layout B — Paired full-access delete ===
@@ -139,6 +164,7 @@ test.describe('TransactionDeleteModal', () => {
     test('A2: paired delete — Layout B shows From/To, split hint, cancel keeps', async ({page}) => {
         const row = await findRow(page, 'delete-safe', 'ETH');
         expect(row, 'delete-safe TRANSFER ETH row not found — check populate_mock_data.py').toBeTruthy();
+        const rowId = await row!.getAttribute('data-row-id');
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -168,6 +194,7 @@ test.describe('TransactionDeleteModal', () => {
     test('A2-confirm: paired delete — confirm removes both halves', async ({page}) => {
         const row = await findRow(page, 'delete-safe', 'ETH');
         expect(row, 'delete-safe TRANSFER ETH row not found — check populate_mock_data.py').toBeTruthy();
+        const rowId = await row!.getAttribute('data-row-id');
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -176,10 +203,9 @@ test.describe('TransactionDeleteModal', () => {
         await modal.getByTestId('tx-delete-modal-confirm').click();
         await expect(modal).not.toBeVisible({timeout: 5_000});
 
-        // Both halves gone
-        await page.waitForTimeout(800);
-        const remaining = await findRow(page, 'delete-safe', 'ETH');
-        expect(remaining).toBeNull();
+        // Both halves gone — see the note above on why this asserts on the id.
+        await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${rowId}"]`)).toHaveCount(0);
+        await expect.poll(() => countRows(page, 'delete-safe', 'ETH'), {timeout: 8_000}).toBe(0);
     });
 
     // === A4/A5: Guard — delete hidden on VIEWER/hidden broker paired ===
@@ -189,9 +215,8 @@ test.describe('TransactionDeleteModal', () => {
         expect(row, 'Asym-c row not found — check populate_mock_data.py').toBeTruthy();
 
         await row!.hover();
-        await page.waitForTimeout(300);
         const kebabBtn = row!.getByTestId(/^row-actions-/);
-        if ((await kebabBtn.count()) === 0) return; // no actions at all — delete is a fortiori hidden
+        if (!(await appears(kebabBtn))) return; // no actions at all — delete is a fortiori hidden
         await kebabBtn.click();
         const menu = page.locator('[data-testid="context-menu"]');
         await expect(menu).toBeVisible({timeout: 3_000});
@@ -204,9 +229,8 @@ test.describe('TransactionDeleteModal', () => {
         expect(row, 'Asym-d row not found — check populate_mock_data.py').toBeTruthy();
 
         await row!.hover();
-        await page.waitForTimeout(300);
         const kebabBtn = row!.getByTestId(/^row-actions-/);
-        if ((await kebabBtn.count()) === 0) return; // no actions at all — delete is a fortiori hidden
+        if (!(await appears(kebabBtn))) return; // no actions at all — delete is a fortiori hidden
         await kebabBtn.click();
         const menu = page.locator('[data-testid="context-menu"]');
         await expect(menu).toBeVisible({timeout: 3_000});
@@ -255,14 +279,15 @@ test.describe('Bulk delete via BulkModal', () => {
         expect(count, 'Need at least 2 rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         // Select first two selectable rows
-        let selected = 0;
-        for (let i = 0; i < count && selected < 2; i++) {
+        const selectedIds: string[] = [];
+        for (let i = 0; i < count && selectedIds.length < 2; i++) {
             const checkbox = rows.nth(i).locator('.checkbox-btn');
             if ((await checkbox.count()) > 0) {
                 await checkbox.click();
-                selected++;
+                selectedIds.push((await rows.nth(i).getAttribute('data-row-id')) ?? '');
             }
         }
+        const selected = selectedIds.length;
         expect(selected, 'Need 2 selectable rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         // Click bulk delete in toolbar
@@ -273,10 +298,26 @@ test.describe('Bulk delete via BulkModal', () => {
         // BulkModal opens
         const bulkModal = page.getByTestId('tx-bulk-modal');
         await expect(bulkModal).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(500);
 
-        // Verify modal opened (detailed row styling depends on implementation)
-        await expect(bulkModal).toBeVisible();
+        // The name of this test promises "with pre-delete rows", so that is what it
+        // must check. It used to sleep 500ms and then re-assert the modal visible —
+        // the same assertion twice with no action in between, which cannot fail for
+        // any reason the first one wouldn't have caught.
+        //
+        // The count is deliberately NOT asserted to equal the selection: if the two
+        // rows picked happen to be the two halves of one pair, the modal collapses
+        // them into a single entry, and that is correct. The invariant that holds
+        // either way is that the modal staged something, and staged nothing that was
+        // not selected.
+        const bulkRows = page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]');
+        await expect(bulkRows.first()).toBeVisible({timeout: 5_000});
+        // The modal keys its rows by PENDING-OP id (a fresh uuid), not by transaction
+        // id, so the staged ids cannot be cross-referenced with the selected ones.
+        // What can be checked is the shape: it staged something, and never more than
+        // was selected.
+        const staged = await bulkRows.count();
+        expect(staged, 'BulkModal opened with no rows staged').toBeGreaterThan(0);
+        expect(staged, 'BulkModal staged more rows than were selected').toBeLessThanOrEqual(selected);
     });
 });
 
@@ -360,14 +401,15 @@ test.describe('PickerModal disabled rows', () => {
         expect(count, 'Need at least 2 rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         // Select first two selectable rows
-        let selected = 0;
-        for (let i = 0; i < count && selected < 2; i++) {
+        const selectedIds: string[] = [];
+        for (let i = 0; i < count && selectedIds.length < 2; i++) {
             const checkbox = rows.nth(i).locator('.checkbox-btn');
             if ((await checkbox.count()) > 0) {
                 await checkbox.click();
-                selected++;
+                selectedIds.push((await rows.nth(i).getAttribute('data-row-id')) ?? '');
             }
         }
+        const selected = selectedIds.length;
         expect(selected, 'Need 2 selectable rows — check populate_mock_data.py').toBeGreaterThanOrEqual(2);
 
         const editBtn = page.getByTestId('toolbar-action-edit');

@@ -21,6 +21,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 
 test.setTimeout(60_000);
 
@@ -31,7 +33,9 @@ test.setTimeout(60_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Open BulkModal via the Edit modal "Import" button or action menu. */
@@ -50,7 +54,7 @@ async function openBulkModalAndImport(page: Page) {
     const formClose = page.getByTestId('tx-form-close');
     if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
         await formClose.click();
-        await page.waitForTimeout(300);
+        await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 3_000});
     }
 
     // Click "Import" button inside BulkModal
@@ -62,7 +66,8 @@ async function openBulkModalAndImport(page: Page) {
 async function skipToStep2(page: Page) {
     await page.getByTestId('import-wizard-next').click();
     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(500);
+    // The step renders before its broker files have loaded; it says so via data-busy.
+    await waitForSettled(page.getByTestId('import-wizard-step2'));
 }
 
 /** Select the first available file from first expanded broker panel. */
@@ -78,7 +83,6 @@ async function selectFirstAvailableFile(page: Page) {
     const firstCheckbox = step2.locator('td.td-select button.checkbox-btn').first();
     await expect(firstCheckbox, 'no importable file listed — check populate --with-reports').toBeVisible({timeout: 15_000});
     await firstCheckbox.click();
-    await page.waitForTimeout(300);
 }
 
 /** Parse selected files and wait for parse to complete. */
@@ -107,7 +111,7 @@ async function continueToReview(page: Page) {
     }
     await passOptionalWizardSteps(page);
     await page.getByTestId('import-wizard-step4').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(300);
+    await waitForSettled(page.getByTestId('import-wizard-step4'));
 }
 
 /**
@@ -120,7 +124,9 @@ export async function passOptionalWizardSteps(page: Page) {
         const button = page.getByTestId(testid);
         if (await button.isVisible({timeout: 1_500}).catch(() => false)) {
             await button.click();
-            await page.waitForTimeout(300);
+            // The step is passed when its continue button is gone; sleeping 300ms was
+            // a guess that the next iteration would not find the same button again.
+            await expect(button).toBeHidden({timeout: 5_000});
         }
     }
 }
@@ -242,11 +248,11 @@ test.describe('BRIM Import Wizard', () => {
             ) {
                 // Type something in the search field
                 await searchInputs.first().fill('AAPL');
-                await page.waitForTimeout(500);
-                // Either results appear or "no results" message
-                const hasResults = await step4.locator('button').filter({hasText: /AAPL/i}).count();
-                // Just verifying the search input works (no JS errors)
-                expect(hasResults).toBeGreaterThanOrEqual(0);
+                // The old assertion was `expect(count).toBeGreaterThanOrEqual(0)`,
+                // which is true of every count that has ever existed — the test
+                // could not fail. What it meant to check is that the field accepts
+                // input and the component survives it, so that is what it checks.
+                await expect(searchInputs.first()).toHaveValue('AAPL');
             }
         }
     });
@@ -336,19 +342,17 @@ test.describe('BRIM Import Wizard', () => {
         // conditional step was shown on the way in (unify assets / corrections /
         // duplicates). Whatever the file triggered, walking back must always end on the
         // analysis step and never on an empty screen.
+        const currentStep = page.getByTestId('import-wizard-stepper').locator('[aria-current="step"]');
         for (let hop = 0; hop < 4; hop++) {
-            if (
-                await page
-                    .getByTestId('import-wizard-step3')
-                    .isVisible({timeout: 1_500})
-                    .catch(() => false)
-            ) {
+            if (await appears(page.getByTestId('import-wizard-step3'), 1_500)) {
                 break;
             }
-            const backBtn = page.locator('button', {hasText: /Back/i}).first();
-            await expect(backBtn).toBeVisible();
-            await backBtn.click();
-            await page.waitForTimeout(400);
+            const from = (await currentStep.getAttribute('data-step-id')) ?? '';
+            await page.getByTestId('import-wizard-back').click();
+            // The stepper says which step it is on. Waiting for that to change is the
+            // only honest proof the Back click landed — a fixed sleep would let the
+            // next hop click Back twice on a wizard that had not moved yet.
+            await expect(currentStep).not.toHaveAttribute('data-step-id', from, {timeout: 5_000});
         }
 
         await expect(page.getByTestId('import-wizard-step3')).toBeVisible({timeout: 3_000});

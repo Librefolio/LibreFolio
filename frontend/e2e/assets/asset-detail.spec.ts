@@ -15,16 +15,24 @@ import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 
 /**
- * Navigate to the first available asset detail page.
- * Module-level (not nested in a single `describe`) so both the main "Asset
- * Detail Page" suite and other sibling suites in this file (e.g. the live
- * price flash tests below) can share it.
+ * Navigate to a *seeded* asset's detail page.
+ *
+ * This used to take the **first** card on the list. With four workers writing to one
+ * database, "the first card" is whichever asset a neighbour created a second earlier —
+ * typically one with no price history, so the ECharts canvas never mounts and the
+ * failure reads like a chart regression. Apple is the suite's established "known asset
+ * with price history" (tx-wac-bulk, tx-wac-formmodal, tx-commit-all-types all rely on
+ * it), so naming it is both the ownership guarantee and the reason a chart exists to
+ * assert on at all.
+ *
+ * Kept as one helper because the "Asset Detail Page" suite and other sibling suites in
+ * this file (e.g. the live price flash tests below) can share it.
  */
-async function goToFirstAssetDetail(page: import('@playwright/test').Page) {
+async function goToSeededAssetDetail(page: import('@playwright/test').Page) {
     await goToAssetsPage(page);
-    const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-    await expect(firstCard).toBeVisible({timeout: 5_000});
-    await firstCard.click();
+    const card = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
+    await expect(card, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 10_000});
+    await card.click();
     await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
     await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
 }
@@ -69,7 +77,7 @@ test.describe('Asset Detail Page', () => {
     // Test 1: Detail page loads with header and chart
     // ========================================================================
     test('detail page shows header and chart', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         await expect(page.getByTestId('asset-detail-header')).toBeVisible();
         await expectAssetDetailChartCanvas(page);
     });
@@ -78,7 +86,7 @@ test.describe('Asset Detail Page', () => {
     // Test 2: Filter bar with date range is visible
     // ========================================================================
     test('filter bar is visible', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         await expect(page.getByTestId('asset-detail-filter-bar')).toBeVisible();
     });
 
@@ -87,7 +95,7 @@ test.describe('Asset Detail Page', () => {
         // most expensive computation in the app and slows down further when four
         // workers share one backend, so the default 30s budget is not enough.
         test.setTimeout(120_000);
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const controls = page.getByTestId('asset-detail-controls');
         const toolbar = controls.getByTestId('asset-detail-filter-bar');
         await expect(controls.getByTestId('asset-detail-tab-overview')).toBeVisible();
@@ -127,7 +135,7 @@ test.describe('Asset Detail Page', () => {
     // Test 3: Edit button opens modal (no effect_update_depth_exceeded)
     // ========================================================================
     test('edit button opens asset modal', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const editBtn = page.getByTestId('asset-detail-edit-btn');
         await expect(editBtn).toBeVisible();
         await editBtn.click();
@@ -140,7 +148,7 @@ test.describe('Asset Detail Page', () => {
     // Test 4: Sync button is visible and clickable
     // ========================================================================
     test('sync button is visible', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         await expect(page.getByTestId('asset-detail-sync-btn')).toBeVisible();
     });
 
@@ -148,7 +156,7 @@ test.describe('Asset Detail Page', () => {
     // Test 5: Refresh button is visible
     // ========================================================================
     test('refresh button is visible', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         await expect(page.getByTestId('asset-detail-refresh-btn')).toBeVisible();
     });
 
@@ -156,7 +164,7 @@ test.describe('Asset Detail Page', () => {
     // Test 6: Signals panel toggle
     // ========================================================================
     test('signals panel toggles open/close', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const toggle = page.getByTestId('asset-detail-signals-toggle');
         await expect(toggle).toBeVisible();
         const panel = page.getByTestId('asset-detail-signals-panel');
@@ -171,7 +179,7 @@ test.describe('Asset Detail Page', () => {
     });
 
     test('risk signals render and beta requests only after selecting a comparison asset', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         await page.getByTestId('asset-detail-signals-toggle').click();
         await expect(page.getByTestId('asset-detail-signals-panel')).toBeVisible({timeout: 5_000});
 
@@ -209,7 +217,7 @@ test.describe('Asset Detail Page', () => {
     // Test 7: Measures panel toggle
     // ========================================================================
     test('measures panel toggles', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const toggle = page.getByTestId('asset-detail-measures-toggle');
         await expect(toggle).toBeVisible();
         await toggle.click();
@@ -220,7 +228,7 @@ test.describe('Asset Detail Page', () => {
     // Test 8: Metadata/classification panel toggle
     // ========================================================================
     test('classification panel toggles', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const toggle = page.getByTestId('asset-detail-metadata-toggle');
         await expect(toggle).toBeVisible();
         await toggle.click();
@@ -231,7 +239,7 @@ test.describe('Asset Detail Page', () => {
     // Test 9: Back button navigates back
     // ========================================================================
     test('back button navigates back to list', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const backBtn = page.getByTestId('asset-detail-back-btn');
         await expect(backBtn).toBeVisible();
         await backBtn.click();
@@ -242,7 +250,7 @@ test.describe('Asset Detail Page', () => {
     // Test 10: Aesthetics toggle is visible (when chart has data)
     // ========================================================================
     test('aesthetics toggle is visible when chart has data', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const chart = page.getByTestId('asset-detail-chart');
         await expect(chart).toBeVisible();
         // Buttons only render inside {:else if lineData.length > 0} block
@@ -260,7 +268,7 @@ test.describe('Asset Detail Page', () => {
     // Test 11: Data editor toggle (when chart has data)
     // ========================================================================
     test('data editor button is visible when chart has data', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const btn = page.getByTestId('asset-detail-editdata-btn');
         const hasData = await btn.isVisible({timeout: 3000}).catch(() => false);
         if (hasData) {
@@ -274,7 +282,7 @@ test.describe('Asset Detail Page', () => {
     // Test 12: Measure button (when chart has data)
     // ========================================================================
     test('measure button is visible when chart has data', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const btn = page.getByTestId('asset-detail-measure-btn');
         const hasData = await btn.isVisible({timeout: 3000}).catch(() => false);
         if (hasData) {
@@ -288,7 +296,7 @@ test.describe('Asset Detail Page', () => {
     // Test 13: Currency selector in filter bar
     // ========================================================================
     test('currency selector is visible in filter bar', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const filterBar = page.getByTestId('asset-detail-filter-bar');
         await expect(filterBar).toBeVisible();
 
@@ -310,7 +318,7 @@ test.describe('Asset Detail Page', () => {
     // Test 14: Asset info shows type badge and name
     // ========================================================================
     test('asset info shows name and type', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const info = page.getByTestId('asset-detail-info');
         await expect(info).toBeVisible();
 
@@ -323,7 +331,7 @@ test.describe('Asset Detail Page', () => {
     // Test 15: Sync button triggers sync (with toast or status change)
     // ========================================================================
     test('sync button is clickable and triggers action', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const syncBtn = page.getByTestId('asset-detail-sync-btn');
         await expect(syncBtn).toBeVisible();
 
@@ -339,7 +347,7 @@ test.describe('Asset Detail Page', () => {
     // Test 16: Refresh button reloads data
     // ========================================================================
     test('refresh button reloads data without error', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const refreshBtn = page.getByTestId('asset-detail-refresh-btn');
         await expect(refreshBtn).toBeVisible();
 
@@ -355,7 +363,7 @@ test.describe('Asset Detail Page', () => {
     // Test 17: Chart-local Abs/% control
     // ========================================================================
     test('Abs/% control is chart-local and synchronizes page view mode', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         const filterBar = page.getByTestId('asset-detail-filter-bar');
         const chart = page.getByTestId('asset-detail-chart');
         await expect(filterBar.getByTestId('chart-view-mode-toggle')).toHaveCount(0);
@@ -374,7 +382,7 @@ test.describe('Asset Detail Page', () => {
     // Test 18: Chart type toggle — Line → Candlestick → Line
     // ========================================================================
     test('chart type toggle switches between line and candlestick', async ({page}) => {
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
 
         // Wait for chart data to load (button only renders when data is available)
         const candleBtn = page.getByTestId('chart-type-candlestick');
@@ -401,7 +409,7 @@ test.describe('Asset Detail Page', () => {
         const errors: string[] = [];
         page.on('pageerror', (err) => errors.push(err.message));
 
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
         await page.getByTestId('chart-type-candlestick').click();
 
         // ECharts must have initialised without throwing
@@ -468,7 +476,7 @@ test.describe('Live price direction flash', () => {
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toBeVisible({timeout: 5_000});
@@ -482,7 +490,7 @@ test.describe('Live price direction flash', () => {
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
@@ -508,7 +516,7 @@ test.describe('Live price direction flash', () => {
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});
@@ -532,7 +540,7 @@ test.describe('Live price direction flash', () => {
         const price = {value: 100};
         await mockCurrentPrice(page, price);
         await page.clock.install();
-        await goToFirstAssetDetail(page);
+        await goToSeededAssetDetail(page);
 
         const priceEl = page.getByTestId('asset-detail-live-price');
         await expect(priceEl).toHaveAttribute('data-live-price-direction', 'neutral', {timeout: 5_000});

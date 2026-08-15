@@ -15,6 +15,7 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 
 test.setTimeout(15_000);
 
@@ -25,7 +26,9 @@ test.setTimeout(15_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Find a row containing ALL given substrings. Throws if not found. */
@@ -65,7 +68,6 @@ test.describe('Transaction Linked Pair Tooltips', () => {
         await expect(linkIcon).toBeVisible({timeout: 5_000});
 
         await linkIcon.hover();
-        await page.waitForTimeout(600);
 
         // Tooltip must appear with HTML content
         const tooltip = page.locator('[data-testid="tooltip-content"]');

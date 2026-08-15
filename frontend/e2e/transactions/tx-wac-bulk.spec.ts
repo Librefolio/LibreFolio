@@ -16,6 +16,7 @@ import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
+import {appears} from '../fixtures/probe';
 
 test.setTimeout(60_000);
 

@@ -77,7 +77,6 @@ test.describe('FX Add Pair Modal', () => {
         const quoteContainer = modal.locator('[data-testid="fx-add-pair-quote"]');
         if (await quoteContainer.isVisible()) {
             await selectCurrency(page, quoteContainer, 'CAD');
-            await page.waitForTimeout(1000);
 
             // Route section should appear
             const routeSection = page.getByTestId('fx-route-select');

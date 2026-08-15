@@ -1,6 +1,7 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {appears} from '../fixtures/probe';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -45,9 +46,7 @@ async function goToFirstBrokerDetail(page: Page): Promise<boolean> {
 
     const brokerCards = page.locator('[data-testid^="broker-card-"]');
     // Wait for async broker list to load
-    await page.waitForTimeout(1000);
-    const count = await brokerCards.count();
-    if (count === 0) return false;
+    if (!(await appears(brokerCards, 5_000))) return false;
 
     await brokerCards.first().click();
     await expect(page).toHaveURL(/\/brokers\/\d+/, {timeout: 5000});

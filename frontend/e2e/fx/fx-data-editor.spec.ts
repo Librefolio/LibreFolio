@@ -33,7 +33,6 @@ test.describe('FX Data Editor', () => {
     test('data editor table has rows', async ({page}) => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-edit-btn').click();
-        await page.waitForTimeout(1000);
         const editorPanel = page.getByTestId('fx-detail-editor-panel');
         await expect(editorPanel).toBeVisible();
 

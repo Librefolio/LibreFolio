@@ -109,11 +109,31 @@ async function injectDashboardIssues(page: import('@playwright/test').Page, issu
 }
 
 /** First active asset, with its currency — the anchor for the event-currency FX branch. */
+type ListedAsset = {id: number; currency: string; active: boolean; display_name?: string};
+
+/**
+ * Assets that the fixture seeds and that therefore have prices, events and a settled
+ * detail page. Taking "the first active asset" instead is what took these tests red at
+ * four workers: the listing is shared, so the first entry is whichever asset a
+ * neighbouring spec created a second earlier — usually one with no data at all, whose
+ * detail page has no event to attach an FX issue to.
+ */
+const SEEDED_ASSET_NAMES = [/apple/i, /microsoft/i, /nvidia/i];
+
+function preferSeeded(assets: ListedAsset[], extra: (a: ListedAsset) => boolean = () => true): ListedAsset | undefined {
+    const usable = assets.filter((a) => a.active && !!a.currency && extra(a));
+    for (const pattern of SEEDED_ASSET_NAMES) {
+        const hit = usable.find((a) => pattern.test(a.display_name ?? ''));
+        if (hit) return hit;
+    }
+    return usable[0];
+}
+
 async function pickActiveAsset(page: import('@playwright/test').Page): Promise<{id: number; currency: string}> {
     const res = await page.request.get('/api/v1/assets/query');
     expect(res.ok(), 'asset listing must be reachable').toBeTruthy();
-    const items = (await res.json()) as Array<{id: number; currency: string; active: boolean}>;
-    const asset = items.find((a) => a.active && !!a.currency);
+    const items = (await res.json()) as ListedAsset[];
+    const asset = preferSeeded(items);
     expect(asset, 'fixture must contain at least one active asset with a currency').toBeTruthy();
     return {id: asset!.id, currency: asset!.currency};
 }
@@ -122,18 +142,14 @@ async function pickActiveAsset(page: import('@playwright/test').Page): Promise<{
 async function pickAssetWithConfiguredCounterCurrency(page: import('@playwright/test').Page): Promise<{assetId: number; counterCurrency: string}> {
     const [assetsRes, routesRes] = await Promise.all([page.request.get('/api/v1/assets/query'), page.request.get('/api/v1/fx/providers/routes')]);
     expect(assetsRes.ok() && routesRes.ok(), 'assets and fx routes must be reachable').toBeTruthy();
-    const assets = (await assetsRes.json()) as Array<{id: number; currency: string; active: boolean}>;
+    const assets = (await assetsRes.json()) as ListedAsset[];
     const routes = (((await routesRes.json()) as {items?: Array<{base: string; quote: string}>}).items ?? []).filter((r) => r.base && r.quote);
     expect(routes.length, 'fixture must configure at least one FX route').toBeGreaterThan(0);
 
-    for (const asset of assets) {
-        if (!asset.active || !asset.currency) continue;
-        const route = routes.find((r) => r.base === asset.currency || r.quote === asset.currency);
-        if (route) {
-            return {assetId: asset.id, counterCurrency: route.base === asset.currency ? route.quote : route.base};
-        }
-    }
-    throw new Error('no active asset shares a currency with a configured FX route');
+    const asset = preferSeeded(assets, (a) => routes.some((r) => r.base === a.currency || r.quote === a.currency));
+    if (!asset) throw new Error('no active asset shares a currency with a configured FX route');
+    const route = routes.find((r) => r.base === asset.currency || r.quote === asset.currency)!;
+    return {assetId: asset.id, counterCurrency: route.base === asset.currency ? route.quote : route.base};
 }
 
 /** Replace the configured FX routes seen by this page only. */

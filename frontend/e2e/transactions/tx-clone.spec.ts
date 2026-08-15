@@ -15,6 +15,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
 
 test.setTimeout(25_000);
@@ -26,7 +28,9 @@ test.setTimeout(25_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Select a row by its row-id checkbox. */
@@ -35,7 +39,10 @@ async function selectRow(page: Page, rowId: string) {
     const checkbox = row.locator('.checkbox-btn').first();
     await expect(checkbox).toBeVisible({timeout: 2_000});
     await checkbox.click();
-    await page.waitForTimeout(200);
+    // The toolbar publishes how many rows it holds. A paired row selects both
+    // halves, so the count is not always 1 — what matters is that the selection
+    // registered at all before the caller reaches for a toolbar action.
+    await expect(page.getByTestId('selection-toolbar')).not.toHaveAttribute('data-selected-count', '0');
 }
 
 /** Find the first row matching ALL substrings. Returns data-row-id or null. */
@@ -57,7 +64,7 @@ async function closeModals(page: Page) {
     const cancelForm = page.getByTestId('tx-form-cancel');
     if (await cancelForm.isVisible({timeout: 500}).catch(() => false)) {
         await cancelForm.click();
-        await page.waitForTimeout(300);
+        await expect(cancelForm).toBeHidden({timeout: 3_000});
     }
     const cancelBulk = page.getByTestId('tx-bulk-cancel');
     if (await cancelBulk.isVisible({timeout: 500}).catch(() => false)) {
@@ -126,7 +133,6 @@ test.describe('Transaction Clone', () => {
         const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
         await expect(cloneBtn).toBeVisible({timeout: 2_000});
         await cloneBtn.click();
-        await page.waitForTimeout(500);
 
         // BulkModal opens
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
@@ -171,7 +177,6 @@ test.describe('Transaction Clone', () => {
         const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
         await expect(cloneBtn).toBeVisible({timeout: 2_000});
         await cloneBtn.click();
-        await page.waitForTimeout(500);
 
         // BulkModal opens with 2 rows (auto-included partner)
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
@@ -220,7 +225,6 @@ test.describe('Transaction Clone', () => {
         const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
         await expect(cloneBtn).toBeVisible({timeout: 2_000});
         await cloneBtn.click();
-        await page.waitForTimeout(500);
 
         // BulkModal opens → FormModal should auto-open for single clone
         const formModal = page.getByTestId('tx-form-modal');
@@ -290,8 +294,10 @@ test.describe('Transaction Clone', () => {
             expect(c.id === undefined || c.id === 0 || c.id === null).toBeTruthy();
         }
 
-        // Wait for response and toast
-        await page.waitForTimeout(1_500);
+        // The commit is still in flight when the payload assertions above finish.
+        // Leaving the test here would hand the next one a half-written table, so wait
+        // for the modal to close — which is the app saying the commit came back.
+        await expect(page.getByTestId('tx-bulk-modal')).toBeHidden({timeout: 15_000});
     });
 
     test('clone from view-only broker → no edit/delete actions on row', async ({page}) => {
@@ -302,11 +308,10 @@ test.describe('Transaction Clone', () => {
         // Hover the row and verify that destructive action buttons (edit/delete) are NOT shown
         const row = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${degiroRowId}"]`);
         await row.hover();
-        await page.waitForTimeout(300);
 
         // View-only rows should NOT show delete/edit actions in the kebab menu
         const kebabBtn = row.getByTestId(/^row-actions-/);
-        if ((await kebabBtn.count()) === 0) {
+        if (!(await appears(kebabBtn))) {
             // No actions at all — delete/edit are a fortiori hidden
             return;
         }

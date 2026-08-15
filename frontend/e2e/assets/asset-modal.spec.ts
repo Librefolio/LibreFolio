@@ -261,7 +261,6 @@ test.describe('NR — Sector dropdown emoji (Bug E)', () => {
 
         // Add a sector entry to make the SectorSearchSelect appear
         await page.getByTestId('distribution-add-sector').click();
-        await page.waitForTimeout(400);
 
         // The sector cell in the new row is a SectorSearchSelect combobox
         const sectorEditor = page.getByTestId('distribution-editor-sector');
@@ -270,7 +269,6 @@ test.describe('NR — Sector dropdown emoji (Bug E)', () => {
 
         // Click to open the listbox
         await combobox.click();
-        await page.waitForTimeout(400);
 
         // Options use data-testid="search-select-option-{sectorCode}" (not role=option)
         const options = page.locator('[data-testid^="search-select-option-"]');

@@ -48,6 +48,9 @@
     /** The row-number column stays put while the rest scrolls. */
     const FROZEN_COL_COUNT = 1;
 
+    /** A preview cannot save anything, so it must not offer to annotate or comment. */
+    const PDF_PREVIEW_DISABLED = ['annotation', 'annotation-comment', 'panel-comment'];
+
     /**
      * The grid's text font, pinned rather than left to the library's default.
      *
@@ -188,12 +191,12 @@
                         type: 'container',
                         target: host,
                         src: sourceUrl,
-                        // One list, not two: `ui.disabledCategories` *overrides* the
-                        // global one rather than adding to it (see the plugin config
-                        // docs), so declaring both silently dropped `panel-comment`
-                        // and the comment button stayed in the toolbar of a preview
-                        // that cannot save anything.
-                        disabledCategories: ['annotation', 'panel-comment'],
+                        // The viewer ships three `comment-button` entries in different
+                        // slots — one in categories ['panel','panel-comment'], two in
+                        // ['annotation','annotation-comment'] — and disables a category
+                        // by *hiding* the control, not by unmounting it. A preview that
+                        // cannot save anything must not offer to comment.
+                        disabledCategories: PDF_PREVIEW_DISABLED,
                     }),
                 );
             } catch (err) {

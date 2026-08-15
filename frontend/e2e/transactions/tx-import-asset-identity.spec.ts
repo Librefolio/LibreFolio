@@ -23,6 +23,8 @@ import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(120_000);
@@ -68,7 +70,9 @@ async function createBrokerWithFixtures(page: Page): Promise<{brokerName: string
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 async function openImportWizard(page: Page) {
@@ -83,7 +87,7 @@ async function openImportWizard(page: Page) {
     const formClose = page.getByTestId('tx-form-close');
     if (await formClose.isVisible({timeout: 1_500}).catch(() => false)) {
         await formClose.click();
-        await page.waitForTimeout(300);
+        await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 3_000});
     }
 
     await page.getByTestId('tx-bulk-import').click();
@@ -94,27 +98,16 @@ async function openImportWizard(page: Page) {
 async function parseBothFiles(page: Page, target: {brokerName: string; fileNames: string[]}) {
     await page.getByTestId('import-wizard-next').click();
     await page.getByTestId('import-wizard-step2').waitFor({state: 'visible', timeout: 5_000});
-    await page.waitForTimeout(800);
 
     const step2 = page.getByTestId('import-wizard-step2');
     const rowFor = (fileName: string) => step2.locator('tr[data-row-id]').filter({hasText: fileName}).first();
 
-    if (
-        !(await rowFor(target.fileNames[0])
-            .isVisible({timeout: 2_000})
-            .catch(() => false))
-    ) {
+    if (!(await appears(rowFor(target.fileNames[0]), 5_000))) {
         // A brand-new broker's panel may start folded.
         const headers = step2.locator('div.rounded-lg > button').filter({hasText: target.brokerName});
         for (let i = 0; i < (await headers.count()); i++) {
             await headers.nth(i).click();
-            await page.waitForTimeout(400);
-            if (
-                await rowFor(target.fileNames[0])
-                    .isVisible({timeout: 800})
-                    .catch(() => false)
-            )
-                break;
+            if (await appears(rowFor(target.fileNames[0]), 1_500)) break;
         }
     }
 
@@ -124,7 +117,6 @@ async function parseBothFiles(page: Page, target: {brokerName: string; fileNames
         const checkbox = row.locator('td.td-select button.checkbox-btn');
         await checkbox.scrollIntoViewIfNeeded();
         await checkbox.click();
-        await page.waitForTimeout(250);
     }
 
     await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 4_000});
@@ -144,7 +136,9 @@ async function goToAssetStep(page: Page, target: {brokerName: string; fileNames:
         await confirm.click();
     }
     await page.getByTestId('asset-group-step').waitFor({state: 'visible', timeout: 10_000});
-    await page.waitForTimeout(400);
+    // The step is only meaningful once it has decided what to show: either groups or
+    // the explicit empty state. Both are real; "neither yet" is what the sleep hid.
+    await expect(page.getByTestId('asset-group-empty').or(page.getByTestId('asset-group-reset')).first()).toBeVisible({timeout: 10_000});
 }
 
 /** The card holding the two BTPs — the only one the engine leaves undecided. */
@@ -213,13 +207,11 @@ test.describe('Import Wizard — asset identity', () => {
         const groupId = await groupIdOf(proposedCard(page));
 
         await page.getByTestId(`asset-group-split-${groupId}`).click();
-        await page.waitForTimeout(500);
-        expect(await page.locator('[data-testid^="asset-group-grp-"]').count()).toBe(cardsBefore + 1);
+        await expect(page.locator('[data-testid^="asset-group-grp-"]')).toHaveCount(cardsBefore + 1);
 
         // Reset is the way back from any decision taken here, not just from this one.
         await page.getByTestId('asset-group-reset').click();
-        await page.waitForTimeout(600);
-        expect(await page.locator('[data-testid^="asset-group-grp-"]').count()).toBe(cardsBefore);
+        await expect(page.locator('[data-testid^="asset-group-grp-"]')).toHaveCount(cardsBefore);
         await expect(proposedCard(page)).toBeVisible();
     });
 
@@ -272,20 +264,17 @@ test.describe('Import Wizard — asset identity', () => {
         const single = page.locator('[data-testid^="asset-group-grp-"][data-state="single"]').first();
         await single.locator('[data-testid^="asset-group-single-menu-"]').first().click();
         await page.getByTestId('asset-group-menu-merge').click();
-        await page.waitForTimeout(300);
 
         // Destinations are listed in a second phase — a flat menu on a thirty-instrument
         // import would be unreadable.
         const target = page.locator('[data-testid^="asset-group-merge-target-"]').first();
         await expect(target).toBeVisible({timeout: 3_000});
         await target.click();
-        await page.waitForTimeout(600);
-        expect(await page.locator('[data-testid^="asset-group-grp-"]').count()).toBe(before - 1);
+        await expect(page.locator('[data-testid^="asset-group-grp-"]')).toHaveCount(before - 1);
 
         // A merge made by hand must be undoable by hand.
         await page.getByTestId('asset-group-reset').click();
-        await page.waitForTimeout(600);
-        expect(await page.locator('[data-testid^="asset-group-grp-"]').count()).toBe(before);
+        await expect(page.locator('[data-testid^="asset-group-grp-"]')).toHaveCount(before);
     });
 
     // -----------------------------------------------------------------------

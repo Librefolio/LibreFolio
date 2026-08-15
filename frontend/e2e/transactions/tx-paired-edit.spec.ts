@@ -15,6 +15,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears, optionsClosed} from '../fixtures/probe';
 
 test.setTimeout(20_000);
 
@@ -25,7 +27,9 @@ test.setTimeout(20_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Find the first row containing ALL given substrings — returns row-id. Throws if not found. */
@@ -48,7 +52,10 @@ async function selectRow(page: Page, rowId: string) {
     const checkbox = row.locator('.checkbox-btn').first();
     await expect(checkbox).toBeVisible({timeout: 2_000});
     await checkbox.click();
-    await page.waitForTimeout(200);
+    // The toolbar publishes how many rows it holds. A paired row selects both
+    // halves, so the count is not always 1 — what matters is that the selection
+    // registered at all before the caller reaches for a toolbar action.
+    await expect(page.getByTestId('selection-toolbar')).not.toHaveAttribute('data-selected-count', '0');
 }
 
 // ---------------------------------------------------------------------------
@@ -87,12 +94,11 @@ test.describe('Transaction Paired Edit', () => {
             const cloneBtn = page.locator('[data-testid="toolbar-action-clone"]');
             await expect(cloneBtn).toBeVisible({timeout: 2_000});
             await cloneBtn.click();
-            await page.waitForTimeout(500);
 
             // Clone opens BulkModal which auto-opens FormModal
             const bulkModal = page.getByTestId('tx-bulk-modal');
             const formModal = page.getByTestId('tx-form-modal');
-            const modal = (await bulkModal.isVisible({timeout: 3_000}).catch(() => false)) ? bulkModal : formModal;
+            const modal = (await appears(bulkModal, 3_000)) ? bulkModal : formModal;
             await expect(modal).toBeVisible({timeout: 5_000});
 
             // If BulkModal is showing, FormModal may auto-open inside it
@@ -109,9 +115,8 @@ test.describe('Transaction Paired Edit', () => {
             if (await cancelBtn.isVisible({timeout: 1_000}).catch(() => false)) {
                 await cancelBtn.click();
             }
-            await page.waitForTimeout(300);
             const bulkCancel = page.getByTestId('tx-bulk-cancel');
-            if (await bulkCancel.isVisible({timeout: 1_000}).catch(() => false)) {
+            if (await appears(bulkCancel, 1_000)) {
                 await bulkCancel.click();
             }
             const discardBtn = page.getByTestId('confirm-modal-confirm');
@@ -157,7 +162,6 @@ test.describe('Transaction Paired Edit', () => {
             const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
             await expect(editBtn).toBeVisible({timeout: 2_000});
             await editBtn.click();
-            await page.waitForTimeout(500);
 
             // BulkModal must open
             await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
@@ -177,7 +181,7 @@ test.describe('Transaction Paired Edit', () => {
             const cancelBtn = page.getByTestId('tx-form-cancel');
             if (await cancelBtn.isVisible({timeout: 1_000}).catch(() => false)) {
                 await cancelBtn.click();
-                await page.waitForTimeout(300);
+                await expect(cancelBtn).toBeHidden({timeout: 3_000});
             }
             const bulkCancel = page.getByTestId('tx-bulk-cancel');
             if (await bulkCancel.isVisible({timeout: 1_000}).catch(() => false)) {
@@ -248,7 +252,6 @@ test.describe('Transaction Paired Edit', () => {
             const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
             await expect(editBtn).toBeVisible({timeout: 2_000});
             await editBtn.click();
-            await page.waitForTimeout(500);
 
             // BulkModal opens
             await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
@@ -259,7 +262,7 @@ test.describe('Transaction Paired Edit', () => {
                 const bulkRow = page.locator('[data-testid="tx-bulk-modal"] tbody tr[data-row-id]').first();
                 if (await bulkRow.isVisible({timeout: 2_000}).catch(() => false)) {
                     await bulkRow.dblclick();
-                    await page.waitForTimeout(500);
+                    await expect(formModal).toBeVisible({timeout: 5_000});
                 }
             }
             await expect(formModal).toBeVisible({timeout: 5_000});
@@ -268,7 +271,7 @@ test.describe('Transaction Paired Edit', () => {
             const optionalToggle = page.getByTestId('tx-form-optional-toggle');
             if (await optionalToggle.isVisible({timeout: 1_000}).catch(() => false)) {
                 await optionalToggle.click();
-                await page.waitForTimeout(200);
+                await optionsClosed(page);
             }
 
             // Modify description to trigger a change
@@ -280,7 +283,6 @@ test.describe('Transaction Paired Edit', () => {
             // Push changes back to BulkModal
             const saveBtn = page.getByTestId('tx-form-save');
             await saveBtn.click();
-            await page.waitForTimeout(500);
 
             // Set up request interception BEFORE clicking commit
             const commitPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 10_000});

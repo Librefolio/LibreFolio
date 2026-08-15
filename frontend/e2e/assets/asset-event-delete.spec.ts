@@ -21,6 +21,7 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,6 +94,10 @@ test.describe('Asset Event Delete', () => {
         // test with an expiry date — so it creates the event it is about to delete.
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
+        // The cards render first and are re-rendered when the bulk price request lands.
+        // Clicking during that window aims at a node Svelte is about to replace, and the
+        // navigation is simply lost — which is what took this test red at load average 22.
+        await waitForSettled(page.getByTestId('assets-page'));
 
         const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
         await expect(appleCard).toBeVisible({timeout: 5_000});
@@ -174,6 +179,10 @@ test.describe('Asset Event Delete', () => {
         // Navigate to Apple detail (has a DIVIDEND event linked to a transaction)
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
+        // The cards render first and are re-rendered when the bulk price request lands.
+        // Clicking during that window aims at a node Svelte is about to replace, and the
+        // navigation is simply lost — which is what took this test red at load average 22.
+        await waitForSettled(page.getByTestId('assets-page'));
 
         const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
         await expect(appleCard).toBeVisible({timeout: 5_000});
@@ -196,7 +205,6 @@ test.describe('Asset Event Delete', () => {
             const kebabBtn = row.getByTestId(/^row-actions-/);
             if (await kebabBtn.isVisible({timeout: 1_000}).catch(() => false)) {
                 await clickDeleteRowAction(page, row);
-                await page.waitForTimeout(200);
             }
         }
 
@@ -229,6 +237,10 @@ test.describe('Asset Event Delete', () => {
     test('delete asset with events shows appropriate warning', async ({page}) => {
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
+        // The cards render first and are re-rendered when the bulk price request lands.
+        // Clicking during that window aims at a node Svelte is about to replace, and the
+        // navigation is simply lost — which is what took this test red at load average 22.
+        await waitForSettled(page.getByTestId('assets-page'));
 
         const assetCards = page.locator('[data-testid^="asset-card-"]');
         await expect(assetCards.first()).toBeVisible({timeout: 5_000});

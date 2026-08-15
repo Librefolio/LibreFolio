@@ -16,6 +16,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears, optionsClosed} from '../fixtures/probe';
 
 test.setTimeout(45_000);
 
@@ -26,7 +28,9 @@ test.setTimeout(45_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
-    await page.waitForTimeout(500);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 async function openCreateFlow(page: Page) {
@@ -38,38 +42,35 @@ async function openCreateFlow(page: Page) {
 async function selectType(page: Page, typeCode: string) {
     const typeButton = page.getByTestId('tx-form-type');
     await typeButton.click();
-    await page.waitForTimeout(300);
     const option = page.getByTestId(`search-select-option-${typeCode}`);
     await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 }
 
 /** Pick broker by name. */
 async function pickBroker(page: Page, brokerName: string) {
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     const option = page.locator('[data-testid^="search-select-option-"]', {hasText: brokerName});
     await expect(option.first()).toBeVisible({timeout: 3_000});
     await option.first().click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 }
 
 /** Pick asset by name (types to filter). */
 async function pickAssetByName(page: Page, name: string) {
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     const searchInput = page.locator('[data-testid="tx-form-asset-wrap"] input[type="text"], [data-testid="tx-form-asset-wrap"] input[role="combobox"]').first();
-    if (await searchInput.isVisible({timeout: 1_000}).catch(() => false)) {
+    if (await appears(searchInput, 1_000)) {
         await searchInput.fill(name);
-        await page.waitForTimeout(500);
+        await expect(searchInput).toHaveValue(name);
     }
     const option = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(option).toBeVisible({timeout: 3_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 }
 
 /** Open the "Optional" disclosure if not already open. */
@@ -80,7 +81,8 @@ async function openOptionalSection(page: Page) {
     const isOpen = await details.getAttribute('open');
     if (isOpen === null) {
         await toggle.click();
-        await page.waitForTimeout(300);
+        // <details open> is the element itself reporting the state the click asked for.
+        await expect(details).toHaveAttribute('open', '', {timeout: 3_000});
     }
 }
 
@@ -136,7 +138,6 @@ test.describe('Event Picker', () => {
         const trigger = page.getByTestId('tx-form-event-picker-trigger');
         await expect(trigger).toBeVisible({timeout: 5_000});
         await trigger.click();
-        await page.waitForTimeout(500);
 
         // Slider should be visible inside the dropdown header
         const slider = page.getByTestId('tx-form-event-slider');
@@ -160,7 +161,6 @@ test.describe('Event Picker', () => {
         // Open the dropdown — click on the trigger button
         const trigger = page.getByTestId('tx-form-event-picker-trigger');
         await trigger.click();
-        await page.waitForTimeout(500);
 
         // Should show the 💰 emoji (DIVIDEND) in at least one option
         const dividendEmoji = page.locator('text=💰');
@@ -175,13 +175,11 @@ test.describe('Event Picker', () => {
         const trigger = page.getByTestId('tx-form-event-picker-trigger');
         await expect(trigger).toBeVisible({timeout: 5_000});
         await trigger.click();
-        await page.waitForTimeout(500);
 
         // Click "+ New event" button in footer
         const createBtn = page.getByTestId('tx-form-event-create-new');
         await expect(createBtn).toBeVisible({timeout: 3_000});
         await createBtn.click();
-        await page.waitForTimeout(500);
 
         // Mini modal should appear
         const modal = page.getByTestId('event-create-mini-modal');
