@@ -221,6 +221,28 @@ describe('riskStore', () => {
         expect(current).toEqual({items: [{instance_id: 'current'}]});
     });
 
+    it('re-issues a catalog fetch whose answer a mid-flight mutation discarded', async () => {
+        // Opening an asset page persists today's price, which notifies the portfolio
+        // mutation listeners, which invalidate risk — so a catalog request can be
+        // discarded for an entirely mundane reason. Handing the caller a null there
+        // leaves the panel stuck on an error it can never leave: nothing re-asks.
+        let resolveFirst: (value: unknown) => void = () => undefined;
+        catalogApi.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    resolveFirst = resolve;
+                }),
+        );
+        const pending = fetchRiskCatalog();
+
+        notifyPortfolioMutation('POST', '/api/v1/assets/prices/sync');
+        catalogApi.mockResolvedValueOnce({items: [{analytic_code: 'retried'}]});
+        resolveFirst({items: [{analytic_code: 'discarded'}]});
+
+        expect(await pending).toEqual({items: [{analytic_code: 'retried'}]});
+        expect(catalogApi).toHaveBeenCalledTimes(2);
+    });
+
     it('invalidates catalog and queries after portfolio-affecting mutations', async () => {
         transitionClientSession(401);
         catalogApi.mockResolvedValue({items: []});
@@ -289,5 +311,44 @@ describe('riskStore', () => {
             path_count: 8192,
             sobol_start_index: 11,
         });
+    });
+});
+
+/**
+ * The first identity resolution is the one path that bumps the session generation
+ * *without* running the registered resetters (clientSession.transition returns
+ * early at the `!hasResolvedIdentity` branch). Anything already in flight when the
+ * app learns who the user is therefore gets discarded on arrival with nobody
+ * clearing its in-flight slot — so it needs its own module state to reproduce.
+ */
+describe('riskStore — first identity resolution', () => {
+    it('releases the in-flight catalog slot discarded by the first identity resolution', async () => {
+        vi.resetModules();
+        catalogApi.mockReset();
+
+        const {transitionClientSession: freshTransition} = await import('$lib/stores/app/clientSession');
+        const {fetchRiskCatalog: freshFetchCatalog} = await import('./riskStore.svelte');
+
+        let resolveFirst: (value: unknown) => void = () => undefined;
+        catalogApi.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    resolveFirst = resolve;
+                }),
+        );
+        // Fired before the app knows who is logged in — the panel mounts and asks
+        // for its capability catalog while identity is still resolving.
+        const straddling = freshFetchCatalog();
+
+        freshTransition(701);
+        catalogApi.mockResolvedValueOnce({items: [{analytic_code: 'fresh'}]});
+        resolveFirst({items: [{analytic_code: 'discarded'}]});
+
+        // Dropping the stale response is right; dropping the request with it is not.
+        // Nothing else re-asks: the single module-level slot would stay parked on an
+        // already-resolved null and every later caller would short-circuit on it, so
+        // the panel would sit unable to load for the life of the page.
+        expect(await straddling).toEqual({items: [{analytic_code: 'fresh'}]});
+        expect(catalogApi).toHaveBeenCalledTimes(2);
     });
 });

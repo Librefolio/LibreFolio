@@ -169,16 +169,26 @@
         }));
     }
 
-    // Initialize/update rows when data changes
+    // Initialize/update rows when data changes.
+    //
+    // The parent reassigns `chartData`/`events` on every `loadChartData()` — always a
+    // fresh array, from ~10 call sites (range change, signal change, post-mutation
+    // reload, and the page's own initial load). Rebuilding the rows from scratch would
+    // discard every row whose `status !== 'original'`, i.e. the user's unsaved edits and
+    // delete marks: the dirty count would silently fall to 0 and Save would disable
+    // itself mid-edit. So a refresh that lands while the user is editing is held back —
+    // `prevChartData`/`prevEvents` stay unconsumed, so the next batch to arrive once the
+    // section is clean is applied normally. Same invariant the locale effect below
+    // states explicitly.
     $effect(() => {
-        if (chartData !== prevChartData) {
+        if (chartData !== prevChartData && untrack(() => priceDirtyCount) === 0) {
             prevChartData = chartData;
             priceRows = chartDataToPriceRows(chartData);
         }
     });
 
     $effect(() => {
-        if (events !== prevEvents) {
+        if (events !== prevEvents && untrack(() => eventDirtyCount) === 0) {
             prevEvents = events;
             eventRows = eventsToEventRows(events);
         }

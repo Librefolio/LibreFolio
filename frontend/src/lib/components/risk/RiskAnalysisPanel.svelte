@@ -329,6 +329,19 @@
         });
         if (signature === lastBaseSignature) return;
         lastBaseSignature = signature;
+        // A run the user already asked for has to survive a late-arriving parameter.
+        // The asset page resolves `dateStart` from the first price response and
+        // `targetCurrency` from the asset payload, so on a slow link the signature
+        // moves *after* the button was pressed. Dropping the in-flight answer is
+        // right — it was computed for parameters that no longer hold — but dropping
+        // the request with it leaves the user with no chart, no spinner and no
+        // error, and nothing that says to press again. Re-issue instead.
+        const rerun = untrack(() => ({
+            comparison: comparisonLoading,
+            stress: stressLoading,
+            replay: replayLoading,
+            simulation: simulationLoading,
+        }));
         comparisonGeneration += 1;
         stressGeneration += 1;
         replayGeneration += 1;
@@ -341,7 +354,13 @@
         stressLoading = false;
         replayLoading = false;
         simulationLoading = false;
-        untrack(() => void loadBase(false));
+        untrack(() => {
+            void loadBase(false);
+            if (rerun.comparison) void runComparison();
+            if (rerun.stress) void runStress();
+            if (rerun.replay) void runReplay();
+            if (rerun.simulation) void runSimulation();
+        });
     });
 
     $effect(() => {
@@ -556,7 +575,14 @@
 
         try {
             catalog = await fetchRiskCatalog();
-            if (generation !== requestGeneration || !catalog) return;
+            if (generation !== requestGeneration) return;
+            // A null catalog is a *failure* to load, not a slow load: without this
+            // the panel would sit at data-catalog="pending" forever and every gated
+            // section would silently look "not supported".
+            if (!catalog) {
+                loadError = true;
+                return;
+            }
 
             const historicalAnalytics = buildBaseAnalytics('historical');
             const currentAnalytics = buildBaseAnalytics('current_composition');
@@ -771,9 +797,10 @@
     section below is gated on it (`supportsComparison`, `supportsStress`, …), so
     a caller that clicks straight into one of them is really betting on a fetch
     it cannot see. Absence of a section means "not supported" *or* "not loaded
-    yet"; this attribute separates the two.
+    yet"; this attribute separates the two — and `error` separates a fetch that
+    failed from one that is merely slow, which `pending` alone could not say.
 -->
-<div class="space-y-4" data-testid="risk-analysis-panel" data-catalog={catalog ? 'ready' : 'pending'} data-busy={initialLoading ? 'true' : 'false'}>
+<div class="space-y-4" data-testid="risk-analysis-panel" data-catalog={catalog ? 'ready' : loadError ? 'error' : 'pending'} data-busy={initialLoading ? 'true' : 'false'}>
     {#if showBetaBanner}
         <RiskBetaBanner />
     {/if}
