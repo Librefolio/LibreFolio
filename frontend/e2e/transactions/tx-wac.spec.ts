@@ -15,6 +15,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {optionsClosed} from '../fixtures/probe';
+import {waitForSettled} from '../fixtures/app-events';
 
 test.setTimeout(20_000);
 
@@ -28,7 +30,7 @@ async function goToTransactions(page: Page) {
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {
         /* either is fine */
     });
-    await page.waitForTimeout(500);
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 async function openNewTransactionForm(page: Page) {
@@ -40,7 +42,7 @@ async function selectType(page: Page, type: string) {
     const typeSelect = page.getByTestId('tx-form-type');
     await typeSelect.locator('button, [role="combobox"]').first().click();
     await page.getByTestId(`search-select-option-${type}`).click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 }
 
 // ---------------------------------------------------------------------------

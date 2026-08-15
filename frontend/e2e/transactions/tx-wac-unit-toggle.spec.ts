@@ -16,6 +16,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {optionsClosed} from '../fixtures/probe';
 
 interface CommitPayload {
     creates?: Record<string, unknown>[];
@@ -27,7 +29,9 @@ interface CommitPayload {
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
-    await page.waitForTimeout(500);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 async function openAdjustmentWithCostBasis(page: Page, quantity: string) {
@@ -36,19 +40,20 @@ async function openAdjustmentWithCostBasis(page: Page, quantity: string) {
 
     await page.getByTestId('tx-form-type').click();
     await page.getByTestId('search-select-option-ADJUSTMENT').click();
-    await page.waitForTimeout(300);
+    // Every SearchSelect uses the same option testid prefix, so clicking `.first()`
+    // on the NEXT dropdown while this one is still closing picks from the wrong
+    // list. That — not latency — is what the sleeps here were covering.
+    await optionsClosed(page);
 
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     await page.locator('[data-testid^="search-select-option-"]').first().click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 
     const assetWrap = page.getByTestId('tx-form-asset-wrap');
     await assetWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     await page.locator('[data-testid^="search-select-option-"]').first().click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 
     const qtyInput = page.getByTestId('tx-form-quantity');
     await qtyInput.fill(quantity);
@@ -98,7 +103,10 @@ test.describe('Cost Basis Override — Total/Per unit toggle', () => {
 
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');
         await cbInput.fill('100');
-        await page.waitForTimeout(200);
+        // The conversion below reads this value, so it has to have landed. Note the
+        // second half of this same test already fills and toggles with no sleep —
+        // the sleep here was never the thing making it work.
+        await expect(cbInput).toHaveValue('100');
 
         // Switch to Total — per-unit 100 x qty 5 = 500
         await page.getByTestId('tx-form-cost-basis-unit-toggle-total').click();
@@ -114,7 +122,10 @@ test.describe('Cost Basis Override — Total/Per unit toggle', () => {
         await openAdjustmentWithCostBasis(page, '4');
         await page.getByTestId('tx-form-cost-basis-toggle-manual').click();
         await page.getByTestId('tx-form-cost-basis-unit-toggle-total').click();
-        await page.waitForTimeout(200);
+        // The toggle rewrites the field; filling it before that lands would be
+        // overwritten by the conversion. aria-pressed is the component saying which
+        // mode it is in — a CSS class is a guess about how it looks.
+        await expect(page.getByTestId('tx-form-cost-basis-unit-toggle-total')).toHaveAttribute('aria-pressed', 'true');
 
         // Total cost basis for the whole 4-unit adjustment: 200 → per-unit must be 50.
         const cbInput = page.getByTestId('tx-form-cost-basis-input-amount');

@@ -570,9 +570,7 @@ test.describe('Transactions', () => {
                 const confirmBtn = page.getByTestId('confirm-modal-confirm');
                 if (await confirmBtn.isVisible({timeout: 3_000}).catch(() => false)) {
                     await confirmBtn.click();
-                    await expect
-                        .poll(async () => Number(await countBadge.textContent().catch(() => '0')), {timeout: 15_000})
-                        .toBeLessThan(Number(countBefore));
+                    await expect.poll(async () => Number(await countBadge.textContent().catch(() => '0')), {timeout: 15_000}).toBeLessThan(Number(countBefore));
                 }
             }
         });

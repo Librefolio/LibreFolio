@@ -394,7 +394,14 @@ test.describe('Files Page', () => {
             await previewButton.click();
 
             await waitForPreviewReady(page);
-            await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0, {timeout: 8_000});
+            // Two traps in one assertion. `toHaveCount(0)` is satisfied by a toolbar
+            // that has not painted yet — which is how this test stayed green for
+            // months — *and* it counts DOM nodes regardless of visibility, while the
+            // viewer disables a category by hiding the control rather than unmounting
+            // it. So: prove the toolbar is there, then assert the button is not usable.
+            await expect(page.locator('[data-epdf-i]').first()).toBeVisible({timeout: 20_000});
+            await expect(page.locator('[data-epdf-i="search-button"]')).toBeVisible({timeout: 8_000});
+            await expect(page.locator('[data-epdf-i="comment-button"]')).toBeHidden({timeout: 8_000});
         });
 
         test('opens table preview for BRIM files', async ({page}) => {

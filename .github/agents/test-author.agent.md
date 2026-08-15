@@ -87,6 +87,39 @@ bet on machine speed, and concurrency takes the other side of it.
 Poll the condition, with a deadline. On the frontend, Playwright assertions already
 retry — a sleep *before* one is dead weight, a sleep *instead* of one is a guess.
 
+**But you must know which construct retries before you delete anything.** Removing a
+sleep in front of something that does *not* retry does not make the test faster: it
+makes it stop testing, and it still reports green.
+
+| retries — a sleep here is pure latency, delete it | does **not** retry — the sleep is load-bearing |
+|---|---|
+| `expect(locator).toBeVisible / toBeHidden / toBeEnabled / toBeDisabled` | `locator.count()` |
+| `expect(locator).toHaveCount / toHaveText / toHaveValue / toHaveAttribute / toHaveClass` | `locator.textContent()` / `allTextContents()` |
+| `expect.poll(() => …)` | `locator.getAttribute()` / `inputValue()` |
+| `locator.waitFor()` | `locator.evaluate()` |
+| `locator.click()` — auto-waits for actionability **and stability**; it will not click a moving element, so an animation sleep before a click is always dead weight | `locator.isVisible()` — **its `timeout` option is ignored**; it answers about *this instant* |
+
+For the right-hand column the fix is not deletion, it is **transformation**: turn the
+one-shot read into a retrying assertion, or wrap it in `expect.poll`. `e2e/fixtures/probe.ts`
+exists for the common case — `appears(locator, ms)` is the honest form of
+`isVisible().catch(() => false)`.
+
+**`expect.poll` on a `Locator` is a trap.** `expect()` is overloaded on `Locator`, so
+`expect.poll(() => findRow(page, id)).toBeNull()` does not apply the plain-value matcher
+you think it does — it burns the whole timeout and fails on a page where the row is
+demonstrably gone. Poll a **number**, or better, assert `toHaveCount(0)` on a precise
+locator you captured *before* the action:
+
+```ts
+// ✘ times out even when the row is gone
+await expect.poll(() => findRowByText(page, name)).toBeNull();
+
+// ✔ precise, retrying, and cheap — no textContent() scan of 100+ rows per attempt
+const rowId = await row.getAttribute('data-row-id');
+await deleteIt();
+await expect(page.locator(`tr[data-row-id="${rowId}"]`)).toHaveCount(0);
+```
+
 ### 4. If there is nothing to wait for, the product is missing a state
 
 Do not hunt for a cleverer selector. **If nothing observable says the operation
@@ -250,24 +283,35 @@ await expect.poll(() => validateRuns(page)).toBeGreaterThan(before);
 A monotonic counter is strictly better than a boolean flag, but only if read as a
 **delta**. `!= '0'` is the same bet as a sleep, wearing a counter's clothes.
 
-### 16. An absence assertion needs a presence barrier
+### 16. An absence assertion needs a presence barrier — and often the wrong matcher
 
 ```ts
-// ✘ also passes when the PDF viewer has not mounted yet
+// ✘ also passes when the PDF viewer has not mounted yet, *and* counts hidden nodes
 await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0);
 
-// ✔ prove the thing is there, *then* prove the part you want gone is not
-await expect(page.getByTestId('pdf-viewer-toolbar')).toBeVisible();
-await expect(page.locator('[data-epdf-i="comment-button"]')).toHaveCount(0);
+// ✔ prove the thing is there, prove a sibling control is visible, then prove
+//   the part you want gone is not usable
+await expect(page.locator('[data-epdf-i]').first()).toBeVisible();
+await expect(page.locator('[data-epdf-i="search-button"]')).toBeVisible();
+await expect(page.locator('[data-epdf-i="comment-button"]')).toBeHidden();
 ```
 
 `toHaveCount(0)` is satisfied by "nothing rendered". A test written this way passes
 **because** the app was slow — the exact inverse of a sleep, and just as false. One did:
-the PDF preview's comment button had been visible for as long as the option that was
-meant to hide it had been misconfigured, and the suite reported green throughout.
+the PDF preview's comment button assertion stayed green for as long as EmbedPDF took more
+than eight seconds to appear.
 
-Before writing a negative assertion, ask what makes the *positive* observable, and assert
-that first.
+Adding the barrier turned it deterministically red, which exposed the second half:
+**`toHaveCount` counts DOM nodes and never looks at visibility**, while that viewer
+disables a feature by *hiding* the control rather than unmounting it. The control had
+been correctly hidden all along. When the question is "can the user reach this?", the
+matcher is `toBeHidden()` / `not.toBeVisible()`, not a count.
+
+The sibling assertion is what gives the negative teeth: without it, "the comment button
+is not visible" also becomes true the day the whole toolbar disappears.
+
+Before writing a negative assertion, ask what makes the *positive* observable, assert
+that first, and check whether you are asking about existence or about visibility.
 
 ### 17. A cached call is not an observable event
 
@@ -288,6 +332,40 @@ refresh button with `force=true`. The same click therefore emits a request or no
 on what the page already fetched, and under load the ordering changes. Waiting on the
 network is right only when the request **is** the subject (proving a refresh really reaches
 the server); when it is scaffolding, wait for the state.
+
+### 18. A helper ends on the post-condition it promises
+
+The commonest sleep in this suite was the last line of a helper: `await cancel.click();
+await page.waitForTimeout(300);`. That sleep is the helper hedging on behalf of a caller
+it cannot see. Say instead what the helper claims to have achieved — it is shorter, it is
+faster, and it fails at the helper instead of three assertions later:
+
+| the helper did | it ends on |
+|---|---|
+| clicked Cancel / Close / Escape | `await expect(modal).toBeHidden()` |
+| `input.fill(v)` | `await expect(input).toHaveValue(v)` |
+| opened a `<details>` | `await expect(details).toHaveAttribute('open', '')` |
+| clicked a wizard's Continue | `await expect(button).toBeHidden()` |
+| landed on a step that fetches | `await waitForSettled(page.getByTestId('…-step2'))` |
+| opened a modal that lists rows | `await expect(modal.locator('tbody tr[data-row-id]').first()).toBeVisible()` |
+
+Reaching a container is not the same as the container being usable: `import-wizard-step2`
+is visible before its broker files have loaded, which is why it publishes `data-busy`.
+
+### 19. Shared testid prefixes need a closing barrier
+
+Every `SearchSelect` in the app renders its options as `search-select-option-*`. Two
+selects filled back-to-back therefore have overlapping option sets in the DOM for as long
+as the first is closing, and `.first()` silently picks from the **wrong list**. This is
+what the 300 ms sleeps between dropdowns were covering, badly. Assert the DOM is empty of
+options before opening the next one:
+
+```ts
+await optionsClosed(page); // e2e/fixtures/probe.ts
+```
+
+The general rule: when a testid identifies a *kind* rather than an *instance*, an index
+into it is only meaningful once you have proved nothing else of that kind is on screen.
 
 ---
 

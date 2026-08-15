@@ -13,6 +13,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 import {maximisePageSize} from '../fixtures/paging';
 
 test.setTimeout(25_000);
@@ -24,7 +26,9 @@ test.setTimeout(25_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions?page_size=200');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(500);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Select 2 editable rows and open the BulkModal via edit toolbar. Throws if fails. */
@@ -60,7 +64,8 @@ async function openPicker(page: Page): Promise<void> {
 
     const picker = page.getByTestId('tx-picker-modal');
     await expect(picker).toBeVisible({timeout: 5_000});
-    await page.waitForTimeout(500);
+    // The modal frame appears before its rows do, and every caller here works on rows.
+    await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 10_000});
 }
 
 // ---------------------------------------------------------------------------
@@ -92,10 +97,13 @@ test.describe('PickerModal Pagination', () => {
         await expect(nextBtn).toBeVisible({timeout: 2_000});
         await expect(nextBtn).toBeEnabled();
         await nextBtn.click();
-        await page.waitForTimeout(400);
 
-        // First row on page 2 should be different
-        const firstRowPage2 = await picker.locator('tbody tr[data-row-id]').first().getAttribute('data-row-id');
+        // "The first row changed" IS the claim of this test, so it is also the only
+        // honest barrier for it. Reading the attribute after a fixed sleep both
+        // raced the re-render and asserted something weaker (merely truthy).
+        const firstRow = picker.locator('tbody tr[data-row-id]').first();
+        await expect.poll(() => firstRow.getAttribute('data-row-id'), {timeout: 5_000}).not.toBe(firstRowPage1);
+        const firstRowPage2 = await firstRow.getAttribute('data-row-id');
         expect(firstRowPage2).toBeTruthy();
         expect(firstRowPage2).not.toEqual(firstRowPage1);
     });
@@ -119,17 +127,14 @@ test.describe('PickerModal Pagination', () => {
         await expect(pageSizeBtn).toBeVisible({timeout: 2_000});
 
         await pageSizeBtn.click();
-        await page.waitForTimeout(300);
 
         // Select option "50" from the dropdown
         const option50 = paginationContainer.locator('.dropdown-option').filter({hasText: '50'}).first();
         await expect(option50).toBeVisible({timeout: 2_000});
         await option50.click();
-        await page.waitForTimeout(400);
 
         // Should now have more rows visible (or same if total < 50)
-        const rowsAfter = await picker.locator('tbody tr[data-row-id]').count();
-        expect(rowsAfter).toBeGreaterThanOrEqual(rowsPage1);
+        await expect.poll(() => picker.locator('tbody tr[data-row-id]').count(), {timeout: 5_000}).toBeGreaterThanOrEqual(rowsPage1);
     });
 
     test('P2-reopen: PickerModal resets selection on reopen', async ({page}) => {
@@ -143,7 +148,6 @@ test.describe('PickerModal Pagination', () => {
         await expect(firstCheckbox).toBeVisible({timeout: 2_000});
 
         await firstCheckbox.click();
-        await page.waitForTimeout(200);
 
         // Verify Add button is enabled (something selected)
         const addBtn = picker.getByTestId('tx-picker-add');
@@ -156,7 +160,7 @@ test.describe('PickerModal Pagination', () => {
             const nextBtn = paginationContainer.getByTestId('pagination-next');
             if (await nextBtn.isEnabled({timeout: 1_000}).catch(() => false)) {
                 await nextBtn.click();
-                await page.waitForTimeout(400);
+                await expect(picker.locator('tbody tr[data-row-id]').first()).toBeVisible({timeout: 5_000});
             }
         }
 
@@ -169,7 +173,13 @@ test.describe('PickerModal Pagination', () => {
         const searchAddBtn = bulkModal.getByTestId('tx-bulk-picker');
         await searchAddBtn.click();
         await expect(picker).toBeVisible({timeout: 5_000});
-        await page.waitForTimeout(500);
+
+        // `toBeDisabled` on its own is satisfied the instant the button exists, so it
+        // would have passed before the picker finished re-rendering — the 500ms sleep
+        // was the only thing making the check mean anything. Waiting for a row to be
+        // there first turns it into a real check: the list is up, and *then* nothing
+        // is selected.
+        await expect(picker.locator('tbody tr[data-row-id] .checkbox-btn').first()).toBeVisible({timeout: 5_000});
 
         // Selection should be reset (Add button disabled)
         await expect(picker.getByTestId('tx-picker-add')).toBeDisabled();
@@ -243,9 +253,8 @@ test.describe('Delete Validation Banner', () => {
             if (classes.includes('receiver') || classes.includes('ghost')) continue;
 
             await row.hover();
-            await page.waitForTimeout(200);
             const kebabBtn = row.getByTestId(/^row-actions-/);
-            if (!(await kebabBtn.isVisible({timeout: 800}).catch(() => false))) continue;
+            if (!(await appears(kebabBtn, 800))) continue;
             await kebabBtn.click();
             const hasDelete = await page
                 .getByTestId('context-menu-action-delete')

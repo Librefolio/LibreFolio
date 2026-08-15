@@ -3976,6 +3976,7 @@ ${arrow}<span>${label}</span></span>`,
                     {isCurrent ? 'font-semibold' : ''}"
                 onclick={() => isClickable && goToStep(step.id)}
                 disabled={isFuture}
+                aria-current={isCurrent ? 'step' : undefined}
                 data-testid="import-wizard-step-{stepNum}"
                 data-step-id={step.id}
             >
@@ -4707,7 +4708,14 @@ ${arrow}<span>${label}</span></span>`,
                         </div>
                         <div class="flex items-center gap-2">
                             {#if step4BeforeOpeningCount > 0}
-                                <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1 disabled:opacity-50" onclick={() => void recheckOpenings()} disabled={recheckingOpenings} data-testid="import-wizard-recheck-openings" title={$t('importWizard.recheckOpeningsTip')}>
+                                <button
+                                    type="button"
+                                    class="text-xs text-libre-green hover:underline flex items-center gap-1 disabled:opacity-50"
+                                    onclick={() => void recheckOpenings()}
+                                    disabled={recheckingOpenings}
+                                    data-testid="import-wizard-recheck-openings"
+                                    title={$t('importWizard.recheckOpeningsTip')}
+                                >
                                     <RefreshCw size={12} class={recheckingOpenings ? 'animate-spin' : ''} /><span class="hidden sm:inline">{$t('importWizard.recheckOpenings')}</span>
                                 </button>
                                 <span class="text-gray-300 dark:text-gray-600">|</span>

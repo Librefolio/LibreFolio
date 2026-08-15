@@ -205,11 +205,11 @@ test.describe('Asset List Page', () => {
         // Search for a string that won't match any asset
         const searchInput = page.getByTestId('assets-search-input');
         await searchInput.fill('zzzzz_nonexistent_12345');
-        await page.waitForTimeout(500);
 
-        // Visible cards should be 0
-        const visibleCards = await cards.count();
-        expect(visibleCards).toBeLessThan(totalCards);
+        // Visible cards should shrink. expect.poll retries; the bare count() that
+        // used to follow a 500ms sleep did not, so the sleep was the only thing
+        // keeping this honest — and it had to outlast a debounced filter.
+        await expect.poll(() => cards.count(), {timeout: 5_000}).toBeLessThan(totalCards);
     });
 
     // ========================================================================
@@ -223,7 +223,9 @@ test.describe('Asset List Page', () => {
         // Toggle to show all (including inactive)
         const toggle = page.getByTestId('assets-active-toggle');
         await toggle.click();
-        await page.waitForTimeout(500);
+        // aria-pressed is the toggle telling us it flipped. Comparing the badges
+        // before that is comparing a number with itself.
+        await expect(toggle).toHaveAttribute('aria-pressed', 'false');
 
         const allBadge = await badge.textContent();
         // Count should be same or greater (all >= active)

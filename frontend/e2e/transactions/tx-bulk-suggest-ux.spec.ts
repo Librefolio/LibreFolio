@@ -19,6 +19,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 
 test.setTimeout(30_000);
 
@@ -29,7 +31,9 @@ test.setTimeout(30_000);
 async function goToTransactions(page: Page, query = '') {
     await navigateTo(page, `/transactions${query}`);
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /**
@@ -111,21 +115,21 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         await page.getByTestId('tx-bulk-modal').waitFor({state: 'visible', timeout: 5_000});
         // If FormModal auto-opened (single row), close it first
         const formModal = page.getByTestId('tx-form-modal');
-        if (await formModal.isVisible({timeout: 1_000}).catch(() => false)) {
+        if (await appears(formModal, 1_000)) {
             await page.keyboard.press('Escape');
-            await page.waitForTimeout(300);
+            await expect(formModal).toBeHidden({timeout: 3_000});
         }
-        await page.waitForTimeout(300);
 
         // Find a row in the bulk table and click its split action via the kebab menu
         const bulkRows = page.locator('[data-testid="tx-bulk-body"] tr[data-row-id]');
+        await expect(bulkRows.first()).toBeVisible({timeout: 5_000});
         const rowCount = await bulkRows.count();
         let splitDone = false;
         for (let i = 0; i < rowCount; i++) {
             const row = bulkRows.nth(i);
             await row.hover();
             const kebabBtn = row.getByTestId(/^row-actions-/);
-            if ((await kebabBtn.count()) === 0) continue;
+            if (!(await appears(kebabBtn, 1_000))) continue;
             await kebabBtn.click();
             const splitAction = page.getByTestId('context-menu-action-split');
             if (await splitAction.isVisible({timeout: 500}).catch(() => false)) {
@@ -179,7 +183,7 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         const formModal = page.getByTestId('tx-form-modal');
         if (await formModal.isVisible({timeout: 1_000}).catch(() => false)) {
             await page.keyboard.press('Escape');
-            await page.waitForTimeout(300);
+            await expect(formModal).toBeHidden({timeout: 3_000});
         }
 
         // Verify delta slider exists
@@ -207,7 +211,6 @@ test.describe('BulkModal Suggest UX (SP-C)', () => {
         // Click the row's split action in the main table via the kebab menu
         const row = page.locator(`[data-testid="tx-table"] tr[data-row-id="${rowId}"]`);
         await row.hover();
-        await page.waitForTimeout(200);
         const splitBtn = row.getByTestId(/^row-actions-/);
         await expect(splitBtn).toBeVisible({timeout: 2_000});
         await splitBtn.click();

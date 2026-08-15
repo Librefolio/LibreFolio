@@ -13,6 +13,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears, optionsClosed} from '../fixtures/probe';
 
 test.setTimeout(30_000);
 
@@ -23,29 +25,29 @@ test.setTimeout(30_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await Promise.race([page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000}), page.getByTestId('tx-loading').waitFor({state: 'hidden', timeout: 10_000})]).catch(() => {});
-    await page.waitForTimeout(500);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Select a transaction type in the FormModal type search-select. */
 async function selectType(page: Page, typeRegex: RegExp) {
     const typeButton = page.getByTestId('tx-form-type');
     await typeButton.click();
-    await page.waitForTimeout(300);
     const option = page.locator('[data-testid^="search-select-option-"]').filter({hasText: typeRegex}).first();
     await expect(option).toBeVisible({timeout: 2_000});
     await option.click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 }
 
 /** Pick the first available broker in FormModal. */
 async function selectFirstBroker(page: Page) {
     const brokerWrap = page.getByTestId('tx-form-broker-wrap');
     await brokerWrap.locator('button, [role="combobox"]').first().click();
-    await page.waitForTimeout(300);
     const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
     await expect(brokerOption).toBeVisible({timeout: 2_000});
     await brokerOption.click();
-    await page.waitForTimeout(300);
+    await optionsClosed(page);
 }
 
 /** Fill cash amount in a cash cell identified by testid. */
@@ -57,24 +59,22 @@ async function fillCash(page: Page, testid: string, amount: string, currencyCode
         const currencyTrigger = cashWrap.locator('.currency-wrap [role="combobox"]').first();
         await expect(currencyTrigger).toBeVisible({timeout: 2_000});
         await currencyTrigger.click();
-        await page.waitForTimeout(300);
         // The dropdown search input appears (inlineSearch mode). Scope it to the
         // currency wrapper: the amount field is also an input[type="text"], so an
         // unscoped .first() would type the currency code into the amount.
         const searchInput = page.locator('input[placeholder]').filter({hasText: ''}).last();
         const dropdownInput = cashWrap.locator('.currency-wrap input[type="text"]').first();
-        const inputToUse = (await dropdownInput.isVisible({timeout: 1_000}).catch(() => false)) ? dropdownInput : searchInput;
+        const inputToUse = (await appears(dropdownInput, 1_000)) ? dropdownInput : searchInput;
         await inputToUse.fill(currencyCode);
-        await page.waitForTimeout(400);
         const currOption = page.locator('[data-testid^="search-select-option-"]').filter({hasText: currencyCode}).first();
         await expect(currOption).toBeVisible({timeout: 3_000});
         await currOption.click();
-        await page.waitForTimeout(300);
+        await optionsClosed(page);
     }
     const cashInput = cashWrap.locator('input[data-testid$="-amount"]').first();
     await expect(cashInput).toBeVisible({timeout: 1_000});
     await cashInput.fill(amount);
-    await page.waitForTimeout(200);
+    await expect(cashInput).toHaveValue(amount);
 }
 
 /** Save the FormModal (click save button -> pushes to BulkModal grid). */
@@ -98,8 +98,11 @@ async function openBulkModal(page: Page) {
         if (text.includes('DEGIRO')) continue; // skip viewer rows
         const checkbox = row.locator('.checkbox-btn').first();
         await checkbox.click();
-        await page.waitForTimeout(200);
         selected++;
+        // The toolbar publishes how many rows it is holding. Waiting for it to
+        // agree is both the barrier and a check that the click actually landed —
+        // a fixed sleep gave neither.
+        await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', String(selected));
     }
     const editBtn = page.locator('[data-testid="toolbar-action-edit"]');
     await expect(editBtn).toBeVisible({timeout: 3_000});
@@ -145,7 +148,6 @@ test.describe('FX Implied Rate & Spread', () => {
 
         // Wait for suggest detection
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 3_000});
-        await page.waitForTimeout(1_500);
 
         // The promote-suggest banner should appear
         const banner = page.getByTestId('promote-suggest-banner');
@@ -188,7 +190,6 @@ test.describe('FX Implied Rate & Spread', () => {
         await saveFormModal(page);
 
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 3_000});
-        await page.waitForTimeout(1_500);
 
         const banner = page.getByTestId('promote-suggest-banner');
         await expect(banner).toBeVisible({timeout: 5_000});
@@ -216,7 +217,6 @@ test.describe('FX Implied Rate & Spread', () => {
 
         // Select FX_CONVERSION type
         await selectType(page, /fx.conversion|cambio.valuta|conversion/i);
-        await page.waitForTimeout(500);
 
         // Dual form should appear
         const dualSplit = page.getByTestId('tx-form-dual-split');
@@ -226,12 +226,11 @@ test.describe('FX Implied Rate & Spread', () => {
         const brokerWrap = page.getByTestId('tx-form-broker-wrap');
         if (await brokerWrap.isVisible({timeout: 2_000}).catch(() => false)) {
             await brokerWrap.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(300);
             const brokerOption = page.locator('[data-testid^="search-select-option-"]').first();
-            if (await brokerOption.isVisible({timeout: 2_000}).catch(() => false)) {
+            if (await appears(brokerOption)) {
                 await brokerOption.click();
             }
-            await page.waitForTimeout(300);
+            await optionsClosed(page);
         }
 
         // Fill "From" cash (EUR, 1000)

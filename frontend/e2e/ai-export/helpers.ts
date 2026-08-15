@@ -168,12 +168,17 @@ export async function waitForClipboard(page: Page, requiredFragments: readonly s
 }
 
 async function requireSeededEntry(candidates: readonly Locator[], errorMessage: string): Promise<Locator> {
-    const deadline = Date.now() + UI_TIMEOUT;
-    while (Date.now() < deadline) {
-        for (const candidate of candidates) {
-            if (await candidate.isVisible()) return candidate;
-        }
-        await candidates[0].page().waitForTimeout(100);
+    // "First of N that shows up" is `.or()`, not a hand-rolled poll: the union
+    // retries on Playwright's own clock, so the loop's 100 ms sleep — the last
+    // mechanical wait in the suite — has nothing left to cover.
+    const union = candidates.reduce((acc, candidate) => acc.or(candidate));
+    try {
+        await expect(union.first()).toBeVisible({timeout: UI_TIMEOUT});
+    } catch {
+        throw new Error(`${errorMessage} Check populate_mock_data.py seeding.`);
+    }
+    for (const candidate of candidates) {
+        if (await candidate.isVisible()) return candidate;
     }
     throw new Error(`${errorMessage} Check populate_mock_data.py seeding.`);
 }

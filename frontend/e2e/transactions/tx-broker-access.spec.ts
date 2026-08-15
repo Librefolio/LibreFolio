@@ -18,6 +18,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 
 test.setTimeout(15_000);
 
@@ -28,7 +30,9 @@ test.setTimeout(15_000);
 async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 8_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 /** Find a row containing ALL the given substrings in its text, double-click to open view. Throws if not found. */
@@ -66,9 +70,13 @@ test.describe('Transaction Broker Access Visibility', () => {
 
             const brokerWrap = page.getByTestId('tx-form-broker-wrap');
             await brokerWrap.locator('button, [role="combobox"]').first().click();
-            await page.waitForTimeout(500);
 
             const options = page.locator('[data-testid^="search-select-option-"]');
+            // This test proves VIEWER brokers are ABSENT from the list. An empty
+            // list satisfies that trivially, so the list must be shown to exist
+            // first — otherwise a slow dropdown is indistinguishable from a
+            // correctly filtered one.
+            await expect(options.first()).toBeVisible({timeout: 5_000});
             const optionCount = await options.count();
             const optionTexts: string[] = [];
             for (let i = 0; i < optionCount; i++) {
@@ -121,12 +129,13 @@ test.describe('Transaction Broker Access Visibility', () => {
 
                 await row.dblclick();
                 await expect(page.getByTestId('tx-form-modal')).toBeVisible({timeout: 5_000});
-                await page.waitForTimeout(500);
 
                 const dualSplit = page.getByTestId('tx-form-dual-split');
-                if (!(await dualSplit.isVisible({timeout: 2_000}).catch(() => false))) {
+                if (!(await appears(dualSplit))) {
                     await page.getByTestId('tx-form-cancel').click();
-                    await page.waitForTimeout(300);
+                    // The next loop iteration double-clicks another row, so the modal
+                    // has to be out of the way first or the click hits the overlay.
+                    await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 3_000});
                     continue;
                 }
 
@@ -149,7 +158,7 @@ test.describe('Transaction Broker Access Visibility', () => {
                     }
                 }
                 await page.getByTestId('tx-form-cancel').click();
-                await page.waitForTimeout(300);
+                await expect(page.getByTestId('tx-form-modal')).toBeHidden({timeout: 3_000});
             }
             expect(foundLocked, 'Should find a row with Hidden Admin Broker as locked partner').toBe(true);
         });

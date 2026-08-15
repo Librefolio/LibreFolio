@@ -16,6 +16,8 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {waitForSettled} from '../fixtures/app-events';
+import {appears} from '../fixtures/probe';
 
 // Shorter timeout — these are read-view tests, no complex modal flows.
 test.setTimeout(20_000);
@@ -28,7 +30,9 @@ async function goToTransactions(page: Page) {
     await navigateTo(page, '/transactions');
     // Wait for table to appear (short timeout — data is pre-populated).
     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
-    await page.waitForTimeout(400);
+    // The table being VISIBLE is not the table being LOADED: it renders empty
+    // and fills in. The page publishes data-busy, so wait on that instead.
+    await waitForSettled(page.getByTestId('transactions-page'));
 }
 
 // ---------------------------------------------------------------------------
@@ -135,9 +139,10 @@ test.describe('TransactionsTable (main read-view)', () => {
         let pulsed = false;
         for (let i = 0; i < Math.min(linkCount, 5); i++) {
             await links.nth(i).click({force: true});
-            await page.waitForTimeout(400);
-            const hCount = await page.locator('[data-testid="tx-table"] tr.tx-row-highlight').count();
-            if (hCount > 0) {
+            // The pulse is a transient CSS class: a fixed sleep samples it once and
+            // can land either before it starts or after it ends. appears() polls,
+            // so it catches the pulse whenever inside the window it happens.
+            if (await appears(page.locator('[data-testid="tx-table"] tr.tx-row-highlight'), 1_500)) {
                 pulsed = true;
                 break;
             }
@@ -169,9 +174,10 @@ test.describe('TransactionsTable (main read-view)', () => {
 
             // Click and check: if NO pulse → this is a hidden-partner row
             await linkIcon.first().click({force: true});
-            await page.waitForTimeout(400);
-            const hCount = await page.locator('[data-testid="tx-table"] tr.tx-row-highlight').count();
-            if (hCount === 0) {
+            // Absence of the pulse is the whole signal here, so it must be given a
+            // window in which it could have appeared. appears() returns as soon as a
+            // pulse shows and only spends the full budget on a genuine no-show.
+            if (!(await appears(page.locator('[data-testid="tx-table"] tr.tx-row-highlight'), 1_000))) {
                 hiddenLinkIcon = linkIcon.first();
                 break;
             }
@@ -180,9 +186,8 @@ test.describe('TransactionsTable (main read-view)', () => {
 
         // Verify tooltip appears on hover with broker name + SVG
         await hiddenLinkIcon!.hover();
-        await page.waitForTimeout(500);
         const tooltip = page.locator('[data-testid="tooltip-content"]');
-        if (await tooltip.isVisible({timeout: 2_000}).catch(() => false)) {
+        if (await appears(tooltip)) {
             const html = await tooltip.innerHTML();
             expect(html, 'Tooltip should mention the hidden broker').toContain('Hidden Admin Broker');
             expect(html, 'Tooltip should have SVG role icon').toContain('<svg');
@@ -307,12 +312,14 @@ test.describe('TransactionsTable (main read-view)', () => {
         const filterTrigger = page.getByTestId('col-filter-trigger-typeIcon');
         await expect(filterTrigger).toBeVisible({timeout: 3_000});
         await filterTrigger.click();
-        await page.waitForTimeout(300);
 
-        // The filter popover should appear with enum options
+        // The popover has to be there before "nothing is checked" means anything:
+        // an unrendered popover has zero checked boxes too.
+        const enumOptions = page.locator('.filter-popover [data-testid^="filter-enum-option-"], .filter-popover .enum-checkbox');
+        await expect(enumOptions.first()).toBeVisible({timeout: 3_000});
+
         const checkedBoxes = page.locator('.filter-popover .enum-checkbox.checked');
-        const checkedCount = await checkedBoxes.count();
-        expect(checkedCount, 'All Type filter options should be deselected by default').toBe(0);
+        await expect(checkedBoxes, 'All Type filter options should be deselected by default').toHaveCount(0);
 
         // Close by clicking outside
         await page.keyboard.press('Escape');
@@ -325,12 +332,11 @@ test.describe('TransactionsTable (main read-view)', () => {
         const filterTrigger = page.getByTestId('col-filter-trigger-broker');
         await expect(filterTrigger).toBeVisible({timeout: 3_000});
         await filterTrigger.click();
-        await page.waitForTimeout(400);
 
         // All broker filter options must be visible
         const options = page.locator('[data-testid^="filter-enum-option-"]');
+        await expect(options.first(), 'Broker filter must have at least one option').toBeVisible({timeout: 3_000});
         const count = await options.count();
-        expect(count, 'Broker filter must have at least one option').toBeGreaterThan(0);
 
         // Each option must contain EITHER an <img> element OR a span with background-color (dot fallback)
         for (let i = 0; i < count; i++) {

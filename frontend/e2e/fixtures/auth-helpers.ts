@@ -64,7 +64,12 @@ export async function setLanguage(page: Page, lang: Language) {
     };
     // Use role='menuitem' to be specific and avoid conflicts with other dropdowns
     await page.getByRole('menuitem', {name: new RegExp(langNames[lang])}).click();
-    await page.waitForTimeout(300); // Wait for i18n update
+    // The app publishes both halves: `lang` flips to the chosen language, and
+    // data-i18n-ready goes true only once that dictionary has actually landed.
+    // Asserting both is what makes this helper's promise ("when I return, the UI
+    // speaks `lang`") true instead of merely likely.
+    await expect(page.locator('html')).toHaveAttribute('lang', lang);
+    await expect(page.locator('html')).toHaveAttribute('data-i18n-ready', 'true');
 }
 
 /**
@@ -74,7 +79,9 @@ export async function openMobileMenu(page: Page) {
     const burger = page.getByTestId('mobile-menu-toggle');
     if (await burger.isVisible()) {
         await burger.click();
-        await page.waitForTimeout(300); // Wait for animation
+        // No sleep for the slide-in animation: Playwright's click() already refuses
+        // to act on an element that is still moving, so whatever is clicked next
+        // waits for the sidebar to settle on its own.
     }
 }
 
@@ -89,7 +96,12 @@ export async function navigateTo(page: Page, route: string, menuItem?: string) {
     } else {
         await page.goto(route);
     }
-    // Wait for page to be fully loaded
+    // Wait for page to be fully loaded.
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(100); // Small buffer for Svelte hydration
+    // `data-i18n-ready` is written by the root +layout, so the attribute does not
+    // exist at all until the client has hydrated — waiting for it IS the hydration
+    // barrier, and it also guarantees the translations are in. This replaced a flat
+    // 100ms "buffer for Svelte hydration" which, at 112 call sites, was both ~11s of
+    // dead time and a guess that got worse under parallel load.
+    await page.waitForSelector('html[data-i18n-ready="true"]', {timeout: 15_000});
 }

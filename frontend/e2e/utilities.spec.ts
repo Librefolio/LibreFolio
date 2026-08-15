@@ -222,7 +222,6 @@ test.describe('Utilities — UI Rendering', () => {
         // several comboboxes and `.first()` silently followed whichever came first in the DOM.
         const combobox = page.getByTestId('asset-modal-currency-group').locator('[role="combobox"]').first();
         await combobox.click();
-        await page.waitForTimeout(500);
 
         // Listbox should show options with 3-letter ISO codes
         const listbox = page.locator('[role="listbox"]');
