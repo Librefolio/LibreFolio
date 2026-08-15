@@ -87,7 +87,7 @@ test.describe('Asset Classification Round-Trip', () => {
 
         // Verify total badge is visible (entry was added)
         const geoTotal = page.getByTestId('distribution-total-geographic');
-        await expect(geoTotal).toBeVisible({timeout: 3000});
+        await expect(geoTotal).toBeVisible({timeout: 10_000});
 
         // Save
         await page.getByTestId('asset-modal-save').click();
@@ -124,7 +124,7 @@ test.describe('Asset Classification Round-Trip', () => {
 
         // Verify total badge appears
         const sectorTotal = page.getByTestId('distribution-total-sector');
-        await expect(sectorTotal).toBeVisible({timeout: 3000});
+        await expect(sectorTotal).toBeVisible({timeout: 10_000});
 
         // Save
         await page.getByTestId('asset-modal-save').click();
@@ -154,9 +154,13 @@ test.describe('Asset Classification Round-Trip', () => {
         // Expand More Info
         await expandMoreInfo(page);
 
-        // Add geo entry
+        // Add geo entry. The button's handler is async — it loads the country list on
+        // first use — so the row does not exist when the click resolves. Saving before
+        // the row lands saves nothing, and the test then blames the reopen. Wait for
+        // the total badge, which only renders once there is an entry.
         const addGeoBtn = page.getByTestId('distribution-add-geographic');
         await addGeoBtn.click();
+        await expect(page.getByTestId('distribution-total-geographic')).toBeVisible({timeout: 10_000});
 
         // Save with entry
         await page.getByTestId('asset-modal-save').click();
