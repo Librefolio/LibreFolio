@@ -147,6 +147,16 @@ def api_assets_provider(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Assets Provider API tests", verbose=verbose)
 
 
+def api_parametric_provider_semantics(verbose: bool = False, test_names: list = None) -> bool:
+    """Run parametric-provider removal/switch semantics tests."""
+    print_section("Parametric Provider Semantics Tests")
+    print_info("Removal: prices and manual events survive, generated events cascade away")
+    print_info("Switch: the invented series is discarded, the manual event is not")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_parametric_provider_semantics.py", test_names)
+    return run_command(cmd, "Parametric provider semantics tests", verbose=verbose)
+
+
 def api_assets_metadata(verbose: bool = False, test_names: list = None) -> bool:
     """Run Assets Metadata API endpoint tests."""
     print_section("Assets Metadata API Endpoint Tests")
@@ -648,6 +658,13 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
     add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
+    add_test(
+        api,
+        "parametric-provider-semantics",
+        api_parametric_provider_semantics,
+        name="Parametric Provider Semantics",
+        desc="What survives a provider removal and a switch away from a parametric provider",
+    )
     add_test(api, "assets-metadata", api_assets_metadata, name="Assets Metadata API", desc="PATCH metadata, bulk read, refresh")
     add_test(api, "assets-events", api_assets_events, name="Assets Events API", desc="Bulk upsert, delete, query")
     add_test(api, "events-target-currency", api_events_target_currency, name="Events Target Currency", desc="FX conversion on events query (E.8)")

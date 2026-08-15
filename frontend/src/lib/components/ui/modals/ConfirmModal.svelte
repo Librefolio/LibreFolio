@@ -43,9 +43,15 @@
         zIndex?: number;
         /** Operation results to display after action completes (replaces message+items when present) */
         results?: {label: string; success: boolean; detail?: string}[];
+        /**
+         * Identifies *which* confirmation is on screen. ConfirmModal is generic, so
+         * without this every confirm looks alike to a test and the only way to tell
+         * them apart is the localized text — which the project forbids as a selector.
+         */
+        testId?: string;
     }
 
-    let {open, title, message, description = '', items = [], itemsLabel = '', confirmText = $t('common.confirm'), cancelText = $t('common.cancel'), danger = false, warning = false, onConfirm, onCancel, zIndex = 60, results = []}: Props = $props();
+    let {open, title, message, description = '', items = [], itemsLabel = '', confirmText = $t('common.confirm'), cancelText = $t('common.cancel'), danger = false, warning = false, onConfirm, onCancel, zIndex = 60, results = [], testId = ''}: Props = $props();
 
     // Auto-show items if there's only 1 (no need for toggle)
     let showItems = $state(false);
@@ -57,7 +63,7 @@
 
 <ModalBase maxWidth="max-w-md" onRequestClose={onCancel} {open} {zIndex}>
     <!-- Header -->
-    <div class="modal-header">
+    <div class="modal-header" data-testid={testId || undefined}>
         {#if danger}
             <AlertTriangle class="text-red-500" size={24} />
         {:else if warning}
@@ -89,7 +95,7 @@
                 {/each}
             </ul>
         {:else}
-            <p class="message">{message}</p>
+            <p class="message" data-testid="confirm-modal-message">{message}</p>
             {#if description}
                 <p class="description">{description}</p>
             {/if}

@@ -11,7 +11,8 @@
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {goToAssetsPage, openCreateAssetModal} from './assets-helpers';
+import {goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
+import {uniqueToken} from '../fixtures/unique';
 
 test.describe('Asset Modal', () => {
     test.beforeEach(async ({page}) => {
@@ -397,6 +398,137 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             // word.
             expect(item.date_range.start).toBe('resume');
             expect(item.date_range.end).toBe(new Date().toISOString().slice(0, 10));
+        } finally {
+            if (assetId !== null) {
+                await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+            }
+        }
+    });
+
+    // ========================================================================
+    // Switching away from a parametric provider must warn *before* destroying
+    //
+    // A parametric series is invented from provider_params; under a market provider it
+    // is not history, so the backend discards it ("provider changed" in
+    // asset_source.py). That is correct — but silent destruction is not, and the
+    // warning has to be able to say *how much* it is about to destroy, otherwise it
+    // is decoration. Both branches are driven: cancelling must leave the series
+    // untouched, confirming must remove it.
+    // ========================================================================
+    test('switching away from a parametric provider warns with real counts, and only destroys on confirm', async ({page}) => {
+        const label = `E2E Param ${uniqueToken(6)}`;
+        let assetId: number | null = null;
+
+        // Seed through the API *before* installing any route, so the seeding calls
+        // reach the real backend: the test needs a genuine invented series to count.
+        const createRes = await page.request.post('/api/v1/assets', {
+            data: [{display_name: label, currency: 'EUR', asset_type: 'BOND'}],
+        });
+        expect(createRes.ok(), `asset create must succeed: ${await createRes.text()}`).toBeTruthy();
+        assetId = ((await createRes.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+
+        try {
+            const assignRes = await page.request.post('/api/v1/assets/provider', {
+                data: [
+                    {
+                        asset_id: assetId,
+                        provider_code: 'scheduled_investment',
+                        identifier: '',
+                        identifier_type: 'AUTO_GENERATED',
+                        provider_params: {
+                            initial_value: {code: 'EUR', amount: 10000},
+                            interest_type: 'SIMPLE',
+                            day_count: 'ACT/365',
+                            schedule: [{start_date: '2024-01-15', end_date: '2026-01-15', annual_rate: 0.035, maturation_frequency: 'MONTHLY', generate_interest: true}],
+                        },
+                    },
+                ],
+            });
+            expect(assignRes.ok(), `parametric assignment must succeed: ${await assignRes.text()}`).toBeTruthy();
+
+            const syncRes = await page.request.post('/api/v1/assets/prices/sync', {
+                data: [{asset_id: assetId, date_range: {start: '2024-01-15', end: '2026-01-15'}}],
+            });
+            expect(syncRes.ok(), 'parametric sync must succeed').toBeTruthy();
+
+            // Stored rows, not the width of a query window: the price-query endpoint
+            // backward-fills every calendar day in the requested range, so it answers
+            // with the size of the question. The market-data summary counts the rows.
+            const marketData = async () => {
+                const res = await page.request.get(`/api/v1/assets/${assetId}/market-data/summary`);
+                return (await res.json()) as {prices: number; events_provider: number; events_manual: number};
+            };
+            const countPrices = async () => (await marketData()).prices;
+
+            const pricesBefore = await countPrices();
+            expect(pricesBefore, 'the seeded parametric asset must actually have an invented series').toBeGreaterThan(0);
+
+            // Pick a real non-parametric provider rather than hardcoding one.
+            const providers = (await (await page.request.get('/api/v1/assets/provider')).json()) as Array<{code: string}>;
+            const target = providers.find((p) => p.code !== 'mockprov' && p.code !== 'scheduled_investment');
+            expect(target, 'a non-parametric provider must exist').toBeTruthy();
+
+            // Keep the switch offline: the probe only has to satisfy the Save gate.
+            await page.route('**/api/v1/assets/provider/probe', async (route) => {
+                await route.fulfill({
+                    status: 200,
+                    contentType: 'application/json',
+                    body: JSON.stringify({
+                        provider_code: target!.code,
+                        identifier: 'E2E-PARAM',
+                        total_execution_time_ms: 2,
+                        current_price: {success: true, execution_time_ms: 1, value: '100.00', currency: 'EUR', as_of_date: '2024-01-02'},
+                        history: {success: true, execution_time_ms: 1, points_count: 2, date_range: '2024-01-01 → 2024-01-02'},
+                    }),
+                });
+            });
+            // The post-save sync is fire-and-forget; stub it so the assertion measures the
+            // wipe rather than whatever the new provider manages to fetch.
+            await page.route('**/api/v1/assets/prices/sync', async (route) => {
+                await route.fulfill({status: 200, contentType: 'application/json', body: '[]'});
+            });
+
+            await goToAssetDetailPage(page, String(assetId));
+            await openEditAssetModal(page);
+
+            const selectNewProvider = async () => {
+                const providerHeader = page.getByTestId('asset-modal-provider-header');
+                if ((await providerHeader.getAttribute('data-expanded')) !== 'true') {
+                    await providerHeader.click();
+                }
+                await page.getByTestId('provider-code-select-button').click();
+                await page.getByTestId(`provider-option-${target!.code}`).click();
+                const identifier = page.getByTestId('provider-identifier');
+                if (await identifier.isVisible().catch(() => false)) {
+                    await identifier.fill('E2E-PARAM');
+                }
+                await page.getByTestId('provider-test-config').click();
+                await expect(page.getByTestId('asset-modal-provider-status')).toHaveAttribute('data-status', 'passed', {timeout: 20_000});
+            };
+
+            await selectNewProvider();
+            // Re-read here rather than reusing the seed count: opening the detail page
+            // persists today's current price, so the series legitimately grows by one
+            // between seeding and the save. The warning must quote what exists *now*.
+            const pricesAtSave = await countPrices();
+            expect(pricesAtSave).toBeGreaterThan(0);
+            await page.getByTestId('asset-modal-save').click();
+
+            // Branch 1 — the warning appears, and it can say how much it is about to destroy.
+            await expect(page.getByTestId('asset-parametric-switch-confirm')).toBeVisible({timeout: 15_000});
+            await expect(page.getByTestId('confirm-modal-message')).toContainText(String(pricesAtSave));
+
+            await page.getByTestId('confirm-modal-cancel').click();
+            await expect(page.getByTestId('asset-parametric-switch-confirm')).not.toBeVisible({timeout: 5000});
+            expect(await countPrices(), 'cancelling must not destroy anything').toBeGreaterThanOrEqual(pricesAtSave);
+
+            // Branch 2 — confirming goes through and the invented series is gone.
+            await page.getByTestId('asset-modal-save').click();
+            await expect(page.getByTestId('asset-parametric-switch-confirm')).toBeVisible({timeout: 15_000});
+            await page.getByTestId('confirm-modal-confirm').click();
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 20_000});
+
+            await expect.poll(async () => await countPrices(), {message: 'confirming the switch must discard the invented series', timeout: 20_000}).toBe(0);
         } finally {
             if (assetId !== null) {
                 await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});

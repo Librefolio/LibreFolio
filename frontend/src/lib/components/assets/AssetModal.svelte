@@ -241,6 +241,14 @@
     let pendingSaveAssetId: number | null = $state(null);
     let initialProviderParamsJson: string = $state('');
 
+    // Leaving a parametric provider (scheduled_investment → Yahoo, …) wipes the
+    // generated series server-side, for the same reason a params change does: the
+    // prices were *invented* from the params, so under a market provider they are
+    // not history. Unlike the params change the user has no reason to expect it,
+    // so the warning states the actual counts before anything is destroyed.
+    let showParametricSwitchConfirm = $state(false);
+    let parametricSwitchInfo = $state<{prices: number; events: number; from: string; to: string} | null>(null);
+
     // I-bis #2 — snapshot of the provider config as loaded from the DB.
     // Used by the ``providerDirty`` derived below to gate the
     // "Save Without Testing?" modal: it must fire **only** when one of
@@ -1341,6 +1349,28 @@
         }
     }
 
+    /** How much of the asset's series was generated, for the warning below.
+     *
+     * Uses the market-data summary — the same counters the currency-change flow
+     * relies on — because it reports *stored rows*. The price query endpoint
+     * cannot be used here: it backward-fills every calendar day in the requested
+     * range, so it would answer with the width of the window instead of the size
+     * of the series, and the warning would quote a plausible wrong number.
+     *
+     * Best effort on purpose: a failed count must never block a save, so a
+     * failure degrades to zeroes and the warning stays generic rather than
+     * lying with a number it does not have.
+     */
+    async function countGeneratedSeries(assetId: number): Promise<{prices: number; events: number}> {
+        try {
+            const summary: any = await zodiosApi.market_data_summary_api_v1_assets__asset_id__market_data_summary_get({params: {asset_id: assetId}});
+            return {prices: summary?.prices ?? 0, events: summary?.events_provider ?? 0};
+        } catch (err) {
+            console.warn('Could not count the generated series before the provider switch:', err);
+            return {prices: 0, events: 0};
+        }
+    }
+
     async function saveEdit(assetId: number) {
         const normalizedQuoteBaseQuantity = !quoteBaseQuantity || quoteBaseQuantity <= 0 ? 1 : quoteBaseQuantity;
         // #R3-4 — for PARAMETRIC_GENERATION providers (e.g. scheduled_investment), if the
@@ -1355,6 +1385,23 @@
         if (isParametricProvider(providerCode) && !providerNoProvider && initialProviderParamsJson && JSON.stringify(providerParams ?? null) !== initialProviderParamsJson && !pendingSaveAssetId) {
             pendingSaveAssetId = assetId;
             showScheduledRegenConfirm = true;
+            return; // wait for confirm; the modal will re-invoke saveEdit()
+        }
+
+        // Same interception for the *other* destructive parametric case: swapping the
+        // provider away from a parametric one. The backend wipes the generated prices
+        // and events (asset_source.py, "provider changed"), and without that wipe the
+        // next sync would resume from the day after the last invented price and never
+        // backfill the real past. Counts come from the two existing query endpoints —
+        // a warning that cannot say how much it is about to destroy is not a warning.
+        if (!providerNoProvider && hasProvider && initialProviderCode && providerCode !== initialProviderCode && isParametricProvider(initialProviderCode) && !pendingSaveAssetId) {
+            pendingSaveAssetId = assetId;
+            parametricSwitchInfo = {
+                ...(await countGeneratedSeries(assetId)),
+                from: getAssetProviderName(initialProviderCode) || initialProviderCode,
+                to: getAssetProviderName(providerCode) || providerCode,
+            };
+            showParametricSwitchConfirm = true;
             return; // wait for confirm; the modal will re-invoke saveEdit()
         }
 
@@ -2195,6 +2242,7 @@
     confirmText={$t('assets.modal.scheduledRegenConfirm')}
     cancelText={$t('common.cancel')}
     danger={true}
+    testId="asset-scheduled-regen-confirm"
     onConfirm={() => {
         showScheduledRegenConfirm = false;
         const aid = pendingSaveAssetId;
@@ -2210,6 +2258,43 @@
     }}
     onCancel={() => {
         showScheduledRegenConfirm = false;
+        pendingSaveAssetId = null;
+    }}
+    zIndex={zIndex + 20}
+/>
+
+<!-- Confirmation: swapping away from a parametric provider discards its generated series -->
+<ConfirmModal
+    open={showParametricSwitchConfirm}
+    title={$t('assets.modal.parametricSwitchTitle')}
+    message={$t('assets.modal.parametricSwitchMessage', {
+        values: {
+            from: parametricSwitchInfo?.from ?? '',
+            to: parametricSwitchInfo?.to ?? '',
+            prices: parametricSwitchInfo?.prices ?? 0,
+            events: parametricSwitchInfo?.events ?? 0,
+        },
+    })}
+    confirmText={$t('assets.modal.parametricSwitchConfirm')}
+    cancelText={$t('common.cancel')}
+    danger={true}
+    testId="asset-parametric-switch-confirm"
+    onConfirm={() => {
+        showParametricSwitchConfirm = false;
+        const aid = pendingSaveAssetId;
+        // pendingSaveAssetId stays non-null so the guard in saveEdit() skips this
+        // modal on the second pass and proceeds to PATCH+assign+sync.
+        if (aid !== null) {
+            saveEdit(aid).catch((err) => {
+                console.error('saveEdit after parametric switch confirm failed:', err);
+                toasts.error($t('common.errorOccurred'));
+                pendingSaveAssetId = null;
+            });
+        }
+    }}
+    onCancel={() => {
+        showParametricSwitchConfirm = false;
+        parametricSwitchInfo = null;
         pendingSaveAssetId = null;
     }}
     zIndex={zIndex + 20}
