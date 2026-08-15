@@ -20,7 +20,7 @@
  */
 import {expect, test, type Page, type Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForSettled} from '../fixtures/app-events';
+import {waitForSettled, waitForValidateRun} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 
 test.setTimeout(60_000);
@@ -233,6 +233,13 @@ test.describe('FormModal WAC Payload Tests', () => {
         await fillCash(page, '1000');
         await applyFormModal(page);
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        // The BUY's apply schedules a validate of its own. `captureValidatePayload`
+        // below returns the *next* validate request, whoever caused it — so if the
+        // BUY's is still queued when the listener registers, the test inspects a
+        // payload containing only the BUY and reports "no TRANSFER receiver".
+        // That is the failure seen under load, and it fails fast (3.5 s) precisely
+        // because the wrong request arrives early. Let the first run finish.
+        await waitForValidateRun(page.getByTestId('tx-bulk-modal-root'), 0);
 
         // Now add a TRANSFER row; intercept the validate that fires after apply
         await page.getByTestId('tx-bulk-add-row').click();

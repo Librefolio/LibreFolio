@@ -1,5 +1,7 @@
+import contextlib
 import os
 import sqlite3
+import sys
 
 import pytest
 
@@ -68,6 +70,30 @@ def pytest_sessionfinish(session, exitstatus):
     _exit_status = int(exitstatus)
 
 
+def _release_process_pools():
+    """Join worker processes by hand, because os._exit() below skips atexit.
+
+    A BRIM parse runs in a ``forkserver``-backed process pool. The pool is
+    normally reaped by the ``atexit`` handler that ``concurrent.futures``
+    registers — and ``os._exit`` never runs it. What survives is not a zombie
+    but a live forkserver plus its workers, re-parented to init and still
+    holding the stdout they inherited from pytest. A run piped into ``tee``
+    therefore never sees EOF and hangs forever, which is why the project rule
+    used to be "never pipe a test run".
+
+    Measured on this exact shape: shutdown(wait=False) immediately before
+    os._exit still hangs — the management thread has no chance to send the
+    sentinels. Only the join closes the pipe.
+
+    Looked up through sys.modules so a suite that never parsed a file does not
+    import the module (and build a pool) just to tear it down.
+    """
+    pool_module = sys.modules.get("backend.app.services.brim_parse_pool")
+    if pool_module is not None:
+        with contextlib.suppress(Exception):
+            pool_module.shutdown_pool(wait=True)
+
+
 def pytest_unconfigure(config):
     """Force process exit once pytest is fully done, including terminal reporting.
 
@@ -80,4 +106,5 @@ def pytest_unconfigure(config):
     exiting there silently swallows all failure diagnostics.
     """
     if _exit_status is not None:
+        _release_process_pools()
         os._exit(_exit_status)

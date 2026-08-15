@@ -950,109 +950,123 @@ class AssetSourceManager:
                 # provider_code check.
                 params_changed = (existing.provider_params or "") != (params_to_store or "")
                 provider_code_unchanged = existing.provider_code == a.provider_code
-                if params_changed and provider_code_unchanged:
-                    prov_instance = AssetProviderRegistry.get_provider_instance(a.provider_code)
-                    is_parametric = prov_instance is not None and prov_instance.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
-                    if is_parametric:
-                        # 1. Delete ALL prices for this asset (full wipe).
-                        #
-                        # #R4-3 (2026-04-23): previously we scoped by
-                        # ``source_plugin_key == a.provider_code``, but
-                        # ``bulk_upsert_prices`` unconditionally hardcoded
-                        # ``source_plugin_key="MANUAL"`` for every inserted row
-                        # (fixed 2026-07-14 — see its ``source_plugin_key`` param,
-                        # L1207), so the DELETE matched **zero** rows and
-                        # old stale points from a previous schedule survived the
-                        # regen. The user observed weekly points (new regen) and
-                        # daily leftovers (pre-existing rows) mixed in the same
-                        # series, producing a misleading "flat line" chart.
-                        #
-                        # Semantically correct REGARDLESS of the above fix: an
-                        # asset bound to a parametric provider derives its
-                        # *entire* price series from the provider_params. A
-                        # change of params invalidates the whole series,
-                        # mirroring the R3-3 currency-change wipe policy.
-                        # Manually imported points (if any) are also wiped —
-                        # the user must re-import after the param change if
-                        # needed (same responsibility model as R3-3).
-                        deleted_rows_result = await session.execute(
-                            delete(PriceHistory).where(
-                                PriceHistory.asset_id == a.asset_id,
-                            )
+
+                def _is_parametric(code: str) -> bool:
+                    inst = AssetProviderRegistry.get_provider_instance(code)
+                    return inst is not None and inst.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
+
+                if provider_code_unchanged:
+                    wipe_reason = "params changed" if (params_changed and _is_parametric(a.provider_code)) else ""
+                else:
+                    # Leaving a parametric provider is at least as invalidating as
+                    # changing its params: the whole series was *invented* from
+                    # provider_params, so under a market provider it is not history,
+                    # it is fiction. Keeping it also poisons the next sync, which
+                    # resumes from the day after the last stored price and therefore
+                    # never backfills the real past.
+                    wipe_reason = "provider changed" if _is_parametric(existing.provider_code) else ""
+
+                if wipe_reason:
+                    # 1. Delete ALL prices for this asset (full wipe).
+                    #
+                    # #R4-3 (2026-04-23): previously we scoped by
+                    # ``source_plugin_key == a.provider_code``, but
+                    # ``bulk_upsert_prices`` unconditionally hardcoded
+                    # ``source_plugin_key="MANUAL"`` for every inserted row
+                    # (fixed 2026-07-14 — see its ``source_plugin_key`` param,
+                    # L1207), so the DELETE matched **zero** rows and
+                    # old stale points from a previous schedule survived the
+                    # regen. The user observed weekly points (new regen) and
+                    # daily leftovers (pre-existing rows) mixed in the same
+                    # series, producing a misleading "flat line" chart.
+                    #
+                    # Semantically correct REGARDLESS of the above fix: an
+                    # asset bound to a parametric provider derives its
+                    # *entire* price series from the provider_params. A
+                    # change of params invalidates the whole series,
+                    # mirroring the R3-3 currency-change wipe policy.
+                    # Manually imported points (if any) are also wiped —
+                    # the user must re-import after the param change if
+                    # needed (same responsibility model as R3-3).
+                    deleted_rows_result = await session.execute(
+                        delete(PriceHistory).where(
+                            PriceHistory.asset_id == a.asset_id,
                         )
-                        deleted_count = deleted_rows_result.rowcount or 0
-                        # 1b. Symmetric wipe of **auto-generated** events
-                        # (#R6-4, 2026-04-24): before this fix, a param change
-                        # wiped only the prices but left the previously
-                        # generated events in place. The result was an asset
-                        # showing stale INTEREST / MATURITY_SETTLEMENT events
-                        # computed from the *old* schedule, plus new events
-                        # that will be regenerated on next sync — the two
-                        # sets can overlap or contradict each other (e.g.
-                        # an old coupon on Jul 1 at rate 0.05 vs a new one
-                        # at rate 0.12), and ``get_current_value`` sees the
-                        # stale subtractive events so its output is
-                        # essentially undefined.
-                        #
-                        # Policy: mirror the R3-3 wipe for events too —
-                        # delete all events generated by THIS provider
-                        # assignment (``provider_assignment_id ==
-                        # existing.id``). Manual events
-                        # (``provider_assignment_id IS NULL``) are
-                        # preserved: they are user-owned and survive param
-                        # changes. Transactions linked to the deleted
-                        # events are disconnected (SET asset_event_id =
-                        # NULL) — same responsibility model as Policy D:
-                        # the user can reattach them to the regenerated
-                        # events if needed.
-                        event_ids_subq = select(AssetEvent.id).where(
+                    )
+                    deleted_count = deleted_rows_result.rowcount or 0
+                    # 1b. Symmetric wipe of **auto-generated** events
+                    # (#R6-4, 2026-04-24): before this fix, a param change
+                    # wiped only the prices but left the previously
+                    # generated events in place. The result was an asset
+                    # showing stale INTEREST / MATURITY_SETTLEMENT events
+                    # computed from the *old* schedule, plus new events
+                    # that will be regenerated on next sync — the two
+                    # sets can overlap or contradict each other (e.g.
+                    # an old coupon on Jul 1 at rate 0.05 vs a new one
+                    # at rate 0.12), and ``get_current_value`` sees the
+                    # stale subtractive events so its output is
+                    # essentially undefined.
+                    #
+                    # Policy: mirror the R3-3 wipe for events too —
+                    # delete all events generated by THIS provider
+                    # assignment (``provider_assignment_id ==
+                    # existing.id``). Manual events
+                    # (``provider_assignment_id IS NULL``) are
+                    # preserved: they are user-owned and survive param
+                    # changes. Transactions linked to the deleted
+                    # events are disconnected (SET asset_event_id =
+                    # NULL) — same responsibility model as Policy D:
+                    # the user can reattach them to the regenerated
+                    # events if needed.
+                    event_ids_subq = select(AssetEvent.id).where(
+                        and_(
+                            AssetEvent.asset_id == a.asset_id,
+                            AssetEvent.provider_assignment_id == existing.id,
+                        )
+                    )
+                    disconnect_result = await session.execute(Transaction.__table__.update().where(Transaction.asset_event_id.in_(event_ids_subq)).values(asset_event_id=None))
+                    disconnected_tx = disconnect_result.rowcount or 0
+                    deleted_events_result = await session.execute(
+                        delete(AssetEvent).where(
                             and_(
                                 AssetEvent.asset_id == a.asset_id,
                                 AssetEvent.provider_assignment_id == existing.id,
                             )
                         )
-                        disconnect_result = await session.execute(Transaction.__table__.update().where(Transaction.asset_event_id.in_(event_ids_subq)).values(asset_event_id=None))
-                        disconnected_tx = disconnect_result.rowcount or 0
-                        deleted_events_result = await session.execute(
-                            delete(AssetEvent).where(
-                                and_(
-                                    AssetEvent.asset_id == a.asset_id,
-                                    AssetEvent.provider_assignment_id == existing.id,
-                                )
-                            )
+                    )
+                    deleted_events = deleted_events_result.rowcount or 0
+                    # 2. Invalidate outer caches for the OLD params hash (the new
+                    #    hash produces a different cache_key → natural MISS, but we
+                    #    also drop the stale entry explicitly so it doesn't linger
+                    #    for 15 min).
+                    try:
+                        old_params_dict = None
+                        if existing.provider_params:
+                            try:
+                                old_params_dict = json.loads(existing.provider_params)
+                            except Exception:
+                                old_params_dict = None
+                        old_hash = _provider_params_hash(old_params_dict)
+                        old_identifier = existing.identifier or ""
+                        old_key = (
+                            existing.provider_code,
+                            old_identifier,
+                            str(existing.identifier_type),
+                            old_hash,
                         )
-                        deleted_events = deleted_events_result.rowcount or 0
-                        # 2. Invalidate outer caches for the OLD params hash (the new
-                        #    hash produces a different cache_key → natural MISS, but we
-                        #    also drop the stale entry explicitly so it doesn't linger
-                        #    for 15 min).
-                        try:
-                            old_params_dict = None
-                            if existing.provider_params:
-                                try:
-                                    old_params_dict = json.loads(existing.provider_params)
-                                except Exception:
-                                    old_params_dict = None
-                            old_hash = _provider_params_hash(old_params_dict)
-                            old_identifier = existing.identifier or ""
-                            old_key = (
-                                existing.provider_code,
-                                old_identifier,
-                                str(existing.identifier_type),
-                                old_hash,
-                            )
-                            _asset_history_cache.delete(old_key)
-                            _asset_current_cache.delete(old_key)
-                        except Exception as cache_err:
-                            logger.debug(f"Cache invalidation skipped for asset {a.asset_id}: {cache_err}")
-                        logger.info(
-                            "parametric provider '%s' params changed for asset %s — wiped %d price row(s), %d event row(s), disconnected %d transaction(s), invalidated cache",
-                            a.provider_code,
-                            a.asset_id,
-                            deleted_count,
-                            deleted_events,
-                            disconnected_tx,
-                        )
+                        _asset_history_cache.delete(old_key)
+                        _asset_current_cache.delete(old_key)
+                    except Exception as cache_err:
+                        logger.debug(f"Cache invalidation skipped for asset {a.asset_id}: {cache_err}")
+                    logger.info(
+                        "parametric provider '%s' %s for asset %s — wiped %d price row(s), %d event row(s), disconnected %d transaction(s), invalidated cache",
+                        existing.provider_code,
+                        wipe_reason,
+                        a.asset_id,
+                        deleted_count,
+                        deleted_events,
+                        disconnected_tx,
+                    )
 
                 # UPDATE existing assignment (preserves id → FK stays valid)
                 existing.provider_code = a.provider_code

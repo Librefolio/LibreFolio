@@ -124,9 +124,21 @@ def _disable_pool(exc: BaseException) -> None:
     _pool_disabled = True
 
 
-def shutdown_pool() -> None:
-    """Release the workers (application shutdown, tests)."""
+def shutdown_pool(wait: bool = False) -> None:
+    """Release the workers (application shutdown, tests).
+
+    ``wait=False`` by default: application shutdown must not block behind a
+    parse that is still running, and an orderly interpreter exit finishes the
+    job anyway — ``concurrent.futures`` registers an ``atexit`` handler that
+    joins the pool.
+
+    Pass ``wait=True`` when the caller is about to leave through ``os._exit``,
+    which skips that handler. Without the join the forkserver control process
+    and its workers survive, are re-parented to init, and keep the *inherited*
+    stdout open — a run piped into ``tee`` then never sees EOF and hangs.
+    ``cancel_futures=True`` means the wait covers only parses already running.
+    """
     global _pool
     if _pool is not None:
-        _pool.shutdown(wait=False, cancel_futures=True)
+        _pool.shutdown(wait=wait, cancel_futures=True)
         _pool = None

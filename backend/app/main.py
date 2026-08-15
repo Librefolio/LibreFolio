@@ -267,7 +267,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     AssetProviderRegistry.shutdown_all_providers()
     FXProviderRegistry.shutdown_all_providers()
     BRIMProviderRegistry.shutdown_all_providers()
-    shutdown_brim_parse_pool()
+    # wait=True: releasing the parse workers has to actually happen here. The
+    # runner escalates to SIGKILL after a grace period, and a SIGKILL skips the
+    # atexit handler that would otherwise join them — the workers then survive,
+    # re-parented to init, holding the stdout they inherited. Nothing is running
+    # at this point anyway: uvicorn has already drained in-flight requests, and
+    # a parse only exists inside one.
+    shutdown_brim_parse_pool(wait=True)
     await shutdown_quant_worker_pools()
 
     # Close all TTL caches (stop timer wheel threads for clean exit)
