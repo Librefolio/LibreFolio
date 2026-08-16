@@ -102,7 +102,6 @@ def plan(scope: str = None, workers: int = 1, classes: tuple = (PURE,), assume_s
     else:
         pure = {u.path for u in pytest_units if u.isolation in classes}
 
-
     # An action can only be lifted out of the serial pass when *every* path it
     # launches runs in the parallel one — a mixed action would silently lose its
     # WRITE-GLOBAL half. And a path launched by an action that stays serial must
@@ -128,6 +127,7 @@ def plan(scope: str = None, workers: int = 1, classes: tuple = (PURE,), assume_s
         "parallel_paths": parallel_paths,
         "covered_actions": covered_actions,
         "serial_actions": sorted(serial),
+        "by_action": by_action,
         "errors": errors,
     }
 

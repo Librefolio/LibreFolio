@@ -23,7 +23,7 @@ import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {waitForSettled} from '../fixtures/app-events';
+import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 import {uniqueSuffix} from '../fixtures/unique';
 
@@ -122,7 +122,7 @@ async function parseBothFiles(page: Page, target: {brokerName: string; fileNames
     await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 4_000});
     await page.getByTestId('import-wizard-parse').click();
     await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 20_000});
-    await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+    await waitForParseVerdict(page);
 }
 
 /** Reach the unification step, reading past the notice modal if the parse raised one. */

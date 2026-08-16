@@ -337,9 +337,9 @@ crash was fixed — 98 statements, twenty times the noise floor, and in the dire
 harmless. Three frontend specs had been dying mid-run and taking their backend E2E coverage with
 them. **Coverage going quietly down is a symptom, not a fluctuation.**
 
-`--no-fail-fast` runs everything and reports every red instead of stopping at the first. It covers
-the parallel pass, the consolidation pass and the serial suite, so one flag answers "how wide is the
-damage".
+A run reports **every** red instead of stopping at the first, across the parallel pass, the
+consolidation pass and the serial suite — because several reds in one worker are usually several
+symptoms of one cause, and stopping at the first hides that. `--fail-fast` opts back into stopping.
 
 !!! info "Port 6041 and `db create` — fixed, and worth knowing why"
     `db create` used to unlink the database *before* `db:upgrade` ran, and `db:upgrade` refuses to

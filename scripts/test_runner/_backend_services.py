@@ -667,9 +667,24 @@ Note: No backend server required.
         # database this category's setup builds — 2m42 → 1m16, zero reds. They
         # never talk to a server; each opens its own session and creates the rows
         # it then reads back.
+        #
+        # That last sentence is the load-bearing claim, and it is a claim about
+        # every unit, so any unit that breaks it must opt out with
+        # `exclusive_because`. Three did, and only 8 workers exposed them: an
+        # autouse fixture that truncates a whole shared table is not "its own
+        # rows", and a unit that reads rows it seeded once per *module* loses
+        # them to a neighbour that truncates once per *test*.
         default_isolation="write-scoped",
     )
-    add_test(cat, "fx-conversion", services_fx_conversion, name="FX Conversion", desc="Currency conversion algorithms", prereq="Database created")
+    add_test(
+        cat,
+        "fx-conversion",
+        services_fx_conversion,
+        name="FX Conversion",
+        desc="Currency conversion algorithms",
+        prereq="Database created",
+        exclusive_because="its assertions are about the oldest and newest EUR/USD row in the whole fx_rates table (backward fill, missing-rate boundary), and the service under test queries that table without a source filter, so a neighbour inserting any EUR/USD rate moves the boundary this unit measures",
+    )
     add_test(cat, "asset-metadata", services_asset_metadata, name="Asset Metadata", desc="Parse/serialize, diff, patch semantics")
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
@@ -698,8 +713,22 @@ Note: No backend server required.
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")
-    add_test(cat, "global-settings", services_global_settings, name="Global Settings", desc="Type conversion, DB reads, TTL getters")
-    add_test(cat, "fx-core", services_fx_core, name="FX Core Helpers", desc="normalize_rate, upsert/delete bulk, changes")
+    add_test(
+        cat,
+        "global-settings",
+        services_global_settings,
+        name="Global Settings",
+        desc="Type conversion, DB reads, TTL getters",
+        exclusive_because="an autouse fixture truncates global_settings before every test; that table holds enable_registration, which conftest seeds once per process, so a concurrent unit loses it mid-run and fails far from the cause",
+    )
+    add_test(
+        cat,
+        "fx-core",
+        services_fx_core,
+        name="FX Core Helpers",
+        desc="normalize_rate, upsert/delete bulk, changes",
+        exclusive_because="an autouse fixture truncates fx_rates before every test, so any concurrent unit reading rates loses them mid-test",
+    )
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
     add_test(cat, "brim-parse-pool", services_brim_parse_pool, name="BRIM Parse Pool", desc="Process-pool off-loading, pickle round-trip, thread fallback")
@@ -722,7 +751,14 @@ Note: No backend server required.
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
-    add_test(cat, "fx-sync-service", services_fx_sync, name="FX Sync Orchestration", desc="_is_date_within_sync_range, _process_route/_compute_multi_step")
+    add_test(
+        cat,
+        "fx-sync-service",
+        services_fx_sync,
+        name="FX Sync Orchestration",
+        desc="_is_date_within_sync_range, _process_route/_compute_multi_step",
+        exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
+    )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
     add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")

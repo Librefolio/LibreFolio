@@ -459,9 +459,9 @@ Useful flags — **global, so they go before the category**:
 | flag | why you want it |
 |---|---|
 | `--workers N` | run isolation-safe units in parallel. **This is the check that matters.** |
-| `--log-dir PATH` | one log file per unit; previous logs are archived and compressed |
+| `--log-dir PATH` | one log file per unit; previous logs are archived and compressed. Defaults to `.testLog` |
 | `--log-file PATH` | the whole run into one file |
-| `--no-fail-fast` | see every failure instead of the first |
+| `--fail-fast` | stop at the first red instead of running everything |
 | `--resume` | re-run only what failed |
 | `--assume-scoped` | ignore isolation declarations (experiment only, never commit under it) |
 

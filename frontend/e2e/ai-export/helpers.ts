@@ -4,7 +4,18 @@ import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 
 export const UI_TIMEOUT = 8_000;
-export const API_TIMEOUT = 30_000;
+
+// A response budget, not a performance assertion. Measured against the test backend:
+// the portfolio snapshot costs 0.32s served alone and 4.0s with eight concurrent
+// callers — but the same contract spec that runs in 6.7s bare takes 44.8s once the
+// suite adds Python and JS coverage instrumentation, because tracing multiplies every
+// pure-Python code path the endpoint walks.
+//
+// This wait sits on a path the test expects to succeed, so a generous ceiling costs
+// nothing when the export works and only bounds how long a genuine hang takes to
+// report. At 30s it was inside the tail of the instrumented run: two sibling specs
+// passed within a few seconds of the same fate, and the third lost the race.
+export const API_TIMEOUT = 90_000;
 
 export type AiExportSelectionKind = 'dataset' | 'analysis';
 export type AiExportDetailLevel = 'compact' | 'standard' | 'full';

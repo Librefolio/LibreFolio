@@ -87,6 +87,42 @@ def read_unit_durations(known_paths: set) -> dict:
     return {p: round(t, 3) for p, t in totals.items()}
 
 
+def read_failed_units(known_paths: set) -> set:
+    """Unit paths with at least one failure or error, from the workers' junit reports.
+
+    The parallel pass marks every unit it ran as covered, so the serial pass skips
+    them. Without naming *which* ones failed, the category verdict has nothing to
+    go on and the suite summary prints "ALL TESTS PASSED" over a run that exits 1.
+    Same classname-to-path walk as :func:`read_unit_durations`, so the two agree
+    by construction.
+
+    A worker that dies before writing its report (timeout, collection error,
+    SIGKILL) leaves nothing to read, so callers must keep treating a non-zero
+    return code as failure in its own right.
+    """
+    import xml.etree.ElementTree as ET
+
+    failed: set = set()
+    for report in sorted(PARTS_DIR.glob("junit.w*.xml")):
+        try:
+            root = ET.parse(report).getroot()
+        except (OSError, ET.ParseError):
+            continue
+        for case in root.iter("testcase"):
+            if case.find("failure") is None and case.find("error") is None:
+                continue
+            parts = (case.get("classname") or "").split(".")
+            if parts[:2] == ["backend", "test_scripts"]:
+                parts = parts[2:]
+            while parts:
+                candidate = "/".join(parts) + ".py"
+                if candidate in known_paths:
+                    failed.add(candidate)
+                    break
+                parts = parts[:-1]
+    return failed
+
+
 def _write_worker_logs(results: list) -> None:
     """Deposit each worker's captured output when --log-dir is active.
 
@@ -103,12 +139,7 @@ def _write_worker_logs(results: list) -> None:
     for r in results:
         try:
             path = log_file_for(log_dir, "backend-parallel", f"worker{r['index']}")
-            header = (
-                f"# worker {r['index']} | exit={r['returncode']} | {r['elapsed']:.1f}s\n"
-                f"# units ({len(r['paths'])}):\n"
-                + "".join(f"#   {p}\n" for p in r["paths"])
-                + "\n"
-            )
+            header = f"# worker {r['index']} | exit={r['returncode']} | {r['elapsed']:.1f}s\n" f"# units ({len(r['paths'])}):\n" + "".join(f"#   {p}\n" for p in r["paths"]) + "\n"
             path.write_text(header + (r["output"] or ""), encoding="utf-8", errors="replace")
         except Exception:
             pass

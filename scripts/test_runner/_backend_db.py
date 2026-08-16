@@ -2,6 +2,9 @@
 Database tests: create, validate, populate, fx_rates, brim, referential integrity, etc.
 """
 
+import shutil
+
+from backend.test_scripts.test_db_config import TEST_DATA_DIR
 from scripts.cli_base import pipenv_prefix
 
 from . import _common
@@ -27,6 +30,41 @@ def db_create(verbose: bool = False) -> bool:
 
     with database_file_owned_exclusively("creating a clean test database"):
         return _db_create_body(verbose)
+
+
+def _reset_test_file_store() -> None:
+    """Drop the file stores that belong to the database being replaced.
+
+    A broker's uploaded reports live on disk, keyed by the broker's *id* —
+    ``broker_reports/uploaded/broker_21/…`` — while the broker row itself lives in
+    the database. Recreating the database therefore renumbers the owners of files
+    that nobody deleted, and the two halves of one dataset drift apart.
+
+    Measured on this machine before the fix: 28 brokers in the database, 308 broker
+    directories on disk, 6490 files, 182 copies of the same ``generic_simple.csv``.
+    Every directory numbered 1-28 was a *previous* run's broker silently
+    impersonating a current one, so the import wizard listed files whose owner had
+    been someone else. Tests that pick "the first file called X" then get a
+    different file depending on how many runs preceded them — a shared-state
+    landmine that only fires in long runs, which is the hardest kind to diagnose.
+
+    The stores are rebuilt by ``db populate`` (``--with-reports`` / ``--with-static``)
+    and the default avatars re-copy themselves at startup, so clearing costs nothing.
+    """
+    for name in ("broker_reports", "custom-uploads"):
+        target = TEST_DATA_DIR / name
+
+        # Never let a path bug reach outside the test data directory.
+        if not target.resolve().is_relative_to(TEST_DATA_DIR.resolve()):
+            print_error(f"Refusing to clear {target}: outside the test data directory")
+            continue
+
+        if not target.exists():
+            continue
+
+        file_count = sum(1 for p in target.rglob("*") if p.is_file())
+        shutil.rmtree(target)
+        print_success(f"Test file store cleared: {name} ({file_count} file(s))")
 
 
 def _db_create_body(verbose: bool = False) -> bool:
@@ -57,6 +95,10 @@ def _db_create_body(verbose: bool = False) -> bool:
         print_success("Test database removed")
     else:
         print_info("No existing test database found")
+
+    # The files on disk are keyed by database ids, so they are part of the database
+    # being replaced — not a separate cache that may outlive it.
+    _reset_test_file_store()
 
     print("\nCreating fresh test database from migrations...")
     success = run_command(

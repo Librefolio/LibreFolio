@@ -4,6 +4,7 @@ Main entry point for the backend API.
 """
 
 import asyncio
+import contextlib
 import os
 import sqlite3
 import subprocess
@@ -134,43 +135,52 @@ def ensure_database_exists():
             # Check if database has tables using SQLite directly
 
             try:
-                conn = sqlite3.connect(str(db_path))
-                cursor = conn.cursor()
-                cursor.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-                table_count = cursor.fetchone()[0]
+                # closing() rather than a bare connect: the close used to sit at the
+                # end of the try, so the corruption branch below — the one branch
+                # that is *expected* to fire — skipped it and leaked a handle to the
+                # very file it was about to rebuild.
+                with contextlib.closing(sqlite3.connect(str(db_path))) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                    table_count = cursor.fetchone()[0]
 
-                if table_count == 0:
-                    logger.warning("Database has no tables, running migrations", db_path=str(db_path))
-                    needs_migration = True
-                else:
-                    # DB already has a schema. Compare its current Alembic revision
-                    # against the head revision in the migration scripts: if they
-                    # differ, migrations were added since this DB was last opened and
-                    # must be applied now. Skipping this is exactly what let a stale
-                    # DB (still at 001 while 002 was pending) reach the app and crash
-                    # on the first query touching a changed column.
-                    try:
-                        cursor.execute("SELECT version_num FROM alembic_version LIMIT 1")
-                        row = cursor.fetchone()
-                        db_rev = row[0] if row else None
-                    except sqlite3.DatabaseError:
-                        db_rev = None  # no alembic_version table
-
-                    head_rev = _alembic_head_revision()
-                    if head_rev is not None and db_rev is not None and db_rev != head_rev:
-                        logger.warning(
-                            "Database schema is behind head, applying pending migrations",
-                            db_path=str(db_path),
-                            db_revision=db_rev,
-                            head_revision=head_rev,
-                        )
-                        pending_migration = True
-                    elif db_rev is None:
-                        logger.warning("Database has tables but no alembic_version row; leaving schema as-is", db_path=str(db_path))
+                    if table_count == 0:
+                        logger.warning("Database has no tables, running migrations", db_path=str(db_path))
+                        needs_migration = True
                     else:
-                        logger.info(f"Database initialized with {table_count} tables (schema up to date)", db_path=str(db_path))
+                        # DB already has a schema. Compare its current Alembic revision
+                        # against the head revision in the migration scripts: if they
+                        # differ, migrations were added since this DB was last opened and
+                        # must be applied now. Skipping this is exactly what let a stale
+                        # DB (still at 001 while 002 was pending) reach the app and crash
+                        # on the first query touching a changed column.
+                        try:
+                            cursor.execute("SELECT version_num FROM alembic_version LIMIT 1")
+                            row = cursor.fetchone()
+                            db_rev = row[0] if row else None
+                        except sqlite3.DatabaseError:
+                            db_rev = None  # no alembic_version table
 
-                conn.close()
+                        head_rev = _alembic_head_revision()
+                        if head_rev is not None and db_rev is not None and db_rev != head_rev:
+                            logger.warning(
+                                "Database schema is behind head, applying pending migrations",
+                                db_path=str(db_path),
+                                db_revision=db_rev,
+                                head_revision=head_rev,
+                            )
+                            pending_migration = True
+                        elif db_rev is None:
+                            logger.warning(
+                                "Database has tables but no alembic_version row; leaving schema as-is",
+                                db_path=str(db_path),
+                            )
+                        else:
+                            logger.info(
+                                f"Database initialized with {table_count} tables (schema up to date)",
+                                db_path=str(db_path),
+                            )
+
             except sqlite3.DatabaseError as e:
                 logger.warning(f"Database appears corrupted, running migrations: {e}", db_path=str(db_path))
                 needs_migration = True

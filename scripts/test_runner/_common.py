@@ -50,15 +50,40 @@ _SKIP_ACTIONS: set = set()
 # _SKIP_ACTIONS because the two answer different questions: "was it already run?" and
 # "did it pass?". Conflating them is how a red becomes a green summary.
 _FAILED_ACTIONS: set = set()
-# Whether a failing action stops the suite. False under --no-fail-fast, where the
-# point is to learn how wide the damage is instead of discovering it one red at a
-# time. Kept as module state rather than a parameter because _run_test_suite is
+# Whether a failing action stops the suite. Off by default: a red is worth more when
+# you can see how wide the damage is, because nine failures in one worker are usually
+# nine symptoms of one cause, and stopping at the first hides that. `--fail-fast` opts
+# back in. Kept as module state rather than a parameter because _run_test_suite is
 # called from ~15 `*_all` functions that have no business knowing about it.
-_FAIL_FAST = True
+_FAIL_FAST = False
 
 # Destination for per-unit logs, or None when --log-dir was not requested.
 _LOG_DIR = None
 _LOG_CATEGORY = "run"
+
+
+def resolve_e2e_workers(requested: int) -> int:
+    """Cap browser workers at what the machine can actually drive.
+
+    A backend unit is a Python process mostly waiting on SQLite; a Playwright
+    worker is a full Chromium *plus* its share of a uvicorn pool sized at
+    ``ceil(workers/2)``. The two do not scale alike, and past the machine's
+    ceiling the browser half does not merely stop getting faster — it gets
+    slower and starts failing on its own timeouts.
+
+    Measured on a 10-core machine, front-utility with coverage:
+
+        4 workers → 165/165 in 3.3 min
+        5 workers → 165/165 in 3.5 min
+        8 workers →  20 failed in 5.8 min   (7 of them: login past 20s)
+
+    So ``--workers 8`` is honoured for the backend, where it pays (services:
+    80 units, 8 workers, green), and capped here, where it does not. Half the
+    logical cores is Playwright's own default heuristic and lands on 5 above.
+    Setting ``E2E_WORKERS`` in the environment overrides the cap for probes.
+    """
+    ceiling = max(1, (os.cpu_count() or 4) // 2)
+    return min(requested, ceiling)
 
 
 def apply_e2e_workers(env: dict) -> dict:
@@ -74,10 +99,12 @@ def apply_e2e_workers(env: dict) -> dict:
     An `E2E_WORKERS` already present in the environment wins, so a probe can
     override a single run without going through the runner.
     """
-    workers = getattr(sys.modules[__name__], "_E2E_WORKERS", 1)
+    requested = getattr(sys.modules[__name__], "_E2E_WORKERS", 1)
+    workers = resolve_e2e_workers(requested)
     if workers > 1 and "E2E_WORKERS" not in os.environ:
         env["E2E_WORKERS"] = str(workers)
-        print(f"{Colors.YELLOW}🧵 Playwright workers: {workers}{Colors.NC}")
+        capped = f" (capped from {requested}: {os.cpu_count()} logical cores)" if workers < requested else ""
+        print(f"{Colors.YELLOW}🧵 Playwright workers: {workers}{capped}{Colors.NC}")
     return env
 
 
@@ -241,7 +268,7 @@ def _run_test_suite(
             mark_failed(suite_key, test_name)
             print_error(f"Test failed: {test_name}")
             if not _FAIL_FAST:
-                print_warning("Continuing (--no-fail-fast)")
+                print_warning("Continuing to the end (use --fail-fast to stop here)")
                 continue
             print_warning(f"Stopping {suite_name.lower()} execution")
             if resume:

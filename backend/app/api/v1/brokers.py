@@ -840,8 +840,10 @@ async def parse_file(
             asset_mappings=asset_mappings,
         )
 
-        # Move file to parsed folder on success
-        brim_provider.move_to_parsed(file_id)
+        # Move file to parsed folder on success. Four filesystem operations
+        # (rename, read, write, unlink) — off the event loop like every other
+        # blocking call in this handler.
+        await asyncio.to_thread(brim_provider.move_to_parsed, file_id)
 
         # Build response
         response = BRIMParseResponse(
@@ -885,12 +887,12 @@ async def parse_file(
 
     except ValueError as e:
         # Parse failed - move to failed folder
-        brim_provider.move_to_failed(file_id, str(e))
+        await asyncio.to_thread(brim_provider.move_to_failed, file_id, str(e))
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     except BRIMParseError as e:
         # Parse failed - move to failed folder
-        brim_provider.move_to_failed(file_id, e.message)
+        await asyncio.to_thread(brim_provider.move_to_failed, file_id, e.message)
         raise HTTPException(status_code=400, detail=f"Parse error: {e.message}") from e
 
 

@@ -35,6 +35,8 @@ Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G.13.
 
 from __future__ import annotations
 
+import os
+import secrets
 import time
 from datetime import date
 from decimal import Decimal
@@ -54,6 +56,7 @@ from backend.app.db.models import (  # noqa: E402
     AssetEventType,
     AssetProviderAssignment,
     AssetType,
+    Broker,
     PriceHistory,
     ProviderInputType,
     Transaction,
@@ -70,7 +73,9 @@ from backend.app.services.provider_registry import AssetProviderRegistry  # noqa
 
 
 def _unique(prefix: str) -> str:
-    return f"{prefix}_{int(time.time() * 1000)}"
+    # Millisecond timestamps alone are not unique: with 8 workers two units start
+    # inside the same millisecond routinely, and brokers.name is UNIQUE.
+    return f"{prefix}_{int(time.time() * 1000)}_{os.getpid()}_{secrets.token_hex(3)}"
 
 
 def _params_v1() -> dict:
@@ -191,11 +196,19 @@ async def _seed_stale_data(
     session.add(manual_event)
     await session.flush()
 
+    # The transaction needs a real broker: PRAGMA foreign_keys is ON for every
+    # connection, so broker_id must resolve. Borrowing id 1 worked only while some
+    # other unit happened to have left one behind — with 8 workers emptying and
+    # repopulating the database that assumption fails outright.
+    broker = Broker(name=_unique("G13 Broker"))
+    session.add(broker)
+    await session.flush()
+
     # Pure cash transaction won't do — tx must link an asset_event. We need
     # any tx of an EVENT_COMPATIBLE_TYPE (e.g. INTEREST) with asset_id set
     # and asset_event_id pointing to the auto event.
     tx = Transaction(
-        broker_id=1,  # any broker; row stays invalid for balance purposes but DB accepts it (no FK check in test)
+        broker_id=broker.id,
         asset_id=asset_id,
         type=TransactionType.INTEREST,
         date=date(2026, 2, 1),

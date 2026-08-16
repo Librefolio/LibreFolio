@@ -25,7 +25,7 @@ import {expect, test, type Page} from '../fixtures/playwright';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForSettled} from '../fixtures/app-events';
+import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
@@ -116,7 +116,7 @@ async function parseFixture(page: Page, target: {brokerName: string; fileName: s
     await expect(page.getByTestId('import-wizard-parse')).toBeEnabled({timeout: 4_000});
     await page.getByTestId('import-wizard-parse').click();
     await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 15_000});
-    await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+    await waitForParseVerdict(page);
 }
 
 /**

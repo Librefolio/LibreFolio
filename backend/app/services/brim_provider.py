@@ -823,6 +823,30 @@ def get_file_path(file_id: str) -> Optional[Path]:
         if fallback_path.exists():
             return fallback_path
 
+    # Last resort: scan every status folder, the way _find_metadata_path already
+    # does for the sidecar. The two are not always in agreement: _move_file
+    # renames the data file first and rewrites the metadata after, so a reader
+    # arriving in between computes the *old* folder for a file that already
+    # lives in the new one. Deriving the address from the status is only a
+    # shortcut; the file itself is the fact.
+    return _find_data_path(file_id, ext)
+
+
+def _find_data_path(file_id: str, ext: str) -> Optional[Path]:
+    """Locate a file's data by scanning every status folder and ``broker_*`` subdir."""
+    broker_reports_dir = get_broker_reports_dir()
+    for status in BRIMFileStatus:
+        status_folder = broker_reports_dir / status.value
+
+        candidate = status_folder / f"{file_id}{ext}"
+        if candidate.exists():
+            return candidate
+
+        for broker_dir in status_folder.glob("broker_*"):
+            if broker_dir.is_dir():
+                candidate = broker_dir / f"{file_id}{ext}"
+                if candidate.exists():
+                    return candidate
     return None
 
 
@@ -1090,7 +1114,21 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     # Parse file
     logger.info("Parsing file with plugin", file_id=file_id, plugin_code=plugin_code, broker_id=broker_id)
 
-    output: BRIMParseOutput = plugin.parse(file_path, broker_id)
+    try:
+        output: BRIMParseOutput = plugin.parse(file_path, broker_id)
+    except Exception:
+        # A concurrent parse of the same file transitions it uploaded → parsed,
+        # which physically renames it. The path resolved a moment ago is then
+        # gone and the plugin reports a read error that has nothing to do with
+        # the file's contents. Retry once, and only when the file demonstrably
+        # moved: if the original path still exists the failure was genuine.
+        if file_path.exists():
+            raise
+        moved_path = get_file_path(file_id)
+        if moved_path is None or moved_path == file_path:
+            raise
+        logger.info("File moved during parse, retrying at new location", file_id=file_id, new_path=str(moved_path))
+        output = plugin.parse(moved_path, broker_id)
 
     logger.info(
         "File parsed successfully",

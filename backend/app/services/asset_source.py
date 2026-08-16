@@ -36,6 +36,7 @@ from typing import AsyncGenerator, Dict, List, Literal, Optional
 
 import structlog
 from sqlalchemy import String, and_, cast, delete, func, or_, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -129,6 +130,14 @@ from backend.app.utils.identifier_utils import merge_other_identifiers
 
 # Initialize structured logger
 logger = structlog.get_logger(__name__)
+
+# Maximum number of price rows written per transaction by ``bulk_upsert_prices``.
+# SQLite serialises writers on a single lock held for the whole transaction, so an
+# unbounded upsert blocks every other write for its full duration. Measured on a
+# 45k-point full-history sync: one transaction held the lock 10.3s and starved every
+# concurrent writer; sliced at 1000 the longest hold fell to 1.2s with no change in
+# total runtime.
+PRICE_UPSERT_CHUNK_SIZE = 1000
 
 
 # ============================================================================
@@ -1384,9 +1393,6 @@ class AssetSourceManager:
             #   - field == None (omitted)  → preserve existing DB value (no-op)
             #   - field == -1              → write NULL
             #   - field >= 0               → write the provided value
-            price_objects = []
-            dates_to_upsert = []
-
             # I.2 — Currency coherence validation (Supersedes E.3).
             # Hard reject (not per-item skip): if ANY point has a currency that doesn't
             # match asset.currency, raise ValueError immediately so the router returns
@@ -1408,15 +1414,6 @@ class AssetSourceManager:
             valid_inputs: dict = {}
             for price in prices:
                 valid_inputs[price.date] = price
-                dates_to_upsert.append(price.date)
-
-            # Fetch existing rows for MERGE (F.4)
-            existing_rows: dict = {}
-            if dates_to_upsert:
-                existing_stmt = select(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(dates_to_upsert)))
-                existing_res = await session.execute(existing_stmt)
-                for row in existing_res.scalars().all():
-                    existing_rows[row.date] = row
 
             # F.4 sentinel helper: -1 → None (SET NULL), None → preserve, else → write
             def _merge_field(new_val, existing_val):
@@ -1430,76 +1427,125 @@ class AssetSourceManager:
             # Integrity guard errors accumulated across all dates (surfaced via
             # the same `results[].message` the currency-mismatch check uses).
             rejected_dates: list[str] = []
+            upserted_count = 0
 
-            for date_key, price in valid_inputs.items():
-                existing = existing_rows.get(date_key)
-                # Sentinel merge for auxiliary OHLC fields (open/high/low) + volume
-                merged_open = _merge_field(price.open, existing.open if existing else None)
-                merged_high = _merge_field(price.high, existing.high if existing else None)
-                merged_low = _merge_field(price.low, existing.low if existing else None)
-                merged_volume = _merge_field(price.volume, existing.volume if existing else None)
+            # SQLite has a single writer per database file, and a transaction holds
+            # that writer from its first write until COMMIT. A full-history sync is
+            # ~45k daily points, which in one transaction kept the lock for ~10s —
+            # long past the 5s busy_timeout, so every concurrent write (another tab,
+            # the scheduler, a parallel test worker) died with "database is locked".
+            # Committing in bounded slices keeps each hold in the sub-second range
+            # and also caps the IN(...) bind-parameter count, which SQLite limits.
+            # Per-date merge semantics are unaffected: each date only ever consults
+            # its own stored row, so slicing changes nothing about the outcome.
+            chunk_keys = list(valid_inputs.keys())
+            for chunk_start in range(0, len(chunk_keys), PRICE_UPSERT_CHUNK_SIZE):
+                chunk_dates = chunk_keys[chunk_start : chunk_start + PRICE_UPSERT_CHUNK_SIZE]
 
-                # Integrity policy:
-                # - Fresh provider OHLC bundles (incoming low+high present) must
-                #   be self-consistent and are still rejected if corrupted.
-                # - Close-only / partial updates must not be rejected just because
-                #   F.4 preserved stale bounds from an older flat candle — that is
-                #   the justETF/scheduled-investment case and the original
-                #   production incident alike. In that branch we widen the merged
-                #   [low, high] bounds around the new close instead.
-                if price.low is not None and price.high is not None:
-                    if price.low > price.high or not (price.low <= price.close <= price.high):
-                        rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
-                        continue
-                elif merged_low is not None and merged_high is not None:
-                    merged_low = min(merged_low, price.close)
-                    merged_high = max(merged_high, price.close)
+                # Fetch existing rows for MERGE (F.4)
+                existing_rows: dict = {}
+                existing_stmt = select(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(chunk_dates)))
+                existing_res = await session.execute(existing_stmt)
+                for row in existing_res.scalars().all():
+                    existing_rows[row.date] = row
 
-                price_obj = PriceHistory(
-                    asset_id=asset_id,
-                    date=price.date,
-                    open=(truncate_priceHistory(merged_open, "open") if merged_open is not None else None),
-                    high=(truncate_priceHistory(merged_high, "high") if merged_high is not None else None),
-                    low=(truncate_priceHistory(merged_low, "low") if merged_low is not None else None),
-                    close=truncate_priceHistory(price.close, "close"),
-                    volume=merged_volume,
-                    currency=price.currency or default_currency,
-                    source_plugin_key=source_plugin_key,
-                    # Only provider-driven writes get a real fetched_at — it feeds
-                    # _compute_price_fingerprint()'s COUNT+MAX(fetched_at) cache-
-                    # invalidation proxy (portfolio_engine.py). Manual entries keep
-                    # fetched_at=None (no "fetch" happened), matching prior behavior.
-                    fetched_at=utcnow() if source_plugin_key != "MANUAL" else None,
-                )
-                price_objects.append(price_obj)
+                price_objects = []
+                for date_key in chunk_dates:
+                    price = valid_inputs[date_key]
+                    existing = existing_rows.get(date_key)
+                    # Sentinel merge for auxiliary OHLC fields (open/high/low) + volume
+                    merged_open = _merge_field(price.open, existing.open if existing else None)
+                    merged_high = _merge_field(price.high, existing.high if existing else None)
+                    merged_low = _merge_field(price.low, existing.low if existing else None)
+                    merged_volume = _merge_field(price.volume, existing.volume if existing else None)
 
-            # Delete existing prices for these dates (MERGE = fetch + delete + insert)
-            # Only accepted dates — a date rejected by the integrity guard above
-            # must NOT be deleted (that would drop the row entirely instead of
-            # preserving it, since it's excluded from price_objects below).
-            accepted_dates = [p.date for p in price_objects]
-            if accepted_dates:
-                delete_stmt = delete(PriceHistory).where(and_(PriceHistory.asset_id == asset_id, PriceHistory.date.in_(accepted_dates)))
-                await session.execute(delete_stmt)
+                    # Integrity policy:
+                    # - Fresh provider OHLC bundles (incoming low+high present) must
+                    #   be self-consistent and are still rejected if corrupted.
+                    # - Close-only / partial updates must not be rejected just because
+                    #   F.4 preserved stale bounds from an older flat candle — that is
+                    #   the justETF/scheduled-investment case and the original
+                    #   production incident alike. In that branch we widen the merged
+                    #   [low, high] bounds around the new close instead.
+                    if price.low is not None and price.high is not None:
+                        if price.low > price.high or not (price.low <= price.close <= price.high):
+                            rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
+                            continue
+                    elif merged_low is not None and merged_high is not None:
+                        merged_low = min(merged_low, price.close)
+                        merged_high = max(merged_high, price.close)
 
-            # Bulk insert new prices
-            session.add_all(price_objects)
-            await session.commit()
+                    price_obj = PriceHistory(
+                        asset_id=asset_id,
+                        date=price.date,
+                        open=(truncate_priceHistory(merged_open, "open") if merged_open is not None else None),
+                        high=(truncate_priceHistory(merged_high, "high") if merged_high is not None else None),
+                        low=(truncate_priceHistory(merged_low, "low") if merged_low is not None else None),
+                        close=truncate_priceHistory(price.close, "close"),
+                        volume=merged_volume,
+                        currency=price.currency or default_currency,
+                        source_plugin_key=source_plugin_key,
+                        # Every write stamps fetched_at, manual ones included, because it
+                        # feeds _compute_price_fingerprint()'s COUNT+MAX(fetched_at) cache
+                        # key (portfolio_engine.py:2182). Editing an existing price by hand
+                        # leaves COUNT unchanged, so fetched_at is the ONLY thing that tells
+                        # the portfolio cache to recompute — without it the user's own edit
+                        # would stay invisible. A previous comment here claimed manual rows
+                        # kept fetched_at=None; they never did (the column is NOT NULL and
+                        # the model's default_factory overwrote it at flush), and the intent
+                        # it described would have been the bug above.
+                        fetched_at=utcnow(),
+                    )
+                    price_objects.append(price_obj)
+
+                # One native upsert instead of DELETE + INSERT. Python above has already
+                # resolved every F.4 sentinel and run the integrity guard, so the merge
+                # semantics stay where they can be read and SQL only decides insert vs
+                # update. A date rejected by the guard is simply absent from the VALUES,
+                # which preserves its stored row — the DELETE had to be filtered by hand
+                # to get the same outcome. Row ids are no longer recycled on every write
+                # (nothing references price_history.id, so this is free).
+                if price_objects:
+                    upsert_stmt = sqlite_insert(PriceHistory).values(
+                        [
+                            {
+                                "asset_id": obj.asset_id,
+                                "date": obj.date,
+                                "open": obj.open,
+                                "high": obj.high,
+                                "low": obj.low,
+                                "close": obj.close,
+                                "volume": obj.volume,
+                                "currency": obj.currency,
+                                "source_plugin_key": obj.source_plugin_key,
+                                "fetched_at": obj.fetched_at,
+                            }
+                            for obj in price_objects
+                        ]
+                    )
+                    upsert_stmt = upsert_stmt.on_conflict_do_update(
+                        index_elements=["asset_id", "date"],
+                        set_={column: upsert_stmt.excluded[column] for column in ("open", "high", "low", "close", "volume", "currency", "source_plugin_key", "fetched_at")},
+                    )
+                    await session.execute(upsert_stmt)
+                await session.commit()
+
+                upserted_count += len(price_objects)
 
             # Count as inserted
-            total_inserted += len(price_objects)
+            total_inserted += upserted_count
 
             # I.2 — currency-mismatch was hard-rejected earlier (whole call raises).
             # OHLC-integrity rejections (this function's own guard, soft-skip per date)
             # are reported in `msg` below instead.
-            msg = f"Upserted {len(price_objects)} prices"
+            msg = f"Upserted {upserted_count} prices"
             if rejected_dates:
                 msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
 
             results.append(
                 {
                     "asset_id": asset_id,
-                    "count": len(price_objects),
+                    "count": upserted_count,
                     "message": msg,
                 }
             )
@@ -1560,20 +1606,26 @@ class AssetSourceManager:
 
         # Delete existing events for these (date, type) pairs — only for the SAME provider
         # When provider_assignment_id is None, SQLAlchemy generates IS NULL which is correct
-        for evt_date, evt_type in keys_to_delete:
-            del_stmt = delete(AssetEvent).where(
-                and_(
-                    AssetEvent.asset_id == asset_id,
-                    AssetEvent.date == evt_date,
-                    AssetEvent.type == evt_type,
-                    AssetEvent.provider_assignment_id == provider_assignment_id,
+        # Committed in bounded slices for the same reason as bulk_upsert_prices: one
+        # transaction spanning every event would hold SQLite's single write lock for the
+        # whole loop. keys_to_delete and event_objects are built 1:1 in the same order,
+        # so slicing by index keeps each event with its own delete.
+        for chunk_start in range(0, len(event_objects), PRICE_UPSERT_CHUNK_SIZE):
+            chunk_end = chunk_start + PRICE_UPSERT_CHUNK_SIZE
+            for evt_date, evt_type in keys_to_delete[chunk_start:chunk_end]:
+                del_stmt = delete(AssetEvent).where(
+                    and_(
+                        AssetEvent.asset_id == asset_id,
+                        AssetEvent.date == evt_date,
+                        AssetEvent.type == evt_type,
+                        AssetEvent.provider_assignment_id == provider_assignment_id,
+                    )
                 )
-            )
-            await session.execute(del_stmt)
+                await session.execute(del_stmt)
 
-        # Insert new events
-        session.add_all(event_objects)
-        await session.commit()
+            # Insert new events
+            session.add_all(event_objects[chunk_start:chunk_end])
+            await session.commit()
 
         return len(event_objects)
 

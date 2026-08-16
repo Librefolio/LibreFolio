@@ -110,3 +110,6 @@ LibreFolio_devWiki/corpus/.graphify_*
 chart-error-page.html
 /LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/real_prompt_probe/
 /LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/targeted_partial_fx_probe/
+
+# Per-unit test logs (default --log-dir)
+.testLog/

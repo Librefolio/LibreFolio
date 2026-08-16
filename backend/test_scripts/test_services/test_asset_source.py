@@ -751,6 +751,130 @@ async def test_bulk_upsert_prices(asset_ids: list[int]):
 
 
 @pytest.mark.asyncio
+async def test_bulk_upsert_prices_spans_chunk_boundaries():
+    """A batch larger than PRICE_UPSERT_CHUNK_SIZE must behave exactly like one transaction.
+
+    bulk_upsert_prices commits in bounded slices so SQLite's single write lock is never
+    held for the whole history (a 45k-point sync used to hold it ~10s, past the 5s
+    busy_timeout, so every concurrent writer died with "database is locked"). Slicing is
+    only safe because each date consults its own stored row and nothing else — this test
+    pins that: every row lands, and the F.4 "preserve" sentinel still sees the value
+    written by a previous call on dates that fall in different slices.
+    """
+    chunk = asset_source_module.PRICE_UPSERT_CHUNK_SIZE
+    total = chunk * 2 + 137  # three slices, last one deliberately partial
+    timestamp = int(time.time() * 1000)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(
+            display_name=f"ChunkedUpsert Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+        )
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+
+        start = date(2000, 1, 1)
+        first = [
+            FAPricePoint(
+                date=start + timedelta(days=i),
+                close=Decimal("10") + Decimal(i),
+                open=Decimal("7") + Decimal(i),
+                currency="USD",
+            )
+            for i in range(total)
+        ]
+
+        result = await AssetSourceManager.bulk_upsert_prices([FAUpsert(asset_id=asset.id, prices=first)], session)
+        assert result["inserted_count"] == total, f"Expected {total} rows, got {result['inserted_count']}"
+
+        stored = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset.id))).scalar_one()
+        assert stored == total, f"Expected {total} rows in DB, got {stored}"
+
+        # Second pass: close only, open omitted (F.4 preserve). Probe one date per slice,
+        # including both sides of each boundary, so a slice that forgot to re-read the
+        # existing rows would show up as a lost `open`.
+        probes = [0, chunk - 1, chunk, chunk * 2 - 1, chunk * 2, total - 1]
+        second = [
+            FAPricePoint(
+                date=start + timedelta(days=i),
+                close=Decimal("999") + Decimal(i),
+                currency="USD",
+            )
+            for i in probes
+        ]
+        await AssetSourceManager.bulk_upsert_prices([FAUpsert(asset_id=asset.id, prices=second)], session)
+
+        for i in probes:
+            row = (await session.execute(select(PriceHistory).where(PriceHistory.asset_id == asset.id).where(PriceHistory.date == start + timedelta(days=i)))).scalar_one()
+            assert row.close == Decimal("999") + Decimal(i), f"day {i}: close not updated"
+            assert row.open == Decimal("7") + Decimal(i), f"day {i}: open lost across chunk boundary"
+
+        stored = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset.id))).scalar_one()
+        assert stored == total, f"Re-upsert changed the row count: {stored} != {total}"
+
+        print_success(f"✓ {total} prices upserted across {-(-total // chunk)} slices with merge semantics intact")
+
+
+@pytest.mark.asyncio
+async def test_manual_reupsert_stamps_fetched_at_and_keeps_row_id():
+    """A manual edit of an existing price must move fetched_at, or it stays invisible.
+
+    The portfolio cache key is COUNT + MAX(fetched_at) (``_compute_price_fingerprint``,
+    portfolio_engine.py). Re-writing a date that already exists leaves COUNT alone, so
+    fetched_at is the only thing left to tell the cache to recompute — a manual write
+    that skipped it would be swallowed by a stale blob and the user's own edit would not
+    show. This used to hold only by accident: the code asked for ``fetched_at=None`` on
+    MANUAL rows and the model's ``default_factory`` quietly overwrote it at flush. The
+    Core upsert has no such safety net, so the property is asserted here instead.
+
+    Also pins the upsert shape: the row id survives, which DELETE + INSERT never did.
+    """
+    timestamp = int(time.time() * 1000)
+    day = date(2001, 3, 14)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        asset = Asset(
+            display_name=f"FetchedAt Test {timestamp}",
+            currency="USD",
+            asset_type=AssetType.STOCK,
+            active=True,
+        )
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+
+        asset_id = asset.id
+
+        async def _write(close: str) -> tuple:
+            await AssetSourceManager.bulk_upsert_prices(
+                [FAUpsert(asset_id=asset_id, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD")])],
+                session,
+                source_plugin_key="MANUAL",
+            )
+            # Read columns, not the entity: an ORM read would hand back the identity-map
+            # copy from before the Core write and the second call would compare a row to
+            # itself.
+            return (await session.execute(select(PriceHistory.id, PriceHistory.close, PriceHistory.fetched_at).where(PriceHistory.asset_id == asset_id).where(PriceHistory.date == day))).one()
+
+        first_id, _, first_stamp = await _write("100")
+        assert first_stamp is not None, "fetched_at must never be NULL — the column forbids it"
+
+        second_id, second_close, second_stamp = await _write("250")
+
+        assert second_close == Decimal("250"), "manual re-write did not update the close"
+        assert second_id == first_id, "row id was recycled: this is an upsert, not DELETE + INSERT"
+        assert second_stamp > first_stamp, "fetched_at did not move — the portfolio cache would keep serving a stale blob"
+
+        stored = (await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id))).scalar_one()
+        assert stored == 1, f"re-upsert duplicated the row: {stored}"
+
+        print_success("✓ manual re-upsert bumps fetched_at, keeps the row id, adds no row")
+
+
+@pytest.mark.asyncio
 async def test_get_prices_with_backfill(asset_ids: list[int]):
     """Test get_prices_bulk() with backward-fill logic."""
     print_section("Test 10: Get Prices with Backward-Fill")

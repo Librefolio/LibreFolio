@@ -32,15 +32,26 @@ def set_sqlite_pragma(dbapi_conn, _connection_record):
       `database is locked` straight away — not after trying. That is reachable
       in production, not only under test: the scheduler refreshes prices in the
       background while the user saves a transaction, and uvicorn now runs with
-      several workers. Five seconds is far beyond any transaction this app
-      opens, so it converts a spurious error into a short wait.
+      several workers.
+
+      The value was 5000 on the assumption that no transaction here lasts that
+      long. Measured, that was false: a full-history price sync committed 45k
+      points in one transaction and held the write lock for 10.3s, so every
+      concurrent writer failed. bulk_upsert_prices now commits in bounded
+      slices (~1.2s each), but a slice's duration still scales with machine
+      load and instrumentation — under coverage the same slices take four
+      times longer. A timeout only decides how long a writer is willing to
+      wait; waiting costs nothing when there is no contention, because the
+      handler returns the moment the lock frees. Failing, by contrast, costs
+      the user their write. 30s is chosen to absorb a queue of slices on a
+      loaded machine rather than to match any single transaction.
 
     Note: This event listener applies to ALL sync engines (including the one backing async).
     """
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA busy_timeout=30000")
     cursor.close()
 
 
