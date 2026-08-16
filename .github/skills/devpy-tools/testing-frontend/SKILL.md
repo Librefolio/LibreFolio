@@ -78,7 +78,7 @@ the whole run rather than once per action.
 
 ```bash
 ./dev.py test --no-consolidate front-fx all   # the old one-process-per-action route
-./dev.py test --no-fail-fast all-frontend     # run everything, report every red
+./dev.py test --fail-fast all-frontend        # stop at the first red (default: run everything)
 ```
 
 `--no-consolidate` exists as the escape hatch, not as the recommended path: the consolidated route is

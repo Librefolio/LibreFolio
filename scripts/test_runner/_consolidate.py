@@ -186,7 +186,14 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
     _common.apply_e2e_workers(env)
     # Specs now share one database, so each test must start from the transaction
     # set populate_mock_data produced. See the fixture in e2e/fixtures/playwright.ts.
-    env["LF_TX_HYGIENE"] = "1"
+    #
+    # Only at one worker. The fixture infers ownership from "created since I opened
+    # this file", which stops being true the moment two spec files interleave, so
+    # above one worker it disables itself and prints a warning per worker. Asking
+    # for a feature that cannot fire is not free: it buries the run's real output
+    # under noise that reads like a problem.
+    if env.get("E2E_WORKERS", "1") == "1":
+        env["LF_TX_HYGIENE"] = "1"
     if coverage and _common._COVERAGE_PY:
         env["COVERAGE_BACKEND"] = "1"
     if coverage and _common._COVERAGE_JS:

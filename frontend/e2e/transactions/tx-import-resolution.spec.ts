@@ -33,7 +33,7 @@
 
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForSettled} from '../fixtures/app-events';
+import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {TEST_USER} from '../fixtures/test-users';
 
 test.setTimeout(90_000);
@@ -138,7 +138,7 @@ async function parseGenericSimple(page: Page) {
     // Step 3: parse
     await page.getByTestId('import-wizard-parse').click();
     await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 10_000});
-    await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+    await waitForParseVerdict(page);
 }
 
 /**

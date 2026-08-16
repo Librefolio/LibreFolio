@@ -305,10 +305,10 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
 
 !!! note "Failure policy: stop assigning, never kill"
 
-    At the first red the scheduler hands out no further work, but workers already running are left to
-    finish. Killing a worker mid-flight discards its coverage, and coverage that disappears without
-    failing is the most expensive defect this project has met. `--no-fail-fast` runs everything and
-    reports the full list instead.
+    By default the run continues past a red and reports the full list. Under `--fail-fast` the
+    scheduler hands out no further work, but workers already running are still left to finish:
+    killing a worker mid-flight discards its coverage, and coverage that disappears without failing
+    is the most expensive defect this project has met.
 
 ### `--workers`
 
@@ -371,14 +371,15 @@ bigger `N`.
 
 ### On failure
 
-By default the first red stops the run: the scheduler hands out no further work, and the serial pass
-stops at the failing action. Workers already started are left to finish their batch — killing one
+By default every unit runs and every failure is reported, across the parallel pass, the
+consolidation pass **and** the serial suite. The reason is empirical: reds arrive in clusters, and
+nine failures in one worker are usually nine symptoms of one cause — a list you cannot see if the
+run stops at the first, and that costs one full re-run per red to rediscover.
+
+`--fail-fast` inverts it: the scheduler hands out no further work and the serial pass stops at the
+failing action. Workers already started are still left to finish their batch — killing one
 mid-flight would discard its coverage, which is exactly how P7 lost data without anything turning
 red.
-
-`--no-fail-fast` inverts it: every unit runs and every failure is reported. It applies to the
-parallel pass, the consolidation pass **and** the serial suite, so a single flag answers "how wide is
-the damage" instead of revealing it one red per re-run.
 
 ---
 
@@ -523,7 +524,7 @@ if even one action was left to the serial path, the normal route with its full s
 !!! danger "Stepping aside must not launder a red"
 
     A skipped serial suite that returns `True` makes the category green. The first version of this
-    guard did exactly that, and under `--no-fail-fast` the run printed `✘ front-transaction
+    guard did exactly that, and with the run continuing past the red it printed `✘ front-transaction
     tx-wac-mode` and then, twenty lines below, **"🎉 ALL FRONTEND TESTS PASSED! 🎉"**. The exit code
     was right the whole time; a summary that contradicts the exit code is worse than no summary.
 

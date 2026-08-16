@@ -144,6 +144,12 @@ def run_test_from_registry(category: str, action: str, verbose: bool = False, te
 # test_*.py files at the root of test_scripts/ are shared helpers, not suites.
 from ._inventory import BACKEND_SUITE_DIRS as _BACKEND_SUITE_DIRS
 
+# Per-unit logs are on by default. Playwright wipes `test-results/` on the next run and
+# a failing worker's pytest output scrolls past in a suite this size, so a red diagnosed
+# after the fact used to depend on having remembered a flag beforehand. Evidence should
+# not be opt-in: pass `--log-dir ""` to turn it off.
+DEFAULT_LOG_DIR = ".testLog"
+
 
 def _check_orphan_tests() -> int:
     """Find test files not registered in the test runner.
@@ -427,13 +433,13 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cov-clean-backend-e2e", "--cov-clean-frontend", action="store_true", dest="cov_clean_backend_e2e", help="Clean Python coverage collected during E2E runs", default=False)
     parser.add_argument("--cov-clean-js", action="store_true", help="Clean JS/Svelte coverage (raw V8 data and reports)", default=False)
     parser.add_argument("--workers", metavar="N", default="1", help="Parallel workers for isolation-safe units (N or 'auto'; default 1 = serial)")
-    parser.add_argument("--no-fail-fast", action="store_true", help="Run everything and report every failure instead of stopping at the first", default=False)
+    parser.add_argument("--fail-fast", dest="fail_fast", action="store_true", help="Stop at the first failing action instead of running everything", default=False)
     parser.add_argument("--no-consolidate", action="store_true", help="Run one invocation per action instead of one per category (backend and frontend)", default=False)
     parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
     parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
-    parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived)", default=None)
+    parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived). Defaults to .testLog; pass an empty string to disable", default=DEFAULT_LOG_DIR)
     parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
     parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
 
@@ -471,13 +477,13 @@ def register_subparser(parent_subparsers):
     test_parser.add_argument("--cov-clean-backend-e2e", "--cov-clean-frontend", action="store_true", dest="cov_clean_backend_e2e", help="Clean Python coverage collected during E2E runs", default=False)
     test_parser.add_argument("--cov-clean-js", action="store_true", help="Clean JS/Svelte coverage (raw V8 data and reports)", default=False)
     test_parser.add_argument("--workers", metavar="N", default="1", help="Parallel workers for isolation-safe units (N or 'auto'; default 1 = serial)")
-    test_parser.add_argument("--no-fail-fast", action="store_true", help="Run everything and report every failure instead of stopping at the first", default=False)
+    test_parser.add_argument("--fail-fast", dest="fail_fast", action="store_true", help="Stop at the first failing action instead of running everything", default=False)
     test_parser.add_argument("--no-consolidate", action="store_true", help="Run one invocation per action instead of one per category (backend and frontend)", default=False)
     test_parser.add_argument("--resume", action="store_true", help="Resume from last failure (skip already-passed tests)", default=False)
     test_parser.add_argument("--fresh-run", action="store_true", dest="fresh_run", help="Clear test run cache before starting", default=False)
     test_parser.add_argument("--run-status", action="store_true", dest="run_status", help="Show test run cache status and exit", default=False)
     test_parser.add_argument("--log-file", dest="log_file", metavar="PATH", help="Tee the full run output (incl. build/pytest/playwright) to this file", default=None)
-    test_parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived)", default=None)
+    test_parser.add_argument("--log-dir", dest="log_dir", metavar="PATH", help="Write one log file per test unit into this directory (previous logs are archived). Defaults to .testLog; pass an empty string to disable", default=DEFAULT_LOG_DIR)
     test_parser.add_argument("--no-shared-server", dest="no_shared_server", action="store_true", help="Let each test module start its own backend (slower; escape hatch)", default=False)
     test_parser.add_argument("--assume-scoped", dest="assume_scoped", action="store_true", help="Experiment: run every server-backed unit in parallel, whatever the catalogue says. The reds are the work list, not a regression", default=False)
 
@@ -706,7 +712,7 @@ def _apply_coverage_mode(args, coverage, resume, cov_clean_be, cov_clean_fe) -> 
     """
     _common._COVERAGE_MODE = coverage
     _common._RESUME_MODE = resume
-    _common.set_fail_fast(not getattr(args, "no_fail_fast", False))
+    _common.set_fail_fast(getattr(args, "fail_fast", False))
 
     # --cov-clean-js is a manual utility: it works without --coverage, because
     # during a JS coverage run the cleanup happens by itself anyway.
@@ -833,7 +839,7 @@ def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
             cat_ok, cat_covered = _parallel_for_scope(args, cat, workers, verbose)
             ok = ok and cat_ok
             covered |= cat_covered
-            if not cat_ok and not getattr(args, "no_fail_fast", False):
+            if not cat_ok and getattr(args, "fail_fast", False):
                 break
         return ok, covered
     # all-frontend, coverage-report, check-orphans and friends: nothing here
@@ -843,7 +849,7 @@ def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
 
 def _parallel_for_scope(args, scope: str, workers: int, verbose: bool) -> tuple:
     """The parallel pass for one category. Returns ``(ok, covered_actions)``."""
-    from ._executor import combine_coverage, read_unit_durations, run_groups
+    from ._executor import combine_coverage, read_failed_units, read_unit_durations, run_groups
     from ._scheduler import load_durations, plan, save_durations
 
     classes = _parallel_classes(args, scope)
@@ -880,6 +886,20 @@ def _parallel_for_scope(args, scope: str, workers: int, verbose: bool) -> tuple:
         durations = load_durations()
         durations.update(measured)
         save_durations(durations)
+
+    # Name the units that failed, so the serial pass — which skips them as
+    # "already covered" — can still turn their category red. Without this the
+    # summary prints ALL TESTS PASSED over a run whose exit code says otherwise.
+    if not outcome["ok"]:
+        failed_paths = read_failed_units(set(p["parallel_paths"]))
+        by_action = p.get("by_action") or {}
+        blamed = {key for key, paths in by_action.items() if key in p["covered_actions"] and any(path in failed_paths for path in paths)}
+        if blamed:
+            _common._FAILED_ACTIONS |= blamed
+        else:
+            # A worker died without leaving a junit report, so no unit can be
+            # blamed individually. Fail every action it covered rather than none.
+            _common._FAILED_ACTIONS |= set(p["covered_actions"])
 
     return outcome["ok"], p["covered_actions"]
 
@@ -1002,20 +1022,20 @@ def _apply_parallel(args, verbose: bool) -> tuple:
     if workers > 1:
         ok, parallel_covered = _run_parallel_prepass(args, workers, verbose)
         covered |= parallel_covered
-        if not ok and not getattr(args, "no_fail_fast", False):
+        if not ok and getattr(args, "fail_fast", False):
             # Fail-fast means "hand out no more work", not "abandon what ran": the
             # workers already running all finished and reported before we got here.
             _common._SKIP_ACTIONS = covered
-            print_error("Parallel pass failed — stopping before the serial pass (use --no-fail-fast to continue)")
+            print_error("Parallel pass failed — stopping before the serial pass (--fail-fast)")
             return False, False
 
     # After the parallel pass, so the units it already ran are not run twice.
     back_ok, back_covered = _run_backend_consolidation_prepass(args, verbose, covered)
     covered |= back_covered
     ok = ok and back_ok
-    if not ok and not getattr(args, "no_fail_fast", False):
+    if not ok and getattr(args, "fail_fast", False):
         _common._SKIP_ACTIONS = covered
-        print_error("Consolidated backend pass failed — stopping before the serial pass (use --no-fail-fast to continue)")
+        print_error("Consolidated backend pass failed — stopping before the serial pass (--fail-fast)")
         return False, False
 
     front_ok, front_covered = _run_consolidation_prepass(args, verbose)
@@ -1023,8 +1043,8 @@ def _apply_parallel(args, verbose: bool) -> tuple:
     ok = ok and front_ok
 
     _common._SKIP_ACTIONS = covered
-    if not ok and not getattr(args, "no_fail_fast", False):
-        print_error("A pre-pass failed — stopping before the serial pass (use --no-fail-fast to continue)")
+    if not ok and getattr(args, "fail_fast", False):
+        print_error("A pre-pass failed — stopping before the serial pass (--fail-fast)")
         return False, False
     return ok, True
 

@@ -143,3 +143,30 @@ export async function waitForValidateRun(scope: Locator, since: number, timeout 
     }).toPass({timeout});
     await waitForSettled(scope, timeout);
 }
+
+/**
+ * Wait for the import wizard's parse to reach a verdict, and insist it is usable.
+ *
+ * Waiting on the Continue button alone cannot tell "still parsing" from "every file
+ * failed": both leave it disabled. A failure therefore spent the whole budget and then
+ * reported nothing beyond "a button was disabled", which is the least useful thing that
+ * could be said about it.
+ *
+ * The wizard already renders *why* a parse failed — this reads it, so the failure names
+ * its own cause. `data-parse-state` on the step-3 container carries the verdict:
+ * `idle` | `parsing` | `ok` | `partial` | `error`.
+ */
+export async function waitForParseVerdict(page: Page, timeout = 30_000): Promise<void> {
+    const step3 = page.getByTestId('import-wizard-step3');
+    await expect(step3).toHaveAttribute('data-parse-state', /^(ok|partial|error)$/, {timeout});
+
+    if ((await step3.getAttribute('data-parse-state')) === 'error') {
+        const reason = await page
+            .getByTestId('import-wizard-parse-errors')
+            .innerText()
+            .catch(() => '(the wizard rendered no detail)');
+        throw new Error(`Parse produced no usable file. The wizard reports:\n${reason}`);
+    }
+
+    await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 5_000});
+}

@@ -95,7 +95,11 @@ async function captureDatasetRequest(page: Page, id: string): Promise<Record<str
     return request.postDataJSON() as Record<string, unknown>;
 }
 
-test.setTimeout(120_000);
+// One test here exports four surfaces in sequence, so the whole-test budget has to
+// clear API_TIMEOUT plus three ordinary exports — otherwise a single slow response
+// gets reported as "test timeout", which names nothing, instead of "waitForResponse
+// timed out", which names the endpoint that stalled.
+test.setTimeout(180_000);
 
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind

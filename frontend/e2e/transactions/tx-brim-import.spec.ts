@@ -21,7 +21,7 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {waitForSettled} from '../fixtures/app-events';
+import {waitForParseVerdict, waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 
 test.setTimeout(60_000);
@@ -93,7 +93,7 @@ async function parseFiles(page: Page) {
     // Wait for Step 3 to appear and parsing to complete (all files reach terminal status)
     await page.getByTestId('import-wizard-step3').waitFor({state: 'visible', timeout: 10_000});
     // Wait for Continue button to be enabled (all parsing done)
-    await expect(page.getByTestId('import-wizard-continue')).toBeEnabled({timeout: 30_000});
+    await waitForParseVerdict(page);
 }
 
 /**

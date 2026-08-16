@@ -18,8 +18,26 @@ from backend.app.services.risk.quant.spawn_worker import (
 
 HANDLER_PATH = "backend.test_scripts.test_services.worker_handlers:" "dispatch_worker_fixture"
 
+# Every submit on a cold lane spawns a fresh interpreter, and this suite runs on
+# a machine already busy with 8 parallel workers. A budget is only ever waited
+# out on the *failure* path, so making it generous costs nothing on the success
+# path these tests exercise — while 2 s, comfortable when idle, turned red under
+# load for a reason that has nothing to do with what the tests are about.
+#
+# The one test that *measures* the timeout must keep a tight budget: see
+# TIGHT_TIMEOUT_S.
+COLD_START_TIMEOUT_S = 30.0
 
-async def wait_until(predicate, *, timeout: float = 3.0) -> None:
+# Deliberately smaller than the job it submits (2 s), so the timeout fires by
+# construction rather than by machine speed: a slower machine only makes it
+# fire more surely. This is the one place where the number is the subject.
+TIGHT_TIMEOUT_S = 0.75
+
+
+async def wait_until(predicate, *, timeout: float = 10.0) -> None:
+    """Wait for a state change. Same reasoning as COLD_START_TIMEOUT_S: this is a
+    success-path wait, so a generous ceiling costs nothing and only bounds how
+    long a genuine failure takes to report."""
     deadline = asyncio.get_running_loop().time() + timeout
     while not predicate():
         if asyncio.get_running_loop().time() >= deadline:
@@ -34,7 +52,7 @@ async def test_spawn_worker_is_lazy_and_persistent() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=1,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
     )
     try:
         assert pool.process_ids == ()
@@ -65,7 +83,7 @@ async def test_spawn_worker_reaps_idle_lane_and_restarts_lazily() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=0,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
         idle_timeout_seconds=0.1,
     )
     try:
@@ -95,7 +113,7 @@ async def test_spawn_worker_never_reaps_queued_or_inflight_jobs() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=1,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
         idle_timeout_seconds=0.05,
     )
     try:
@@ -125,7 +143,7 @@ async def test_spawn_worker_repeats_idle_restart_cycles_without_orphans() -> Non
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=0,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
         idle_timeout_seconds=0.05,
     )
     seen_pids = []
@@ -151,7 +169,7 @@ async def test_spawn_worker_reaps_and_restarts_every_lane() -> None:
         handler_path=HANDLER_PATH,
         workers=2,
         queue_capacity=0,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
         idle_timeout_seconds=0.05,
     )
     try:
@@ -185,7 +203,7 @@ async def test_spawn_worker_shutdown_cancels_pending_idle_reap() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=0,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
         idle_timeout_seconds=0.2,
     )
     await pool.submit({"action": "echo", "value": "done"})
@@ -203,7 +221,7 @@ async def test_spawn_worker_remote_error_recycles_lane() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=0,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
     )
     try:
         with pytest.raises(SpawnWorkerRemoteError) as exc_info:
@@ -226,7 +244,7 @@ async def test_spawn_worker_timeout_does_not_block_event_loop() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=0,
-        timeout_seconds=0.75,
+        timeout_seconds=TIGHT_TIMEOUT_S,
     )
     ticks = 0
 
@@ -245,7 +263,7 @@ async def test_spawn_worker_timeout_does_not_block_event_loop() -> None:
         await ticker
         assert ticks == 5
 
-        pool.timeout_seconds = 3
+        pool.timeout_seconds = COLD_START_TIMEOUT_S
         recovered = await pool.submit(
             {"action": "echo", "value": "recovered"},
         )
@@ -261,7 +279,7 @@ async def test_spawn_worker_crash_recycles_lane(tmp_path) -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=0,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
     )
     try:
         marker = tmp_path / "worker-started"
@@ -297,7 +315,7 @@ async def test_spawn_worker_rejects_jobs_beyond_capacity() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=1,
-        timeout_seconds=2,
+        timeout_seconds=COLD_START_TIMEOUT_S,
     )
     try:
         first = asyncio.create_task(
@@ -327,7 +345,7 @@ async def test_spawn_worker_cancellation_does_not_reuse_busy_lane() -> None:
         handler_path=HANDLER_PATH,
         workers=1,
         queue_capacity=0,
-        timeout_seconds=3,
+        timeout_seconds=COLD_START_TIMEOUT_S,
     )
     try:
         job = asyncio.create_task(

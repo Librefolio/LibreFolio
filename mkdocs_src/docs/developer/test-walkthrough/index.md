@@ -35,7 +35,8 @@ All tests are executed through `dev.py`:
 | `--cov-clean-backend-e2e` | Clean Python coverage collected during E2E runs (`htmlcov-backend-e2e/` + `.coverage_data/frontend`) |
 | `--cov-clean-js` | Clean JS/Svelte coverage (`coverage-js/`). Manual utility only — a `--coverage js` run cleans it by itself |
 | `--workers N\|auto` | Run isolation-safe backend units in parallel. Default `1` — the serial path, unchanged. `auto` is half the cores |
-| `--no-fail-fast` | Run everything and report every failure, instead of handing out no further work after the first red |
+| `--fail-fast` | Stop handing out work after the first red. The default runs everything and reports every failure |
+| `--log-dir PATH` | One log file per test unit. Defaults to `.testLog`; `--log-dir ""` turns it off |
 | `--no-consolidate` | Keep the one-invocation-per-action shape on the frontend instead of grouping a category into a single Playwright and vitest run |
 
 !!! note "Where the flags go"

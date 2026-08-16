@@ -2,10 +2,15 @@ import contextlib
 import os
 import sqlite3
 import sys
+import warnings
 
 import pytest
 
 from backend.app.config import get_data_dir, is_test_mode
+
+# Matches PRAGMA busy_timeout=30000 in backend/app/db/session.py: this fixture
+# competes for the same write lock as the app, so it waits as long as the app.
+_SEED_LOCK_TIMEOUT_S = 30.0
 
 # Captured by pytest_sessionfinish, consumed by pytest_unconfigure.
 # None means pytest_sessionfinish never ran (e.g. early collection error),
@@ -37,6 +42,15 @@ def restore_registration_setting():
     The insert mirrors the app's own `initialize_global_settings()`, which is
     likewise "create only what is missing", so a suite that deliberately changes
     a value during the session is unaffected.
+
+    Being `autouse` this runs in **every** pytest process, so under `--workers N`
+    all N workers reach this row within a second of each other — including the
+    ones classified `pure`, whose "no DB" guarantee this fixture is the sole
+    exception to. Hence the read-first fast path below, the explicit timeout (the
+    stdlib default is 5s, a sixth of what the app's own engine allows) and the
+    closing() wrapper: `with conn` commits but does not close, which would leak
+    one connection per worker for the whole session and hold WAL checkpointing
+    back.
     """
     if not is_test_mode():
         return
@@ -51,17 +65,39 @@ def restore_registration_setting():
         GLOBAL_SETTINGS_DEFAULTS = {}
 
     try:
-        with sqlite3.connect(db_path) as conn:
-            for key, config in GLOBAL_SETTINGS_DEFAULTS.items():
-                conn.execute(
-                    "INSERT OR IGNORE INTO global_settings (key, value, value_type, description, updated_at) "
-                    "VALUES (?, ?, ?, ?, datetime('now'))",
-                    (key, config["value"], config["type"], config.get("description")),
-                )
-            conn.execute("UPDATE global_settings SET value = 'true' WHERE key = 'enable_registration'")
+        with contextlib.closing(sqlite3.connect(db_path, timeout=_SEED_LOCK_TIMEOUT_S)) as conn:
+            # Read before writing. In the overwhelmingly common case every default
+            # is already seeded and registration is already on, so the eight
+            # workers that start within a second of each other take no write lock
+            # at all — a WAL reader blocks nobody. The write path is then reserved
+            # for the case it was written for: a previous run killed mid-test.
+            present = {row[0] for row in conn.execute("SELECT key FROM global_settings")}
+            missing = {k: v for k, v in GLOBAL_SETTINGS_DEFAULTS.items() if k not in present}
+            registration_off = conn.execute("SELECT 1 FROM global_settings WHERE key = 'enable_registration' AND value != 'true'").fetchone() is not None
+            if not missing and not registration_off:
+                return
+
+            with conn:
+                for key, config in missing.items():
+                    conn.execute(
+                        "INSERT OR IGNORE INTO global_settings (key, value, value_type, description, updated_at) " "VALUES (?, ?, ?, ?, datetime('now'))",
+                        (key, config["value"], config["type"], config.get("description")),
+                    )
+                if registration_off:
+                    conn.execute("UPDATE global_settings SET value = 'true' WHERE key = 'enable_registration'")
+    except sqlite3.OperationalError as exc:
+        # "no such table" is the documented benign case: the DB is not migrated
+        # yet and the suite's own setup will build it. Anything else — a lock
+        # timeout above all — means registration may have stayed disabled, and
+        # the docstring explains what that costs: dozens of unrelated tests
+        # failing with a message that points nowhere near here. Silence is what
+        # makes that expensive, so this one says its name.
+        if "no such table" not in str(exc):
+            warnings.warn(
+                f"could not restore enable_registration ({exc}); expect unrelated " "'registration is disabled' failures across this run",
+                stacklevel=2,
+            )
     except sqlite3.Error:
-        # The DB may not be migrated yet on a first run; the suite's own
-        # setup will build it. Never block collection over this guard.
         pass
 
 

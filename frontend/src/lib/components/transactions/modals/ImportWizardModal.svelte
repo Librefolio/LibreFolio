@@ -234,6 +234,13 @@
     let step3CanContinue = $derived(parseDone && parseHasSuccess);
     let usingCachedResults = $state(false);
 
+    // The outcome of the parse, in one machine-readable word. The visible status is a
+    // localized sentence, so without this the only thing an observer can see is that
+    // Continue stays disabled — which is equally true while a parse is still running and
+    // after one has failed. Those two need telling apart: the first is worth waiting for,
+    // the second never resolves.
+    let parseState = $derived(parseTotalCount === 0 ? 'idle' : !parseDone ? 'parsing' : parseHasSuccess ? (parseHasErrors ? 'partial' : 'ok') : 'error');
+
     // Aggregate stats from done results
     let parseAggregateStats = $derived(() => {
         const doneResults = parseResults.filter((r) => r.status === 'done' && r.response);
@@ -4202,7 +4209,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 3: Parse Engine -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'analyze'}
-            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3">
+            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3" data-parse-state={parseState}>
                 <!-- Progress bar -->
                 <div class="space-y-1">
                     <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
