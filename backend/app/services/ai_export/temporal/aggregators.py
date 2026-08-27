@@ -157,8 +157,6 @@ class BandBucketStatistics:
             self.middle.observation_count,
             self.upper.observation_count,
         )
-        if self.observation_count == 0 and any(component_counts):
-            raise ValueError("empty band statistics must have empty components")
         if self.observation_count > 0 and not any(component_counts):
             raise ValueError("non-empty band statistics require at least one observed component")
 

@@ -1,5 +1,5 @@
 ---
-applyTo: "frontend/e2e/**"
+applyTo: "frontend/e2e/**,frontend/src/**/*.test.ts"
 ---
 
 # Frontend E2E Testing (Playwright)
@@ -101,6 +101,66 @@ Tests are organized **per concern**, not monolithically per page. Each spec file
 - **Login via helper**: always use `login()` from `auth-helpers.ts`
 - **Mock data**: tests rely on `populate_mock_data.py` — all asymmetric access pairs use tag `access-test`
 - **Request interception**: use `page.waitForRequest()` to verify commit payloads (Bug 14 pattern)
+
+## Component tests (Vitest + jsdom)
+
+Not everything belongs in a browser. A component that only maps props to DOM and
+calls back — a calendar grid, a chip input, a column filter — can be mounted in a
+simulated DOM and driven directly, in milliseconds, with no login, no navigation
+and no shared database. Reaching the same surface through Playwright means
+asserting on a component two levels below the one under test, and paying seconds
+for the privilege.
+
+**Where the line falls:**
+
+| write a component test | write an E2E |
+|---|---|
+| props in, DOM out, callbacks out | anything that crosses the API |
+| keyboard/interaction models (arrows, Enter, Escape) | anything that depends on seeded data |
+| state that is hard to reach from a page (empty, disabled, error) | the flow a user actually performs |
+| a UI primitive shared by many pages | the page that composes them |
+
+**The infrastructure, already wired:**
+
+- `frontend/vitest.config.ts` — `svelte()` + `svelteTesting()` plugins. The default
+  environment stays `node` so the ~650 existing unit tests do not pay for jsdom.
+- `frontend/src/__tests__/component.ts` — the shared harness. Exports `render`,
+  `screen`, `fireEvent`, `within`, `waitFor`, `cleanup` and `setupI18n()`; imports
+  the jest-dom matchers and stubs `scrollIntoView` (jsdom has no layout engine).
+  The directory is excluded from coverage, so the harness never inflates the
+  numbers it exists to improve.
+- `$test` → `src/__tests__`, declared in `svelte.config.js` — **not** in
+  `tsconfig.json`, which SvelteKit regenerates.
+
+**The shape of a spec** (references: `ui/date/CalendarMonth.test.ts`,
+`ui/input/TagInput.test.ts`):
+
+```ts
+// @vitest-environment jsdom   ← first line, mandatory, per file
+import {describe, expect, it, vi} from 'vitest';
+import {fireEvent, render, screen, setupI18n} from '$test/component';
+import Thing from './Thing.svelte';
+```
+
+Call `await setupI18n()` in `beforeAll` when the component reads `$_(...)`:
+`register()` loads the catalogues through dynamic `import()`, so without awaiting
+it the first render can land while the dictionary is still empty and every label
+renders as its own key — a flake by construction.
+
+**Most components here are controlled**: they never mutate `value`, they call
+`onchange(next)` and wait to be re-rendered. Assert on the call — that is the
+contract — and use `rerender` only when the follow-up state is the subject.
+
+**The rules below apply unchanged.** In particular: never assert on translated
+text (supply `weekdayLabels`/`monthLabels` as props and assert on those), and
+never use a CSS class as a semantic selector. If the visual state has no stable
+handle, the component should publish one — `CalendarMonth` gained
+`data-state="selected|range-start|in-range|today|…"` for exactly this reason, and
+`data-testid`/`data-state` are additive attributes that change no behaviour.
+
+Register new files in `front_component_unit` in
+`scripts/test_runner/_frontend_utility.py` (action `component-unit`).
+`./dev.py test check-orphans` covers `frontend/src/**/*.test.ts` too.
 
 ## ⛔ The rules — normative
 

@@ -134,7 +134,13 @@ async function waitForWacResolved(page: Page) {
     // "at least one run completed" is a state, safe to read late.
     await expect(root).not.toHaveAttribute('data-validate-runs', '0', {timeout: 25_000});
     await waitForSettled(root, 25_000);
-    await expect(page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first()).toBeVisible({timeout: 20_000});
+    // Presenza e stato separati: in modalità auto la cella esiste sempre e
+    // pubblica 'pending' | 'ready' | 'empty'. Il selettore composto li faceva
+    // collassare in «element(s) not found», che non distingue «ancora lento»
+    // da «questa riga un WAC non ce l'ha».
+    const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').first();
+    await expect(autoCell).toBeVisible({timeout: 20_000});
+    await expect(autoCell).toHaveAttribute('data-state', 'ready', {timeout: 20_000});
 }
 
 /** Double-click on a row in the BulkModal grid to open FormModal for editing it. */

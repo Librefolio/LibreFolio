@@ -38,6 +38,57 @@ BACKEND_TEST_PATHS = {
 }
 
 
+def _archive_incompatible_coverage_dbs() -> None:
+    """Archivia i DB di coverage salvati la cui modalità di misura non è più quella corrente.
+
+    ``coverage combine`` **rifiuta** di fondere dati ad archi (branch) con dati a
+    sole righe. Il guaio non è il rifiuto: è che ``_finalize_coverage`` tratta il
+    fallimento del combine come un semplice warning e poi genera comunque l'HTML
+    da qualunque metà sia sopravvissuta. Cambiare ``branch`` in ``.coveragerc``
+    con i vecchi DB sul disco produrrebbe quindi un report **sbagliato in
+    silenzio** — il modo più caro di sbagliarsi.
+
+    Qui il disallineamento si scopre prima che i test scrivano, diventa una riga
+    a schermo, e il dato vecchio resta recuperabile in ``.coverage_data/00_archive``.
+    """
+    data_dir = Path(os.getcwd()) / ".coverage_data"
+    if not data_dir.exists():
+        return
+
+    try:
+        from coverage import Coverage, CoverageData
+    except ImportError:
+        return
+
+    from ._archive import archive_path
+
+    wants_arcs = bool(Coverage().config.branch)
+    mode = "branch" if wants_arcs else "statement"
+
+    # Il `.coverage` di root va incluso: non è uno scarto, è il **bersaglio** del
+    # `coverage combine --append` della passata parallela, e sopravvive alle run
+    # backend-only. Lasciarlo fuori significava veder fallire il combine e
+    # buttare via la coverage di tutta la passata senza capire perché.
+    candidates = [(data_dir / "backend", "backend"), (data_dir / "frontend", "frontend"), (Path(os.getcwd()) / ".coverage", "root")]
+
+    for db_path, label in candidates:
+        if not db_path.exists():
+            continue
+        try:
+            data = CoverageData(basename=str(db_path))
+            data.read()
+            compatible = data.has_arcs() == wants_arcs
+            reason = f"raccolto in modalità {'branch' if data.has_arcs() else 'statement'}"
+        except Exception as exc:
+            # Illeggibile è comunque inutilizzabile: si archivia dicendo perché,
+            # invece di lasciarlo far fallire il combine più avanti.
+            compatible, reason = False, f"illeggibile ({exc.__class__.__name__})"
+        if compatible:
+            continue
+        print_warning(f"   Coverage {label}: {reason}, incompatibile con la modalità {mode} attuale")
+        archive_path(db_path, target_dir=data_dir, label=f"{label}_mode_change", move=True)
+
+
 def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
     """Remove coverage data directories selectively, archiving DBs first."""
     cwd = Path(os.getcwd())
@@ -65,6 +116,10 @@ def _clean_coverage_dirs(clean_backend: bool, clean_frontend: bool) -> None:
 
     if clean_backend or clean_frontend:
         result = subprocess.run([*pipenv_prefix(), "coverage", "erase"], cwd=os.getcwd(), capture_output=True, text=True)
+
+    # Dopo le pulizie esplicite: quello che è sopravvissuto deve essere della
+    # stessa modalità di misura di adesso, altrimenti il merge finale mente.
+    _archive_incompatible_coverage_dbs()
 
 
 def run_all_tests(verbose: bool = False, providers: list = None, exclude_providers: list = None, resume: bool = False) -> bool:

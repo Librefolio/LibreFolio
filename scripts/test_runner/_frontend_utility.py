@@ -37,6 +37,43 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
     return False
 
 
+def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Svelte component unit tests (Vitest + jsdom).
+
+    Kept separate from ``core-unit`` on purpose. These mount real ``.svelte``
+    components in a simulated DOM, so they need the jsdom environment and the
+    testing-library harness, and they cover a surface — the UI primitives — that
+    E2E reaches only incidentally, if at all. Splitting them also means the two
+    families can be run, timed and parallelised independently.
+    """
+    print(f"\n{Colors.BLUE}Running: Svelte component unit tests (jsdom){Colors.NC}")
+    result = subprocess.run(
+        [
+            "npx",
+            "vitest",
+            "run",
+            "src/lib/components/ui/date/CalendarMonth.test.ts",
+            "src/lib/components/ui/date/SingleDatePicker.test.ts",
+            "src/lib/components/ui/date/DateRangePicker.test.ts",
+            "src/lib/components/ui/input/TagInput.test.ts",
+            "src/lib/components/ui/select/SimpleSelect.test.ts",
+            "src/lib/components/ui/select/FxProviderSelect.test.ts",
+            "src/lib/components/table/DataTableColumnFilter.test.ts",
+        ],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Svelte component unit tests - PASSED")
+        return True
+
+    print_error(f"Svelte component unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
 def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run auth E2E tests."""
     print_section("Frontend Auth Tests")
@@ -129,6 +166,7 @@ def populate_registry(registry: dict) -> None:
         description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
     add_test(cat, "core-unit", front_utility_unit, test_names=False, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency", tests="src/lib/stores/core/entityStore.test.ts")
+    add_test(cat, "component-unit", front_component_unit, test_names=False, name="Svelte Component Unit Tests", desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes", tests="src/lib/components/ui/date/CalendarMonth.test.ts")
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")

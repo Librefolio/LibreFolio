@@ -33,6 +33,7 @@ sentence applied somewhere:
 |---|---|---|
 | backend test | `.github/instructions/backend-testing.instructions.md` | `testing-backend` |
 | frontend E2E / Vitest | `.github/instructions/frontend-testing.instructions.md` | `testing-frontend` |
+| a Svelte **component** test | same file, section *Component tests (Vitest + jsdom)* — plus the two reference specs it names | `testing-frontend` |
 | a test that touches an existing area | — | `wiki-search` first: the problem may already be solved and documented |
 | a test that fails and you do not know why | — | `test-triage`. **`flaky` is not a verdict.** |
 | formatting the result | — | `lint-format` (backend) / `lint-format-frontend` (frontend) |
@@ -407,7 +408,8 @@ appeared since I started" is a description of another worker's rows too.
 | provider (external) | `backend/test_scripts/test_external/` | `scripts/test_runner/_backend_external.py` |
 | backend end-to-end | `backend/test_scripts/test_e2e/` | `scripts/test_runner/_backend_api.py` |
 | frontend E2E | `frontend/e2e/{area}/{name}.spec.ts` | `scripts/test_runner/_frontend_{area}.py` |
-| frontend unit | `frontend/src/**/*.test.ts` (Vitest) | — |
+| frontend unit (logic) | `frontend/src/**/*.test.ts` (Vitest, node env) | `_frontend_utility.py` → `front_utility_unit`, action `core-unit` |
+| frontend component | `frontend/src/lib/components/**/X.test.ts` (Vitest + jsdom) | `_frontend_utility.py` → `front_component_unit`, action `component-unit` |
 
 Frontend runner modules, one per category: `_frontend_{ai_export,asset,broker,fx,
 portfolio,transaction,user,utility}.py`.

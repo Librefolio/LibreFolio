@@ -249,7 +249,15 @@ def combine_coverage(source: str = "backend") -> bool:
         env=env,
     )
     if result.returncode != 0:
-        print_error(f"coverage combine failed: {result.stderr.strip()}")
+        # coverage.py stampa gli errori di combine su **stdout**, non su stderr:
+        # leggere solo stderr faceva comparire "coverage combine failed: " senza
+        # nulla dopo i due punti — un errore che non nomina niente.
+        detail = (result.stdout.strip() + " " + result.stderr.strip()).strip()
+        print_error(f"coverage combine failed: {detail or f'exit {result.returncode}'}")
+        # Le parti non vengono cancellate, quindi il dato non è perso; ma il
+        # report finale non conterrà questa passata, e dirlo qui è l'unico modo
+        # perché una run «tutta verde» non consegni di nascosto numeri parziali.
+        print_error(f"   Le {len(parts)} parti restano in .coverage_data/parts/: il report NON include questa passata parallela")
         return False
 
     if main.exists():

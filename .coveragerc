@@ -1,6 +1,18 @@
 [run]
 source = backend/app
 parallel = true
+# Misura anche gli archi decisionali, non solo le righe eseguite.
+#
+# Senza questo, un `if err: log(err)` in cui `err` capita sempre risulta
+# interamente coperto pur non avendo mai percorso il ramo «err assente»: la
+# riga è verde, la decisione non è mai stata presa in entrambi i sensi. È la
+# differenza fra sapere che il codice è stato *toccato* e sapere che è stato
+# *esercitato*, e senza la seconda la mappa che guida la scrittura dei test è
+# sbagliata proprio dove serve.
+#
+# La percentuale scende perché il denominatore cresce: non è un peggioramento,
+# è il numero vero.
+branch = true
 # Handle SIGTERM to save coverage data before process exits.
 # Without this, SIGTERM kills the process without running atexit handlers,
 # so no .coverage.<pid> file is written. Required for E2E test coverage

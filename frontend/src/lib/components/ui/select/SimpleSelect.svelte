@@ -8,6 +8,7 @@
 <script lang="ts">
     import type {Snippet} from 'svelte';
     import type {SelectOption} from './types';
+    import {firstSelectable, isSelectable, lastSelectable, stepSelectable} from './optionFilter';
     import {Check, ChevronDown} from 'lucide-svelte';
     import {_} from '$lib/i18n';
 
@@ -84,28 +85,12 @@
         return `${listboxId}-option-${valueId}`;
     }
 
-    function getFirstEnabledIndex(candidateOptions: readonly SelectOption[]): number {
-        return candidateOptions.findIndex((option) => !option.disabled);
-    }
-
-    function getLastEnabledIndex(candidateOptions: readonly SelectOption[]): number {
-        for (let index = candidateOptions.length - 1; index >= 0; index--) {
-            if (!candidateOptions[index].disabled) return index;
-        }
-        return -1;
-    }
-
+    // Highlight traversal is delegated to the shared `optionFilter` helpers so this select skips
+    // exactly what SearchSelect skips: a `disabled` row and a `header` section label are both
+    // pass-through. A header left navigable is a title the user can land on and "choose".
     function getInitialHighlightedIndex(candidateOptions: readonly SelectOption[], selectedValue: string): number {
-        const selectedIndex = candidateOptions.findIndex((option) => option.value === selectedValue && !option.disabled);
-        return selectedIndex >= 0 ? selectedIndex : getFirstEnabledIndex(candidateOptions);
-    }
-
-    function getAdjacentEnabledIndex(candidateOptions: readonly SelectOption[], currentIndex: number, direction: 1 | -1): number {
-        if (currentIndex < 0) return direction === 1 ? getFirstEnabledIndex(candidateOptions) : getLastEnabledIndex(candidateOptions);
-        for (let index = currentIndex + direction; index >= 0 && index < candidateOptions.length; index += direction) {
-            if (!candidateOptions[index].disabled) return index;
-        }
-        return currentIndex;
+        const selectedIndex = candidateOptions.findIndex((option) => option.value === selectedValue && isSelectable(option));
+        return selectedIndex >= 0 ? selectedIndex : firstSelectable(candidateOptions);
     }
 
     // Compute dropdown position when opening
@@ -217,7 +202,7 @@
     }
 
     function selectOption(option: SelectOption) {
-        if (option.disabled) return;
+        if (option.disabled || option.header) return;
         value = option.value;
         onchange?.(option.value);
         closeDropdown();
@@ -238,19 +223,19 @@
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
-                highlightedIndex = getAdjacentEnabledIndex(options, highlightedIndex, 1);
+                highlightedIndex = stepSelectable(options, highlightedIndex, 1);
                 break;
             case 'ArrowUp':
                 event.preventDefault();
-                highlightedIndex = getAdjacentEnabledIndex(options, highlightedIndex, -1);
+                highlightedIndex = stepSelectable(options, highlightedIndex, -1);
                 break;
             case 'Home':
                 event.preventDefault();
-                highlightedIndex = getFirstEnabledIndex(options);
+                highlightedIndex = firstSelectable(options);
                 break;
             case 'End':
                 event.preventDefault();
-                highlightedIndex = getLastEnabledIndex(options);
+                highlightedIndex = lastSelectable(options);
                 break;
             case 'Enter':
             case ' ':
@@ -325,47 +310,59 @@
             use:adjustFixedPositionAction
         >
             {#if loading}
-                <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" data-testid={testId ? `${testId}-loading` : undefined}>
                     {$_('common.loading')}
                 </div>
             {:else if options.length === 0}
-                <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" data-testid={testId ? `${testId}-empty` : undefined}>
                     {$_('common.noData')}
                 </div>
             {:else}
                 {#each options as option, index (option.value)}
-                    <button
-                        type="button"
-                        role="option"
-                        id={getOptionId(option)}
-                        tabindex="-1"
-                        aria-selected={value === option.value}
-                        aria-disabled={option.disabled ?? false}
-                        data-testid={optionTestId?.(option)}
-                        onclick={() => selectOption(option)}
-                        onmousedown={(event) => event.preventDefault()}
-                        onmouseenter={() => {
-                            if (!option.disabled) highlightedIndex = index;
-                        }}
-                        disabled={option.disabled}
-                        class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
+                    {#if option.header}
+                        <!--
+                          Section label, not a choice. Rendered as a presentation node so it is
+                          neither an `option` in the listbox nor a click target, matching how
+                          SearchSelect renders `header` rows. The keyboard skips it via the shared
+                          `optionFilter` helpers above.
+                        -->
+                        <div class="px-3 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-gray-400 uppercase select-none dark:text-gray-500" role="presentation" data-testid={testId ? `${testId}-header-${option.value}` : undefined}>
+                            {option.label}
+                        </div>
+                    {:else}
+                        <button
+                            type="button"
+                            role="option"
+                            id={getOptionId(option)}
+                            tabindex="-1"
+                            aria-selected={value === option.value}
+                            aria-disabled={option.disabled ?? false}
+                            data-testid={optionTestId?.(option)}
+                            onclick={() => selectOption(option)}
+                            onmousedown={(event) => event.preventDefault()}
+                            onmouseenter={() => {
+                                if (!option.disabled) highlightedIndex = index;
+                            }}
+                            disabled={option.disabled}
+                            class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
                                {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                {index === highlightedIndex ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}
                                {value === option.value ? 'bg-libre-green/5 dark:bg-libre-green/10 text-libre-green dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}"
-                    >
-                        {#if item}
-                            <div class="flex-1 min-w-0">
-                                {@render item(option)}
-                            </div>
-                        {:else if option.icon}
-                            <span class="truncate emoji-flag">{option.icon} {option.label}</span>
-                        {:else}
-                            <span class="truncate">{option.label}</span>
-                        {/if}
-                        {#if value === option.value}
-                            <Check size={16} class="ml-2 flex-shrink-0 text-libre-green dark:text-green-400" />
-                        {/if}
-                    </button>
+                        >
+                            {#if item}
+                                <div class="flex-1 min-w-0">
+                                    {@render item(option)}
+                                </div>
+                            {:else if option.icon}
+                                <span class="truncate emoji-flag">{option.icon} {option.label}</span>
+                            {:else}
+                                <span class="truncate">{option.label}</span>
+                            {/if}
+                            {#if value === option.value}
+                                <Check size={16} class="ml-2 flex-shrink-0 text-libre-green dark:text-green-400" />
+                            {/if}
+                        </button>
+                    {/if}
                 {/each}
             {/if}
         </div>

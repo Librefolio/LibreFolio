@@ -49,11 +49,16 @@ async def run_current_price_refresh(state: SchedulerState) -> None:
         asset_icons: dict[int, str | None] = {r[0]: r[2] for r in rows}
 
         if not asset_ids:
+            # An empty asset list is not a reason to stay silent. Returning here left
+            # neither the state nor a log entry behind, so the scheduler panel kept
+            # showing the *previous* run: "it ran and found nothing to do" was
+            # indistinguishable from "it stopped running". run_history_sync has always
+            # written its entry in this same situation — the two jobs now agree.
             logger.debug("Scheduler: no active assets to refresh")
-            return
-
-        # Call service layer (includes F.2/F.3 OHLC upsert)
-        results = await AssetSourceManager.get_current_prices_bulk(asset_ids, session, concurrency=3)
+            results: list = []
+        else:
+            # Call service layer (includes F.2/F.3 OHLC upsert)
+            results = await AssetSourceManager.get_current_prices_bulk(asset_ids, session, concurrency=3)
 
     duration = time_module.monotonic() - t_start
     ok_count = sum(1 for r in results if r.value is not None)

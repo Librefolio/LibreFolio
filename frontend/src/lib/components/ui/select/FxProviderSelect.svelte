@@ -476,12 +476,12 @@
 <!-- ===================================================================== -->
 
 {#if loading}
-    <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-400 dark:text-gray-500">
+    <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-400 dark:text-gray-500" data-testid="fx-route-loading">
         <Loader2 size={14} class="animate-spin" />
         <span>{$_('fx.route.loading')}</span>
     </div>
 {:else if error}
-    <div class="text-xs text-red-500 dark:text-red-400 py-2">{error}</div>
+    <div class="text-xs text-red-500 dark:text-red-400 py-2" data-testid="fx-route-error">{error}</div>
 {:else if hasCurrencies}
     <div class="space-y-3 {disabled ? 'opacity-50 pointer-events-none' : ''}" data-testid="fx-route-select">
         <!-- ============================================================= -->
@@ -490,7 +490,7 @@
         {#if orderedSelected.length > 0}
             <OrderableList items={orderedSelected} keyFn={routeKey} onReorder={handleReorder} {disabled}>
                 {#snippet children({item: route, index})}
-                    <div class="flex items-center gap-2 min-w-0">
+                    <div class="flex items-center gap-2 min-w-0" data-testid="fx-route-selected" data-route-key={route.key} data-priority={index + 1}>
                         <!-- Route visualization -->
                         {#if route.isDirect}
                             {@const step = route.chainSteps[0]}
@@ -553,7 +553,7 @@
                         {/if}
                         <!-- Remove button -->
                         {#if !disabled}
-                            <button type="button" class="p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all flex-shrink-0" onclick={() => removeRoute(route.key)} title="Remove">
+                            <button type="button" class="p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all flex-shrink-0" onclick={() => removeRoute(route.key)} title="Remove" data-testid="fx-route-remove">
                                 <Trash2 size={13} />
                             </button>
                         {/if}
@@ -573,6 +573,8 @@
                 onclick={() => {
                     pickerOpen = !pickerOpen;
                 }}
+                data-testid="fx-route-picker-toggle"
+                data-open={pickerOpen}
             >
                 {#if pickerOpen}
                     <ChevronUp size={14} />
@@ -626,9 +628,10 @@
                         bind:value={searchQuery}
                         placeholder={$_('fx.route.searchPlaceholder')}
                         class="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green outline-none transition-colors"
+                        data-testid="fx-route-search"
                     />
                     {#if searchQuery}
-                        <button class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onclick={clearSearch}>
+                        <button class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onclick={clearSearch} data-testid="fx-route-search-clear">
                             <X size={13} />
                         </button>
                     {/if}
@@ -689,7 +692,13 @@
                     {@const isExpanded = expandedChainGroups.has(group.stepCount)}
                     <div class="space-y-1" data-testid="fx-route-chain-section-{group.stepCount}">
                         <!-- Collapsible header -->
-                        <button type="button" class="w-full flex items-center gap-1.5 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-300 transition-colors" onclick={() => toggleChainGroup(group.stepCount)}>
+                        <button
+                            type="button"
+                            class="w-full flex items-center gap-1.5 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                            onclick={() => toggleChainGroup(group.stepCount)}
+                            data-testid="fx-route-chain-toggle-{group.stepCount}"
+                            data-expanded={isExpanded}
+                        >
                             {#if isExpanded}
                                 <ChevronUp size={10} class="text-blue-500 flex-shrink-0" />
                             {:else}
@@ -760,7 +769,7 @@
 
                 <!-- Unusable providers -->
                 {#if filteredUnusable.length > 0}
-                    <div class="space-y-1">
+                    <div class="space-y-1" data-testid="fx-route-unusable">
                         <h4 class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                             <AlertTriangle size={10} class="text-gray-400 dark:text-gray-500" />
                             {$_('fx.route.unusableSection')}
@@ -782,7 +791,7 @@
 
                 <!-- No search results -->
                 {#if !hasFilteredRoutes && searchTokens.length > 0}
-                    <div class="text-xs text-gray-400 dark:text-gray-500 text-center py-2">
+                    <div class="text-xs text-gray-400 dark:text-gray-500 text-center py-2" data-testid="fx-route-no-results">
                         {$_('fx.route.noSearchResults')}
                     </div>
                 {/if}
@@ -791,7 +800,7 @@
 
         <!-- No routes available at all -->
         {#if !hasAnyRoutes && !loading}
-            <div class="px-3 py-3 rounded-lg border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10">
+            <div class="px-3 py-3 rounded-lg border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10" data-testid="fx-route-none">
                 <div class="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
                     <AlertTriangle size={12} />
                     <span>{$_('fx.route.noRoutesAvailable')}</span>

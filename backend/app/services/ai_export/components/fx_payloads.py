@@ -297,10 +297,21 @@ class FxExposureRow(BaseModel):
             return None
         return _validate_finite_decimal(value, field_name="native_amount")
 
+    @field_validator("asset_id", "broker_id", mode="before")
+    @classmethod
+    def _reject_bool_id(cls, value, info):
+        # `True` *is* `1` in Python, and pydantic coerces it to `1` before any "after"
+        # validator runs — so the bool check that used to live in the validator below
+        # could never fire, and `asset_id=True` was quietly accepted as asset #1, a real
+        # asset. This runs on the raw input, the only place where a bool is still a bool.
+        if isinstance(value, bool):
+            raise ValueError(f"{info.field_name} must be a positive int when present")
+        return value
+
     @field_validator("asset_id", "broker_id")
     @classmethod
     def _validate_positive_id(cls, value: int | None, info) -> int | None:
-        if value is not None and (isinstance(value, bool) or value < 1):
+        if value is not None and value < 1:
             raise ValueError(f"{info.field_name} must be a positive int when present")
         return value
 

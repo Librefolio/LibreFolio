@@ -24,6 +24,9 @@
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates:
  *   - "delete-safe" tagged TX: DEPOSIT on IB, FEE on Directa, TRANSFER ETH IB↔Coinbase
+ *   - "delete-consume" tagged TX: a SECOND paired TRANSFER ETH IB↔Coinbase, single-use,
+ *     which A2-confirm destroys. The "delete-safe" pair must survive: A2 asserts it does,
+ *     and tx-bulk-suggest-ux / tx-crud-full / tx-split-promote all read it.
  *   - "access-test" tagged TX: Asym-a (IB↔Directa), Asym-b (IB↔Coinbase),
  *     Asym-c (IB↔DEGIRO=viewer), Asym-d (IB↔Hidden)
  */
@@ -49,27 +52,6 @@ async function goToTransactions(page: Page) {
 }
 
 /** Find a row whose text content contains ALL given substrings. Returns null if not found. */
-/**
- * How many rows currently match. Separate from findRow() because asserting an
- * ABSENCE has to retry, and expect.poll() on a Locator is ambiguous — Playwright's
- * expect() is overloaded on Locator, so the matcher applied to the polled value is
- * not the plain-value one you think you are getting. A number has no such trap.
- */
-async function countRows(page: Page, ...substrings: string[]): Promise<number> {
-    const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
-    const count = await rows.count();
-    let hits = 0;
-    for (let i = 0; i < count; i++) {
-        const text =
-            (await rows
-                .nth(i)
-                .textContent()
-                .catch(() => '')) ?? '';
-        if (substrings.every((s) => text.includes(s))) hits++;
-    }
-    return hits;
-}
-
 async function findRow(page: Page, ...substrings: string[]): Promise<Locator | null> {
     const rows = page.locator('[data-testid="tx-table"] tbody tr[data-row-id]');
     const count = await rows.count();
@@ -192,9 +174,27 @@ test.describe('TransactionDeleteModal', () => {
     });
 
     test('A2-confirm: paired delete — confirm removes both halves', async ({page}) => {
-        const row = await findRow(page, 'delete-safe', 'ETH');
-        expect(row, 'delete-safe TRANSFER ETH row not found — check populate_mock_data.py').toBeTruthy();
+        // Deliberately NOT the "delete-safe" pair A2 uses. This one is destructive, and
+        // the mock ships a second pair for exactly that: tagged `delete-consume`, single
+        // use, described without the "delete-safe" substring so the finders elsewhere
+        // never land on it. Sharing one pair with A2 meant racing it under fullyParallel
+        // and leaving every later spec without a paired row.
+        const row = await findRow(page, 'delete-consume', 'ETH');
+        expect(row, 'delete-consume TRANSFER ETH row not found — run ./dev.py test db populate --force --clean; it is single-use and A2-confirm eats it').toBeTruthy();
         const rowId = await row!.getAttribute('data-row-id');
+
+        // The table does not publish the link between two halves, so the sibling is read
+        // from the server before acting: `related_transaction_id` is bidirectional (see
+        // TXReadItem), so one GET names both halves of *this* pair. The DOM id is not the
+        // transaction id — TransactionsTable prefixes it (`tx-` / `ghost-` for the
+        // receiver half) to keep the two id-spaces apart in DataTable's selection state.
+        const txId = Number(rowId!.replace(/^(?:tx|ghost)-/, ''));
+        expect(Number.isInteger(txId), `row id ${rowId} does not carry a transaction id`).toBeTruthy();
+        const before = await page.request.get(`/api/v1/transactions?ids=${txId}`);
+        expect(before.ok(), `the row under test must be readable before it is deleted (HTTP ${before.status()})`).toBeTruthy();
+        const [item] = (await before.json()) as Array<{id: number; related_transaction_id: number | null}>;
+        expect(item?.related_transaction_id, 'A2-confirm is about a *paired* row; this one is not linked').toBeTruthy();
+        const pairQuery = `ids=${item.id}&ids=${item.related_transaction_id}`;
 
         await clickDeleteOnRow(row!);
         const modal = page.getByTestId('tx-delete-modal');
@@ -205,7 +205,21 @@ test.describe('TransactionDeleteModal', () => {
 
         // Both halves gone — see the note above on why this asserts on the id.
         await expect(page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="${rowId}"]`)).toHaveCount(0);
-        await expect.poll(() => countRows(page, 'delete-safe', 'ETH'), {timeout: 8_000}).toBe(0);
+
+        // Asked of the server, about these two ids, instead of counting every row whose
+        // text matches. That count was a global total this test never created: it read
+        // "no row in the world says delete-safe ETH", and `tx-clone` legitimately commits
+        // a clone of that pair and removes it in its own afterEach — so between those two
+        // moments the shared table holds two extra matching rows. The poll sampled inside
+        // that window and failed with 2 received, in a run where the delete had worked
+        // perfectly. Neighbours are allowed to add rows; the subject here is the pair this
+        // test deleted, and only the server can answer that without guessing.
+        await expect
+            .poll(async () => ((await (await page.request.get(`/api/v1/transactions?${pairQuery}`)).json()) as unknown[]).length, {
+                message: 'both halves of the deleted pair must be gone from the server',
+                timeout: 8_000,
+            })
+            .toBe(0);
     });
 
     // === A4/A5: Guard — delete hidden on VIEWER/hidden broker paired ===

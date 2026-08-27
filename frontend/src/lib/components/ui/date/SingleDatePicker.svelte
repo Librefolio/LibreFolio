@@ -70,6 +70,14 @@
 
     let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, testid}: Props = $props();
 
+    /**
+     * Prefix for the structural test ids. `testid` names the *input*, which is what a
+     * caller cares about; the trigger and the popover derive from it so two pickers on
+     * the same screen stay distinguishable. Without a caller-supplied id they fall back
+     * to a shared default — fine for a screen that only has one.
+     */
+    let tid = $derived(testid ?? 'single-date-picker');
+
     // =========================================================================
     // State
     // =========================================================================
@@ -84,7 +92,20 @@
 
     let shown = $derived(typed ?? value ?? '');
     let typedIso = $derived(typed === null ? null : parseTypedDate(typed));
-    let typedInvalid = $derived(typed !== null && typed.trim() !== '' && !isSelectable(typedIso));
+    /** The raw fact: the text does not read as a date this picker would accept. */
+    let typedUnparseable = $derived(typed !== null && typed.trim() !== '' && !isSelectable(typedIso));
+    /**
+     * A half-typed date is not a mistake, it is a date in progress: `2024-08-0` fails to
+     * parse for exactly as long as it takes to press one more key. Complaining on every
+     * keystroke painted the field red for the whole time the user was typing it
+     * *correctly* — from `2` all the way to the last digit.
+     *
+     * So the complaint is armed only when the user leaves the value as it stands: blur,
+     * or Enter. It is disarmed again the moment they resume editing, because at that
+     * point the text is in progress once more.
+     */
+    let validationArmed = $state(false);
+    let typedInvalid = $derived(validationArmed && typedUnparseable);
     /** What the calendar highlights: the date being typed as soon as it reads as one. */
     let previewIso = $derived(isSelectable(typedIso) ? typedIso : value);
 
@@ -109,15 +130,30 @@
         return true;
     }
 
-    /** Reads what the user typed; reverts to the stored value when unreadable. */
+    /**
+     * Reads what the user typed.
+     *
+     * Text the picker will not accept is *kept on screen* instead of being discarded.
+     * Throwing it away silently put the previous value back with no explanation, so
+     * "I mistyped" and "I typed a date this field refuses" looked identical — nothing
+     * on screen said which. Now the refused text stays, and the caller arms the
+     * warning, so leaving the field is where the user finds out.
+     *
+     * Escape remains the way to abandon an edit, and an empty field is read as exactly
+     * that: nothing was refused, so the stored value comes back.
+     */
     function commitTyped() {
         if (typed === null) return;
         const parsed = parseTypedDate(typed);
-        if (isSelectable(parsed) && parsed !== value) {
-            value = parsed;
-            onchange(parsed);
+        if (isSelectable(parsed)) {
+            if (parsed !== value) {
+                value = parsed;
+                onchange(parsed);
+            }
+            typed = null;
+            return;
         }
-        typed = null;
+        if (typed.trim() === '') typed = null;
     }
 
     function updatePopoverPosition() {
@@ -215,6 +251,9 @@
             // Enter commits and puts the calendar away; pressing it again asks for it back,
             // which is the only way to reopen it without leaving and re-entering the field.
             if (calendarOpen) {
+                // Enter says "this is my answer", so an answer that does not read as a
+                // date is now worth complaining about — same moment as leaving the field.
+                validationArmed = true;
                 commitTyped();
                 closeCalendar();
             } else {
@@ -222,6 +261,7 @@
             }
         } else if (e.key === 'Escape') {
             typed = null;
+            validationArmed = false;
         }
     }
 
@@ -282,7 +322,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="relative sdp-trigger {inputStyle ? 'block w-full' : 'inline-block'}">
+<div class="relative sdp-trigger {inputStyle ? 'block w-full' : 'inline-block'}" data-testid="{tid}-root" data-open={calendarOpen ? 'true' : 'false'} data-invalid={typedInvalid ? 'true' : 'false'}>
     <!-- The date is typed, not only picked: the calendar is one click away but is
          the slow path for anything more than a few months from today. -->
     <div
@@ -296,6 +336,7 @@
         <button
             type="button"
             class="flex-shrink-0 text-libre-green disabled:cursor-not-allowed"
+            data-testid="{tid}-calendar-button"
             {disabled}
             aria-label={$_('datePicker.openCalendar')}
             title={$_('datePicker.openCalendar')}
@@ -322,10 +363,13 @@
             data-testid={testid}
             oninput={(e) => {
                 typed = e.currentTarget.value;
+                // Editing resumed: whatever is on screen is in progress again.
+                validationArmed = false;
                 syncCalendarToTyped();
             }}
             onblur={() => {
                 resetDateArrowHold();
+                validationArmed = true;
                 commitTyped();
             }}
             onkeyup={resetDateArrowHold}
@@ -341,7 +385,7 @@
     </div>
 
     {#if calendarOpen}
-        <div class="sdp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 w-[280px]" style={popoverStyle}>
+        <div class="sdp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4 w-[280px]" style={popoverStyle} data-testid="{tid}-popover">
             <CalendarMonth year={calYear} month={calMonth} {weekdayLabels} {monthLabels} onDayClick={handleDayClick} onPrevMonth={prevMonth} onNextMonth={nextMonth} onSetMonth={setMonth} onSetYear={setYear} onGoToToday={goToToday} highlights={{selected: previewIso}} {disabledDates} {allowFuture} />
         </div>
     {/if}
