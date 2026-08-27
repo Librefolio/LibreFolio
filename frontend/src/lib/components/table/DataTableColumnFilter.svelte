@@ -533,22 +533,36 @@
         applyFilter();
     }
     function selectAllMultiEnums() {
-        multiEnums = new Set(enumOptions.map((o) => o.value));
+        // Scoped to what the search left on screen, like `selectAllEnums`: ticking rows the user
+        // filtered away would select things they can no longer see. With no query active,
+        // `filteredMultiEnumOptions` is the whole list, so the plain "select all" is unchanged.
+        //
+        // It *adds* to the selection rather than replacing it. Replacing looks identical with no
+        // query, but with one active it silently unticks everything the search is hiding — so
+        // searching, ticking, searching again and ticking again would keep only the last batch.
+        // That is "select only these" wearing the label "select all".
+        multiEnums = new Set([...multiEnums, ...filteredMultiEnumOptions.map((o) => o.value)]);
         applyFilter();
     }
     function clearAllMultiEnums() {
         multiEnums = new Set();
         applyFilter();
     }
-    let filteredMultiEnumOptions = $derived(multiEnumSearch.trim() === '' ? enumOptions : enumOptions.filter((o) => o.label.toLowerCase().includes(multiEnumSearch.toLowerCase())));
-    let filteredEnumOptions = $derived(
-        enumSearch.trim() === ''
-            ? enumOptions
-            : enumOptions.filter((o) => {
-                  const q = enumSearch.toLowerCase();
-                  return o.label.toLowerCase().includes(q) || (o.searchText?.toLowerCase().includes(q) ?? false);
-              }),
-    );
+
+    /**
+     * One "contains, case-insensitive, label OR hidden searchText" rule, shared by both the enum
+     * and multi-enum lists so their search can never drift apart again. The multi-enum branch used
+     * to match on the label alone, which left every option whose query lived only in `searchText`
+     * (an ISIN standing behind an asset name, say) unreachable — the box looked live but filtered
+     * nothing the user typed.
+     */
+    function optionMatchesQuery(option: EnumOption, rawQuery: string): boolean {
+        const q = rawQuery.trim().toLowerCase();
+        if (q === '') return true;
+        return option.label.toLowerCase().includes(q) || (option.searchText?.toLowerCase().includes(q) ?? false);
+    }
+    let filteredMultiEnumOptions = $derived(multiEnumSearch.trim() === '' ? enumOptions : enumOptions.filter((o) => optionMatchesQuery(o, multiEnumSearch)));
+    let filteredEnumOptions = $derived(enumSearch.trim() === '' ? enumOptions : enumOptions.filter((o) => optionMatchesQuery(o, enumSearch)));
 
     // ---- Currency-stack helpers ----
     /** Set of currency codes already in the stack (to exclude from the picker). */
@@ -559,10 +573,34 @@
         currencyToAdd = '';
         applyFilter();
     }
+    /**
+     * Drops a currency row and keeps the index-keyed editor state aligned with it.
+     *
+     * The stack renders keyed by currency code, but the three pieces of editor state
+     * around it — which row is expanded, and both slider thumb positions — are keyed
+     * by array index. Removing a row from the middle shifts every later row down one
+     * slot, so without re-indexing the next currency silently inherits the removed
+     * one's thumbs: a row showing "any amount" with an empty min field would display
+     * its predecessor's handle at 80%, and dragging from there produced a value the
+     * user never aimed at. The expanded editor jumped to a different currency for the
+     * same reason.
+     */
     function removeCurrencyFromStack(idx: number) {
         currencyStack = currencyStack.filter((_, i) => i !== idx);
-        if (currencyOpenIdx === idx) currencyOpenIdx = null;
+        currencyOpenIdx = currencyOpenIdx === null || currencyOpenIdx === idx ? null : currencyOpenIdx > idx ? currencyOpenIdx - 1 : currencyOpenIdx;
+        currencyMinPos = shiftPositionsAfterRemoval(currencyMinPos, idx);
+        currencyMaxPos = shiftPositionsAfterRemoval(currencyMaxPos, idx);
         applyFilter();
+    }
+    /** Drops `removedIdx` and slides every higher index down by one. */
+    function shiftPositionsAfterRemoval(positions: Record<number, number>, removedIdx: number): Record<number, number> {
+        const next: Record<number, number> = {};
+        for (const [key, pos] of Object.entries(positions)) {
+            const i = Number(key);
+            if (i === removedIdx) continue;
+            next[i > removedIdx ? i - 1 : i] = pos;
+        }
+        return next;
     }
     /** Reorders one currency row's bounds and repaints both handles. See {@link normalizeSizeBounds}. */
     function normalizeCurrencyBounds(idx: number) {
@@ -726,10 +764,10 @@
     });
 </script>
 
-<div bind:this={popoverElement} class="filter-popover" style={popoverStyle} transition:fade={{duration: 100}}>
+<div bind:this={popoverElement} class="filter-popover" style={popoverStyle} transition:fade={{duration: 100}} data-testid="column-filter" data-filter-type={type}>
     <div class="filter-header">
         <span class="filter-title">{$t('table.filterLabel')}</span>
-        <button class="reset-btn" onclick={clearFilter} title={$t('common.clear')} type="button">
+        <button class="reset-btn" onclick={clearFilter} title={$t('common.clear')} type="button" data-testid="column-filter-reset">
             <RotateCcw size={14} />
         </button>
     </div>
@@ -739,11 +777,12 @@
             <div class="text-filter">
                 <div class="search-input-wrapper">
                     <Search size={14} class="search-icon" />
-                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={textValue} oninput={autoApplyTextFilter} id="text-filter-input" />
+                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={textValue} oninput={autoApplyTextFilter} id="text-filter-input" data-testid="filter-text-input" />
                     {#if textValue}
                         <button
                             type="button"
                             class="clear-input-btn"
+                            data-testid="filter-text-clear"
                             onclick={() => {
                                 textValue = '';
                                 applyFilter();
@@ -753,7 +792,7 @@
                         </button>
                     {/if}
                 </div>
-                <select class="match-mode-select" bind:value={textMatchMode} onchange={applyFilter} id="text-match-mode-select">
+                <select class="match-mode-select" bind:value={textMatchMode} onchange={applyFilter} id="text-match-mode-select" data-testid="filter-text-match-mode">
                     <option value="contains">{$t('filter.contains')}</option>
                     <option value="startsWith">{$t('filter.startsWith')}</option>
                     <option value="endsWith">{$t('filter.endsWith')}</option>
@@ -780,6 +819,7 @@
                             if (swapped) void followSwap(numMaxInputEl);
                         }}
                         id="number-min-input"
+                        data-testid="filter-number-min"
                     />
                 </div>
                 <div class="range-row">
@@ -800,6 +840,7 @@
                             if (swapped) void followSwap(numMinInputEl);
                         }}
                         id="number-max-input"
+                        data-testid="filter-number-max"
                     />
                 </div>
                 <!-- Dual range slider -->
@@ -810,8 +851,8 @@
                         <div class="slider-tick" style="left: 50%"></div>
                         <div class="slider-tick" style="left: 75%"></div>
                     </div>
-                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={numSliderMinPos} oninput={updateNumMinFromSlider} onchange={finalizeNumSliders} />
-                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={numSliderMaxPos} oninput={updateNumMaxFromSlider} onchange={finalizeNumSliders} />
+                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={numSliderMinPos} oninput={updateNumMinFromSlider} onchange={finalizeNumSliders} data-testid="filter-number-slider-min" />
+                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={numSliderMaxPos} oninput={updateNumMaxFromSlider} onchange={finalizeNumSliders} data-testid="filter-number-slider-max" />
                 </div>
 
                 <!-- Slider labels with intermediate values -->
@@ -829,8 +870,8 @@
                 <div class="size-row">
                     <label class="size-label" for="size-min-input">{$t('common.min')}</label>
                     <div class="size-input-group">
-                        <input type="number" use:numericArrows class="size-input" id="size-min-input" bind:this={sizeMinInputEl} bind:value={sizeMinInputValue} min="0" onchange={updateSizeMinFromInput} />
-                        <select class="size-unit-select" bind:value={sizeMinUnit} onchange={updateSizeMinFromInput}>
+                        <input type="number" use:numericArrows class="size-input" id="size-min-input" bind:this={sizeMinInputEl} bind:value={sizeMinInputValue} min="0" onchange={updateSizeMinFromInput} data-testid="filter-size-min" />
+                        <select class="size-unit-select" bind:value={sizeMinUnit} onchange={updateSizeMinFromInput} data-testid="filter-size-min-unit">
                             {#each SIZE_UNITS as u}
                                 <option value={u.unit}>{u.label}</option>
                             {/each}
@@ -842,8 +883,8 @@
                 <div class="size-row">
                     <label class="size-label" for="size-max-input">{$t('common.max')}</label>
                     <div class="size-input-group">
-                        <input type="number" use:numericArrows class="size-input" id="size-max-input" bind:this={sizeMaxInputEl} bind:value={sizeMaxInputValue} min="0" onchange={updateSizeMaxFromInput} />
-                        <select class="size-unit-select" bind:value={sizeMaxUnit} onchange={updateSizeMaxFromInput}>
+                        <input type="number" use:numericArrows class="size-input" id="size-max-input" bind:this={sizeMaxInputEl} bind:value={sizeMaxInputValue} min="0" onchange={updateSizeMaxFromInput} data-testid="filter-size-max" />
+                        <select class="size-unit-select" bind:value={sizeMaxUnit} onchange={updateSizeMaxFromInput} data-testid="filter-size-max-unit">
                             {#each SIZE_UNITS as u}
                                 <option value={u.unit}>{u.label}</option>
                             {/each}
@@ -860,8 +901,8 @@
                         <div class="slider-tick" style="left: 50%"></div>
                         <div class="slider-tick" style="left: 75%"></div>
                     </div>
-                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={sliderMinPos} oninput={updateSizeMinFromSlider} onchange={finalizeSizeSliders} />
-                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={sliderMaxPos} oninput={updateSizeMaxFromSlider} onchange={finalizeSizeSliders} />
+                    <input type="range" class="size-slider size-slider-min" min="0" max="100" bind:value={sliderMinPos} oninput={updateSizeMinFromSlider} onchange={finalizeSizeSliders} data-testid="filter-size-slider-min" />
+                    <input type="range" class="size-slider size-slider-max" min="0" max="100" bind:value={sliderMaxPos} oninput={updateSizeMaxFromSlider} onchange={finalizeSizeSliders} data-testid="filter-size-slider-max" />
                 </div>
 
                 <!-- Slider labels with intermediate values -->
@@ -892,25 +933,25 @@
         {:else if type === 'enum'}
             <div class="enum-filter">
                 <div class="enum-actions">
-                    <button type="button" class="enum-action-btn" onclick={selectAllEnums}>{$t('common.selectAll')}</button>
-                    <button type="button" class="enum-action-btn" onclick={clearAllEnums}>{$t('common.clearAll')}</button>
+                    <button type="button" class="enum-action-btn" onclick={selectAllEnums} data-testid="filter-enum-select-all">{$t('common.selectAll')}</button>
+                    <button type="button" class="enum-action-btn" onclick={clearAllEnums} data-testid="filter-enum-clear-all">{$t('common.clearAll')}</button>
                 </div>
                 <div class="search-input-wrapper">
                     <Search size={14} class="search-icon" />
-                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={enumSearch} />
+                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={enumSearch} data-testid="filter-enum-search" />
                     {#if enumSearch}
-                        <button type="button" class="clear-input-btn" onclick={() => (enumSearch = '')}>
+                        <button type="button" class="clear-input-btn" onclick={() => (enumSearch = '')} data-testid="filter-enum-search-clear">
                             <X size={12} />
                         </button>
                     {/if}
                 </div>
                 <div class="enum-list">
                     {#if filteredEnumOptions.length === 0}
-                        <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
+                        <div class="enum-empty" data-testid="filter-enum-empty">{$t('table.filter.empty') || 'No options'}</div>
                     {:else}
                         {#each filteredEnumOptions as option}
                             {@const iconCandidates = option.iconCandidates?.length ? option.iconCandidates : option.iconUrl ? [option.iconUrl] : []}
-                            <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)} data-testid={`filter-enum-option-${option.value}`}>
+                            <button type="button" class="enum-option" onclick={() => toggleEnum(option.value)} data-testid={`filter-enum-option-${option.value}`} data-checked={selectedEnums.has(option.value)}>
                                 <span class="enum-checkbox" class:checked={selectedEnums.has(option.value)}>
                                     {#if selectedEnums.has(option.value)}
                                         <Check size={12} />
@@ -936,25 +977,25 @@
         {:else if type === 'multi-enum'}
             <div class="enum-filter">
                 <div class="enum-actions">
-                    <button type="button" class="enum-action-btn" onclick={selectAllMultiEnums}>{$t('common.selectAll')}</button>
-                    <button type="button" class="enum-action-btn" onclick={clearAllMultiEnums}>{$t('common.clearAll')}</button>
+                    <button type="button" class="enum-action-btn" onclick={selectAllMultiEnums} data-testid="filter-multi-enum-select-all">{$t('common.selectAll')}</button>
+                    <button type="button" class="enum-action-btn" onclick={clearAllMultiEnums} data-testid="filter-multi-enum-clear-all">{$t('common.clearAll')}</button>
                 </div>
                 <div class="search-input-wrapper">
                     <Search size={14} class="search-icon" />
-                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={multiEnumSearch} />
+                    <input type="text" class="filter-input" placeholder={$t('common.search')} bind:value={multiEnumSearch} data-testid="filter-multi-enum-search" />
                     {#if multiEnumSearch}
-                        <button type="button" class="clear-input-btn" onclick={() => (multiEnumSearch = '')}>
+                        <button type="button" class="clear-input-btn" onclick={() => (multiEnumSearch = '')} data-testid="filter-multi-enum-search-clear">
                             <X size={12} />
                         </button>
                     {/if}
                 </div>
                 <div class="enum-list">
                     {#if filteredMultiEnumOptions.length === 0}
-                        <div class="enum-empty">{$t('table.filter.empty') || 'No options'}</div>
+                        <div class="enum-empty" data-testid="filter-multi-enum-empty">{$t('table.filter.empty') || 'No options'}</div>
                     {:else}
                         {#each filteredMultiEnumOptions as option}
                             {@const iconCandidates = option.iconCandidates?.length ? option.iconCandidates : option.iconUrl ? [option.iconUrl] : []}
-                            <button type="button" class="enum-option" onclick={() => toggleMultiEnum(option.value)} data-testid={`filter-multi-enum-option-${option.value}`}>
+                            <button type="button" class="enum-option" onclick={() => toggleMultiEnum(option.value)} data-testid={`filter-multi-enum-option-${option.value}`} data-checked={multiEnums.has(option.value)}>
                                 <span class="enum-checkbox" class:checked={multiEnums.has(option.value)}>
                                     {#if multiEnums.has(option.value)}
                                         <Check size={12} />
@@ -990,7 +1031,7 @@
                     />
                 </div>
                 {#if currencyStack.length === 0}
-                    <div class="currency-stack-empty">{$t('table.filter.currencyStack.empty') || 'Pick a currency to add a numeric range filter.'}</div>
+                    <div class="currency-stack-empty" data-testid="filter-currency-empty">{$t('table.filter.currencyStack.empty') || 'Pick a currency to add a numeric range filter.'}</div>
                 {:else}
                     <ul class="currency-stack-list">
                         {#each currencyStack as item, idx (item.code)}
@@ -1011,14 +1052,14 @@
                                 </button>
                                 {#if currencyOpenIdx === idx}
                                     {@const r = curRange(idx)}
-                                    <div class="currency-stack-range-editor number-filter">
+                                    <div class="currency-stack-range-editor number-filter" data-testid={`filter-currency-editor-${item.code}`}>
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-min-${idx}`}>{$t('common.min')}</label>
-                                            <input type="number" use:numericArrows class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, e.currentTarget.value)} />
+                                            <input type="number" use:numericArrows class="range-input" id={`cur-min-${idx}`} value={item.min ?? ''} onchange={(e) => updateCurrencyMin(idx, e.currentTarget.value)} data-testid={`filter-currency-min-${item.code}`} />
                                         </div>
                                         <div class="range-row">
                                             <label class="range-label" for={`cur-max-${idx}`}>{$t('common.max')}</label>
-                                            <input type="number" use:numericArrows class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, e.currentTarget.value)} />
+                                            <input type="number" use:numericArrows class="range-input" id={`cur-max-${idx}`} value={item.max ?? ''} onchange={(e) => updateCurrencyMax(idx, e.currentTarget.value)} data-testid={`filter-currency-max-${item.code}`} />
                                         </div>
                                         <!-- Linear dual range slider — same UX as `type:'number'`, scoped to per-currency min/max. -->
                                         <div class="size-slider-container">
@@ -1036,6 +1077,7 @@
                                                 value={curMinPos(idx)}
                                                 oninput={(e) => updateCurrencyMinSlider(idx, Number(e.currentTarget.value), e.currentTarget)}
                                                 onchange={(e) => finalizeCurrencySlider(idx, e.currentTarget, 'min')}
+                                                data-testid="filter-currency-slider-min-{item.code}"
                                             />
                                             <input
                                                 type="range"
@@ -1045,6 +1087,7 @@
                                                 value={curMaxPos(idx)}
                                                 oninput={(e) => updateCurrencyMaxSlider(idx, Number(e.currentTarget.value), e.currentTarget)}
                                                 onchange={(e) => finalizeCurrencySlider(idx, e.currentTarget, 'max')}
+                                                data-testid="filter-currency-slider-max-{item.code}"
                                             />
                                         </div>
                                         <div class="size-slider-labels">

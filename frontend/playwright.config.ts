@@ -121,7 +121,21 @@ export default defineConfig({
         // symptom is a burst of login timeouts that looks like flakiness. An
         // ephemeral test server has nothing to hot-reload; the runner's own
         // shared-backend path already passes this flag.
-        command: `cd .. && exec ./dev.py server --test --force --no-reload --workers ${SERVER_WORKERS}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
+        //
+        // `--no-scheduler`: the runner's shared-backend path has always passed it,
+        // with the reason written out in `_server.py` — `populate_mock_data` writes
+        // `last_run_at=yesterday`, so every job is due the moment a test server
+        // boots. Five seconds in, the daemon starts refreshing current prices for
+        // *every active asset* against live providers, and the OHLC write-back
+        // documented on `get_current_prices_bulk` means those refreshes **create
+        // and extend price rows underneath the tests**. This path did not pass it,
+        // so a frontend category run on its own — `./dev.py test front-asset all`,
+        // which starts its own server rather than attaching to a shared one — was
+        // running against a backend that mutates prices on a 10-minute timer and
+        // drags the network into the suite. Measured on the shared path when it
+        // was still missing: ±700-1300 lines of backend coverage between two
+        // identical runs, and one run where the Bank of England answered HTML.
+        command: `cd .. && exec ./dev.py server --test --force --no-reload --no-scheduler --workers ${SERVER_WORKERS}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
         url: `${BASE_URL}/api/v1/system/health`,
         // In coverage mode, always start a fresh server (don't reuse a
         // non-coverage server that may already be running on the port) —

@@ -736,5 +736,5 @@
         </div>
     {/if}
 
-    <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || data.length === 0}></div>
+    <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || data.length === 0} data-testid="allocation-history-chart"></div>
 </div>

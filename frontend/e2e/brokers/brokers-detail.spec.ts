@@ -1,7 +1,6 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {appears} from '../fixtures/probe';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -41,19 +40,50 @@ async function clickRowAction(page: Page, row: Locator, actionId: string): Promi
  * Helper: navigate to the first broker's detail page and wait for data to load.
  * Returns false if no brokers exist (test should be skipped).
  */
-async function goToFirstBrokerDetail(page: Page): Promise<boolean> {
+/**
+ * Opens the detail page of the first broker card on screen.
+ *
+ * The mock always ships seven brokers, so "no card appeared" is a failure and not a
+ * reason to skip: returning a boolean here let every caller write `if (!ok) return`,
+ * which marks a test green without testing anything.
+ */
+async function goToFirstBrokerDetail(page: Page): Promise<void> {
     await navigateTo(page, '/brokers');
 
     const brokerCards = page.locator('[data-testid^="broker-card-"]');
-    // Wait for async broker list to load
-    if (!(await appears(brokerCards, 5_000))) return false;
+    await expect(brokerCards.first(), 'the mock always ships brokers — an empty list means the page never loaded').toBeVisible({timeout: 8_000});
 
     await brokerCards.first().click();
     await expect(page).toHaveURL(/\/brokers\/\d+/, {timeout: 5000});
     await expect(page.getByTestId('broker-detail-page')).toBeVisible();
     // Wait for broker data to load (broker-name is inside {#if broker})
     await expect(page.getByTestId('broker-name')).toBeVisible({timeout: 10000});
-    return true;
+}
+
+/** The one broker the mock fills with positions — see populate_mock_data.py. */
+const BROKER_WITH_HOLDINGS = 'Interactive Brokers';
+
+/**
+ * Opens the broker that actually has positions.
+ *
+ * "The first card" is not an identity. The list is ordered by name and other specs
+ * legitimately create brokers of their own, so `.first()` landed on whatever happened to
+ * sort first — frequently one with no positions at all. Every test below then hit
+ * `if (rows === 0) return` and reported green without exercising a single line of the
+ * FIFO panel: measured, **ten of the twenty-two tests in this file** were exiting that
+ * way, which is why LotCustodyModal sat at 11.9% coverage while two tests appeared to
+ * cover it.
+ */
+async function goToBrokerWithHoldings(page: Page): Promise<void> {
+    await navigateTo(page, '/brokers');
+
+    const card = page.locator('[data-testid^="broker-card-"]').filter({hasText: BROKER_WITH_HOLDINGS});
+    await expect(card.first(), `${BROKER_WITH_HOLDINGS} is the broker the mock gives positions to — check populate_mock_data.py`).toBeVisible({timeout: 8_000});
+
+    await card.first().click();
+    await expect(page).toHaveURL(/\/brokers\/\d+/, {timeout: 5000});
+    await expect(page.getByTestId('broker-detail-page')).toBeVisible();
+    await expect(page.getByTestId('broker-name')).toBeVisible({timeout: 10000});
 }
 
 /** Switch to the "Transazioni" tab — the import/new-tx buttons live there, not on
@@ -94,23 +124,20 @@ test.describe('Broker Detail Page', () => {
     });
 
     test('broker detail page shows broker name', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         // broker-name is already verified by the helper
         await expect(page.getByTestId('broker-name')).toBeVisible();
     });
 
     test('broker detail page shows cash balances section', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         await expect(page.getByTestId('broker-cash-balances')).toBeVisible({timeout: 5000});
     });
 
     test('broker detail page shows holdings section', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         // broker-holdings lives on the "Posizioni" tab, not the default "Panoramica" one.
         await goToPosizioniTab(page);
@@ -118,16 +145,14 @@ test.describe('Broker Detail Page', () => {
     });
 
     test('broker detail page shows transactions section', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         await goToTransazioniTab(page);
         await expect(page.getByTestId('broker-transactions')).toBeVisible({timeout: 5000});
     });
 
     test('broker detail page has show-import-history button', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         // broker-show-import-history is always visible (unlike the import/new-tx
         // buttons next to it, which require OWNER or EDITOR role)
@@ -136,32 +161,28 @@ test.describe('Broker Detail Page', () => {
     });
 
     test('broker detail page has edit button', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         // broker-edit-button is inside {#if canEdit}
         await expect(page.getByTestId('broker-edit-button')).toBeVisible({timeout: 5000});
     });
 
     test('can open edit modal from detail page', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         await page.getByTestId('broker-edit-button').click();
         await expect(page.getByTestId('broker-modal')).toBeVisible({timeout: 5000});
     });
 
     test('can navigate back from detail page', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         await page.getByTestId('broker-back-button').click();
         await expect(page.getByTestId('brokers-page')).toBeVisible({timeout: 5000});
     });
 
     test('can open import files modal', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         await goToTransazioniTab(page);
         await page.getByTestId('broker-show-import-history').click();
@@ -169,8 +190,7 @@ test.describe('Broker Detail Page', () => {
     });
 
     test('can close import files modal', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         await goToTransazioniTab(page);
         await page.getByTestId('broker-show-import-history').click();
@@ -182,8 +202,7 @@ test.describe('Broker Detail Page', () => {
     });
 
     test('import files modal can open file preview', async ({page}) => {
-        const ok = await goToFirstBrokerDetail(page);
-        if (!ok) return;
+        await goToFirstBrokerDetail(page);
 
         await page.route('**/api/v1/brokers/import/files/*/preview', async (route) => {
             await route.fulfill({
@@ -232,15 +251,20 @@ test.describe('Broker Detail Page', () => {
          *  established convention for DataTable rows in this codebase (see transactions-table.spec.ts). */
         async function firstHoldingRow(page: Page) {
             await goToPosizioniTab(page);
-            return page.locator('[data-testid="broker-holdings"] tbody tr[data-row-id]').first();
+            const rows = page.locator('[data-testid="broker-holdings"] tbody tr[data-row-id]');
+            // Assert, do not probe. This broker has positions by construction, so an empty
+            // table means either the page had not finished loading or the mock changed —
+            // and both are things a run must say out loud. `count()` answers about *this
+            // instant* and never retries, which is how ten tests here turned "slow" and
+            // "wrong broker" alike into "nothing to do, green".
+            await expect(rows.first(), `${BROKER_WITH_HOLDINGS} must have at least one position — check populate_mock_data.py`).toBeVisible({timeout: 10_000});
+            return rows.first();
         }
 
         test('clicking the "Analyze Lots" row action opens the FIFO lots panel', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return; // no holdings for this broker — nothing to click
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
@@ -251,11 +275,9 @@ test.describe('Broker Detail Page', () => {
         });
 
         test('closing the panel clears the ?asset= query param', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
@@ -266,22 +288,18 @@ test.describe('Broker Detail Page', () => {
         });
 
         test('clicking the "View Asset" row action navigates to asset detail', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'view-asset');
             await expect(page).toHaveURL(/\/assets\/\d+/, {timeout: 5000});
         });
 
         test('right-clicking a holding row shows a context menu with both actions', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await row.click({button: 'right'});
             await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
@@ -293,11 +311,9 @@ test.describe('Broker Detail Page', () => {
         });
 
         test('WAC/Price chart EUR|% toggle switches without breaking the panel', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
@@ -311,11 +327,9 @@ test.describe('Broker Detail Page', () => {
         });
 
         test('clicking a Gantt segment overlay selects the lot and reflects in the unified table', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
@@ -324,7 +338,9 @@ test.describe('Broker Detail Page', () => {
             // Invisible per-lane hit target, absolutely positioned over the ECharts custom
             // series bar (no fixed HTML column anymore — see LotGanttChart.svelte OverlayRect).
             const segmentOverlay = page.locator('[data-testid^="lot-gantt-segment-"]').first();
-            if ((await segmentOverlay.count()) === 0) return; // no lots in range for this holding
+            // The panel is open on a broker that has lots, so a Gantt with no segment is a
+            // defect or a load that never finished — not a reason to call this test done.
+            await expect(segmentOverlay, 'the Gantt must draw at least one lot segment').toBeVisible({timeout: 10_000});
 
             const testid = await segmentOverlay.getAttribute('data-testid');
             const lotId = testid?.replace('lot-gantt-segment-', '');
@@ -338,17 +354,15 @@ test.describe('Broker Detail Page', () => {
         });
 
         test('clicking the Custody cell opens the modal without changing row selection', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
             const custodyCell = page.locator('[data-testid^="unified-lots-custody-"]').first();
-            if ((await custodyCell.count()) === 0) return;
+            await expect(custodyCell, 'the unified lots table must render a custody cell').toBeVisible({timeout: 10_000});
 
             const testid = await custodyCell.getAttribute('data-testid');
             const lotId = testid?.replace('unified-lots-custody-', '');
@@ -364,17 +378,15 @@ test.describe('Broker Detail Page', () => {
         });
 
         test('row context menu "View lot detail" opens the modal for any lot, including one with no transfer', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
-            if ((await tableRow.count()) === 0) return;
+            await expect(tableRow, 'the unified lots table must have at least one lot row').toBeVisible({timeout: 10_000});
 
             await tableRow.click({button: 'right'});
             await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
@@ -388,19 +400,82 @@ test.describe('Broker Detail Page', () => {
             await expect(page.getByTestId('lot-custody-modal-summary')).toContainText(/./);
         });
 
+        test('the lot detail modal renders its three sections and the net breakdown', async ({page}) => {
+            // Until the navigation above was anchored to a broker that actually has
+            // positions, every test in this block exited early and this modal was never
+            // opened by this file at all. Opening it is not the same as exercising it:
+            // the two tests above assert the title and that the summary is non-empty,
+            // which leaves the P&L maths, the custody rows and the event history — the
+            // bulk of the component — unread.
+            await goToBrokerWithHoldings(page);
+            const row = await firstHoldingRow(page);
+            await clickRowAction(page, row, 'analyze-lots');
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+
+            const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
+            await expect(tableRow, 'the unified lots table must have at least one lot row').toBeVisible({timeout: 10_000});
+            await tableRow.click({button: 'right'});
+            await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
+            await page.getByTestId('context-menu-action-lot-view-details-action').click();
+
+            const modal = page.getByTestId('lot-custody-modal');
+            await expect(modal).toBeVisible({timeout: 5000});
+
+            // The three sections the modal is made of.
+            await expect(page.getByTestId('lot-custody-modal-summary')).toBeVisible();
+            await expect(page.getByTestId('lot-custody-modal-current-custody')).toBeVisible();
+            await expect(page.getByTestId('lot-custody-modal-history')).toBeVisible();
+            await expect(page.getByTestId('lot-custody-modal-lot-id')).toContainText(/\S/);
+
+            // The derived P&L figures. Their *values* depend on prices this test does not
+            // own, so the assertion is that each one resolved to something printable —
+            // a blank here means a derived threw or a format helper returned undefined,
+            // which is exactly what never running this component would hide.
+            for (const tid of ['lot-custody-modal-asset-income', 'lot-custody-modal-market-pnl', 'lot-custody-modal-total-pnl']) {
+                await expect(page.getByTestId(tid), `${tid} must render a value`).toContainText(/\S/);
+            }
+        });
+
+        // NOT covered, on purpose: the modal's net breakdown (`{#if lotHasNetCosts}`,
+        // with the allocated fees/taxes and the net P&L) cannot be reached with today's
+        // mock. Both FEE rows in populate_mock_data.py carry `asset_id=None` — they are
+        // account-level charges, never allocated to a lot — so `lotHasNetCosts` is false
+        // for every lot. Verified by scanning the first six lots of Interactive Brokers.
+        // Covering it needs a fee or tax attached to an asset in the mock, which is a
+        // change other specs read, so it is a decision for the maintainer, not a test.
+
+        test('the lot detail modal closes from both the header and the footer', async ({page}) => {
+            await goToBrokerWithHoldings(page);
+            const row = await firstHoldingRow(page);
+            await clickRowAction(page, row, 'analyze-lots');
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+
+            const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
+            await expect(tableRow).toBeVisible({timeout: 10_000});
+            const modal = page.getByTestId('lot-custody-modal');
+
+            for (const closeTestId of ['lot-custody-modal-close', 'lot-custody-modal-footer-close']) {
+                await tableRow.click({button: 'right'});
+                await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
+                await page.getByTestId('context-menu-action-lot-view-details-action').click();
+                await expect(modal).toBeVisible({timeout: 5000});
+
+                await page.getByTestId(closeTestId).click();
+                await expect(modal, `${closeTestId} must close the modal`).toBeHidden({timeout: 5000});
+            }
+        });
+
         test('row context menu "Go to lot in Gantt" pulses the matching Gantt lane', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
             await expect(page.getByTestId('lot-gantt-chart')).toBeVisible({timeout: 10000});
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
-            if ((await tableRow.count()) === 0) return;
+            await expect(tableRow, 'the unified lots table must have at least one lot row').toBeVisible({timeout: 10_000});
 
             await tableRow.click({button: 'right'});
             await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
@@ -413,17 +488,15 @@ test.describe('Broker Detail Page', () => {
         });
 
         test('Value presentation toggle: two independent buttons (Aggregate/Per lot), Asset-Global-style tri-state — neither pressed shows both', async ({page}) => {
-            const ok = await goToFirstBrokerDetail(page);
-            if (!ok) return;
+            await goToBrokerWithHoldings(page);
 
             const row = await firstHoldingRow(page);
-            if ((await row.count()) === 0) return;
 
             await clickRowAction(page, row, 'analyze-lots');
             await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
 
             const checkbox = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first().locator('.checkbox-btn, button').first();
-            if ((await checkbox.count()) === 0) return;
+            await expect(checkbox, 'the value presentation toggle must be present once the panel is open').toBeVisible({timeout: 10_000});
             await checkbox.click();
 
             const presentationFilter = page.getByTestId('lots-value-presentation-filter');

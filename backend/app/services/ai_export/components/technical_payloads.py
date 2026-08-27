@@ -233,8 +233,6 @@ class IndicatorBucketRow(BaseModel):
         cell_counts = [1 if isinstance(cell, TechnicalSingleValueCell) else cell.observation_count for cell in self.cells.values() if cell is not None]
         if cell_counts and max(cell_counts) > self.observation_count:
             raise ValueError("cell observation count cannot exceed row observation_count")
-        if self.observation_count == 0 and cell_counts:
-            raise ValueError("empty indicator rows must not contain populated cells")
         for cell in self.cells.values():
             if isinstance(cell, TechnicalSingleValueCell):
                 dates = (cell.date,)

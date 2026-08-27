@@ -1666,6 +1666,54 @@ def populate_transactions(session: Session):
     session.commit()
     print(f"  🗑️🔗 delete-safe TRANSFER ETH IB↔Coinbase (#{tx_del_pair_out.id} ↔ #{tx_del_pair_in.id})")
 
+    # 9c. delete-consume TRANSFER pair: a SECOND paired row, same shape, meant to be
+    # destroyed.
+    #
+    # The pair above is read by specs that need it to still be there: tx-delete's A2
+    # asserts it survives a cancelled delete, tx-bulk-suggest-ux raises when it cannot
+    # find it, tx-crud-full and tx-split-promote pick it up too. tx-delete's A2-confirm
+    # used to delete *that* pair, which made two things true at once: it raced with A2
+    # over the only paired row available, and it left the database without one for every
+    # spec the runner happened to schedule afterwards.
+    #
+    # Its description deliberately does NOT contain "delete-safe", so the finders that
+    # look for that substring keep landing on the pair above and ignore this one.
+    #
+    # Single use per population, by design: A2-confirm consumes it and does not restore
+    # it. Running that spec twice against the same database fails on the second pass —
+    # which is already true of A1-confirm and its FEE, and is what `db populate` is for.
+    tx_del_consume_out = Transaction(
+        broker_id=coinbase.id,
+        asset_id=eth.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1),
+        quantity=Decimal("-0.001"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="[delete-consume] ETH Coinbase ↔ IB (single-use)",
+        tags="delete-consume",
+    )
+    tx_del_consume_in = Transaction(
+        broker_id=ib.id,
+        asset_id=eth.id,
+        type=TransactionType.TRANSFER,
+        date=today - timedelta(days=1),
+        quantity=Decimal("0.001"),
+        amount=Decimal("0"),
+        currency="USD",
+        description="[delete-consume] ETH Coinbase ↔ IB (single-use)",
+        tags="delete-consume",
+        cost_basis_override=Decimal("3500.00"),
+        cost_basis_currency="USD",
+    )
+    session.add(tx_del_consume_out)
+    session.add(tx_del_consume_in)
+    session.flush()
+    tx_del_consume_out.related_transaction_id = tx_del_consume_in.id
+    tx_del_consume_in.related_transaction_id = tx_del_consume_out.id
+    session.commit()
+    print(f"  🗑️🔗 delete-consume TRANSFER ETH IB↔Coinbase, single-use (#{tx_del_consume_out.id} ↔ #{tx_del_consume_in.id})")
+
     # --- Balance-safe BUY to cover promote-test ADJUSTMENT qty on Apple/IB ---
     # Without this, the promote-test ADJUSTMENT qty=-2 causes Apple to go
     # negative on IB (BUY+15 - SELL5 - TRANSFER5 - Asym-a3 - Asym-d1 - ADJ2 = -1).

@@ -19,6 +19,21 @@ const SOURCE_RE = /\.(svelte|ts|js)$/;
 const TEST_RE = /\.(test|spec)\.[tj]s$/;
 
 /**
+ * Sorgenti nostri per posizione, ma non nostri per scrittura.
+ *
+ * `api/generated.ts` è prodotto da `openapi-zod-client` a partire dallo schema
+ * OpenAPI: 17k righe di validatori Zod che l'app attraversa a ogni chiamata e
+ * che risultano quindi coperte al 100%. Contarle significa aggiungere 478
+ * statement sempre verdi al denominatore, cioè spostare in su la percentuale
+ * complessiva senza che nessuno abbia testato niente — e la percentuale serve
+ * proprio a decidere dove scrivere i prossimi test.
+ *
+ * Non è codice da testare: se sbaglia, sbaglia il generatore, e il posto dove
+ * accorgersene è `./dev.py api sync`, non la suite.
+ */
+const GENERATED_SOURCES = new Set(['src/lib/api/generated.ts']);
+
+/**
  * Elenco dei file che esistono davvero in `frontend/src`.
  *
  * È questo l'unico criterio affidabile per distinguere il nostro codice da
@@ -50,7 +65,9 @@ const ourSources = new Set();
 
 /** Tiene solo i sorgenti che appartengono a LibreFolio. */
 function sourceFilter(sourcePath) {
-    return ourSources.has(sourcePath.replace(/\\/g, '/'));
+    const p = sourcePath.replace(/\\/g, '/');
+    if (GENERATED_SOURCES.has(p)) return false;
+    return ourSources.has(p);
 }
 
 /**

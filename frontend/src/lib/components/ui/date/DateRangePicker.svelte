@@ -150,6 +150,13 @@
     let typedEnd = $state<string | null>(null);
     let focusedField = $state<RangeField | null>(null);
     /**
+     * Validation is armed on the way out of a field, not while typing in it. Blur and
+     * Enter arm; `oninput` disarms; Escape and an abandoned edit reset. So a field is
+     * only ever red for a value the user has walked away from, never mid-keystroke.
+     */
+    let startArmed = $state(false);
+    let endArmed = $state(false);
+    /**
      * A range being edited by hand, not yet handed to the caller. `start`/`end` are
      * bound props and pages run their fetches off them, so writing every intermediate
      * date there would fire one report request per keystroke. The draft holds the
@@ -923,8 +930,13 @@
 
     let typedStartIso = $derived(typedStart === null ? null : parseTypedDate(typedStart));
     let typedEndIso = $derived(typedEnd === null ? null : parseTypedDate(typedEnd));
-    let startInvalid = $derived(typedStart !== null && typedStart.trim() !== '' && !isSelectableDate(typedStartIso));
-    let endInvalid = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isSelectableDate(typedEndIso));
+    let startUnparseable = $derived(typedStart !== null && typedStart.trim() !== '' && !isSelectableDate(typedStartIso));
+    let endUnparseable = $derived(typedEnd !== null && typedEnd.trim() !== '' && !isSelectableDate(typedEndIso));
+    // A field is invalid only once its validation is armed — i.e. once the user has
+    // left it (blur/Enter). Half a date is unreadable too, and flagging it red while
+    // it is still being typed correctly is noise, not help.
+    let startInvalid = $derived(startArmed && startUnparseable);
+    let endInvalid = $derived(endArmed && endUnparseable);
 
     /** The same ceiling the calendar applies, applied to what is typed. */
     function isSelectableDate(iso: string | null): iso is string {
@@ -986,10 +998,16 @@
         onchange?.(nextStart, nextEnd);
     }
 
-    /** Drops a draft that a preset or a calendar click has just made irrelevant. */
+    /** Drops a draft that a preset or a calendar click has just made irrelevant, along
+     *  with any half-typed text and its armed warning — those belong to the same edit
+     *  the click or preset has just superseded. */
     function discardDraft() {
         draftStart = null;
         draftEnd = null;
+        typedStart = null;
+        typedEnd = null;
+        startArmed = false;
+        endArmed = false;
     }
 
     /** Moves both calendar halves onto the range, so the months follow the text. */
@@ -1028,11 +1046,20 @@
         const typed = which === 'start' ? typedStart : typedEnd;
         if (typed === null) return;
         const parsed = parseTypedDate(typed);
-        if (which === 'start') typedStart = null;
-        else typedEnd = null;
-        if (!isSelectableDate(parsed)) return;
-        if (follow) void applyAndFollow(which, parsed);
-        else applyRangeDate(which, parsed);
+        if (isSelectableDate(parsed)) {
+            // Accepted: clear the scratch text and let the committed value take over.
+            if (which === 'start') typedStart = null;
+            else typedEnd = null;
+            if (follow) void applyAndFollow(which, parsed);
+            else applyRangeDate(which, parsed);
+        } else if (typed.trim() === '') {
+            // Emptied: read as "never mind", so the stored value comes back.
+            if (which === 'start') typedStart = null;
+            else typedEnd = null;
+        }
+        // Otherwise the text is unreadable but not empty: leave it on screen, where the
+        // armed warning turns it red, instead of silently reverting to the old value and
+        // making "I mistyped" indistinguishable from "the field rejected my date".
     }
 
     function handleFieldKeydown(e: KeyboardEvent, which: RangeField) {
@@ -1053,13 +1080,14 @@
                 return;
             }
             // Enter means "done": apply and close, without chasing the caret into the
-            // other field when the value swapped.
+            // other field when the value swapped. Arm first, so an unreadable value is
+            // flagged on the spot rather than dropped.
+            if (which === 'start') startArmed = true;
+            else endArmed = true;
             commitTypedField(which, false);
             closeCalendar();
         } else if (e.key === 'Escape') {
-            // Escape abandons the whole hand edit, not just the half-typed text.
-            typedStart = null;
-            typedEnd = null;
+            // Escape abandons the whole hand edit — text, draft and the armed warning.
             discardDraft();
         }
     }
@@ -1071,6 +1099,10 @@
 
     async function handleFieldBlur(e: FocusEvent, which: RangeField) {
         resetDateArrowHold();
+        // Leaving the field arms its validation: from here a still-unreadable value is a
+        // mistake worth flagging, where mid-edit it was simply unfinished.
+        if (which === 'start') startArmed = true;
+        else endArmed = true;
         commitTypedField(which, false);
         if (focusedField === which) focusedField = null;
         if (swapFollowing) return;
@@ -1133,6 +1165,7 @@
             type="button"
             bind:this={coreBadgeRefs[i]}
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -1147,6 +1180,7 @@
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -1160,6 +1194,7 @@
         <button
             type="button"
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -1173,6 +1208,7 @@
             type="button"
             bind:this={trailingBadgeRefs[i]}
             data-testid="date-preset-{preset.key.toLowerCase()}"
+            data-active={effectivePreset === preset.key ? 'true' : 'false'}
             class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                 {effectivePreset === preset.key ? 'bg-libre-green text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
             onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
@@ -1207,6 +1243,8 @@
             <button
                 type="button"
                 bind:this={customPlainBtnRef}
+                data-testid="date-preset-custom"
+                data-active={effectivePreset === 'custom' ? 'true' : 'false'}
                 class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
                     {effectivePreset === 'custom' ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'}"
                 onclick={(e) => toggleCustomEdit(e)}>{effectivePreset === 'custom' ? `${customAmount}${$_(granularityOptions.find((o) => o.value === customGranularity)?.shortKey ?? 'common.custom').toUpperCase()}` : $_('common.custom')}</button
@@ -1215,7 +1253,7 @@
     {/if}
 {/snippet}
 
-<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''}>
+<div class="relative flex flex-col gap-1.5 {align === 'start' ? 'grow self-stretch items-stretch' : 'items-center'}" style={align === 'start' ? `max-width: ${effectiveMaxWidth}px` : ''} data-testid="date-range-picker-root" data-open={calendarOpen ? 'true' : 'false'}>
     {#if showPresets}
         <!-- align='start': JS decides ONLY isSingleRow + jolly counts (see measureAndFill) —
              the actual spreading/"giustificato" look is native CSS justify-between, applied to
@@ -1302,7 +1340,11 @@
                         value={fieldText('start')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-start"
-                        oninput={(e) => (typedStart = e.currentTarget.value)}
+                        data-invalid={startInvalid ? 'true' : 'false'}
+                        oninput={(e) => {
+                            typedStart = e.currentTarget.value;
+                            startArmed = false;
+                        }}
                         onfocus={() => handleFieldFocus('start')}
                         onblur={(e) => handleFieldBlur(e, 'start')}
                         onkeyup={resetDateArrowHold}
@@ -1329,7 +1371,11 @@
                         value={fieldText('end')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-end"
-                        oninput={(e) => (typedEnd = e.currentTarget.value)}
+                        data-invalid={endInvalid ? 'true' : 'false'}
+                        oninput={(e) => {
+                            typedEnd = e.currentTarget.value;
+                            endArmed = false;
+                        }}
                         onfocus={() => handleFieldFocus('end')}
                         onblur={(e) => handleFieldBlur(e, 'end')}
                         onkeyup={resetDateArrowHold}
@@ -1345,7 +1391,7 @@
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div use:portalAction>
                         <div class="fixed inset-0" style="z-index:99998;" onclick={closeCalendar}></div>
-                        <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                        <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
                             <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                                 <CalendarMonth
                                     year={calLeftYear}
@@ -1391,7 +1437,7 @@
                         </div>
                     </div>
                 {:else}
-                    <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle}>
+                    <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
                         <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">
                             <CalendarMonth
                                 year={calLeftYear}

@@ -68,7 +68,6 @@ def shared_server_mode() -> bool:
     return os.environ.get(SHARED_SERVER_ENV, "").strip().lower() in {"1", "true", "yes"}
 
 
-
 def check_port_available(port: int = TEST_SERVER_PORT) -> tuple[bool, str | None]:
     """
     Check if a port is available.

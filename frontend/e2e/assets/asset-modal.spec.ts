@@ -487,6 +487,18 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             await page.route('**/api/v1/assets/prices/sync', async (route) => {
                 await route.fulfill({status: 200, contentType: 'application/json', body: '[]'});
             });
+            // Same reason, second writer — and this one is not obvious. Fetching a current
+            // price is not a read: `get_current_prices_bulk` documents an OHLC write-back
+            // (F.2/F.3) that creates today's row on every successful provider fetch. So the
+            // detail page *adds* a price row simply by displaying the asset, and a fetch
+            // still in flight when the wipe commits lands after it — leaving exactly one
+            // survivor that no later poll will ever remove. That is what made this test
+            // fail only under load, at `toBe(0)` with 1 received. Stubbing it keeps the
+            // assertion exact instead of tolerant: the count after the wipe is 0 because
+            // nothing else is allowed to write.
+            await page.route('**/api/v1/assets/prices/current', async (route) => {
+                await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: []})});
+            });
 
             await goToAssetDetailPage(page, String(assetId));
             await openEditAssetModal(page);
@@ -507,9 +519,11 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             };
 
             await selectNewProvider();
-            // Re-read here rather than reusing the seed count: opening the detail page
-            // persists today's current price, so the series legitimately grows by one
-            // between seeding and the save. The warning must quote what exists *now*.
+            // Re-read rather than reuse the seed count. With the current-price write-back
+            // stubbed the two should now agree, but the warning must quote what exists
+            // *at save time*, and asserting on a number read earlier would be a guess:
+            // if anything ever writes here again, this read is what makes the mismatch
+            // visible instead of silently shifting the expected message.
             const pricesAtSave = await countPrices();
             expect(pricesAtSave).toBeGreaterThan(0);
             await page.getByTestId('asset-modal-save').click();

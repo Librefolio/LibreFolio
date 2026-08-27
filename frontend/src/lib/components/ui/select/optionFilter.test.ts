@@ -1,5 +1,5 @@
 import {describe, it, expect} from 'vitest';
-import {filterOptions, firstSelectable, isSelectable, stepSelectable} from './optionFilter';
+import {filterOptions, firstSelectable, isSelectable, lastSelectable, stepSelectable} from './optionFilter';
 import type {SelectOption} from './types';
 
 const header = (value: string, label: string): SelectOption => ({value, label, header: true});
@@ -62,6 +62,15 @@ describe('keyboard traversal', () => {
 
     it('has no landing place in a list of titles alone', () => {
         expect(firstSelectable([header('__s:a', 'A')])).toBe(-1);
+    });
+
+    it('finds the last landing place, stepping back over a trailing title', () => {
+        // `sectioned` ends on `db:41` at index 4, so the last selectable is 4, not the empty tail.
+        expect(lastSelectable(sectioned)).toBe(4);
+    });
+
+    it('has no last landing place in a list of titles alone', () => {
+        expect(lastSelectable([header('__s:a', 'A')])).toBe(-1);
     });
 
     it('steps over the title between two sections', () => {

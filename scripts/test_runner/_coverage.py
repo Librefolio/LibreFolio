@@ -206,7 +206,7 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
                 cwd=os.getcwd(), capture_output=True, text=True
             )
             if r_combine.returncode != 0:
-                err_lines = [l for l in r_combine.stderr.strip().splitlines()
+                err_lines = [l for l in (r_combine.stdout + "\n" + r_combine.stderr).strip().splitlines()
                              if "Loading .env" not in l and l.strip()]
                 if err_lines:
                     print_warning(f"   coverage combine: {' '.join(err_lines)}")
@@ -253,7 +253,8 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
                 cwd=os.getcwd(), capture_output=True, text=True
             )
             if r_merge.returncode != 0:
-                err_lines = [l for l in r_merge.stderr.strip().splitlines()
+                # Come sopra: coverage.py parla su stdout quando il combine rifiuta.
+                err_lines = [l for l in (r_merge.stdout + "\n" + r_merge.stderr).strip().splitlines()
                              if "Loading .env" not in l and l.strip()]
                 if err_lines:
                     print_warning(f"   coverage combine: {' '.join(err_lines)}")

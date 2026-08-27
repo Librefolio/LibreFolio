@@ -50,6 +50,14 @@ export function firstSelectable(options: readonly SelectOption[]): number {
     return options.findIndex((o) => isSelectable(o));
 }
 
+/** Index of the last row the user can land on, or -1 when the list holds none. */
+export function lastSelectable(options: readonly SelectOption[]): number {
+    for (let i = options.length - 1; i >= 0; i--) {
+        if (isSelectable(options[i])) return i;
+    }
+    return -1;
+}
+
 /**
  * The next selectable index in `dir`, or `from` when there is none.
  *

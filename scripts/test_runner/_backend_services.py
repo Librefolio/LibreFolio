@@ -39,6 +39,18 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_temporal.py",
 )
 
+# Pure-calculation AI Export contracts: value-object invariants and observed-math
+# helpers only. Kept apart from AI_EXPORT_SERVICE_TEST_PATHS (which builds against
+# the shared DB) so the unit can honestly declare PURE isolation and run beside
+# anything.
+AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
+    "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
+    "backend/test_scripts/test_services/test_ai_export_technical_payload_invariants.py",
+    "backend/test_scripts/test_services/test_ai_export_technical_shared_pure.py",
+    "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",
+)
+
 RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_quantlib_smoke.py",
     "backend/test_scripts/test_services/test_series_preparation.py",
@@ -368,6 +380,16 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM parse error tests", verbose=verbose)
 
 
+def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
+    """Test parse resilience when the file is renamed underfoot."""
+    print_section("Services: BRIM Parse Race")
+    print_info("Testing: backend/app/services/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
+    return run_command(cmd, "BRIM parse race tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: get_session_ttl_sync."""
     print_section("Services: Settings Service")
@@ -565,6 +587,25 @@ def services_scheduler_joblog_misc(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "Scheduler job log tests", verbose=verbose)
 
 
+def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the two scheduler job bodies end to end, with the bulk calls doubled."""
+    print_section("Services: Scheduler Job Bodies")
+    print_info("Testing: backend/app/services/scheduler/jobs.py")
+    print_info("Tests: _classify_job_status, run_current_price_refresh, run_history_sync")
+    print_info("get_current_prices_bulk / bulk_refresh_prices / sync_pairs_bulk doubled — no provider calls, no price writes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_jobs.py", test_names)
+    return run_command(cmd, "Scheduler job body tests", verbose=verbose)
+
+
+def services_scheduler_joblog_builders(verbose: bool = False, test_names: list = None) -> bool:
+    """Test scheduler job log entry builders and the append/rotate/read round trip."""
+    print_section("Services: Scheduler Job Log Builders")
+    print_info("Testing: backend/app/services/scheduler/joblog.py")
+    print_info("Tests: append/rotate/read round trip, build_current_price_entry, build_history_sync_entry, StrEnum guard")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_joblog_builders.py", test_names)
+    return run_command(cmd, "Scheduler job log builder tests", verbose=verbose)
+
+
 def services_scheduler_settings_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler settings local-time-to-UTC conversion."""
     print_section("Services: Scheduler Settings TZ Conversion")
@@ -581,6 +622,16 @@ def services_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
     return run_command(cmd, "AI Export service tests", verbose=verbose)
+
+
+def services_ai_export_pure(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the pure AI Export calculation contracts (no DB, no server, no network)."""
+    print_section("Services: AI Export Pure Contracts")
+    print_info("Testing payload invariants, temporal aggregators, observed FX math, and shared technical helpers")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *AI_EXPORT_PURE_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "AI Export pure contract tests", verbose=verbose)
 
 
 def services_borsa_italiana_search(verbose: bool = False, test_names: list = None) -> bool:
@@ -732,6 +783,7 @@ Note: No backend server required.
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
     add_test(cat, "brim-parse-pool", services_brim_parse_pool, name="BRIM Parse Pool", desc="Process-pool off-loading, pickle round-trip, thread fallback")
+    add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail")
     add_test(cat, "settings", services_settings, name="Settings Service", desc="get_session_ttl_sync")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
@@ -747,6 +799,19 @@ Note: No backend server required.
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
+    add_test(
+        cat,
+        "scheduler-jobs",
+        services_scheduler_jobs,
+        name="Scheduler Job Bodies",
+        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled)",
+        # READ, not write-global: the three bulk entry points that rewrite prices for
+        # every active asset and every FX route are replaced by doubles, so only the
+        # two SELECTs reach the shared DB. The job log is redirected to a per-test
+        # sandbox dir, and jobs.py mutates the SchedulerState object it is handed
+        # without ever calling save_state(), so nothing global is written.
+        isolation="read",
+    )
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
@@ -761,8 +826,17 @@ Note: No backend server required.
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")
+    add_test(cat, "scheduler-joblog-builders", services_scheduler_joblog_builders, name="Scheduler Job Log Builders", desc="append/rotate/read round trip, entry builders, SyncStatus StrEnum guard")
     add_test(cat, "scheduler-settings-misc", services_scheduler_settings_misc, name="Scheduler Settings TZ Conversion", desc="_local_times_to_utc")
     add_test(cat, "ai-export", services_ai_export, name="AI Export", desc="Component runtime, datasets, analyses, financial/technical builders, and temporal policy")
+    add_test(
+        cat,
+        "ai-export-pure",
+        services_ai_export_pure,
+        name="AI Export Pure Contracts",
+        desc="Payload/aggregate invariants, observed FX math, shared technical helpers",
+        isolation="pure",
+    )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
     add_test(cat, "borsa-italiana-funds", services_borsa_italiana_funds, name="Borsa Italiana Funds", desc="Mutual-fund NAV via codice_fondo detail page + resolve_url (scraper mocked)")
     add_test(cat, "web-link-finder", services_web_link_finder, name="Web Link Finder", desc="find_candidate_urls + search orchestration augmentation (ddgs mocked)")

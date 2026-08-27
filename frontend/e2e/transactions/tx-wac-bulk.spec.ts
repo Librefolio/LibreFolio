@@ -144,7 +144,15 @@ async function waitForWacResolved(page: Page) {
     // which is exactly what a 4-worker run needs.
     await expect(root).not.toHaveAttribute('data-validate-runs', '0', {timeout: 25_000});
     await waitForSettled(root, 25_000);
-    await expect(page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first()).toBeVisible({timeout: 20_000});
+    // Presenza e stato vanno chiesti separatamente. In modalità auto la cella
+    // esiste sempre e pubblica tre stati: 'pending' (in calcolo), 'ready'
+    // (valore proposto), 'empty' (calcolato, e non c'è nulla da proporre).
+    // Il selettore composto [data-state="ready"] li collassava tutti in
+    // «element(s) not found» — un errore che non distingue «ancora lento» da
+    // «questa riga un WAC non ce l'ha», cioè le due diagnosi opposte.
+    const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"]').first();
+    await expect(autoCell).toBeVisible({timeout: 20_000});
+    await expect(autoCell).toHaveAttribute('data-state', 'ready', {timeout: 20_000});
 }
 
 /** Double-click on a row in the BulkModal grid to open FormModal for editing it. */
@@ -418,10 +426,18 @@ test.describe('BulkModal WAC Cell Rendering', () => {
         await cloneBtn.click();
         await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
 
-        // WAC now comes from the validate response (no separate /wac-preview call).
-        // Wait for the auto cell to become visible — proves WAC inline works.
-        const autoCell = page.locator('[data-testid="tx-bulk-cost-basis-auto"][data-state="ready"]').first();
-        await expect(autoCell).toBeVisible({timeout: 8_000});
+        // Il WAC arriva dalla risposta di validate (niente /wac-preview separato).
+        //
+        // Qui stava il difetto: WB5 era l'unico test del file che, dopo il clone,
+        // scommetteva 8 s sull'**esito** senza prima aspettare la barriera che il
+        // prodotto pubblica — `data-validate-runs` che lascia lo zero, poi
+        // `data-busy` che torna false. Con il debounce di 1 s davanti e un backend
+        // strumentato due volte (coverage Python + JS) sotto la run completa, quel
+        // budget cadeva dentro la coda della distribuzione e il test si arrendeva
+        // mentre la cella era ancora 'pending'. Aumentare il numero avrebbe
+        // spostato la scommessa, non tolta: `waitForWacResolved` aspetta lo stato,
+        // che è ciò che gli altri nove test di questo file fanno da sempre.
+        await waitForWacResolved(page);
     });
 
     test('WB6 — WAC value stable after debounce (no feedback loop)', async ({page}) => {
