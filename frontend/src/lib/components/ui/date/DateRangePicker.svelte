@@ -16,6 +16,7 @@
   Used by: FX list page, FX detail page, transaction filters, etc.
 -->
 <script lang="ts">
+    import {addDays, addMonths, todayIso} from '$lib/utils/dateOnly';
     import {tick, untrack} from 'svelte';
     import {Calendar} from 'lucide-svelte';
     import {_} from '$lib/i18n';
@@ -252,7 +253,7 @@
         // concrete date by the controller, but the badge should highlight regardless.
         if (start === 'min') return 'MAX';
         if (!start || !end) return null;
-        const today = todayISO();
+        const today = todayIso();
         // End must be today (presets always go "backwards from today")
         if (end !== today) return null;
         for (const p of [...presets, ...durationFillPresets, ...periodFillPresets]) {
@@ -268,10 +269,6 @@
     // Helpers
     // =========================================================================
 
-    function todayISO(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-
     // Shared by YTD/WTD/MTD/QTD: a "start of period" that's very recent (e.g. YTD on Jan 2nd,
     // WTD on a Monday) would otherwise produce a near-empty 1-2 day chart — enforce a minimum
     // window by falling back to "N days ago" whenever the period start is more recent than
@@ -280,36 +277,32 @@
     // 14-day floor would ALWAYS override it, making WTD collapse into a fixed "last 14 days"
     // preset that can never show its real (shorter) range.
     function withMinWindow(periodStart: string, minDays = 14): string {
-        const minDate = new Date();
-        minDate.setDate(minDate.getDate() - minDays);
-        const floor = minDate.toISOString().slice(0, 10);
+        const floor = addDays(todayIso(), -minDays);
         return periodStart < floor ? periodStart : floor;
     }
 
     function computeStartDate(preset: QuickPreset): string {
-        const d = new Date();
+        // Calendar arithmetic through $lib/utils/dateOnly. These used to build a local
+        // Date, shift it, and read it back with toISOString() — which is UTC, so east of
+        // Greenwich every preset started a day early. MTD/QTD/YTD right below already did
+        // it correctly from local fields, so the two styles sat side by side in the same
+        // switch and disagreed by a day.
+        const today = todayIso();
         switch (preset) {
             case '1W':
-                d.setDate(d.getDate() - 7);
-                break;
+                return addDays(today, -7);
             case '1M':
-                d.setMonth(d.getMonth() - 1);
-                break;
+                return addMonths(today, -1);
             case '3M':
-                d.setMonth(d.getMonth() - 3);
-                break;
+                return addMonths(today, -3);
             case '6M':
-                d.setMonth(d.getMonth() - 6);
-                break;
+                return addMonths(today, -6);
             case 'WTD': {
-                const now = new Date();
-                const day = now.getDay(); // 0=Sun..6=Sat
+                const day = new Date().getDay(); // 0=Sun..6=Sat, in the user's own week
                 const diffToMonday = day === 0 ? 6 : day - 1;
-                const monday = new Date(now);
-                monday.setDate(now.getDate() - diffToMonday);
                 // 6-day floor (not the shared 14-day one) — WTD spans at most 6 days by
                 // definition, so the default floor would always win and hide the real range.
-                return withMinWindow(monday.toISOString().slice(0, 10), 6);
+                return withMinWindow(addDays(today, -diffToMonday), 6);
             }
             case 'MTD': {
                 const now = new Date();
@@ -327,43 +320,34 @@
                 return withMinWindow(jan1);
             }
             case '1Y':
-                d.setFullYear(d.getFullYear() - 1);
-                break;
+                return addMonths(today, -12);
             case '2Y':
-                d.setFullYear(d.getFullYear() - 2);
-                break;
+                return addMonths(today, -24);
             case '3Y':
-                d.setFullYear(d.getFullYear() - 3);
-                break;
+                return addMonths(today, -36);
             case '5Y':
-                d.setFullYear(d.getFullYear() - 5);
-                break;
+                return addMonths(today, -60);
             case '10Y':
-                d.setFullYear(d.getFullYear() - 10);
-                break;
+                return addMonths(today, -120);
             case 'MAX':
                 return 'min';
         }
-        return d.toISOString().slice(0, 10);
+        return today;
     }
 
     function computeCustomStart(amount: number, granularity: Granularity): string {
-        const d = new Date();
+        const today = todayIso();
         switch (granularity) {
             case 'days':
-                d.setDate(d.getDate() - amount);
-                break;
+                return addDays(today, -amount);
             case 'weeks':
-                d.setDate(d.getDate() - amount * 7);
-                break;
+                return addDays(today, -amount * 7);
             case 'months':
-                d.setMonth(d.getMonth() - amount);
-                break;
+                return addMonths(today, -amount);
             case 'years':
-                d.setFullYear(d.getFullYear() - amount);
-                break;
+                return addMonths(today, -amount * 12);
         }
-        return d.toISOString().slice(0, 10);
+        return today;
     }
 
     function monthOrder(year: number, month: number): number {
@@ -874,7 +858,7 @@
             onchange?.('min', 'max');
         } else {
             const newStart = computeStartDate(preset);
-            const newEnd = todayISO();
+            const newEnd = todayIso();
             start = newStart;
             end = newEnd;
             onchange?.(newStart, newEnd);
@@ -884,7 +868,7 @@
     function handleCustomApply() {
         activePreset = 'custom';
         const newStart = computeCustomStart(customAmount, customGranularity);
-        const newEnd = todayISO();
+        const newEnd = todayIso();
         start = newStart;
         end = newEnd;
         discardDraft();
@@ -941,7 +925,7 @@
     /** The same ceiling the calendar applies, applied to what is typed. */
     function isSelectableDate(iso: string | null): iso is string {
         if (!iso) return false;
-        if (!allowFuture && iso > todayISO()) return false;
+        if (!allowFuture && iso > todayIso()) return false;
         return true;
     }
 
@@ -1064,11 +1048,11 @@
 
     function handleFieldKeydown(e: KeyboardEvent, which: RangeField) {
         const typedIso = which === 'start' ? typedStartIso : typedEndIso;
-        const stepped = dateArrowStep(e, isSelectableDate(typedIso) ? typedIso : fieldIso(which) || null, todayISO());
+        const stepped = dateArrowStep(e, isSelectableDate(typedIso) ? typedIso : fieldIso(which) || null, todayIso());
         if (stepped !== null) {
             // Arrows are a stepper, and a stepper stops at its bound rather than
             // walking past it into a date the calendar would grey out.
-            void applyAndFollow(which, !allowFuture && stepped > todayISO() ? todayISO() : stepped);
+            void applyAndFollow(which, !allowFuture && stepped > todayIso() ? todayIso() : stepped);
             return;
         }
         if (e.key === 'Enter') {
@@ -1127,7 +1111,7 @@
         if (iso === 'min') return $_('datePicker.resolvingStart');
         // "max" should never persist (controllers resolve it to today immediately),
         // kept only as a defensive fallback.
-        if (iso === 'max') return displayDate(todayISO());
+        if (iso === 'max') return displayDate(todayIso());
         if (compact) return iso; // YYYY-MM-DD — fits narrow cells
         const d = new Date(iso + 'T00:00:00');
         return d.toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'});

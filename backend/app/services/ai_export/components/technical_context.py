@@ -9,8 +9,9 @@ from datetime import date, timedelta
 from decimal import Decimal
 from statistics import pstdev
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
+from backend.app.schemas.common import StrictModel
 from backend.app.schemas.prices import FAPriceQueryResult
 from backend.app.schemas.signals import SignalBandSeries, SignalResult, SignalScalarSeriesBase, SignalStatus
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
@@ -66,8 +67,7 @@ _SINGLE_ENTITY_HISTORY_BUCKET_COUNTS = {
 }
 
 
-class SignalCoverageAggregate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class SignalCoverageAggregate(StrictModel):
 
     instance_id: str
     signal_code: str
@@ -82,8 +82,7 @@ class SignalCoverageAggregate(BaseModel):
     )
 
 
-class TechnicalEntityCoverage(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalEntityCoverage(StrictModel):
 
     entity_id: str
     observation_count: int = Field(..., ge=0)
@@ -105,22 +104,19 @@ class TechnicalEntityCoverage(BaseModel):
     )
 
 
-class TechnicalExcludedEntity(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalExcludedEntity(StrictModel):
 
     entity_id: str
     reason_code: str
 
 
-class TechnicalUniverseCoveragePayload(BaseModel):
+class TechnicalUniverseCoveragePayload(StrictModel):
     """`portfolio.technical_coverage` / `broker.technical_coverage`: multi-asset universe coverage.
 
     Counts describe the eligible held-asset universe (broker-deduplicated), the
     raw pre-eligibility period legs, and Signal data coverage over that universe.
     Weight ratios use gross absolute open-position value (see field descriptions).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     period_position_leg_count: int = Field(
         ...,
@@ -166,15 +162,13 @@ class TechnicalUniverseCoveragePayload(BaseModel):
     signals: tuple[SignalCoverageAggregate, ...]
 
 
-class TechnicalSingleEntityCoveragePayload(BaseModel):
+class TechnicalSingleEntityCoveragePayload(StrictModel):
     """`asset.technical_coverage` / `fx.technical_coverage`: single-entity coverage.
 
     A single Asset or FX pair is not a multi-asset universe, so counts are
     explicit single-entity tallies (never leg/asset universe names) and there
     are no portfolio weights (a lone entity carries no relative weight).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     selected_entity_count: int = Field(
         ...,
@@ -207,8 +201,7 @@ class TechnicalSingleEntityCoveragePayload(BaseModel):
     signals: tuple[SignalCoverageAggregate, ...]
 
 
-class TechnicalMarketContextRow(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalMarketContextRow(StrictModel):
 
     entity_id: str
     portfolio_weight_ratio: float | None = None
@@ -244,8 +237,7 @@ class TechnicalMarketContextRow(BaseModel):
     ema_50_vs_ema_200: str | None = None
 
 
-class TechnicalContextHistoryRow(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalContextHistoryRow(StrictModel):
 
     entity_id: str
     bucket_start: date
@@ -257,8 +249,7 @@ class TechnicalContextHistoryRow(BaseModel):
     return_from_first_ratio: float | None = None
 
 
-class TechnicalContextEvent(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalContextEvent(StrictModel):
 
     entity_id: str
     date: date
@@ -270,8 +261,7 @@ class TechnicalContextEvent(BaseModel):
     values: dict[str, float]
 
 
-class TechnicalMarketContextPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalMarketContextPayload(StrictModel):
 
     policy_code: str
     entities: tuple[TechnicalMarketContextRow, ...]
@@ -280,8 +270,7 @@ class TechnicalMarketContextPayload(BaseModel):
     latest_events: tuple[TechnicalContextEvent, ...] = ()
 
 
-class TechnicalContextEventsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalContextEventsPayload(StrictModel):
 
     policy_code: str
     detected_event_count: int = Field(..., ge=0)
@@ -289,8 +278,7 @@ class TechnicalContextEventsPayload(BaseModel):
     events: tuple[TechnicalContextEvent, ...]
 
 
-class TechnicalEventDigestRow(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalEventDigestRow(StrictModel):
 
     signal_code: str
     signal_category: str
@@ -301,8 +289,7 @@ class TechnicalEventDigestRow(BaseModel):
     downward_count: int = Field(..., ge=0)
 
 
-class TechnicalEventDigestPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TechnicalEventDigestPayload(StrictModel):
 
     policy_code: str
     detected_event_count: int = Field(..., ge=0)

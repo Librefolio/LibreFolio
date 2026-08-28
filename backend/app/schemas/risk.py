@@ -7,9 +7,9 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, PositiveInt, field_validator, model_validator
+from pydantic import Field, FiniteFloat, JsonValue, PositiveInt, field_validator, model_validator
 
-from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal
+from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
@@ -181,19 +181,15 @@ class RiskSimulationCovarianceEstimator(StrEnum):
     SAMPLE_LOG_RETURNS = "sample_log_returns"
 
 
-class RiskExcludedAsset(BaseModel):
+class RiskExcludedAsset(StrictModel):
     """Metric-specific asset exclusion recorded in result metadata."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     reason: str = Field(..., min_length=1)
 
 
-class RiskHistoricalReplayProxyAsset(BaseModel):
+class RiskHistoricalReplayProxyAsset(StrictModel):
     """Manual original-to-proxy return-series mapping."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: PositiveInt
     proxy_asset_id: PositiveInt
@@ -205,10 +201,8 @@ class RiskHistoricalReplayProxyAsset(BaseModel):
         return self
 
 
-class RiskHistoricalReplayExcludedAsset(BaseModel):
+class RiskHistoricalReplayExcludedAsset(StrictModel):
     """Auditable outcome of one explicit replay exclusion."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: PositiveInt
     reason: Literal["manual_exclusion"] = "manual_exclusion"
@@ -216,10 +210,8 @@ class RiskHistoricalReplayExcludedAsset(BaseModel):
     treatment: RiskHistoricalReplayExclusionTreatment
 
 
-class RiskHistoricalReplayAudit(BaseModel):
+class RiskHistoricalReplayAudit(StrictModel):
     """Serializable execution choices for one historical replay."""
-
-    model_config = ConfigDict(extra="forbid")
 
     proxy_count: int = Field(..., ge=0)
     proxy_assets: List[RiskHistoricalReplayProxyAsset] = Field(default_factory=list)
@@ -257,10 +249,8 @@ class RiskHistoricalReplayAudit(BaseModel):
         return self
 
 
-class RiskFreeReference(BaseModel):
+class RiskFreeReference(StrictModel):
     """Deterministic risk-free reference used only by eligible metrics."""
-
-    model_config = ConfigDict(extra="forbid")
 
     annual_rate: FiniteFloat = Field(0.0, gt=-1)
     source: str = Field("config", min_length=1)
@@ -272,10 +262,8 @@ class RiskFreeReference(BaseModel):
         return Currency.validate_code(value)
 
 
-class AssetValuationPoint(BaseModel):
+class AssetValuationPoint(StrictModel):
     """One target-currency valuation with price and FX provenance."""
-
-    model_config = ConfigDict(extra="forbid")
 
     valuation_date: date
     effective_price_date: date
@@ -309,10 +297,8 @@ class AssetValuationPoint(BaseModel):
         return self
 
 
-class AssetReturnPoint(BaseModel):
+class AssetReturnPoint(StrictModel):
     """Simple return derived from two converted valuation points."""
-
-    model_config = ConfigDict(extra="forbid")
 
     date: date
     previous_valuation_date: date
@@ -325,10 +311,8 @@ class AssetReturnPoint(BaseModel):
         return self
 
 
-class AssetValuationSeries(BaseModel):
+class AssetValuationSeries(StrictModel):
     """Converted valuation series for one asset on the joint calendar."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     target_currency: str
@@ -350,10 +334,8 @@ class AssetValuationSeries(BaseModel):
         return self
 
 
-class AssetReturnSeries(BaseModel):
+class AssetReturnSeries(StrictModel):
     """Price-only simple-return series for one asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     target_currency: str
@@ -374,10 +356,8 @@ class AssetReturnSeries(BaseModel):
         return self
 
 
-class PreparedAssetSeries(BaseModel):
+class PreparedAssetSeries(StrictModel):
     """Canonical valuation and return series for one asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     valuations: AssetValuationSeries
     returns: AssetReturnSeries
@@ -404,10 +384,8 @@ class PreparedAssetSeries(BaseModel):
         return self
 
 
-class PreparedAssetSeriesSet(BaseModel):
+class PreparedAssetSeriesSet(StrictModel):
     """Canonical common-calendar series ready for risk analytics."""
-
-    model_config = ConfigDict(extra="forbid")
 
     requested_range: DateRangeModel
     baseline_date: Optional[date] = None
@@ -462,10 +440,8 @@ class PreparedAssetSeriesSet(BaseModel):
         return self
 
 
-class RiskResultMetadata(BaseModel):
+class RiskResultMetadata(StrictModel):
     """Execution context shared by all serialized risk results."""
-
-    model_config = ConfigDict(extra="forbid")
 
     analyzed_range: DateRangeModel
     frequency: RiskDataFrequency = RiskDataFrequency.DAILY
@@ -547,10 +523,8 @@ class RiskResultMetadata(BaseModel):
         return self
 
 
-class RiskScopeBase(BaseModel):
+class RiskScopeBase(StrictModel):
     """Base for the discriminated risk query scope."""
-
-    model_config = ConfigDict(extra="forbid")
 
     kind: RiskScopeKind
 
@@ -601,20 +575,16 @@ RiskScope = Annotated[
 ]
 
 
-class RiskAnalyticRequest(BaseModel):
+class RiskAnalyticRequest(StrictModel):
     """One independently executable analytic in a bulk risk query."""
-
-    model_config = ConfigDict(extra="forbid")
 
     instance_id: str = Field(..., min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     analytic_code: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     parameters: Dict[str, JsonValue] = Field(default_factory=dict)
 
 
-class RiskQueryRequest(BaseModel):
+class RiskQueryRequest(StrictModel):
     """Bulk deterministic risk query sharing one scope and prepared data set."""
-
-    model_config = ConfigDict(extra="forbid")
 
     scope: RiskScope
     date_range: DateRangeModel
@@ -641,10 +611,8 @@ class RiskQueryRequest(BaseModel):
         return self
 
 
-class RiskCatalogDefinition(BaseModel):
+class RiskCatalogDefinition(StrictModel):
     """Static definition published by one RiskAnalytic plugin."""
-
-    model_config = ConfigDict(extra="forbid")
 
     analytic_code: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     name_i18n_key: str = Field(..., min_length=1)
@@ -664,14 +632,12 @@ class RiskCatalogDefinition(BaseModel):
         return value
 
 
-class RiskCatalogResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskCatalogResponse(StrictModel):
 
     items: List[RiskCatalogDefinition] = Field(default_factory=list)
 
 
-class RiskKpiOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskKpiOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.KPI] = Field(default=RiskOutputKind.KPI, json_schema_extra={"enum": ["kpi"]})
     volatility: FiniteFloat = Field(..., ge=0)
@@ -681,8 +647,7 @@ class RiskKpiOutput(BaseModel):
     sortino: Optional[FiniteFloat] = None
 
 
-class RiskMatrixCell(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskMatrixCell(StrictModel):
 
     row_asset_id: PositiveInt
     column_asset_id: PositiveInt
@@ -692,16 +657,14 @@ class RiskMatrixCell(BaseModel):
     status: RiskValueStatus
 
 
-class RiskCorrelationOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskCorrelationOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.MATRIX] = Field(default=RiskOutputKind.MATRIX, json_schema_extra={"enum": ["matrix"]})
     asset_ids: List[PositiveInt] = Field(..., min_length=1)
     cells: List[RiskMatrixCell] = Field(default_factory=list)
 
 
-class RiskContributionItem(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskContributionItem(StrictModel):
 
     asset_id: PositiveInt
     weight: FiniteFloat
@@ -710,8 +673,7 @@ class RiskContributionItem(BaseModel):
     percentage_contribution: Optional[FiniteFloat] = None
 
 
-class RiskContributionOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskContributionOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.CONTRIBUTION] = Field(default=RiskOutputKind.CONTRIBUTION, json_schema_extra={"enum": ["contribution"]})
     portfolio_volatility: FiniteFloat = Field(..., ge=0)
@@ -719,10 +681,8 @@ class RiskContributionOutput(BaseModel):
     items: List[RiskContributionItem] = Field(default_factory=list)
 
 
-class RiskStressBucketAudit(BaseModel):
+class RiskStressBucketAudit(StrictModel):
     """Auditable resolution of one asset exposure bucket."""
-
-    model_config = ConfigDict(extra="forbid")
 
     exposure_bucket_id: str = Field(..., min_length=1, max_length=80)
     exposure: FiniteFloat = Field(..., ge=0, le=1)
@@ -754,10 +714,8 @@ class RiskStressBucketAudit(BaseModel):
         return self
 
 
-class RiskStressConfiguredBucketImpact(BaseModel):
+class RiskStressConfiguredBucketImpact(StrictModel):
     """Scope usage of one configured bucket, including explicit zero exposure."""
-
-    model_config = ConfigDict(extra="forbid")
 
     bucket_id: str = Field(..., min_length=1, max_length=80)
     shock: FiniteFloat
@@ -770,8 +728,7 @@ class RiskStressConfiguredBucketImpact(BaseModel):
     contribution_return: Optional[FiniteFloat] = None
 
 
-class RiskStressImpact(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskStressImpact(StrictModel):
 
     asset_id: PositiveInt
     return_source_asset_id: Optional[PositiveInt] = None
@@ -807,8 +764,7 @@ class RiskStressImpact(BaseModel):
         return self
 
 
-class RiskStressOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskStressOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.STRESS] = Field(default=RiskOutputKind.STRESS, json_schema_extra={"enum": ["stress"]})
     method: RiskStressMethod
@@ -839,8 +795,7 @@ class RiskStressOutput(BaseModel):
         return self
 
 
-class RiskComparisonPoint(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskComparisonPoint(StrictModel):
 
     date: date
     primary_cumulative_return: FiniteFloat
@@ -849,8 +804,7 @@ class RiskComparisonPoint(BaseModel):
     comparison_drawdown: FiniteFloat = Field(..., le=0)
 
 
-class RiskComparisonOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskComparisonOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.COMPARISON] = Field(default=RiskOutputKind.COMPARISON, json_schema_extra={"enum": ["comparison"]})
     comparison_asset_id: PositiveInt
@@ -863,8 +817,7 @@ class RiskComparisonOutput(BaseModel):
     series: List[RiskComparisonPoint] = Field(default_factory=list)
 
 
-class RiskVarCvarOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskVarCvarOutput(StrictModel):
 
     kind: Literal[RiskOutputKind.VAR_CVAR] = Field(default=RiskOutputKind.VAR_CVAR, json_schema_extra={"enum": ["var_cvar"]})
     confidence_level: FiniteFloat = Field(..., gt=0, lt=1)
@@ -880,10 +833,8 @@ class RiskVarCvarOutput(BaseModel):
         return self
 
 
-class RiskSimulationBandPoint(BaseModel):
+class RiskSimulationBandPoint(StrictModel):
     """One cumulative-return percentile band at a simulated day."""
-
-    model_config = ConfigDict(extra="forbid")
 
     day: int = Field(..., ge=0)
     p05: FiniteFloat = Field(..., gt=-1)
@@ -897,10 +848,8 @@ class RiskSimulationBandPoint(BaseModel):
         return self
 
 
-class RiskSimulationOutput(BaseModel):
+class RiskSimulationOutput(StrictModel):
     """Renderer-neutral conditional simulation result."""
-
-    model_config = ConfigDict(extra="forbid")
 
     kind: Literal[RiskOutputKind.SIMULATION] = Field(default=RiskOutputKind.SIMULATION, json_schema_extra={"enum": ["simulation"]})
     process: RiskSimulationProcess
@@ -930,10 +879,8 @@ class RiskSimulationOutput(BaseModel):
         return self
 
 
-class RiskOptimizationWeight(BaseModel):
+class RiskOptimizationWeight(StrictModel):
     """One optimized asset weight and its volatility contribution."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     weight: FiniteFloat = Field(..., ge=0, le=1)
@@ -942,10 +889,8 @@ class RiskOptimizationWeight(BaseModel):
     percentage_risk_contribution: FiniteFloat
 
 
-class RiskOptimizationConstraintSummary(BaseModel):
+class RiskOptimizationConstraintSummary(StrictModel):
     """Effective long-only budget constraints."""
-
-    model_config = ConfigDict(extra="forbid")
 
     min_weight: FiniteFloat = Field(..., ge=0, le=1)
     max_weight: FiniteFloat = Field(..., ge=0, le=1)
@@ -954,10 +899,8 @@ class RiskOptimizationConstraintSummary(BaseModel):
     leverage_allowed: Literal[False] = False
 
 
-class RiskOptimizationFrontierPoint(BaseModel):
+class RiskOptimizationFrontierPoint(StrictModel):
     """One portfolio on the efficient frontier."""
-
-    model_config = ConfigDict(extra="forbid")
 
     expected_annual_return: FiniteFloat
     annual_volatility: FiniteFloat = Field(..., ge=0)
@@ -965,10 +908,8 @@ class RiskOptimizationFrontierPoint(BaseModel):
     weights: List[RiskOptimizationWeight] = Field(..., min_length=2)
 
 
-class RiskOptimizationSensitivityPoint(BaseModel):
+class RiskOptimizationSensitivityPoint(StrictModel):
     """Recomputed solution under another covariance estimator."""
-
-    model_config = ConfigDict(extra="forbid")
 
     covariance_estimator: RiskCovarianceEstimator
     expected_annual_return: FiniteFloat
@@ -977,10 +918,8 @@ class RiskOptimizationSensitivityPoint(BaseModel):
     weights: List[RiskOptimizationWeight] = Field(..., min_length=2)
 
 
-class RiskPortfolioOptimizationOutput(BaseModel):
+class RiskPortfolioOptimizationOutput(StrictModel):
     """Renderer-neutral long-only portfolio optimization result."""
-
-    model_config = ConfigDict(extra="forbid")
 
     kind: Literal[RiskOutputKind.OPTIMIZATION] = Field(
         default=RiskOutputKind.OPTIMIZATION,
@@ -1003,14 +942,12 @@ class RiskPortfolioOptimizationOutput(BaseModel):
     algorithm_version: str = Field(..., min_length=1)
 
 
-class RiskDrawdownOutput(BaseModel):
+class RiskDrawdownOutput(StrictModel):
     """Renderer-neutral current and maximum drawdown episode summary.
 
     All magnitudes are decimal ratios (``-0.1`` == 10% peak-relative decline);
     percentage formatting is a renderer concern handled by a later todo.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     kind: Literal[RiskOutputKind.DRAWDOWN] = Field(default=RiskOutputKind.DRAWDOWN, json_schema_extra={"enum": ["drawdown"]})
     current_drawdown: FiniteFloat = Field(..., le=0)
@@ -1080,8 +1017,7 @@ RiskAnalyticOutput = Annotated[
 ]
 
 
-class RiskWarning(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskWarning(StrictModel):
 
     code: str = Field(..., min_length=1, max_length=120)
     message: str = Field(..., min_length=1)
@@ -1089,18 +1025,15 @@ class RiskWarning(BaseModel):
     degrades_result: bool = True
 
 
-class RiskError(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskError(StrictModel):
 
     code: RiskErrorCode
     message: str = Field(..., min_length=1)
     details: Dict[str, JsonValue] = Field(default_factory=dict)
 
 
-class RiskAnalyticResult(BaseModel):
+class RiskAnalyticResult(StrictModel):
     """One isolated result in a bulk risk response."""
-
-    model_config = ConfigDict(extra="forbid")
 
     instance_id: str
     analytic_code: str
@@ -1126,8 +1059,7 @@ class RiskAnalyticResult(BaseModel):
         return self
 
 
-class RiskQueryResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskQueryResponse(StrictModel):
 
     items: List[RiskAnalyticResult] = Field(default_factory=list)
 

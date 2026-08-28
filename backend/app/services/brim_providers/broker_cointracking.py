@@ -31,7 +31,7 @@ import structlog
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, is_fiat_currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
@@ -81,14 +81,6 @@ def _parse_cointracking_number(value: str) -> Optional[Decimal]:
 
 def _normalise_symbol(value: str) -> str:
     return value.strip().upper()
-
-
-def _is_fiat_currency(value: str) -> bool:
-    try:
-        Currency.validate_code(value)
-    except ValueError:
-        return False
-    return True
 
 
 @register_provider(BRIMProviderRegistry)
@@ -174,7 +166,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
         def create_fee(row_num: int, tx_date: date_type, fee: Optional[Decimal], fee_cur: str, asset_id: Optional[int], context: str) -> None:
             if fee is None or fee <= 0 or not fee_cur:
                 return
-            if _is_fiat_currency(fee_cur):
+            if is_fiat_currency(fee_cur):
                 self._create_transaction(
                     row_num=row_num,
                     transactions=transactions,
@@ -254,8 +246,8 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             warnings.append(f"Row {row_num}: incomplete trade, skipping")
                             continue
 
-                        buy_is_fiat = _is_fiat_currency(buy_cur)
-                        sell_is_fiat = _is_fiat_currency(sell_cur)
+                        buy_is_fiat = is_fiat_currency(buy_cur)
+                        sell_is_fiat = is_fiat_currency(sell_cur)
                         if not buy_is_fiat and sell_is_fiat:
                             asset_id = get_asset_id(buy_cur)
                             self._create_transaction(
@@ -298,7 +290,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             skipped_invalid_rows += 1
                             warnings.append(f"Row {row_num}: invalid deposit, skipping")
                             continue
-                        if _is_fiat_currency(buy_cur):
+                        if is_fiat_currency(buy_cur):
                             self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
@@ -335,7 +327,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             skipped_invalid_rows += 1
                             warnings.append(f"Row {row_num}: invalid withdrawal, skipping")
                             continue
-                        if _is_fiat_currency(sell_cur):
+                        if is_fiat_currency(sell_cur):
                             self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
@@ -372,7 +364,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             skipped_invalid_rows += 1
                             warnings.append(f"Row {row_num}: invalid staking reward, skipping")
                             continue
-                        if _is_fiat_currency(buy_cur):
+                        if is_fiat_currency(buy_cur):
                             self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,

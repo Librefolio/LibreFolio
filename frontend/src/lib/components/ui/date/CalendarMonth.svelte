@@ -7,6 +7,7 @@
   Used by: DateRangePicker (×2), SingleDatePicker (×1).
 -->
 <script lang="ts">
+    import {todayIso} from '$lib/utils/dateOnly';
     import {CalendarCheck, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
@@ -53,17 +54,13 @@
     // Helpers
     // =========================================================================
 
-    function todayISO(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-
     function formatISO(y: number, m: number, d: number): string {
         return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
     function isFuture(iso: string): boolean {
         if (allowFuture) return false;
-        return iso > todayISO();
+        return iso > todayIso();
     }
 
     // SimpleSelect options (derived)
@@ -130,7 +127,7 @@
     }
 
     function isToday(iso: string): boolean {
-        return iso === todayISO();
+        return iso === todayIso();
     }
 
     function isDisabled(iso: string): boolean {

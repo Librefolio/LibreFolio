@@ -9,9 +9,7 @@ from typing import Annotated, Any, Literal, Self, Union
 
 from pydantic import (
     AfterValidator,
-    BaseModel,
     BeforeValidator,
-    ConfigDict,
     Field,
     JsonValue,
     PositiveInt,
@@ -19,7 +17,7 @@ from pydantic import (
     model_validator,
 )
 
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, StrictModel
 from backend.app.schemas.signals import SignalTemporalClass
 
 _ID_PATTERN = r"^[a-z][a-z0-9_.-]*$"
@@ -73,8 +71,14 @@ ContractId = Annotated[
 ]
 
 
-class AiExportModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class AiExportModel(StrictModel):
+    """Base for every AI Export runtime payload.
+
+    It used to exist only to carry ``ConfigDict(extra="forbid")``; that now comes
+    from :class:`StrictModel`. The name is kept because it says which subsystem a
+    model belongs to, and gives this family somewhere to put a shared rule if it
+    ever needs one.
+    """
 
 
 class AiExportDomain(StrEnum):

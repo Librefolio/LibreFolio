@@ -512,7 +512,7 @@ Generated: ${new Date().toISOString()}
                 </summary>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 pl-1">
                     {#each PLUGIN_SYSTEMS as definition}
-                        <div class="p-3 bg-white border border-gray-100 rounded-lg shadow-sm" data-testid={'about-plugin-diagnostics-' + definition.system}>
+                        <div class="p-3 bg-white border border-gray-100 rounded-lg shadow-sm" data-testid={'about-plugin-diagnostics-' + definition.system} data-status={failuresForSystem(definition.system).length > 0 ? 'failed' : 'ok'} data-failures={failuresForSystem(definition.system).length}>
                             <p class="text-sm font-medium text-gray-800 mb-2">{$_(definition.labelKey)}</p>
                             {#if failuresForSystem(definition.system).length > 0}
                                 <div class="space-y-2">

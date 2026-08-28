@@ -15,6 +15,8 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {lotStateColor} from './lotStateVisual';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeNumber, safeScalar, safeString} from '$lib/types';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -195,19 +197,6 @@
         isDark = document.documentElement.classList.contains('dark');
     }
 
-    function safeScalar<T>(value: T | Array<T | null> | null | undefined): T | null {
-        if (Array.isArray(value)) return value[0] ?? null;
-        return value ?? null;
-    }
-
-    function safeString(value: string | Array<string | null> | null | undefined): string | null {
-        return safeScalar(value);
-    }
-
-    function safeInt(value: number | Array<number | null> | null | undefined): number | null {
-        return safeScalar(value);
-    }
-
     function parseNumber(value: string | Array<string | null> | null | undefined): number {
         const raw = safeString(value);
         if (raw == null) return 0;
@@ -268,10 +257,6 @@
 
     function clamp(value: number, min: number, max: number): number {
         return Math.min(max, Math.max(min, value));
-    }
-
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function translatedOr(key: string, fallback: string): string {
@@ -505,9 +490,9 @@
                 fragmentId: segment.fragment_id,
                 direction: segment.direction,
                 custodyType: segment.custody_type,
-                brokerId: safeInt(segment.broker_id),
-                sourceBrokerId: safeInt(segment.source_broker_id),
-                destinationBrokerId: safeInt(segment.destination_broker_id),
+                brokerId: safeNumber(segment.broker_id),
+                sourceBrokerId: safeNumber(segment.source_broker_id),
+                destinationBrokerId: safeNumber(segment.destination_broker_id),
                 quantity: Math.max(0, parseNumber(segment.quantity)),
                 unitPrice: parseNumber(segment.unit_price),
                 startDate,

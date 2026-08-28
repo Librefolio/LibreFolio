@@ -213,6 +213,26 @@ class SharedTestServer:
         deadline = time.time() + grace
         while time.time() < deadline and port_holders(self.port):
             time.sleep(0.25)
+
+        # `self.proc.wait()` above only reaps the parent. With several uvicorn workers
+        # the children can outlive it and keep the listening socket, and simply
+        # reporting that is not enough: the very next step of an `all` run recreates
+        # the test database, refuses to touch it while anything is on the port, and the
+        # whole category fails for a reason that has nothing to do with any test.
+        # Measured twice in a row on this exact path. These are processes this runner
+        # started, so finishing them off is ours to do.
+        holders = port_holders(self.port)
+        if holders:
+            print(f"   {Colors.YELLOW}⚠️  Port {self.port} still held after SIGTERM — closing PID(s) {', '.join(holders)}{Colors.NC}")
+            for pid in holders:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, ValueError):
+                    pass
+            second_deadline = time.time() + 5
+            while time.time() < second_deadline and port_holders(self.port):
+                time.sleep(0.25)
+
         holders = port_holders(self.port)
         if holders:
             print_error(f"Port {self.port} still held by PID(s) {', '.join(holders)} after shutdown")

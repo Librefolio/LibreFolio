@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from datetime import date as Date
 from enum import StrEnum
 
+from .._int_validation import require_positive_int
+
 
 class Domain(StrEnum):
     """AI Export domain a component/dataset/analysis belongs to or applies to."""
@@ -110,14 +112,6 @@ def normalize_currency_code(value: object) -> str:
     return code
 
 
-def _require_positive_int(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise BuildScopeError(f"{label} must be an int, got {type(value).__name__}")
-    if value < 1:
-        raise BuildScopeError(f"{label} must be a positive integer (>= 1), got {value}")
-    return value
-
-
 def _normalize_broker_scope(values: object) -> tuple[int, ...]:
     """Normalizes any iterable of broker IDs into a sorted, deduplicated tuple."""
     if isinstance(values, (str, bytes)) or not hasattr(values, "__iter__"):
@@ -125,7 +119,7 @@ def _normalize_broker_scope(values: object) -> tuple[int, ...]:
     seen: set[int] = set()
     normalized: list[int] = []
     for raw in values:
-        broker_id = _require_positive_int(raw, "broker_scope entries")
+        broker_id = require_positive_int(raw, "broker_scope entries", error_cls=BuildScopeError)
         if broker_id not in seen:
             seen.add(broker_id)
             normalized.append(broker_id)
@@ -183,7 +177,7 @@ class BuildScope:
     def __post_init__(self) -> None:
         if not isinstance(self.request_id, str) or not self.request_id.strip():
             raise BuildScopeError("request_id must be a non-empty string")
-        object.__setattr__(self, "user_id", _require_positive_int(self.user_id, "user_id"))
+        object.__setattr__(self, "user_id", require_positive_int(self.user_id, "user_id", error_cls=BuildScopeError))
         if not isinstance(self.domain, Domain):
             raise BuildScopeError(f"domain must be a Domain member, got {self.domain!r}")
         if not isinstance(self.detail_level, DetailLevel):
@@ -196,9 +190,9 @@ class BuildScope:
         object.__setattr__(self, "broker_scope", _normalize_broker_scope(self.broker_scope))
 
         if self.asset_id is not None:
-            object.__setattr__(self, "asset_id", _require_positive_int(self.asset_id, "asset_id"))
+            object.__setattr__(self, "asset_id", require_positive_int(self.asset_id, "asset_id", error_cls=BuildScopeError))
         if self.broker_id is not None:
-            object.__setattr__(self, "broker_id", _require_positive_int(self.broker_id, "broker_id"))
+            object.__setattr__(self, "broker_id", require_positive_int(self.broker_id, "broker_id", error_cls=BuildScopeError))
         if self.base_currency is not None:
             object.__setattr__(self, "base_currency", normalize_currency_code(self.base_currency))
         if self.quote_currency is not None:

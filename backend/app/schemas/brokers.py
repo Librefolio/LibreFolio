@@ -31,6 +31,7 @@ from backend.app.schemas.common import (
     BaseListResponse,
     Currency,
     SafeDecimal,
+    StrictModel,
 )
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -39,7 +40,7 @@ from backend.app.utils.datetime_utils import UTCDateTime
 # =============================================================================
 
 
-class BRCreateItem(BaseModel):
+class BRCreateItem(StrictModel):
     """
     DTO for creating a new broker.
 
@@ -49,8 +50,6 @@ class BRCreateItem(BaseModel):
     Creates automatic DEPOSIT transactions for each.
     Example: [Currency(code="EUR", amount=10000), Currency(code="USD", amount=5000)]
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=100, description="Broker name (must be unique)")
     description: Optional[str] = Field(default=None, max_length=500, description="Broker description")
@@ -93,7 +92,7 @@ class BRCreateItem(BaseModel):
 # =============================================================================
 
 
-class BRReadItem(BaseModel):
+class BRReadItem(StrictModel):
     """
     DTO for reading broker basic data.
 
@@ -127,8 +126,6 @@ class BRReadItem(BaseModel):
 class BRDiscoveryItem(BaseModel):
     """Minimal broker payload for discovery of inaccessible brokers."""
 
-    model_config = ConfigDict(extra="forbid")
-
     id: int = Field(..., description="Broker ID")
     name: str = Field(..., description="Broker name")
     icon_url: Optional[str] = Field(default=None, description="Custom icon URL for the broker")
@@ -145,14 +142,12 @@ class BRListResponse(BaseListResponse[BRReadItem]):
 # =============================================================================
 
 
-class BRAssetHolding(BaseModel):
+class BRAssetHolding(StrictModel):
     """
     Single asset holding within a broker.
 
     Represents current position in an asset with cost basis and market value.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
     asset_name: str = Field(..., description="Asset display name")
@@ -213,7 +208,7 @@ class BRSummary(BRReadItem):
 # =============================================================================
 
 
-class BRUpdateItem(BaseModel):
+class BRUpdateItem(StrictModel):
     """
     DTO for updating a broker.
 
@@ -222,8 +217,6 @@ class BRUpdateItem(BaseModel):
 
     Note: Changing flags from True to False triggers balance validation.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=100, description="New broker name")
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
@@ -267,7 +260,7 @@ class BRUpdateItem(BaseModel):
 # =============================================================================
 
 
-class BRDeleteItem(BaseModel):
+class BRDeleteItem(StrictModel):
     """
     Single broker deletion request.
 
@@ -277,8 +270,6 @@ class BRDeleteItem(BaseModel):
     - force=True: Deletes broker AND all associated transactions.
       transactions_deleted in BRDeleteResult shows how many were removed.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., gt=0, description="Broker ID to delete")
     force: bool = Field(
@@ -309,10 +300,8 @@ class BRBulkDeleteResponse(BaseBulkDeleteResponse[BRDeleteResult]):
 # =============================================================================
 
 
-class BRCreateResult(BaseModel):
+class BRCreateResult(StrictModel):
     """Result for a single broker creation attempt."""
-
-    model_config = ConfigDict(extra="forbid")
 
     success: bool
     broker_id: Optional[int] = None
@@ -330,10 +319,8 @@ class BRBulkCreateResponse(BaseBulkResponse[BRCreateResult]):
 # =============================================================================
 
 
-class BRUpdateResult(BaseModel):
+class BRUpdateResult(StrictModel):
     """Result for a single broker update attempt."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int
     success: bool
@@ -350,7 +337,7 @@ class BRBulkUpdateResponse(BaseBulkResponse[BRUpdateResult]):
 # =============================================================================
 
 
-class BRAccessItem(BaseModel):
+class BRAccessItem(StrictModel):
     """
     DTO for broker access with user details.
     Used in list responses to show who has access.
@@ -379,8 +366,6 @@ class BRAccessBulkItem(BaseModel):
     - share_percentage is only valid for OWNER role (enforced by validator)
     - EDITOR and VIEWER always have share_percentage = 0
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     user_id: int = Field(..., gt=0, description="User ID")
     role: UserRole = Field(..., description="Access role (OWNER/EDITOR/VIEWER)")

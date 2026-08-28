@@ -28,10 +28,10 @@ from collections.abc import Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from backend.app.db.models import Asset
-from backend.app.schemas.common import Currency, SafeDecimal
+from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioHistoryPoint
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
@@ -99,8 +99,7 @@ async def _load_broker_asset_metadata(context: BuildContext, asset_ids: Sequence
 # =============================================================================
 
 
-class BrokerSummaryPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerSummaryPayload(StrictModel):
 
     broker_id: int
     as_of: Date
@@ -161,8 +160,7 @@ async def _build_broker_summary(context: BuildContext, dependencies: Mapping[str
 # =============================================================================
 
 
-class BrokerPositionsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerPositionsPayload(StrictModel):
 
     broker_id: int
     as_of: Date
@@ -185,8 +183,7 @@ async def _build_broker_positions(context: BuildContext, dependencies: Mapping[s
 # =============================================================================
 
 
-class BrokerAllocationConcentrationPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerAllocationConcentrationPayload(StrictModel):
 
     broker_id: int
     as_of: Date
@@ -242,15 +239,13 @@ async def _build_broker_allocation_concentration(context: BuildContext, dependen
 # =============================================================================
 
 
-class ProvenanceNote(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class ProvenanceNote(StrictModel):
 
     subject: str
     text: str
 
 
-class BrokerProvenancePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerProvenancePayload(StrictModel):
 
     domain: str
     broker_id: int
@@ -288,8 +283,7 @@ def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, S
 # =============================================================================
 
 
-class BrokerPerformancePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerPerformancePayload(StrictModel):
 
     broker_id: int
     period_start: Date
@@ -358,8 +352,7 @@ async def _build_broker_performance(context: BuildContext, dependencies: Mapping
 # =============================================================================
 
 
-class BrokerFlowsIncomeCostsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerFlowsIncomeCostsPayload(StrictModel):
 
     broker_id: int
     period_start: Date
@@ -408,8 +401,7 @@ async def _build_broker_flows_income_costs(context: BuildContext, dependencies: 
 # =============================================================================
 
 
-class BrokerReconciliationPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerReconciliationPayload(StrictModel):
 
     broker_id: int
     period_start: Date
@@ -494,8 +486,7 @@ async def _broker_fifo_rows(context: BuildContext, scope: BuildScope) -> list[Fi
     return sort_fifo_lots(candidate_pairs)
 
 
-class BrokerFifoSummaryPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerFifoSummaryPayload(StrictModel):
 
     broker_id: int
     period_start: Date
@@ -535,8 +526,7 @@ async def _build_broker_fifo_summary(context: BuildContext, dependencies: Mappin
     )
 
 
-class BrokerFifoLotsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class BrokerFifoLotsPayload(StrictModel):
 
     broker_id: int
     period_start: Date

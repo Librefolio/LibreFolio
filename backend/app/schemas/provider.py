@@ -29,10 +29,10 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from backend.app.db.models import IdentifierType, ProviderInputType
-from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew, SafeDecimal
+from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew, SafeDecimal, StrictModel
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -90,13 +90,11 @@ class FAVolumeKind(StrEnum):
 # ============================================================================
 
 
-class FAProviderParamField(BaseModel):
+class FAProviderParamField(StrictModel):
     """Single field definition for provider_params form.
 
     Used by the frontend to generate dynamic forms for provider configuration.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     key: str = Field(..., description="Parameter key name")
     type: str = Field(..., description="Field type: 'string', 'number', 'select', 'json'")
@@ -114,13 +112,11 @@ class FAProviderParamField(BaseModel):
 # ============================================================================
 
 
-class FAProviderInfo(BaseModel):
+class FAProviderInfo(StrictModel):
     """Information about a single Financial Asset pricing provider.
 
     Used for provider discovery and capability inspection.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Provider code (e.g., yfinance, cssscraper)")
     name: str = Field(..., description="Provider full name")
@@ -168,13 +164,11 @@ class FAProviderInfo(BaseModel):
 # ============================================================================
 
 
-class FXProviderInfo(BaseModel):
+class FXProviderInfo(StrictModel):
     """Information about a single FX rate provider.
 
     Used for FX provider discovery and capability inspection.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     code: str = Field(..., description="Provider code (e.g., ECB, FED, BOE, SNB)")
     name: str = Field(..., description="Provider full name")
@@ -187,7 +181,7 @@ class FXProviderInfo(BaseModel):
 # ============================================================================
 
 
-class FAProviderConfigBase(BaseModel):
+class FAProviderConfigBase(StrictModel):
     """Base provider configuration — minimal set for probe/test operations.
 
     Contains only the fields needed to identify and configure a provider,
@@ -197,8 +191,6 @@ class FAProviderConfigBase(BaseModel):
     Child classes extend this for assignment (FAProviderAssignmentItem)
     and probe requests (FAProviderProbeRequest).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     provider_code: str = Field(..., description="Provider code (yfinance, cssscraper, scheduled_investment, etc.)")
     identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
@@ -244,13 +236,11 @@ class FAProviderAssignmentItem(FAProviderConfigBase):
     asset_id: int = Field(..., description="Asset ID")
 
 
-class FAProviderAssignmentReadItem(BaseModel):
+class FAProviderAssignmentReadItem(StrictModel):
     """Provider assignment read response (includes all fields).
 
     Used for GET /assets/provider/assignments endpoint.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int = Field(..., description="Asset ID")
     provider_code: str = Field(..., description="Provider code")
@@ -261,7 +251,7 @@ class FAProviderAssignmentReadItem(BaseModel):
     provider_url: Optional[str] = Field(None, description="Auto-generated URL to provider page")
 
 
-class FAProviderRefreshFieldsDetail(BaseModel):
+class FAProviderRefreshFieldsDetail(StrictModel):
     """Field-level details for provider refresh operation.
 
     Provides granular information about which fields were updated during refresh,
@@ -278,8 +268,6 @@ class FAProviderRefreshFieldsDetail(BaseModel):
         ... )
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     refreshed_fields: List[OldNew[str | None]] = Field(
         ...,
         description="Fields updated with old→new values. Old is None if first time set, new is None if field cleared.",
@@ -288,10 +276,8 @@ class FAProviderRefreshFieldsDetail(BaseModel):
     ignored_fields: List[str] = Field(..., description="Fields ignored (not requested when using field selection)")
 
 
-class FAProviderAssignmentResult(BaseModel):
+class FAProviderAssignmentResult(StrictModel):
     """Result of single FA provider assignment or refresh."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     success: bool
@@ -356,7 +342,7 @@ class FAProviderProbeRequest(FAProviderConfigBase):
     )
 
 
-class BaseProbeOperationResult(BaseModel):
+class BaseProbeOperationResult(StrictModel):
     """Base class for all probe operation results.
 
     Shared fields for every probe sub-operation (current_price, history, metadata).
@@ -364,8 +350,6 @@ class BaseProbeOperationResult(BaseModel):
 
     Design follows the same inheritance pattern as BaseDeleteResult in common.py.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     success: bool = Field(..., description="Whether the operation succeeded")
     error: Optional[str] = Field(None, description="Error message if failed")
@@ -395,14 +379,12 @@ class ProbeMetadataResult(BaseProbeOperationResult):
     patch_data: Optional[dict] = Field(None, description="Asset metadata patch (identifiers, asset_type, classification, etc.)")
 
 
-class FAProviderProbeResponse(BaseModel):
+class FAProviderProbeResponse(StrictModel):
     """Response for provider probe endpoint.
 
     Contains results for each requested operation, with per-operation
     execution time and a total execution time.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     provider_code: str = Field(...)
     identifier: str = Field(...)
@@ -419,15 +401,13 @@ class FAProviderProbeResponse(BaseModel):
 # ============================================================================
 
 
-class FAProviderSearchResultItem(BaseModel):
+class FAProviderSearchResultItem(StrictModel):
     """Single search result from a provider.
 
     Contains the asset identifier and metadata from the provider's search.
     The identifier_type field is required so the result can be used directly
     for asset creation without needing to look up the identifier type.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     identifier: str = Field(..., description="Asset identifier (ISIN, ticker, URL, etc.)")
     identifier_type: IdentifierType = Field(..., description="Type of identifier (ISIN, TICKER, URL, etc.)")
@@ -440,13 +420,11 @@ class FAProviderSearchResultItem(BaseModel):
     via_web: bool = Field(False, description="True if resolved via the external web link-finder (last-resort), not the provider's native on-site search")
 
 
-class FAProviderSearchResponse(BaseModel):
+class FAProviderSearchResponse(StrictModel):
     """Response for provider search endpoint.
 
     Returns aggregated search results from one or more providers.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     query: str = Field(..., description="Original search query")
     total_results: int = Field(..., description="Total number of results across all providers")

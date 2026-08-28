@@ -39,9 +39,9 @@ from datetime import date as Date
 from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
-from backend.app.schemas.common import Currency, SafeDecimal
+from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioHolding, PortfolioReportResponse, PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
@@ -119,7 +119,7 @@ def _holding_native_currency(holding: PortfolioHolding) -> str | None:
 # =============================================================================
 
 
-class CurrencyAllocationSlice(BaseModel):
+class CurrencyAllocationSlice(StrictModel):
     """One native-currency allocation slice of the broker's snapshot market value.
 
     ``currency == None`` is the explicit *unknown* bucket (positions whose native
@@ -129,18 +129,14 @@ class CurrencyAllocationSlice(BaseModel):
     ``None`` only when there is no valued market value to divide by.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     currency: str | None = Field(None, description="Native valuation currency; None == undetermined/unknown bucket.")
     amount: Currency
     percent: SafeDecimal | None = None
     position_count: int = Field(ge=0)
 
 
-class ConcentrationCoverage(BaseModel):
+class ConcentrationCoverage(StrictModel):
     """Explicit covered/unknown split so undetermined-currency positions stay visible."""
-
-    model_config = ConfigDict(extra="forbid")
 
     valued_market_value: Currency
     covered_market_value: Currency
@@ -150,10 +146,8 @@ class ConcentrationCoverage(BaseModel):
     unknown_position_count: int = Field(ge=0)
 
 
-class BrokerConcentrationContextPayload(BaseModel):
+class BrokerConcentrationContextPayload(StrictModel):
     """Renderer-neutral concentration evidence: existing dimensions + currency breakdown + preserved HHI."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int
     as_of: Date
@@ -292,7 +286,7 @@ class ConcentrationComparisonStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
-class BrokerConcentrationComparisonPayload(BaseModel):
+class BrokerConcentrationComparisonPayload(StrictModel):
     """Broker-vs-whole-portfolio concentration comparison, or an explicit unavailable reason.
 
     On ``ok`` every ``broker_*``/``portfolio_*`` metric and its ``*_delta`` is
@@ -301,8 +295,6 @@ class BrokerConcentrationComparisonPayload(BaseModel):
     section degrades honestly. Only the scoped ``broker_id`` entity identifier is
     exposed - never any asset/lot/transaction row identifier.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     status: ConcentrationComparisonStatus
     reason_code: str | None = None

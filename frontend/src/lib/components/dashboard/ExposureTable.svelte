@@ -21,6 +21,8 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     interface Holding {
         asset_id: number;
@@ -93,29 +95,8 @@
         return tableRef;
     }
 
-    function safeNum(v: string | (string | null)[] | null | undefined): number | null {
-        const s = Array.isArray(v) ? (v[0] ?? null) : v;
-        if (s == null) return null;
-        const n = parseFloat(s);
-        return isNaN(n) ? null : n;
-    }
-
-    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
     function makePositionKey(assetId: number, brokerId: number | null): string {
         return `${assetId}-${brokerId ?? 0}`;
-    }
-
-    function escapeHtml(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function signedAmountCell(value: number | null) {
@@ -146,28 +127,28 @@
 
         return [...holdings]
             .map((holding) => {
-                const brokerId = safeInt(holding.broker_id);
+                const brokerId = safeNumber(holding.broker_id);
                 const broker = brokerId == null ? null : (brokerMap.get(brokerId) ?? null);
-                const currentValue = safeNum(holding.current_value);
+                const currentValue = safeDecimal(holding.current_value);
                 return {
                     key: makePositionKey(holding.asset_id, brokerId),
                     assetId: holding.asset_id,
                     assetName: holding.asset_name,
                     assetType: holding.asset_type,
                     brokerId,
-                    brokerName: safeStr(holding.broker_name) || broker?.name || '—',
+                    brokerName: safeString(holding.broker_name) || broker?.name || '—',
                     broker,
                     currentValue,
-                    navWeight: safeNum(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
-                    unrealizedPnl: safeNum(holding.gain_loss),
-                    unrealizedPnlPercent: safeNum(holding.gain_loss_percent),
-                    annualizedReturn: safeNum(holding.annualized_return),
-                    gainLossChange1d: safeNum(holding.gain_loss_change_1d),
-                    gainLossChange1dPercent: safeNum(holding.gain_loss_change_1d_percent),
-                    quantity: safeNum(holding.quantity),
-                    price: safeNum(holding.current_price),
-                    wacPerUnit: safeNum(holding.wac_per_unit),
-                    oldestOpenLotDate: safeStr(holding.oldest_open_lot_date),
+                    navWeight: safeDecimal(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
+                    unrealizedPnl: safeDecimal(holding.gain_loss),
+                    unrealizedPnlPercent: safeDecimal(holding.gain_loss_percent),
+                    annualizedReturn: safeDecimal(holding.annualized_return),
+                    gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
+                    quantity: safeDecimal(holding.quantity),
+                    price: safeDecimal(holding.current_price),
+                    wacPerUnit: safeDecimal(holding.wac_per_unit),
+                    oldestOpenLotDate: safeString(holding.oldest_open_lot_date),
                 };
             })
             .filter((row) => row.quantity == null || row.quantity !== 0)

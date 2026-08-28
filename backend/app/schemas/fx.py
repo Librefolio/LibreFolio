@@ -51,6 +51,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     SafeDecimal,
+    StrictModel,
 )
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,
@@ -67,7 +68,7 @@ from backend.app.utils.datetime_utils import parse_ISO_date
 # ============================================================================
 
 
-class FXProviderInfo(BaseModel):
+class FXProviderInfo(StrictModel):
     """Information about a single FX rate provider."""
 
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -171,8 +172,6 @@ class FXConversionResult(BaseModel):
 
 class FXSignalQueryResult(BaseModel):
     """Signal results for one original (pre-daily-expansion) FX request."""
-
-    model_config = ConfigDict(extra="forbid")
 
     request_index: int = Field(..., ge=0)
     from_currency: str = Field(..., min_length=3, max_length=3)

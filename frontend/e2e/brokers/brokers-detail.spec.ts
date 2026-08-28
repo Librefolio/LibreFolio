@@ -1,6 +1,7 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {appears} from '../fixtures/probe';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -436,13 +437,49 @@ test.describe('Broker Detail Page', () => {
             }
         });
 
-        // NOT covered, on purpose: the modal's net breakdown (`{#if lotHasNetCosts}`,
-        // with the allocated fees/taxes and the net P&L) cannot be reached with today's
-        // mock. Both FEE rows in populate_mock_data.py carry `asset_id=None` — they are
-        // account-level charges, never allocated to a lot — so `lotHasNetCosts` is false
-        // for every lot. Verified by scanning the first six lots of Interactive Brokers.
-        // Covering it needs a fee or tax attached to an asset in the mock, which is a
-        // change other specs read, so it is a decision for the maintainer, not a test.
+        test('the lot detail modal breaks down fees and taxes for a lot that carries them', async ({page}) => {
+            // The net breakdown is behind `{#if lotHasNetCosts}`, so this looks for a lot
+            // that actually has allocated costs rather than assuming the first one does —
+            // filtering to "a lot" is not the same as finding one that can still show what
+            // the test is about.
+            //
+            // Until the mock grew an asset-attached FEE and TAX on Apple/IB, no lot in the
+            // database qualified: every other FEE/TAX row has `asset_id=None`, an
+            // account-level charge the FIFO engine has nothing to attach to. This whole
+            // section of the modal was unreachable, which is why it went uncovered.
+            await goToBrokerWithHoldings(page);
+            const row = await firstHoldingRow(page);
+            await clickRowAction(page, row, 'analyze-lots');
+            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+
+            const rows = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]');
+            await expect(rows.first()).toBeVisible({timeout: 10_000});
+            const modal = page.getByTestId('lot-custody-modal');
+            const breakdown = page.getByTestId('lot-custody-modal-net-breakdown');
+
+            const candidates = Math.min(await rows.count(), 8);
+            let found = false;
+            for (let i = 0; i < candidates; i++) {
+                await rows.nth(i).click({button: 'right'});
+                await expect(page.getByTestId('context-menu')).toBeVisible({timeout: 5000});
+                await page.getByTestId('context-menu-action-lot-view-details-action').click();
+                await expect(modal).toBeVisible({timeout: 5000});
+
+                if (await appears(breakdown, 2_000)) {
+                    found = true;
+                    break;
+                }
+                await page.getByTestId('lot-custody-modal-close').click();
+                await expect(modal).toBeHidden({timeout: 5000});
+            }
+
+            expect(found, `no lot among the first ${candidates} carries allocated fees or taxes — the mock must keep an asset-attached FEE/TAX, see populate_mock_data.py`).toBe(true);
+            await expect(page.getByTestId('lot-custody-modal-allocated-fees')).toContainText(/\S/);
+            await expect(page.getByTestId('lot-custody-modal-allocated-taxes')).toContainText(/\S/);
+            // Either a net figure or the explicit "unavailable" dash — both legitimate,
+            // an empty node is not.
+            await expect(page.getByTestId('lot-custody-modal-net-total-pnl')).toContainText(/\S/);
+        });
 
         test('the lot detail modal closes from both the header and the footer', async ({page}) => {
             await goToBrokerWithHoldings(page);

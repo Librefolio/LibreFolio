@@ -35,12 +35,12 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, Transaction
-from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal
+from backend.app.schemas.common import Currency, OpenDateRangeModel, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import (
     AllocationItem,
     AssetPeriodContribution,
@@ -193,10 +193,8 @@ def _currency_required(currency_code: str, value: Decimal) -> Currency:
 # =============================================================================
 
 
-class PositionRow(BaseModel):
+class PositionRow(StrictModel):
     """One open holding snapshot at `snapshot_as_of`, currency-safe and self-describing."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     asset_name: str
@@ -215,10 +213,8 @@ class PositionRow(BaseModel):
     nav_weight_percent: SafeDecimal | None = None
 
 
-class AllocationSlice(BaseModel):
+class AllocationSlice(StrictModel):
     """One allocation category slice (type/sector/geography)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
     percent: SafeDecimal
@@ -226,10 +222,8 @@ class AllocationSlice(BaseModel):
     emoji: str | None = None
 
 
-class ContributionRow(BaseModel):
+class ContributionRow(StrictModel):
     """Per-asset period P&L contribution, mirroring `AssetPeriodContribution` currency-safe."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     asset_name: str
@@ -248,10 +242,8 @@ class ContributionRow(BaseModel):
     is_fully_sold: bool = False
 
 
-class UnallocatedRow(BaseModel):
+class UnallocatedRow(StrictModel):
     """Broker-level fees/income not attributed to a specific asset, mirroring `UnallocatedContribution`."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int
     broker_name: str
@@ -259,10 +251,8 @@ class UnallocatedRow(BaseModel):
     unallocated_fees_taxes: Currency | None = None
 
 
-class EffectRow(BaseModel):
+class EffectRow(StrictModel):
     """Non-position period P&L row, mirroring `OtherPeriodEffect`."""
-
-    model_config = ConfigDict(extra="forbid")
 
     description: str
     category: str
@@ -271,7 +261,7 @@ class EffectRow(BaseModel):
     broker_name: str | None = None
 
 
-class PerformanceBucketRow(BaseModel):
+class PerformanceBucketRow(StrictModel):
     """One bucket's internal NAV statistics plus inter-bucket performance.
 
     `has_data=False` (all other fields `None`) is an explicit, valid outcome for a
@@ -283,8 +273,6 @@ class PerformanceBucketRow(BaseModel):
     as `variation_start_*`. The first populated bucket therefore has null
     variation fields unless a deterministic pre-period observation was loaded.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     index: int
     start_date: Date
@@ -409,10 +397,8 @@ def build_performance_bucket_rows(
     return tuple(rows)
 
 
-class FifoAssetSummaryRow(BaseModel):
+class FifoAssetSummaryRow(StrictModel):
     """Per-asset economic FIFO summary derived from authoritative lot rows."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     asset_name: str
@@ -447,20 +433,16 @@ class FifoAssetSummaryRow(BaseModel):
     has_in_transit_custody: bool = False
 
 
-class FifoCustodyRow(BaseModel):
+class FifoCustodyRow(StrictModel):
     """Current broker or in-transit custody slice for a public FIFO lot."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int | None = None
     custody_type: str
     quantity: SafeDecimal
 
 
-class FifoLotRow(BaseModel):
+class FifoLotRow(StrictModel):
     """One FIFO lot row with a prompt-local audit reference, never a database ID."""
-
-    model_config = ConfigDict(extra="forbid")
 
     lot_ref: str = Field(..., pattern=r"^L[1-9]\d*$")
     asset_id: int

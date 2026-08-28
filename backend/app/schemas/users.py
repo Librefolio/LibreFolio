@@ -7,15 +7,13 @@ schemas distinct from general user info schemas.
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
-from backend.app.schemas.common import BaseListResponse
+from backend.app.schemas.common import BaseListResponse, StrictModel
 
 
-class UserSearchItem(BaseModel):
+class UserSearchItem(StrictModel):
     """Minimal user info for search results. Does NOT expose email for privacy."""
-
-    model_config = ConfigDict(extra="forbid")
 
     id: int = Field(..., description="User ID")
     username: str = Field(..., description="Username")

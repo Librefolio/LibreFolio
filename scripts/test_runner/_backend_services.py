@@ -46,6 +46,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 AI_EXPORT_PURE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
+    "backend/test_scripts/test_services/test_ai_export_int_validation.py",
     "backend/test_scripts/test_services/test_ai_export_technical_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_technical_shared_pure.py",
     "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",
@@ -457,6 +458,24 @@ def services_roi_fifo_utils(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the pure LotsAnalysisService builders (no DB, no server, no network)."""
+    print_section("Services: Lots Analysis Pure Builders")
+    print_info("Testing: backend/app/services/lots_analysis_service.py (sync, argument-driven helpers)")
+    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lots_analysis_pure.py", test_names)
+    return run_command(cmd, "Lots Analysis pure builder tests", verbose=verbose)
+
+
+def services_asset_source_guards(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the AssetSourceManager integrity guards and event FX conversion tests."""
+    print_section("Services: Asset Source Guards")
+    print_info("Testing: backend/app/services/asset_source.py (bulk_upsert_prices, get_prices_bulk, list_assets)")
+    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
+    return run_command(cmd, "Asset Source guard tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
@@ -791,6 +810,31 @@ Note: No backend server required.
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
     add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR, MWRR warm-start, SimpleROI series, FIFO lots, _build_history_series")
+    add_test(
+        cat,
+        "lots-analysis-pure",
+        services_lots_analysis_pure,
+        name="Lots Analysis Pure Builders",
+        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver",
+        # PURE: every helper under test is a sync method that takes all of its
+        # inputs as arguments and never touches self.db, so the service is built
+        # with db=None. The two async cases stub convert_bulk instead of opening a
+        # session. Kept out of the DB-backed lots units on purpose: folding it in
+        # would declass it to the category default (write-scoped).
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "asset-source-guards",
+        services_asset_source_guards,
+        name="Asset Source Guards",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion",
+        # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
+        # asset this unit creates and every price/event row written against it are
+        # visible to all concurrent tests. Rows are uniquely named and dropped in
+        # teardown, but the tables themselves are shared surfaces.
+        isolation="write-global",
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")

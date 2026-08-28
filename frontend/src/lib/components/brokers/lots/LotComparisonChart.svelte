@@ -15,6 +15,8 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeScalar, safeString} from '$lib/types';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -177,15 +179,6 @@
     let resolutionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     let lastResolutionSourceSignature: string | null = null;
 
-    function safeScalar<T>(value: T | Array<T | null> | null | undefined): T | null {
-        if (Array.isArray(value)) return value[0] ?? null;
-        return value ?? null;
-    }
-
-    function safeString(value: string | Array<string | null> | null | undefined): string | null {
-        return safeScalar(value);
-    }
-
     function safeValueSource(value: LotSummarySchema['value_source']): LotValueSource | null {
         const source = safeString(value);
         return source === 'MARKET_PRICE' || source === 'ESTIMATED_AT_COST' ? source : null;
@@ -229,10 +222,6 @@
                 .toString(16)
                 .padStart(2, '0')}`;
         return color;
-    }
-
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function formatShortDate(value: string): string {

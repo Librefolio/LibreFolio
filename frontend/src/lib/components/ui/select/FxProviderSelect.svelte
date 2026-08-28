@@ -27,6 +27,7 @@
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {getPriorityBadgeStyle, getProviderColor} from '$lib/utils/colors';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     // =========================================================================
     // Types
@@ -447,26 +448,22 @@
     // =========================================================================
 
     /** Escape HTML entities for safe tooltip content */
-    function esc(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
     /** Build HTML tooltip for a provider badge */
     function providerTooltipHtml(code: string): string {
-        return `<strong>${esc(getProviderName(code))}</strong><br/>${esc(getProviderDescByCode(code))}`;
+        return `<strong>${escapeHtml(getProviderName(code))}</strong><br/>${escapeHtml(getProviderDescByCode(code))}`;
     }
 
     /** Build HTML tooltip for warning messages list */
     function warningsTooltipHtml(warnings: string[]): string {
-        return warnings.map((w) => esc(w)).join('<br/><br/>');
+        return warnings.map((w) => escapeHtml(w)).join('<br/><br/>');
     }
 
     /** Build HTML tooltip for provider legend badge (name + desc + optional warning) */
     function legendTooltipHtml(prov: ProviderInfo): string {
         const desc = getProviderDescription(prov);
         const warning = getProviderWarning(prov.code);
-        let h = `<strong>${esc(prov.name)}</strong><br/>${esc(desc)}`;
-        if (warning) h += `<br/><br/><span style="color:#fbbf24">⚠️ ${esc(warning)}</span>`;
+        let h = `<strong>${escapeHtml(prov.name)}</strong><br/>${escapeHtml(desc)}`;
+        if (warning) h += `<br/><br/><span style="color:#fbbf24">⚠️ ${escapeHtml(warning)}</span>`;
         return h;
     }
 </script>

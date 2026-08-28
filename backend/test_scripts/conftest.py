@@ -140,7 +140,20 @@ def pytest_unconfigure(config):
     pytest_sessionfinish) because pytest_sessionfinish is called *before*
     the terminal reporter prints the FAILURES section and summary line —
     exiting there silently swallows all failure diagnostics.
+
+    And it must flush first, for the same reason. os._exit() skips the
+    interpreter's own flush, so whatever is still sitting in the stdout buffer
+    is discarded. On a terminal that costs nothing (line-buffered), but every
+    run the test runner records goes through a **pipe**, where the buffer is a
+    few KB and only full blocks have been written out. The tail is exactly what
+    is lost — and the tail is the FAILURES section and the summary line, the two
+    things this hook was moved here to preserve. Measured before the fix: every
+    per-unit backend log in .testLog ended mid-line at "[100%]" with no summary,
+    and `pytest --collect-only` redirected to a file produced zero bytes.
     """
     if _exit_status is not None:
+        for stream in (sys.stdout, sys.stderr):
+            with contextlib.suppress(Exception):
+                stream.flush()
         _release_process_pools()
         os._exit(_exit_status)

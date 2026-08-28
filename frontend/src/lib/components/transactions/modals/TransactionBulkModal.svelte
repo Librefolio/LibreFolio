@@ -24,6 +24,7 @@
   Architecture: Plan C3 — PendingOp refactor (2026-05-11).
 -->
 <script lang="ts">
+    import {todayIso} from '$lib/utils/dateOnly';
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -150,10 +151,6 @@
         const da = new Date(a);
         const db = new Date(b);
         return Math.round(Math.abs(da.getTime() - db.getTime()) / 86400000);
-    }
-
-    function todayIso(): string {
-        return new Date().toISOString().slice(0, 10);
     }
 
     /** Default DraftFields for a brand-new transaction. */

@@ -247,72 +247,82 @@ test.describe('Asset Detail Page', () => {
     });
 
     // ========================================================================
-    // Test 10: Aesthetics toggle is visible (when chart has data)
+    // Test 10: The gear button toggles the aesthetics panel above the chart.
+    //
+    // This replaces a `hasData ? expect(toggle).toBeVisible() : annotate-and-pass`
+    // guard. On the seeded Apple asset the chart toolbar always renders (the
+    // buttons live inside `{:else if lineData.length > 0}` and Apple has price
+    // history), so the guard collapsed to re-asserting the very `isVisible()`
+    // probe it had just run — and on any asset without data it passed having
+    // exercised nothing. It now drives the real branch: opening the gear mounts
+    // `asset-detail-aesthetics-panel`, closing it removes the node again.
     // ========================================================================
-    test('aesthetics toggle is visible when chart has data', async ({page}) => {
+    test('aesthetics toggle opens and closes the aesthetics panel', async ({page}) => {
         await goToSeededAssetDetail(page);
-        const chart = page.getByTestId('asset-detail-chart');
-        await expect(chart).toBeVisible();
-        // Buttons only render inside {:else if lineData.length > 0} block
         const toggle = page.getByTestId('asset-detail-aesthetics-toggle');
-        const hasData = await toggle.isVisible({timeout: 3000}).catch(() => false);
-        if (hasData) {
-            await expect(toggle).toBeVisible();
-        } else {
-            // Asset has no price data — buttons are not rendered (expected)
-            test.info().annotations.push({type: 'skip-reason', description: 'Asset has no price data, chart toolbar not rendered'});
-        }
+        await expect(toggle).toBeVisible();
+
+        // `{#if showAesthetics}` — the panel is absent from the DOM until opened.
+        const panel = page.getByTestId('asset-detail-aesthetics-panel');
+        await expect(panel).toHaveCount(0);
+
+        await toggle.click();
+        await expect(panel).toBeVisible();
+
+        await toggle.click();
+        await expect(panel).toHaveCount(0);
     });
 
     // ========================================================================
-    // Test 11: Data editor toggle (when chart has data)
+    // Test 11: The pencil button opens the inline data editor, and pressing it
+    // again returns to the chart. Same history as the aesthetics test above —
+    // the previous version only re-asserted its own visibility probe.
     // ========================================================================
-    test('data editor button is visible when chart has data', async ({page}) => {
+    test('edit-data button opens and closes the inline data editor', async ({page}) => {
         await goToSeededAssetDetail(page);
         const btn = page.getByTestId('asset-detail-editdata-btn');
-        const hasData = await btn.isVisible({timeout: 3000}).catch(() => false);
-        if (hasData) {
-            await expect(btn).toBeVisible();
-        } else {
-            test.info().annotations.push({type: 'skip-reason', description: 'Asset has no price data, chart toolbar not rendered'});
-        }
+        await expect(btn).toBeVisible();
+
+        // `{#if showDataEditor}` — mounted only while the editor is open.
+        const editor = page.getByTestId('asset-detail-editor-panel');
+        await expect(editor).toHaveCount(0);
+
+        await btn.click();
+        await expect(editor).toBeVisible();
+
+        await btn.click();
+        await expect(editor).toHaveCount(0);
     });
 
     // ========================================================================
-    // Test 12: Measure button (when chart has data)
+    // Test 12: The ruler button reveals the measures panel (and arms measure
+    // mode via the chart). Unlike the aesthetics/editor panels the measures
+    // panel is always in the DOM but carries the `hidden` class until
+    // `showMeasures`, so this asserts on visibility rather than node count. It
+    // is a distinct entry point from the `asset-detail-measures-toggle` header
+    // exercised by the "measures panel toggles" test.
     // ========================================================================
-    test('measure button is visible when chart has data', async ({page}) => {
+    test('measure button reveals the measures panel', async ({page}) => {
         await goToSeededAssetDetail(page);
         const btn = page.getByTestId('asset-detail-measure-btn');
-        const hasData = await btn.isVisible({timeout: 3000}).catch(() => false);
-        if (hasData) {
-            await expect(btn).toBeVisible();
-        } else {
-            test.info().annotations.push({type: 'skip-reason', description: 'Asset has no price data, chart toolbar not rendered'});
-        }
+        await expect(btn).toBeVisible();
+
+        const panel = page.getByTestId('asset-detail-measures-panel');
+        await expect(panel).toBeHidden();
+
+        await btn.click();
+        await expect(panel).toBeVisible();
     });
 
-    // ========================================================================
-    // Test 13: Currency selector in filter bar
-    // ========================================================================
-    test('currency selector is visible in filter bar', async ({page}) => {
-        await goToSeededAssetDetail(page);
-        const filterBar = page.getByTestId('asset-detail-filter-bar');
-        await expect(filterBar).toBeVisible();
-
-        // Currency selector should be within the filter bar (CurrencySearchSelect or similar)
-        // It renders as a combobox or button with currency code
-        const currencyEl = filterBar
-            .locator('[role="combobox"], button')
-            .filter({hasText: /[A-Z]{3}/})
-            .first();
-        const hasCurrency = await currencyEl.isVisible({timeout: 3000}).catch(() => false);
-        if (hasCurrency) {
-            await expect(currencyEl).toBeVisible();
-        } else {
-            test.info().annotations.push({type: 'skip-reason', description: 'Currency selector not rendered (single-currency asset)'});
-        }
-    });
+    // NOTE: a former "currency selector is visible in filter bar" test was
+    // removed here. It scoped its locator to `asset-detail-filter-bar`, but that
+    // container holds only the DateRangePicker — the display-currency selector
+    // lives in the separate `summary` snippet (AssetPriceSummary), which passes
+    // no test id. The old locator therefore matched nothing (silent
+    // annotate-and-pass) or, worse, matched a 3-letter date preset such as
+    // "YTD"/"MAX" and asserted a date button was "the currency selector". Making
+    // it honest would require a test hook on CurrencySearchSelect; reported
+    // rather than fixed, per the campaign rule on product-surface changes.
 
     // ========================================================================
     // Test 14: Asset info shows type badge and name

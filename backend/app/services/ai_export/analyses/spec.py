@@ -19,6 +19,8 @@ from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.types import CODE_PATTERN, PAGE_PATTERN, DetailLevel, Domain
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry
 
+from .._int_validation import require_positive_int
+
 _ANALYSIS_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 _DATASET_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 # i18n keys must be dotted with at least 2 segments (e.g. "aiExport.analysis.x.display"),
@@ -63,14 +65,6 @@ class AdditionalExportSuggestion:
             raise AnalysisSpecError(f"{self.dataset_id}: recommended_detail must be a DetailLevel member")
         if not isinstance(self.necessity, AdditionalExportNecessity):
             raise AnalysisSpecError(f"{self.dataset_id}: necessity must be an AdditionalExportNecessity member")
-
-
-def _require_positive_int(value: object, *, label: str, analysis_id: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise AnalysisSpecError(f"{analysis_id}: {label} must be an int, got {type(value).__name__}")
-    if value < 1:
-        raise AnalysisSpecError(f"{analysis_id}: {label} must be >= 1")
-    return value
 
 
 def _validate_code_tuple(values: tuple[str, ...], *, label: str, analysis_id: str, pattern: re.Pattern[str], allow_empty: bool) -> tuple[str, ...]:
@@ -134,7 +128,7 @@ class AnalysisSpec:
     def __post_init__(self) -> None:
         if not _ANALYSIS_ID_PATTERN.fullmatch(self.analysis_id):
             raise AnalysisSpecError(f"analysis_id has invalid format: {self.analysis_id!r}")
-        _require_positive_int(self.version, label="version", analysis_id=self.analysis_id)
+        require_positive_int(self.version, "version", owner_id=self.analysis_id, error_cls=AnalysisSpecError)
         if not isinstance(self.domain, Domain):
             raise AnalysisSpecError(f"{self.analysis_id}: domain must be a Domain member, got {type(self.domain).__name__}")
         if not self.display_i18n_key or not _I18N_KEY_PATTERN.fullmatch(self.display_i18n_key):
@@ -162,10 +156,10 @@ class AnalysisSpec:
         object.__setattr__(self, "optional_dataset_ids", optional)
         if not self.instruction_template_id:
             raise AnalysisSpecError(f"{self.analysis_id}: instruction_template_id must not be empty")
-        _require_positive_int(self.instruction_template_version, label="instruction_template_version", analysis_id=self.analysis_id)
+        require_positive_int(self.instruction_template_version, "instruction_template_version", owner_id=self.analysis_id, error_cls=AnalysisSpecError)
         if not self.response_contract_id:
             raise AnalysisSpecError(f"{self.analysis_id}: response_contract_id must not be empty")
-        _require_positive_int(self.response_contract_version, label="response_contract_version", analysis_id=self.analysis_id)
+        require_positive_int(self.response_contract_version, "response_contract_version", owner_id=self.analysis_id, error_cls=AnalysisSpecError)
         suggestions = tuple(self.additional_export_suggestions)
         if any(not isinstance(suggestion, AdditionalExportSuggestion) for suggestion in suggestions):
             raise AnalysisSpecError(f"{self.analysis_id}: additional_export_suggestions must contain AdditionalExportSuggestion values")

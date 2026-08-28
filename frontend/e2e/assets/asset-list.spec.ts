@@ -13,6 +13,7 @@ import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
+import {uniqueToken} from '../fixtures/unique';
 
 test.describe('Asset List Page', () => {
     test.beforeEach(async ({page}) => {
@@ -52,16 +53,31 @@ test.describe('Asset List Page', () => {
     });
 
     // ========================================================================
-    // Test 4: Search filter works
+    // Test 4: Search narrows the grid to matching assets (positive filter).
+    //
+    // Was: fill "Apple", then assert only that `assets-page` is still visible —
+    // i.e. it never checked that filtering happened at all. It now asserts the
+    // matching card survives and the grid actually shrinks. The negative case
+    // (a query that matches nothing) is covered separately below.
     // ========================================================================
-    test('search filter filters assets', async ({page}) => {
+    test('search filter narrows the grid to matching assets', async ({page}) => {
         await goToAssetsPage(page);
+        const cards = page.locator('[data-testid^="asset-card-"]');
+        const totalBefore = await cards.count();
+        expect(totalBefore, 'mock data must have assets to filter').toBeGreaterThan(0);
+
         const searchInput = page.getByTestId('assets-search-input');
         await expect(searchInput).toBeVisible();
-        // Type a search query that should match at least one mock asset
         await searchInput.fill('Apple');
-        // Should still have the page visible (even if filtered)
-        await expect(page.getByTestId('assets-page')).toBeVisible();
+        // The list republishes data-busy while it refilters (debounced); wait on
+        // that instead of a fixed pause.
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        // The seeded Apple card (identified by content, not position) survives...
+        await expect(cards.filter({hasText: /Apple/i}).first()).toBeVisible();
+        // ...and the grid is strictly smaller — the mock always has non-Apple
+        // assets, and a filter can never grow the set.
+        await expect.poll(() => cards.count(), {timeout: 5_000}).toBeLessThan(totalBefore);
     });
 
     // ========================================================================
@@ -74,15 +90,28 @@ test.describe('Asset List Page', () => {
     });
 
     // ========================================================================
-    // Test 6: Active/All toggle works
+    // Test 6: The view-mode toggle switches between the card grid and the data
+    // table. Written to make no assumption about the initial view (localStorage
+    // may remember it): it drives list → grid and asserts each end state.
+    //
+    // Was: click `assets-active-toggle` then assert only that the page is still
+    // visible — no effect verified. The active/all toggle's real effect (the
+    // badge count and its aria-pressed state) is covered by the dedicated test
+    // further down, so this slot now covers the previously-untested list view.
     // ========================================================================
-    test('active/all toggle switches view', async ({page}) => {
+    test('view-mode toggle switches between card grid and data table', async ({page}) => {
         await goToAssetsPage(page);
-        const toggle = page.getByTestId('assets-active-toggle');
-        await expect(toggle).toBeVisible();
-        await toggle.click();
-        // Page should still be visible after toggle
-        await expect(page.getByTestId('assets-page')).toBeVisible();
+
+        // → List view: the DataTable select-all control appears, cards disappear.
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await expect(page.getByTestId('dt-select-all')).toBeVisible();
+        await expect(page.locator('[data-testid^="asset-card-"]')).toHaveCount(0);
+
+        // → Grid view: the seeded Apple card is back and the table control is gone.
+        await page.getByTestId('view-mode-grid').click();
+        await expect(page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first()).toBeVisible();
+        await expect(page.getByTestId('dt-select-all')).toHaveCount(0);
     });
 
     // ========================================================================
@@ -95,16 +124,21 @@ test.describe('Asset List Page', () => {
     });
 
     // ========================================================================
-    // Test 8: Click card navigates to detail
+    // Test 8: Clicking an asset card navigates to its detail page.
+    //
+    // Was: `firstCard = ...first(); if (firstCard.isVisible().catch(()=>false))
+    // { click; assert }`. Two defects in three lines — an unfiltered `.first()`
+    // (whichever card a neighbour worker inserted ahead) and a silent guard that
+    // let the whole assertion be skipped if that card was merely slow. Now it
+    // targets the seeded Apple card by content and navigates unconditionally.
     // ========================================================================
-    test('clicking asset card navigates to detail page', async ({page}) => {
+    test('clicking an asset card navigates to its detail page', async ({page}) => {
         await goToAssetsPage(page);
-        // Click the first asset card
-        const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        if (await firstCard.isVisible().catch(() => false)) {
-            await firstCard.click();
-            await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
-        }
+        const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
+        await expect(appleCard).toBeVisible({timeout: 10_000});
+        await appleCard.click();
+        await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
+        await expect(page.getByTestId('asset-detail-header')).toBeVisible();
     });
 
     // ========================================================================
@@ -117,41 +151,30 @@ test.describe('Asset List Page', () => {
     });
 
     // ========================================================================
-    // Test 10: Grid/Table view toggle switches view
+    // Test 10: The chosen view mode persists across a reload. ViewModeToggle
+    // writes `assetsViewMode` to per-user localStorage and restores it in a
+    // mount `$effect` — a branch no test covered.
+    //
+    // Was: a loose "grid/table toggle" test that clicked buttons located by
+    // aria-label and asserted a disjunction (`tableVisible || cards===0 ||
+    // cards!==before`) that is true for almost any outcome, with a silent
+    // `.isVisible().catch(()=>false)`. The plain grid↔list switch is now covered
+    // deterministically by the view-mode toggle test above, so this slot takes
+    // the persistence path instead.
     // ========================================================================
-    test('grid/table toggle switches between views', async ({page}) => {
+    test('selected view mode persists across a reload', async ({page}) => {
         await goToAssetsPage(page);
 
-        // Find the toggle buttons by aria-label
-        const assetsPage = page.getByTestId('assets-page');
-        const tableBtn = assetsPage.locator('button[aria-label="Table view"]');
-        const gridBtn = assetsPage.locator('button[aria-label="Grid view"]');
-
-        // Both buttons should be visible
-        await expect(tableBtn).toBeVisible();
-        await expect(gridBtn).toBeVisible();
-
-        // Initially grid view — cards should be present
-        const cardsBeforeToggle = await page.locator('[data-testid^="asset-card-"]').count();
-
-        // Switch to table view
-        await tableBtn.click();
+        // Switch to the table view and confirm it took effect.
+        await page.getByTestId('view-mode-list').click();
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await expect(page.getByTestId('dt-select-all')).toBeVisible();
 
-        // Table should be visible OR cards should disappear (depending on data)
-        const tableVisible = await page
-            .locator('[data-testid="assets-table"], table')
-            .first()
-            .isVisible()
-            .catch(() => false);
-        const cardsAfterToggle = await page.locator('[data-testid^="asset-card-"]').count();
-
-        // Either table appeared or cards disappeared (view switched)
-        expect(tableVisible || cardsAfterToggle === 0 || cardsAfterToggle !== cardsBeforeToggle).toBeTruthy();
-
-        // Switch back to grid
-        await gridBtn.click();
-        await expect(page.getByTestId('assets-page')).toBeVisible();
+        // Reload: the mount effect must restore list view from localStorage.
+        await page.reload();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+        await expect(page.getByTestId('dt-select-all')).toBeVisible();
+        await expect(page.locator('[data-testid^="asset-card-"]')).toHaveCount(0);
     });
 
     test('column menu stays compact and lists daily delta after price', async ({page}) => {
@@ -247,5 +270,85 @@ test.describe('Asset List Page', () => {
         expect(bulkRequests).toHaveLength(1);
         expect(Array.isArray(bulkRequests[0].postData)).toBe(true);
         expect((bulkRequests[0].postData as unknown[]).length).toBeGreaterThan(0);
+    });
+
+    // ========================================================================
+    // Test 14: The Assets ↔ Correlation tab switch. `activeTab === 'correlation'`
+    // swaps the whole list body for the asset-set risk panel — a branch of the
+    // page no test had ever entered. No data is mutated.
+    // ========================================================================
+    test('correlation tab mounts the asset-set risk panel and returns to the list', async ({page}) => {
+        await goToAssetsPage(page);
+        const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i});
+        await expect(appleCard.first()).toBeVisible();
+
+        await page.getByTestId('assets-tab-correlation').click();
+        await expect(page.getByTestId('asset-global-risk-panel')).toBeVisible({timeout: 15_000});
+        // The correlation tab replaces the list body, so the card grid is gone.
+        await expect(page.locator('[data-testid^="asset-card-"]')).toHaveCount(0);
+
+        await page.getByTestId('assets-tab-list').click();
+        await expect(appleCard.first()).toBeVisible();
+        await expect(page.getByTestId('asset-global-risk-panel')).toHaveCount(0);
+    });
+
+    // ========================================================================
+    // Test 15: List-view bulk delete. Owns its data end to end: it creates two
+    // assets tagged with a unique token, filters the list to just those two,
+    // selects them, deletes them through the toolbar's confirm dialog, and
+    // asserts the rows are gone. The `finally` removes them over the API in case
+    // a step fails before the UI delete lands. This is the first test to reach
+    // the DataTable selection, the DataTableToolbar and the bulk-delete confirm.
+    // ========================================================================
+    test('list-view bulk delete removes the selected rows', async ({page}) => {
+        const token = uniqueToken(6);
+        const names = [`E2E BulkDel ${token} A`, `E2E BulkDel ${token} B`];
+        let ids: number[] = [];
+        try {
+            const createRes = await page.request.post('/api/v1/assets', {
+                data: names.map((display_name) => ({display_name, currency: 'EUR', asset_type: 'STOCK'})),
+            });
+            expect(createRes.ok(), `asset create must succeed: ${await createRes.text()}`).toBeTruthy();
+            ids = ((await createRes.json()) as {results: Array<{asset_id: number}>}).results.map((r) => r.asset_id);
+            expect(ids).toHaveLength(2);
+
+            await goToAssetsPage(page);
+            // Narrow the whole list (grid and table share filteredAssets) to just
+            // the two rows this test owns, so select-all selects exactly them and
+            // nothing a neighbour worker created.
+            await page.getByTestId('assets-search-input').fill(token);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+            for (const id of ids) {
+                await expect(page.getByTestId(`dt-row-checkbox-${id}`)).toBeVisible();
+            }
+            // No foreign rows leaked into the filtered view.
+            await expect(page.locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(2);
+
+            await page.getByTestId('dt-select-all').click();
+            const toolbar = page.getByTestId('selection-toolbar');
+            await expect(toolbar).toHaveAttribute('data-selected-count', '2');
+
+            await page.getByTestId('toolbar-action-delete').click();
+            await expect(page.getByTestId('confirm-modal-message')).toBeVisible();
+            await page.getByTestId('confirm-modal-confirm').click();
+
+            // The dialog switches to results mode (a Close button) once the delete
+            // has run — that transition is the signal the API call completed.
+            await expect(page.getByTestId('confirm-modal-close')).toBeVisible({timeout: 15_000});
+            await page.getByTestId('confirm-modal-close').click();
+
+            // Both owned rows are gone from the still-filtered table.
+            for (const id of ids) {
+                await expect(page.getByTestId(`dt-row-checkbox-${id}`)).toHaveCount(0);
+            }
+        } finally {
+            for (const id of ids) {
+                await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
+            }
+        }
     });
 });

@@ -19,8 +19,9 @@
  *
  * Dates that must be "in the past whatever today is" are hardcoded in 2024;
  * anything about *now* (preset windows, the future guard) is computed relative to
- * today with the component's own UTC-based `toISOString().slice(0,10)`, so a
- * literal date can never quietly stop testing the rule the day it slips by.
+ * today from the **local** calendar fields, so a literal date can never quietly stop
+ * testing the rule the day it slips by — and the oracle cannot agree with the
+ * component by making the same mistake.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
@@ -31,14 +32,28 @@ import DateRangePicker from './DateRangePicker.svelte';
 const DEF_START = '2024-01-15';
 const DEF_END = '2024-02-20';
 
-/** ISO for today / an offset from it, computed exactly like the component does. */
+/**
+ * Today, and an offset from it, on the **user's** calendar.
+ *
+ * These used to be written "exactly like the component does" — `new Date()` read at
+ * local time and re-serialised through `toISOString()`, which is UTC. That made the
+ * oracle share the component's bug: east of Greenwich both were a day early, they
+ * agreed, and the preset tests passed while every preset started on the wrong day.
+ * Verified: reverting `1W` to the old arithmetic left all 17 tests green.
+ *
+ * An oracle has to come from the rule, not from the implementation. `todayIso` is the
+ * shared helper the component now uses; `offsetISO` is deliberately written out here
+ * rather than calling the shared `addDays`, so a mistake in that helper cannot hide
+ * itself by being on both sides of the assertion.
+ */
 function todayISO(): string {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function offsetISO(days: number): string {
     const d = new Date();
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function setup(overrides: Record<string, unknown> = {}) {
@@ -80,6 +95,27 @@ describe('DateRangePicker — presets', () => {
         fireEvent.click(screen.getByTestId('date-preset-1w'));
         // 1W is "seven days back to today" — end is today, start is exactly a week earlier.
         expect(onchange).toHaveBeenCalledWith(offsetISO(-7), todayISO());
+    });
+
+    it('computes a preset from the calendar day the user is on, not from UTC', () => {
+        // 22:30 UTC on 14 June is 00:30 on the 15th in Rome. That two-hour window after
+        // midnight is the *only* time the two readings disagree, which is why this test
+        // freezes the clock: run at any other hour it passes whatever the component does,
+        // and means nothing. Verified — reverting `1W` to the old `toISOString()` form
+        // left all 17 tests green until this one existed.
+        //
+        // The expected values are derived from the frozen instant's LOCAL fields, so the
+        // assertion states the rule ("a preset counts from the user's today") in every
+        // timezone, rather than hardcoding what Rome happens to see.
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-06-14T22:30:00Z'));
+        try {
+            const {onchange} = setup();
+            fireEvent.click(screen.getByTestId('date-preset-1w'));
+            expect(onchange).toHaveBeenCalledWith(offsetISO(-7), todayISO());
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('marks the chosen preset active and no other', async () => {

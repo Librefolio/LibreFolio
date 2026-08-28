@@ -19,6 +19,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
+    import {addDays, addMonths, daysBetween, midpointDate, todayIso as todayISO} from '$lib/utils/dateOnly';
     import {Plus, Scissors, X, Link2, Trash2, CalendarDays, CalendarClock, Info} from 'lucide-svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef, RowAction, CellContent} from '$lib/components/table/types';
@@ -119,32 +120,13 @@
     // Date Helpers
     // =========================================================================
 
-    function addDays(isoDate: string, days: number): string {
-        const d = new Date(isoDate + 'T00:00:00');
-        d.setDate(d.getDate() + days);
-        return d.toISOString().slice(0, 10);
-    }
-
-    function addMonths(isoDate: string, months: number): string {
-        const d = new Date(isoDate + 'T00:00:00');
-        d.setMonth(d.getMonth() + months);
-        return d.toISOString().slice(0, 10);
-    }
-
-    function daysBetween(start: string, end: string): number {
-        const s = new Date(start + 'T00:00:00');
-        const e = new Date(end + 'T00:00:00');
-        return Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24));
-    }
-
-    function todayISO(): string {
-        return new Date().toISOString().slice(0, 10);
-    }
-
-    function midpointDate(start: string, end: string): string {
-        const days = daysBetween(start, end);
-        return addDays(start, Math.floor(days / 2));
-    }
+    // Calendar-day arithmetic lives in $lib/utils/dateOnly. The versions that used to
+    // sit here read a date at *local* midnight and wrote it back in UTC, so east of
+    // Greenwich every result was a day behind: under TZ=Europe/Rome even
+    // addDays('2024-06-01', +1) returned 2024-06-01 — it never advanced at all.
+    // "Add period" therefore started a period on the day the previous one ended, and
+    // a split gave both halves the same boundary day. Correct only under TZ=UTC,
+    // which is why no test ever caught it.
 
     // =========================================================================
     // Maturation Frequency Validation
@@ -178,7 +160,29 @@
 
     let rows: ScheduleRow[] = $state([]);
     let selectedIds: string[] = $state([]);
-    let internalUpdate = false;
+    /**
+     * The payload this component last handed to the parent, serialised.
+     *
+     * It replaces a boolean that meant "skip the next update, whatever it is". The
+     * parent echoes back what it receives, and reloading from that echo would undo
+     * the edit that produced it — so an echo does have to be skipped. But a count
+     * cannot tell an echo from a genuinely different value, and when the two got out
+     * of step the guard ate the wrong one: the update was dropped in silence and the
+     * component kept showing the stale schedule, ready to save it back over the new
+     * data.
+     *
+     * There are real ways for them to get out of step. `ProviderAssignmentSection`
+     * reassigns `providerParams` from three places, and one of them —
+     * `handleProviderChange` — sets it to `null` when the user picks another provider.
+     * And this component emits on its own from the `queueMicrotask` below when it
+     * mounts on an empty value, arming the guard with no user edit behind it, in time
+     * to swallow the real data arriving from a fetch.
+     *
+     * So the question is answered rather than assumed: skip only what matches what was
+     * sent. Same shape as the WAC anti-bounce fix — an identity inferred instead of
+     * verified.
+     */
+    let lastEmitted: string | null = null;
 
     // Initial Value + Currency + Asset Events state
     let initialValue: number = $state(10000);
@@ -193,10 +197,11 @@
     $effect(() => {
         // Read value to track reactivity
         const v = value;
-        if (internalUpdate) {
-            internalUpdate = false;
+        if (lastEmitted !== null && JSON.stringify(v) === lastEmitted) {
+            lastEmitted = null;
             return;
         }
+        lastEmitted = null;
         rows = deserializeRows(v);
         // initial_value is now a Currency object: {code: string, amount: string|number}
         if (v?.initial_value && typeof v.initial_value === 'object') {
@@ -390,8 +395,10 @@
     }
 
     function emitChange() {
-        internalUpdate = true;
-        onchange?.(serialize(rows));
+        const payload = serialize(rows);
+        // Remember *what* was sent, so the echo can be recognised rather than counted.
+        lastEmitted = JSON.stringify(payload);
+        onchange?.(payload);
     }
 
     // =========================================================================
@@ -968,6 +975,7 @@
     let rowActions: RowAction<ScheduleRow>[] = $derived([
         {
             id: 'split',
+            testid: 'schedule-action-split',
             icon: Scissors,
             label: () => $t('assets.schedule.split'),
             visible: (row) => !row.isLate,
@@ -979,6 +987,7 @@
         },
         {
             id: 'delete',
+            testid: 'schedule-action-delete',
             icon: X,
             label: () => $t('common.delete'),
             variant: 'danger',
@@ -1073,6 +1082,7 @@
                 <input
                     id="initial-value"
                     type="number"
+                    data-testid="schedule-initial-value"
                     use:numericArrows
                     min="0"
                     step="100"
@@ -1171,6 +1181,7 @@
                     class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md
                            bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300
                            hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
+                    data-testid="schedule-clear-selection"
                     onclick={() => {
                         selectedIds = [];
                     }}
@@ -1183,6 +1194,7 @@
                 {#each bulkActions as action}
                     <button
                         type="button"
+                        data-testid="schedule-bulk-{action.id}"
                         onclick={action.onClick}
                         disabled={action.disabled}
                         title={typeof action.label === 'function' ? action.label() : action.label}
@@ -1203,6 +1215,7 @@
         {#if !readonly && !disabled}
             <button
                 type="button"
+                data-testid="schedule-add-period"
                 onclick={handleAddPeriod}
                 class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
                        border border-gray-200 dark:border-slate-600
@@ -1218,7 +1231,7 @@
     <!-- DataTable or Empty State -->
     {#if normalRows.length === 0 && (!lateRow || !lateRow.enabled)}
         <!-- Empty state -->
-        <div class="p-8 border border-dashed border-gray-300 dark:border-slate-600 rounded-xl text-center space-y-3">
+        <div class="p-8 border border-dashed border-gray-300 dark:border-slate-600 rounded-xl text-center space-y-3" data-testid="schedule-empty">
             <div class="text-3xl">📅</div>
             <div class="text-sm text-gray-500 dark:text-gray-400">
                 {$t('assets.schedule.emptyTitle')}
@@ -1229,6 +1242,7 @@
             {#if !readonly && !disabled}
                 <button
                     type="button"
+                    data-testid="schedule-add-first-period"
                     onclick={handleAddPeriod}
                     class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
                            bg-libre-green text-white hover:bg-libre-green-dark transition-colors"
@@ -1271,6 +1285,8 @@
             <span>⚡ {$t('assets.schedule.lateInterest')}</span>
             <button
                 type="button"
+                data-testid="schedule-late-toggle"
+                data-state={lateRow.enabled ? 'on' : 'off'}
                 onclick={toggleLateInterest}
                 disabled={disabled || readonly}
                 aria-label="Toggle late interest"
@@ -1296,6 +1312,7 @@
             {#if !readonly && !disabled}
                 <button
                     type="button"
+                    data-testid="schedule-add-event"
                     onclick={handleAddEvent}
                     class="flex items-center gap-1 px-2 py-1 text-xs rounded-md
                            border border-gray-200 dark:border-slate-600
@@ -1321,7 +1338,7 @@
                     </thead>
                     <tbody>
                         {#each assetEvents as evt, idx}
-                            <tr class="border-t border-gray-100 dark:border-slate-700">
+                            <tr class="border-t border-gray-100 dark:border-slate-700" data-testid="schedule-event-row" data-event-index={idx}>
                                 <td class="px-2 py-1">
                                     <SingleDatePicker value={evt.date} label="" compact={true} allowFuture={true} onchange={(d) => handleEventFieldChange(idx, 'date', d)} />
                                 </td>
@@ -1331,6 +1348,7 @@
                                 <td class="px-2 py-1">
                                     <input
                                         type="number"
+                                        data-testid="schedule-event-value-{idx}"
                                         use:numericArrows
                                         value={evt.value}
                                         step={evt.type === 'MATURITY_SETTLEMENT' ? '100' : '0.01'}
@@ -1344,6 +1362,7 @@
                                 <td class="px-2 py-1">
                                     <input
                                         type="text"
+                                        data-testid="schedule-event-notes-{idx}"
                                         value={evt.notes}
                                         placeholder="optional"
                                         oninput={(e) => handleEventFieldChange(idx, 'notes', e.currentTarget.value)}
@@ -1355,7 +1374,7 @@
                                 </td>
                                 <td class="px-2 py-1">
                                     {#if !readonly && !disabled}
-                                        <button type="button" onclick={() => handleDeleteEvent(idx)} class="text-red-400 hover:text-red-600 transition-colors">
+                                        <button type="button" data-testid="schedule-event-delete-{idx}" onclick={() => handleDeleteEvent(idx)} class="text-red-400 hover:text-red-600 transition-colors">
                                             <X size={14} />
                                         </button>
                                     {/if}
@@ -1373,7 +1392,7 @@
     </div>
 
     <!-- Status banner -->
-    <div class="flex items-center gap-2 text-xs {statusBanner.ok ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}">
+    <div class="flex items-center gap-2 text-xs {statusBanner.ok ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}" data-testid="schedule-status" data-valid={statusBanner.ok ? 'true' : 'false'}>
         <span>{statusBanner.icon}</span>
         <span>{statusBanner.text}</span>
     </div>

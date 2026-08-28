@@ -18,6 +18,8 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeNumber, safeScalar, safeString} from '$lib/types';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -224,26 +226,9 @@
     let dataZoomResolutionCleanup: (() => void) | null = null;
     let lastResolutionInputRefs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], LotPriceHistoryPoint[]] | null = null;
 
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
-
     function translatedOr(key: string, fallback: string): string {
         const translated = $_(key);
         return !translated || translated === key ? fallback : translated;
-    }
-
-    function safeScalar<T>(value: T | Array<T | null> | null | undefined): T | null {
-        if (Array.isArray(value)) return value[0] ?? null;
-        return value ?? null;
-    }
-
-    function safeString(value: string | Array<string | null> | null | undefined): string | null {
-        return safeScalar(value);
-    }
-
-    function safeInt(value: number | Array<number | null> | null | undefined): number | null {
-        return safeScalar(value);
     }
 
     function parseNumber(value: string | number | Array<string | number | null> | null | undefined): number | null {
@@ -1620,7 +1605,7 @@
             rows.push(markerTooltipRow(labels.quantity, quantity == null ? '—' : formatQuantityValue(quantity)));
             rows.push(markerTooltipRow(labels.unitPrice, formatMaybeMoney(unitPrice)));
             rows.push(markerTooltipRow(labels.openingValue, formatMaybeMoney(openingValue)));
-            rows.push(markerTooltipRow(labels.broker, brokerName(safeInt(event.broker_id))));
+            rows.push(markerTooltipRow(labels.broker, brokerName(safeNumber(event.broker_id))));
         } else if (event.kind === 'SELL') {
             const quantity = parseNumber(event.quantity);
             const salePrice = parseNumber(event.close_unit_price ?? event.unit_price);
@@ -1635,8 +1620,8 @@
             rows.push(markerTooltipRow(labels.proceeds, formatMaybeMoney(proceeds)));
             rows.push(markerTooltipRow(labels.realizedPnl, formatMaybeMoney(realizedPnl)));
         } else if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') {
-            const sourceBrokerId = safeInt(event.source_broker_id);
-            const destinationBrokerId = safeInt(event.destination_broker_id);
+            const sourceBrokerId = safeNumber(event.source_broker_id);
+            const destinationBrokerId = safeNumber(event.destination_broker_id);
             rows.push(markerTooltipRow(labels.from, brokerName(sourceBrokerId)));
             rows.push(markerTooltipRow(labels.to, brokerName(destinationBrokerId)));
             rows.push(markerTooltipRow(labels.quantity, eventQuantityText(event) ?? '—'));

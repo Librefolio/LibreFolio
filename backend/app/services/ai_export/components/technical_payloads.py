@@ -28,8 +28,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import Field, FiniteFloat, model_validator
 
+from backend.app.schemas.common import StrictModel
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
     SignalBandComponent,
@@ -39,15 +40,13 @@ from backend.app.schemas.signals import (
 )
 
 
-class TechnicalBucket(BaseModel):
+class TechnicalBucket(StrictModel):
     """One OHLC-style bucket for a continuous (single- or multi-output) series.
 
     Empty buckets are explicit: ``first``/``minimum``/``maximum``/``last`` are
     all ``None`` and ``observation_count == 0`` (never synthesized/carried
     forward - see `temporal.aggregators.aggregate_continuous_multi_output`).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     start_date: date
     end_date: date
@@ -87,10 +86,8 @@ class ReturnVolatilityBucket(TechnicalBucket):
     volatility: float | None = None
 
 
-class AssetPriceSeriesPayload(BaseModel):
+class AssetPriceSeriesPayload(StrictModel):
     """One held asset's price/return OHLC-bucketed series (Portfolio/Broker universe)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     portfolio_weight_ratio: float | None = Field(
@@ -103,10 +100,8 @@ class AssetPriceSeriesPayload(BaseModel):
     latest_date: date | None = None
 
 
-class AssetOhlcReturnsPayload(BaseModel):
+class AssetOhlcReturnsPayload(StrictModel):
     """`asset.ohlc_returns`: single-target observed-close bucket series."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     currency: str
@@ -116,10 +111,8 @@ class AssetOhlcReturnsPayload(BaseModel):
     latest_date: date | None = None
 
 
-class PortfolioTechnicalPricesPayload(BaseModel):
+class PortfolioTechnicalPricesPayload(StrictModel):
     """`portfolio.technical_prices` / `broker.technical_prices`: per-asset price/return series over the full eligible universe."""
-
-    model_config = ConfigDict(extra="forbid")
 
     price_basis: Literal["observed_close"] = "observed_close"
     assets: tuple[AssetPriceSeriesPayload, ...]
@@ -145,29 +138,23 @@ class PortfolioTechnicalPricesPayload(BaseModel):
     )
 
 
-class TechnicalDatedValue(BaseModel):
+class TechnicalDatedValue(StrictModel):
     """One finite value paired with its real observation date."""
-
-    model_config = ConfigDict(extra="forbid")
 
     value: FiniteFloat
     date: date
 
 
-class TechnicalSingleValueCell(BaseModel):
+class TechnicalSingleValueCell(StrictModel):
     """Compact cell for a bucket containing exactly one finite observation."""
-
-    model_config = ConfigDict(extra="forbid")
 
     kind: Literal["single"] = "single"
     value: FiniteFloat
     date: date
 
 
-class TechnicalRangeValueCell(BaseModel):
+class TechnicalRangeValueCell(StrictModel):
     """Complete dated statistics for a bucket containing multiple observations."""
-
-    model_config = ConfigDict(extra="forbid")
 
     kind: Literal["range"] = "range"
     observation_count: int = Field(..., ge=2)
@@ -195,10 +182,8 @@ TechnicalIndicatorCell = Annotated[
 ]
 
 
-class IndicatorOutputColumn(BaseModel):
+class IndicatorOutputColumn(StrictModel):
     """Plugin-owned metadata for one scalar output or one band component."""
-
-    model_config = ConfigDict(extra="forbid")
 
     column_key: str
     output_key: str
@@ -213,10 +198,8 @@ class IndicatorOutputColumn(BaseModel):
     latest: TechnicalDatedValue | None = None
 
 
-class IndicatorBucketRow(BaseModel):
+class IndicatorBucketRow(StrictModel):
     """One temporal row shared by every output column of one plugin instance."""
-
-    model_config = ConfigDict(extra="forbid")
 
     start_date: date
     end_date: date
@@ -245,14 +228,12 @@ class IndicatorBucketRow(BaseModel):
         return self
 
 
-class IndicatorTablePayload(BaseModel):
+class IndicatorTablePayload(StrictModel):
     """One plugin instance with class-aware rows plus whole-period state.
 
     Plugin and output semantics are copied from `describe_for_ai()` and
     `SignalOutputSpec`; AI Export never re-derives indicator meaning.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     instance_id: str
     signal_code: str
@@ -297,10 +278,8 @@ class IndicatorTablePayload(BaseModel):
         return self
 
 
-class AssetIndicatorsPayload(BaseModel):
+class AssetIndicatorsPayload(StrictModel):
     """One held asset's full curated indicator bundle (Portfolio/Broker universe)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     portfolio_weight_ratio: float | None = Field(
@@ -310,10 +289,8 @@ class AssetIndicatorsPayload(BaseModel):
     indicators: tuple[IndicatorTablePayload, ...]
 
 
-class UniverseIndicatorsPayload(BaseModel):
+class UniverseIndicatorsPayload(StrictModel):
     """`portfolio.technical_indicators` / `broker.technical_indicators`: per-asset indicators, full universe."""
-
-    model_config = ConfigDict(extra="forbid")
 
     assets: tuple[AssetIndicatorsPayload, ...]
     eligible_asset_count: int = Field(
@@ -350,18 +327,14 @@ class UniverseIndicatorsPayload(BaseModel):
     )
 
 
-class SingleTargetIndicatorsPayload(BaseModel):
+class SingleTargetIndicatorsPayload(StrictModel):
     """`asset.indicators` / `fx.indicators`: the curated indicator bundle for one target."""
-
-    model_config = ConfigDict(extra="forbid")
 
     indicators: tuple[IndicatorTablePayload, ...]
 
 
-class TechnicalNumericBounds(BaseModel):
+class TechnicalNumericBounds(StrictModel):
     """Optional plugin-owned numerical bounds for one rendered value."""
-
-    model_config = ConfigDict(extra="forbid")
 
     minimum: FiniteFloat | None = None
     maximum: FiniteFloat | None = None
@@ -375,10 +348,8 @@ class TechnicalNumericBounds(BaseModel):
         return self
 
 
-class TechnicalEventPayload(BaseModel):
+class TechnicalEventPayload(StrictModel):
     """One preserved-verbatim technical state-change event (crossover/threshold-crossing)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     entity_id: str = Field(..., min_length=1)
     date: date
@@ -392,10 +363,8 @@ class TechnicalEventPayload(BaseModel):
     asset_id: int | None = None
 
 
-class TechnicalEventBucket(BaseModel):
+class TechnicalEventBucket(StrictModel):
     """Every selected event assigned to one bucket, verbatim."""
-
-    model_config = ConfigDict(extra="forbid")
 
     start_date: date
     end_date: date
@@ -416,10 +385,8 @@ class TechnicalEventBucket(BaseModel):
         return self
 
 
-class TechnicalEventSelectionSummary(BaseModel):
+class TechnicalEventSelectionSummary(StrictModel):
     """Complete detection/export statistics for one entity + annotation key."""
-
-    model_config = ConfigDict(extra="forbid")
 
     entity_id: str = Field(..., min_length=1)
     annotation_key: str = Field(..., min_length=1)
@@ -453,10 +420,8 @@ class TechnicalEventSelectionSummary(BaseModel):
         return self
 
 
-class TechnicalEventsPayload(BaseModel):
+class TechnicalEventsPayload(StrictModel):
     """Selected technical events plus complete per-group detection statistics."""
-
-    model_config = ConfigDict(extra="forbid")
 
     buckets: tuple[TechnicalEventBucket, ...]
     detected_event_count: int = Field(..., ge=0)
@@ -480,15 +445,13 @@ class TechnicalEventsPayload(BaseModel):
         return self
 
 
-class BreadthStateBucket(BaseModel):
+class BreadthStateBucket(StrictModel):
     """Weighted/unweighted share of the eligible universe currently in one reference-level state.
 
     ``state`` is derived generically from the owning plugin's own
     `SignalOutputSpec.default_reference_levels` (e.g. RSI/MFI's own
     oversold/overbought labels) - never a hardcoded threshold.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     signal_code: str
     output_key: str
@@ -517,10 +480,8 @@ class BreadthStateBucket(BaseModel):
     )
 
 
-class UniverseBreadthPayload(BaseModel):
+class UniverseBreadthPayload(StrictModel):
     """`portfolio.technical_breadth` / `broker.technical_breadth`: reconciled coverage + breadth states."""
-
-    model_config = ConfigDict(extra="forbid")
 
     eligible_asset_count: int = Field(
         ...,
@@ -557,10 +518,8 @@ class UniverseBreadthPayload(BaseModel):
     states: tuple[BreadthStateBucket, ...]
 
 
-class FxRateOhlcPayload(BaseModel):
+class FxRateOhlcPayload(StrictModel):
     """`fx.rate_ohlc`: daily base->quote conversion rate, OHLC-bucketed (``"rate"`` key)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str
@@ -569,10 +528,8 @@ class FxRateOhlcPayload(BaseModel):
     latest_date: date | None = None
 
 
-class FxReturnsVolatilityPayload(BaseModel):
+class FxReturnsVolatilityPayload(StrictModel):
     """`fx.returns_volatility`: daily rate return + bucket-local realized volatility."""
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str

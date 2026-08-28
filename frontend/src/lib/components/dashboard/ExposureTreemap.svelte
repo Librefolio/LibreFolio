@@ -24,6 +24,7 @@
     import {ensurePluginIconsLoaded, getBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
     import {attachTreemapZoomGuard, resetTreemapView, panTreemapBy, type TreemapZoomGuardHandle} from '$lib/components/charts/echartsTreemapZoomGuard';
     import {truncateName} from '$lib/utils/text';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     interface Holding {
         asset_id: number;
@@ -76,23 +77,6 @@
     const UPPER_LABEL_ICON_SIZE = 12;
 
     type TreeNodeLevel = 'broker' | 'type' | 'asset';
-
-    function safeNum(v: string | (string | null)[] | null | undefined): number | null {
-        const s = Array.isArray(v) ? (v[0] ?? null) : v;
-        if (s == null) return null;
-        const n = parseFloat(s);
-        return isNaN(n) ? null : n;
-    }
-
-    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
 
     /** Broker names are user-entered data (not translated); asset TYPE is a backend
      *  enum and must go through i18n (`assets.types.X`, plural namespace). */
@@ -338,7 +322,7 @@
         let total = 0;
         let min = Infinity;
         for (const h of holdings) {
-            const val = safeNum(h.current_value);
+            const val = safeDecimal(h.current_value);
             if (val == null || val <= 0) continue;
             total += val;
             if (val < min) min = val;
@@ -375,12 +359,12 @@
         >();
 
         for (const h of holdings) {
-            const val = safeNum(h.current_value);
+            const val = safeDecimal(h.current_value);
             if (val == null || val <= 0) continue;
 
-            const bid = safeInt(h.broker_id);
+            const bid = safeNumber(h.broker_id);
             const brokerInfo = bid ? getBrokerInfo(bid) : null;
-            const bName = safeStr(h.broker_name) || brokerInfo?.name || 'Unknown';
+            const bName = safeString(h.broker_name) || brokerInfo?.name || 'Unknown';
             const aType = h.asset_type || 'Unknown';
             const brokerKey = bid != null ? `broker_${bid}` : `broker_name_${bName}`;
 
@@ -413,9 +397,9 @@
             }
             const typeNode = brokerNode.types.get(aType)!;
 
-            const glPct = safeNum(h.gain_loss_percent);
-            const gl = safeNum(h.gain_loss);
-            const weight = safeNum(h.nav_weight_percent);
+            const glPct = safeDecimal(h.gain_loss_percent);
+            const gl = safeDecimal(h.gain_loss);
+            const weight = safeDecimal(h.nav_weight_percent);
 
             // Roll up sums for the type/broker group tooltips below — value and
             // weight (both already NAV-normalized percentages/amounts) and gl

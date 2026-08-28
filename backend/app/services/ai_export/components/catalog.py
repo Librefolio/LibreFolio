@@ -14,8 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from pydantic import BaseModel, ConfigDict
-
+from backend.app.schemas.common import StrictModel
 from backend.app.services.ai_export.components.asset_fx_registry import (
     ASSET_FX_COMPONENTS,
 )
@@ -47,7 +46,7 @@ class ComponentNotImplementedError(RuntimeError):
     """
 
 
-class FoundationComponentPayload(BaseModel):
+class FoundationComponentPayload(StrictModel):
     """Documents the intended future payload shape for foundation components.
 
     Never actually produced by a production builder (see
@@ -55,8 +54,6 @@ class FoundationComponentPayload(BaseModel):
     has a concrete, versionable schema placeholder for workstreams E1/E2 to
     replace or extend.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     component_id: str
     domain: Domain
