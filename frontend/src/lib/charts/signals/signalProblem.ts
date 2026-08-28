@@ -1,5 +1,6 @@
 import type {SignalInputField} from './ChartSignal';
 import type {SignalInstanceResult, SignalInstanceStatus} from './resultMapper';
+import {finiteNumber} from '$lib/utils/core/finiteNumber';
 
 const INPUT_FIELDS: SignalInputField[] = ['open', 'high', 'low', 'close', 'volume'];
 
@@ -77,10 +78,6 @@ function firstString(value: unknown): string | null {
     if (typeof value === 'string') return value;
     if (!Array.isArray(value)) return null;
     return value.find((item): item is string => typeof item === 'string') ?? null;
-}
-
-function finiteNumber(value: unknown): number | null {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function stringList(value: unknown): string[] {

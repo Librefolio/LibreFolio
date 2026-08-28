@@ -8,6 +8,7 @@
 -->
 <script lang="ts">
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
         iconUrl: string;
@@ -42,10 +43,7 @@
     }
 
     function cancelLongPress() {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
+        longPressTimer = clearTimer(longPressTimer);
     }
 
     function handleClick(e: MouseEvent) {

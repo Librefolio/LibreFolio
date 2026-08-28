@@ -344,7 +344,7 @@
                     </button>
                 {/if}
             </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onClose}>
+            <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={onClose} data-testid="parse-detail-close">
                 {$t('common.close')}
             </button>
         </div>

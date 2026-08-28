@@ -41,7 +41,7 @@ from enum import StrEnum
 
 from pydantic import Field, model_validator
 
-from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
+from backend.app.schemas.common import Currency, CurrencyCode, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioHolding, PortfolioReportResponse, PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
@@ -129,7 +129,7 @@ class CurrencyAllocationSlice(StrictModel):
     ``None`` only when there is no valued market value to divide by.
     """
 
-    currency: str | None = Field(None, description="Native valuation currency; None == undetermined/unknown bucket.")
+    currency: CurrencyCode | None = Field(None, description="Native valuation currency; None == undetermined/unknown bucket.")
     amount: Currency
     percent: SafeDecimal | None = None
     position_count: int = Field(ge=0)
@@ -151,7 +151,7 @@ class BrokerConcentrationContextPayload(StrictModel):
 
     broker_id: int
     as_of: Date
-    target_currency: str
+    target_currency: CurrencyCode
     position_count: int = Field(ge=0)
     market_value: Currency | None = None
     largest_position_weight_percent: SafeDecimal | None = None
@@ -301,7 +301,7 @@ class BrokerConcentrationComparisonPayload(StrictModel):
     message: str | None = None
 
     broker_id: int
-    target_currency: str
+    target_currency: CurrencyCode
 
     broker_position_count: int | None = Field(None, ge=0)
     portfolio_position_count: int | None = Field(None, ge=0)

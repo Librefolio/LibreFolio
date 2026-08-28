@@ -16,6 +16,8 @@
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {lotStateColor} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {translateOr} from '$lib/utils/core/translateOr';
+    import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
     import {safeNumber, safeScalar, safeString} from '$lib/types';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -245,23 +247,12 @@
         return formatDate(value, {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
-    function formatAxisDate(value: number, withYear = false): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
-    }
-
     function formatQuantity(value: number): string {
         return value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
     }
 
     function clamp(value: number, min: number, max: number): number {
         return Math.min(max, Math.max(min, value));
-    }
-
-    function translatedOr(key: string, fallback: string): string {
-        const translated = $t(key);
-        return !translated || translated === key ? fallback : translated;
     }
 
     function formatMoneyField(value: unknown): string {
@@ -662,7 +653,7 @@
     function eventMarkerLabel(kind: EventMarkerKind): string {
         const keyKind = kind === 'TRANSFER' ? 'TRANSFER_DEPART' : kind;
         const fallback = kind === 'ADJUSTMENT_IN' ? 'Adjustment In' : kind === 'ADJUSTMENT_OUT' ? 'Adjustment Out' : kind === 'TRANSFER' ? 'Transfer' : kind === 'SELL' ? 'Sale' : kind === 'SPLIT' ? 'Split' : 'Buy';
-        return translatedOr(`brokers.lots.chartMarkers.eventType.${keyKind}`, fallback);
+        return translateOr($t, `brokers.lots.chartMarkers.eventType.${keyKind}`, fallback);
     }
 
     function isSplitTransition(prev: RenderedSegment, next: RenderedSegment): boolean {
@@ -777,9 +768,9 @@
     }
 
     function compactStateLabel(lot: LotModel | undefined, openQuantity: number, originalQuantity: number): string {
-        if (openQuantity <= 0) return translatedOr('brokers.lots.modal.state.closed', 'Closed');
-        if (lot?.states.includes('PARTIALLY_CLOSED') || openQuantity < originalQuantity) return translatedOr('brokers.lots.modal.state.partially_closed', 'Partially closed');
-        return translatedOr('brokers.lots.modal.state.open', 'Open');
+        if (openQuantity <= 0) return translateOr($t, 'brokers.lots.modal.state.closed', 'Closed');
+        if (lot?.states.includes('PARTIALLY_CLOSED') || openQuantity < originalQuantity) return translateOr($t, 'brokers.lots.modal.state.partially_closed', 'Partially closed');
+        return translateOr($t, 'brokers.lots.modal.state.open', 'Open');
     }
 
     function latestLotEndDate(lotId: number): string | null {
@@ -814,43 +805,43 @@
         const isEstimatedAtCost = valueSource === 'ESTIMATED_AT_COST';
         const currentValue = firstPresentUnknown(lotDto?.open_value, lotDto?.total_value);
         const valueField = isClosedLot ? lotDto?.original_cost : currentValue;
-        const valueLabel = isClosedLot ? translatedOr('brokers.lots.tooltip.initialValue', 'Initial value') : translatedOr('brokers.lots.currentValue', 'Current value');
+        const valueLabel = isClosedLot ? translateOr($t, 'brokers.lots.tooltip.initialValue', 'Initial value') : translateOr($t, 'brokers.lots.currentValue', 'Current value');
         const assetIncome = parseUnknownNumber(lotDto?.asset_income);
-        const quantityLine = isClosedLot ? `${formatQuantity(originalQuantity)} → 0 ${translatedOr('brokers.lots.tooltip.shares', 'shares')}` : `${formatQuantity(openQuantity)} ${translatedOr('brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${formatQuantity(originalQuantity)}`;
+        const quantityLine = isClosedLot ? `${formatQuantity(originalQuantity)} → 0 ${translateOr($t, 'brokers.lots.tooltip.shares', 'shares')}` : `${formatQuantity(openQuantity)} ${translateOr($t, 'brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${formatQuantity(originalQuantity)}`;
         const closeDate = isClosedLot ? (latestLotEndDate(meta.lotId) ?? meta.endDate) : null;
-        const footer = isClosedLot ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}` : `${translatedOr('brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
+        const footer = isClosedLot ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}` : `${translateOr($t, 'brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
         let html = buildTooltipHeader(escapeHtml(lotLabel(openingDate)), theme.textColor);
         html += `<div style="margin-top:6px;font-weight:700;color:${theme.textColor}">${escapeHtml(brokerLabel)} · ${escapeHtml(meta.direction)} · ${escapeHtml(stateLabel)}</div>`;
         html += `<div style="margin-top:2px;color:${theme.mutedColor}">${escapeHtml(quantityLine)}</div>`;
         html += buildTooltipDivider(theme.border);
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.openingPriceReference', 'Opening price')), escapeHtml(formatMoneyField(firstPresentUnknown(lotDto?.opening_unit_price, meta.unitPrice))));
+        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.openingPriceReference', 'Opening price')), escapeHtml(formatMoneyField(firstPresentUnknown(lotDto?.opening_unit_price, meta.unitPrice))));
         if (isEstimatedAtCost && !isClosedLot) {
             const estimatedColor = themeDark ? '#fbbf24' : '#d97706';
-            const estLabel = `<span style="color:${estimatedColor};font-weight:600">⚠ ${escapeHtml(translatedOr('brokers.lots.estimatedCurrentValue', 'Estimated current value'))}</span>`;
+            const estLabel = `<span style="color:${estimatedColor};font-weight:600">⚠ ${escapeHtml(translateOr($t, 'brokers.lots.estimatedCurrentValue', 'Estimated current value'))}</span>`;
             const estValue = `<span style="color:${estimatedColor}">${escapeHtml(formatMoneyField(valueField))}</span>`;
             html += buildTooltipRow(estLabel, estValue);
         } else {
             html += buildTooltipRow(escapeHtml(valueLabel), escapeHtml(formatMoneyField(valueField)));
         }
         if (assetIncome != null && assetIncome !== 0) {
-            html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.assetIncome', 'Income')), signedColorField(assetIncome, formatSignedMoneyField, themeDark));
+            html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.assetIncome', 'Income')), signedColorField(assetIncome, formatSignedMoneyField, themeDark));
         }
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.tooltip.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
-        html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.totalReturn', 'Total return')), signedColorField(lotDto?.total_return, formatSignedPercentField, themeDark));
+        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.tooltip.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
+        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalReturn', 'Total return')), signedColorField(lotDto?.total_return, formatSignedPercentField, themeDark));
         const allocatedFees = parseUnknownNumber(lotDto?.allocated_fees);
         const allocatedTaxes = parseUnknownNumber(lotDto?.allocated_taxes);
         const hasCosts = (allocatedFees != null && allocatedFees !== 0) || (allocatedTaxes != null && allocatedTaxes !== 0);
         if (hasCosts) {
             const costColor = themeDark ? '#f87171' : '#dc2626';
             if (allocatedFees != null && allocatedFees !== 0) {
-                html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.allocatedFees', 'Fees')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedFees))}</span>`);
+                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedFees', 'Fees')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedFees))}</span>`);
             }
             if (allocatedTaxes != null && allocatedTaxes !== 0) {
-                html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.allocatedTaxes', 'Taxes')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedTaxes))}</span>`);
+                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedTaxes', 'Taxes')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedTaxes))}</span>`);
             }
             const netUnavailable = safeUnknownString(lotDto?.net_metrics_status) === 'UNAVAILABLE';
             const netValue = netUnavailable ? escapeHtml('\u2014') : signedColorField(lotDto?.net_total_pnl, formatSignedMoneyField, themeDark);
-            html += buildTooltipRow(escapeHtml(translatedOr('brokers.lots.netTotalPnl', 'Net P&L')), netValue);
+            html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.netTotalPnl', 'Net P&L')), netValue);
         }
         html += buildTooltipDivider(theme.border);
         html += `<div style="margin-top:4px;color:${theme.mutedColor}">${escapeHtml(footer)}</div>`;
@@ -1138,7 +1129,7 @@
                     show: false,
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate(value),
+                    formatter: (value: number) => formatAxisDate($currentLanguage, value),
                 },
             },
             yAxis: {
@@ -1205,7 +1196,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate(value, multiYearAxis),
+                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
                 },
             },
             yAxis: {

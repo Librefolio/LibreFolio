@@ -4319,6 +4319,7 @@ ${arrow}<span>${label}</span></span>`,
                             <button
                                 type="button"
                                 class="flex flex-col items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 transition-colors px-2 py-1.5"
+                                data-testid="import-wizard-view-all"
                                 onclick={() => {
                                     showAggregateDetail = true;
                                 }}
@@ -4329,6 +4330,7 @@ ${arrow}<span>${label}</span></span>`,
                             <button
                                 type="button"
                                 class="flex flex-col items-center justify-center gap-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors px-2 py-1.5"
+                                data-testid="import-wizard-reparse"
                                 onclick={handleReparse}
                             >
                                 <RefreshCw size={16} />
@@ -4550,7 +4552,7 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step 4: Review & Import -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'review'}
-            <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4" data-busy={autoFixingBrokerId !== null || recheckingOpenings}>
+            <div class="flex flex-col gap-4 h-full overflow-y-auto" data-testid="import-wizard-step4" data-busy={autoFixingBrokerId !== null || recheckingOpenings} data-selected-count={step4SelectedCount} data-total-count={step4TotalCount}>
                 <!-- ── Resolve Assets section ─────────────────────────── -->
                 {#if assetResolutions.length > 0}
                     <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
@@ -4727,7 +4729,7 @@ ${arrow}<span>${label}</span></span>`,
                                 </button>
                                 <span class="text-gray-300 dark:text-gray-600">|</span>
                             {/if}
-                            <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectAll}>
+                            <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectAll} data-testid="import-wizard-select-all">
                                 <CheckSquare size={12} /><span class="hidden sm:inline">{$t('common.selectAll')}</span>
                             </button>
                             <span class="text-gray-300 dark:text-gray-600">|</span>
@@ -4735,7 +4737,7 @@ ${arrow}<span>${label}</span></span>`,
                                 <ListChecks size={12} /><span class="hidden sm:inline">{$t('importWizard.selectVisible')}</span>
                             </button>
                             <span class="text-gray-300 dark:text-gray-600">|</span>
-                            <button type="button" class="text-xs text-gray-500 hover:underline flex items-center gap-1" onclick={step4DeselectAll}>
+                            <button type="button" class="text-xs text-gray-500 hover:underline flex items-center gap-1" onclick={step4DeselectAll} data-testid="import-wizard-deselect-all">
                                 <Square size={12} /><span class="hidden sm:inline">{$t('common.deselectAll')}</span>
                             </button>
                             <span class="text-gray-300 dark:text-gray-600">|</span>

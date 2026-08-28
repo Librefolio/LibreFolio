@@ -3,7 +3,7 @@
 import subprocess
 
 from . import _common
-from ._common import PROJECT_ROOT, Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
+from ._common import Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
 from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
@@ -24,6 +24,12 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
             "src/lib/utils/core/__tests__/formatDecimal.test.ts",
             "src/lib/utils/core/__tests__/escapeHtml.test.ts",
+            "src/lib/utils/core/__tests__/translateOr.test.ts",
+            "src/lib/utils/core/__tests__/positionKey.test.ts",
+            "src/lib/utils/core/__tests__/finiteNumber.test.ts",
+            "src/lib/utils/core/__tests__/formatAxisDate.test.ts",
+            "src/lib/utils/core/__tests__/clearTimer.test.ts",
+            "src/lib/utils/__tests__/text.test.ts",
             "src/lib/types/__tests__/safeAccessors.test.ts",
         ],
         cwd="frontend",

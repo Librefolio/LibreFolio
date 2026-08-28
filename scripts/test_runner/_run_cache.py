@@ -89,7 +89,7 @@ def show_status() -> str:
         passed = entry.get("passed", [])
         failed = entry.get("failed")
         ts = entry.get("timestamp", "?")
-        lines.append(f"")
+        lines.append("")
         lines.append(f"  \U0001f4cb {suite_key} (last update: {ts})")
         lines.append(f"     \u2705 Passed: {len(passed)} test(s)")
         if passed:

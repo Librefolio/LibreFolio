@@ -13,6 +13,7 @@
     import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface AssetSyncItem {
         id: number;
@@ -79,10 +80,7 @@
     }
 
     function handleTouchEnd() {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
+        longPressTimer = clearTimer(longPressTimer);
     }
 
     let targetIds = $derived(assets.filter((a) => !!a.provider_code).map((a) => a.id.toString()));

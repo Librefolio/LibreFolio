@@ -1807,7 +1807,7 @@ class TestPluginFrontendContract:
 
     @staticmethod
     def _line_count(path) -> int:
-        with open(path, "r", encoding="utf-8-sig", errors="replace") as fh:
+        with open(path, encoding="utf-8-sig", errors="replace") as fh:
             return sum(1 for _ in fh)
 
     @pytest.mark.parametrize("plugin,path", CONTRACT_SAMPLES, ids=lambda v: getattr(v, "name", v))

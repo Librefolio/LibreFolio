@@ -159,9 +159,9 @@ def db_populate(verbose: bool = False, force: bool = False,
     if not success and not verbose:
         print_warning("\n💡 Hint: Database might already contain data")
         print_info("   Run with -v to see detailed error:")
-        print_info(f"     dev.py test -v db populate")
+        print_info("     dev.py test -v db populate")
         print_info("   Or use --force to delete and recreate:")
-        print_info(f"     dev.py test db populate --force")
+        print_info("     dev.py test db populate --force")
 
     return success
 

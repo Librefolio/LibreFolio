@@ -106,6 +106,19 @@
         pairedWith?: string;
         link_uuid?: string | null;
         /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean;
+        /**
+         * Type this row had before a *mixed* promote reassigned it.
+         *
+         * A mixed promote (one saved row + one new one) is executed by the backend,
+         * which expects both halves in their pre-promote types and derives the target
+         * itself. The grid, however, must already show the promoted type. The two
+         * therefore diverge for exactly one row, and this remembers the wire value.
+         *
+         * Unset for create+create promotes: those carry no backend promote at all —
+         * the pair is formed by a shared link_uuid — so the target type is what must
+         * be sent.
+         */
+        promoteFromType?: TransactionTypeCode | null;
         /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null;
         /** Currency hint for WAC target — null = backend decides */ wacCurrencyHint?: string | null;
         /** BRIM import field todos — blocker severity prevents commit until resolved */ todos?: ImportTodo[];
@@ -847,6 +860,12 @@
     function handleSplitRow(row: PendingOp) {
         const partnerOp = getPartnerOp(row.tempId);
 
+        // Splitting undoes the pairing, so any pre-promote type kept for the wire is
+        // now stale — left behind it would silently override the standalone type each
+        // branch below assigns, and the row would be committed as what it used to be.
+        row.promoteFromType = null;
+        if (partnerOp) partnerOp.promoteFromType = null;
+
         if (row.op === 'edit' && partnerOp && partnerOp.op === 'edit') {
             // Case A: Saved paired → backend split + preview editable (DD-R2.1)
             const txId = row.txId;
@@ -893,6 +912,7 @@
             // Case B legacy: link_uuid shared between two visible create ops
             const partner = ops.find((o) => o !== row && o.op === 'create' && o.link_uuid === row.link_uuid);
             if (partner) {
+                partner.promoteFromType = null;
                 const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
                 if (!splitTypes) return;
                 const [fromType, toType] = splitTypes;
@@ -917,8 +937,17 @@
     // -----------------------------------------------------------------
 
     function collectCreate(d: PendingOp): Record<string, unknown> {
-        const rule = getTypeRule(d.fields.type);
-        return buildCreatePayload(opToTxFields(d), rule);
+        // The rule must follow the type actually being sent, not the one on screen:
+        // for a mixed promote those differ, and a rule for the wrong type strips or
+        // keeps the wrong fields.
+        const fields = opToTxFields(d);
+        const payload = buildCreatePayload(fields, getTypeRule(fields.type as TransactionTypeCode));
+        // `buildCreatePayload` only forwards link_uuid for types whose rule requires a
+        // pair, which a pre-promote type by definition does not. Here the uuid is not
+        // a pairing marker at all: it is the handle the promote resolves as
+        // `link_uuid_b`, so it has to ride along independently of the type's own rule.
+        if (d.promoteFromType && d.link_uuid) payload.link_uuid = d.link_uuid;
+        return payload;
     }
 
     function collectUpdate(d: PendingOp): Record<string, unknown> | null {
@@ -963,16 +992,34 @@
 
             // Skip split-queued edit rows ONLY if unchanged
             if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
-            // Skip promote-queued edit rows entirely
-            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
+            // Skip promote-queued edit rows: the promote itself carries them.
+            //
+            // But not their hidden partner. In a *mixed* promote (one saved row +
+            // one new one) the promote sends `link_uuid_b`, and the backend resolves
+            // that uuid only against the creates it receives in the same batch. If
+            // the new row happens to be the hidden partner of this edit, the two
+            // `continue`s cancel each other out — this one skips the main, line 960
+            // skips the partner — and the create is never sent at all. The commit
+            // then fails with "Cannot resolve TX B reference", pointing at a row the
+            // user filled in and can see on screen.
+            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) {
+                const hidden = getPartnerOp(d.tempId);
+                if (hidden && hidden.op === 'create') {
+                    resolved.push({intent: 'create', payload: collectCreate(hidden), partnerPayload: null});
+                }
+                continue;
+            }
 
             const pOp = getPartnerOp(d.tempId);
 
             if (st === 'new') {
                 let partnerPayload: Record<string, unknown> | null = null;
-                if (pOp) {
-                    const partnerRule = getTypeRule(pOp.fields.type as TransactionTypeCode);
-                    partnerPayload = buildCreatePayload(opToTxFields(pOp), partnerRule);
+                // Only a *new* partner is created alongside. A saved partner (the
+                // other half of a mixed promote) already exists in the database:
+                // emitting a create payload for it would insert a duplicate of a
+                // row the user was merely linking.
+                if (pOp && pOp.op === 'create') {
+                    partnerPayload = collectCreate(pOp);
                 }
                 resolved.push({intent: 'create', payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
@@ -1008,7 +1055,10 @@
     function opToTxFields(d: PendingOp): TxFields {
         // In auto mode with currency hint, override becomes the hint sentinel
         const cbo = d.fields.cost_basis_mode === 'auto' && d.wacCurrencyHint ? {code: d.wacCurrencyHint, amount: '0'} : d.fields.cost_basis_override || null;
-        return {...d.fields, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
+        // A mixed promote is applied server-side from the two *source* types, so the
+        // wire keeps the pre-promote value while the grid shows the promoted one.
+        const type = d.promoteFromType ?? d.fields.type;
+        return {...d.fields, type, cost_basis_override: cbo, link_uuid: d.link_uuid ?? null};
     }
 
     /** Derive the effective display status of a draft row.
@@ -2434,11 +2484,25 @@
         const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
         if (!match) return;
 
-        // Apply resolved fields (from MergeModal) to opA before collapsing
-        if (resolved.description != null) opA.fields.description = resolved.description as string;
-        if (resolved.tags != null) opA.fields.tags = resolved.tags as string[];
-        if (resolved.date != null) opA.fields.date = resolved.date as string;
-        if (resolved.cost_basis_override != null) opA.fields.cost_basis_override = resolved.cost_basis_override as any;
+        // Apply resolved fields (from MergeModal) to *both* ops before collapsing.
+        //
+        // Not just opA, for two reasons. The create+create branch below is purely
+        // local — it assigns a shared link_uuid and sends no `resolved_fields`, so
+        // nothing else would ever reach opB and the commit is rejected with
+        // `pairDescriptionMismatch`, quoting a description the user never chose.
+        // And `collapseIntoPaired` picks the displayed row by cash sign, so opB can
+        // become the *visible* one: resolving into opA alone can hide the chosen
+        // value as well as fail on it.
+        //
+        // For the edit+edit and mixed branches the backend applies `resolved_fields`
+        // to both sides anyway, so writing them here is idempotent — and it keeps
+        // the grid showing what will actually be persisted.
+        for (const op of [opA, opB]) {
+            if (resolved.description != null) op.fields.description = resolved.description as string;
+            if (resolved.tags != null) op.fields.tags = resolved.tags as string[];
+            if (resolved.date != null) op.fields.date = resolved.date as string;
+            if (resolved.cost_basis_override != null) op.fields.cost_basis_override = resolved.cost_basis_override as any;
+        }
 
         if (opA.op === 'edit' && opB.op === 'edit') {
             // 2 saved → batch promotes
@@ -2472,6 +2536,9 @@
                     ...(Object.keys(resolved).length > 0 ? {resolved_fields: resolved} : {}),
                 },
             ];
+            // The backend derives the target from the two *source* types, so the new
+            // row has to reach it un-promoted; the grid still shows the target below.
+            newOp.promoteFromType = newOp.fields.type as TransactionTypeCode;
             savedOp.fields.type = match.targetType as TransactionTypeCode;
             newOp.fields.type = match.targetType as TransactionTypeCode;
         }

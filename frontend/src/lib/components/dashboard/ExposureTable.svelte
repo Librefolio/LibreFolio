@@ -17,6 +17,7 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {makePositionKey} from '$lib/utils/core/positionKey';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -93,10 +94,6 @@
 
     export function getTableRef() {
         return tableRef;
-    }
-
-    function makePositionKey(assetId: number, brokerId: number | null): string {
-        return `${assetId}-${brokerId ?? 0}`;
     }
 
     function signedAmountCell(value: number | null) {

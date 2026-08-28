@@ -12,10 +12,14 @@ from scripts.cli_base import pipenv_prefix
 
 from ._archive import archive_path
 from ._common import (
-    PROJECT_ROOT, Colors,
-    print_header, print_section, print_info, print_success, print_error, print_warning,
+    PROJECT_ROOT,
+    Colors,
+    print_error,
+    print_info,
+    print_section,
+    print_success,
+    print_warning,
 )
-
 
 JS_COVERAGE_DIR = "coverage-js"
 
@@ -297,10 +301,10 @@ def _finalize_coverage(is_front: bool, is_all: bool) -> str:
     print()
     print(f"{Colors.YELLOW}💡 View HTML report:{Colors.NC}")
     if is_all:
-        print(f"└─▶ $ ./dev.py test coverage show combined")
+        print("└─▶ $ ./dev.py test coverage show combined")
     else:
         print(f"└─▶ $ ./dev.py test coverage show {'frontend' if is_front else 'backend'}")
-        print(f"└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
+        print("└─▶ $ ./dev.py test coverage show combined   # merge backend + frontend")
     print()
 
     return html_dir
@@ -353,11 +357,11 @@ def _coverage_show(target: str) -> int:
         _coverage_combine_internal(html_dir=str(html_dir), title=title_map[target])
     elif not index_file.exists():
         print_error(f"No {target} coverage report found at {html_dir}/")
-        print_info(f"Run tests with --coverage first:")
+        print_info("Run tests with --coverage first:")
         if target == "backend":
-            print_info(f"  ./dev.py test --coverage api all")
+            print_info("  ./dev.py test --coverage api all")
         else:
-            print_info(f"  ./dev.py test --coverage front-fx all")
+            print_info("  ./dev.py test --coverage front-fx all")
         return 1
 
     if index_file.exists():

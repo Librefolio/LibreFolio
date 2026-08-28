@@ -15,10 +15,6 @@ from . import _common
 from ._common import (
     Colors,
     _run_test_suite,
-    print_error,
-    print_header,
-    print_info,
-    print_success,
     print_warning,
 )
 from ._registry import TEST_REGISTRY

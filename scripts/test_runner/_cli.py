@@ -7,7 +7,6 @@ import contextlib
 import os
 import re
 import sys
-import traceback
 from pathlib import Path
 
 import argcomplete
@@ -23,7 +22,6 @@ from ._common import (
     print_error,
     print_header,
     print_info,
-    print_section,
     print_success,
     print_warning,
 )
@@ -33,7 +31,6 @@ from ._registry import TEST_REGISTRY
 from ._run_cache import clear_all as _cache_clear_all
 from ._run_cache import show_status as _cache_show_status
 from ._suites import (
-    _BACKEND_CATEGORIES,
     _FRONTEND_CATEGORIES,
     _clean_coverage_dirs,
     run_all_backend_tests,
@@ -969,8 +966,8 @@ def _frontend_consolidation_scope(args) -> tuple:
 
 def _run_consolidation_prepass(args, verbose: bool) -> tuple:
     """Run each frontend category in one invocation instead of one per action."""
-    from ._consolidate import run_consolidated
     from . import _frontend_common
+    from ._consolidate import run_consolidated
 
     enabled, scope = _frontend_consolidation_scope(args)
     if not enabled:

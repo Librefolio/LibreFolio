@@ -16,7 +16,6 @@ import os
 import subprocess
 import time
 
-
 from ._common import Colors, print_error, print_info, print_success
 from ._inventory import PROJECT_ROOT
 

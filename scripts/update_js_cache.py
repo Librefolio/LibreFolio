@@ -23,7 +23,7 @@ import re
 import shutil
 import sys
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -99,7 +99,7 @@ def load_manifest(vendor_dir: Path) -> dict:
     manifest_path = vendor_dir / CACHE_MANIFEST_FILE
     if manifest_path.exists():
         try:
-            with open(manifest_path, "r") as f:
+            with open(manifest_path) as f:
                 return json.load(f)
         except Exception:
             pass
@@ -134,8 +134,8 @@ def should_skip_check(manifest: dict) -> bool:
     try:
         last_check_dt = datetime.fromisoformat(last_check.replace('Z', '+00:00'))
         if last_check_dt.tzinfo is None:
-            last_check_dt = last_check_dt.replace(tzinfo=timezone.utc)
-        hours_since = (datetime.now(timezone.utc) - last_check_dt).total_seconds() / 3600
+            last_check_dt = last_check_dt.replace(tzinfo=UTC)
+        hours_since = (datetime.now(UTC) - last_check_dt).total_seconds() / 3600
         return hours_since < CACHE_CHECK_INTERVAL_HOURS
     except Exception:
         return False
@@ -188,9 +188,9 @@ def _download_font_resource(
     )
     if css_bytes is None:
         if file_exists:
-            print(f"  ⚠️  CSS download failed, keeping cached version")
+            print("  ⚠️  CSS download failed, keeping cached version")
         else:
-            print(f"  ❌ CSS download failed and no cached version exists")
+            print("  ❌ CSS download failed and no cached version exists")
         return False
 
     css_text = css_bytes.decode("utf-8")
@@ -203,7 +203,7 @@ def _download_font_resource(
     # Parse subsets
     subsets = _parse_google_fonts_css(css_text)
     if not subsets:
-        print(f"  ⚠️  No subsets found in Google Fonts CSS")
+        print("  ⚠️  No subsets found in Google Fonts CSS")
         return False
 
     print(f"  📋 Found {len(subsets)} subsets")
@@ -214,9 +214,9 @@ def _download_font_resource(
     local_css_lines = [
         "/*",
         f" * {name} — self-hosted subsets (Google Fonts)",
-        f" * Auto-downloaded by scripts/update_js_cache.py",
+        " * Auto-downloaded by scripts/update_js_cache.py",
         f" * Source: {config['css_url']}",
-        f" * Updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+        f" * Updated: {datetime.now(UTC).strftime('%Y-%m-%d')}",
         f" * Subsets: {len(subsets)}",
         " */",
         "",
@@ -266,10 +266,10 @@ def _download_font_resource(
     manifest["libraries"][name]["type"] = "font"
     manifest["libraries"][name]["subset_count"] = len(subsets)
     manifest["libraries"][name]["total_size"] = total_size
-    manifest["libraries"][name]["updated_at"] = datetime.now(timezone.utc).isoformat()
+    manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
     manifest["libraries"][name]["versions"].append({
         "hash": css_hash,
-        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "downloaded_at": datetime.now(UTC).isoformat(),
         "subset_count": len(subsets),
         "total_size": total_size,
     })
@@ -311,7 +311,7 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
 
             # If ETag matches, no update needed
             if remote_etag and current_etag and remote_etag == current_etag:
-                print(f"  ✓ Already up-to-date (ETag match)")
+                print("  ✓ Already up-to-date (ETag match)")
                 return False
 
             # If size matches and no ETag, likely same file
@@ -323,7 +323,7 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
     content = download_file(config["url"])
     if content is None:
         if file_exists:
-            print(f"  ⚠️  Download failed, keeping cached version")
+            print("  ⚠️  Download failed, keeping cached version")
         return False
 
     # Calculate hash
@@ -358,10 +358,10 @@ def update_library(vendor_dir: Path, manifest: dict, name: str, config: dict, fo
     manifest["libraries"][name]["url"] = config["url"]
     manifest["libraries"][name]["size"] = len(content)
     manifest["libraries"][name]["etag"] = etag
-    manifest["libraries"][name]["updated_at"] = datetime.now(timezone.utc).isoformat()
+    manifest["libraries"][name]["updated_at"] = datetime.now(UTC).isoformat()
     manifest["libraries"][name]["versions"].append({
         "hash": content_hash,
-        "downloaded_at": datetime.now(timezone.utc).isoformat(),
+        "downloaded_at": datetime.now(UTC).isoformat(),
         "size": len(content)
         })
 
@@ -389,7 +389,7 @@ def update_all_libraries(force: bool = False):
         manifest = load_manifest(vendor_dir)
         if update_library(vendor_dir, manifest, name, config, force):
             updated_count += 1
-        manifest["last_check"] = datetime.now(timezone.utc).isoformat()
+        manifest["last_check"] = datetime.now(UTC).isoformat()
         save_manifest(vendor_dir, manifest)
 
     print("-" * 60)

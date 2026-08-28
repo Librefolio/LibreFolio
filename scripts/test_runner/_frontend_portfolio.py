@@ -3,7 +3,7 @@
 import subprocess
 
 from . import _common
-from ._common import _get_category_tests_for_all, Colors, _run_test_suite, print_error, print_section, print_success
+from ._common import Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
 from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 

@@ -65,7 +65,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
-from backend.app.schemas.common import Currency, StrictModel
+from backend.app.schemas.common import Currency, CurrencyCode, StrictModel
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata,
@@ -232,7 +232,7 @@ class IncomeTimelineSummary(StrictModel):
     surfaced honestly rather than summed to a misleading subtotal).
     """
 
-    target_currency: str
+    target_currency: CurrencyCode
     transaction_count: int = Field(ge=0)
     dividend_count: int = Field(ge=0)
     interest_count: int = Field(ge=0)

@@ -22,6 +22,7 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {truncateName} from '$lib/utils/text';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {translateOr} from '$lib/utils/core/translateOr';
     import {safeNumber, safeString} from '$lib/types';
 
     interface AssetPeriodContribution {
@@ -158,11 +159,6 @@
         return value.replace(/[{}]/g, '');
     }
 
-    function tr(key: string, fallback: string): string {
-        const translated = $t(key);
-        return !translated || translated === key ? fallback : translated;
-    }
-
     function shortMoney(amount: number, currency: string, showSign = true): string {
         const info = getCurrencyInfo(currency);
         const symbol = info.symbol && info.symbol !== currency ? info.symbol : '';
@@ -267,9 +263,9 @@
     /** Backend sends the raw enum ("Income"/"Cost"/"Other") — translate it for
      *  tooltip display instead of leaking the untranslated value into the UI. */
     function categoryLabel(category: string): string {
-        if (category === 'Income') return tr('dashboard.categoryIncome', category);
-        if (category === 'Cost') return tr('dashboard.categoryCost', category);
-        if (category === 'Other') return tr('dashboard.categoryOther', category);
+        if (category === 'Income') return translateOr($t, 'dashboard.categoryIncome', category);
+        if (category === 'Cost') return translateOr($t, 'dashboard.categoryCost', category);
+        if (category === 'Other') return translateOr($t, 'dashboard.categoryOther', category);
         return category;
     }
 
@@ -277,9 +273,9 @@
      *  (never localized) — translate the known ones instead of leaking raw English
      *  into other languages. Same mapping as OtherPeriodEffectsTable.svelte. */
     function otherEffectDescriptionLabel(description: string): string {
-        if (description === 'Unallocated income') return tr('dashboard.unallocatedIncome', description);
-        if (description === 'Unallocated costs') return tr('dashboard.unallocatedCosts', description);
-        if (description === 'Other / reconciliation residual') return tr('dashboard.otherReconciliationResidual', description);
+        if (description === 'Unallocated income') return translateOr($t, 'dashboard.unallocatedIncome', description);
+        if (description === 'Unallocated costs') return translateOr($t, 'dashboard.unallocatedCosts', description);
+        if (description === 'Other / reconciliation residual') return translateOr($t, 'dashboard.otherReconciliationResidual', description);
         return description;
     }
 
@@ -291,22 +287,22 @@
     }
 
     let labels = $derived.by(() => ({
-        periodPnl: tr('dashboard.periodPnl', 'Period P&L'),
-        unrealized: tr('dashboard.unrealizedDelta', 'Unrealized Δ'),
-        realized: tr('dashboard.realizedSales', 'Realized Sales'),
-        income: tr('dashboard.income', 'Income'),
-        costs: tr('dashboard.costs', 'Costs'),
-        otherPeriodEffects: tr('dashboard.otherPeriodEffects', 'Other period effects'),
-        status: tr('common.status', 'Status'),
-        openShort: tr('dashboard.openPositions', 'Open'),
-        closedShort: tr('dashboard.closedPositions', 'Closed'),
-        openLong: tr('dashboard.openAtPeriodEnd', 'Open at period end'),
-        closedLong: tr('dashboard.closedByPeriodEnd', 'Closed by period end'),
-        startValue: tr('dashboard.startValue', 'Start Value'),
-        endValue: tr('dashboard.endValue', 'End Value'),
-        broker: tr('common.broker', 'Broker'),
-        category: tr('common.category', 'Category'),
-        noPeriodPnl: tr('dashboard.noPeriodPnl', 'No P&L in selected period'),
+        periodPnl: translateOr($t, 'dashboard.periodPnl', 'Period P&L'),
+        unrealized: translateOr($t, 'dashboard.unrealizedDelta', 'Unrealized Δ'),
+        realized: translateOr($t, 'dashboard.realizedSales', 'Realized Sales'),
+        income: translateOr($t, 'dashboard.income', 'Income'),
+        costs: translateOr($t, 'dashboard.costs', 'Costs'),
+        otherPeriodEffects: translateOr($t, 'dashboard.otherPeriodEffects', 'Other period effects'),
+        status: translateOr($t, 'common.status', 'Status'),
+        openShort: translateOr($t, 'dashboard.openPositions', 'Open'),
+        closedShort: translateOr($t, 'dashboard.closedPositions', 'Closed'),
+        openLong: translateOr($t, 'dashboard.openAtPeriodEnd', 'Open at period end'),
+        closedLong: translateOr($t, 'dashboard.closedByPeriodEnd', 'Closed by period end'),
+        startValue: translateOr($t, 'dashboard.startValue', 'Start Value'),
+        endValue: translateOr($t, 'dashboard.endValue', 'End Value'),
+        broker: translateOr($t, 'common.broker', 'Broker'),
+        category: translateOr($t, 'common.category', 'Category'),
+        noPeriodPnl: translateOr($t, 'dashboard.noPeriodPnl', 'No P&L in selected period'),
     }));
 
     let componentDefs = $derived.by(() => [

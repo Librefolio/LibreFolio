@@ -4,6 +4,7 @@
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {resolveVisualSignalStyle, type SignalConfig, type SignalDefinition, type SignalStyle, type SignalVisualComponent, type SignalVisualPartition} from '$lib/charts/signals';
+    import {humanizeKey} from '$lib/utils/text';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
 
     interface Props {
@@ -24,7 +25,7 @@
             const componentKey = componentKeyForPartition(partition);
             const component = components.find((item) => item.key === componentKey);
             const current = groups.get(componentKey) ?? {
-                componentLabel: component ? componentLabel(component) : humanize(componentKey),
+                componentLabel: component ? componentLabel(component) : humanizeKey(componentKey),
                 partitions: [],
             };
             current.partitions.push(partition);
@@ -42,15 +43,8 @@
         return value === key ? fallback : value;
     }
 
-    function humanize(value: string): string {
-        return value
-            .replaceAll('_', ' ')
-            .replaceAll('-', ' ')
-            .replace(/\b\w/g, (letter) => letter.toUpperCase());
-    }
-
     function componentLabel(component: SignalVisualComponent): string {
-        const fallback = components.length === 1 ? signalName : humanize(component.key);
+        const fallback = components.length === 1 ? signalName : humanizeKey(component.key);
         return translated(component.labelKey, fallback);
     }
 
@@ -60,7 +54,7 @@
     }
 
     function partitionLabel(partition: SignalVisualPartition): string {
-        return translated(partition.labelKey, humanize(partition.semantic || partition.key));
+        return translated(partition.labelKey, humanizeKey(partition.semantic || partition.key));
     }
 
     function partitionDescription(partition: SignalVisualPartition): string {

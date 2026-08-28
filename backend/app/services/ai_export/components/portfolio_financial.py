@@ -39,7 +39,7 @@ from decimal import Decimal
 from pydantic import Field
 
 from backend.app.db.models import Asset
-from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
+from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioHistoryPoint
 from backend.app.services.ai_export.components.broker_concentration_context import (
     ConcentrationCoverage,
@@ -117,7 +117,7 @@ class PortfolioSummaryPayload(StrictModel):
 
     as_of: Date
     period_start: Date
-    target_currency: str
+    target_currency: CurrencyCode
     position_count: int
     position_broker_count: int
     net_worth: Currency
@@ -177,7 +177,7 @@ async def _build_portfolio_summary(context: BuildContext, dependencies: Mapping[
 class PortfolioPositionsPayload(StrictModel):
 
     as_of: Date
-    target_currency: str
+    target_currency: CurrencyCode
     position_count: int
     positions: list[PositionRow] = Field(default_factory=list)
 
@@ -199,7 +199,7 @@ async def _build_portfolio_positions(context: BuildContext, dependencies: Mappin
 class PortfolioAllocationsCashPayload(StrictModel):
 
     as_of: Date
-    target_currency: str
+    target_currency: CurrencyCode
     by_type: list[AllocationSlice] = Field(default_factory=list)
     by_sector: list[AllocationSlice] = Field(default_factory=list)
     by_geography: list[AllocationSlice] = Field(default_factory=list)
@@ -273,12 +273,10 @@ class ProvenanceNote(StrictModel):
     text: str
 
 
-class PortfolioProvenancePayload(StrictModel):
+class PortfolioProvenancePayload(PeriodBoundedModel):
 
     domain: str
-    target_currency: str
-    period_start: Date
-    period_end: Date
+    target_currency: CurrencyCode
     scoped_broker_count: int
     broker_scope: list[int] = Field(default_factory=list)
     engine_source: str
@@ -312,11 +310,9 @@ def _build_portfolio_provenance(context: BuildContext, dependencies: Mapping[str
 # =============================================================================
 
 
-class PortfolioPerformancePayload(StrictModel):
+class PortfolioPerformancePayload(PeriodBoundedModel):
 
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     twrr_percent: SafeDecimal | None = None
     mwrr_annualized_percent: SafeDecimal | None = None
     mwrr_cumulative_percent: SafeDecimal | None = None
@@ -381,11 +377,9 @@ async def _build_portfolio_performance(context: BuildContext, dependencies: Mapp
 # =============================================================================
 
 
-class PortfolioFlowsIncomePayload(StrictModel):
+class PortfolioFlowsIncomePayload(PeriodBoundedModel):
 
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     total_deposited: Currency | None = None
     total_withdrawn: Currency | None = None
     net_deposited_capital: Currency | None = None
@@ -422,11 +416,9 @@ async def _build_portfolio_flows_income(context: BuildContext, dependencies: Map
 # =============================================================================
 
 
-class PortfolioFeesTaxesPayload(StrictModel):
+class PortfolioFeesTaxesPayload(PeriodBoundedModel):
 
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     period_fees: Currency | None = None
     period_taxes: Currency | None = None
     period_fees_taxes: Currency | None = None
@@ -459,11 +451,9 @@ async def _build_portfolio_fees_taxes(context: BuildContext, dependencies: Mappi
 # =============================================================================
 
 
-class PortfolioReconciliationPayload(StrictModel):
+class PortfolioReconciliationPayload(PeriodBoundedModel):
 
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     period_pnl: Currency | None = None
     period_unrealized_gain_loss_delta: Currency | None = None
     period_realized_gain_loss: Currency | None = None
@@ -516,11 +506,9 @@ async def _build_portfolio_reconciliation(context: BuildContext, dependencies: M
 # =============================================================================
 
 
-class PortfolioFifoSummaryPayload(StrictModel):
+class PortfolioFifoSummaryPayload(PeriodBoundedModel):
 
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     cost_allocation_semantics: str
     asset_count: int
     total_open_lots: int
@@ -581,11 +569,9 @@ async def _build_portfolio_fifo_summary(context: BuildContext, dependencies: Map
 # =============================================================================
 
 
-class PortfolioFifoLotsPayload(StrictModel):
+class PortfolioFifoLotsPayload(PeriodBoundedModel):
 
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     cost_allocation_semantics: str
     lot_count: int
     lots: list[FifoLotRow] = Field(default_factory=list)

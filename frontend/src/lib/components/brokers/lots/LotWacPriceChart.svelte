@@ -19,6 +19,8 @@
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {translateOr} from '$lib/utils/core/translateOr';
+    import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
     import {safeNumber, safeScalar, safeString} from '$lib/types';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
@@ -226,11 +228,6 @@
     let dataZoomResolutionCleanup: (() => void) | null = null;
     let lastResolutionInputRefs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], LotPriceHistoryPoint[]] | null = null;
 
-    function translatedOr(key: string, fallback: string): string {
-        const translated = $_(key);
-        return !translated || translated === key ? fallback : translated;
-    }
-
     function parseNumber(value: string | number | Array<string | number | null> | null | undefined): number | null {
         const raw = safeScalar(value);
         if (raw == null) return null;
@@ -246,12 +243,6 @@
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
         return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
-    }
-
-    function formatShortDate(value: number | string, withYear = false): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
     }
 
     function formatPercent(value: number): string {
@@ -789,21 +780,21 @@
         const eventTypeTransferArrive = $_('brokers.lots.chartMarkers.eventType.TRANSFER_ARRIVE');
         const eventTypeSplit = $_('brokers.lots.chartMarkers.eventType.SPLIT');
         const pmc = $_('dashboard.pmc');
-        const openingValue = translatedOr('brokers.lots.chartMarkers.openingValue', 'Opening value');
-        const quantitySold = translatedOr('brokers.lots.chartMarkers.quantitySold', 'Quantity sold');
-        const residualQuantity = translatedOr('brokers.lots.chartMarkers.residualQuantity', 'Residual quantity');
-        const salePrice = translatedOr('brokers.lots.chartMarkers.salePrice', 'Sale price');
-        const completeSale = translatedOr('brokers.lots.chartMarkers.completeSale', 'Complete sale');
-        const partialSale = translatedOr('brokers.lots.chartMarkers.partialSale', 'Partial sale');
-        const adjustmentType = translatedOr('brokers.lots.chartMarkers.adjustmentType', 'Adjustment type');
-        const eventDate = translatedOr('brokers.lots.chartMarkers.eventDate', 'Date');
-        const quantityEffect = translatedOr('brokers.lots.chartMarkers.quantityEffect', 'Lot quantity effect');
-        const previousQuantity = translatedOr('brokers.lots.chartMarkers.previousQuantity', 'Previous quantity');
-        const nextQuantity = translatedOr('brokers.lots.chartMarkers.nextQuantity', 'Next quantity');
-        const previousPrice = translatedOr('brokers.lots.chartMarkers.previousPrice', 'Previous price');
-        const nextPrice = translatedOr('brokers.lots.chartMarkers.nextPrice', 'Next price');
-        const totalCost = translatedOr('brokers.lots.chartMarkers.totalCost', 'Total cost');
-        const unchanged = translatedOr('brokers.lots.chartMarkers.unchanged', 'Unchanged');
+        const openingValue = translateOr($_, 'brokers.lots.chartMarkers.openingValue', 'Opening value');
+        const quantitySold = translateOr($_, 'brokers.lots.chartMarkers.quantitySold', 'Quantity sold');
+        const residualQuantity = translateOr($_, 'brokers.lots.chartMarkers.residualQuantity', 'Residual quantity');
+        const salePrice = translateOr($_, 'brokers.lots.chartMarkers.salePrice', 'Sale price');
+        const completeSale = translateOr($_, 'brokers.lots.chartMarkers.completeSale', 'Complete sale');
+        const partialSale = translateOr($_, 'brokers.lots.chartMarkers.partialSale', 'Partial sale');
+        const adjustmentType = translateOr($_, 'brokers.lots.chartMarkers.adjustmentType', 'Adjustment type');
+        const eventDate = translateOr($_, 'brokers.lots.chartMarkers.eventDate', 'Date');
+        const quantityEffect = translateOr($_, 'brokers.lots.chartMarkers.quantityEffect', 'Lot quantity effect');
+        const previousQuantity = translateOr($_, 'brokers.lots.chartMarkers.previousQuantity', 'Previous quantity');
+        const nextQuantity = translateOr($_, 'brokers.lots.chartMarkers.nextQuantity', 'Next quantity');
+        const previousPrice = translateOr($_, 'brokers.lots.chartMarkers.previousPrice', 'Previous price');
+        const nextPrice = translateOr($_, 'brokers.lots.chartMarkers.nextPrice', 'Next price');
+        const totalCost = translateOr($_, 'brokers.lots.chartMarkers.totalCost', 'Total cost');
+        const unchanged = translateOr($_, 'brokers.lots.chartMarkers.unchanged', 'Unchanged');
         const bubbleOpeningDate = $_('brokers.lots.openingDate');
         const bubbleOpeningValue = $_('brokers.lots.openingValue');
         const bubbleTotalPnl = $_('brokers.lots.totalPnl');
@@ -815,8 +806,8 @@
         const bubbleStateOpen = $_('brokers.lots.states.OPEN');
         const bubbleStatePartial = $_('brokers.lots.states.PARTIALLY_CLOSED');
         const bubbleStateClosed = $_('brokers.lots.states.CLOSED');
-        const yAuto = translatedOr('brokers.lots.yAxisAuto', 'Auto');
-        const yFromZero = translatedOr('brokers.lots.yAxisFromZero', 'From 0');
+        const yAuto = translateOr($_, 'brokers.lots.yAxisAuto', 'Auto');
+        const yFromZero = translateOr($_, 'brokers.lots.yAxisFromZero', 'From 0');
 
         return {
             wac: !pmc || pmc === 'dashboard.pmc' ? 'WAC' : pmc,
@@ -1051,7 +1042,7 @@
         const amount = Number.parseFloat(event.amount);
         const rows = [
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerType')), escapeHtml(incomeEventTypeLabel(event.type)), incomeMarkerColor()),
-            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatShortDate(event.date))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatAxisDate($currentLanguage, event.date))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerBroker')), escapeHtml(brokerName(event.broker_id))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, currency) : String(event.amount))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerLotCount')), escapeHtml(String(event.lot_ids?.length ?? 0))),
@@ -1775,7 +1766,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatShortDate(value, multiYearAxis),
+                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
                 },
             },
             yAxis: {

@@ -16,7 +16,6 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Tuple
 
-
 # =============================================================================
 # Terminal Colors
 # =============================================================================
@@ -203,7 +202,7 @@ def check_server_running(action: str = "this operation", strict: bool = True, po
         print(Colors.error(f"❌ Server is currently running on port {port}"))
         print()
         print(Colors.warning(f"Please stop the server before {action}:"))
-        print(f"  1. Stop the server (Ctrl+C in server terminal)")
+        print("  1. Stop the server (Ctrl+C in server terminal)")
         print(f"  2. Or kill the process: {Colors.success(f'lsof -ti:{port} | xargs kill -9')}")
         print()
         return False

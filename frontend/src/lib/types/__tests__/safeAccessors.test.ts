@@ -121,4 +121,22 @@ describe('safeDecimal', () => {
         expect(safeDecimal([])).toBeNull();
         expect(safeDecimal([null])).toBeNull();
     });
+
+    it('rejects infinity, which is not a quantity', () => {
+        // Not hypothetical: the backend's `SafeDecimal` serialises through
+        // `format(v, 'f')`, and `format(Decimal('Infinity'), 'f')` is the string
+        // "Infinity" — which parseFloat reads straight back. The UI renders null
+        // as "—"; rendering ∞ where an amount belongs would state a fact that is
+        // not one. This guard came from a local copy in UnifiedLotsTable that had
+        // it right while the shared function did not.
+        expect(safeDecimal('Infinity')).toBeNull();
+        expect(safeDecimal('-Infinity')).toBeNull();
+        expect(safeDecimal(Infinity)).toBeNull();
+        expect(safeDecimal(['Infinity'])).toBeNull();
+    });
+
+    it('still rejects NaN', () => {
+        expect(safeDecimal('NaN')).toBeNull();
+        expect(safeDecimal(NaN)).toBeNull();
+    });
 });

@@ -213,7 +213,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
             proc = subprocess.run(cmd, cwd=PROJECT_ROOT, env=env)
     except Exception as exc:
         print_error(f"{category} consolidated run error: {exc}")
-        return {p: False for p in paths}
+        return dict.fromkeys(paths, False)
     finally:
         # The copy *out* is as load-bearing as the copy in, and its absence would
         # not fail: pytest-cov would write .coverage, the next reader would find

@@ -9,7 +9,6 @@ from typing import Annotated, Any, Literal, Self, Union
 
 from pydantic import (
     AfterValidator,
-    BeforeValidator,
     Field,
     JsonValue,
     PositiveInt,
@@ -17,7 +16,7 @@ from pydantic import (
     model_validator,
 )
 
-from backend.app.schemas.common import Currency, StrictModel
+from backend.app.schemas.common import CurrencyCode, StrictModel
 from backend.app.schemas.signals import SignalTemporalClass
 
 _ID_PATTERN = r"^[a-z][a-z0-9_.-]*$"
@@ -55,7 +54,9 @@ def _ensure_json_safe(value: Any, path: str = "value") -> Any:
     raise ValueError(f"{path} contains a non-JSON value of type {type(value).__name__}")
 
 
-CurrencyCode = Annotated[str, BeforeValidator(Currency.validate_code)]
+# ``CurrencyCode`` is imported from backend.app.schemas.common (ISO 4217, uppercase-
+# normalising). It lived here first; it now has one home so the two definitions
+# cannot drift.
 NonEmptyBrokerIds = Annotated[
     list[PositiveInt],
     Field(min_length=1),

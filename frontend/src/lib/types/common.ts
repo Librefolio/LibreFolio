@@ -47,6 +47,14 @@ export function parseCurrencyAmount(amount: string | undefined | null): number {
  * `safeString` and `safeNumber` are this function plus a `typeof` guard; use
  * them when the field has one type. Reach for this one only when the field is
  * genuinely polymorphic (a decimal the generator typed as `string | number`).
+ *
+ * It takes `[0]`, not the first non-null entry. A local copy in
+ * `UnifiedLotsTable` used `find(v => v != null)` and the two never disagreed,
+ * because this array is not a collection: it is a generator artefact standing in
+ * for `T | null`, so it holds nothing or one thing. Were a real `[null, x]` ever
+ * to arrive, skipping the null would silently answer from an arbitrary position
+ * — reading a value out of a shape nobody designed. Position 0 is the only entry
+ * the type claims to describe.
  */
 export function safeScalar<T>(value: T | (T | null)[] | null | undefined): T | null {
     if (Array.isArray(value)) return value[0] ?? null;
@@ -90,14 +98,23 @@ export function safeNumber(value: unknown): number | null {
  * keep their precision, so anything sourced from a `Decimal` column needs this
  * one instead.
  *
- * `NaN` is rejected. `Infinity` is not, because `parseFloat` only yields it for
- * the literal text "Infinity", which no decimal column emits.
+ * `NaN`, `Infinity` and `-Infinity` all map to `null`, which the UI renders as
+ * "—". None of them is a quantity: they are the shapes a broken computation
+ * takes, and showing "∞" where an amount belongs states a fact that is not one.
+ *
+ * That guard is not hypothetical. `SafeDecimal` on the backend serialises via
+ * `format(v, 'f')`, and `format(Decimal('Infinity'), 'f')` is the string
+ * `"Infinity"` — which `parseFloat` reads straight back into `Infinity`. An
+ * earlier version of this comment argued no decimal *column* emits it, which is
+ * true and beside the point: the serialiser does, for any computed field whose
+ * own overflow guard is missing. `cumulative_to_annualized` has one; that is a
+ * property of that function, not of the type.
  */
 export function safeDecimal(value: unknown): number | null {
     const scalar = Array.isArray(value) ? (value[0] ?? null) : value;
     if (scalar === null || scalar === undefined) return null;
-    const parsed = parseFloat(scalar as string);
-    return Number.isNaN(parsed) ? null : parsed;
+    const parsed = parseFloat(String(scalar));
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**

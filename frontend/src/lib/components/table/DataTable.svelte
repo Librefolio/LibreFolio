@@ -1423,7 +1423,7 @@
                                                 <span>{cellContent.text}</span>
                                             </div>
                                         {:else if cellContent.type === 'badge'}
-                                            <span class="cell-badge {cellContent.variant}" class:custom-style={cellContent.customStyle} style={cellContent.customStyle || undefined}>{cellContent.text}</span>
+                                            <span class="cell-badge {cellContent.variant}" class:custom-style={cellContent.customStyle} style={cellContent.customStyle || undefined} data-badge-variant={cellContent.variant}>{cellContent.text}</span>
                                         {:else if cellContent.type === 'date'}
                                             {formatDate(cellContent.value, cellContent.format)}
                                         {:else if cellContent.type === 'size'}
