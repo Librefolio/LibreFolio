@@ -48,7 +48,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
-from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
+from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioReportResponse, PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import load_portfolio_report
@@ -234,7 +234,7 @@ class CostSourceCoverage(StrictModel):
     source_code: str = "portfolio_report_typed_fee_tax_transactions_v1"
     fee_transaction_count: int = Field(ge=0)
     tax_transaction_count: int = Field(ge=0)
-    target_currency: str
+    target_currency: CurrencyCode
     subtype_classification_status: FeeStatus = FeeStatus.UNAVAILABLE
     subtype_reason_code: str = REASON_SUBTYPE_UNAVAILABLE
 
@@ -281,13 +281,11 @@ class CostRatio(StrictModel):
         return self
 
 
-class BrokerCostEfficiencyPayload(StrictModel):
+class BrokerCostEfficiencyPayload(PeriodBoundedModel):
     """Renderer-neutral broker cost-efficiency evidence: activity + turnover + recorded fees + ratios."""
 
     broker_id: int
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
 
     transaction_count: int = Field(ge=0, description="All settlement transactions for this broker in (period_start, period_end].")
     trade_count: int = Field(ge=0, description="BUY + SELL transactions in the period.")

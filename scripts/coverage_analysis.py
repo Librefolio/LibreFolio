@@ -301,7 +301,7 @@ def print_text_report(results: list[dict], priority_filter: str = None,
         stmts_by_cat[r["category"]] += r["stmts"]
 
     print(f"{'=' * 90}")
-    print(f"COVERAGE ANALYSIS — Functions below threshold")
+    print("COVERAGE ANALYSIS — Functions below threshold")
     print(f"{'=' * 90}")
     print(f"\n{'Category':<18} {'Funcs':>5} {'Stmts':>6}  {'Impact':<12} Description")
     print(f"{'─' * 90}")
@@ -321,7 +321,7 @@ def print_text_report(results: list[dict], priority_filter: str = None,
 
     # Detailed list
     print(f"\n{'=' * 90}")
-    print(f"DETAIL")
+    print("DETAIL")
     print(f"{'=' * 90}")
 
     current_cat = None
@@ -378,7 +378,7 @@ def print_summary(results: list[dict]):
     for r in results:
         stmts_by_cat[r["category"]] += r["stmts"]
 
-    print(f"\n📊 Coverage Analysis Summary")
+    print("\n📊 Coverage Analysis Summary")
     print(f"{'─' * 50}")
     for cat in CATEGORY_ORDER:
         count = by_cat.get(cat, 0)

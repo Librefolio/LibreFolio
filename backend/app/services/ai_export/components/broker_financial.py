@@ -31,7 +31,7 @@ from decimal import Decimal
 from pydantic import Field
 
 from backend.app.db.models import Asset
-from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
+from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioHistoryPoint
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
@@ -104,7 +104,7 @@ class BrokerSummaryPayload(StrictModel):
     broker_id: int
     as_of: Date
     period_start: Date
-    target_currency: str
+    target_currency: CurrencyCode
     position_count: int
     net_worth: Currency
     total_invested: Currency
@@ -164,7 +164,7 @@ class BrokerPositionsPayload(StrictModel):
 
     broker_id: int
     as_of: Date
-    target_currency: str
+    target_currency: CurrencyCode
     position_count: int
     positions: list[PositionRow] = Field(default_factory=list)
 
@@ -187,7 +187,7 @@ class BrokerAllocationConcentrationPayload(StrictModel):
 
     broker_id: int
     as_of: Date
-    target_currency: str
+    target_currency: CurrencyCode
     position_count: int
     market_value: Currency | None = None
     cash_total: Currency
@@ -245,13 +245,11 @@ class ProvenanceNote(StrictModel):
     text: str
 
 
-class BrokerProvenancePayload(StrictModel):
+class BrokerProvenancePayload(PeriodBoundedModel):
 
     domain: str
     broker_id: int
-    target_currency: str
-    period_start: Date
-    period_end: Date
+    target_currency: CurrencyCode
     engine_source: str
     fifo_methodology: str
     valuation_semantics: str
@@ -283,12 +281,10 @@ def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, S
 # =============================================================================
 
 
-class BrokerPerformancePayload(StrictModel):
+class BrokerPerformancePayload(PeriodBoundedModel):
 
     broker_id: int
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     twrr_percent: SafeDecimal | None = None
     mwrr_annualized_percent: SafeDecimal | None = None
     mwrr_cumulative_percent: SafeDecimal | None = None
@@ -352,12 +348,10 @@ async def _build_broker_performance(context: BuildContext, dependencies: Mapping
 # =============================================================================
 
 
-class BrokerFlowsIncomeCostsPayload(StrictModel):
+class BrokerFlowsIncomeCostsPayload(PeriodBoundedModel):
 
     broker_id: int
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     total_deposited: Currency | None = None
     total_withdrawn: Currency | None = None
     net_deposited_capital: Currency | None = None
@@ -401,12 +395,10 @@ async def _build_broker_flows_income_costs(context: BuildContext, dependencies: 
 # =============================================================================
 
 
-class BrokerReconciliationPayload(StrictModel):
+class BrokerReconciliationPayload(PeriodBoundedModel):
 
     broker_id: int
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     period_pnl: Currency | None = None
     period_unrealized_gain_loss_delta: Currency | None = None
     period_realized_gain_loss: Currency | None = None
@@ -486,12 +478,10 @@ async def _broker_fifo_rows(context: BuildContext, scope: BuildScope) -> list[Fi
     return sort_fifo_lots(candidate_pairs)
 
 
-class BrokerFifoSummaryPayload(StrictModel):
+class BrokerFifoSummaryPayload(PeriodBoundedModel):
 
     broker_id: int
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     cost_allocation_semantics: str
     asset_count: int
     total_open_lots: int
@@ -526,12 +516,10 @@ async def _build_broker_fifo_summary(context: BuildContext, dependencies: Mappin
     )
 
 
-class BrokerFifoLotsPayload(StrictModel):
+class BrokerFifoLotsPayload(PeriodBoundedModel):
 
     broker_id: int
-    period_start: Date
-    period_end: Date
-    target_currency: str
+    target_currency: CurrencyCode
     cost_allocation_semantics: str
     lot_count: int
     lots: list[FifoLotRow] = Field(default_factory=list)

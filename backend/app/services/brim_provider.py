@@ -850,6 +850,26 @@ def _find_data_path(file_id: str, ext: str) -> Optional[Path]:
     return None
 
 
+def _relocated_path(file_id: str, file_path: Path) -> Optional[Path]:
+    """Return where a file went when a concurrent parse moved it, else ``None``.
+
+    Parsing a report transitions it ``uploaded → parsed``, which physically renames
+    the file. A path resolved a moment earlier is then stale, and every read through
+    it fails for a reason that has nothing to do with the file's contents — the
+    plugin reports "cannot read" about a file it reads perfectly well.
+
+    ``None`` means the caller's failure was genuine and must be propagated: either
+    the original path still exists (so the file never moved), or re-resolution finds
+    nothing new. Only a *demonstrated* move earns a retry.
+    """
+    if file_path.exists():
+        return None
+    moved_path = get_file_path(file_id)
+    if moved_path is None or moved_path == file_path:
+        return None
+    return moved_path
+
+
 def delete_file(file_id: str) -> bool:
     """
     Delete a file and its metadata.
@@ -1107,9 +1127,16 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     if not plugin:
         raise ValueError(f"Plugin not found: {plugin_code}")
 
-    # Verify plugin can parse this file
+    # Verify plugin can parse this file. The guard reads the file, so it loses
+    # the same race as the parse below and needs the same re-resolution: a stale
+    # path makes can_parse() answer False, which would be reported to the user as
+    # "this plugin cannot read your file" about a file the plugin reads fine.
     if not plugin.can_parse(file_path):
-        raise ValueError(f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'")
+        moved_path = _relocated_path(file_id, file_path)
+        if moved_path is None or not plugin.can_parse(moved_path):
+            raise ValueError(f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'")
+        logger.info("File moved before parse check, retrying at new location", file_id=file_id, new_path=str(moved_path))
+        file_path = moved_path
 
     # Parse file
     logger.info("Parsing file with plugin", file_id=file_id, plugin_code=plugin_code, broker_id=broker_id)
@@ -1117,15 +1144,8 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     try:
         output: BRIMParseOutput = plugin.parse(file_path, broker_id)
     except Exception:
-        # A concurrent parse of the same file transitions it uploaded → parsed,
-        # which physically renames it. The path resolved a moment ago is then
-        # gone and the plugin reports a read error that has nothing to do with
-        # the file's contents. Retry once, and only when the file demonstrably
-        # moved: if the original path still exists the failure was genuine.
-        if file_path.exists():
-            raise
-        moved_path = get_file_path(file_id)
-        if moved_path is None or moved_path == file_path:
+        moved_path = _relocated_path(file_id, file_path)
+        if moved_path is None:
             raise
         logger.info("File moved during parse, retrying at new location", file_id=file_id, new_path=str(moved_path))
         output = plugin.parse(moved_path, broker_id)

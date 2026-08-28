@@ -31,7 +31,6 @@ from pathlib import Path
 
 from ._common import Colors
 
-
 ARCHIVE_DIR_NAME = "00_archive"
 
 #: preset 1 keeps ~90% of the ratio of preset 6 for a twelfth of the cost.

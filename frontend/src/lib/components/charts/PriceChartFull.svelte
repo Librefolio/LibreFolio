@@ -24,6 +24,7 @@
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {truncateName} from '$lib/utils/text';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
 
@@ -681,10 +682,7 @@
             let touchMeasureHandled = false;
 
             function clearLongPress() {
-                if (longPressTimer) {
-                    clearTimeout(longPressTimer);
-                    longPressTimer = null;
-                }
+                longPressTimer = clearTimer(longPressTimer);
                 touchStartPos = null;
             }
 

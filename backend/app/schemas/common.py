@@ -25,7 +25,7 @@ from functools import lru_cache
 from typing import Annotated, Any, List, Literal, Optional, Union
 
 import pycountry
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 from pydantic.functional_serializers import PlainSerializer
 
 from backend.app.utils.datetime_utils import parse_ISO_date
@@ -332,6 +332,40 @@ def is_fiat_currency(value: Any) -> bool:
     return True
 
 
+CurrencyCode = Annotated[str, BeforeValidator(Currency.validate_code)]
+"""Use instead of a bare ``str`` for a currency-**code** field that must be a valid
+ISO 4217 code.
+
+``Currency.validate_code`` already normalises (``upper().strip()``) and checks the
+code against the ISO 4217 registry (via pycountry), raising ``ValueError`` on
+anything else -- a crypto ticker like ``BTC``, an internal placeholder, an empty
+string. This annotated type carries that one rule so a field opts in *by type*
+instead of every class repeating its own ``@field_validator`` (nineteen payloads
+did, fifteen forgot).
+
+It does **not** change the wire shape: the field stays a JSON string. A value that
+is already a valid uppercase code (``"EUR"``) is returned byte-for-byte unchanged,
+so ``model_dump()`` of any existing payload is identical; only an *invalid* code --
+which no correct payload should ever carry -- is now rejected at construction
+instead of leaking out to the model that reads it.
+
+Mirrors ``SafeDecimal`` just above: one rule, written once, inherited by type. Uses
+``BeforeValidator`` (not ``AfterValidator``) so it sees the raw input and matches the
+definition already used across ``ai_export_runtime`` verbatim, which now imports this
+one instead of keeping a divergent copy.
+
+Import::
+
+    from backend.app.schemas.common import CurrencyCode
+
+Usage::
+
+    class MyPayload(StrictModel):
+        target_currency: CurrencyCode
+        currency: CurrencyCode | None = None  # None passes through; only real codes are checked
+"""
+
+
 class BackwardFillInfo(BaseModel):
     """
     Backward-fill information when requested date has no data.
@@ -500,6 +534,38 @@ class OpenDateRangeModel(BaseModel):
         if self.end is None or isinstance(self.end, str):
             return None
         return self.end
+
+
+class PeriodBoundedModel(StrictModel):
+    """A `StrictModel` mixin for payloads with a flat inclusive ``[period_start, period_end]``.
+
+    Fourteen AI Export payloads declare ``period_start`` and ``period_end`` as two
+    flat ``date`` fields, and not one of them checked that the end is not before
+    the start -- so a payload could be exported with an *inverted* period and the
+    only thing that could notice would be the model reading it.
+
+    ``DateRangeModel`` has enforced ``end >= start`` forever, but it nests the two
+    bounds under ``{"start": ..., "end": ...}``. These payloads are versioned and
+    the two flat keys are part of their wire shape, so swapping them for a nested
+    range would not be a refactor -- it would break the contract. This mixin keeps
+    the two fields **flat** and adds the one validator, so a payload opts in by
+    inheriting instead of repeating the rule fourteen times.
+
+    Inheriting the fields moves them to the front of the serialised key order
+    (Pydantic emits base-class fields first), which is invisible to every JSON
+    consumer -- the object is byte-for-byte the same *set* of keys and values, as
+    ``model_dump()`` (order-insensitive) confirms.
+    """
+
+    period_start: date_type
+    period_end: date_type
+
+    @model_validator(mode="after")
+    def validate_period_end_after_start(self) -> PeriodBoundedModel:
+        """Ensure ``period_end`` is not before ``period_start``."""
+        if self.period_end < self.period_start:
+            raise ValueError(f"period_end ({self.period_end}) must be >= period_start ({self.period_start})")
+        return self
 
 
 class BaseDeleteResult(BaseModel):

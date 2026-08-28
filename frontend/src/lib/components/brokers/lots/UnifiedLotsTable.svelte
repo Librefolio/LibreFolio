@@ -12,11 +12,10 @@
     import {BarChart3, Copy, ExternalLink, Eye} from 'lucide-svelte';
     import type {z} from 'zod';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber} from '$lib/types';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
-    type NumericLike = string | number | (string | number | null)[] | null | undefined;
-    type BrokerIdLike = number | (number | null)[] | null | undefined;
     type LotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DISTRIBUTED' | 'IN_TRANSIT' | 'DEGRADED';
     type PrimaryLotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DEGRADED';
 
@@ -82,26 +81,6 @@
     function label(key: string, fallback: string): string {
         const translated = $_(key) || fallback;
         return translated === key ? fallback : translated;
-    }
-
-    function firstScalar<T>(value: T | (T | null)[] | null | undefined): T | null {
-        if (Array.isArray(value)) {
-            return (value.find((item) => item != null) as T | undefined) ?? null;
-        }
-        return value ?? null;
-    }
-
-    function safeNum(value: NumericLike): number | null {
-        const scalar = firstScalar(value);
-        if (scalar == null) return null;
-        const parsed = Number.parseFloat(String(scalar));
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    function safeBrokerId(value: BrokerIdLike): number | null {
-        const scalar = firstScalar(value);
-        if (scalar == null) return null;
-        return typeof scalar === 'number' && Number.isFinite(scalar) ? scalar : null;
     }
 
     function formatQuantity(value: number | null): string {
@@ -267,9 +246,9 @@
     function buildCustodyTooltip(row: DisplayRow): string {
         if (row.custodySlices.length === 0) return '';
         const lines = row.custodySlices.map((slice) => {
-            const brokerId = safeBrokerId(slice.broker_id);
+            const brokerId = safeNumber(slice.broker_id);
             const name = slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
-            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatQuantity(safeNum(slice.quantity)))}</span></div>`;
+            return `<div class="flex items-center justify-between gap-3"><span>${escapeHtml(name)}</span><span class="font-medium tabular-nums">${escapeHtml(formatQuantity(safeDecimal(slice.quantity)))}</span></div>`;
         });
         return `<div class="space-y-1"><div class="font-semibold">${escapeHtml(label('brokers.lots.custody', 'Custody'))}</div>${lines.join('')}</div>`;
     }
@@ -278,7 +257,7 @@
         const custody = row.custodySlices;
         if (custody.length === 0) return '—';
 
-        const brokerIds = Array.from(new Set(custody.map((slice) => safeBrokerId(slice.broker_id)).filter((brokerId): brokerId is number => brokerId != null)));
+        const brokerIds = Array.from(new Set(custody.map((slice) => safeNumber(slice.broker_id)).filter((brokerId): brokerId is number => brokerId != null)));
         const hasInTransit = custody.some((slice) => slice.custody_type === 'IN_TRANSIT');
         const tooltip = buildCustodyTooltip(row);
 
@@ -322,14 +301,14 @@
             const states = rawStates.filter((state): state is LotState => STATUS_FILTER_VALUES.includes(state as LotState));
             const currentCustody = lot.current_custody ?? [];
             const openingBrokerName = getBrokerName(lot.opening_broker_id);
-            const openingUnitPrice = safeNum(lot.opening_unit_price);
-            const quantityOpen = safeNum(lot.open_quantity);
-            const quantityOriginal = safeNum(lot.original_quantity);
-            const openingValue = safeNum(lot.original_cost);
+            const openingUnitPrice = safeDecimal(lot.opening_unit_price);
+            const quantityOpen = safeDecimal(lot.open_quantity);
+            const quantityOriginal = safeDecimal(lot.original_quantity);
+            const openingValue = safeDecimal(lot.original_cost);
             const brokerFilterValues = Array.from(
                 new Set(
                     (currentCustody.length > 0 ? currentCustody : [{broker_id: lot.opening_broker_id, custody_type: 'BROKER', quantity: lot.open_quantity}]).flatMap((slice) => {
-                        const brokerId = safeBrokerId(slice.broker_id);
+                        const brokerId = safeNumber(slice.broker_id);
                         const values: string[] = [];
                         if (brokerId != null) values.push(String(brokerId));
                         if (slice.custody_type === 'IN_TRANSIT') values.push(IN_TRANSIT_FILTER_VALUE);
@@ -352,7 +331,7 @@
                 custodySlices: currentCustody,
                 custodySearchText: currentCustody
                     .map((slice) => {
-                        const brokerId = safeBrokerId(slice.broker_id);
+                        const brokerId = safeNumber(slice.broker_id);
                         return slice.custody_type === 'IN_TRANSIT' && brokerId == null ? label('brokers.lots.inTransit', 'In transit') : getBrokerName(brokerId);
                     })
                     .join(' '),
@@ -360,17 +339,17 @@
                 quantityOpen,
                 quantityOriginal,
                 openingValue,
-                currentValue: safeNum(lot.open_value),
-                assetIncome: safeNum(lot.asset_income),
-                totalPnl: safeNum(lot.total_pnl),
-                totalReturn: safeNum(lot.total_return),
-                annualizedReturn: safeNum(lot.annualized_return),
-                allocatedFees: safeNum(lot.allocated_fees),
-                allocatedTaxes: safeNum(lot.allocated_taxes),
-                netTotalPnl: safeNum(lot.net_total_pnl),
-                netTotalReturn: safeNum(lot.net_total_return),
+                currentValue: safeDecimal(lot.open_value),
+                assetIncome: safeDecimal(lot.asset_income),
+                totalPnl: safeDecimal(lot.total_pnl),
+                totalReturn: safeDecimal(lot.total_return),
+                annualizedReturn: safeDecimal(lot.annualized_return),
+                allocatedFees: safeDecimal(lot.allocated_fees),
+                allocatedTaxes: safeDecimal(lot.allocated_taxes),
+                netTotalPnl: safeDecimal(lot.net_total_pnl),
+                netTotalReturn: safeDecimal(lot.net_total_return),
                 netMetricsStatus: lot.net_metrics_status === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'AVAILABLE',
-                relativeReturn: safeNum(lot.relative_return),
+                relativeReturn: safeDecimal(lot.relative_return),
             };
             return row;
         }),

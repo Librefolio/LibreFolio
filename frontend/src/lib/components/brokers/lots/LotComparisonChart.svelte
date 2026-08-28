@@ -16,6 +16,9 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {finiteNumber} from '$lib/utils/core/finiteNumber';
+    import {translateOr} from '$lib/utils/core/translateOr';
+    import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
     import {safeScalar, safeString} from '$lib/types';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -204,11 +207,6 @@
         isDark = document.documentElement.classList.contains('dark');
     }
 
-    function tr(key: string, fallback: string): string {
-        const translated = $_(key);
-        return !translated || translated === key ? fallback : translated;
-    }
-
     function clamp(value: number, min: number, max: number): number {
         return Math.min(max, Math.max(min, value));
     }
@@ -234,12 +232,6 @@
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
         return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
-    }
-
-    function formatAxisDate(value: number | string, withYear = false): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, withYear ? {year: 'numeric', month: 'short', day: 'numeric'} : {month: 'short', day: 'numeric'});
     }
 
     function formatPercent(value: number): string {
@@ -424,10 +416,6 @@
         });
     }
 
-    function finiteChartNumber(value: unknown): number | null {
-        return typeof value === 'number' && Number.isFinite(value) ? value : null;
-    }
-
     function chartSeriesPointValue(raw: unknown, index: number): {key: string; value: number | null} | null {
         const source = Array.isArray(raw) ? raw : raw && typeof raw === 'object' && 'value' in raw ? (raw as {value?: unknown}).value : raw;
 
@@ -435,10 +423,10 @@
             const x = source[0];
             if (typeof x !== 'string' && typeof x !== 'number') return null;
             const y = source[1];
-            return {key: String(x), value: y == null ? null : finiteChartNumber(y)};
+            return {key: String(x), value: y == null ? null : finiteNumber(y)};
         }
 
-        const value = source == null ? null : finiteChartNumber(source);
+        const value = source == null ? null : finiteNumber(source);
         return value == null ? null : {key: `__index_${index}`, value};
     }
 
@@ -651,37 +639,37 @@
     }
 
     const modeLabels = $derived.by(() => ({
-        value: tr('common.value', 'Value'),
-        return: tr('brokers.lots.modeReturn', 'Return'),
-        valueTitle: tr('brokers.lots.valueComparisonTitle', 'Value of selected lots'),
-        returnTitle: tr('brokers.lots.returnComparisonTitle', 'Return from opening date'),
-        residualValue: tr('brokers.lots.aggregateResidualValue', 'Residual value'),
-        residualValueEstimatedAtCost: tr('brokers.lots.aggregateResidualValueEstimatedAtCost', 'Residual value estimated at cost'),
-        saleProceeds: tr('brokers.lots.aggregateSaleProceeds', 'Sale proceeds'),
-        cumulativeIncome: tr('brokers.lots.aggregateCumulativeIncome', 'Cumulative income'),
-        comprehensiveValue: tr('brokers.lots.aggregateComprehensiveValue', 'Comprehensive value'),
-        aggregateOpeningValue: tr('brokers.lots.aggregateOpeningValue', 'Opening value'),
-        aggregateReturn: tr('brokers.lots.aggregateReturn', 'Aggregate return'),
-        fifoPnl: tr('brokers.lots.fifoPnl', 'FIFO P&L'),
-        totalPnl: tr('brokers.lots.tooltip.totalPnl', 'Total P&L'),
-        totalReturn: tr('brokers.lots.totalReturn', 'Total return'),
-        yAuto: tr('brokers.lots.yAxisAuto', 'Auto'),
-        yFromZero: tr('brokers.lots.yAxisFromZero', 'From 0'),
-        returnUnitAbs: tr('brokers.lots.returnUnitAbs', 'Abs'),
-        returnUnitPercent: tr('brokers.lots.returnUnitPercent', '%'),
-        returnPctUndefined: tr('brokers.lots.returnPctUndefined', 'Not definable (opening value ≤ 0)'),
-        openReturn: tr('brokers.lots.openReturn', 'Open Return'),
-        selectLots: tr('brokers.lots.selectLotsToCompare', 'Select one or more lots to compare'),
-        noVisibleLots: tr('brokers.lots.noVisibleLots', 'No visible lots in chart'),
-        noData: tr('common.noData', 'No data'),
-        estimatedAtCostLegend: tr('brokers.lots.estimatedAtCostLegend', 'Dashed neutral lines use value estimated at cost.'),
-        incomeDividend: tr('brokers.lots.incomeMarkerDividend', 'Dividend'),
-        incomeInterest: tr('brokers.lots.incomeMarkerInterest', 'Interest'),
-        incomeType: tr('brokers.lots.incomeMarkerType', 'Type'),
-        incomeDate: tr('brokers.lots.incomeMarkerDate', 'Transaction date'),
-        incomeBroker: tr('brokers.lots.incomeMarkerBroker', 'Broker'),
-        incomeAmount: tr('brokers.lots.incomeMarkerAmount', 'Amount'),
-        incomeLotCount: tr('brokers.lots.incomeMarkerLotCount', 'Lots involved'),
+        value: translateOr($_, 'common.value', 'Value'),
+        return: translateOr($_, 'brokers.lots.modeReturn', 'Return'),
+        valueTitle: translateOr($_, 'brokers.lots.valueComparisonTitle', 'Value of selected lots'),
+        returnTitle: translateOr($_, 'brokers.lots.returnComparisonTitle', 'Return from opening date'),
+        residualValue: translateOr($_, 'brokers.lots.aggregateResidualValue', 'Residual value'),
+        residualValueEstimatedAtCost: translateOr($_, 'brokers.lots.aggregateResidualValueEstimatedAtCost', 'Residual value estimated at cost'),
+        saleProceeds: translateOr($_, 'brokers.lots.aggregateSaleProceeds', 'Sale proceeds'),
+        cumulativeIncome: translateOr($_, 'brokers.lots.aggregateCumulativeIncome', 'Cumulative income'),
+        comprehensiveValue: translateOr($_, 'brokers.lots.aggregateComprehensiveValue', 'Comprehensive value'),
+        aggregateOpeningValue: translateOr($_, 'brokers.lots.aggregateOpeningValue', 'Opening value'),
+        aggregateReturn: translateOr($_, 'brokers.lots.aggregateReturn', 'Aggregate return'),
+        fifoPnl: translateOr($_, 'brokers.lots.fifoPnl', 'FIFO P&L'),
+        totalPnl: translateOr($_, 'brokers.lots.tooltip.totalPnl', 'Total P&L'),
+        totalReturn: translateOr($_, 'brokers.lots.totalReturn', 'Total return'),
+        yAuto: translateOr($_, 'brokers.lots.yAxisAuto', 'Auto'),
+        yFromZero: translateOr($_, 'brokers.lots.yAxisFromZero', 'From 0'),
+        returnUnitAbs: translateOr($_, 'brokers.lots.returnUnitAbs', 'Abs'),
+        returnUnitPercent: translateOr($_, 'brokers.lots.returnUnitPercent', '%'),
+        returnPctUndefined: translateOr($_, 'brokers.lots.returnPctUndefined', 'Not definable (opening value ≤ 0)'),
+        openReturn: translateOr($_, 'brokers.lots.openReturn', 'Open Return'),
+        selectLots: translateOr($_, 'brokers.lots.selectLotsToCompare', 'Select one or more lots to compare'),
+        noVisibleLots: translateOr($_, 'brokers.lots.noVisibleLots', 'No visible lots in chart'),
+        noData: translateOr($_, 'common.noData', 'No data'),
+        estimatedAtCostLegend: translateOr($_, 'brokers.lots.estimatedAtCostLegend', 'Dashed neutral lines use value estimated at cost.'),
+        incomeDividend: translateOr($_, 'brokers.lots.incomeMarkerDividend', 'Dividend'),
+        incomeInterest: translateOr($_, 'brokers.lots.incomeMarkerInterest', 'Interest'),
+        incomeType: translateOr($_, 'brokers.lots.incomeMarkerType', 'Type'),
+        incomeDate: translateOr($_, 'brokers.lots.incomeMarkerDate', 'Transaction date'),
+        incomeBroker: translateOr($_, 'brokers.lots.incomeMarkerBroker', 'Broker'),
+        incomeAmount: translateOr($_, 'brokers.lots.incomeMarkerAmount', 'Amount'),
+        incomeLotCount: translateOr($_, 'brokers.lots.incomeMarkerLotCount', 'Lots involved'),
     }));
 
     const lotModels = $derived.by(() => {
@@ -1421,7 +1409,7 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate(value, multiYearAxis),
+                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
                 },
             },
             yAxis: {

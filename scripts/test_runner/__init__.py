@@ -42,8 +42,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
 # Public API — backward-compatible imports used by dev.py
+from ._cli import main, register_subparser
 from ._frontend_common import _ensure_test_users
-from ._cli import register_subparser, main
 
 # Also export for direct script execution
 from ._registry import TEST_REGISTRY

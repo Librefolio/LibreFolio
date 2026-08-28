@@ -4,8 +4,8 @@
 import sys
 import traceback
 
-from ._common import Colors
 from ._cli import main
+from ._common import Colors
 
 if __name__ == "__main__":
     try:

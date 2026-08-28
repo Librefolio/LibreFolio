@@ -52,6 +52,19 @@ AI_EXPORT_PURE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",
 )
 
+# Provider error paths: what the four price/FX providers do when the source
+# misbehaves. Every HTTP client is doubled, so these never leave the machine —
+# which is also the only way the assertions can be exact rather than "something
+# arrived". No session and no server either, hence PURE and its own unit: folding
+# them into a DB-backed unit would demote them to that unit's isolation class and
+# waste the parallelism on tests that touch nothing.
+PROVIDER_ERROR_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
+    "backend/test_scripts/test_services/test_justetf_errors.py",
+    "backend/test_scripts/test_services/test_snb_errors.py",
+    "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
+)
+
 RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_quantlib_smoke.py",
     "backend/test_scripts/test_services/test_series_preparation.py",
@@ -653,6 +666,17 @@ def services_ai_export_pure(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "AI Export pure contract tests", verbose=verbose)
 
 
+def services_provider_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the provider error-path contracts (no DB, no server, no network)."""
+    print_section("Services: Provider Error Paths")
+    print_info("Testing what happens when a price provider misbehaves: empty response, HTML instead of JSON,")
+    print_info("missing field, unexpected date format, timeout, unknown ticker")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PROVIDER_ERROR_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "Provider error-path tests", verbose=verbose)
+
+
 def services_borsa_italiana_search(verbose: bool = False, test_names: list = None) -> bool:
     """Test Borsa Italiana provider search (single-fetch, IT+EN variants, ISIN hit)."""
     print_section("Services: Borsa Italiana Search")
@@ -879,6 +903,14 @@ Note: No backend server required.
         services_ai_export_pure,
         name="AI Export Pure Contracts",
         desc="Payload/aggregate invariants, observed FX math, shared technical helpers",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "provider-errors",
+        services_provider_errors,
+        name="Provider Error Paths",
+        desc="justETF, Borsa Italiana, Yahoo Finance and SNB when the source misbehaves (every client doubled)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

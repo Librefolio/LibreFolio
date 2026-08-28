@@ -219,7 +219,7 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
             subprocess.run(cmd, cwd=FRONTEND_DIR, text=True, env=env)
     except Exception as exc:
         print_error(f"Playwright error: {exc}")
-        return {s: False for s in specs}
+        return dict.fromkeys(specs, False)
 
     results = _playwright_results(report)
     return {s: results.get(s, False) for s in specs}
@@ -268,7 +268,7 @@ def run_vitest_group(paths: list[str], coverage: bool, category: str | None = No
             subprocess.run(cmd, cwd=FRONTEND_DIR, text=True)
     except Exception as exc:
         print_error(f"vitest error: {exc}")
-        return {p: False for p in paths}
+        return dict.fromkeys(paths, False)
 
     results = _vitest_results(report, paths)
     return {p: results.get(p, False) for p in paths}

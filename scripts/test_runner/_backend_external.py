@@ -4,7 +4,6 @@ Includes provider discovery for dynamic CLI help.
 """
 
 import re
-from pathlib import Path
 
 from . import _common
 from ._common import (

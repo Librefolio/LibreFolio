@@ -19,6 +19,7 @@
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import {portal} from '$lib/actions/portal';
     interface Props {
         start: string;
         end: string;
@@ -63,15 +64,6 @@
     // Note: No scroll listener needed — grace popover uses position:fixed.
 
     /** Svelte action: portal — moves the node to document.body */
-    function portal(node: HTMLElement) {
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentElement === document.body) node.remove();
-            },
-        };
-    }
-
     function openGracePopover() {
         if (disabled || !anchorEl) return;
         const rect = anchorEl.getBoundingClientRect();

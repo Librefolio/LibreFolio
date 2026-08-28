@@ -24,6 +24,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/charts/signals';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {humanizeKey} from '$lib/utils/text';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -143,19 +144,12 @@
         return $t(`signals.dataFields.${field}`);
     }
 
-    function humanizeSignalKey(value: string): string {
-        return value
-            .replaceAll('_', ' ')
-            .replaceAll('-', ' ')
-            .replace(/\b\w/g, (letter) => letter.toUpperCase());
-    }
-
     function signalParamAffectsLabel(definition: SignalDefinition, descriptor: SignalParamDescriptor): string {
         if (!descriptor.affectsOutputs?.length) return '';
         return descriptor.affectsOutputs
             .map((outputKey) => {
                 const component = definition.visualComponents?.find((item) => item.key === outputKey);
-                return component ? translatedValue(component.labelKey) || humanizeSignalKey(component.key) : humanizeSignalKey(outputKey);
+                return component ? translatedValue(component.labelKey) || humanizeKey(component.key) : humanizeKey(outputKey);
             })
             .join(' · ');
     }

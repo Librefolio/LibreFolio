@@ -18,6 +18,7 @@
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS, DEFAULT_PROVIDER_COLOR} from '$lib/utils/providerHelpers';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {ChevronDown, ChevronRight, CheckCircle, XCircle, ClipboardList, X} from 'lucide-svelte';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
 
     // =========================================================================
     // Types matching backend JSONL format
@@ -291,10 +292,7 @@
     }
 
     function handleTouchEnd() {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-        }
+        longPressTimer = clearTimer(longPressTimer);
     }
 </script>
 

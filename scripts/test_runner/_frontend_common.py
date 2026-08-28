@@ -11,13 +11,16 @@ from pathlib import Path
 from scripts.cli_base import auto_build_frontend, pipenv_prefix
 
 from . import _common
-from ._common import (
-    PROJECT_ROOT, Colors,
-    print_section, print_info, print_success, print_error, print_warning,
-)
 from ._archive import log_file_for
 from ._backend_db import db_populate
-
+from ._common import (
+    PROJECT_ROOT,
+    Colors,
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 
 # Setup already performed in the current scope. A scope is one run of one
 # category: `reset_setup_scope()` opens it, and the first `_ensure_*` call
@@ -254,7 +257,7 @@ def _run_playwright_body(
         result = subprocess.run(cmd, cwd=PROJECT_ROOT / "frontend", text=True, env=env)
 
         if result.returncode == 0:
-            print_success(f"Playwright tests - PASSED")
+            print_success("Playwright tests - PASSED")
             return True
         else:
             print_error(f"Playwright tests - FAILED (exit code: {result.returncode})")

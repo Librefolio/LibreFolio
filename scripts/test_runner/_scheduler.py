@@ -12,8 +12,7 @@ costs time, and time is cheap compared with an intermittent red.
 
 import json
 
-
-from ._inventory import PURE, READ, WRITE_SCOPED, PROJECT_ROOT, build_inventory
+from ._inventory import PROJECT_ROOT, PURE, build_inventory
 
 DURATIONS_FILE = PROJECT_ROOT / ".coverage_data" / "unit_durations.json"
 

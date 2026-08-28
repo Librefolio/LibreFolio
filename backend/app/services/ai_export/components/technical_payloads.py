@@ -30,7 +30,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import Field, FiniteFloat, model_validator
 
-from backend.app.schemas.common import StrictModel
+from backend.app.schemas.common import CurrencyCode, StrictModel
 from backend.app.schemas.signals import (
     SignalAggregationProfile,
     SignalBandComponent,
@@ -94,7 +94,7 @@ class AssetPriceSeriesPayload(StrictModel):
         None,
         description="Gross absolute open-position value of this unique asset / gross eligible exposure. Aggregated once per asset ID across brokers. Fraction in [0,1]; None if weightless.",
     )
-    currency: str
+    currency: CurrencyCode
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None
     latest_date: date | None = None
@@ -104,7 +104,7 @@ class AssetOhlcReturnsPayload(StrictModel):
     """`asset.ohlc_returns`: single-target observed-close bucket series."""
 
     asset_id: int
-    currency: str
+    currency: CurrencyCode
     price_basis: Literal["observed_close"] = "observed_close"
     buckets: tuple[PriceBucket, ...]
     latest_close: float | None = None

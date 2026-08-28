@@ -17,6 +17,7 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {makePositionKey} from '$lib/utils/core/positionKey';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -80,10 +81,6 @@
         return tableRef;
     }
 
-    function makeHoldingLookupKey(assetId: number, brokerId: number | null): string {
-        return `${assetId}-${brokerId ?? 0}`;
-    }
-
     function statusFromSoldFlag(isFullySold: boolean): PositionStatus {
         return isFullySold ? 'closed_by_period_end' : 'open_at_period_end';
     }
@@ -125,7 +122,7 @@
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
         const holdingsByKey = new Map(
             holdings.map((holding) => [
-                makeHoldingLookupKey(holding.asset_id, safeNumber(holding.broker_id)),
+                makePositionKey(holding.asset_id, safeNumber(holding.broker_id)),
                 {
                     gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
                     gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
@@ -136,7 +133,7 @@
             .map((p) => {
                 const isFullySold = p.is_fully_sold ?? false;
                 const status = statusFromSoldFlag(isFullySold);
-                const holdingMatch = holdingsByKey.get(makeHoldingLookupKey(p.asset_id, p.broker_id)) ?? null;
+                const holdingMatch = holdingsByKey.get(makePositionKey(p.asset_id, p.broker_id)) ?? null;
                 return {
                     key: `pos-${p.broker_id}-${p.asset_id}`,
                     assetName: p.asset_name,

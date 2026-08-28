@@ -28,6 +28,7 @@
     import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import {portal} from '$lib/actions/portal';
     // =========================================================================
     // Types
     // =========================================================================
@@ -1128,16 +1129,6 @@
             hovered: hoveredDate ?? undefined,
         };
     });
-
-    /** Svelte action: portal — moves node to document.body (escapes stacking contexts) */
-    function portalAction(node: HTMLElement) {
-        document.body.appendChild(node);
-        return {
-            destroy() {
-                if (node.parentElement === document.body) node.remove();
-            },
-        };
-    }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1373,7 +1364,7 @@
                 {#if usePortal}
                     <!-- svelte-ignore a11y_click_events_have_key_events -->
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div use:portalAction>
+                    <div use:portal>
                         <div class="fixed inset-0" style="z-index:99998;" onclick={closeCalendar}></div>
                         <div class="drp-popover bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-600 p-4" style={popoverStyle} data-testid="date-range-popover">
                             <div class="flex {singleColumn ? 'flex-col' : 'flex-row'} gap-4 justify-center">

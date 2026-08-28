@@ -37,7 +37,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
-from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
+from backend.app.schemas.common import Currency, CurrencyCode, DateRangeModel, SafeDecimal, StrictModel
 
 
 class AssetComponentModel(StrictModel):
@@ -94,7 +94,7 @@ class AssetIdentityPayload(AssetComponentModel):
 
     asset_id: int
     display_name: str
-    currency: str
+    currency: CurrencyCode
     asset_type: str
     quote_base_quantity: int
     active: bool
@@ -144,7 +144,7 @@ class AssetMarketSnapshotPayload(AssetComponentModel):
 
     asset_id: int
     as_of_date: Date
-    target_currency: str
+    target_currency: CurrencyCode
     observed: AssetPriceObservation | None = None
     converted_price: Currency | None = None
     conversion: AssetFxConversionProvenance | None = None
@@ -203,7 +203,7 @@ class AssetPortfolioRoleBasis(AssetComponentModel):
     price/FX gap can never masquerade as a real concentration figure.
     """
 
-    target_currency: str
+    target_currency: CurrencyCode
     valuation_basis: Literal["current_market_value"] = "current_market_value"
     denominator_basis: Literal["gross_absolute_open_position_value"] = "gross_absolute_open_position_value"
     broker_scope_mode: Literal["WHOLE_ACCESSIBLE_PORTFOLIO", "SCOPED_BROKERS"]
@@ -232,7 +232,7 @@ class AssetPositionScopePayload(AssetComponentModel):
 
     asset_id: int
     as_of_date: Date
-    target_currency: str
+    target_currency: CurrencyCode
     brokers: tuple[AssetPositionScopeBroker, ...] = ()
     total_quantity: SafeDecimal = Decimal("0")
     broker_count: int = 0
@@ -311,7 +311,7 @@ class AssetPositionsByBrokerPayload(AssetComponentModel):
 
     asset_id: int
     as_of_date: Date
-    target_currency: str
+    target_currency: CurrencyCode
     positions: tuple[AssetBrokerPosition, ...] = ()
 
 
@@ -378,7 +378,7 @@ class AssetCostValuePlPayload(AssetComponentModel):
 
     asset_id: int
     as_of_date: Date
-    target_currency: str
+    target_currency: CurrencyCode
     brokers: tuple[AssetBrokerCostValuePl, ...] = ()
     coverage: AssetAggregateCoverage
     total_cost_basis: SafeDecimal | None = None
@@ -426,7 +426,7 @@ class AssetPerformancePayload(AssetComponentModel):
 
     asset_id: int
     period: DateRangeModel
-    target_currency: str
+    target_currency: CurrencyCode
     zero_semantics: str
     brokers: tuple[AssetBrokerPeriodPerformance, ...] = ()
     coverage: AssetAggregateCoverage
@@ -501,7 +501,7 @@ class AssetLotDetailPayload(AssetComponentModel):
 
     asset_id: int
     period: DateRangeModel
-    target_currency: str
+    target_currency: CurrencyCode
     cost_allocation_semantics: str
     lots: tuple[AssetLotDetailRow, ...] = ()
     omitted_degraded_lot_count: int = 0
