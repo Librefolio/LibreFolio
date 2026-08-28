@@ -43,12 +43,12 @@ from datetime import date as Date
 from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
-from backend.app.schemas.common import Currency, SafeDecimal
+from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioReportResponse, PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import load_portfolio_report
@@ -183,10 +183,8 @@ class FeeStatus(StrEnum):
     NOT_APPLICABLE = "not_applicable"
 
 
-class TurnoverCoverage(BaseModel):
+class TurnoverCoverage(StrictModel):
     """Explicit target-currency turnover coverage of the period's trades."""
-
-    model_config = ConfigDict(extra="forbid")
 
     trade_count: int = Field(ge=0)
     target_currency_trade_count: int = Field(ge=0)
@@ -195,10 +193,8 @@ class TurnoverCoverage(BaseModel):
     complete: bool = Field(description="True when every counted trade settled in the report target currency with a usable amount (nothing excluded from turnover).")
 
 
-class TurnoverSummary(BaseModel):
+class TurnoverSummary(StrictModel):
     """Deterministic BUY/SELL turnover in the report target currency."""
-
-    model_config = ConfigDict(extra="forbid")
 
     gross_turnover: Currency = Field(description="Σ |amount| over BUY+SELL trades settled in target_currency.")
     buy_turnover: Currency
@@ -206,10 +202,8 @@ class TurnoverSummary(BaseModel):
     coverage: TurnoverCoverage
 
 
-class RecordedCostAmount(BaseModel):
+class RecordedCostAmount(StrictModel):
     """One typed recorded-cost category with explicit source-row evidence."""
-
-    model_config = ConfigDict(extra="forbid")
 
     status: FeeStatus
     amount: Currency | None = None
@@ -226,20 +220,16 @@ class RecordedCostAmount(BaseModel):
         return self
 
 
-class CostContributor(BaseModel):
+class CostContributor(StrictModel):
     """Typed fee/tax contributor aggregate; no transaction row IDs or free text."""
-
-    model_config = ConfigDict(extra="forbid")
 
     category: str
     amount: Currency
     transaction_count: int = Field(ge=1)
 
 
-class CostSourceCoverage(BaseModel):
+class CostSourceCoverage(StrictModel):
     """Coverage of the typed FEE/TAX source rows used by this component."""
-
-    model_config = ConfigDict(extra="forbid")
 
     source_code: str = "portfolio_report_typed_fee_tax_transactions_v1"
     fee_transaction_count: int = Field(ge=0)
@@ -249,10 +239,8 @@ class CostSourceCoverage(BaseModel):
     subtype_reason_code: str = REASON_SUBTYPE_UNAVAILABLE
 
 
-class CostDenominators(BaseModel):
+class CostDenominators(StrictModel):
     """All deterministic denominators exposed alongside the ratios that use them."""
-
-    model_config = ConfigDict(extra="forbid")
 
     gross_traded_amount: Currency
     average_nav: Currency | None = None
@@ -265,7 +253,7 @@ class CostDenominators(BaseModel):
     trade_count: int = Field(ge=0)
 
 
-class CostRatio(BaseModel):
+class CostRatio(StrictModel):
     """A single cost ratio with formula, operands, unit, coverage and status.
 
     ``recorded`` means a deterministic value is available; ``unavailable`` means
@@ -273,8 +261,6 @@ class CostRatio(BaseModel):
     inputs exist but the denominator is non-positive, so the ratio has no useful
     meaning for this period.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     status: FeeStatus
     formula: str
@@ -295,10 +281,8 @@ class CostRatio(BaseModel):
         return self
 
 
-class BrokerCostEfficiencyPayload(BaseModel):
+class BrokerCostEfficiencyPayload(StrictModel):
     """Renderer-neutral broker cost-efficiency evidence: activity + turnover + recorded fees + ratios."""
-
-    model_config = ConfigDict(extra="forbid")
 
     broker_id: int
     period_start: Date

@@ -21,6 +21,8 @@
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {truncateName} from '$lib/utils/text';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeNumber, safeString} from '$lib/types';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -142,27 +144,14 @@
     let hoveredRowKey: string | null = null;
     const ROW_HIGHLIGHT_SERIES_ID = 'row-highlight';
 
-    function safeString(value: string | (string | null)[] | null | undefined): string | null {
-        if (value == null) return null;
-        if (typeof value === 'string') return value;
-        return value[0] ?? null;
-    }
-
-    function safeNumber(value: string | (string | null)[] | null | undefined): number {
+    // Not `safeNumber` from $lib/types: this one parses a decimal *string*
+    // and substitutes 0 for a missing or unparseable value, because a chart
+    // series cannot carry a null. Keep the two apart.
+    function parseNumberOrZero(value: string | (string | null)[] | null | undefined): number {
         const raw = safeString(value);
         if (raw == null) return 0;
         const parsed = Number.parseFloat(raw);
         return Number.isFinite(parsed) ? parsed : 0;
-    }
-
-    function safeInt(value: number | (number | null)[] | null | undefined): number | null {
-        if (value == null) return null;
-        if (typeof value === 'number') return value;
-        return value[0] ?? null;
-    }
-
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function escapeRichText(value: string): string {
@@ -329,7 +318,7 @@
 
     let chartRows = $derived.by<ChartRow[]>(() => {
         const assetRows: AssetRow[] = positions.map((position, index) => {
-            const feesTaxes = safeNumber(position.period_fees_taxes);
+            const feesTaxes = parseNumberOrZero(position.period_fees_taxes);
             return {
                 key: `asset-${position.broker_id}-${position.asset_id}-${index}`,
                 kind: 'asset',
@@ -337,26 +326,26 @@
                 assetId: position.asset_id,
                 assetTicker: safeString(position.asset_ticker),
                 brokerName: position.broker_name,
-                startValue: safeNumber(position.start_value),
-                endValue: safeNumber(position.end_value),
-                net: safeNumber(position.period_pnl),
+                startValue: parseNumberOrZero(position.start_value),
+                endValue: parseNumberOrZero(position.end_value),
+                net: parseNumberOrZero(position.period_pnl),
                 isFullySold: position.is_fully_sold ?? false,
                 components: {
-                    unrealized: safeNumber(position.period_unrealized_delta),
-                    realized: safeNumber(position.period_realized_gain_loss),
-                    income: safeNumber(position.period_income),
+                    unrealized: parseNumberOrZero(position.period_unrealized_delta),
+                    realized: parseNumberOrZero(position.period_realized_gain_loss),
+                    income: parseNumberOrZero(position.period_income),
                     costs: feesTaxes === 0 ? 0 : -Math.abs(feesTaxes),
                 },
             };
         });
 
         const effectRows: OtherRow[] = otherEffects.map((effect, index) => ({
-            key: `effect-${safeInt(effect.broker_id) ?? 'none'}-${index}`,
+            key: `effect-${safeNumber(effect.broker_id) ?? 'none'}-${index}`,
             kind: 'other',
             label: effect.description,
             category: effect.category,
             brokerName: safeString(effect.broker_name),
-            net: safeNumber(effect.period_pnl),
+            net: parseNumberOrZero(effect.period_pnl),
         }));
 
         // Sort by impact (largest movers first, gain or loss) — mirrors the same

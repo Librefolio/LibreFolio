@@ -425,6 +425,20 @@
             const bRaw = typeof bVal === 'object' && bVal !== null && 'type' in bVal ? extractRawValue(bVal as CellContent) : bVal;
 
             let comparison = 0;
+            // A missing value is not a value: it sorts last whichever way the column
+            // points. Falling through to the string branch turned `null` into the
+            // literal "null" and handed it to localeCompare, so in descending order
+            // empty cells outranked the largest number — and *where* they landed
+            // depended on the spelling of the placeholder, since 'null' and
+            // 'undefined' sort after digits while '' sorts before everything.
+            // Returned directly, because the direction flip below must not move them.
+            const aEmpty = aRaw === null || aRaw === undefined || aRaw === '';
+            const bEmpty = bRaw === null || bRaw === undefined || bRaw === '';
+            if (aEmpty || bEmpty) {
+                if (aEmpty && bEmpty) return 0;
+                return aEmpty ? 1 : -1;
+            }
+
             if (typeof aRaw === 'number' && typeof bRaw === 'number') {
                 comparison = aRaw - bRaw;
             } else if (aRaw instanceof Date && bRaw instanceof Date) {
@@ -1152,7 +1166,9 @@
                     {#if effectiveSelectionMode === 'multi'}
                         <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
                             <div class="flex items-center justify-center gap-1">
-                                <button type="button" class="checkbox-btn" onclick={toggleAllPageRows}>
+                                <!-- data-state publishes the tri-state of the header checkbox so it can be
+                                     observed without reading the icon's CSS class. -->
+                                <button type="button" class="checkbox-btn" data-testid="dt-select-all" data-state={isAllPageSelected ? 'checked' : isSomePageSelected ? 'partial' : 'unchecked'} onclick={toggleAllPageRows}>
                                     {#if isAllPageSelected}
                                         <Check size={16} class="check-icon checked" />
                                     {:else if isSomePageSelected}
@@ -1165,6 +1181,8 @@
                                     type="button"
                                     class="filter-btn"
                                     class:active={showSelectedOnly}
+                                    data-testid="dt-show-selected-only"
+                                    data-state={showSelectedOnly ? 'on' : 'off'}
                                     onclick={() => {
                                         showSelectedOnly = !showSelectedOnly;
                                     }}
@@ -1183,6 +1201,8 @@
                         {@const hasFilter = columnFilters[column.id] !== undefined}
                         <th
                             class="th-data"
+                            data-testid="dt-header-{column.id}"
+                            data-sort={sortDir ?? 'none'}
                             class:sortable={column.sortable !== false && enableSorting}
                             class:th-fixed={column.pinned != null}
                             class:th-pinned-right={column.pinned === 'right'}
@@ -1192,7 +1212,7 @@
                                 {#if getColumnTooltip(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
                                     <Tooltip text={tooltipText} position="bottom">
-                                        <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
+                                        <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
                                             {#if getColumnHeaderHtml(column)}
                                                 <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
                                             {:else}
@@ -1212,7 +1232,7 @@
                                         </button>
                                     </Tooltip>
                                 {:else}
-                                    <button type="button" class="header-sort-btn" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
+                                    <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
                                         {#if getColumnHeaderHtml(column)}
                                             <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
                                         {:else}
@@ -1292,14 +1312,14 @@
             <tbody>
                 {#if isLoading}
                     <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading">
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading" data-testid="dt-loading">
                             <div class="loading-spinner"></div>
                             <span>{$t('common.loading') || 'Loading...'}</span>
                         </td>
                     </tr>
                 {:else if paginatedData.length === 0}
                     <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-empty">
+                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-empty" data-testid="dt-empty">
                             {emptyMessage || $t('common.noData') || 'No data available'}
                         </td>
                     </tr>
@@ -1310,6 +1330,8 @@
                         {@const visibleRowActions = getVisibleRowActions(row)}
                         <tr
                             data-row-id={rowId}
+                            data-selected={isSelected ? 'true' : 'false'}
+                            data-highlighted={rowId === highlightedRowId ? 'true' : 'false'}
                             class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
                             style={getRowStyle?.(row) ?? ''}
                             onclick={() => {
@@ -1357,6 +1379,8 @@
                                             <button
                                                 type="button"
                                                 class="checkbox-btn"
+                                                data-testid="dt-row-checkbox-{rowId}"
+                                                data-state={isSelected ? 'checked' : 'unchecked'}
                                                 onclick={(e) => {
                                                     e.stopPropagation();
                                                     toggleRowSelection(rowId);
@@ -1603,7 +1627,13 @@
                         {/if}
                         {#each visibleColumns as column}
                             {@const footerContent = computedFooterCells[column.id] ?? ''}
-                            <td class="td-data td-footer" class:td-fixed={column.pinned != null} class:td-pinned-right={column.pinned === 'right'} style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
+                            <td
+                                class="td-data td-footer"
+                                data-testid="dt-footer-{column.id}"
+                                class:td-fixed={column.pinned != null}
+                                class:td-pinned-right={column.pinned === 'right'}
+                                style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                            >
                                 {#if typeof footerContent === 'string' || typeof footerContent === 'number'}
                                     {footerContent}
                                 {:else if footerContent && typeof footerContent === 'object' && 'type' in footerContent && footerContent.type === 'html'}

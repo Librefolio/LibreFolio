@@ -9,9 +9,9 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, field_validator, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, JsonValue, field_validator, model_validator
 
-from backend.app.schemas.common import BackwardFillInfo, DateRangeModel
+from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, StrictModel
 from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.risk import PreparedAssetSeries, RiskResultMetadata
 
@@ -88,8 +88,13 @@ def _inject_discriminator(
     return value
 
 
-class SignalModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class SignalModel(StrictModel):
+    """Base for the signal payloads.
+
+    Same story as ``AiExportModel``: it existed to carry
+    ``ConfigDict(extra="forbid")``, which :class:`StrictModel` now provides. Kept
+    as the family's named base.
+    """
 
 
 class SignalDomain(StrEnum):

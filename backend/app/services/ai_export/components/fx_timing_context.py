@@ -49,10 +49,11 @@ from enum import StrEnum
 from statistics import pstdev
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
+from backend.app.schemas.common import StrictModel
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
-from backend.app.services.ai_export.components.fx_payloads import FxConversionProvenancePayload, FxCurrentRatePayload
+from backend.app.services.ai_export.components.fx_payloads import FxConversionProvenancePayload, FxCurrentRatePayload, validate_finite_positive_decimal
 from backend.app.services.ai_export.components.resources import FxRateSeriesResource
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_shared import load_fx_rate_series
@@ -116,15 +117,7 @@ REASON_HISTORY_STARTS_LATE = "source_history_starts_after_period_start"
 REASON_NO_GENUINE_OBSERVATIONS = "no_genuine_observations_in_period"
 
 
-def _validate_finite_positive_decimal(value: Decimal, *, field_name: str) -> Decimal:
-    if not isinstance(value, Decimal):
-        raise TypeError(f"{field_name} must be a Decimal")
-    if not value.is_finite() or value <= 0:
-        raise ValueError(f"{field_name} must be a finite, positive Decimal")
-    return value
-
-
-class FxObservedRangePosition(BaseModel):
+class FxObservedRangePosition(StrictModel):
     """Where the current rate sits inside the observed period min/max envelope.
 
     ``range_position_ratio`` is a plain 0..1 *range position* (``(current - min) /
@@ -137,8 +130,6 @@ class FxObservedRangePosition(BaseModel):
     room there is below the current rate to the observed low and above it to the
     observed high.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     observed_minimum: Decimal | None = None
     observed_minimum_date: date | None = None
@@ -154,7 +145,7 @@ class FxObservedRangePosition(BaseModel):
     def _validate_extreme(cls, value: Decimal | None) -> Decimal | None:
         if value is None:
             return None
-        return _validate_finite_positive_decimal(value, field_name="observed extreme")
+        return validate_finite_positive_decimal(value, field_name="observed extreme")
 
     @model_validator(mode="after")
     def _check_consistency(self) -> Self:
@@ -181,7 +172,7 @@ class FxObservedRangePosition(BaseModel):
         return self
 
 
-class FxObservedReturns(BaseModel):
+class FxObservedReturns(StrictModel):
     """Trailing observed returns and realized dispersion (never a forecast).
 
     Every value is ``None`` when insufficient genuine observations exist to
@@ -190,15 +181,13 @@ class FxObservedReturns(BaseModel):
     historical dispersion figure, never scaled into a predictive band.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     return_30d_ratio: float | None = None
     return_91d_ratio: float | None = None
     return_period_ratio: float | None = None
     daily_return_volatility_ratio: float | None = Field(default=None, ge=0)
 
 
-class FxSourceHistoryCoverage(BaseModel):
+class FxSourceHistoryCoverage(StrictModel):
     """Observed calendar coverage + observed/backfilled counts for the visible period.
 
     Mirrors the semantics of ``backend.app.services.ai_export.runtime_service.
@@ -208,8 +197,6 @@ class FxSourceHistoryCoverage(BaseModel):
     a backward-filled weekend/holiday start remains covered and does not become a
     false source-history gap. ``is_partial_history`` is the exact inverse.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     requested_period_start: date
     requested_period_end: date
@@ -239,7 +226,7 @@ class FxSourceHistoryCoverage(BaseModel):
         return self
 
 
-class FxTimingContextPayload(BaseModel):
+class FxTimingContextPayload(StrictModel):
     """`fx.timing_context`: observed, non-predictive conversion-timing evidence.
 
     The current rate/date/staleness/backfill/provider are reused verbatim from
@@ -248,8 +235,6 @@ class FxTimingContextPayload(BaseModel):
     genuine observed rate series. There is deliberately no forecast, target or
     predictive band anywhere in this payload.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str
@@ -277,7 +262,7 @@ class FxTimingContextPayload(BaseModel):
     @field_validator("current_rate")
     @classmethod
     def _validate_rate(cls, value: Decimal) -> Decimal:
-        return _validate_finite_positive_decimal(value, field_name="current_rate")
+        return validate_finite_positive_decimal(value, field_name="current_rate")
 
     @model_validator(mode="after")
     def _check_consistency(self) -> Self:

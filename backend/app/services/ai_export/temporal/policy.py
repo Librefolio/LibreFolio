@@ -18,6 +18,8 @@ from enum import StrEnum
 
 from backend.app.schemas.signals import SignalTemporalClass
 
+from .._int_validation import is_int_not_bool, require_positive_int
+
 #: Exponent P in the rational decay function.
 EXPONENT = 2
 
@@ -136,9 +138,9 @@ class BucketingPolicy:
     ramp_start_offset: int = RAMP_START_OFFSET
 
     def __post_init__(self) -> None:
-        _require_positive_int(self.max_bucket_days, "max_bucket_days")
-        _require_positive_int(self.exponent, "exponent")
-        _require_positive_int(self.half_life_offset, "half_life_offset")
+        require_positive_int(self.max_bucket_days, "max_bucket_days")
+        require_positive_int(self.exponent, "exponent")
+        require_positive_int(self.half_life_offset, "half_life_offset")
         _require_non_negative_int(self.ramp_start_offset, "ramp_start_offset")
 
     @classmethod
@@ -187,15 +189,8 @@ class BucketingPolicy:
         return max(1, int(rounded))
 
 
-def _require_positive_int(value: object, label: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{label} must be an integer")
-    if value < 1:
-        raise ValueError(f"{label} must be >= 1")
-
-
 def _require_non_negative_int(value: object, label: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int):
+    if not is_int_not_bool(value):
         raise TypeError(f"{label} must be an integer")
     if value < 0:
         raise ValueError(f"{label} must be >= 0")

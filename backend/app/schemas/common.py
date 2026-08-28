@@ -99,6 +99,33 @@ def _validate_currency_code_cached(code: str) -> str:
 
 
 # =============================================================================
+# STRICT MODEL BASE
+# =============================================================================
+
+
+class StrictModel(BaseModel):
+    """A `BaseModel` that refuses fields it does not declare.
+
+    ``ConfigDict(extra="forbid")`` was repeated **316 times** across the schema
+    layer and the AI Export payloads — the single most duplicated line in the
+    backend. It is not decoration: forbidding unknown fields is what turns a
+    renamed or misspelled key into a loud 422 instead of a value that silently
+    goes nowhere, and every one of those 316 classes wanted it.
+
+    Repeating it is how it eventually gets forgotten on the one model where it
+    mattered most, and nothing says so. Inheriting it means a new model is strict
+    by default and has to *opt out* on purpose, which is the right way round.
+
+    Pydantic merges `model_config` down the inheritance chain, so a subclass that
+    genuinely needs something else can still declare its own — the handful that
+    do (``from_attributes``, ``frozen``, ``str_strip_whitespace``) keep working
+    unchanged.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+# =============================================================================
 # CURRENCY CLASS
 # =============================================================================
 
@@ -282,6 +309,29 @@ class Currency(BaseModel):
         return self.amount < Decimal("0")
 
 
+def is_fiat_currency(value: Any) -> bool:
+    """Return True when ``value`` is a valid ISO 4217 currency code.
+
+    Non-raising twin of :meth:`Currency.validate_code`, which already normalises
+    (``upper().strip()``) and rejects the empty string. Anything that is not a
+    valid code -- a crypto ticker like ``BTC``, an empty cell, ``None``, a number
+    a CSV parser failed to coerce -- answers ``False`` instead of raising,
+    because callers use this to *classify* a symbol, not to validate input.
+
+    Single source of truth for the "is this fiat?" question. It lives beside
+    ``Currency`` because that class already owns ISO 4217 validation and its LRU
+    cache; a second normalisation elsewhere is exactly how the four BRIM copies
+    of this helper started to drift apart.
+    """
+    if not isinstance(value, str):
+        return False
+    try:
+        Currency.validate_code(value)
+    except ValueError:
+        return False
+    return True
+
+
 class BackwardFillInfo(BaseModel):
     """
     Backward-fill information when requested date has no data.
@@ -398,7 +448,7 @@ class DateRangeModel(BaseModel):
     def validate_end_after_start(self) -> DateRangeModel:
         """Ensure end >= start when end is provided."""
         if self.end is not None and self.end < self.start:
-            raise ValueError(f"end date ({self.end}) must be >= start date ({self.end})")
+            raise ValueError(f"end date ({self.end}) must be >= start date ({self.start})")
         return self
 
 

@@ -458,6 +458,7 @@
             {#each categories as cat}
                 <button
                     on:click={() => (selectedCategory = cat.id)}
+                    data-testid="global-settings-category-{cat.id}"
                     class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
                         {selectedCategory === cat.id ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
                 >

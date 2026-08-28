@@ -36,10 +36,10 @@ from collections.abc import Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
 from backend.app.db.models import Asset
-from backend.app.schemas.common import Currency, SafeDecimal
+from backend.app.schemas.common import Currency, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioHistoryPoint
 from backend.app.services.ai_export.components.broker_concentration_context import (
     ConcentrationCoverage,
@@ -113,8 +113,7 @@ async def _load_portfolio_asset_metadata(context: BuildContext, asset_ids: Seque
 # =============================================================================
 
 
-class PortfolioSummaryPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioSummaryPayload(StrictModel):
 
     as_of: Date
     period_start: Date
@@ -175,8 +174,7 @@ async def _build_portfolio_summary(context: BuildContext, dependencies: Mapping[
 # =============================================================================
 
 
-class PortfolioPositionsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioPositionsPayload(StrictModel):
 
     as_of: Date
     target_currency: str
@@ -198,8 +196,7 @@ async def _build_portfolio_positions(context: BuildContext, dependencies: Mappin
 # =============================================================================
 
 
-class PortfolioAllocationsCashPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioAllocationsCashPayload(StrictModel):
 
     as_of: Date
     target_currency: str
@@ -270,15 +267,13 @@ async def _build_portfolio_allocations_cash(context: BuildContext, dependencies:
 # =============================================================================
 
 
-class ProvenanceNote(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class ProvenanceNote(StrictModel):
 
     subject: str
     text: str
 
 
-class PortfolioProvenancePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioProvenancePayload(StrictModel):
 
     domain: str
     target_currency: str
@@ -317,8 +312,7 @@ def _build_portfolio_provenance(context: BuildContext, dependencies: Mapping[str
 # =============================================================================
 
 
-class PortfolioPerformancePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioPerformancePayload(StrictModel):
 
     period_start: Date
     period_end: Date
@@ -387,8 +381,7 @@ async def _build_portfolio_performance(context: BuildContext, dependencies: Mapp
 # =============================================================================
 
 
-class PortfolioFlowsIncomePayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioFlowsIncomePayload(StrictModel):
 
     period_start: Date
     period_end: Date
@@ -429,8 +422,7 @@ async def _build_portfolio_flows_income(context: BuildContext, dependencies: Map
 # =============================================================================
 
 
-class PortfolioFeesTaxesPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioFeesTaxesPayload(StrictModel):
 
     period_start: Date
     period_end: Date
@@ -467,8 +459,7 @@ async def _build_portfolio_fees_taxes(context: BuildContext, dependencies: Mappi
 # =============================================================================
 
 
-class PortfolioReconciliationPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioReconciliationPayload(StrictModel):
 
     period_start: Date
     period_end: Date
@@ -525,8 +516,7 @@ async def _build_portfolio_reconciliation(context: BuildContext, dependencies: M
 # =============================================================================
 
 
-class PortfolioFifoSummaryPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioFifoSummaryPayload(StrictModel):
 
     period_start: Date
     period_end: Date
@@ -591,8 +581,7 @@ async def _build_portfolio_fifo_summary(context: BuildContext, dependencies: Map
 # =============================================================================
 
 
-class PortfolioFifoLotsPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class PortfolioFifoLotsPayload(StrictModel):
 
     period_start: Date
     period_end: Date

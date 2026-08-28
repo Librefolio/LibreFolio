@@ -37,6 +37,7 @@ from backend.app.config import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
+from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     BRIMProviderRegistry,
@@ -49,7 +50,6 @@ from backend.app.services.risk.quant.workers import (
 from backend.app.services.risk.scenario_catalog import (
     initialize_risk_scenario_catalog,
 )
-from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.signal_runtime import validate_signal_runtime

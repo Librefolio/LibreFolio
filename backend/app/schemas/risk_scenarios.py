@@ -8,7 +8,9 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Annotated, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, PositiveInt, RootModel, field_validator, model_validator
+from pydantic import Field, FiniteFloat, PositiveInt, RootModel, field_validator, model_validator
+
+from backend.app.schemas.common import StrictModel
 
 RISK_SCENARIO_SCHEMA_VERSION = 1
 RISK_SCENARIO_OFFICIAL_LANGUAGES = ("en", "it", "fr", "es")
@@ -77,8 +79,7 @@ class RiskScenarioLocalizedText(RootModel[Dict[str, str]]):
         return self.root[first_language]
 
 
-class RiskHistoricalReplayDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskHistoricalReplayDefaults(StrictModel):
 
     start: Optional[date] = None
     end: Optional[date] = None
@@ -94,8 +95,7 @@ class RiskHistoricalReplayDefaults(BaseModel):
         return self
 
 
-class RiskHistoricalReplayEditable(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskHistoricalReplayEditable(StrictModel):
 
     dates: bool = True
     missing_history_policy: bool = True
@@ -103,8 +103,7 @@ class RiskHistoricalReplayEditable(BaseModel):
     exclusions: bool = True
 
 
-class RiskHistoricalReplayLimits(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskHistoricalReplayLimits(StrictModel):
 
     minimum_calendar_days: PositiveInt = 1
     maximum_calendar_days: Optional[PositiveInt] = None
@@ -116,8 +115,7 @@ class RiskHistoricalReplayLimits(BaseModel):
         return self
 
 
-class RiskHypotheticalShockDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskHypotheticalShockDefaults(StrictModel):
 
     dimension: RiskScenarioDimension
     bucket_shocks: Dict[str, FiniteFloat] = Field(..., min_length=1, max_length=100)
@@ -138,16 +136,14 @@ class RiskHypotheticalShockDefaults(BaseModel):
         return normalized
 
 
-class RiskHypotheticalShockEditable(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskHypotheticalShockEditable(StrictModel):
 
     dimension: bool = False
     bucket_shocks: bool = True
     manual_overrides: bool = True
 
 
-class RiskHypotheticalShockLimits(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskHypotheticalShockLimits(StrictModel):
 
     minimum_shock: FiniteFloat = -1.0
     maximum_shock: FiniteFloat = 1.0
@@ -160,8 +156,7 @@ class RiskHypotheticalShockLimits(BaseModel):
         return self
 
 
-class RiskScenarioBase(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskScenarioBase(StrictModel):
 
     schema_version: Literal[RISK_SCENARIO_SCHEMA_VERSION]
     id: str = Field(..., min_length=1, max_length=80)
@@ -242,24 +237,21 @@ RiskScenarioDefinition = Annotated[
 ]
 
 
-class RiskScenarioCatalogEntry(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskScenarioCatalogEntry(StrictModel):
 
     source: RiskScenarioSource
     source_file: str
     scenario: RiskScenarioDefinition
 
 
-class RiskScenarioCatalogWarning(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskScenarioCatalogWarning(StrictModel):
 
     code: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     source_file: str
     message: str
 
 
-class RiskGeographyGroupDefinition(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskGeographyGroupDefinition(StrictModel):
 
     schema_version: Literal[RISK_SCENARIO_SCHEMA_VERSION]
     id: str = Field(..., min_length=1, max_length=80)
@@ -284,8 +276,7 @@ class RiskGeographyGroupDefinition(BaseModel):
         return sorted(normalized)
 
 
-class RiskScenarioCatalogStatus(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskScenarioCatalogStatus(StrictModel):
 
     schema_version: Literal[RISK_SCENARIO_SCHEMA_VERSION] = RISK_SCENARIO_SCHEMA_VERSION
     loaded_at: datetime
@@ -301,8 +292,7 @@ class RiskScenarioCatalogStatus(BaseModel):
         return value
 
 
-class RiskScenarioCatalogResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class RiskScenarioCatalogResponse(StrictModel):
 
     items: List[RiskScenarioCatalogEntry] = Field(default_factory=list)
     geography_groups: List[RiskGeographyGroupDefinition] = Field(default_factory=list)

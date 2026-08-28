@@ -14,6 +14,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import KpiMetricBar from '$lib/components/dashboard/KpiMetricBar.svelte';
     import KpiDivergingFlowBar from '$lib/components/dashboard/KpiDivergingFlowBar.svelte';
+    import {safeString} from '$lib/types';
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -23,12 +24,6 @@
     }
 
     let {summary, history, loading, displayCurrency}: Props = $props();
-
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        if (Array.isArray(v)) return v[0] ?? null;
-        return v;
-    }
 
     function safeCurrency(v: any): {code: string; amount: string} | null {
         if (v == null) return null;
@@ -195,15 +190,15 @@
 
     const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
     const twrrCumVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.twrr_percent) : null;
+        const v = summary ? safeString(summary.twrr_percent) : null;
         return v != null ? parseFloat(v) * 100 : 0;
     });
     const mwrrCumVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.mwrr_cumulative_percent) : null;
+        const v = summary ? safeString(summary.mwrr_cumulative_percent) : null;
         return v != null ? parseFloat(v) * 100 : 0;
     });
     const mwrrAnnVal = $derived.by(() => {
-        const v = summary ? safeStr(summary.mwrr_annualized_percent) : null;
+        const v = summary ? safeString(summary.mwrr_annualized_percent) : null;
         return v != null ? parseFloat(v) * 100 : 0;
     });
     const timingEffectVal = $derived(mwrrCumVal - twrrCumVal);

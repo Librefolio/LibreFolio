@@ -14,6 +14,8 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import type {PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     type OtherPeriodEffect = NonNullable<PositionsContribution['other_effects']>[number];
 
@@ -35,23 +37,6 @@
 
     let tableShell: HTMLDivElement | null = $state(null);
 
-    function safeNum(v: string | (string | null)[] | null | undefined): number | null {
-        const s = Array.isArray(v) ? (v[0] ?? null) : v;
-        if (s == null) return null;
-        const n = parseFloat(s);
-        return Number.isNaN(n) ? null : n;
-    }
-
-    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function safeStr(v: string | (string | null)[] | null | undefined): string | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
     function label(key: string, fallback: string): string {
         const translated = $_(key);
         return !translated || translated === key ? fallback : translated;
@@ -59,18 +44,14 @@
 
     let rows = $derived.by<DisplayRow[]>(() =>
         (effects ?? []).map((effect, index) => ({
-            key: `effect-${index}-${effect.category}-${safeInt(effect.broker_id) ?? 'global'}`,
+            key: `effect-${index}-${effect.category}-${safeNumber(effect.broker_id) ?? 'global'}`,
             description: effect.description,
             category: effect.category,
-            periodPnl: safeNum(effect.period_pnl),
-            brokerId: safeInt(effect.broker_id),
-            brokerName: safeStr(effect.broker_name),
+            periodPnl: safeDecimal(effect.period_pnl),
+            brokerId: safeNumber(effect.broker_id),
+            brokerName: safeString(effect.broker_name),
         })),
     );
-
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
 
     function categoryBadgeClass(category: string): string {
         switch (category) {

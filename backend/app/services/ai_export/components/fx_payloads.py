@@ -21,8 +21,9 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
+from backend.app.schemas.common import StrictModel
 from backend.app.services.ai_export.components.types import normalize_currency_code
 
 
@@ -48,7 +49,14 @@ def _validate_currency(value: str) -> str:
     return normalize_currency_code(value)
 
 
-def _validate_finite_positive_decimal(value: Decimal, *, field_name: str) -> Decimal:
+def validate_finite_positive_decimal(value: Decimal, *, field_name: str) -> Decimal:
+    """Shared FX guard: the value must be a genuine, finite, strictly positive ``Decimal``.
+
+    Public (not ``_``-prefixed) because ``fx_timing_context`` reuses it verbatim; it used
+    to hold a byte-identical private copy, which is exactly how two sibling modules drift
+    apart. Keep the wording of both messages stable: they are asserted by the FX payload
+    tests as the validation contract of every rate-like field.
+    """
     if not isinstance(value, Decimal):
         raise TypeError(f"{field_name} must be a Decimal")
     if not value.is_finite() or value <= 0:
@@ -64,7 +72,7 @@ def _validate_finite_decimal(value: Decimal, *, field_name: str) -> Decimal:
     return value
 
 
-class FxPairIdentityPayload(BaseModel):
+class FxPairIdentityPayload(StrictModel):
     """`fx.pair_identity`: explicit quote-per-base pair identity.
 
     `rate_semantics` documents the fixed convention (1 unit of `base_currency`
@@ -72,8 +80,6 @@ class FxPairIdentityPayload(BaseModel):
     `stored_quote_currency` expose the alphabetical storage order backing
     `direction`, so callers never have to re-derive it themselves.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str
@@ -101,15 +107,13 @@ class FxPairIdentityPayload(BaseModel):
         return self
 
 
-class FxCurrentRatePayload(BaseModel):
+class FxCurrentRatePayload(StrictModel):
     """`fx.current_rate`: quote-per-base rate as of the snapshot instant.
 
     `requested_date` is always `BuildScope.snapshot_as_of`; `effective_date` is
     the actual stored rate date backing it (backward-filled when no exact
     match exists), never after `requested_date`.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str
@@ -128,7 +132,7 @@ class FxCurrentRatePayload(BaseModel):
     @field_validator("rate")
     @classmethod
     def _validate_rate(cls, value: Decimal) -> Decimal:
-        return _validate_finite_positive_decimal(value, field_name="rate")
+        return validate_finite_positive_decimal(value, field_name="rate")
 
     @model_validator(mode="after")
     def _check_consistency(self) -> Self:
@@ -144,15 +148,13 @@ class FxCurrentRatePayload(BaseModel):
         return self
 
 
-class FxConversionProvenancePayload(BaseModel):
+class FxConversionProvenancePayload(StrictModel):
     """`fx.conversion_provenance`: methodology/provenance for the base/quote pair itself.
 
     Distinct from `fx.exposure_provenance` (which documents exposure currency
     conversions towards `target_currency`, possibly a third currency): this
     component only ever describes the `base_currency`/`quote_currency` pair.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str
@@ -216,7 +218,7 @@ class FxExposureConversionBasis(StrEnum):
     ENGINE_VALUATION = "engine_valuation"
 
 
-class FxExposureConversion(BaseModel):
+class FxExposureConversion(StrictModel):
     """Per-row conversion facts from `linked_currency` towards `target_currency`.
 
     `direction` is only ever set for `basis=RESOLVED_RATE` (a genuine resolved
@@ -224,8 +226,6 @@ class FxExposureConversion(BaseModel):
     `direction=None` - the former because no conversion is needed, the latter
     because none is honestly known.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     basis: FxExposureConversionBasis
     direction: FxRateDirection | None = None
@@ -250,7 +250,7 @@ class FxExposureConversion(BaseModel):
         return self
 
 
-class FxExposureRow(BaseModel):
+class FxExposureRow(StrictModel):
     """One preserved exposure row: exactly one cash balance or one valued position.
 
     Every row produced by the builder is kept (no top-N truncation); ordering
@@ -267,8 +267,6 @@ class FxExposureRow(BaseModel):
     CASH), so callers still get an honest basis for the value even when no
     native amount/rate is available.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     kind: FxExposureKind
     linkage: FxExposureLinkage
@@ -350,7 +348,7 @@ class FxExposureRole(StrEnum):
     QUOTE = "quote"
 
 
-class FxExposureRoleSummary(BaseModel):
+class FxExposureRoleSummary(StrictModel):
     """Deterministic per-leg (base or quote) rollup of the preserved exposure rows.
 
     Every count/total is derived purely from the preserved ``rows`` (no row is
@@ -363,8 +361,6 @@ class FxExposureRoleSummary(BaseModel):
     sums their absolute values, so a reader can tell an offsetting net-flat leg
     from a truly empty one.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     currency: str
     role: FxExposureRole
@@ -426,7 +422,7 @@ def _role_summary(rows: Sequence[FxExposureRow], *, currency: str, role: FxExpos
     )
 
 
-class FxExposureSummary(BaseModel):
+class FxExposureSummary(StrictModel):
     """Explicit base/quote exposure rollup + zero-state for ``fx.exposure_base_quote``.
 
     Fully derived from the preserved rows (see ``FxExposureBaseQuotePayload`` -
@@ -434,8 +430,6 @@ class FxExposureSummary(BaseModel):
     / ``has_direct_base_exposure`` make the direct-exposure zero-state explicit so
     an analysis never has to infer "no exposure" from an empty row list.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str
@@ -487,7 +481,7 @@ class FxExposureSummary(BaseModel):
         )
 
 
-class FxExposureBaseQuotePayload(BaseModel):
+class FxExposureBaseQuotePayload(StrictModel):
     """`fx.exposure_base_quote`: every direct base/quote exposure row, preserved.
 
     `rows` deliberately preserves every candidate row across all detail
@@ -499,8 +493,6 @@ class FxExposureBaseQuotePayload(BaseModel):
     from those preserved rows - it never removes or overrides any row, and is
     recomputed on validation so it can never drift from `rows`.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str
@@ -537,14 +529,12 @@ class FxExposureBaseQuotePayload(BaseModel):
         return self
 
 
-class FxExposureConversionSummary(BaseModel):
+class FxExposureConversionSummary(StrictModel):
     """One deduplicated exposure-currency conversion entry (`fx.exposure_provenance`).
 
     `source=None` is only valid for identity conversions (`direction=None`);
     every real conversion must carry the authoritative `FxRate.source`.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     linked_currency: str
     target_currency: str
@@ -571,7 +561,7 @@ class FxExposureConversionSummary(BaseModel):
         return self
 
 
-class FxExposureProvenancePayload(BaseModel):
+class FxExposureProvenancePayload(StrictModel):
     """`fx.exposure_provenance`: deduplicated conversion provenance for `fx.exposure_base_quote`.
 
     One entry per distinct `linked_currency` that has at least one sibling
@@ -584,8 +574,6 @@ class FxExposureProvenancePayload(BaseModel):
     on those rows instead) is deliberately omitted here: this component never
     claims a conversion as provenance for a row that did not actually use it.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     base_currency: str
     quote_currency: str

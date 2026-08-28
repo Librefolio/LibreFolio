@@ -11,6 +11,7 @@
   Used by: DataEditor (new row date editing), transaction form, broker form.
 -->
 <script lang="ts">
+    import {todayIso} from '$lib/utils/dateOnly';
     import {Calendar} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import CalendarMonth from './CalendarMonth.svelte';
@@ -112,12 +113,6 @@
     // =========================================================================
     // Helpers
     // =========================================================================
-
-    /** Today in ISO, used to enforce `allowFuture` on typed input too. */
-    function todayIso(): string {
-        const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    }
 
     /**
      * The same gates the calendar applies to a day cell, applied to a typed date:

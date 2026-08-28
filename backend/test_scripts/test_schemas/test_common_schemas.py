@@ -21,13 +21,16 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from pydantic import ConfigDict, ValidationError
 
 from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     OldNew,
     OpenDateRangeModel,
+    StrictModel,
     _decimal_fixed_point,
+    is_fiat_currency,
 )
 
 # ============================================================================
@@ -465,20 +468,38 @@ class TestDateRangeModel:
         assert dr.start == dr.end
 
     def test_end_before_start_fails(self):
-        """End before start should fail."""
+        """End before start should fail, and the message must name both dates."""
         with pytest.raises(ValueError, match="must be >= start"):
             DateRangeModel(start=date(2025, 12, 31), end=date(2025, 1, 1))
 
-    def test_optional_end(self):
-        """End can be optional if schema allows."""
-        # This depends on the schema definition
-        try:
-            dr = DateRangeModel(start=date(2025, 1, 1), end=None)
-            # If it works, end is optional
-            assert dr.end is None
-        except (ValueError, TypeError):
-            # If it fails, end is required - that's also valid
-            pass
+    def test_the_error_names_the_start_date_it_is_talking_about(self):
+        """The message announced "start date" and then printed the *end* date.
+
+        `validate_end_after_start` interpolated ``self.end`` twice, so a user who
+        submitted 31/12 → 01/01 was told "end date (2025-01-01) must be >= start date
+        (2025-01-01)" — a sentence that contradicts itself and hides the value they
+        need to fix. Its two sibling validators (``OpenDateRangeModel`` and
+        ``SyncDateRangeModel``) always got it right, which is what identifies it as a
+        typo rather than a decision. Asserting only the prefix, as the test above
+        does, let it through.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            DateRangeModel(start=date(2025, 12, 31), end=date(2025, 1, 1))
+        message = str(excinfo.value)
+        assert "2025-12-31" in message, f"the start date must appear in: {message}"
+        assert "2025-01-01" in message, f"the end date must appear in: {message}"
+
+    def test_end_is_optional(self):
+        """A range with no end is a single open-ended range, and is accepted.
+
+        This used to try the call inside a try/except that accepted *both* outcomes —
+        "if it works end is optional, if it fails end is required, that's also valid" —
+        which is a test that cannot fail. The field is declared
+        ``Optional[date_type] = Field(None, ...)``, so there is a right answer.
+        """
+        dr = DateRangeModel(start=date(2025, 1, 1), end=None)
+        assert dr.end is None
+        assert dr.start == date(2025, 1, 1)
 
 
 # ============================================================================
@@ -506,5 +527,117 @@ class TestOpenDateRangeModel:
             OpenDateRangeModel(start=date(2025, 12, 31), end=date(2025, 1, 1))
 
 
+class TestIsFiatCurrency:
+    """The single ``is_fiat_currency`` shared by the four BRIM crypto plugins.
+
+    Until now each of ``broker_delta``, ``broker_cointracking``, ``broker_bitvavo``
+    and ``broker_cryptocom`` carried its own copy in two different shapes. These
+    tests pin the unified contract so a fifth copy cannot quietly reappear with
+    different answers: a symbol read from a CSV cell is *classified*, never
+    validated, so every malformed input has to produce ``False`` rather than an
+    exception.
+    """
+
+    def test_a_lowercase_code_is_fiat(self):
+        # Exports are not consistent about case: "eur" and "EUR" are the same currency.
+        assert is_fiat_currency("eur") is True
+
+    def test_surrounding_whitespace_is_ignored(self):
+        # CSV cells routinely carry padding; it must not change the classification.
+        assert is_fiat_currency("  EUR  ") is True
+        assert is_fiat_currency(" eur ") is True
+
+    def test_the_empty_string_is_not_fiat(self):
+        # An empty cell means "no currency reported", not "an invalid one".
+        assert is_fiat_currency("") is False
+
+    def test_a_whitespace_only_string_is_not_fiat(self):
+        assert is_fiat_currency("   ") is False
+
+    def test_a_code_that_does_not_exist_is_not_fiat(self):
+        assert is_fiat_currency("ZZZ") is False
+
+    @pytest.mark.parametrize("ticker", ["BTC", "ETH", "USDT", "btc", " ada "])
+    def test_a_crypto_ticker_is_never_fiat(self, ticker):
+        # The whole point of the helper: separating the fiat leg of a trade from
+        # the crypto leg. A stablecoin ticker is still not an ISO 4217 currency.
+        assert is_fiat_currency(ticker) is False
+
+    @pytest.mark.parametrize("ticker", ["SOL", "ALL"])
+    def test_tickers_that_collide_with_iso_4217_are_reported_as_fiat(self, ticker):
+        # Documents current behaviour, it is not an endorsement. SOL is both Solana
+        # and the Peruvian Sol; ALL is both a token and the Albanian Lek. pycountry
+        # answers yes, so a Solana leg is classified as the fiat leg of the trade.
+        # All four BRIM copies behaved this way before the unification, so nothing
+        # changed here -- but the collision is real and needs a product decision
+        # (a crypto denylist) rather than a silent tweak inside a shared helper.
+        assert is_fiat_currency(ticker) is True
+
+    @pytest.mark.parametrize("value", [None, 123, 12.5, Decimal("1"), b"EUR", ["EUR"]])
+    def test_a_non_string_is_not_fiat_instead_of_raising(self, value):
+        # Regression: the bitvavo/cryptocom copies normalised *before* their try
+        # block, so ``None`` from an unparsed cell raised AttributeError and took
+        # the whole import down instead of classifying the symbol as non-fiat.
+        assert is_fiat_currency(value) is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+class TestStrictModel:
+    """`extra="forbid"` used to be written out 316 times; now it is inherited.
+
+    That line is not decoration: forbidding unknown fields is what turns a renamed
+    or misspelled key into a loud 422 instead of a value that silently goes
+    nowhere. These tests are what make the inheritance trustworthy — and what would
+    notice if a future refactor turned `StrictModel` back into a plain `BaseModel`,
+    which would loosen three hundred contracts at once without a single test
+    failing anywhere else.
+    """
+
+    def test_a_subclass_rejects_an_unknown_field(self):
+        class Sub(StrictModel):
+            known: int
+
+        with pytest.raises(ValidationError):
+            Sub(known=1, unknown="surprise")
+
+    def test_a_subclass_still_accepts_what_it_declares(self):
+        class Sub(StrictModel):
+            known: int
+
+        assert Sub(known=1).known == 1
+
+    def test_strictness_survives_two_levels_of_inheritance(self):
+        # Several schema families define an intermediate base of their own
+        # (AiExportModel, SignalModel), so the config has to travel further than one
+        # step.
+        class Middle(StrictModel):
+            pass
+
+        class Leaf(Middle):
+            known: int
+
+        with pytest.raises(ValidationError):
+            Leaf(known=1, unknown="surprise")
+
+    def test_a_subclass_can_still_add_its_own_config(self):
+        # The handful of models that need `from_attributes` or `frozen` declare their
+        # own model_config; pydantic merges it with the inherited one rather than
+        # replacing it, so they must keep forbidding extras.
+        class Frozen(StrictModel):
+            model_config = ConfigDict(frozen=True)
+            known: int
+
+        instance = Frozen(known=1)
+        with pytest.raises(ValidationError):
+            Frozen(known=1, unknown="surprise")
+        with pytest.raises(ValidationError):
+            instance.known = 2
+
+    def test_the_real_schemas_inherit_it(self):
+        # A spot check on shipped models rather than on locally defined ones: this is
+        # what proves the 305 conversions actually took effect.
+        with pytest.raises(ValidationError):
+            DateRangeModel(start=date(2025, 1, 1), end=date(2025, 1, 2), unknown="surprise")

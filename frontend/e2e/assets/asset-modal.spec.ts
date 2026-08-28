@@ -549,4 +549,36 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             }
         }
     });
+
+    // ========================================================================
+    // Discard-confirm guard: cancelling a create modal that has unsaved edits
+    // must open the discard confirmation, and "continue editing" must keep the
+    // form open. Exercises AssetModal's isDirty → showDiscardConfirm branch in
+    // handleClose, which no test entered. Nothing is ever saved → no cleanup.
+    // ========================================================================
+    test('cancelling a dirty create modal asks to confirm before discarding', async ({page}) => {
+        await goToAssetsPage(page);
+        await openCreateAssetModal(page);
+
+        // Make the form dirty so handleClose routes through the discard confirm
+        // instead of closing outright (displayName is the first snapshot field).
+        const name = page.getByTestId('asset-modal-display-name');
+        await name.fill(`E2E Discard ${uniqueToken(6)}`);
+        await expect(name).toHaveValue(/^E2E Discard/);
+
+        // Cancel → the discard confirmation appears rather than closing.
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('confirm-modal-message')).toBeVisible();
+
+        // "Continue editing" dismisses the confirm and keeps the form open.
+        await page.getByTestId('confirm-modal-cancel').click();
+        await expect(page.getByTestId('confirm-modal-message')).toHaveCount(0);
+        await expect(page.getByTestId('asset-modal-form')).toBeVisible();
+
+        // Cancel again, this time confirm the discard → the modal closes.
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible();
+        await page.getByTestId('confirm-modal-confirm').click();
+        await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
+    });
 });

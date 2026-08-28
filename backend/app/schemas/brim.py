@@ -27,10 +27,10 @@ from datetime import date
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.common import SafeDecimal
+from backend.app.schemas.common import SafeDecimal, StrictModel
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
@@ -112,7 +112,7 @@ class BRIMDuplicateLevel(StrEnum):
 # =============================================================================
 
 
-class BRIMFileInfo(BaseModel):
+class BRIMFileInfo(StrictModel):
     """
     Information about an uploaded broker report file.
 
@@ -180,14 +180,12 @@ class BRIMAssetNotice(BaseModel):
             that triggered this notice. Currently unused by the UI; reserved for a future preview.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     kind: str = Field(..., description="Notice category key driving banner grouping (e.g. 'maturity_suspected')")
     reason: str = Field(..., description="Plugin-localized motivation shown as a bullet under the banner")
     transaction_indexes: List[int] = Field(default_factory=list, description="Indexes of triggering transactions in the parse output (reserved for future preview)")
 
 
-class BRIMExtractedAssetInfo(BaseModel):
+class BRIMExtractedAssetInfo(StrictModel):
     """
     Extracted asset information from a broker report row.
 
@@ -201,15 +199,13 @@ class BRIMExtractedAssetInfo(BaseModel):
         notices: Advisory notices for this asset (e.g. suspected maturity/redemption). Empty by default.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     extracted_symbol: Optional[str] = Field(default=None, description="Ticker/symbol from report")
     extracted_isin: Optional[str] = Field(default=None, description="ISIN code from report")
     extracted_name: Optional[str] = Field(default=None, description="Asset name/description from report")
     notices: List[BRIMAssetNotice] = Field(default_factory=list, description="Advisory notices for this asset (e.g. suspected maturity/redemption); empty by default")
 
 
-class BRIMPluginInfo(BaseModel):
+class BRIMPluginInfo(StrictModel):
     """
     Information about an available import plugin.
 
@@ -389,8 +385,6 @@ class BRIMValidationIssue(BaseModel):
     are NOT validation issues: they stay in ``warnings: List[str]``.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     row: int = Field(..., description="Source file row number (1-based)")
     code: str = Field(..., description="Pydantic error type code (e.g. 'cashSignPositive', 'cashRequired')")
     message: str = Field(..., description="Human-readable error message (English fallback)")
@@ -404,7 +398,7 @@ class BRIMValidationIssue(BaseModel):
 # =============================================================================
 
 
-class BRIMEvidence(BaseModel):
+class BRIMEvidence(StrictModel):
     """A navigable table of source data plus a human comment on what does not add up.
 
     A plugin message is a pair *data + interpretation*: the number that does not
@@ -416,8 +410,6 @@ class BRIMEvidence(BaseModel):
     that supplied a bond nominal, or a computed comparison between the two.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     title: str = Field(..., description="Short table caption (e.g. 'Riga di origine', 'Cedola corrispondente')")
     headers: List[str] = Field(default_factory=list, description="Column headers, in display order")
     rows: List[List[str]] = Field(default_factory=list, description="Row values as strings, aligned with headers")
@@ -425,7 +417,7 @@ class BRIMEvidence(BaseModel):
     comment: Optional[str] = Field(default=None, description="Human-readable comment explaining what does not add up")
 
 
-class BRIMNotice(BaseModel):
+class BRIMNotice(StrictModel):
     """A parser notice: severity, stable code, human message and optional evidence.
 
     Replaces the previous bare ``str`` warning. A ``field_validator`` in
@@ -438,8 +430,6 @@ class BRIMNotice(BaseModel):
     - ``info``    — the plugin did something correct and non-obvious; explain it (blue)
     - ``warning`` — the plugin had to fall back or guess; look at it (amber)
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     severity: Literal["info", "warning"] = Field(default="warning", description="info = explanatory (blue); warning = needs attention (amber)")
     code: str = Field(default="generic", description="Machine-readable, i18n-stable notice code")
@@ -472,7 +462,7 @@ def _coerce_notices(value: Any) -> Any:
 # =============================================================================
 
 
-class BRIMFieldTodo(BaseModel):
+class BRIMFieldTodo(StrictModel):
     """A field in an accepted transaction that the plugin left intentionally incomplete.
 
     Three output channels from a BRIM parse:
@@ -485,8 +475,6 @@ class BRIMFieldTodo(BaseModel):
     Severity ``blocker`` means Step 4 cannot proceed without resolution.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     tx_index: int = Field(..., description="Index into transactions[] (0-based)")
     field: str = Field(..., description="TXCreateItem field name that needs input (e.g. 'cost_basis_override')")
     severity: Literal["blocker", "warning"] = Field(..., description="blocker = Step 4 gated; warning = informational")
@@ -496,7 +484,7 @@ class BRIMFieldTodo(BaseModel):
     evidence: List[BRIMEvidence] = Field(default_factory=list, description="Source-data tables backing this todo (e.g. the originating file row)")
 
 
-class BRIMParseResponse(BaseModel):
+class BRIMParseResponse(StrictModel):
     """
     Response from parsing a broker report file.
 
@@ -547,8 +535,6 @@ class BRIMParseOutput(BaseModel):
     the asset source providers (yfinance/JustETF/...) or manually by the
     user from the asset UI, not by BRIM plugins.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     transactions: List[TXCreateItem] = Field(default_factory=list)
     warnings: List[BRIMNotice] = Field(default_factory=list)

@@ -60,12 +60,12 @@ from datetime import date as Date
 from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, StrictModel
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata,
@@ -158,10 +158,8 @@ _INCOME_RECORDS_RESOURCE: ResourceKey[_IncomeTimelineData] = ResourceKey("portfo
 # =============================================================================
 
 
-class ConversionProvenance(BaseModel):
+class ConversionProvenance(StrictModel):
     """Deterministic FX provenance for one converted income row."""
-
-    model_config = ConfigDict(extra="forbid")
 
     source: str = CONVERSION_SOURCE
     rate_date: Date
@@ -169,7 +167,7 @@ class ConversionProvenance(BaseModel):
     identity: bool = False
 
 
-class IncomeTimelineRow(BaseModel):
+class IncomeTimelineRow(StrictModel):
     """One dated realized income cash-flow, currency-safe and self-describing.
 
     ``asset_id``/``broker_id`` are business identities (never the transaction DB
@@ -177,8 +175,6 @@ class IncomeTimelineRow(BaseModel):
     deterministic rate exists; otherwise ``conversion_reason`` explains the gap
     and the native amount is retained unchanged.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     date: Date
     income_type: str
@@ -208,15 +204,13 @@ class IncomeTimelineRow(BaseModel):
         return self
 
 
-class AggregatedIncomeRow(BaseModel):
+class AggregatedIncomeRow(StrictModel):
     """One ``COMPACT`` bucket: recorded income grouped by ``(month, asset, type)``.
 
     ``month`` is the ``YYYY-MM`` settlement month. Native amounts are listed per
     distinct native currency (deterministic order). ``target_amount`` is present
     only when every transaction in the bucket converted deterministically.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     month: str
     income_type: str
@@ -229,7 +223,7 @@ class AggregatedIncomeRow(BaseModel):
     conversion_complete: bool
 
 
-class IncomeTimelineSummary(BaseModel):
+class IncomeTimelineSummary(StrictModel):
     """Aggregate income summary computed over the *full* transaction set.
 
     Always present for ``OK``/``EMPTY`` regardless of detail level, so bounding
@@ -237,8 +231,6 @@ class IncomeTimelineSummary(BaseModel):
     only when ``conversion_status == COMPLETE`` (a partial/absent conversion is
     surfaced honestly rather than summed to a misleading subtotal).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     target_currency: str
     transaction_count: int = Field(ge=0)
@@ -253,7 +245,7 @@ class IncomeTimelineSummary(BaseModel):
     conversion_status: ConversionStatus
 
 
-class IncomeTimelinePayload(BaseModel):
+class IncomeTimelinePayload(StrictModel):
     """Deterministic dated income evidence for one Portfolio scope/period.
 
     Statuses: ``OK`` (dated/aggregated income present + summary), ``EMPTY`` (no
@@ -263,8 +255,6 @@ class IncomeTimelinePayload(BaseModel):
     populate ``rows`` only (``STANDARD`` bounded, ``rows_truncated`` /
     ``rows_omitted_count`` disclose any omission).
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     status: IncomeTimelineStatus
     detail_level: str

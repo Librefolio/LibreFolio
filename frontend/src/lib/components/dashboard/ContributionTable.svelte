@@ -21,6 +21,8 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     type NumericLike = string | (string | null)[] | null;
     type PositionStatus = 'open_at_period_end' | 'closed_by_period_end';
@@ -78,23 +80,6 @@
         return tableRef;
     }
 
-    function safeNum(v: NumericLike | undefined): number | null {
-        const s = Array.isArray(v) ? (v[0] ?? null) : v;
-        if (s == null) return null;
-        const n = parseFloat(s);
-        return isNaN(n) ? null : n;
-    }
-
-    function safeInt(v: number | (number | null)[] | null | undefined): number | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
-    function safeStr(v: NumericLike | undefined): string | null {
-        if (v == null) return null;
-        return Array.isArray(v) ? (v[0] ?? null) : v;
-    }
-
     function makeHoldingLookupKey(assetId: number, brokerId: number | null): string {
         return `${assetId}-${brokerId ?? 0}`;
     }
@@ -140,10 +125,10 @@
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
         const holdingsByKey = new Map(
             holdings.map((holding) => [
-                makeHoldingLookupKey(holding.asset_id, safeInt(holding.broker_id)),
+                makeHoldingLookupKey(holding.asset_id, safeNumber(holding.broker_id)),
                 {
-                    gainLossChange1d: safeNum(holding.gain_loss_change_1d),
-                    gainLossChange1dPercent: safeNum(holding.gain_loss_change_1d_percent),
+                    gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
+                    gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
                 },
             ]),
         );
@@ -159,29 +144,25 @@
                     brokerId: p.broker_id,
                     brokerName: p.broker_name,
                     broker: brokerMap.get(p.broker_id) ?? null,
-                    pnl: safeNum(p.period_pnl),
-                    annualizedReturn: safeNum(p.annualized_return),
-                    unrealizedDelta: safeNum(p.period_unrealized_delta),
-                    realizedSales: safeNum(p.period_realized_gain_loss),
-                    income: safeNum(p.period_income),
-                    costs: safeNum(p.period_fees_taxes),
-                    startValue: safeNum(p.start_value),
-                    endValue: safeNum(p.end_value),
+                    pnl: safeDecimal(p.period_pnl),
+                    annualizedReturn: safeDecimal(p.annualized_return),
+                    unrealizedDelta: safeDecimal(p.period_unrealized_delta),
+                    realizedSales: safeDecimal(p.period_realized_gain_loss),
+                    income: safeDecimal(p.period_income),
+                    costs: safeDecimal(p.period_fees_taxes),
+                    startValue: safeDecimal(p.start_value),
+                    endValue: safeDecimal(p.end_value),
                     gainLossChange1d: holdingMatch?.gainLossChange1d ?? null,
                     gainLossChange1dPercent: holdingMatch?.gainLossChange1dPercent ?? null,
                     status,
                     statusLabel: statusLabel(status),
                     isFullySold,
                     assetId: p.asset_id,
-                    oldestOpenLotDate: safeStr(p.oldest_open_lot_date),
+                    oldestOpenLotDate: safeString(p.oldest_open_lot_date),
                 };
             })
             .sort((a, b) => Math.abs(b.pnl ?? 0) - Math.abs(a.pnl ?? 0));
     });
-
-    function escapeHtml(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
 
     function signedAmountCell(value: number | null) {
         if (value == null) return '—';

@@ -344,6 +344,48 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('about-app-name')).toContainText('LibreFolio');
             await expect(page.getByTestId('about-version')).toBeVisible();
         });
+
+        // The three tests above read the header and stop there, which left the rest of
+        // AboutTab — the installed-signal catalogue and the per-system plugin
+        // diagnostics — at 27% coverage. Both live inside a collapsed `<details>`, so
+        // nothing rendered them until something opened it.
+
+        test('installed signals section lists the signals the backend reports', async ({page}) => {
+            const details = page.getByTestId('about-installed-signals');
+            await expect(details).toBeVisible();
+            await details.locator('summary').click();
+            // A `<details>` announces itself: the open attribute is the post-condition,
+            // not the chevron rotating.
+            await expect(details).toHaveAttribute('open', '');
+
+            // Asserting on *which* signals exist would be asserting a catalogue this test
+            // does not own — plugins can be added. That at least one is listed, and that
+            // each entry carries the signal type in its testid, is the contract.
+            const entries = page.locator('[data-testid^="about-installed-signal-"]');
+            await expect(entries.first(), 'the signal registry should report at least one installed signal').toBeVisible({timeout: 5_000});
+        });
+
+        test('plugin diagnostics reports a load status for every plugin system', async ({page}) => {
+            const details = page.getByTestId('about-plugin-diagnostics');
+            await expect(details).toBeVisible();
+            await details.locator('summary').click();
+            await expect(details).toHaveAttribute('open', '');
+
+            // Four plugin systems, each of which must say whether its plugins loaded.
+            // The status used to be readable only from the green tick and its translated
+            // caption, so the component now publishes data-status / data-failures.
+            for (const system of ['asset', 'fx', 'brim', 'signals']) {
+                const card = page.getByTestId(`about-plugin-diagnostics-${system}`);
+                await expect(card, `the ${system} plugin system should report its diagnostics`).toBeVisible({timeout: 5_000});
+                await expect(card).toHaveAttribute('data-status', /^(ok|failed)$/);
+            }
+
+            // And in a healthy test environment nothing should have failed to load: a
+            // plugin that throws on import is a real defect, and this is where it surfaces
+            // instead of being discovered by a user.
+            const failed = page.locator('[data-testid^="about-plugin-diagnostics-"][data-status="failed"]');
+            await expect(failed, 'a plugin failed to load — open the About tab to see which').toHaveCount(0);
+        });
     });
 
     test.describe('Preferences Persistence', () => {

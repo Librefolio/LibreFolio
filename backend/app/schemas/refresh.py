@@ -32,9 +32,9 @@ from datetime import date
 from enum import StrEnum
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
-from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeModel
+from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeModel, StrictModel
 from backend.app.schemas.prices import FAPricePoint
 
 # ============================================================================
@@ -76,10 +76,8 @@ SyncStartDate = date | Literal["min"]
 AssetSyncStartDate = date | Literal["min", "resume"]
 
 
-class SyncDateRangeModel(BaseModel):
+class SyncDateRangeModel(StrictModel):
     """Sync date range with required end and sentinel-aware start."""
-
-    model_config = ConfigDict(extra="forbid")
 
     start: AssetSyncStartDate = Field(..., description="Start date (inclusive), 'min' for provider-defined full history, or 'resume' for the day after the last stored price")
     end: date = Field(..., description="End date (inclusive)")
@@ -100,22 +98,18 @@ class SyncDateRangeModel(BaseModel):
         return self
 
 
-class FARefreshItem(BaseModel):
+class FARefreshItem(StrictModel):
     """Single asset refresh request.
 
     Specifies asset and date range for price data refresh from provider.
     """
 
-    model_config = ConfigDict(extra="forbid")
-
     asset_id: int = Field(..., description="Asset ID")
     date_range: SyncDateRangeModel = Field(..., description="Date range for refresh")
 
 
-class FARefreshResult(BaseModel):
+class FARefreshResult(StrictModel):
     """Result of refresh for single asset."""
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     status: SyncStatus = Field(SyncStatus.FAILED, description="Sync status for this asset")
@@ -162,14 +156,12 @@ class FABulkRefreshResponse(BaseBulkResponse[FARefreshResult]):
 # ============================================================================
 
 
-class FXSyncPairRequest(BaseModel):
+class FXSyncPairRequest(StrictModel):
     """Request body for pair-based FX sync.
 
     Accepts a list of pair slugs (e.g. ['EUR-USD', 'CHF-CNY']) and a date range.
     Pairs are normalized to alphabetical order internally.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     pairs: List[str] = Field(..., min_length=1, description="Pair slugs, e.g. ['EUR-USD', 'CHF-CNY']")
     start: SyncStartDate = Field(..., description="Start date (inclusive) or 'min' for provider-defined full history")
@@ -202,10 +194,8 @@ class FXSyncPairRequest(BaseModel):
         return deduped
 
 
-class FXSyncLegDetail(BaseModel):
+class FXSyncLegDetail(StrictModel):
     """Diagnostic detail for a single leg in a chain (or single-provider route)."""
-
-    model_config = ConfigDict(extra="forbid")
 
     provider: str = Field(..., description="Provider code for this leg, e.g. 'ECB'")
     leg: str = Field(..., description="Leg pair in the chain, e.g. 'EUR→GBP'")
@@ -213,10 +203,8 @@ class FXSyncLegDetail(BaseModel):
     error: Optional[str] = Field(None, description="Error message if the leg failed (e.g. timeout, provider error)")
 
 
-class FXSyncPairResult(BaseModel):
+class FXSyncPairResult(StrictModel):
     """Result of sync operation for a single pair."""
-
-    model_config = ConfigDict(extra="forbid")
 
     pair: str = Field(..., description="Normalized pair slug, e.g. 'EUR-USD'")
     status: SyncStatus = Field(..., description="Sync status for this pair")

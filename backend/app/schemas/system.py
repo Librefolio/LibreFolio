@@ -2,22 +2,20 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import Field, RootModel
+
+from backend.app.schemas.common import StrictModel
 
 
-class DependencyInfo(BaseModel):
+class DependencyInfo(StrictModel):
     """Information about a dependency."""
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str
     version: str
 
 
-class SystemInfoResponse(BaseModel):
+class SystemInfoResponse(StrictModel):
     """System information response."""
-
-    model_config = ConfigDict(extra="forbid")
 
     app_version: str
     python_version: str
@@ -29,10 +27,8 @@ class SystemInfoResponse(BaseModel):
     frontend_dependencies: list[DependencyInfo]
 
 
-class PluginDiscoveryFailureInfo(BaseModel):
+class PluginDiscoveryFailureInfo(StrictModel):
     """One failed plugin module import discovered at startup/runtime."""
-
-    model_config = ConfigDict(extra="forbid")
 
     system: str = Field(..., description="Plugin system that attempted discovery")
     filename: str = Field(..., description="Python module filename that failed to load")

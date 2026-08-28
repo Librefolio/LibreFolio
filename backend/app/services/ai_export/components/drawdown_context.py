@@ -37,10 +37,10 @@ from collections.abc import Mapping
 from datetime import date as Date
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import DateRangeModel, StrictModel
 from backend.app.schemas.portfolio import DataQualityStatus
 from backend.app.schemas.risk import (
     AssetRiskScope,
@@ -101,7 +101,7 @@ REASON_INSUFFICIENT_OBSERVED_PRICES = "insufficient_observed_prices"
 REASON_INVALID_OBSERVED_PRICES = "invalid_observed_prices"
 
 
-class DrawdownContextPayload(BaseModel):
+class DrawdownContextPayload(StrictModel):
     """Renderer-neutral current/maximum drawdown episode context for one AI Export scope.
 
     All magnitudes are decimal ratios (``-0.1`` == a 10% peak-relative decline);
@@ -112,8 +112,6 @@ class DrawdownContextPayload(BaseModel):
     ``unavailable``/``failed`` every metric is ``None`` and ``reason_code`` /
     ``message`` explain why, so an optional analysis section degrades honestly.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     status: DrawdownContextStatus
     reason_code: str | None = None
@@ -394,15 +392,13 @@ async def _build_asset_drawdown(context: BuildContext, dependencies: Mapping[str
 # =============================================================================
 
 
-class PortfolioAssetDrawdownRow(BaseModel):
+class PortfolioAssetDrawdownRow(StrictModel):
     """Compact observed-price drawdown comparison for one held asset.
 
     No history is exported. The four decision fields requested by PAC are
     accompanied only by basis/coverage facts needed to avoid treating a sparse
     series as equivalent to a complete one.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     asset_id: int
     status: DrawdownContextStatus
@@ -442,10 +438,8 @@ class PortfolioAssetDrawdownRow(BaseModel):
         return self
 
 
-class PortfolioAssetDrawdownSnapshotPayload(BaseModel):
+class PortfolioAssetDrawdownSnapshotPayload(StrictModel):
     """No-history per-asset Drawdown comparison for PAC planning."""
-
-    model_config = ConfigDict(extra="forbid")
 
     policy_code: str = "observed_price_drawdown_snapshot_v1"
     rows: tuple[PortfolioAssetDrawdownRow, ...]

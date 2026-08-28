@@ -31,6 +31,7 @@
   data-testid everywhere.
 -->
 <script lang="ts">
+    import {todayIso} from '$lib/utils/dateOnly';
     import {onDestroy, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -245,10 +246,6 @@
         quantity?: string;
         /** Cost basis override for the receiver (transfer_asset only). */
         cost_basis_override?: {code: string; amount: string} | null;
-    }
-
-    function todayIso(): string {
-        return new Date().toISOString().slice(0, 10);
     }
 
     function emptyDraft(): FormDraft {

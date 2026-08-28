@@ -7,15 +7,15 @@ DTOs for file upload operations.
 from enum import StrEnum
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
+from backend.app.schemas.common import StrictModel
 from backend.app.utils.datetime_utils import UTCDateTime
 
 
-class UploadFileInfo(BaseModel):
+class UploadFileInfo(StrictModel):
     """Information about an uploaded file."""
 
-    model_config = ConfigDict(extra="forbid")
     id: str = Field(..., description="Unique file ID (UUID)")
     original_name: str = Field(..., description="Original filename")
     mime_type: str = Field(..., description="MIME type of the file")
@@ -30,7 +30,7 @@ class UploadFileInfo(BaseModel):
     url: str = Field(..., description="URL to access the file")
 
 
-class UploadResponse(BaseModel):
+class UploadResponse(StrictModel):
     """Response after successful upload."""
 
     success: bool = Field(default=True)
@@ -66,8 +66,6 @@ class FilePreviewType(StrEnum):
 
 class FilePreviewResponse(BaseModel):
     """Structured response for file preview endpoints."""
-
-    model_config = ConfigDict(extra="forbid")
 
     preview_type: FilePreviewType = Field(..., description="Detected preview type")
     filename: str = Field(..., description="Original filename")

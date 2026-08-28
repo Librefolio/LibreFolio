@@ -22,7 +22,7 @@ import structlog
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, is_fiat_currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
@@ -81,18 +81,6 @@ def _parse_decimal(value: str) -> Optional[Decimal]:
         return Decimal(value)
     except InvalidOperation:
         return None
-
-
-def _is_fiat_currency(code: str) -> bool:
-    """Return True when code can be represented by Currency (ISO 4217)."""
-    code = code.strip().upper()
-    if not code:
-        return False
-    try:
-        Currency(code=code, amount=Decimal("0"))
-        return True
-    except Exception:
-        return False
 
 
 @register_provider(BRIMProviderRegistry)
@@ -197,7 +185,7 @@ class CryptoComBrokerProvider(BRIMProvider):
                     native_amount = _parse_decimal(row.get(COL_NATIVE_AMOUNT, "")) or Decimal("0")
 
                     if kind in BUY_KINDS:
-                        if not symbol or _is_fiat_currency(symbol):
+                        if not symbol or is_fiat_currency(symbol):
                             warnings.append(f"Row {row_num}: buy missing crypto currency, skipping")
                             continue
                         if native_amount == 0 or not native_currency:
@@ -219,7 +207,7 @@ class CryptoComBrokerProvider(BRIMProvider):
                             tags=["import", "cryptocom", "crypto"],
                         )
                     elif kind in SELL_KINDS:
-                        if not symbol or _is_fiat_currency(symbol):
+                        if not symbol or is_fiat_currency(symbol):
                             warnings.append(f"Row {row_num}: sell missing crypto currency, skipping")
                             continue
                         if native_amount == 0 or not native_currency:
@@ -241,7 +229,7 @@ class CryptoComBrokerProvider(BRIMProvider):
                             tags=["import", "cryptocom", "crypto"],
                         )
                     elif self._is_reward_kind(kind):
-                        if symbol and not _is_fiat_currency(symbol) and amount != 0:
+                        if symbol and not is_fiat_currency(symbol) and amount != 0:
                             asset_id, next_fake_id = self._get_asset_id(symbol, asset_to_fake_id, extracted_assets, next_fake_id)
                             self._create_transaction(
                                 row_num=row_num,
@@ -257,7 +245,7 @@ class CryptoComBrokerProvider(BRIMProvider):
                                 description=f"{description} (Value: {native_amount} {native_currency}){desc_suffix}" if native_amount and native_currency else f"{description}{desc_suffix}",
                                 tags=["import", "cryptocom", "reward", "crypto"],
                             )
-                        elif symbol and _is_fiat_currency(symbol) and amount > 0:
+                        elif symbol and is_fiat_currency(symbol) and amount > 0:
                             self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,

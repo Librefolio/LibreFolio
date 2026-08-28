@@ -22,6 +22,8 @@ from pydantic import BaseModel
 
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior, TemporalAggregatorSpec
 
+from .._int_validation import require_positive_int
+
 if TYPE_CHECKING:
     from backend.app.services.ai_export.components.envelope import SectionEnvelope
     from backend.app.services.ai_export.dependencies import BuildContext
@@ -31,14 +33,6 @@ _COMPONENT_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
 class ComponentSpecError(ValueError):
     """Raised when a `ComponentSpec` declaration is internally inconsistent."""
-
-
-def _require_positive_int(value: object, *, field_name: str, owner_id: str, error_cls: type[Exception]) -> None:
-    """Rejects non-`int` values and `bool` (a subclass of `int` that must never satisfy a version field)."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise error_cls(f"{owner_id}: {field_name} must be an int, got {type(value).__name__}")
-    if value < 1:
-        raise error_cls(f"{owner_id}: {field_name} must be >= 1")
 
 
 @runtime_checkable
@@ -88,7 +82,7 @@ class ComponentSpec:
     def __post_init__(self) -> None:
         if not _COMPONENT_ID_PATTERN.fullmatch(self.component_id):
             raise ComponentSpecError(f"component_id has invalid format: {self.component_id!r}")
-        _require_positive_int(self.version, field_name="version", owner_id=self.component_id, error_cls=ComponentSpecError)
+        require_positive_int(self.version, "version", owner_id=self.component_id, error_cls=ComponentSpecError)
         domains = frozenset(self.domains)
         if not domains:
             raise ComponentSpecError(f"{self.component_id}: domains must not be empty")
@@ -116,4 +110,4 @@ class ComponentSpec:
         if self.period_behavior != PeriodBehavior.AGGREGATED and self.aggregator is not None:
             raise ComponentSpecError(f"{self.component_id}: aggregator requires period_behavior=AGGREGATED")
         object.__setattr__(self, "schema_id", self.schema_id or self.component_id)
-        _require_positive_int(self.schema_version, field_name="schema_version", owner_id=self.component_id, error_cls=ComponentSpecError)
+        require_positive_int(self.schema_version, "schema_version", owner_id=self.component_id, error_cls=ComponentSpecError)

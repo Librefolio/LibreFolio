@@ -15,7 +15,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import event
+from sqlalchemy import delete, event
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
@@ -23,6 +23,28 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import IssueCode
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.utils.datetime_utils import utcnow
+
+
+async def _own_fx_rate(session, *, on: date, base: str, quote: str, rate: Decimal) -> None:
+    """Insert an FX rate this test owns, without depending on the table's prior state.
+
+    ``fx_rates`` is global -- no ``user_id`` -- and unique on ``(date, base, quote)``.
+    Two things follow, and both have bitten this file:
+
+    * a plain ``session.add`` fails with ``UNIQUE constraint failed`` whenever a
+      neighbour (the mock ECB seed, an FX sync test, another unit) already
+      committed that exact key. The test then reds for a reason it did not cause;
+    * asserting on a rate this test did not write is asserting on someone else's
+      data.
+
+    Deleting the key first makes the test independent of what came before. The
+    delete runs inside the same transaction as the insert, and the ``session``
+    fixture rolls that transaction back, so a neighbour's row is restored intact
+    -- nothing is destroyed, the test just guarantees its own starting point.
+    """
+    await session.execute(delete(FxRate).where(FxRate.date == on, FxRate.base == base, FxRate.quote == quote))
+    session.add(FxRate(date=on, base=base, quote=quote, rate=rate, source="TEST"))
+    await session.flush()
 
 
 def _points_by_date(points):
@@ -152,11 +174,13 @@ async def test_buy_sell_summary_converts_to_target_currency(session, test_user, 
                 currency="EUR",
                 source_plugin_key="TEST",
             ),
-            FxRate(date=date(2025, 1, 10), base="EUR", quote="USD", rate=Decimal("1.2"), source="TEST"),
-            FxRate(date=date(2025, 2, 1), base="EUR", quote="USD", rate=Decimal("1.3"), source="TEST"),
         ]
     )
     await session.flush()
+    # This test owns EUR/USD on 10 Jan and 1 Feb 2025. See _own_fx_rate: the pair
+    # is global, so the rows are claimed rather than assumed absent.
+    await _own_fx_rate(session, on=date(2025, 1, 10), base="EUR", quote="USD", rate=Decimal("1.2"))
+    await _own_fx_rate(session, on=date(2025, 2, 1), base="EUR", quote="USD", rate=Decimal("1.3"))
 
     result = await get_lots_analysis(
         session=session,
@@ -1127,13 +1151,16 @@ async def test_dividend_in_foreign_currency_converted_to_target(session, test_us
     session.add_all(
         [
             Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
-            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), quantity=Decimal("0"), amount=Decimal("120"), currency="USD"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 5), quantity=Decimal("0"), amount=Decimal("120"), currency="USD"),
             PriceHistory(asset_id=asset.id, date=date(2025, 1, 10), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
-            PriceHistory(asset_id=asset.id, date=date(2025, 2, 1), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
-            FxRate(date=date(2025, 2, 1), base="EUR", quote="USD", rate=Decimal("1.25"), source="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2025, 3, 5), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
         ]
     )
     await session.flush()
+    # 5 Mar 2025, not 1 Feb: test_buy_sell_summary_converts_to_target_currency owns
+    # EUR/USD on 1 Feb, and two tests writing the same unique key raced whenever the
+    # suite ran them close together.
+    await _own_fx_rate(session, on=date(2025, 3, 5), base="EUR", quote="USD", rate=Decimal("1.25"))
 
     result = await get_lots_analysis(
         session=session,
@@ -1141,7 +1168,7 @@ async def test_dividend_in_foreign_currency_converted_to_target(session, test_us
         asset_id=asset.id,
         broker_ids=[broker.id],
         date_from=None,
-        date_to=date(2025, 2, 1),
+        date_to=date(2025, 3, 5),
         target_currency="EUR",
         selected_lot_ids=None,
         requested_analyses=["LOT_SUMMARY"],

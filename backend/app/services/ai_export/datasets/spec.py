@@ -28,6 +28,8 @@ from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import CODE_PATTERN, PAGE_PATTERN, DetailLevel, Domain, PeriodBehavior
 
+from .._int_validation import require_positive_int
+
 _DATASET_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 
 # Dotted, alphanumeric i18n key identifier (e.g. "aiExport.dataset.portfolio.overview.display").
@@ -39,14 +41,6 @@ _I18N_KEY_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)
 
 class DatasetSpecError(ValueError):
     """Raised when a `DatasetSpec` declaration is internally inconsistent."""
-
-
-def _require_positive_int(value: object, *, field_name: str, owner_id: str) -> None:
-    """Rejects non-`int` values and `bool` (a subclass of `int` that must never satisfy a version field)."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise DatasetSpecError(f"{owner_id}: {field_name} must be an int, got {type(value).__name__}")
-    if value < 1:
-        raise DatasetSpecError(f"{owner_id}: {field_name} must be >= 1")
 
 
 def _validate_code_tuple(values: Sequence[str], *, field_name: str, owner_id: str, allow_empty: bool) -> tuple[str, ...]:
@@ -112,7 +106,7 @@ class DatasetSpec:
     def __post_init__(self) -> None:
         if not _DATASET_ID_PATTERN.fullmatch(self.dataset_id):
             raise DatasetSpecError(f"dataset_id has invalid format: {self.dataset_id!r}")
-        _require_positive_int(self.version, field_name="version", owner_id=self.dataset_id)
+        require_positive_int(self.version, "version", owner_id=self.dataset_id, error_cls=DatasetSpecError)
         if not isinstance(self.domain, Domain):
             raise DatasetSpecError(f"{self.dataset_id}: domain must be a Domain member, got {self.domain!r}")
         if not self.icon:

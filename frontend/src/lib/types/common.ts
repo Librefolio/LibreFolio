@@ -42,6 +42,18 @@ export function parseCurrencyAmount(amount: string | undefined | null): number {
 // safely extract the correct value.
 
 /**
+ * Collapse the malformed union to a scalar, whatever it holds.
+ *
+ * `safeString` and `safeNumber` are this function plus a `typeof` guard; use
+ * them when the field has one type. Reach for this one only when the field is
+ * genuinely polymorphic (a decimal the generator typed as `string | number`).
+ */
+export function safeScalar<T>(value: T | (T | null)[] | null | undefined): T | null {
+    if (Array.isArray(value)) return value[0] ?? null;
+    return value ?? null;
+}
+
+/**
  * Safely extract string value from potentially malformed union type.
  * Handles: string | null | undefined | (string | null)[]
  */
@@ -67,6 +79,25 @@ export function safeNumber(value: unknown): number | null {
         return typeof first === 'number' ? first : null;
     }
     return null;
+}
+
+/**
+ * Parse a decimal the API sent as a *string*, e.g. an amount or a quantity.
+ *
+ * This is emphatically not `safeNumber`, and the difference is worth a line:
+ * `safeNumber('12.34')` is `null`, because a string is not a number and that
+ * function will not guess. Monetary and quantity fields arrive as strings to
+ * keep their precision, so anything sourced from a `Decimal` column needs this
+ * one instead.
+ *
+ * `NaN` is rejected. `Infinity` is not, because `parseFloat` only yields it for
+ * the literal text "Infinity", which no decimal column emits.
+ */
+export function safeDecimal(value: unknown): number | null {
+    const scalar = Array.isArray(value) ? (value[0] ?? null) : value;
+    if (scalar === null || scalar === undefined) return null;
+    const parsed = parseFloat(scalar as string);
+    return Number.isNaN(parsed) ? null : parsed;
 }
 
 /**

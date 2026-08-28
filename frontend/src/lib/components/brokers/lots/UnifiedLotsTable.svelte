@@ -11,6 +11,7 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {BarChart3, Copy, ExternalLink, Eye} from 'lucide-svelte';
     import type {z} from 'zod';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -81,10 +82,6 @@
     function label(key: string, fallback: string): string {
         const translated = $_(key) || fallback;
         return translated === key ? fallback : translated;
-    }
-
-    function escapeHtml(value: string): string {
-        return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function firstScalar<T>(value: T | (T | null)[] | null | undefined): T | null {

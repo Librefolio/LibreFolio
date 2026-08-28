@@ -37,15 +37,11 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
-
-from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal
+from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
 
 
-class AssetComponentModel(BaseModel):
+class AssetComponentModel(StrictModel):
     """Shared strict-shape base for every Asset-core component payload."""
-
-    model_config = ConfigDict(extra="forbid")
 
 
 # =============================================================================
