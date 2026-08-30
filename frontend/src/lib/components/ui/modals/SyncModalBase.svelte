@@ -266,18 +266,23 @@
                 {title}
             </h2>
         </div>
-        <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onclick={onclose}>
+        <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" data-testid="sync-modal-dismiss" onclick={onclose}>
             <X size={18} />
         </button>
     </div>
 
-    <!-- Body -->
-    <div class="px-6 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto" data-busy={syncing ? 'true' : 'false'} data-testid="sync-modal-body">
+    <!-- Body. `data-timeout` publishes the one piece of state that is otherwise
+         only legible as a translated footer label ("Close" instead of "Cancel"):
+         the last attempt died on a timeout rather than on an ordinary failure. -->
+    <div class="px-6 py-4 space-y-3 flex-1 min-h-0 overflow-y-auto" data-busy={syncing ? 'true' : 'false'} data-testid="sync-modal-body" data-timeout={isTimeout ? 'true' : 'false'}>
         <p class="text-sm text-gray-600 dark:text-gray-400">
             {description}
         </p>
-        <!-- Date range + count info -->
-        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 rounded-lg px-3 py-2">
+        <!-- Date range + count info. The visible tally is `countLabel`, which is
+             assembled from translated nouns ("2 pairs · 3 assets"); the two
+             counts are republished here as numbers so the scope of the sync is
+             machine-readable in every language. -->
+        <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 rounded-lg px-3 py-2" data-item-count={itemCount} data-section-count={activeSections.length} data-testid="sync-modal-count">
             <span class="font-medium text-gray-700 dark:text-gray-300">{dateStart}</span>
             <span>→</span>
             <span class="font-medium text-gray-700 dark:text-gray-300">{dateEnd}</span>
@@ -298,15 +303,18 @@
                     step="10"
                     bind:value={timeoutSec}
                     disabled={syncing}
+                    data-testid="sync-modal-timeout"
                     class="w-16 px-1.5 py-0.5 text-xs text-center rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
                 />
                 <span>sec</span>
             </div>
         {/if}
 
-        <!-- Progress bar during sync -->
+        <!-- Progress bar during sync. `data-remaining` is the countdown in
+             seconds; `formatTime` renders it as "1:05" or "45s", which is a
+             format, not a number a test can compare against. -->
         {#if syncing}
-            <div class="space-y-1.5">
+            <div class="space-y-1.5" data-remaining={remainingSec} data-testid="sync-modal-progress">
                 <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span class="flex items-center gap-1.5">
                         <Clock size={13} class="animate-pulse" />
@@ -330,6 +338,7 @@
                 <button
                     class="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors
                         {allFailuresPartial ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/30' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30'}"
+                    data-testid="sync-modal-retry-failed"
                     onclick={handleRetryFailed}
                 >
                     <SkipForward size={13} />
@@ -345,12 +354,17 @@
                         {section.title} ({sResults.length}/{section.targetIds.length})
                     </h4>
                 {/if}
-                <div class="space-y-1.5">
+                <!-- One group per section. The wrapper carries the section
+                     identity so results stay attributable to the section that
+                     produced them (the <h4> above only renders when there are
+                     two or more sections, and its counts are a translated
+                     title plus a fraction). -->
+                <div class="space-y-1.5" data-result-count={sResults.length} data-section-id={section.id} data-target-count={section.targetIds.length} data-testid="sync-section">
                     {#each sResults as item (item.id)}
                         {@render section.resultRow(item, syncing)}
                     {/each}
                     {#if syncing && sResults.length === 0}
-                        <div class="flex items-center gap-2 text-xs text-gray-400">
+                        <div class="flex items-center gap-2 text-xs text-gray-400" data-testid="sync-section-pending">
                             <RefreshCw size={12} class="animate-spin" />
                             {$t('common.syncing') ?? 'Syncing'}…
                         </div>
@@ -360,8 +374,12 @@
 
             <!-- Summary. This is where the sync says how it went: the modal
                  reports in place instead of raising a toast, so this banner is
-                 the outcome, and `data-testid` makes it addressable as such. -->
-            <div data-testid="sync-modal-results">
+                 the outcome, and `data-testid` makes it addressable as such.
+                 The five tallies are republished as attributes because the
+                 rendered line interleaves them with a translated verb and the
+                 ↓/Δ glyphs, so the numbers themselves are otherwise only
+                 reachable by parsing a sentence that changes with the locale. -->
+            <div data-changed={totalPointsChanged} data-failed={failedItems.length} data-fetched={totalPointsFetched} data-success={successCount} data-testid="sync-modal-results" data-total={allResults.length}>
                 <InfoBanner variant={successCount === allResults.length ? 'success' : successCount > 0 ? 'warning' : 'error'}>
                     <span class="text-sm font-medium flex items-center gap-1 flex-wrap">
                         {$t('fx.sync.synced') ?? 'Synced'}

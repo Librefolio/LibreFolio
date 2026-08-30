@@ -114,11 +114,12 @@
 {#snippet resultRow(pr: SyncResult, syncing: boolean)}
     {@const Icon = STATUS_ICONS[pr.status] ?? STATUS_ICONS.failed}
     {@const asset = assetMap.get(pr.id)}
-    <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 group">
+    <div class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 group" data-row-id={pr.id} data-status={pr.status} data-testid="sync-result-row">
         {#if (pr.status === 'failed' || pr.status === 'partial') && !syncing}
             <button
                 class="shrink-0 p-0.5 rounded transition-colors
                     {pr.status === 'failed' ? 'hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500' : 'hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-500'}"
+                data-testid="sync-retry-row"
                 onclick={() => syncModalBase?.handleRetrySingle(pr.id)}
             >
                 <RotateCw size={13} />
