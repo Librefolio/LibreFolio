@@ -1,5 +1,6 @@
 <script lang="ts">
     import {_, LANGUAGE_OPTIONS} from '$lib/i18n';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {zodiosApi} from '$lib/api';
     import {isAxiosError} from 'axios';
     import {onDestroy, onMount} from 'svelte';
@@ -366,7 +367,7 @@
 
     // Close dropdown on click outside
     function handleClickOutside(event: MouseEvent) {
-        if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
+        if (isOutsideClick(event.target, (el) => !dropdownRef || dropdownRef.contains(el))) {
             showDropdown = false;
         }
     }

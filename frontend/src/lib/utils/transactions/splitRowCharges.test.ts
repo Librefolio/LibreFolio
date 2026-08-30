@@ -11,6 +11,11 @@ describe('splitRowCharges', () => {
         expect(splitRowCharges('abc', 'out', [fee('10')])).toBeNull();
     });
 
+    it('returns null when the row amount is nullish (defensive against an absent value)', () => {
+        expect(splitRowCharges(null as unknown as number, 'out', [fee('10')])).toBeNull();
+        expect(splitRowCharges(undefined as unknown as number, 'out', [fee('10')])).toBeNull();
+    });
+
     it('stays untouched, and silent, until the user types a charge', () => {
         const split = splitRowCharges('-46603.73', 'out', [fee('')]);
         expect(split).not.toBeNull();

@@ -26,7 +26,26 @@
     import {truncateName} from '$lib/utils/text';
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
-    import {aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
+    import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
+    import {
+        buildDeltaHtml,
+        buildEventScatterGroups,
+        buildStaleTooltipHtml,
+        computeGhostSeries,
+        computeZoomWindow,
+        countBuckets,
+        formatMonthLabel,
+        formatTruncatedGhostLabel,
+        getBucketInfo,
+        getVisibleDailyPoints,
+        resolveActivePointIndex,
+        resolveZoomBounds,
+        synthesizeDailyOHLC,
+        toAbsoluteValue,
+        toDisplaySeries,
+        type BucketInfo,
+        type LogicalVisibleRange,
+    } from './priceChartHelpers';
 
     // =========================================================================
     // Event Marker types and constants
@@ -60,18 +79,8 @@
         SPLIT: 'arrow',
     };
 
-    interface LogicalVisibleRange {
-        startDate: string;
-        endDate: string;
-    }
-
     interface ResolvedDataCacheEntry {
         lineData: LineDataPoint[];
-    }
-
-    interface BucketInfo {
-        bucketStart: string;
-        bucketEnd: string;
     }
 
     // =========================================================================
@@ -212,12 +221,7 @@
     // Derived data
     // =========================================================================
 
-    let displayData = $derived.by(() => {
-        if (viewMode === 'absolute' || data.length === 0) return data;
-        const baseValue = data[0].value;
-        if (baseValue === 0) return data;
-        return data.map((d) => ({...d, value: ((d.value - baseValue) / baseValue) * 100}));
-    });
+    let displayData = $derived(toDisplaySeries(data, viewMode));
 
     // =========================================================================
     // Lifecycle
@@ -291,20 +295,12 @@
     }
 
     function handlePointClick(date: string, value: number) {
+        const baseValue = data.length > 0 ? data[0].value : undefined;
+        const absValue = toAbsoluteValue(value, viewMode, baseValue);
         if (measureMode && onMeasureClick) {
-            if (viewMode === 'percentage' && data.length > 0) {
-                const baseValue = data[0].value;
-                onMeasureClick(date, baseValue * (1 + value / 100));
-            } else {
-                onMeasureClick(date, value);
-            }
+            onMeasureClick(date, absValue);
         } else if (editMode && onPointClick) {
-            if (viewMode === 'percentage' && data.length > 0) {
-                const baseValue = data[0].value;
-                onPointClick(date, baseValue * (1 + value / 100));
-            } else {
-                onPointClick(date, value);
-            }
+            onPointClick(date, absValue);
         }
     }
 
@@ -313,28 +309,6 @@
             clearTimeout(zoomDebounceTimer);
             zoomDebounceTimer = null;
         }
-    }
-
-    function formatMonthLabel(date: string): string {
-        return new Intl.DateTimeFormat(undefined, {
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'UTC',
-        }).format(new Date(`${date}T00:00:00Z`));
-    }
-
-    function getBucketInfo(point: LineDataPoint, currentResolution: ChartResolution): BucketInfo {
-        if (currentResolution === 'daily') {
-            return {
-                bucketStart: point.date,
-                bucketEnd: point.date,
-            };
-        }
-
-        return {
-            bucketStart: typeof (point as any).bucketStart === 'string' ? (point as any).bucketStart : mapDateToBucket(point.date, currentResolution).bucketStart,
-            bucketEnd: typeof (point as any).bucketEnd === 'string' ? (point as any).bucketEnd : point.date,
-        };
     }
 
     function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
@@ -349,25 +323,6 @@
         }
 
         return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: info.bucketEnd}})}</span>`;
-    }
-
-    function synthesizeDailyOHLC(points: LineDataPoint[]): LineDataPoint[] {
-        return points.map((point, index) => {
-            const close = point.close ?? point.value;
-            const prevClose = index > 0 ? (points[index - 1].close ?? points[index - 1].value) : close;
-            const open = point.open ?? prevClose;
-            const high = point.high ?? Math.max(open, close);
-            const low = point.low ?? Math.min(open, close);
-
-            return {
-                ...point,
-                open,
-                high,
-                low,
-                close,
-                value: close,
-            };
-        });
     }
 
     function getResolvedSeries(currentResolution: ChartResolution): ResolvedDataCacheEntry {
@@ -398,42 +353,6 @@
         return resolution === 'daily' ? synthesized : aggregateOHLCV(synthesized, resolution);
     });
 
-    function getVisibleDailyPoints(range: LogicalVisibleRange | null): LineDataPoint[] {
-        if (!range) return displayData;
-        return displayData.filter((point) => point.date >= range.startDate && point.date <= range.endDate);
-    }
-
-    function countBuckets(points: LineDataPoint[]): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
-        const weeklyBuckets = new Set<string>();
-        const monthlyBuckets = new Set<string>();
-
-        for (const point of points) {
-            const weekly = mapDateToBucket(point.date, 'weekly');
-            const monthly = mapDateToBucket(point.date, 'monthly');
-            weeklyBuckets.add(`${weekly.bucketStart}|${weekly.bucketEnd}`);
-            monthlyBuckets.add(`${monthly.bucketStart}|${monthly.bucketEnd}`);
-        }
-
-        return {
-            dailyCount: points.length,
-            weeklyCount: weeklyBuckets.size,
-            monthlyCount: monthlyBuckets.size,
-        };
-    }
-
-    function resolveZoomIndex(value: unknown, dates: string[], fallback: number): number {
-        if (typeof value === 'number') {
-            return Math.min(Math.max(Math.round(value), 0), dates.length - 1);
-        }
-
-        if (typeof value === 'string') {
-            const index = dates.indexOf(value);
-            if (index >= 0) return index;
-        }
-
-        return fallback;
-    }
-
     function getLogicalRangeFromChart(points: LineDataPoint[], currentResolution: ChartResolution): LogicalVisibleRange | null {
         if (!chartInstance || points.length === 0) return null;
 
@@ -443,23 +362,7 @@
             if (!zoom) return null;
 
             const dates = points.map((point) => point.date);
-            const lastIndex = dates.length - 1;
-            if (lastIndex < 0) return null;
-
-            let startIndex = 0;
-            let endIndex = lastIndex;
-
-            if (zoom.startValue !== undefined || zoom.endValue !== undefined) {
-                startIndex = resolveZoomIndex(zoom.startValue, dates, 0);
-                endIndex = resolveZoomIndex(zoom.endValue, dates, lastIndex);
-            } else if (lastIndex > 0) {
-                const start = typeof zoom.start === 'number' ? zoom.start : 0;
-                const end = typeof zoom.end === 'number' ? zoom.end : 100;
-                startIndex = Math.min(Math.max(Math.floor((start / 100) * lastIndex), 0), lastIndex);
-                endIndex = Math.min(Math.max(Math.ceil((end / 100) * lastIndex), 0), lastIndex);
-            }
-
-            if (startIndex > endIndex) [startIndex, endIndex] = [endIndex, startIndex];
+            const {startIndex, endIndex} = resolveZoomBounds(zoom, dates);
 
             const startBucket = getBucketInfo(points[startIndex], currentResolution);
             const endBucket = getBucketInfo(points[endIndex], currentResolution);
@@ -471,39 +374,6 @@
         } catch (_) {
             return null;
         }
-    }
-
-    function computeZoomWindow(points: LineDataPoint[], currentResolution: ChartResolution, range: LogicalVisibleRange | null): {start: number; end: number} {
-        const lastIndex = points.length - 1;
-        if (!range || lastIndex <= 0) return {start: 0, end: 100};
-
-        let startIndex = lastIndex;
-        let endIndex = 0;
-
-        for (let index = 0; index < points.length; index++) {
-            const bucket = getBucketInfo(points[index], currentResolution);
-            if (bucket.bucketEnd >= range.startDate) {
-                startIndex = index;
-                break;
-            }
-        }
-
-        for (let index = lastIndex; index >= 0; index--) {
-            const bucket = getBucketInfo(points[index], currentResolution);
-            if (bucket.bucketStart <= range.endDate) {
-                endIndex = index;
-                break;
-            }
-        }
-
-        if (endIndex < startIndex) {
-            endIndex = startIndex;
-        }
-
-        return {
-            start: (startIndex / lastIndex) * 100,
-            end: (endIndex / lastIndex) * 100,
-        };
     }
 
     function scheduleResolutionRecompute() {
@@ -520,7 +390,7 @@
                 logicalRange = nextRange;
             }
 
-            const visiblePoints = getVisibleDailyPoints(logicalRange);
+            const visiblePoints = getVisibleDailyPoints(displayData, logicalRange);
             const counts = countBuckets(visiblePoints.length > 0 ? visiblePoints : displayData);
             const nextResolution = cascadeResolution(resolution, counts, chartInstance.getWidth());
 
@@ -589,9 +459,9 @@
                 if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                     const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                     if (pointInGrid) {
-                        const dateIdx = Math.round(pointInGrid[0]);
                         const activeLineData = getResolvedSeries(resolution).lineData;
-                        if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                        const dateIdx = resolveActivePointIndex(pointInGrid[0], activeLineData.length);
+                        if (dateIdx !== null) {
                             const point = activeLineData[dateIdx];
                             // Check if this date has an event marker
                             const hasEvent = eventMarkers.find((e) => e.date === point.date);
@@ -621,9 +491,9 @@
                 if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                     const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                     if (pointInGrid) {
-                        const dateIdx = Math.round(pointInGrid[0]);
                         const activeLineData = getResolvedSeries(resolution).lineData;
-                        if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                        const dateIdx = resolveActivePointIndex(pointInGrid[0], activeLineData.length);
+                        if (dateIdx !== null) {
                             const point = activeLineData[dateIdx];
                             handlePointClick(point.date, point.value);
                         }
@@ -643,17 +513,13 @@
                     if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                         const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                         if (pointInGrid) {
-                            const dateIdx = Math.round(pointInGrid[0]);
                             const activeLineData = getResolvedSeries(resolution).lineData;
-                            if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                            const dateIdx = resolveActivePointIndex(pointInGrid[0], activeLineData.length);
+                            if (dateIdx !== null) {
                                 const point = activeLineData[dateIdx];
                                 // Convert back from % to absolute if needed
-                                if (viewMode === 'percentage' && data.length > 0) {
-                                    const baseValue = data[0].value;
-                                    onMeasureHover(point.date, baseValue * (1 + point.value / 100));
-                                } else {
-                                    onMeasureHover(point.date, point.value);
-                                }
+                                const baseValue = data.length > 0 ? data[0].value : undefined;
+                                onMeasureHover(point.date, toAbsoluteValue(point.value, viewMode, baseValue));
                             }
                         }
                     }
@@ -703,9 +569,9 @@
                     if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                         const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                         if (pointInGrid) {
-                            const dateIdx = Math.round(pointInGrid[0]);
                             const activeLineData = getResolvedSeries(resolution).lineData;
-                            if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                            const dateIdx = resolveActivePointIndex(pointInGrid[0], activeLineData.length);
+                            if (dateIdx !== null) {
                                 const point = activeLineData[dateIdx];
                                 navigator.vibrate?.(50);
                                 // Mirror dblclick behavior: event marker → onEventDblClick, else → onDblClick
@@ -746,9 +612,9 @@
                         if (chartInstance.containPixel({gridIndex: 0}, pointInPixel)) {
                             const pointInGrid = chartInstance.convertFromPixel({gridIndex: 0}, pointInPixel);
                             if (pointInGrid) {
-                                const dateIdx = Math.round(pointInGrid[0]);
                                 const activeLineData = getResolvedSeries(resolution).lineData;
-                                if (dateIdx >= 0 && dateIdx < activeLineData.length) {
+                                const dateIdx = resolveActivePointIndex(pointInGrid[0], activeLineData.length);
+                                if (dateIdx !== null) {
                                     const point = activeLineData[dateIdx];
                                     handlePointClick(point.date, point.value);
                                     touchMeasureHandled = true; // suppress following synthetic click
@@ -780,7 +646,7 @@
 
         let activeResolution = resolution;
         if (!chartOptionSet && chartInstance) {
-            const initialVisiblePoints = getVisibleDailyPoints(logicalRange);
+            const initialVisiblePoints = getVisibleDailyPoints(displayData, logicalRange);
             const initialCounts = countBuckets(initialVisiblePoints.length > 0 ? initialVisiblePoints : displayData);
             activeResolution = chooseInitialResolution(initialCounts, chartInstance.getWidth());
             if (activeResolution !== resolution) {
@@ -800,26 +666,11 @@
         const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, 2, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
         series.push(...mainSeriesList);
 
-        const hasOriginalValues = data.some((point) => point.originalValue !== undefined);
-        let ghostLabel = '';
-        if (hasOriginalValues) {
-            const origCur = data.find((point) => point.originalCurrency)?.originalCurrency ?? '';
-            const origFlag = data.find((point) => point.originalCurrencyFlag)?.originalCurrencyFlag ?? '';
-            ghostLabel = mainSeriesLabel ? `💱 ${mainSeriesLabel} (${origFlag} ${origCur})`.trim() : `💱 ${origCur}`;
-
-            const dailyGhostPoints = data.flatMap((point) => {
-                if (point.originalValue === undefined) return [];
-                return [{...point, value: point.originalValue}];
-            });
-            const firstOriginalValue = dailyGhostPoints[0]?.value ?? 1;
-            const normalizedGhostPoints = isPercentage
-                ? dailyGhostPoints.map((point) => ({
-                      ...point,
-                      value: firstOriginalValue !== 0 ? ((point.value - firstOriginalValue) / firstOriginalValue) * 100 : 0,
-                  }))
-                : dailyGhostPoints;
-            const resolvedGhostPoints = activeResolution === 'daily' ? normalizedGhostPoints : aggregateLineSeries(normalizedGhostPoints, activeResolution);
-            const ghostLookup = new Map(resolvedGhostPoints.map((point) => [point.date, point.value]));
+        const ghostSeriesData = computeGhostSeries(data, isPercentage, activeResolution, mainSeriesLabel);
+        const hasOriginalValues = ghostSeriesData !== null;
+        const ghostLabel = ghostSeriesData?.label ?? '';
+        if (ghostSeriesData) {
+            const ghostLookup = ghostSeriesData.lookup;
 
             series.push({
                 type: 'line',
@@ -916,73 +767,20 @@
                 overlayDataByLabel.set(signal.label, new Map(signal.data.map((point) => [point.date, point.value])));
             }
 
-            const grouped = new Map<string, {markers: EventMarker[]; color: string; label: string}>();
-            for (const marker of eventMarkers) {
-                const isComparison = !!marker.assetLabel;
-                const groupKey = isComparison ? `${marker.assetLabel}::${marker.type}` : marker.type;
-                const color = isComparison ? (marker.signalColor ?? '#6b7280') : baseColor;
-                const seriesLabel = isComparison ? `${marker.assetLabel} ${marker.type}` : marker.type;
-                if (!grouped.has(groupKey)) {
-                    grouped.set(groupKey, {markers: [], color, label: seriesLabel});
-                }
-                grouped.get(groupKey)!.markers.push(marker);
-            }
+            const scatterGroups = buildEventScatterGroups(eventMarkers, activeResolution, {
+                dateIndexMap,
+                resolvedLineData,
+                overlayDataByLabel,
+                bucketInfoByDate,
+                baseColor,
+            });
 
-            for (const [, group] of grouped) {
-                const {markers, color: eventColor, label: seriesLabel} = group;
-                const eventType = markers[0].type;
-                const scatterData: any[] = [];
-
-                if (activeResolution === 'daily') {
-                    for (const marker of markers) {
-                        const index = dateIndexMap.get(marker.date);
-                        if (index === undefined) continue;
-
-                        let yValue: number;
-                        if (marker.assetLabel) {
-                            const overlayLookup = overlayDataByLabel.get(marker.assetLabel);
-                            yValue = overlayLookup?.get(marker.date) ?? resolvedLineData[index]?.value ?? 0;
-                        } else {
-                            yValue = resolvedLineData[index]?.value ?? 0;
-                        }
-
-                        scatterData.push({
-                            value: [marker.date, yValue],
-                            marker,
-                            bucketInfo: {bucketStart: marker.date, bucketEnd: marker.date},
-                            bucketValue: yValue,
-                        });
-                    }
-                } else {
-                    const bucketedMarkers = bucketEventMarkers(markers, activeResolution);
-
-                    for (const [bucketDate, bucketEntries] of bucketedMarkers) {
-                        const index = dateIndexMap.get(bucketDate);
-                        if (index === undefined) continue;
-
-                        let yValue: number;
-                        if (bucketEntries[0]?.assetLabel) {
-                            const overlayLookup = overlayDataByLabel.get(bucketEntries[0].assetLabel);
-                            yValue = overlayLookup?.get(bucketDate) ?? resolvedLineData[index]?.value ?? 0;
-                        } else {
-                            yValue = resolvedLineData[index]?.value ?? 0;
-                        }
-
-                        scatterData.push({
-                            value: [bucketDate, yValue],
-                            markers: bucketEntries,
-                            bucketInfo: bucketInfoByDate.get(bucketDate) ?? mapDateToBucket(bucketDate, activeResolution),
-                            bucketValue: yValue,
-                        });
-                    }
-                }
-
-                if (scatterData.length === 0) continue;
-
+            for (const group of scatterGroups) {
+                const {label: seriesLabel, color: eventColor, eventType, points} = group;
                 series.push({
                     type: 'scatter',
                     name: `Events: ${seriesLabel}`,
-                    data: scatterData,
+                    data: points,
                     xAxisIndex: 0,
                     yAxisIndex: 0,
                     symbol: EVENT_SYMBOLS[eventType] ?? 'diamond',
@@ -1105,17 +903,7 @@
                         if (isGhost) {
                             // Ghost label: "💱 Name (flag CUR)" — keep currency suffix visible.
                             const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                            // Extract name part from ghostLabel format "💱 Name (flag CUR)"
-                            const nameMatch = ghostLabel.match(/^💱\s*(.+?)\s*(\([^)]+\))$/);
-                            let truncatedGhost: string;
-                            if (nameMatch) {
-                                const name = nameMatch[1];
-                                const currPart = nameMatch[2];
-                                const truncName = truncateName(name);
-                                truncatedGhost = `💱 ${truncName} ${currPart}`;
-                            } else {
-                                truncatedGhost = truncateName(ghostLabel);
-                            }
+                            const truncatedGhost = formatTruncatedGhostLabel(ghostLabel);
                             labelHtml = `${ghostDot}<span title="${ghostLabel}">${truncatedGhost}</span>`;
                             isGhostRow = true;
                         } else {
@@ -1162,31 +950,10 @@
                         html += `<br/>${rowHtml}`;
                         // Show delta from first visible point for the main axis (yAxisIndex 0)
                         if (axisIdx === 0 && firstValue !== null && !isGhost) {
-                            const numVal = Number(value);
-                            if (isPercentage) {
-                                // In % mode, value IS already the delta %
-                                html += ` <span style="font-size:10px;color:${numVal >= 0 ? '#10b981' : '#ef4444'}">(Δ ${numVal >= 0 ? '+' : ''}${numVal.toFixed(2)}%)</span>`;
-                            } else {
-                                const deltaAbs = numVal - firstValue;
-                                const deltaPct = firstValue !== 0 ? ((numVal - firstValue) / firstValue) * 100 : 0;
-                                html += ` <span style="font-size:10px;color:${deltaAbs >= 0 ? '#10b981' : '#ef4444'}">(Δ ${deltaAbs >= 0 ? '+' : ''}${deltaAbs.toFixed(4)} / ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(2)}%)</span>`;
-                            }
+                            html += buildDeltaHtml(Number(value), firstValue, isPercentage);
                         }
                     }
-                    const dataPoint = staleLookup.get(date);
-                    if (dataPoint !== undefined) {
-                        const fxStale = fxStaleLookup.get(date);
-                        if (fxStale !== undefined && fxStale > 0) {
-                            const priceDaysBack = dataPoint;
-                            const label = staleLabel ? staleLabel.replace('{days}', String(priceDaysBack)) : `Stale: ${priceDaysBack}d`;
-                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
-                            const fxLabel = fxStaleLabel ? fxStaleLabel.replace('{days}', String(fxStale)) : `FX rate: ${fxStale}d old`;
-                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${fxLabel}</span>`;
-                        } else {
-                            const label = staleLabel ? staleLabel.replace('{days}', String(dataPoint)) : `Stale: ${dataPoint}d`;
-                            html += `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${label}</span>`;
-                        }
-                    }
+                    html += buildStaleTooltipHtml(staleLookup.get(date), fxStaleLookup.get(date), staleLabel, fxStaleLabel);
                     return html;
                 },
             },

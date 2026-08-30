@@ -8,17 +8,60 @@
  * `./dev.py test --coverage js|all`): a flag spento la fixture esce subito e
  * la corsa normale non paga nulla.
  *
- * Nota sull'architettura: qui si chiama solo `mcr.add()`, mai `generate()`.
- * Playwright viene invocato una volta per spec, quindi i dati devono
- * accumularsi nella cache di monocart e il report va prodotto una sola volta
- * a fine corsa — è lo stesso schema con cui il backend accumula i
- * `.coverage.<pid>` e poi li unisce con `coverage combine`.
+ * Nota sull'architettura: qui si scrive un JSON per test e basta; il report si
+ * produce a fine corsa da `scripts/js-coverage-report.js`. È lo stesso schema
+ * con cui il backend accumula i `.coverage.<pid>` e poi li unisce con
+ * `coverage combine` — e per la stessa ragione: accumulare in memoria dentro il
+ * worker è ciò che, sui 25 spec di una categoria consolidata, arrivava a 8 GB.
  */
 import {test as testBase, expect, request as playwrightRequest} from '@playwright/test';
 import type {APIRequestContext, Browser, BrowserContext, Locator, Page, Request, Response, TestInfo} from '@playwright/test';
+import {existsSync} from 'node:fs';
+import {mkdir, writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {TEST_USER} from './test-users';
 
 const COVERAGE_ON = process.env.COVERAGE_JS === '1';
+
+/**
+ * Is the build under test instrumented by `vite-plugin-istanbul`?
+ *
+ * The sentinel is written by `_ensure_frontend_build()`; timestamps cannot tell
+ * the two *kinds* of build apart. When it is there, `window.__coverage__` will
+ * carry richer data than V8 for every file, so V8 is not started at all — it is
+ * not merely redundant, it is expensive: its payloads carry sources and
+ * sourcemaps, and accumulating them across a consolidated category is what
+ * reached 8 GB and killed the worker.
+ */
+const INSTRUMENTED_BUILD = (() => {
+    if (!COVERAGE_ON) return false;
+    try {
+        return existsSync(new URL('../../build/.coverage-instrumented', import.meta.url));
+    } catch {
+        return false;
+    }
+})();
+
+/** Where each test drops its slice of `window.__coverage__`. */
+const E2E_COVERAGE_DIR = fileURLToPath(new URL('../../coverage-js/e2e-raw', import.meta.url));
+
+let coverageSeq = 0;
+let warnedUninstrumented = false;
+
+/**
+ * Say once, per worker, that the measurement is silently empty.
+ *
+ * Without instrumentation there is nothing to read and the run would produce a
+ * report of zero without failing — the exact shape of a green that means
+ * nothing. `_ensure_frontend_build()` normally prevents this; the warning is
+ * for when someone runs Playwright directly against a plain build.
+ */
+function warnUninstrumentedOnce(): void {
+    if (warnedUninstrumented) return;
+    warnedUninstrumented = true;
+    console.warn('[coverage-js] the build under test is not instrumented — no coverage will be collected. Rebuild with COVERAGE_INSTRUMENT=1.');
+}
 
 /**
  * Transaction hygiene — active only when specs share one invocation.
@@ -182,49 +225,7 @@ async function restore(api: APIRequestContext, baseline: Set<number>): Promise<b
 
 type HygieneState = {api: APIRequestContext | null; file: string | null; baseline: Set<number>; baseURL: string};
 
-type McrInstance = {add: (entries: unknown[]) => Promise<unknown>; fileCache?: Map<string, unknown>} | null;
-
-const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: HygieneState; mcr: McrInstance}>({
-    /**
-     * One monocart instance per worker, not one per test.
-     *
-     * `MCR(options)` is a constructor: it builds a `CoverageReport` with its own
-     * `fileCache` and, on the first `add()`, resolves the sourcemaps of the whole
-     * build. Calling it per test was affordable while Playwright started a fresh
-     * process for every spec file — a dozen instances, then the heap went away
-     * with the process. Consolidation removed that reset: one worker now runs the
-     * 25 spec files of `transactions/` in a row, so it became several hundred
-     * instances each re-parsing the same sourcemaps.
-     *
-     * Reusing one instance keeps that cache warm instead of rebuilding it. It is
-     * worker-scoped rather than global because Playwright workers are separate
-     * processes anyway.
-     *
-     * Reuse alone is **not** enough — see the `fileCache.clear()` below. The two
-     * changes fix different halves of the same symptom: `FATAL ERROR: Ineffective
-     * mark-compacts near heap limit`, which Playwright reports as `worker process
-     * exited unexpectedly (SIGABRT)` against whichever test happened to be running
-     * when the heap ran out.
-     */
-    mcr: [
-        async ({}, use) => {
-            if (!COVERAGE_ON) {
-                await use(null);
-                return;
-            }
-            let instance: McrInstance = null;
-            try {
-                const {default: MCR} = await import('monocart-coverage-reports');
-                const {default: coverageOptions} = await import('../../mcr.e2e.config.js');
-                instance = MCR(coverageOptions);
-            } catch (e) {
-                console.warn('[coverage-js] monocart non disponibile:', e);
-            }
-            await use(instance);
-        },
-        {scope: 'worker'},
-    ],
-
+const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: HygieneState}>({
     hygieneApi: [
         async ({}, use) => {
             if (HYGIENE_REQUESTED && !HYGIENE_ON) {
@@ -281,60 +282,50 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
     ],
 
     jsCoverage: [
-        async ({context, mcr}, use) => {
+        async ({context}, use) => {
             if (!COVERAGE_ON) {
                 await use();
                 return;
             }
 
-            const startOn = async (page: Page) => {
-                try {
-                    await page.coverage.startJSCoverage({resetOnNavigation: false});
-                } catch {
-                    // Pagina già chiusa, oppure browser non Chromium: non è un errore
-                    // del test, e non deve farlo fallire.
-                }
-            };
-
-            // Copre sia le pagine già aperte sia quelle create dopo (popup, tab).
-            context.on('page', startOn);
-            await Promise.all(context.pages().map(startOn));
-
             await use();
 
-            context.off('page', startOn);
+            // The build carries its own istanbul counters, so collecting is a
+            // read of `window.__coverage__` — already in source coordinates,
+            // with a branch map for every `{#if}` of every template. Nothing
+            // has to be mapped back through the bundle, which is why there is
+            // no monocart here any more: resolving V8 ranges to sources was its
+            // entire job, and instrumenting the build removed the job.
+            const entries = (
+                await Promise.all(
+                    context.pages().map(async (page) => {
+                        try {
+                            return await page.evaluate(() => (window as unknown as {__coverage__?: unknown}).__coverage__ ?? null);
+                        } catch {
+                            // Page already closed: not an error of the test.
+                            return null;
+                        }
+                    }),
+                )
+            ).filter(Boolean);
 
-            const collected = await Promise.all(
-                context.pages().map(async (page) => {
-                    try {
-                        return await page.coverage.stopJSCoverage();
-                    } catch {
-                        return [];
-                    }
-                }),
-            );
+            if (entries.length === 0) {
+                if (!INSTRUMENTED_BUILD) warnUninstrumentedOnce();
+                return;
+            }
 
-            const entries = collected.flat();
-            if (entries.length === 0 || !mcr) return;
-
+            // One file per test rather than an in-process accumulator. The
+            // accumulator is what used to die: it retained every payload —
+            // sources and sourcemaps included — and over the 25 spec files a
+            // consolidated category now runs in a single worker it reached 8 GB
+            // and took the worker with it, reported against whichever test
+            // happened to be running. Writing and forgetting is O(1) in memory,
+            // and the merge is somebody else's problem: `js-coverage-report.js`.
             try {
-                await mcr.add(entries);
-                // `add()` writes the payload to the cache directory and *then* keeps a
-                // copy in `fileCache`, keyed by a fresh id every call. That map is a
-                // pure optimisation for the case where `add()` and `generate()` run in
-                // the same process — monocart's own `generate.js` falls back to reading
-                // the very same file from disk when the key is missing.
-                //
-                // Here they never share a process: the fixture only adds, and the report
-                // is produced afterwards by `scripts/mcr-generate.js`. So every entry
-                // retained is a full V8 payload — sources and sourcemaps included — held
-                // for a reader that will never look at it. Over one spec file that was
-                // invisible; over the 25 files of a consolidated category it reached
-                // 8 GB and killed the worker.
-                mcr.fileCache?.clear();
+                await mkdir(E2E_COVERAGE_DIR, {recursive: true});
+                const name = `${Date.now().toString(36)}-${process.pid}-${coverageSeq++}.json`;
+                await writeFile(join(E2E_COVERAGE_DIR, name), JSON.stringify(Object.assign({}, ...entries)));
             } catch (e) {
-                // Il pacchetto potrebbe non essere installato: meglio un avviso
-                // che far fallire l'intera suite per un problema di strumentazione.
                 console.warn('[coverage-js] raccolta non riuscita:', e);
             }
         },

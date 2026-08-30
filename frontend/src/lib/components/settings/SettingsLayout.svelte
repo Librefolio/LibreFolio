@@ -1,5 +1,6 @@
 <script lang="ts">
     import type {ComponentType} from 'svelte';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     /**
      * SettingsLayout.svelte
      * Responsive layout for settings pages
@@ -55,7 +56,7 @@
 
     // Close dropdown on click outside
     function handleClickOutside(event: MouseEvent) {
-        if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
+        if (isOutsideClick(event.target, (el) => !dropdownRef || dropdownRef.contains(el))) {
             showDropdown = false;
         }
     }

@@ -64,11 +64,6 @@ def _clean_js_coverage_dirs() -> None:
             time.sleep(0.2)
 
 
-def _run_mcr(args: list, label: str) -> bool:
-    """Run the monocart CLI from the frontend directory."""
-    return _run_frontend_cmd(["npx", "mcr", *args], label)
-
-
 def _run_frontend_cmd(cmd: list, label: str) -> bool:
     try:
         result = subprocess.run(
@@ -94,18 +89,23 @@ def _run_frontend_cmd(cmd: list, label: str) -> bool:
 def _finalize_js_coverage() -> None:
     """Merge JS/Svelte coverage from vitest and Playwright into one report.
 
-    Mirrors what ``_finalize_coverage`` does for Python, with ``mcr merge``
-    playing the part of ``coverage combine`` and the ``raw`` directories the
-    part of the ``.coverage.*`` files.
+    Mirrors what ``_finalize_coverage`` does for Python, with
+    ``istanbul-lib-coverage`` playing the part of ``coverage combine`` and the
+    per-process JSON files the part of the ``.coverage.*`` files.
 
-    Two sources feed in, and they arrive differently:
+    Two sources feed in, in the same format:
 
-    - **unit** — ``vitest-monocart-coverage`` calls ``generate()`` at the end of
-      every vitest process, and the runner launches vitest once per category.
-      Each run therefore writes to its own ``unit/<tag>/raw`` directory, and we
-      merge them here.
-    - **e2e** — the Playwright fixture only calls ``add()``, so data piles up in
-      monocart's cache across every spec and is turned into a report once, now.
+    - **unit** — vitest's istanbul provider writes a ``coverage-final.json`` at
+      the end of every process, and the runner launches vitest once per
+      category, each into its own ``unit/<tag>`` directory.
+    - **e2e** — the Playwright fixture drops one JSON per test into
+      ``e2e-raw/``, read straight out of ``window.__coverage__``.
+
+    That both levels are istanbul is what makes the merge mean anything: while
+    the E2E level was V8, the two counted different things and the combined
+    percentage was an average of two questions. It also puts the branches of
+    every ``{#if}`` in the denominator — V8 reports an empty branch map for a
+    Svelte template, so the whole conditional surface of the UI was invisible.
     """
     js_dir = _js_dir()
     if not js_dir.exists():
@@ -114,66 +114,40 @@ def _finalize_js_coverage() -> None:
 
     print_section("JS/Svelte Coverage")
 
-    raw_inputs = []
+    def report(out: str, name: str, inputs: list[str]) -> bool:
+        return _run_frontend_cmd(["node", "scripts/js-coverage-report.js", f"{JS_COVERAGE_DIR}/{out}", name, *inputs], out)
 
-    # --- unit: one raw directory per vitest process ---
+    sources = []
+
+    # --- unit: one istanbul JSON per vitest process ---
     unit_root = js_dir / "unit"
-    unit_raws = sorted(str(p.relative_to(PROJECT_ROOT / "frontend")) for p in unit_root.glob("*/raw") if p.is_dir())
-    if unit_raws:
-        ok = _run_mcr(
-            ["merge", "--inputDir", ",".join(unit_raws),
-             "--outputDir", f"{JS_COVERAGE_DIR}/unit-combined",
-             "--name", "LibreFolio — Unit Coverage (vitest)",
-             "--reports", "v8,json,console-summary"],
-            "unit",
-        )
-        if ok:
-            print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/unit-combined/ ({len(unit_raws)} run){Colors.NC}")
-        # The combined merge is fed the *original* raw directories, not the
-        # merged output: `mcr merge` does not re-emit a `raw` report, so a
-        # two-step merge would silently drop this whole source.
-        raw_inputs.extend(unit_raws)
+    unit_jsons = sorted(unit_root.glob("*/coverage-final.json")) if unit_root.is_dir() else []
+    if unit_jsons and report("unit-combined", "unit", [f"{JS_COVERAGE_DIR}/unit"]):
+        print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/unit-combined/ ({len(unit_jsons)} run){Colors.NC}")
+        sources.append(f"{JS_COVERAGE_DIR}/unit-combined/coverage-final.json")
 
-    # --- e2e: a single accumulated cache ---
-    e2e_dir = js_dir / "e2e"
-    if (e2e_dir / ".cache").is_dir() or (e2e_dir / "raw").is_dir():
-        ok = _run_frontend_cmd(
-            ["node", "scripts/mcr-generate.js", "v8,raw,json,console-summary"],
-            "e2e",
-        )
-        if ok:
-            print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/e2e/{Colors.NC}")
-        # `generate()` consumes the cache, so a second call in the same run
-        # fails. The raw output it already wrote is still valid — and the whole
-        # directory is wiped at the start of every run, so it cannot be stale.
-        if (e2e_dir / "raw").is_dir():
-            raw_inputs.append(f"{JS_COVERAGE_DIR}/e2e/raw")
+    # --- e2e: one istanbul JSON per test ---
+    e2e_raw = js_dir / "e2e-raw"
+    e2e_jsons = sorted(e2e_raw.glob("*.json")) if e2e_raw.is_dir() else []
+    if e2e_jsons and report("e2e", "e2e", [f"{JS_COVERAGE_DIR}/e2e-raw"]):
+        print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/e2e/ ({len(e2e_jsons)} test){Colors.NC}")
+        sources.append(f"{JS_COVERAGE_DIR}/e2e/coverage-final.json")
 
-    if not raw_inputs:
+    if not sources:
         print_warning("No JS coverage data to report")
         return
 
-    # --- combined: the only report where `--all` makes sense ---
-    # Listing never-executed files is noise on the unit report (vitest cannot
-    # run .svelte components by construction) but it is the whole point here:
-    # it is what answers "which code does no test touch at all".
-    has_unit = bool(unit_raws)
-    has_e2e = any("e2e" in p for p in raw_inputs)
-    if has_unit and has_e2e:
-        ok = _run_mcr(
-            ["merge", "--inputDir", ",".join(raw_inputs),
-             "--outputDir", f"{JS_COVERAGE_DIR}/combined",
-             "--name", "LibreFolio — JS/Svelte Coverage (unit + E2E)",
-             "--reports", "v8,json,console-summary",
-             "--all", "src"],
-            "combined",
-        )
-        if ok:
+    # The combined report is built from the two *reports*, not from the raw data
+    # again: each level has already been remapped onto source coordinates and
+    # re-keyed, which is precisely what makes them addable. Re-reading the raw
+    # data here would repeat several minutes of sourcemap work for no gain.
+    if len(sources) == 2:
+        if report("combined", "unit + E2E", sources):
             print(f"   {Colors.GREEN}📊 Generated frontend/{JS_COVERAGE_DIR}/combined/{Colors.NC}")
             print_info("   Open with: ./dev.py test coverage show js")
             print_info("   Find the gaps: ./dev.py test coverage-report --lang js --summary")
     else:
-        only = "unit-combined" if has_unit else "e2e"
+        only = "unit-combined" if "unit" in sources[0] else "e2e"
         print_info(f"   Single source only — see frontend/{JS_COVERAGE_DIR}/{only}/index.html")
         print_info("   Find the gaps: ./dev.py test coverage-report --lang js --summary")
 

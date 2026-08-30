@@ -38,6 +38,7 @@ backend/data/**
 # Testing
 .pytest_cache/
 scripts/test_runner/.run_cache.json
+scripts/test_runner/.campaign.json
 
 # OS
 .DS_Store

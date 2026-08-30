@@ -42,6 +42,8 @@
     import RiskResultFrame from './RiskResultFrame.svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import * as riskHelpers from './riskAnalysisHelpers';
     interface Props {
         scope: RiskScope;
         dateStart: string;
@@ -387,34 +389,19 @@
     });
 
     function localizedScenarioText(value: unknown): string {
-        if (value === null || typeof value !== 'object' || Array.isArray(value)) return '';
-        const translations = value as Record<string, unknown>;
-        const requested = translations[$currentLanguage];
-        if (typeof requested === 'string') return requested;
-        if (typeof translations.en === 'string') return translations.en;
-        if (typeof translations.it === 'string') return translations.it;
-        return Object.values(translations).find((candidate): candidate is string => typeof candidate === 'string') ?? '';
+        return riskHelpers.localizedScenarioText(value, $currentLanguage);
     }
 
     function scalarString(value: unknown): string | null {
-        if (typeof value === 'string') return value;
-        if (Array.isArray(value)) return value.find((candidate): candidate is string => typeof candidate === 'string') ?? null;
-        return null;
+        return riskHelpers.scalarString(value);
     }
 
     function numberRecord(value: unknown): Record<string, number> {
-        if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
-        return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number'));
+        return riskHelpers.numberRecord(value);
     }
 
     function presentStressBuckets(dimension: RiskScenarioDimension): string[] {
-        if (dimension === 'asset_class') return [(assetClass?.trim().toUpperCase() || 'OTHER') as string];
-        const exposure = dimension === 'sector' ? sectorExposure : geographyExposure;
-        const buckets = Object.entries(exposure ?? {})
-            .filter(([, weight]) => Number.isFinite(weight) && weight > 0)
-            .map(([bucket]) => bucket.trim())
-            .filter(Boolean);
-        return buckets.length > 0 ? buckets : ['Other'];
+        return riskHelpers.presentStressBuckets(dimension, {assetClass, sectorExposure, geographyExposure});
     }
 
     function stressBucketLabel(bucket: string, dimension: RiskScenarioDimension): string {
@@ -428,8 +415,7 @@
     }
 
     function stressImpactDimension(value: unknown): RiskScenarioDimension {
-        const dimension = singleValue(value);
-        return dimension === 'asset_class' || dimension === 'sector' || dimension === 'geography' ? dimension : stressDimension;
+        return riskHelpers.stressImpactDimension(value, stressDimension);
     }
 
     function applyReplayPreset(scenario: HistoricalReplayScenario): void {
@@ -516,24 +502,11 @@
     }
 
     function resultByCode(results: RiskAnalyticResult[], analyticCode: string): RiskAnalyticResult | null {
-        return results.find((result) => result.analytic_code === analyticCode) ?? null;
+        return riskHelpers.resultByCode(results, analyticCode);
     }
 
     function normalizeQualityIssue(issue: NonNullable<RiskDataQualityReport['issues']>[number]): DataQualityIssue {
-        return {
-            domain: issue.domain,
-            code: issue.code,
-            severity: issue.severity,
-            message_i18n_key: issue.message_i18n_key,
-            message_params: issue.message_params as Record<string, string | number | boolean | null | undefined> | undefined,
-            count: singleValue(issue.count),
-            affected_asset_ids: issue.affected_asset_ids,
-            affected_asset_names: issue.affected_asset_names,
-            affected_fx_pairs: issue.affected_fx_pairs,
-            cta_action: singleValue(issue.cta_action),
-            cta_target: singleValue(issue.cta_target),
-            group_key: singleValue(issue.group_key),
-        };
+        return riskHelpers.normalizeQualityIssue(issue);
     }
 
     function analyticTitle(code: string, fallbackKey: string): string {
@@ -547,23 +520,10 @@
     }
 
     function buildBaseAnalytics(mode: RiskMode): RiskQueryRequest['analytics'] {
-        const analytics: Array<RiskQueryRequest['analytics'][number]> = [];
-        const add = (code: string, parameters: RiskQueryRequest['analytics'][number]['parameters'] = {}) => {
-            if (hasRiskCapability(catalog, code, scope.kind, mode)) {
-                analytics.push(buildRiskAnalyticRequest(`base-${mode}-${code}`, code, parameters));
-            }
-        };
-        if (mode === 'historical') {
-            add('historical_kpi', {
-                risk_free_annual_rate: appliedRiskFreePercent / 100,
-                target_annual_return: 0,
-            });
-            add('correlation');
-            add('historical_var', {confidence_level: 0.95, horizon_days: 1});
-        } else {
-            add('risk_contribution');
-        }
-        return analytics;
+        return riskHelpers.buildBaseAnalytics(mode, {
+            appliedRiskFreePercent,
+            hasCapability: (code, capabilityMode) => hasRiskCapability(catalog, code, scope.kind, capabilityMode),
+        });
     }
 
     async function loadBase(force: boolean): Promise<void> {
@@ -765,30 +725,20 @@
         }
     }
 
-    function formatPercent(value: number | null | undefined, signed = false): string {
-        if (value == null) return '—';
-        const percentage = value * 100;
-        const sign = signed && percentage > 0 ? '+' : '';
-        return `${sign}${percentage.toFixed(2)}%`;
-    }
+    /** Fractions from the risk API, hence scale 100. Unlike the lot charts this
+     *  one defaults to *unsigned*: most of these figures are shares, not deltas. */
+    const formatPercent = (value: number | null | undefined, signed = false): string => sharedFormatPercent(value, {scale: 100, signed});
 
     function formatRatio(value: number | null | undefined): string {
-        return value == null ? '—' : value.toFixed(2);
+        return riskHelpers.formatRatio(value);
     }
 
     function formatAmount(value: string | readonly (string | null)[] | null | undefined): string {
-        const scalar = singleValue(value);
-        if (scalar == null) return '—';
-        const amount = Number(scalar);
-        if (!Number.isFinite(amount)) return '—';
-        return new Intl.NumberFormat(undefined, {style: 'currency', currency: targetCurrency, maximumFractionDigits: 2}).format(amount);
+        return riskHelpers.formatCurrencyAmount(value, targetCurrency);
     }
 
     function addDays(baseDate: string, days: number): string {
-        const parsed = new Date(`${baseDate}T00:00:00Z`);
-        if (Number.isNaN(parsed.getTime())) return `day-${days}`;
-        parsed.setUTCDate(parsed.getUTCDate() + days);
-        return parsed.toISOString().slice(0, 10);
+        return riskHelpers.addDays(baseDate, days);
     }
 </script>
 

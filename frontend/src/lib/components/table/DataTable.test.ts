@@ -19,6 +19,15 @@
  * Rows are always addressed by `tr[data-row-id="…"]`, never by position: the
  * table sorts and paginates, so an index means nothing here.
  *
+ * The pure decision logic that used to live inline — `extractRawValue`'s eleven
+ * typed-cell shapes, the per-mode filter predicate, the typed comparison used to
+ * sort, the column min/max and the enum-option builders — has been lifted into a
+ * sibling module, `dataTableLogic.ts`, and is tested branch-by-branch in
+ * `dataTableLogic.test.ts` (node env, no DOM). That is where those decisions are
+ * covered now; this file mounts the component and asserts the wiring, the
+ * rendering and the interactions that only exist once it is in a DOM. The two
+ * suites are complementary — neither re-derives the other's branches.
+ *
  * What it deliberately does NOT assert:
  *   - the `⋮` row-actions button. It opens the same ContextMenu the right-click
  *     path opens, but it passes the button as `anchorEl`, and ContextMenu's
@@ -38,6 +47,24 @@
  *     mount themselves. Nothing in the public surface can reach it.
  *   - translated text. `emptyMessage` is asserted because the test supplies it;
  *     the fallback label comes from the catalogue in four languages.
+ *
+ * Residual uncovered branches in DataTable.svelte, after the above, are all
+ * either the jsdom-dead geometry/storage/menu already listed, or rendering
+ * permutations that a component mount reaches only by enumerating column/prop
+ * shapes one at a time and that the page-level E2E already drives for real:
+ *   - the sort-indicator chevrons (asc vs desc vs unsorted) are a rendering
+ *     variant of the sort logic already asserted through `onSortChange`; which
+ *     glyph paints is not a decision the logic tests can't already see.
+ *   - middle-click-to-open (`e.button === 1 && getRowHref`) opens a row's href in
+ *     a new tab. Describable, but it needs the rare `getRowHref` prop and a
+ *     synthetic middle-button event whose default jsdom cannot perform.
+ *   - `orderedColumns` dropping an id that is in the persisted order but no longer
+ *     in `columns`. Only reachable from a stale `localStorage` layout, which this
+ *     build cannot populate (see above); the guard stays for all callers.
+ * Editable cells are NOT in this list: the inline-editing gestures (arrow-step
+ * with min/max clamp, commit-on-blur/Enter, the checkbox toggle and its disabled
+ * guard, and the click that must not select the row) are covered below under
+ * "DataTable — editable cells".
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
@@ -713,5 +740,310 @@ describe('DataTable — row actions', () => {
 
         await fireEvent.contextMenu(row('r1'));
         expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+    });
+});
+
+// ===========================================================================
+// Typed cells
+//
+// A cell can be a plain value or one of eleven tagged shapes, and each shape is
+// rendered one way and *sorted* another: `extractRawValue` is what turns the
+// shape back into something comparable. The distinction matters because the two
+// can disagree — a `size` cell shows "1.5 kB" and sorts on 1536, an `html` cell
+// shows markup and sorts on the text inside it. Reaching these through Playwright
+// means finding a page that happens to use that shape; here each one is a column.
+// ===========================================================================
+
+interface CellRow {
+    id: string;
+    v: unknown;
+}
+
+/** Mount one column whose cell is whatever the case needs, sorted ascending. */
+function mountCells(key: string, values: unknown[], type: ColumnDef<CellRow>['type'] = 'text') {
+    const data: CellRow[] = values.map((v, i) => ({id: `c${i + 1}`, v}));
+    return render(DataTable, {
+        data,
+        columns: [{id: 'v', header: 'V', type, cell: (r: CellRow) => r.v, sortable: true}] as unknown as ColumnDef<unknown>[],
+        getRowId: ((r: CellRow) => r.id) as (row: unknown) => string,
+        storageKey: key,
+    });
+}
+
+async function sortByV() {
+    await fireEvent.click(screen.getByTestId('dt-sort-v'));
+}
+
+describe('DataTable — typed cells', () => {
+    it('sorts a badge cell by its text, not by its variant', async () => {
+        await setupI18n();
+        mountCells('cells-badge', [
+            {type: 'badge', text: 'zulu', variant: 'success'},
+            {type: 'badge', text: 'alpha', variant: 'error'},
+        ]);
+        await sortByV();
+        expect(pageIds()).toEqual(['c2', 'c1']);
+    });
+
+    it('sorts a size cell on its byte count, not on the string shown', async () => {
+        // "1.5 kB" < "900 B" as text, and the inverse as bytes. This is the case
+        // the tagged shape exists for.
+        await setupI18n();
+        mountCells(
+            'cells-size',
+            [
+                {type: 'size', bytes: 1536},
+                {type: 'size', bytes: 900},
+            ],
+            'size',
+        );
+        await sortByV();
+        expect(pageIds()).toEqual(['c2', 'c1']);
+    });
+
+    it('sorts an html cell on the text inside the markup', async () => {
+        await setupI18n();
+        mountCells('cells-html', [
+            {type: 'html', html: '<b>zulu</b>'},
+            {type: 'html', html: '<i>alpha</i>'},
+        ]);
+        await sortByV();
+        expect(pageIds()).toEqual(['c2', 'c1']);
+    });
+
+    it('sorts a link cell on its label, not on its href', async () => {
+        await setupI18n();
+        mountCells('cells-link', [
+            {type: 'link', text: 'zulu', href: 'https://a.example'},
+            {type: 'link', text: 'alpha', href: 'https://z.example'},
+        ]);
+        await sortByV();
+        expect(pageIds()).toEqual(['c2', 'c1']);
+    });
+
+    it('sorts an icon-text cell on its text', async () => {
+        await setupI18n();
+        const {Trash2: Icon} = await import('lucide-svelte');
+        mountCells('cells-icon', [
+            {type: 'icon-text', icon: Icon, text: 'zulu'},
+            {type: 'icon-text', icon: Icon, text: 'alpha'},
+        ]);
+        await sortByV();
+        expect(pageIds()).toEqual(['c2', 'c1']);
+    });
+
+    it('sorts a date cell chronologically, not alphabetically', async () => {
+        // '2024-01-02' vs '2023-12-31': the string order and the calendar order
+        // agree here only because ISO happens to sort; the point is that the cell
+        // is turned into a Date and compared as one.
+        await setupI18n();
+        mountCells(
+            'cells-date',
+            [
+                {type: 'date', value: '2024-01-02'},
+                {type: 'date', value: '2023-12-31'},
+            ],
+            'date',
+        );
+        await sortByV();
+        expect(pageIds()).toEqual(['c2', 'c1']);
+    });
+
+    it('sorts each editable shape on its underlying value', async () => {
+        await setupI18n();
+        mountCells('cells-editable', [
+            {type: 'editable-number', value: 20, onSave: () => {}},
+            {type: 'editable-number', value: 3, onSave: () => {}},
+        ]);
+        await sortByV();
+        expect(pageIds()).toEqual(['c2', 'c1']);
+    });
+
+    it('renders a badge with its variant published as data, not only as a class', async () => {
+        // The variant is a contract — a spec asserts "this row failed" by reading
+        // it — so it has to be legible without depending on the stylesheet.
+        await setupI18n();
+        mountCells('cells-variant', [{type: 'badge', text: 'x', variant: 'error'}]);
+        expect(document.querySelector('[data-badge-variant="error"]')).not.toBeNull();
+    });
+});
+
+// ===========================================================================
+// Footer, the empty case
+//
+// The block above already pins the computed footer and the arguments it is
+// handed. What it does not cover is the answer "nothing to summarise": a caller
+// whose function returns {} for the current data must get no footer row at all,
+// not an empty one taking up space at the bottom of every table in the app.
+// ===========================================================================
+
+describe('DataTable — empty footer', () => {
+    it('draws no footer row when the function returns nothing', async () => {
+        await setupI18n();
+        mount('footer-fn-empty', {footerCells: () => ({})});
+        expect(document.querySelector('tfoot')).toBeNull();
+    });
+
+    it('draws no footer row when no footerCells prop is given at all', async () => {
+        await setupI18n();
+        mount('footer-absent');
+        expect(document.querySelector('tfoot')).toBeNull();
+    });
+});
+
+// ===========================================================================
+// Editable cells
+//
+// The typed-cells block above renders every editable shape (it has to, to sort
+// them) but never touches one: the arrow-stepping, the min/max clamp, the
+// commit-on-blur/Enter and the checkbox toggle are all interaction branches no
+// sort exercises. Each is a real inline-editing gesture — a user changing a
+// quantity in a schedule row, ticking a flag, renaming an identifier — reachable
+// with a keystroke and observable through the cell's own `onchange`.
+// ===========================================================================
+/** One editable cell in row `e1`, plus any extra DataTable props the case needs. */
+function mountEditable(key: string, cellValue: unknown, extra: Record<string, unknown> = {}) {
+    const data: CellRow[] = [{id: 'e1', v: cellValue}];
+    render(DataTable, {
+        data,
+        columns: [{id: 'v', header: 'V', type: 'text', cell: (r: CellRow) => r.v}] as unknown as ColumnDef<unknown>[],
+        getRowId: ((r: CellRow) => r.id) as (row: unknown) => string,
+        storageKey: key,
+        ...extra,
+    });
+}
+
+const numberInput = () => document.querySelector('input.cell-editable-number') as HTMLInputElement;
+const textInput = () => document.querySelector('input.cell-editable-text') as HTMLInputElement;
+const toggleButton = () => document.querySelector('button[aria-label="Toggle"]') as HTMLButtonElement;
+
+describe('DataTable — editable cells', () => {
+    describe('editable-number', () => {
+        it('steps the value up with the arrow key', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('en-arrow', {type: 'editable-number', value: 5, onchange});
+
+            await fireEvent.keyDown(numberInput(), {key: 'ArrowUp'});
+
+            expect(onchange).toHaveBeenLastCalledWith(6);
+        });
+
+        it('will not let the arrow key step past the column maximum', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('en-arrow-max', {type: 'editable-number', value: 10, max: 10, onchange});
+
+            await fireEvent.keyDown(numberInput(), {key: 'ArrowUp'});
+
+            // 10 → 11 clamped back to the column's ceiling.
+            expect(onchange).toHaveBeenLastCalledWith(10);
+        });
+
+        it('clamps a typed value up to the column minimum', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('en-min', {type: 'editable-number', value: null, min: 5, onchange});
+
+            await fireEvent.input(numberInput(), {target: {value: '2'}});
+
+            expect(onchange).toHaveBeenLastCalledWith(5);
+        });
+
+        it('reads a cleared field as null, not as zero', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('en-null', {type: 'editable-number', value: 7, onchange});
+
+            await fireEvent.input(numberInput(), {target: {value: ''}});
+
+            expect(onchange).toHaveBeenLastCalledWith(null);
+        });
+
+        it('leaves a half-typed decimal uncommitted', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('en-half', {type: 'editable-number', value: null, onchange});
+
+            // "5." would reformat to "5" and eat the separator the user just pressed.
+            await fireEvent.input(numberInput(), {target: {value: '5.'}});
+
+            expect(onchange).not.toHaveBeenCalled();
+        });
+
+        it('commits the clamped value on blur', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('en-blur', {type: 'editable-number', value: null, max: 10, onchange});
+            const input = numberInput();
+
+            input.value = '999';
+            await fireEvent.blur(input);
+
+            expect(onchange).toHaveBeenLastCalledWith(10);
+        });
+    });
+
+    describe('editable-text', () => {
+        it('commits the edited text on blur', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('et-blur', {type: 'editable-text', value: 'foo', onchange});
+            const input = textInput();
+
+            await fireEvent.input(input, {target: {value: 'bar'}});
+            await fireEvent.blur(input);
+
+            expect(onchange).toHaveBeenLastCalledWith('bar');
+        });
+
+        it('commits the edited text when Enter is pressed', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('et-enter', {type: 'editable-text', value: 'foo', onchange});
+            const input = textInput();
+            input.focus(); // Enter calls blur(); jsdom only fires blur on the focused element.
+
+            await fireEvent.input(input, {target: {value: 'baz'}});
+            await fireEvent.keyDown(input, {key: 'Enter'});
+
+            expect(onchange).toHaveBeenLastCalledWith('baz');
+        });
+    });
+
+    describe('editable-checkbox', () => {
+        it('flips the value when the toggle is enabled', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('ec-on', {type: 'editable-checkbox', value: false, onchange});
+
+            await fireEvent.click(toggleButton());
+
+            expect(onchange).toHaveBeenLastCalledWith(true);
+        });
+
+        it('ignores the click when disabled', async () => {
+            await setupI18n();
+            const onchange = vi.fn();
+            mountEditable('ec-off', {type: 'editable-checkbox', value: false, disabled: true, onchange});
+
+            await fireEvent.click(toggleButton());
+
+            expect(onchange).not.toHaveBeenCalled();
+        });
+    });
+
+    it('does not select the row when its editable cell is clicked', async () => {
+        await setupI18n();
+        const onRowClick = vi.fn();
+        mountEditable('ec-stop', {type: 'editable-text', value: 'x', onchange: () => {}}, {selectionMode: 'single', onRowClick});
+
+        // Clicking the field edits it; the click must not bubble up and select the row.
+        await fireEvent.click(textInput());
+        expect(onRowClick).not.toHaveBeenCalled();
+
+        // Positive control: the row itself still selects, so the negative above is real.
+        await fireEvent.click(document.querySelector('tr[data-row-id="e1"]') as HTMLElement);
+        expect(onRowClick).toHaveBeenCalledTimes(1);
     });
 });

@@ -339,6 +339,17 @@ def print_info(msg: str):
 # Frontend Build Utilities
 # =============================================================================
 
+# Files that live under `frontend/src` but are *produced* by the build itself:
+# `cmd_fe_build` regenerates them from the backend's OpenAPI schema on every
+# run, so they always end up newer than the build output and would make the
+# staleness check answer "yes" for ever. That answer used to be merely wasteful
+# — a redundant rebuild on every `dev.py server` — but once a coverage run needs
+# an *instrumented* build it became destructive: Playwright's webServer rebuilt
+# a plain bundle on top of the instrumented one, and the run then reported no JS
+# coverage at all while every test passed.
+_BUILD_GENERATED_SOURCES = {"generated.ts", "openapi.json"}
+
+
 def check_frontend_needs_build() -> bool:
     """
     Check if frontend needs to be rebuilt.
@@ -360,7 +371,7 @@ def check_frontend_needs_build() -> bool:
 
         # Check all source files
         for src_file in src_dir.rglob("*"):
-            if src_file.is_file() and src_file.stat().st_mtime > build_time:
+            if src_file.is_file() and src_file.name not in _BUILD_GENERATED_SOURCES and src_file.stat().st_mtime > build_time:
                 return True
 
         # Also check config files
@@ -380,7 +391,7 @@ def check_frontend_needs_build() -> bool:
     return False
 
 
-def auto_build_frontend(debug: bool = False, build_func=None) -> Optional[int]:
+def auto_build_frontend(debug: bool = False, build_func=None, force: bool = False) -> Optional[int]:
     """
     Auto-build frontend if sources have changed since last build.
 
@@ -388,17 +399,21 @@ def auto_build_frontend(debug: bool = False, build_func=None) -> Optional[int]:
         debug: Enable debug mode for build
         build_func: Optional function to call for building (for dev.py integration)
                    If None, uses npm run build directly
+        force: Rebuild even when the sources are unchanged. Needed when what
+               changed is not the source but the *kind* of build wanted — the
+               coverage runs need an istanbul-instrumented output, and a normal
+               run must not inherit it. Timestamps cannot see that difference.
 
     Returns:
         None if no build needed
         0 if build succeeded
         Non-zero if build failed
     """
-    if not check_frontend_needs_build():
+    if not force and not check_frontend_needs_build():
         print_info("Frontend build is up to date")
         return None
 
-    print_info("Frontend sources changed, rebuilding...")
+    print_info("Frontend build forced (build kind changed)" if force else "Frontend sources changed, rebuilding...")
 
     if build_func:
         # Use provided build function (from dev.py)

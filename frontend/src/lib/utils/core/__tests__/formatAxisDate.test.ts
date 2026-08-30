@@ -8,7 +8,7 @@
  * runner's timezone.
  */
 import {describe, expect, it} from 'vitest';
-import {formatAxisDate} from '../formatAxisDate';
+import {formatAxisDate, parseDisplayDate} from '../formatAxisDate';
 
 // 15 June 2024, noon local — a mid-year day so no timezone can shift it across a
 // year (or even month) boundary and disturb the year-presence assertions.
@@ -40,5 +40,74 @@ describe('formatAxisDate', () => {
     it('falls back to the environment locale when locale is empty', () => {
         const out = formatAxisDate('', ts, true);
         expect(out).toContain('2024');
+    });
+});
+
+describe('a bare calendar day is not an instant', () => {
+    it('renders the day it was given, not the day before it', () => {
+        // `new Date('2024-03-15')` is midnight UTC by spec, so rendering it shows
+        // 14 March to everyone west of Greenwich. Measured before the fix:
+        // "Mar 14, 2024" in New York against "15 mar 2024" in Rome, from the same
+        // string. Every opening, closing and lot boundary the API sends is a bare
+        // YYYY-MM-DD — a calendar day with no instant attached — so the only
+        // reading that means anything is the local one.
+        //
+        // This assertion is timezone-independent by construction: it does not name
+        // an expected string, it states that the rendered day matches the day that
+        // was asked for. It therefore fails in New York on the old code and passes
+        // everywhere on the new, instead of passing in Rome either way.
+        expect(formatAxisDate('en-US', '2024-03-15', true)).toContain('15');
+        expect(formatAxisDate('en-US', '2024-01-01', true)).toContain('2024');
+        expect(formatAxisDate('en-US', '2024-12-31', true)).toContain('31');
+    });
+
+    it('still treats a value with a time as the instant it is', () => {
+        // The counterpart: an ISO timestamp *is* a point in time and must keep
+        // converting into the reader's zone. Only the bare-day form is special.
+        const noon = new Date(2024, 2, 15, 12, 0, 0).toISOString();
+        expect(formatAxisDate('en-US', noon, true)).toContain('15');
+    });
+
+    it('leaves numeric timestamps alone', () => {
+        const ts = new Date(2024, 5, 5, 12, 0, 0).getTime();
+        expect(formatAxisDate('en-US', ts)).toContain('5');
+    });
+
+    it('still echoes something that is not a date at all', () => {
+        expect(formatAxisDate('en-US', 'not-a-date')).toBe('not-a-date');
+        // A day-shaped string that is not a real day falls through to the normal
+        // parse, which rejects it — the regex matches the shape, not the calendar.
+        expect(formatAxisDate('en-US', '2024-13-45')).toBe('2024-13-45');
+    });
+});
+
+describe('parseDisplayDate — the parse, exported so every formatter shares it', () => {
+    it('reads a bare day on the local calendar', () => {
+        const d = parseDisplayDate('2024-03-15');
+        expect(d).not.toBeNull();
+        // Asserted through the components, not a rendered string, so the case is
+        // meaningful in every timezone rather than only in the one it was written in.
+        expect([d!.getFullYear(), d!.getMonth(), d!.getDate()]).toEqual([2024, 2, 15]);
+    });
+
+    it('reads a timestamped value as the instant it is', () => {
+        const iso = new Date(2024, 2, 15, 12, 30).toISOString();
+        expect(parseDisplayDate(iso)!.getDate()).toBe(15);
+    });
+
+    it('accepts a numeric timestamp', () => {
+        expect(parseDisplayDate(new Date(2024, 5, 5).getTime())!.getMonth()).toBe(5);
+    });
+
+    it('returns null rather than a wrong date for an impossible day', () => {
+        // Shape-valid, calendar-invalid: the constructor would roll it over into
+        // February of the next year instead of refusing.
+        expect(parseDisplayDate('2024-13-45')).toBeNull();
+        expect(parseDisplayDate('2024-02-30')).toBeNull();
+    });
+
+    it('returns null for something that is not a date', () => {
+        expect(parseDisplayDate('not-a-date')).toBeNull();
+        expect(parseDisplayDate('')).toBeNull();
     });
 });

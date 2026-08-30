@@ -24,11 +24,13 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {_ as t} from '$lib/i18n';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {buildChoroplethData, buildGeoLabel, buildGeoNameMaps, centroidOf, choroplethMax, computeUnknownPct} from '$lib/components/charts/geographyMapHelpers';
 
     // =========================================================================
     // Props
@@ -55,7 +57,9 @@
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
-    let resizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => {
+        chartInstance?.resize();
+    });
     let mapRegistered = $state(false);
     let mapError = $state<string | null>(null);
     let needsInitialLayoutStabilityPass = false;
@@ -81,7 +85,7 @@
 
     /** Percentage of value with no geographic classification (key "Unknown" or "Other" in data).
      *  "Other" is a provider placeholder for "rest of world" — treated as unclassified. */
-    const unknownPct = $derived(+(((data['Unknown'] ?? 0) + (data['Other'] ?? 0)) * 100).toFixed(1));
+    const unknownPct = $derived(computeUnknownPct(data));
 
     /** ISO A3 → GeoJSON feature name (built dynamically from loaded world.json) */
     let iso3ToGeoName: Record<string, string> = {};
@@ -129,16 +133,11 @@
     });
 
     function setupResizeObserver() {
-        if (resizeObserver || !chartContainer) return;
-        resizeObserver = new ResizeObserver(() => {
-            chartInstance?.resize();
-        });
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function cleanup() {
-        resizeObserver?.disconnect();
-        resizeObserver = null;
+        resizeWatcher.disconnect();
         if (chartContainer) {
             chartContainer.removeEventListener('touchstart', handleTouchPanStart);
             chartContainer.removeEventListener('touchmove', handleTouchPanMove);
@@ -176,16 +175,6 @@
      *  drives pinch-to-zoom (untouched by this fix, it was already working) — this only ever
      *  adjusts position, never scale, so the two naturally compose on a real 2-finger
      *  gesture that both translates and pinches at once. */
-    function centroidOf(touches: TouchList): {x: number; y: number} {
-        let x = 0;
-        let y = 0;
-        for (let i = 0; i < touches.length; i++) {
-            x += touches[i].clientX;
-            y += touches[i].clientY;
-        }
-        return {x: x / touches.length, y: y / touches.length};
-    }
-
     function handleTouchPanStart(e: TouchEvent) {
         if (e.touches.length !== 2 || !isZoomedIn) {
             touchPanState = null;
@@ -233,16 +222,9 @@
             const geoJson = await response.json();
 
             // Build ISO A3 ↔ GeoJSON name mappings from the enriched GeoJSON
-            iso3ToGeoName = {};
-            geoNameToIso3 = {};
-            for (const feature of geoJson.features ?? []) {
-                const name: string = feature.properties?.name ?? '';
-                const iso3: string = feature.properties?.ISO_A3 ?? '';
-                if (name && iso3) {
-                    iso3ToGeoName[iso3] = name;
-                    geoNameToIso3[name] = iso3;
-                }
-            }
+            const maps = buildGeoNameMaps(geoJson);
+            iso3ToGeoName = maps.iso3ToGeoName;
+            geoNameToIso3 = maps.geoNameToIso3;
 
             echarts.registerMap('world', geoJson as any);
             mapRegistered = true;
@@ -279,29 +261,19 @@
         const isDark = document.documentElement.classList.contains('dark');
 
         // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
-        const chartData: Array<{name: string; value: number}> = [];
-        for (const [code, weight] of Object.entries(data)) {
-            if (weight <= 0 || code === 'Unknown' || code === 'Other') continue;
-            const countryName = iso3ToGeoName[code] ?? code;
-            chartData.push({name: countryName, value: +(weight * 100).toFixed(2)});
-        }
+        const chartData = buildChoroplethData(data, iso3ToGeoName);
 
-        const maxValue = chartData.length > 0 ? Math.max(...chartData.map((d) => d.value)) : 100;
+        const maxValue = choroplethMax(chartData);
 
         // Fixed label — show flag + translated country name + % + absolute amount on hover
-        const labelFormatter = (params: any) => {
-            const iso3 = geoNameToIso3[params.name] ?? '';
-            const info = iso3 ? getCountryInfo(iso3) : null;
-            const flag = info?.flag_emoji ?? '';
-            const displayName = info?.name ?? params.name;
-            const prefix = flag ? `${flag} ` : '';
-            if (params.value != null && !isNaN(params.value) && params.value > 0) {
-                const absAmt = iso3 ? amounts[iso3] : undefined;
-                const amtLine = absAmt != null && absAmt > 0 ? `\n${formatCurrencyAmountPlain(absAmt, currency, {showSign: false})}` : '';
-                return `${prefix}${displayName}: ${params.value}%${amtLine}`;
-            }
-            return `${prefix}${displayName}`;
-        };
+        const labelFormatter = (params: any) =>
+            buildGeoLabel(params, {
+                geoNameToIso3,
+                amounts,
+                currency,
+                getInfo: (iso3) => getCountryInfo(iso3),
+                formatAmount: (amt, cur) => formatCurrencyAmountPlain(amt, cur, {showSign: false}),
+            });
 
         const fixedLabelStyle = {
             show: true,

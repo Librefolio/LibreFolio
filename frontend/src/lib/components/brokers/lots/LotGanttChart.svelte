@@ -13,17 +13,41 @@
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-    import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {lotStateColor} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
-    import {safeNumber, safeScalar, safeString} from '$lib/types';
+    import {formatAxisDate, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {resolveBrokerName, withAlpha} from './lotChartShared';
+    import {
+        applySharedZoomWindow as sharedApplyZoomWindow,
+        branchDepthForLaneKey,
+        estimateTextWidthPx,
+        eventMarkerKind,
+        eventMarkerSymbol,
+        firstPresentUnknown,
+        formatQuantity,
+        inferredTransitionKind,
+        isTransferFragment,
+        laneKeyForFragmentId,
+        laneKeyForSegment,
+        laneSortKey,
+        parseDateToUtcMs,
+        parseUnknownNumber,
+        safeUnknownString,
+        segmentBaseColor as sharedSegmentBaseColor,
+        segmentIntersectsRange,
+        segmentOpacity,
+        signedColorField,
+        thicknessForQuantity,
+        type EventMarkerKind,
+    } from './lotGanttChartHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
-    type EventMarkerKind = 'BUY' | 'SELL' | 'TRANSFER' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT';
 
     interface Props {
         lots: ReadonlyArray<LotSummarySchema>;
@@ -139,9 +163,6 @@
     const CHART_MIN_WIDTH = 720;
     const PULSE_DURATION_MS = 1800;
     const TOGGLE_DEBOUNCE_MS = 260;
-    const THICKNESS_MIN = 10;
-    const THICKNESS_MAX = 26;
-    const BRANCH_THICKNESS_MAX = 22;
     const LANE_GAP_PX = 4;
     const LANE_CHART_MIN_HEIGHT = 160;
     const GRID_LEFT_PX = 56;
@@ -174,8 +195,11 @@
     let axisContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let axisInstance: echarts.ECharts | undefined = undefined;
-    let resizeObserver: ResizeObserver | null = null;
-    let axisResizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => {
+        syncAxisViewport();
+        chartInstance?.resize();
+    });
+    const axisResizeWatcher = createResizeWatcher(() => axisInstance?.resize());
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let activeTooltipDataIndex: number | null = null;
@@ -199,43 +223,17 @@
         isDark = document.documentElement.classList.contains('dark');
     }
 
-    function parseNumber(value: string | Array<string | null> | null | undefined): number {
-        const raw = safeString(value);
-        if (raw == null) return 0;
-        const parsed = Number.parseFloat(raw);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }
+    /** Local name for this chart's numeric unwrap, which treats "missing" as
+     *  zero — a chart axis has no room for "unknown". The parsing itself is the
+     *  shared `safeDecimal`; only the fallback is this file's own choice. */
+    const parseNumber = (value: unknown): number => safeDecimal(value) ?? 0;
 
-    function safeUnknownString(value: unknown): string | null {
-        if (Array.isArray(value)) return safeUnknownString(value[0]);
-        if (typeof value === 'string') return value;
-        if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-        return null;
-    }
-
-    function parseUnknownNumber(value: unknown): number | null {
-        const raw = safeUnknownString(value);
-        if (raw == null) return null;
-        const parsed = Number.parseFloat(raw);
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    function parseDateToUtcMs(value: string): number | null {
-        const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (dateOnlyMatch) {
-            const [, year, month, day] = dateOnlyMatch;
-            return Date.UTC(Number(year), Number(month) - 1, Number(day));
-        }
-
-        const parsed = Date.parse(value);
-        if (!Number.isFinite(parsed)) return null;
-        const date = new Date(parsed);
-        return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-    }
-
+    // `parseDisplayDate` rather than `new Date`: these are bare `YYYY-MM-DD`
+    // days, and the plain constructor reads them as midnight UTC — a whole day
+    // early for anyone west of Greenwich.
     function formatDate(value: string, opts: Intl.DateTimeFormatOptions): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return value;
+        const date = parseDisplayDate(value);
+        if (!date) return value;
         return date.toLocaleDateString($currentLanguage || undefined, opts);
     }
 
@@ -245,14 +243,6 @@
 
     function formatDateLong(value: string): string {
         return formatDate(value, {year: 'numeric', month: 'short', day: 'numeric'});
-    }
-
-    function formatQuantity(value: number): string {
-        return value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
-    }
-
-    function clamp(value: number, min: number, max: number): number {
-        return Math.min(max, Math.max(min, value));
     }
 
     function formatMoneyField(value: unknown): string {
@@ -272,54 +262,20 @@
         return `${sign}${(parsed * 100).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}%`;
     }
 
-    function withAlpha(color: string, alpha: number): string {
-        const hslMatch = color.match(/^hsl\((.+)\)$/i);
-        if (hslMatch) return `hsla(${hslMatch[1]}, ${alpha})`;
-        const hexMatch = color.match(/^#([0-9a-f]{6})$/i);
-        if (hexMatch)
-            return `${color}${Math.round(clamp(alpha, 0, 1) * 255)
-                .toString(16)
-                .padStart(2, '0')}`;
-        return color;
-    }
-
     function lotLabel(openingDate: string): string {
         const translated = $t('brokers.lots.lotLabel', {values: {date: formatDateShort(openingDate)}});
         return !translated || translated === 'brokers.lots.lotLabel' ? `Lot ${formatDateShort(openingDate)}` : translated;
     }
 
-    function brokerName(brokerId: number | null): string {
-        if (brokerId == null) return '—';
-        return brokers.find((broker) => broker.id === brokerId)?.name ?? `#${brokerId}`;
-    }
+    const brokerName = (brokerId: number | null): string => resolveBrokerName(brokerId, brokers);
 
     function brokerLike(brokerId: number | null): BrokerLike | null {
         if (brokerId == null) return null;
         return brokers.find((broker) => broker.id === brokerId) ?? {id: brokerId, name: brokerName(brokerId)};
     }
 
-    function segmentBaseColor(segment: SegmentModel, themeDark: boolean): string {
-        if (segment.custodyType === 'IN_TRANSIT') return themeDark ? '#c084fc' : '#7c3aed';
-        if (segment.brokerId == null) return themeDark ? '#60a5fa' : '#2563eb';
-        const brokerColor = getBrokerColor(segment.brokerId, brokers);
-        return themeDark ? brokerColor.vivid : brokerColor.vividLight;
-    }
-
-    function segmentOpacity(segment: SegmentModel): number {
-        if (segment.custodyType === 'IN_TRANSIT') return 0.65;
-        return segment.endDate == null ? 0.9 : 0.45;
-    }
-
-    function thicknessForQuantity(quantity: number, qMax: number, isBranch: boolean): number {
-        if (qMax <= 0) return THICKNESS_MIN;
-        const maxThickness = isBranch ? BRANCH_THICKNESS_MAX : THICKNESS_MAX;
-        return THICKNESS_MIN + (clamp(quantity, 0, qMax) / qMax) * (maxThickness - THICKNESS_MIN);
-    }
-
-    function segmentIntersectsRange(segment: SegmentModel, minMs: number | null, maxMs: number | null): boolean {
-        if (minMs == null || maxMs == null) return true;
-        return segment.endMs > minMs && segment.startMs < maxMs;
-    }
+    /** Wrapper: passes the reactive `brokers` list to the shared segment colour. */
+    const segmentBaseColor = (segment: SegmentModel, themeDark: boolean): string => sharedSegmentBaseColor(segment, themeDark, brokers);
 
     function buildTransitLabel(segment: SegmentModel): string {
         const translated = $t('brokers.lots.inTransit');
@@ -337,10 +293,6 @@
     /** Rough Latin-glyph width estimate (no canvas measureText available inside renderItem) —
      * good enough to pick which label variant fits before ECharts' own char-level `overflow:
      * 'truncate'` kicks in as a final safety net. */
-    function estimateTextWidthPx(text: string, fontSize = 11): number {
-        return text.length * fontSize * 0.58;
-    }
-
     /** Segment label with graceful degradation. Priority (kept longest first, per plan §3.4):
      * 1) date, 2) broker, 3) quantity, 4) the word "Lot" — so variants are built by dropping
      * from the END of that list first. */
@@ -362,35 +314,6 @@
             if (estimateTextWidthPx(variant) <= availableWidthPx) return variant;
         }
         return variants.at(-1) ?? dateText;
-    }
-
-    function transferPairId(fragmentId: string): string | null {
-        return fragmentId.match(/\/transfer:([^/]+)/)?.[1] ?? null;
-    }
-
-    function isTransferFragment(segment: SegmentModel): boolean {
-        return segment.fragmentId.includes('/transfer:') || segment.custodyType === 'IN_TRANSIT';
-    }
-
-    function laneKeyForFragmentId(lotId: number, fragmentId: string): string {
-        const pairId = transferPairId(fragmentId);
-        if (pairId != null) return `lot:${lotId}/transfer:${pairId}`;
-        return fragmentId;
-    }
-
-    function laneKeyForSegment(segment: SegmentModel): string {
-        const pairId = transferPairId(segment.fragmentId);
-        if (pairId != null) return `lot:${segment.lotId}/transfer:${pairId}`;
-        return segment.fragmentId;
-    }
-
-    function branchDepthForLaneKey(laneKey: string): number {
-        return laneKey.includes('/transfer:') ? 1 : 0;
-    }
-
-    function laneSortKey(segmentsForLane: SegmentModel[], laneKey: string): [number, number, string] {
-        const firstStart = Math.min(...segmentsForLane.map((segment) => segment.startMs));
-        return [branchDepthForLaneKey(laneKey), firstStart, laneKey];
     }
 
     function triggerPulse(lotId: number) {
@@ -632,43 +555,10 @@
             ),
     );
 
-    function eventMarkerKind(kind: string): EventMarkerKind {
-        if (kind === 'TRANSFER_DEPART' || kind === 'TRANSFER_ARRIVE') return 'TRANSFER';
-        if (kind === 'ADJUSTMENT_IN') return 'ADJUSTMENT_IN';
-        if (kind === 'ADJUSTMENT_OUT') return 'ADJUSTMENT_OUT';
-        if (kind === 'SPLIT') return 'SPLIT';
-        if (kind === 'SELL') return 'SELL';
-        return 'BUY';
-    }
-
-    function eventMarkerSymbol(kind: EventMarkerKind): string {
-        if (kind === 'SELL') return '▼';
-        if (kind === 'TRANSFER') return '◆';
-        if (kind === 'ADJUSTMENT_IN') return '+';
-        if (kind === 'ADJUSTMENT_OUT') return '×';
-        if (kind === 'SPLIT') return '│';
-        return '▲';
-    }
-
     function eventMarkerLabel(kind: EventMarkerKind): string {
         const keyKind = kind === 'TRANSFER' ? 'TRANSFER_DEPART' : kind;
         const fallback = kind === 'ADJUSTMENT_IN' ? 'Adjustment In' : kind === 'ADJUSTMENT_OUT' ? 'Adjustment Out' : kind === 'TRANSFER' ? 'Transfer' : kind === 'SELL' ? 'Sale' : kind === 'SPLIT' ? 'Split' : 'Buy';
         return translateOr($t, `brokers.lots.chartMarkers.eventType.${keyKind}`, fallback);
-    }
-
-    function isSplitTransition(prev: RenderedSegment, next: RenderedSegment): boolean {
-        if (prev.quantity === next.quantity || prev.unitPrice <= 0 || next.unitPrice <= 0) return false;
-        const prevNotional = prev.quantity * prev.unitPrice;
-        const nextNotional = next.quantity * next.unitPrice;
-        return Math.abs(prevNotional - nextNotional) <= Math.max(0.000001, Math.abs(prevNotional) * 0.0001);
-    }
-
-    function inferredTransitionKind(prev: RenderedSegment, next: RenderedSegment, transferDates: Set<number> | undefined): EventMarkerKind {
-        if (transferDates?.has(next.startMs)) return 'TRANSFER';
-        if (isSplitTransition(prev, next)) return 'SPLIT';
-        if (next.quantity > prev.quantity) return 'ADJUSTMENT_IN';
-        if (next.quantity < prev.quantity) return 'SELL';
-        return 'TRANSFER';
     }
 
     function pushEventMarker(target: EventMarkerDatum[], seen: Set<string>, kind: EventMarkerKind, segment: RenderedSegment, dateMs: number, date: string, quantity: number | null = segment.quantity) {
@@ -755,18 +645,6 @@
 
     const eventMarkerData = $derived.by((): EventMarkerDatum[] => (events.length > 0 ? buildExplicitEventMarkers() : buildInferredEventMarkers()));
 
-    function firstPresentUnknown(...values: unknown[]): unknown {
-        for (const value of values) {
-            if (Array.isArray(value)) {
-                const scalar = value[0];
-                if (scalar != null) return scalar;
-            } else if (value != null) {
-                return value;
-            }
-        }
-        return undefined;
-    }
-
     function compactStateLabel(lot: LotModel | undefined, openQuantity: number, originalQuantity: number): string {
         if (openQuantity <= 0) return translateOr($t, 'brokers.lots.modal.state.closed', 'Closed');
         if (lot?.states.includes('PARTIALLY_CLOSED') || openQuantity < originalQuantity) return translateOr($t, 'brokers.lots.modal.state.partially_closed', 'Partially closed');
@@ -781,14 +659,6 @@
     function segmentBrokerLabel(meta: RenderedSegment, lot: LotModel | undefined): string {
         if (meta.custodyType === 'IN_TRANSIT') return `${brokerName(meta.sourceBrokerId)} → ${brokerName(meta.destinationBrokerId)}`;
         return brokerName(meta.brokerId ?? lot?.openingBrokerId ?? null);
-    }
-
-    function signedColorField(value: unknown, formatter: (v: unknown) => string, themeDark: boolean): string {
-        const num = parseUnknownNumber(value);
-        const text = escapeHtml(formatter(value));
-        if (num == null || num === 0) return text;
-        const color = num > 0 ? (themeDark ? '#4ade80' : '#16a34a') : themeDark ? '#f87171' : '#dc2626';
-        return `<span style="color:${color}">${text}</span>`;
     }
 
     function buildTooltip(meta: RenderedSegment, themeDark: boolean): string {
@@ -1156,12 +1026,7 @@
      * same full-domain 0-100 window that LotWacPriceChart starts with. Without explicit start/end,
      * ECharts can keep a merged stale Gantt window after range changes. setOption does not re-emit
      * a 'dataZoom' event, so this cannot cause a sync ping-pong. */
-    function applySharedZoomWindow<T extends {start?: number; end?: number}>(zooms: T[]): T[] {
-        if (externalZoomStart != null && externalZoomEnd != null) {
-            return zooms.map((zoom) => ({...zoom, start: externalZoomStart, end: externalZoomEnd}));
-        }
-        return zooms.map((zoom) => ({...zoom, start: INITIAL_ZOOM_START, end: INITIAL_ZOOM_END}));
-    }
+    const applySharedZoomWindow = <T extends {start?: number; end?: number}>(zooms: T[]): T[] => sharedApplyZoomWindow(zooms, externalZoomStart, externalZoomEnd, INITIAL_ZOOM_START, INITIAL_ZOOM_END);
 
     /** Gantt bars are custom-series items whose x-value is the segment START. With the default
      * dataZoom `filterMode:'filter'` ECharts DROPS any data item whose start scrolls out of the
@@ -1214,17 +1079,8 @@
     }
 
     function setupResizeObserver() {
-        if (chartContainer && !resizeObserver) {
-            resizeObserver = new ResizeObserver(() => {
-                syncAxisViewport();
-                chartInstance?.resize();
-            });
-            resizeObserver.observe(chartContainer);
-        }
-        if (axisContainer && !axisResizeObserver) {
-            axisResizeObserver = new ResizeObserver(() => axisInstance?.resize());
-            axisResizeObserver.observe(axisContainer);
-        }
+        resizeWatcher.observe(chartContainer);
+        axisResizeWatcher.observe(axisContainer);
     }
 
     /** Recomputes the invisible per-segment hit targets (see OverlayRect) from the chart's
@@ -1349,8 +1205,7 @@
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
-            resizeObserver?.disconnect();
-            resizeObserver = null;
+            resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
             dataZoomSyncHandle?.dispose();
@@ -1359,8 +1214,7 @@
             chartInstance = undefined;
         }
         if (axisInstance && (!axisContainer || axisInstance.getDom() !== axisContainer)) {
-            axisResizeObserver?.disconnect();
-            axisResizeObserver = null;
+            axisResizeWatcher.disconnect();
             axisDataZoomTouchPanHandle?.dispose();
             axisDataZoomTouchPanHandle = null;
             axisDataZoomSyncHandle?.dispose();
@@ -1439,8 +1293,8 @@
         return () => {
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
-            resizeObserver?.disconnect();
-            axisResizeObserver?.disconnect();
+            resizeWatcher.disconnect();
+            axisResizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
             dataZoomSyncHandle?.dispose();

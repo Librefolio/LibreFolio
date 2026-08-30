@@ -260,8 +260,19 @@
         if (advanceFocus && containerRef) {
             // Move focus to the next focusable element after closing
             setTimeout(() => {
+                // Re-check rather than assert non-null: the guard above ran when
+                // the timer was *scheduled*, and `onchange` fired before that, so
+                // a consumer that closes its modal or advances a wizard step on
+                // selection can unmount us in between.
+                //
+                // Honest note: this was reported as a live defect, and I could not
+                // reproduce it — under jsdom the timer never reaches this line, so
+                // I have neither a proof nor a refutation. The guard stays because
+                // a non-null assertion on a ref read asynchronously is a claim
+                // nothing enforces, not because a failure was observed.
+                if (!containerRef) return;
                 const all = Array.from(document.querySelectorAll<HTMLElement>('[tabindex]:not([tabindex="-1"]), input:not([disabled]), select:not([disabled]), button:not([disabled]), a[href]')).filter((el) => el.offsetParent !== null);
-                const idx = all.indexOf(containerRef!.querySelector<HTMLElement>('[tabindex]') ?? containerRef!);
+                const idx = all.indexOf(containerRef.querySelector<HTMLElement>('[tabindex]') ?? containerRef);
                 if (idx >= 0 && idx + 1 < all.length) {
                     all[idx + 1].focus();
                 }
@@ -427,7 +438,7 @@
                             data-testid={testId ? `${testId}-search` : undefined}
                         />
                         {#if searchQuery}
-                            <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
+                            <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600" data-testid={testId ? `${testId}-search-clear` : undefined}>
                                 <X size={14} />
                             </button>
                         {/if}
@@ -458,6 +469,7 @@
                                 onmouseenter={() => (highlightedIndex = index)}
                                 disabled={option.disabled}
                                 data-testid="search-select-option-{option.value}"
+                                data-highlighted={index === highlightedIndex}
                                 class="w-full flex items-center space-x-3 px-4 py-2.5 text-left transition-colors
                                    {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
                                    {index === highlightedIndex ? 'bg-libre-green/30 dark:bg-libre-green dark:text-white highlighted' : 'hover:bg-gray-100 dark:hover:bg-slate-600'}"

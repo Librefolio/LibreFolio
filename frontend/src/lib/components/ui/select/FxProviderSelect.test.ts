@@ -288,4 +288,47 @@ describe('FxProviderSelect', () => {
         await waitFor(() => expect(selectedRow(DIRECT_KEY)).toBeInTheDocument());
         expect(within(selectedRow(DIRECT_KEY)).queryByTestId('fx-route-remove')).toBeNull();
     });
+
+    it('renders a provider that carries an icon as an <img>, and one without as initials', async () => {
+        await setupI18n();
+        // The icon comes from the FX provider cache (getCachedFxProviders), which is
+        // mocked — so a provider gains an icon simply by carrying an icon_url. ECB does,
+        // FED does not, so the same route shows one of each.
+        graphReturns([DIRECT, CHAIN], [{...ECB, icon_url: 'https://cdn.test/ecb.png'}, FED, BOE, MANUAL]);
+        mount();
+        await settled();
+        const picker = await openPicker();
+
+        const ecbDirect = within(picker).getByTestId('fx-route-direct-ECB');
+        const img = ecbDirect.querySelector<HTMLImageElement>('img[alt="ECB"]');
+        expect(img).not.toBeNull();
+        expect(img!.src).toContain('cdn.test/ecb.png');
+    });
+
+    it('surfaces a provider warning as a route-level count without inventing one', async () => {
+        await setupI18n();
+        // ECB carries a warning; FED does not. The direct route (ECB only) shows one
+        // warning; the chain (ECB→FED) also shows exactly one, since only ECB warns.
+        graphReturns([DIRECT, CHAIN], [{...ECB, warning_i18n: {en: 'Rates published once daily'}}, FED, BOE, MANUAL]);
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+
+        // The warning count is published as data, not read from the (translated) tooltip.
+        expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAttribute('data-warnings', '1');
+
+        // It rides along when the route is selected, too.
+        await fireEvent.click(within(picker).getByTestId('fx-route-direct-ECB'));
+        expect(onSelectionChange).toHaveBeenCalledWith([DIRECT]);
+        expect(selectedRow(DIRECT_KEY)).toHaveAttribute('data-warnings', '1');
+    });
+
+    it('shows no warnings when no provider on the route carries one', async () => {
+        await setupI18n();
+        // The default fixture has no warnings — a route must not manufacture one.
+        mount();
+        await settled();
+        const picker = await openPicker();
+        expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAttribute('data-warnings', '0');
+    });
 });

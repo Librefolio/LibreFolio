@@ -45,6 +45,13 @@ describe('buildDuplicateRecheckPayload', () => {
         expect(asked.map((a) => a.row.index)).toEqual([0, 1]);
     });
 
+    it('keeps an asset-less row that has no type at all (empty type → not required)', () => {
+        // asset_id null and no type: String(undefined ?? '') feeds assetFieldOf('') → optional.
+        const asked = buildDuplicateRecheckPayload([row(0, {asset_id: null})], new Map(), assetFieldOf);
+
+        expect(asked.map((a) => a.row.index)).toEqual([0]);
+    });
+
     it('keeps a real instrument id untouched', () => {
         const asked = buildDuplicateRecheckPayload([row(7, {asset_id: 91, type: 'SELL'})], new Map([[FAKE, 42]]), assetFieldOf);
 

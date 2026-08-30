@@ -1167,7 +1167,20 @@
                 return {issuesCount: 0};
             }
             const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
-            const resolved = resolveOps({splitTxIds});
+            // `promoteTxIds` has to be here for the same reason it is in commit():
+            // `buildOpsIndexMap` below derives it from `pendingPromotes` regardless
+            // and skips those rows *without advancing its cursor*. Leaving it out
+            // here made `resolveOps` keep them, so the two walked the same list at
+            // different speeds and every entry after a queued promote mapped to the
+            // wrong row — which is what `lastOpsIndexMap` is then read through to
+            // attach WAC previews and validation issues. The user saw the preview
+            // pinned to a neighbouring transaction.
+            //
+            // It also validated rows the commit will not send, which is the wrong
+            // question to ask: a preview should simulate the commit, not something
+            // adjacent to it.
+            const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
+            const resolved = resolveOps({splitTxIds, promoteTxIds});
             const payload = buildBatchPayload({
                 ops: resolved,
                 splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,

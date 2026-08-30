@@ -70,6 +70,7 @@
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
+    import {deduplicateIssues, signLabel, signHintKey} from '$lib/utils/transactions/txFormFields';
     import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
@@ -1267,33 +1268,10 @@
     // =========================================================================
 
     /** Label suffix for a sign rule: (+), (−), (≠0), or empty. */
-    function signLabel(sign: import('$lib/stores/transactions/transactionTypeStore').SignRule): string {
-        switch (sign) {
-            case 'positive':
-                return '(+)';
-            case 'negative':
-                return '(−)';
-            case 'nonzero':
-                return '(≠0)';
-            default:
-                return '';
-        }
-    }
-
     /** Hint text below the field explaining the sign constraint. */
     function signHintText(sign: import('$lib/stores/transactions/transactionTypeStore').SignRule): string {
-        switch (sign) {
-            case 'positive':
-                return $t('transactions.form.hintSignPositive');
-            case 'negative':
-                return $t('transactions.form.hintSignNegative');
-            case 'zero':
-                return $t('transactions.form.hintSignZero');
-            case 'nonzero':
-                return $t('transactions.form.hintSignNonzero');
-            default:
-                return '';
-        }
+        const key = signHintKey(sign);
+        return key ? $t(key) : '';
     }
 
     let qtyHint = $derived(signHintText(rule.quantityRule));
@@ -1346,16 +1324,6 @@
 
     /** W42: Deduplicate validation issues by `code` — in dual mode both halves
      *  can produce the same error code, showing it once is enough. */
-    function deduplicateIssues(raw: ValidationIssue[]): ValidationIssue[] {
-        const seen = new Set<string>();
-        return raw.filter((iss) => {
-            const key = iss.code ?? iss.error;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-    }
-
     // Bugfix-4 §U16: validate chip removed in favor of the green/warning
     // banners (single source of truth). The footer now shows only an inline
     // "Validating…" indicator while a request is in flight (see template).

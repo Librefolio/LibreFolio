@@ -35,11 +35,15 @@
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/svelte": "^5.4.2",
+    "@vitest/coverage-istanbul": "^4.1.11",
     "autoprefixer": "^10.4.22",
     "dotenv": "^17.2.3",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-lib-source-maps": "^5.0.6",
+    "istanbul-reports": "^3.2.0",
     "jsdom": "^30.0.1",
     "knip": "^6.31.0",
-    "monocart-coverage-reports": "^2.12.12",
     "openapi-zod-client": "^1.18.0",
     "postcss": "^8.5.6",
     "prettier": "^3.8.3",
@@ -49,8 +53,8 @@
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
     "vite": "^7.3.5",
-    "vitest": "^4.1.0",
-    "vitest-monocart-coverage": "^4.0.2"
+    "vite-plugin-istanbul": "^9.0.1",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@embedpdf/snippet": "^2.14.3",

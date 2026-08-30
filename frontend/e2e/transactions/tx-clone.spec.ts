@@ -18,6 +18,7 @@ import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {appears} from '../fixtures/probe';
 import {trackTransactionWrites, type TransactionWriteTracker} from '../fixtures/db-cleanup';
+import {todayIso} from '../fixtures/dates';
 
 test.setTimeout(25_000);
 
@@ -74,10 +75,6 @@ async function closeModals(page: Page) {
             await discard.click();
         }
     }
-}
-
-function todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
 }
 
 // ---------------------------------------------------------------------------

@@ -51,6 +51,8 @@ def _ensure_frontend_build() -> bool:
     regenerates them first. ``auto_build_frontend`` still only rebuilds when the
     sources actually changed.
     """
+    import os
+    from pathlib import Path
     from types import SimpleNamespace
 
     from dev import cmd_fe_build
@@ -58,16 +60,100 @@ def _ensure_frontend_build() -> bool:
     if "build" in _SETUP_DONE:
         return True
 
-    result = auto_build_frontend(
-        debug=False,
-        build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
-    )
+    # JS coverage needs an *instrumented* build, and an instrumented build must
+    # never be left behind for a normal run: it is slower and its output is not
+    # what ships. `auto_build_frontend` only rebuilds when sources changed, which
+    # would happily reuse a build of the wrong kind — so the kind is recorded
+    # beside the output and a mismatch forces a rebuild.
+    #
+    # Why instrumented at all: the V8 route reports an *empty* branch map for a
+    # Svelte template, so every `{#if}` in the app was invisible to the numbers.
+    # Instrumenting the source before the compiler rewrites it keeps those
+    # branches, and makes the unit and E2E measurements describe the same
+    # positions instead of two different compilations of one file.
+    want_instrumented = bool(_common._COVERAGE_JS)
+    marker = Path("frontend/build/.coverage-instrumented")
+    have_instrumented = marker.exists()
+    force = want_instrumented != have_instrumented
+
+    env_backup = os.environ.get("COVERAGE_INSTRUMENT")
+    node_backup = os.environ.get("NODE_OPTIONS")
+    if want_instrumented:
+        os.environ["COVERAGE_INSTRUMENT"] = "1"
+        # Instrumenting every file of `src` while also emitting sourcemaps does
+        # not fit in Node's default heap: the build dies with "Ineffective
+        # mark-compacts near heap limit" and the runner reports it as a build
+        # failure. Unlike the coverage *accumulation* inside a Playwright worker
+        # — where raising the limit only postponed a leak — this is a genuine
+        # one-shot working set, so more headroom is the fix rather than a delay.
+        os.environ["NODE_OPTIONS"] = f"{node_backup + ' ' if node_backup else ''}--max-old-space-size=8192"
+        print_info("Building the frontend instrumented for coverage (slower; not shippable)")
+    else:
+        os.environ.pop("COVERAGE_INSTRUMENT", None)
+
+    try:
+        result = auto_build_frontend(
+            debug=False,
+            force=force,
+            build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
+        )
+    finally:
+        if env_backup is None:
+            os.environ.pop("COVERAGE_INSTRUMENT", None)
+        else:
+            os.environ["COVERAGE_INSTRUMENT"] = env_backup
+        if node_backup is None:
+            os.environ.pop("NODE_OPTIONS", None)
+        else:
+            os.environ["NODE_OPTIONS"] = node_backup
+
+    if result is None or result == 0:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        if want_instrumented:
+            # Verified, not declared. Announcing an instrumented build and
+            # shipping an ordinary one produces a run that measures nothing and
+            # still reports success — which is exactly what happened while
+            # `forceBuildInstrument` was missing from the plugin options: the
+            # plugin's `apply()` excludes it from `vite build` unless forced, so
+            # the log said "instrumented" and the bundle was plain.
+            if not _bundle_is_instrumented():
+                print_error(
+                    "The frontend build is not instrumented despite COVERAGE_INSTRUMENT=1. "
+                    "JS coverage would come back empty without failing, so the run stops here. "
+                    "Check the vite-plugin-istanbul options in frontend/vite.config.ts."
+                )
+                marker.unlink(missing_ok=True)
+                return False
+            marker.write_text("this build is istanbul-instrumented; do not ship it\n")
+        elif marker.exists():
+            marker.unlink()
     if result is None or result == 0:
         _SETUP_DONE.add("build")
         return True
     else:
         print_error("Frontend build failed!")
         return False
+
+
+def _bundle_is_instrumented() -> bool:
+    """Does the built client bundle actually carry istanbul counters?
+
+    Reads the chunks rather than trusting the flag: the counter global is what
+    the Playwright fixture will look for at runtime, so this asks the same
+    question the collection asks.
+    """
+    from pathlib import Path
+
+    app_dir = Path("frontend/build/_app/immutable")
+    if not app_dir.is_dir():
+        return False
+    for chunk in app_dir.rglob("*.js"):
+        try:
+            if "__coverage__" in chunk.read_text(errors="ignore"):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def _ensure_db_populated() -> bool:

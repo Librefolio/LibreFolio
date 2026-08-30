@@ -24,7 +24,8 @@
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
-    import type {BulkAction, CellContent, ColumnDef, ColumnWidthsState, EnumOption, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
+    import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
+    import {compareRowsByColumn, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
 
     interface Props {
         data: T[];
@@ -354,55 +355,7 @@
             const column = columns.find((c) => c.id === columnId);
             if (!column) continue;
 
-            result = result.filter((row) => {
-                const getValue = column.getValue ?? column.cell;
-                const cellValue = getValue(row);
-                const rawValue = typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue ? String(cellValue) : cellValue;
-
-                if (filterValue.type === 'text') {
-                    const str = String(rawValue).toLowerCase();
-                    const search = filterValue.value.toLowerCase();
-                    switch (filterValue.matchMode) {
-                        case 'contains':
-                            return str.includes(search);
-                        case 'startsWith':
-                            return str.startsWith(search);
-                        case 'endsWith':
-                            return str.endsWith(search);
-                        case 'equals':
-                            return str === search;
-                    }
-                } else if (filterValue.type === 'number') {
-                    const num = Number(rawValue);
-                    if (filterValue.min !== undefined && num < filterValue.min) return false;
-                    if (filterValue.max !== undefined && num > filterValue.max) return false;
-                    return true;
-                } else if (filterValue.type === 'size') {
-                    // Size filter - rawValue should be bytes (from SizeCell)
-                    const bytes = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'size' ? (rawValue as unknown as {bytes: number}).bytes : Number(rawValue);
-                    if (filterValue.minBytes !== undefined && bytes < filterValue.minBytes) return false;
-                    if (filterValue.maxBytes !== undefined && bytes > filterValue.maxBytes) return false;
-                    return true;
-                } else if (filterValue.type === 'date') {
-                    const dateStr = typeof rawValue === 'object' && rawValue !== null && 'type' in rawValue && (rawValue as unknown as {type: string}).type === 'date' ? String((rawValue as unknown as {value: Date | string}).value) : String(rawValue);
-                    const date = new Date(dateStr);
-                    if (filterValue.from && date < new Date(filterValue.from)) return false;
-                    if (filterValue.to && date > new Date(filterValue.to)) return false;
-                    return true;
-                } else if (filterValue.type === 'enum') {
-                    return filterValue.selected.includes(String(rawValue));
-                } else if (filterValue.type === 'multi-enum') {
-                    if (filterValue.selected.length === 0) return true;
-                    const rowVals = column.getMultiValue ? column.getMultiValue(row) : Array.isArray(rawValue) ? (rawValue as unknown[]).map((v) => String(v)) : String(rawValue ?? '').split(',');
-                    return filterValue.selected.some((sel) => rowVals.includes(sel));
-                } else if (filterValue.type === 'currency-stack') {
-                    if (filterValue.items.length === 0) return true;
-                    const cv = column.getCurrencyValue ? column.getCurrencyValue(row) : null;
-                    if (!cv) return false;
-                    return filterValue.items.some((it) => it.code === cv.code && (it.min === undefined || cv.amount >= it.min) && (it.max === undefined || cv.amount <= it.max));
-                }
-                return true;
-            });
+            result = result.filter((row) => matchesColumnFilter(column, row, filterValue));
         }
 
         return result;
@@ -415,40 +368,7 @@
         const column = columns.find((c) => c.id === sortState!.columnId);
         if (!column) return filteredData;
 
-        return [...filteredData].sort((a, b) => {
-            const getValue = column.getValue ?? column.cell;
-            const aVal = getValue(a);
-            const bVal = getValue(b);
-
-            // Extract raw value if it's a CellContent object
-            const aRaw = typeof aVal === 'object' && aVal !== null && 'type' in aVal ? extractRawValue(aVal as CellContent) : aVal;
-            const bRaw = typeof bVal === 'object' && bVal !== null && 'type' in bVal ? extractRawValue(bVal as CellContent) : bVal;
-
-            let comparison = 0;
-            // A missing value is not a value: it sorts last whichever way the column
-            // points. Falling through to the string branch turned `null` into the
-            // literal "null" and handed it to localeCompare, so in descending order
-            // empty cells outranked the largest number — and *where* they landed
-            // depended on the spelling of the placeholder, since 'null' and
-            // 'undefined' sort after digits while '' sorts before everything.
-            // Returned directly, because the direction flip below must not move them.
-            const aEmpty = aRaw === null || aRaw === undefined || aRaw === '';
-            const bEmpty = bRaw === null || bRaw === undefined || bRaw === '';
-            if (aEmpty || bEmpty) {
-                if (aEmpty && bEmpty) return 0;
-                return aEmpty ? 1 : -1;
-            }
-
-            if (typeof aRaw === 'number' && typeof bRaw === 'number') {
-                comparison = aRaw - bRaw;
-            } else if (aRaw instanceof Date && bRaw instanceof Date) {
-                comparison = aRaw.getTime() - bRaw.getTime();
-            } else {
-                comparison = String(aRaw).localeCompare(String(bRaw));
-            }
-
-            return sortState!.direction === 'asc' ? comparison : -comparison;
-        });
+        return [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
     });
 
     // Paginated data
@@ -486,190 +406,9 @@
 
     // ============ Helper Functions ============
 
-    function extractRawValue(cell: CellContent): unknown {
-        if (typeof cell !== 'object' || cell === null) return cell;
-        if (!('type' in cell)) return cell;
-
-        switch (cell.type) {
-            case 'icon-text':
-                return cell.text;
-            case 'badge':
-                return cell.text;
-            case 'date':
-                return new Date(cell.value);
-            case 'size':
-                return cell.bytes;
-            case 'link':
-                return cell.text;
-            case 'editable-number':
-                return cell.value;
-            case 'editable-text':
-                return cell.value;
-            case 'editable-select':
-                return cell.value;
-            case 'editable-checkbox':
-                return cell.value;
-            case 'html':
-                // Strip HTML tags for sorting
-                return cell.html.replace(/<[^>]*>/g, '');
-            default:
-                return String(cell);
-        }
-    }
-
-    // Calculate min/max values for a column (used for number/size filters)
-    function getColumnMinMax(column: ColumnDef<T>): {min: number; max: number} {
-        let min = Infinity;
-        let max = -Infinity;
-
-        for (const row of boundaryData) {
-            const getValue = column.getValue ?? column.cell;
-            const cellValue = getValue(row);
-            let numValue: number;
-
-            if (typeof cellValue === 'object' && cellValue !== null && 'type' in cellValue) {
-                const typed = cellValue as unknown as {type: string; bytes?: number};
-                if (typed.type === 'size' && typeof typed.bytes === 'number') {
-                    numValue = typed.bytes;
-                } else {
-                    numValue = Number(extractRawValue(cellValue as CellContent));
-                }
-            } else {
-                numValue = Number(cellValue);
-            }
-
-            if (!isNaN(numValue) && isFinite(numValue)) {
-                min = Math.min(min, numValue);
-                max = Math.max(max, numValue);
-            }
-        }
-
-        // If no valid values, use sensible defaults
-        if (min === Infinity) min = 0;
-        if (max === -Infinity) max = min + 1;
-
-        // Ensure min < max
-        if (min >= max) max = min + 1;
-
-        return {min, max};
-    }
-
-    /**
-     * Compute the option set for a `multi-enum` filter column from the data
-     * loaded in this table. Sorted alphabetically. Used when the column does
-     * NOT declare a static `enumOptions` (typical for tags or other open sets
-     * derived from rows).
-     */
-    function getMultiEnumOptions(column: ColumnDef<T>): EnumOption[] {
-        const all = new Set<string>();
-        for (const row of data) {
-            const vals = column.getMultiValue ? column.getMultiValue(row) : [];
-            for (const v of vals) if (v != null && v !== '') all.add(String(v));
-        }
-        return [...all].sort((a, b) => a.localeCompare(b)).map((v) => ({value: v, label: v}));
-    }
-
-    /**
-     * Enrich parent-provided enumOptions for multi-enum columns with counts
-     * from the current data. Uses column.enumOptions as the stable option list.
-     */
-    function getMultiEnumOptionsWithCounts(column: ColumnDef<T>): EnumOption[] {
-        const opts = column.enumOptions ?? [];
-        if (opts.length === 0) return opts;
-        const counts = new Map<string, number>();
-        for (const row of data) {
-            const vals = column.getMultiValue ? column.getMultiValue(row) : [];
-            for (const v of vals) counts.set(v, (counts.get(v) ?? 0) + 1);
-        }
-        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0}));
-    }
-
-    /**
-     * Enrich enum options with count of matching rows in `data` and filter out
-     * options that have zero rows. This ensures the filter dropdown only shows
-     * types/values that actually exist in the current dataset.
-     */
-    function getEnumOptionsWithCounts(column: ColumnDef<T>): EnumOption[] {
-        const opts = column.enumOptions ?? [];
-        if (opts.length === 0) return opts;
-        const counts = new Map<string, number>();
-        for (const row of data) {
-            const v = column.getValue ? String(column.getValue(row) ?? '') : '';
-            counts.set(v, (counts.get(v) ?? 0) + 1);
-        }
-        return opts.map((o) => ({...o, count: counts.get(o.value) ?? 0}));
-    }
-
-    /**
-     * Compute the available currency-codes for a `currency-stack` filter
-     * column from the data. Used to seed the CurrencySearchSelect dropdown
-     * inside the filter popover.
-     */
-    function getCurrencyOptions(column: ColumnDef<T>): string[] {
-        if (!column.getCurrencyValue) return [];
-        const all = new Set<string>();
-        for (const row of data) {
-            const cv = column.getCurrencyValue(row);
-            if (cv?.code) all.add(cv.code);
-        }
-        return [...all].sort();
-    }
-
-    /**
-     * For `currency-stack` columns: compute per-currency min/max amount from
-     * the dataset. Used by the filter popover to drive a relevant range
-     * editor (slider + inputs) for each currency the user picks — instead
-     * of a single global range that's meaningless when amounts spread
-     * across mixed currencies (e.g. EUR cash deposits vs USD trades).
-     */
-    function getCurrencyMinMaxByCode(column: ColumnDef<T>): Map<string, {min: number; max: number}> {
-        const out = new Map<string, {min: number; max: number}>();
-        if (!column.getCurrencyValue) return out;
-        for (const row of boundaryData) {
-            const cv = column.getCurrencyValue(row);
-            if (!cv || !cv.code || !Number.isFinite(cv.amount)) continue;
-            const cur = out.get(cv.code);
-            if (!cur) {
-                out.set(cv.code, {min: cv.amount, max: cv.amount});
-            } else {
-                if (cv.amount < cur.min) cur.min = cv.amount;
-                if (cv.amount > cur.max) cur.max = cv.amount;
-            }
-        }
-        // Defensive: ensure min < max so the slider remains usable on single-row currencies.
-        for (const v of out.values()) {
-            if (v.min >= v.max) v.max = v.min + 1;
-        }
-        return out;
-    }
-
     /** Empty currency min/max map — extracted to avoid generic syntax `<string, …>` in
      *  Svelte template `{@const}` blocks where `<` is parsed as an HTML tag. */
     const EMPTY_CURRENCY_MIN_MAX: Map<string, {min: number; max: number}> = new Map();
-
-    function formatDate(value: Date | string, format?: string): string {
-        const date = value instanceof Date ? value : new Date(value);
-        if (format === 'time') {
-            return date.toLocaleTimeString();
-        } else if (format === 'datetime') {
-            return date.toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-            });
-        } else if (format === 'relative') {
-            const now = new Date();
-            const diff = now.getTime() - date.getTime();
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            if (days === 0) return $t('date.today') || 'Today';
-            if (days === 1) return $t('date.yesterday') || 'Yesterday';
-            if (days < 7) return `${days}d ago`;
-            return date.toLocaleDateString();
-        }
-        return date.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'});
-    }
 
     function getColumnLabel(col: ColumnDef<T>): string {
         return typeof col.header === 'function' ? col.header() : col.header;
@@ -1278,11 +1017,17 @@
 
                                 <!-- Filter popover -->
                                 {#if openFilterColumnId === column.id}
-                                    {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column) : {min: 0, max: 100}}
+                                    {@const minMax = column.type === 'number' || column.type === 'size' ? getColumnMinMax(column, boundaryData) : {min: 0, max: 100}}
                                     {@const dynamicEnumOptions =
-                                        column.type === 'multi-enum' ? (column.enumOptions && column.enumOptions.length > 0 ? getMultiEnumOptionsWithCounts(column) : getMultiEnumOptions(column)) : column.type === 'enum' ? getEnumOptionsWithCounts(column) : (column.enumOptions ?? [])}
-                                    {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column)) : []}
-                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column) : EMPTY_CURRENCY_MIN_MAX}
+                                        column.type === 'multi-enum'
+                                            ? column.enumOptions && column.enumOptions.length > 0
+                                                ? getMultiEnumOptionsWithCounts(column, data)
+                                                : getMultiEnumOptions(column, data)
+                                            : column.type === 'enum'
+                                              ? getEnumOptionsWithCounts(column, data)
+                                              : (column.enumOptions ?? [])}
+                                    {@const currencyOptions = column.type === 'currency-stack' ? (column.currencyOptions ?? getCurrencyOptions(column, data)) : []}
+                                    {@const currencyMinMaxByCode = column.type === 'currency-stack' ? getCurrencyMinMaxByCode(column, boundaryData) : EMPTY_CURRENCY_MIN_MAX}
                                     <DataTableColumnFilter
                                         type={column.type}
                                         enumOptions={dynamicEnumOptions}
@@ -1425,7 +1170,7 @@
                                         {:else if cellContent.type === 'badge'}
                                             <span class="cell-badge {cellContent.variant}" class:custom-style={cellContent.customStyle} style={cellContent.customStyle || undefined} data-badge-variant={cellContent.variant}>{cellContent.text}</span>
                                         {:else if cellContent.type === 'date'}
-                                            {formatDate(cellContent.value, cellContent.format)}
+                                            {formatCellDate(cellContent.value, cellContent.format, {today: $t('date.today') || 'Today', yesterday: $t('date.yesterday') || 'Yesterday'})}
                                         {:else if cellContent.type === 'size'}
                                             {formatBytes(cellContent.bytes)}
                                         {:else if cellContent.type === 'link'}

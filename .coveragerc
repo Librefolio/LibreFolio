@@ -21,7 +21,13 @@ sigterm = true
 # Support async/await coverage in FastAPI endpoints
 # - thread: for uvicorn running in background thread
 # - gevent: for asyncio event loop context switches
-concurrency = thread,gevent
+# - multiprocessing: uvicorn --workers N *forks*, and a forked child is a new
+#   process that coverage does not follow without this. The shared E2E backend is
+#   sized at ceil(clients/2) workers, so above two clients every request was served
+#   by an unmeasured child: the run wrote its .coverage.<pid> files, they were empty,
+#   and nothing warned. Measured before the fix: the whole suite at 8 workers scored
+#   0.00% while a single spec at 2 workers scored 35.01%.
+concurrency = multiprocessing,thread,gevent
 omit =
     */test_*
     */tests/*

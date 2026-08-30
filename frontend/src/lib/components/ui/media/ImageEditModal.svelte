@@ -343,14 +343,14 @@
             <div class="filename-row">
                 <div class="filename-editor">
                     <input bind:value={editedFileName} class="filename-input" data-testid="image-edit-filename" disabled={!editReady} on:input={() => (hasChanges = true)} placeholder="image" type="text" />
-                    <select bind:value={outputFormat} class="format-select" disabled={!editReady} on:change={() => (hasChanges = true)}>
+                    <select bind:value={outputFormat} class="format-select" data-testid="image-edit-format" disabled={!editReady} on:change={() => (hasChanges = true)}>
                         <option value="png">.png</option>
                         <option value="jpeg">.jpg</option>
                         <option value="webp">.webp</option>
                     </select>
                 </div>
                 {#if outputFormat !== 'png'}
-                    <div class="quality-spinner">
+                    <div class="quality-spinner" data-testid="image-edit-quality">
                         <button type="button" class="spin-btn" disabled={!editReady} on:click={decrementQuality}>−</button>
                         <span class="quality-value">{outputQuality}%</span>
                         <button type="button" class="spin-btn" disabled={!editReady} on:click={incrementQuality}>+</button>
@@ -425,7 +425,7 @@
                     {#if allowPresetChange}
                         <div class="panel-row">
                             <span class="panel-label">{$_('uploads.outputPreset') || 'Preset'}:</span>
-                            <div class="preset-buttons">
+                            <div class="preset-buttons" data-testid="image-edit-preset-row">
                                 {#each presetOptions as opt}
                                     <button type="button" class="preset-btn" class:active={currentPreset === opt.value} disabled={!editReady} on:click={() => selectPreset(opt.value)}>
                                         {$_(opt.labelKey) || opt.value}
@@ -438,7 +438,7 @@
                     {#if currentPreset === 'custom'}
                         <div class="panel-row">
                             <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
-                            <div class="aspect-buttons">
+                            <div class="aspect-buttons" data-testid="image-edit-aspect-row">
                                 {#each aspectOptions as opt}
                                     <button type="button" class="aspect-btn" class:active={currentAspect === opt.value} disabled={!editReady} on:click={() => selectAspectRatio(opt.value)}>
                                         {opt.label}

@@ -45,6 +45,7 @@
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
     import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import LotDataQualityBanner from './LotDataQualityBanner.svelte';
+    import {asArray, asObject, collectInvolvedLotIds, filterVisibleLots, lotIsOpenish, normalizeQuoteBaseQuantity} from './lotsAnalysisHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -61,23 +62,10 @@
      * Optional[List[X]] response field: `(X[] | null) | (X[] | null)[]`
      * (openapi-zod-client artifact, pre-existing, unrelated to this feature —
      * see fifo-lot-engine-v2-implementation-log.md §3.1). The API never
-     * actually returns the doubled-array branch. `value` is typed `unknown`
-     * and T is always passed explicitly at the call site (`asArray<Foo>(...)`)
-     * to avoid fighting TS's structural inference over that redundant union.
+     * actually returns the doubled-array branch. `asArray`/`asObject` (in
+     * ./lotsAnalysisHelpers) unwrap it; T is always passed explicitly at the
+     * call site (`asArray<Foo>(...)`).
      */
-    function asArray<T>(value: unknown): T[] {
-        if (!value || !Array.isArray(value)) return [];
-        if (value.length > 0 && Array.isArray(value[0])) {
-            return (value as unknown[][]).flatMap((item) => (item ?? []) as T[]);
-        }
-        return value as T[];
-    }
-
-    /** Same generator artifact as asArray(), for single-object Optional[X] fields. */
-    function asObject<T>(value: unknown): T | null {
-        if (!value) return null;
-        return Array.isArray(value) ? ((value[0] ?? null) as T | null) : (value as T);
-    }
 
     interface Props {
         open: boolean;
@@ -136,16 +124,7 @@
 
     /** Vita e custodia view (plan v3 §8): the compact hierarchical Gantt (Timeline). */
 
-    function lotIsOpenish(lot: LotSummarySchema): boolean {
-        return Number.parseFloat(lot.open_quantity) > 0 || (lot.states ?? []).includes('OPEN');
-    }
-
-    let visibleLots = $derived.by((): LotSummarySchema[] => {
-        const bothSame = lotStateFilter.open === lotStateFilter.closed;
-        const showOpen = bothSame || lotStateFilter.open;
-        const showClosed = bothSame || lotStateFilter.closed;
-        return lots.filter((lot) => (lotIsOpenish(lot) ? showOpen : showClosed));
-    });
+    let visibleLots = $derived.by((): LotSummarySchema[] => filterVisibleLots(lots, lotStateFilter));
 
     /** lot_id → opening_date for the currently visible lots, so the data-quality banner can turn each
      * issue's message_params.lot_id into a labelled, clickable chip (→ pulses that lot's bubble). */
@@ -200,8 +179,7 @@
             priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
             brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
             cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
-            const rawQbq = Number(response.quote_base_quantity);
-            quoteBaseQuantity = Number.isFinite(rawQbq) && rawQbq > 0 ? rawQbq : 1;
+            quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
             incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string; lot_ids?: number[]}>(response.income_events).map((event) => ({
                 type: event.type,
                 date: event.date,
@@ -376,10 +354,7 @@
      * -> every lot/fragment touched by the same (or paired) transaction. Selects them and pulses the
      * first involved lane in the Gantt. */
     function handleEventDoubleClick(event: LotTimelineEventSchema) {
-        const txId = event.transaction_id;
-        const relatedId = event.related_transaction_id ?? null;
-        const involved = lotEvents.filter((row) => row.transaction_id === txId || (relatedId != null && row.transaction_id === relatedId) || (row.related_transaction_id != null && row.related_transaction_id === txId));
-        const lotIds = Array.from(new Set<number>([event.lot_id, ...involved.map((row) => row.lot_id)]));
+        const lotIds = collectInvolvedLotIds(lotEvents, event);
         if (lotIds.length === 0) return;
         selectedLotIds = lotIds;
         void (async () => {

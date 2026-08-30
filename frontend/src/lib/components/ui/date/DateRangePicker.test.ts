@@ -288,3 +288,195 @@ describe('DateRangePicker — a mistyped date is armed, and stays on screen', ()
         expect(endInput).toHaveAttribute('data-invalid', 'false');
     });
 });
+
+// ---------------------------------------------------------------------------
+// The two calendar columns. Each has its own prev/next/year/today controls, but
+// neither may cross the other: driving one past its neighbour SWAPS the pair so
+// the left month is never after the right. jsdom has no layout, so nothing here
+// touches position — only the data-year/data-month the grids publish. There are
+// two of every control (one per column); getAll…[0] is the left, [1] the right.
+// ---------------------------------------------------------------------------
+
+/** A calendar nav control on the given side (0 = left column, 1 = right column). */
+function navBtn(testid: string, side: 0 | 1): HTMLButtonElement {
+    return screen.getAllByTestId(testid)[side] as HTMLButtonElement;
+}
+/** The year <input> of the given column. */
+function yearField(side: 0 | 1): HTMLInputElement {
+    return screen.getAllByTestId('calendar-year-input')[side] as HTMLInputElement;
+}
+/** What a grid publishes about the month it is showing — a state, never a label. */
+function ym(gridIndex: 0 | 1): {year: string | null; month: string | null} {
+    const g = grids()[gridIndex];
+    return {year: g.getAttribute('data-year'), month: g.getAttribute('data-month')};
+}
+
+describe('DateRangePicker — the two calendar columns step without crossing', () => {
+    it('the left column steps back across a year boundary', async () => {
+        const {startInput} = setup({start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput); // left = Jan 2024, right = Feb 2024
+        await fireEvent.click(navBtn('calendar-prev-month', 0));
+        await tick();
+        // January rolls back to the previous December, pulling the year with it.
+        expect(ym(0)).toEqual({year: '2023', month: '11'});
+    });
+
+    it('the right column steps forward across a year boundary', async () => {
+        const {startInput} = setup({start: '2024-11-10', end: '2024-12-20'});
+        await fireEvent.focus(startInput); // left = Nov, right = Dec 2024
+        await fireEvent.click(navBtn('calendar-next-month', 1));
+        await tick();
+        expect(ym(1)).toEqual({year: '2025', month: '0'});
+    });
+
+    it('advancing the left column past the right swaps the pair', async () => {
+        const {startInput} = setup({start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput); // left = Jan (0), right = Feb (1)
+        await fireEvent.click(navBtn('calendar-next-month', 0)); // left → Feb, ties the right, no swap
+        await fireEvent.click(navBtn('calendar-next-month', 0)); // left → Mar, past the right → swap
+        await tick();
+        // The swap keeps left ≤ right, so the columns read Feb then Mar — not Mar then Feb.
+        expect(ym(0)).toEqual({year: '2024', month: '1'});
+        expect(ym(1)).toEqual({year: '2024', month: '2'});
+    });
+
+    it('moving the right column before the left swaps the pair', async () => {
+        const {startInput} = setup({start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput); // left = Jan (0), right = Feb (1)
+        await fireEvent.click(navBtn('calendar-prev-month', 1)); // right → Jan, ties the left, no swap
+        await fireEvent.click(navBtn('calendar-prev-month', 1)); // right → Dec 2023, before the left → swap
+        await tick();
+        expect(ym(0)).toEqual({year: '2023', month: '11'});
+        expect(ym(1)).toEqual({year: '2024', month: '0'});
+    });
+
+    it('typing a left year past the right swaps the pair', async () => {
+        const {startInput} = setup({start: '2024-01-15', end: '2024-02-20'});
+        await fireEvent.focus(startInput);
+        await fireEvent.change(yearField(0), {target: {value: '2025'}});
+        await tick();
+        // Left jumped to Jan 2025, past the right's Feb 2024 → swap restores left ≤ right.
+        expect(ym(0)).toEqual({year: '2024', month: '1'});
+        expect(ym(1)).toEqual({year: '2025', month: '0'});
+    });
+
+    it('typing a right year before the left swaps the pair', async () => {
+        const {startInput} = setup({start: '2024-06-10', end: '2024-07-20'});
+        await fireEvent.focus(startInput); // left = Jun (5), right = Jul (6)
+        await fireEvent.change(yearField(1), {target: {value: '2020'}});
+        await tick();
+        expect(ym(0)).toEqual({year: '2020', month: '6'});
+        expect(ym(1)).toEqual({year: '2024', month: '5'});
+    });
+
+    it('the today button snaps a column to the current month, each side on its own', async () => {
+        // Noon UTC on the 14th is the 14th in every test timezone, so the expected month is
+        // stable wherever this runs; the frozen clock also makes goToToday deterministic.
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-06-14T12:00:00Z'));
+        try {
+            const {startInput} = setup({start: '2024-01-15', end: '2024-02-20'});
+            await fireEvent.focus(startInput);
+            await fireEvent.click(navBtn('calendar-go-today', 0));
+            await tick();
+            expect(ym(0)).toEqual({year: '2024', month: '5'}); // June, from the left button alone
+            await fireEvent.click(navBtn('calendar-go-today', 1));
+            await tick();
+            expect(ym(1)).toEqual({year: '2024', month: '5'});
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Preset auto-detection. When the range wasn't chosen through the row but the
+// props happen to match a "N back from today" window (end === today), the picker
+// lights that preset on its own. The detection loop walks EVERY preset — the six
+// hidden jolly windows included — so a range matching none is the one case that
+// exercises all of computeStartDate's arms.
+// ---------------------------------------------------------------------------
+
+describe('DateRangePicker — a range that matches a preset window lights it up', () => {
+    it('a week-wide range back from today activates 1W without a click', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-06-14T12:00:00Z'));
+        try {
+            setup({start: offsetISO(-7), end: todayISO()});
+            expect(screen.getByTestId('date-preset-1w')).toHaveAttribute('data-active', 'true');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('a range matching no window leaves every preset inactive', () => {
+        // 2020-03-03 is not a whole number of weeks/months/years before the frozen today, and
+        // none of YTD/MTD/QTD/WTD reach that far — so the detection loop runs to the end,
+        // computing (and rejecting) every arm of computeStartDate, and settles on none.
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2024-06-14T12:00:00Z'));
+        try {
+            setup({start: '2020-03-03', end: todayISO()});
+            for (const key of ['1w', '1m', '3m', '6m', '1y', '2y', 'ytd', 'max', 'custom']) {
+                expect(screen.getByTestId(`date-preset-${key}`), `preset ${key}`).toHaveAttribute('data-active', 'false');
+            }
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The custom "N units back" window. Opening it applies a range immediately, and
+// the range is the contract: it always ends today and starts strictly before —
+// asserting the shared date arithmetic to the day here would just re-run the
+// implementation, so the rule is what's checked.
+// ---------------------------------------------------------------------------
+
+describe('DateRangePicker — the custom "N units back" window', () => {
+    it('opening the custom window publishes a range that ends today and starts in the past', async () => {
+        const {onchange} = setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+        const today = todayISO();
+        expect(onchange).toHaveBeenCalledTimes(1);
+        const [gotStart, gotEnd] = onchange.mock.calls[0];
+        expect(gotEnd).toBe(today);
+        expect(gotStart < today).toBe(true);
+        // The plain button is gone, replaced by the amount editor — the state changed, visibly.
+        expect(screen.queryByTestId('date-preset-custom')).toBeNull();
+        expect(screen.getByTestId('date-range-custom-amount')).toBeInTheDocument();
+    });
+
+    it('changing the amount republishes a fresh window without leaving edit mode', async () => {
+        const {onchange} = setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+        onchange.mockClear();
+        const amount = screen.getByTestId('date-range-custom-amount') as HTMLInputElement;
+        await fireEvent.input(amount, {target: {value: '5'}});
+        // The amount effect re-applies on a microtask; whatever the number, the window ends today.
+        await waitFor(() => expect(onchange).toHaveBeenCalled());
+        const [gotStart, gotEnd] = onchange.mock.calls.at(-1)!;
+        expect(gotEnd).toBe(todayISO());
+        expect(gotStart < todayISO()).toBe(true);
+        expect(screen.getByTestId('date-range-custom-amount')).toBeInTheDocument(); // still editing
+    });
+
+    it('Escape leaves the custom editor and restores the plain button', async () => {
+        setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+        await fireEvent.keyDown(screen.getByTestId('date-range-custom-amount'), {key: 'Escape'});
+        await tick();
+        expect(screen.queryByTestId('date-range-custom-amount')).toBeNull();
+        expect(screen.getByTestId('date-preset-custom')).toBeInTheDocument();
+    });
+});
+
+describe('DateRangePicker — compact fields show the raw ISO', () => {
+    it('renders the stored dates as YYYY-MM-DD when compact, not a localised label', () => {
+        // compact is the narrow-cell variant: the field text is the ISO the test supplied,
+        // which is exactly what makes it safe to assert on (a wide field would be i18n output).
+        const {startInput, endInput} = setup({compact: true, start: '2024-01-15', end: '2024-02-20'});
+        expect(startInput).toHaveValue('2024-01-15');
+        expect(endInput).toHaveValue('2024-02-20');
+    });
+});

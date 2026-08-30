@@ -9,7 +9,7 @@
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
-    import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, computeDensity, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
+    import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, computeDensity, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
@@ -21,7 +21,34 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
-    import {safeNumber, safeScalar, safeString} from '$lib/types';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
+    import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import {formatAxisNumber as sharedFormatAxisNumber, normalizeZero, resolveBrokerName} from './lotChartShared';
+    import {
+        applyLotEvent,
+        cloneLotEventState,
+        computeLineBucketCounts as computeLineBucketCountsShared,
+        computePaddedValueBounds,
+        computeVisibleLogicalRange,
+        eventCategory,
+        eventKey,
+        eventTimelineOrder as eventTimelineOrderShared,
+        findTransferArriveEvent,
+        findTransferDepartEvent,
+        LOT_BUBBLE_ZERO_EPS,
+        lotBubbleRadius,
+        lotBubbleSignColor as lotBubbleSignColorShared,
+        nullifyZeroWac,
+        orderDateBounds,
+        padDateBoundsForBubbles,
+        readZoomPercent,
+        resolveMarketPriceAtOrBefore,
+        resolveQbqScale,
+        scaleUnitPrice as scaleUnitPriceShared,
+        sortDates,
+        toPercentSeries,
+    } from './lotWacPriceChartHelpers';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -42,10 +69,8 @@
     const MARKER_VERTICAL_OFFSET_STEP = 12;
     // Per-lot performance bubbles (plan v3 round-2 §5/§6): opening-marker overlay migrated here from
     // the removed LotPerformanceBubbleChart. Radius scales sqrt-proportionally to a per-mode metric
-    // (ABS→open_quantity, %→opening value) between these bounds.
-    const LOT_BUBBLE_MIN_RADIUS = 7;
-    const LOT_BUBBLE_MAX_RADIUS = 22;
-    const LOT_BUBBLE_ZERO_EPS = 0.0005;
+    // (ABS→open_quantity, %→opening value); the min/max radius bounds and the zero-epsilon dead band
+    // live in ./lotWacPriceChartHelpers (LOT_BUBBLE_ZERO_EPS imported above for tooltip reuse).
     // Income (dividend/interest) "|" markers share this series id so the ECharts series stays stable.
     const LOT_INCOME_MARKER_SERIES_ID = 'lot-income-markers';
     // Fixed (non-containLabel) grid bounds shared byte-for-byte with LotGanttChart.svelte so the
@@ -198,7 +223,10 @@
     let wrapperEl: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
-    let resizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => {
+        chartInstance?.resize();
+        scheduleResolutionSync();
+    });
     let darkModeObserver: MutationObserver | null = null;
     let pulseTimers: ReturnType<typeof setTimeout>[] = [];
 
@@ -228,41 +256,24 @@
     let dataZoomResolutionCleanup: (() => void) | null = null;
     let lastResolutionInputRefs: [BrokerWACHistoryPoint[], CumulativeWACHistoryPoint[], LotPriceHistoryPoint[]] | null = null;
 
-    function parseNumber(value: string | number | Array<string | number | null> | null | undefined): number | null {
-        const raw = safeScalar(value);
-        if (raw == null) return null;
-        const parsed = typeof raw === 'number' ? raw : Number.parseFloat(raw);
-        return Number.isFinite(parsed) ? parsed : null;
-    }
+    /** Local name for this chart's numeric unwrap. Delegates to the shared
+     *  `safeDecimal`: the body used to be copied five times, and two of those
+     *  copies went through `safeString`, which answers `null` for a value that
+     *  is already a number. */
+    const parseNumber = (value: unknown): number | null => safeDecimal(value);
 
-    function normalizeZero(value: number): number {
-        return Object.is(value, -0) ? 0 : value;
-    }
-
+    /** The chart's date labels are exactly the shared axis formatter's with-year
+     *  long form; delegating keeps its ~8 call sites untouched. */
     function formatDate(value: number | string): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+        return formatAxisDate($currentLanguage, value, true);
     }
 
-    function formatPercent(value: number): string {
-        const normalized = normalizeZero(value);
-        const sign = normalized > 0 ? '+' : '';
-        return `${sign}${normalized.toFixed(2)}%`;
-    }
+    /** This chart's numbers are already percentages, hence scale 1 (the default). */
+    const formatPercent = (value: number): string => sharedFormatPercent(value);
 
-    function formatAxisNumber(value: number): string {
-        const normalized = normalizeZero(value);
-        const abs = Math.abs(normalized);
-        if (abs >= 1000) {
-            return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(normalized);
-        }
-        return normalized.toLocaleString(undefined, {minimumFractionDigits: abs < 10 && abs % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2});
-    }
-
-    function sortDates(a: string, b: string): number {
-        return a.localeCompare(b);
-    }
+    /** The chart uses the machine locale for numbers (not `$currentLanguage`), so
+     *  the shared formatter is called with no locale argument. */
+    const formatAxisNumber = (value: number): string => sharedFormatAxisNumber(value);
 
     const lineSeriesDates = $derived.by(() => {
         const dateSet = new Set<string>();
@@ -272,44 +283,17 @@
         return Array.from(dateSet).sort(sortDates);
     });
 
-    function nullifyZeroWac(wac: number | null, poolQty: number | null): number | null {
-        if (wac == null) return null;
-        return wac === 0 || poolQty === 0 ? null : wac;
-    }
-
     /** Positive quote_base_quantity scale factor (1 for stocks, e.g. 100 for bonds priced per 100
      * nominal). */
-    const qbqScale = $derived(quoteBaseQuantity > 0 ? quoteBaseQuantity : 1);
+    const qbqScale = $derived(resolveQbqScale(quoteBaseQuantity));
 
-    /** Rescale a per-single-unit price (WAC / opening_unit_price = cost ÷ raw quantity) up to the
-     * per-quote_base_quantity market scale that price_history.close uses (e.g. ×100 → bond par ≈ 100),
-     * so cost lines, bubbles and the market line share one ABS price axis. No-op for qbq=1 (stocks).
-     * In % mode the constant factor cancels in the first-value normalisation, so callers may apply it
-     * unconditionally. */
+    /** Rescale a per-single-unit price up to the per-quote_base_quantity market scale that
+     * price_history.close uses (see {@link scaleUnitPriceShared}); binds the reactive qbqScale. */
     function scaleUnitPrice(value: number | null): number | null {
-        return value == null ? null : value * qbqScale;
+        return scaleUnitPriceShared(value, qbqScale);
     }
 
-    function toPercentSeries(points: Array<{date: string; value: number | null}>): ValuePoint[] {
-        let baseline: number | null = null;
-        for (const point of points) {
-            if (point.value != null && point.value !== 0) {
-                baseline = point.value;
-                break;
-            }
-        }
-
-        return points.map((point) => ({
-            date: point.date,
-            absolute: point.value,
-            percent: point.value != null && baseline != null ? ((point.value - baseline) / baseline) * 100 : null,
-        }));
-    }
-
-    function brokerName(brokerId: number | null): string {
-        if (brokerId == null) return '—';
-        return brokers.find((broker) => broker.id === brokerId)?.name ?? `Broker ${brokerId}`;
-    }
+    const brokerName = (brokerId: number | null): string => resolveBrokerName(brokerId, brokers, {unknown: (id) => `Broker ${id}`});
 
     function buildBrokerSeries(brokerId: number | null, points: Array<{date: string; value: number | null}>): BrokerSeries {
         const valuePoints = toPercentSeries([...points].sort((a, b) => sortDates(a.date, b.date)));
@@ -345,20 +329,6 @@
         shouldPickInitialResolution = true;
     }
 
-    function isoDateToUtcMs(date: string): number {
-        const [year, month, day] = date.split('-').map(Number);
-        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return Number.NaN;
-        return Date.UTC(year, month - 1, day);
-    }
-
-    function utcMsToIsoDate(ms: number): string {
-        const date = new Date(ms);
-        const year = date.getUTCFullYear();
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
     function getFullLineRange(): LogicalRange | null {
         if (lineSeriesDates.length === 0) return null;
         return {
@@ -370,8 +340,7 @@
     function getXAxisBounds(): {min: string; max: string} | null {
         const min = xAxisRange?.min ?? groupedChartData.minDate ?? lineSeriesDates[0] ?? null;
         const max = xAxisRange?.max ?? groupedChartData.maxDate ?? lineSeriesDates[lineSeriesDates.length - 1] ?? null;
-        if (!min || !max) return null;
-        return min <= max ? {min, max} : {min: max, max: min};
+        return orderDateBounds(min, max);
     }
 
     /** Extend the x-domain horizontally by the largest bubble radius so lots opened on the first/last
@@ -382,16 +351,9 @@
      * maxBubbleRadius px regardless of how wide the date range is. Applied to the axis display bounds
      * only (not getXAxisBounds, which drives zoom/bucketing). No-op without bubbles or a real span. */
     function padXBoundsForBubbles(bounds: {min: string; max: string} | null): {min: string; max: string} | null {
-        if (!bounds) return bounds;
         const maxBubbleRadius = Math.max(0, ...buildRenderableLotBubbles().map((entry) => entry.radius));
-        if (maxBubbleRadius <= 0) return bounds;
-        const minMs = new Date(bounds.min).getTime();
-        const maxMs = new Date(bounds.max).getTime();
-        if (!Number.isFinite(minMs) || !Number.isFinite(maxMs) || maxMs <= minMs) return bounds;
         const plotWidth = Math.max(1, (chartContainer?.clientWidth ?? 640) - GRID_LEFT_PX - GRID_RIGHT_PX);
-        const edgeFraction = Math.min(0.3, maxBubbleRadius / plotWidth);
-        const padMs = ((maxMs - minMs) * edgeFraction) / Math.max(0.1, 1 - 2 * edgeFraction);
-        return {min: new Date(minMs - padMs).toISOString(), max: new Date(maxMs + padMs).toISOString()};
+        return padDateBoundsForBubbles(bounds, maxBubbleRadius, plotWidth);
     }
 
     function getAxisLogicalRange(): LogicalRange | null {
@@ -405,22 +367,7 @@
     }
 
     function computeLineBucketCounts(range: LogicalRange): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
-        let dailyCount = 0;
-        const weekly = new Set<string>();
-        const monthly = new Set<string>();
-
-        for (const date of lineSeriesDates) {
-            if (date < range.startDate || date > range.endDate) continue;
-            dailyCount += 1;
-            weekly.add(mapDateToBucket(date, 'weekly').bucketEnd);
-            monthly.add(mapDateToBucket(date, 'monthly').bucketEnd);
-        }
-
-        return {
-            dailyCount,
-            weeklyCount: weekly.size,
-            monthlyCount: monthly.size,
-        };
+        return computeLineBucketCountsShared(lineSeriesDates, range);
     }
 
     function getZoomPercent(): {start: number; end: number} {
@@ -428,13 +375,7 @@
 
         try {
             const option = chartInstance.getOption() as {dataZoom?: Array<{start?: number; end?: number}>};
-            const zoom = option.dataZoom?.[0];
-            const start = typeof zoom?.start === 'number' ? zoom.start : 0;
-            const end = typeof zoom?.end === 'number' ? zoom.end : 100;
-            return {
-                start: Math.min(100, Math.max(0, start)),
-                end: Math.min(100, Math.max(0, end)),
-            };
+            return readZoomPercent(option.dataZoom?.[0]);
         } catch (_) {
             return {start: 0, end: 100};
         }
@@ -443,20 +384,7 @@
     function getVisibleLogicalRangeFromChart(): LogicalRange | null {
         const axisRange = getAxisLogicalRange();
         if (!axisRange) return null;
-
-        const minMs = isoDateToUtcMs(axisRange.startDate);
-        const maxMs = isoDateToUtcMs(axisRange.endDate);
-        if (!Number.isFinite(minMs) || !Number.isFinite(maxMs) || maxMs <= minMs) return axisRange;
-
-        const zoom = getZoomPercent();
-        const startPercent = Math.min(zoom.start, zoom.end);
-        const endPercent = Math.max(zoom.start, zoom.end);
-        const spanMs = maxMs - minMs;
-
-        return {
-            startDate: utcMsToIsoDate(minMs + spanMs * (startPercent / 100)),
-            endDate: utcMsToIsoDate(minMs + spanMs * (endPercent / 100)),
-        };
+        return computeVisibleLogicalRange(axisRange, getZoomPercent());
     }
 
     function pickInitialResolution() {
@@ -528,45 +456,13 @@
         values.push(...bubbles.map((entry) => entry.yValue));
         if (valueKey === 'percent' || absYFromZero) values.push(0);
 
-        if (values.length === 0) return null;
-        const min = Math.min(...values);
-        const max = Math.max(...values);
-        const span = max - min;
-        const padding = span > 0 ? span * 0.04 : Math.max(Math.abs(min), Math.abs(max), 1) * 0.04;
-        let paddedMin = min - padding;
-        let paddedMax = max + padding;
-
         const maxBubbleRadius = Math.max(0, ...bubbles.map((entry) => entry.radius));
-        if (maxBubbleRadius > 0) {
-            const plotHeight = Math.max(1, (chartContainer?.clientHeight ?? 288) - GRID_TOP_PX - GRID_BOTTOM_PX);
-            const edgeFraction = Math.min(0.3, maxBubbleRadius / plotHeight);
-            const paddedSpan = paddedMax - paddedMin;
-            const bubblePadding = (paddedSpan * edgeFraction) / Math.max(0.1, 1 - 2 * edgeFraction);
-            paddedMin -= bubblePadding;
-            paddedMax += bubblePadding;
-        }
-
-        return {
-            min: paddedMin,
-            max: paddedMax,
-        };
-    }
-
-    function eventKey(event: LotTimelineEventSchema): string {
-        return `${event.lot_id}:${event.date}:${event.kind}:${event.transaction_id}:${event.related_transaction_id ?? ''}:${event.fragment_id ?? ''}`;
+        const plotHeight = Math.max(1, (chartContainer?.clientHeight ?? 288) - GRID_TOP_PX - GRID_BOTTOM_PX);
+        return computePaddedValueBounds(values, maxBubbleRadius, plotHeight);
     }
 
     function eventKindLabel(kind: LotTimelineEventSchema['kind']): string {
         return labels.eventType[kind];
-    }
-
-    function eventCategory(kind: LotTimelineEventSchema['kind']): EventMarkerSeriesKind | null {
-        if (kind === 'BUY') return 'buy';
-        if (kind === 'SELL') return 'sell';
-        if (kind === 'TRANSFER_ARRIVE') return 'transfer';
-        if (kind === 'ADJUSTMENT_IN' || kind === 'ADJUSTMENT_OUT') return 'adjustment';
-        if (kind === 'SPLIT') return 'split';
-        return null;
     }
 
     function formatQuantityValue(value: number): string {
@@ -592,67 +488,7 @@
         return quantity == null ? null : formatQuantityValue(quantity);
     }
 
-    function resolveMarketPriceAtOrBefore(date: string, points: ReadonlyArray<MarketPriceLookupPoint>): MarketPriceLookupPoint | null {
-        let low = 0;
-        let high = points.length - 1;
-        let matchIndex = -1;
-
-        while (low <= high) {
-            const mid = Math.floor((low + high) / 2);
-            if (points[mid].date <= date) {
-                matchIndex = mid;
-                low = mid + 1;
-            } else {
-                high = mid - 1;
-            }
-        }
-
-        return matchIndex >= 0 ? points[matchIndex] : null;
-    }
-
-    function findTransferDepartEvent(arriveEvent: LotTimelineEventSchema, departEvents: ReadonlyArray<LotTimelineEventSchema>): LotTimelineEventSchema | null {
-        const candidates = departEvents.filter((candidate) => {
-            if (candidate.lot_id !== arriveEvent.lot_id) return false;
-            if (sortDates(candidate.date, arriveEvent.date) > 0) return false;
-            if (candidate.source_broker_id != null && arriveEvent.source_broker_id != null && candidate.source_broker_id !== arriveEvent.source_broker_id) return false;
-            if (candidate.destination_broker_id != null && arriveEvent.destination_broker_id != null && candidate.destination_broker_id !== arriveEvent.destination_broker_id) return false;
-            if (arriveEvent.related_transaction_id != null && candidate.transaction_id === arriveEvent.related_transaction_id) return true;
-            if (candidate.related_transaction_id != null && candidate.related_transaction_id === arriveEvent.transaction_id) return true;
-            if (arriveEvent.fragment_id != null && candidate.fragment_id != null && candidate.fragment_id === arriveEvent.fragment_id) return true;
-            return false;
-        });
-
-        candidates.sort((left, right) => sortDates(right.date, left.date) || right.transaction_id - left.transaction_id);
-        return candidates[0] ?? null;
-    }
-
-    function findTransferArriveEvent(departEvent: LotTimelineEventSchema, arriveEvents: ReadonlyArray<LotTimelineEventSchema>): LotTimelineEventSchema | null {
-        const candidates = arriveEvents.filter((candidate) => {
-            if (candidate.lot_id !== departEvent.lot_id) return false;
-            if (sortDates(candidate.date, departEvent.date) < 0) return false;
-            if (candidate.source_broker_id != null && departEvent.source_broker_id != null && candidate.source_broker_id !== departEvent.source_broker_id) return false;
-            if (candidate.destination_broker_id != null && departEvent.destination_broker_id != null && candidate.destination_broker_id !== departEvent.destination_broker_id) return false;
-            if (departEvent.related_transaction_id != null && candidate.transaction_id === departEvent.related_transaction_id) return true;
-            if (candidate.related_transaction_id != null && candidate.related_transaction_id === departEvent.transaction_id) return true;
-            if (departEvent.fragment_id != null && candidate.fragment_id != null && candidate.fragment_id === departEvent.fragment_id) return true;
-            return false;
-        });
-
-        candidates.sort((left, right) => sortDates(left.date, right.date) || left.transaction_id - right.transaction_id);
-        return candidates[0] ?? null;
-    }
-
-    function eventTimelineOrder(event: LotTimelineEventSchema): number {
-        if (event.kind === 'TRANSFER_DEPART') return 0;
-        if (event.kind === 'TRANSFER_ARRIVE') return 1;
-        if (event.kind === 'SPLIT') return 2;
-        if (event.kind === 'BUY' || event.kind === 'ADJUSTMENT_IN') return 3;
-        return 4;
-    }
-
-    function cloneLotEventState(state: LotEventState | undefined): LotEventState {
-        return {quantity: state?.quantity ?? null, unitPrice: state?.unitPrice ?? null};
-    }
+    const eventTimelineOrder = (event: LotTimelineEventSchema): number => eventTimelineOrderShared(event.kind);
 
     const eventStateSnapshots = $derived.by(() => {
         const stateByLot = new Map<number, LotEventState>();
@@ -660,53 +496,16 @@
         const sortedEvents = [...lotEvents].sort((left, right) => sortDates(left.date, right.date) || eventTimelineOrder(left) - eventTimelineOrder(right) || left.transaction_id - right.transaction_id);
 
         for (const event of sortedEvents) {
-            const state = cloneLotEventState(stateByLot.get(event.lot_id));
-            const beforeQuantity = state.quantity;
-            const beforeUnitPrice = state.unitPrice;
-            const quantity = parseNumber(event.quantity);
-            const unitPrice = parseNumber(event.unit_price ?? event.open_unit_price ?? event.close_unit_price);
-            const ratio = parseNumber(event.ratio);
-            let afterQuantity = beforeQuantity;
-            let afterUnitPrice = beforeUnitPrice;
-
-            if (event.kind === 'BUY') {
-                const openedQuantity = quantity == null ? null : Math.abs(quantity);
-                const baseQuantity = beforeQuantity ?? 0;
-                afterQuantity = openedQuantity == null ? beforeQuantity : baseQuantity + openedQuantity;
-                afterUnitPrice = unitPrice ?? beforeUnitPrice;
-            } else if (event.kind === 'ADJUSTMENT_IN') {
-                const addedQuantity = quantity == null ? null : Math.abs(quantity);
-                const baseQuantity = beforeQuantity ?? 0;
-                if (addedQuantity != null) {
-                    afterQuantity = baseQuantity + addedQuantity;
-                    if (unitPrice != null && beforeUnitPrice != null && baseQuantity > 0) {
-                        afterUnitPrice = (beforeUnitPrice * baseQuantity + unitPrice * addedQuantity) / afterQuantity;
-                    } else {
-                        afterUnitPrice = unitPrice ?? beforeUnitPrice;
-                    }
-                }
-            } else if (event.kind === 'SELL' || event.kind === 'ADJUSTMENT_OUT') {
-                const closedQuantity = quantity == null ? null : Math.abs(quantity);
-                afterQuantity = beforeQuantity != null && closedQuantity != null ? Math.max(0, beforeQuantity - closedQuantity) : beforeQuantity;
-                afterUnitPrice = beforeUnitPrice;
-            } else if (event.kind === 'SPLIT') {
-                const fallbackAfterQuantity = quantity == null ? null : Math.abs(quantity);
-                const fallbackBeforeQuantity = ratio != null && ratio !== 0 && fallbackAfterQuantity != null ? fallbackAfterQuantity / ratio : null;
-                const splitBeforeQuantity = beforeQuantity ?? fallbackBeforeQuantity;
-                afterQuantity = splitBeforeQuantity != null && ratio != null ? splitBeforeQuantity * ratio : beforeQuantity;
-                afterUnitPrice = beforeUnitPrice != null && ratio != null && ratio !== 0 ? beforeUnitPrice / ratio : beforeUnitPrice;
-            } else if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') {
-                afterQuantity = beforeQuantity ?? (quantity == null ? null : Math.abs(quantity));
-                afterUnitPrice = beforeUnitPrice ?? unitPrice;
-            }
+            const before = cloneLotEventState(stateByLot.get(event.lot_id));
+            const after = applyLotEvent(before, event);
 
             snapshots.set(eventKey(event), {
-                quantityBefore: beforeQuantity,
-                quantityAfter: afterQuantity,
-                unitPriceBefore: beforeUnitPrice,
-                unitPriceAfter: afterUnitPrice,
+                quantityBefore: before.quantity,
+                quantityAfter: after.quantity,
+                unitPriceBefore: before.unitPrice,
+                unitPriceAfter: after.unitPrice,
             });
-            stateByLot.set(event.lot_id, {quantity: afterQuantity, unitPrice: afterUnitPrice});
+            stateByLot.set(event.lot_id, after);
         }
 
         return snapshots;
@@ -1152,22 +951,7 @@
         return isDark ? colors.vivid : colors.vividLight;
     }
 
-    function lotBubbleSignColor(signed: number): string {
-        if (signed > LOT_BUBBLE_ZERO_EPS) return isDark ? '#4ade80' : '#16a34a';
-        if (signed < -LOT_BUBBLE_ZERO_EPS) return isDark ? '#f87171' : '#dc2626';
-        return isDark ? '#94a3b8' : '#64748b';
-    }
-
-    function lotBubbleRadius(value: number, minValue: number, maxValue: number): number {
-        const mid = (LOT_BUBBLE_MIN_RADIUS + LOT_BUBBLE_MAX_RADIUS) / 2;
-        if (maxValue <= minValue) return mid;
-        const minRoot = Math.sqrt(Math.max(0, minValue));
-        const maxRoot = Math.sqrt(Math.max(0, maxValue));
-        if (maxRoot === minRoot) return mid;
-        const valueRoot = Math.sqrt(Math.max(0, value));
-        const normalized = Math.min(1, Math.max(0, (valueRoot - minRoot) / (maxRoot - minRoot)));
-        return LOT_BUBBLE_MIN_RADIUS + normalized * (LOT_BUBBLE_MAX_RADIUS - LOT_BUBBLE_MIN_RADIUS);
-    }
+    const lotBubbleSignColor = (signed: number): string => lotBubbleSignColorShared(signed, isDark);
 
     const lotSelectionSet = $derived.by(() => new Set(selectedLotIds));
 
@@ -1804,12 +1588,7 @@
     }
 
     function setupResizeObserver() {
-        if (!chartContainer || resizeObserver) return;
-        resizeObserver = new ResizeObserver(() => {
-            chartInstance?.resize();
-            scheduleResolutionSync();
-        });
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function renderChart(opts?: {animate?: boolean}) {
@@ -1820,8 +1599,7 @@
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
-            resizeObserver?.disconnect();
-            resizeObserver = null;
+            resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
             dataZoomSyncHandle?.dispose();
@@ -1895,7 +1673,7 @@
             pulseTimers = [];
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
-            resizeObserver?.disconnect();
+            resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
             dataZoomSyncHandle?.dispose();
