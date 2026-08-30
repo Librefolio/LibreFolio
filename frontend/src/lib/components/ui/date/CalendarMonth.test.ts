@@ -28,6 +28,12 @@
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n} from '$test/component';
 import CalendarMonth from './CalendarMonth.svelte';
+// The component reads today from the user's calendar (`todayIso`), so the test
+// must ask the same question the same way. `toISOString().slice(0, 10)` was here
+// before and answered in UTC: it agreed for 22 hours a day and turned this file
+// red every night between midnight and 02:00 in Rome — which is exactly when it
+// was found.
+import {localIso} from '$lib/utils/dateOnly';
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const MONTHS = ['M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7', 'M8', 'M9', 'M10', 'M11'];
@@ -153,7 +159,7 @@ describe('CalendarMonth', () => {
     it('greys out future days unless the parent allows them', () => {
         const future = new Date();
         future.setDate(future.getDate() + 1);
-        const iso = future.toISOString().slice(0, 10);
+        const iso = localIso(future);
 
         const {unmount} = render(CalendarMonth, baseProps({year: future.getFullYear(), month: future.getMonth()}));
         expect(day(iso)).toBeDisabled();
@@ -165,11 +171,51 @@ describe('CalendarMonth', () => {
 
     it('marks today with its own state', () => {
         const today = new Date();
-        const iso = today.toISOString().slice(0, 10);
+        const iso = localIso(today);
 
         render(CalendarMonth, baseProps({year: today.getFullYear(), month: today.getMonth()}));
 
         expect(day(iso)).toHaveAttribute('data-state', 'today');
+    });
+
+    it("marks the user's today, not UTC's, in the hours where the two disagree", () => {
+        // The test above runs at whatever time the suite happens to run, and for
+        // 22 hours a day the local calendar and `toISOString()` agree — so it is
+        // green on a wrong implementation almost always. This one freezes the
+        // clock inside the window where they differ.
+        //
+        // Not hypothetical: this file went red at 00:02 local time because its
+        // assertions derived the expected date with `toISOString().slice(0, 10)`
+        // while the component reads the local calendar. For those two hours every
+        // user east of Greenwich saw the wrong day highlighted.
+        //
+        // The expected value is spelled out from the *rule* — "the year, month and
+        // day fields of the local Date" — and deliberately not by calling the
+        // helper under test. An oracle derived from the implementation is how the
+        // DateRangePicker preset tests stayed green on broken arithmetic for
+        // months: they replicated the component's own formula, so the two agreed
+        // with each other and with nothing else.
+        vi.useFakeTimers();
+        try {
+            // Cross midnight from whichever side this runner's zone sits on, so
+            // the two readings differ wherever it runs. In UTC itself they never
+            // differ, and the case says so rather than pretending otherwise.
+            const offsetMinutes = -new Date('2024-06-14T12:00:00Z').getTimezoneOffset();
+            if (offsetMinutes === 0) return;
+
+            vi.setSystemTime(new Date(offsetMinutes > 0 ? '2024-06-14T23:30:00Z' : '2024-06-14T00:30:00Z'));
+            const local = new Date();
+
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const expected = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+            expect(expected).not.toBe(local.toISOString().slice(0, 10)); // the premise of the case
+
+            render(CalendarMonth, baseProps({year: local.getFullYear(), month: local.getMonth()}));
+
+            expect(day(expected)).toHaveAttribute('data-state', 'today');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('delegates navigation to the parent instead of moving on its own', async () => {

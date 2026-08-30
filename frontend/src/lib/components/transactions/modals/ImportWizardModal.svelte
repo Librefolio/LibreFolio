@@ -14,12 +14,13 @@
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {extractErrorMessage, trySave} from '$lib/utils/trySave';
     import {formatBytes} from '$lib/utils/files/upload';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {ensureBrokersLoaded, getEditableBrokers, refreshAllBrokers, getBrokerInfo, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getAssetInfo, refreshAllAssets, type AssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
-    import {isFakeAssetId, FAKE_ASSET_ID_BASE} from '$lib/utils/brim/isFakeAssetId';
+    import {isFakeAssetId} from '$lib/utils/brim/isFakeAssetId';
     import {getIndexColor, getStringColor} from '$lib/utils/colors';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import IdentifierPrimaryChooser from '$lib/components/assets/IdentifierPrimaryChooser.svelte';
@@ -63,6 +64,13 @@
     import {applySignRules, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
     import {buildDuplicateRecheckPayload} from '$lib/utils/transactions/duplicateRecheckPayload';
     import {isFixStepTodo, rowStaysInFixStep, todosAfterSettle, todosAfterReopen} from '$lib/utils/transactions/fixRowLifecycle';
+    import {CONF_ORDER, type DuplicateStatus, type DuplicateTier, type DedupKey, type DuplicateGroup, type MergedTx, type AssetResolution} from '$lib/utils/transactions/importTypes';
+    import {buildDedupKey, buildDuplicateGroups, dedupKeysMatch, duplicateStatusAllowsAutoSelect, duplicateStatusIsSelectedWarning, isResolvedAwayDuplicate, pendingDuplicateStatusFor} from '$lib/utils/transactions/importDedup';
+    import {buildMergedTransactions, mergeCandidates, uniqueExactCandidateId} from '$lib/utils/transactions/importMerge';
+    import {cmpSourceFromTx, cmpSourceFromExisting, compareTypeCellHtml, type CmpSource} from '$lib/utils/transactions/importCompare';
+    import {createNamesFor, createOtherFor, duplicateCandidates, resolutionLabel as resolutionLabelPure} from '$lib/utils/transactions/importResolutionHelpers';
+    import {brokerIdForTx, beforeOpeningInfo, isBeforeOpening as isBeforeOpeningPure, isRowAssetResolved as isRowAssetResolvedPure} from '$lib/utils/transactions/importRowState';
+    import {groupPartitions as groupPartitionsPure, defaultKeeperIndices as defaultKeeperIndicesPure, resolverSelectionFor as resolverSelectionForPure, outlierIndexSet} from '$lib/utils/transactions/importDuplicateResolver';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, FilePreviewResponse} from '$lib/types';
 
@@ -155,7 +163,7 @@
     $effect(() => {
         if (!dropZoneExpanded || pendingFiles.length === 0) return;
         function handleClickOutside(e: MouseEvent) {
-            if (dropZoneContainerRef && !dropZoneContainerRef.contains(e.target as Node)) {
+            if (isOutsideClick(e.target, (el) => !dropZoneContainerRef || dropZoneContainerRef.contains(el))) {
                 dropZoneExpanded = false;
             }
         }
@@ -271,205 +279,9 @@
     // Step 4 State — Review & Import
     // =========================================================================
 
-    type DuplicateStatus = 'unique' | 'possible' | 'likely' | 'pending_duplicate' | 'pending_possible_duplicate';
-    type DuplicateTier = 'sure' | 'probable';
-
-    interface MergedTx {
-        index: number;
-        sourceFileId: string;
-        tx: TransactionCreateItem;
-        selected: boolean;
-        duplicateStatus: DuplicateStatus;
-        dupMatches: BrimDuplicateMatch[];
-        todos: ImportTodo[];
-        dupGroupKey?: string;
-        dupTier?: DuplicateTier;
-        dupKeeperIndex?: number;
-        dupKeeperFileName?: string;
-        isDupKeeper?: boolean;
-        /** For a bulk-modal pending duplicate: the matched unsaved transaction (for side-by-side compare). */
-        dupPendingMatch?: TransactionCreateItem;
-    }
-
-    interface DuplicateGroup {
-        key: string;
-        memberIndices: number[];
-        tier: DuplicateTier;
-    }
-
-    /**
-     * One asset to resolve — after unification, **one per security**, not one per file.
-     *
-     * The wizard allocates a fake id per instrument per file, so the same BTP read from two
-     * layouts used to arrive here twice: two identical entries in every picker, two candidate
-     * searches, and two duplicates created at the end. The grouping step folds those members into
-     * a single resolution whose `extracted*` fields are the representative's and whose `group*`
-     * fields carry the **union** of everything the members knew.
-     *
-     * The union is provenance-ordered, not preference-ordered: electing which ISIN leads belongs
-     * to the second stage, when the group meets a database asset that has its own to defend.
-     */
-    interface AssetResolution {
-        fakeAssetId: number;
-        extractedSymbol: string | null;
-        extractedIsin: string | null;
-        extractedName: string | null;
-        candidates: Array<{asset_id: number; symbol?: string | null; isin?: string | null; name: string; match_confidence: string}>;
-        resolvedAssetId: number | null;
-        txCount: number;
-        sourceFiles: string[];
-        notices: Array<{kind: string; reason: string}>;
-        /** Every code the group carries, representative included. */
-        groupIsins: string[];
-        groupSymbols: string[];
-        groupNames: string[];
-        /** The per-file assets folded into this one. A lone asset has exactly one. */
-        groupMembers: ExtractedAsset[];
-        groupState: AssetGroup['state'];
-        groupLinks: SimilarityLink[];
-        /** The user already elected the leading code on the unification step: do not ask again. */
-        groupPrimaryIsin: boolean;
-        groupPrimarySymbol: boolean;
-    }
-
-    const QUANTITY_TOLERANCE = 0.0001;
-    const AMOUNT_TOLERANCE = 0.01;
-
-    interface DedupKey {
-        broker: string;
-        type: string;
-        date: string;
-        quantity: number;
-        cashCode: string | null;
-        cashAmount: number | null;
-        costOverride: number | null;
-        assetIdentity: string;
-    }
-
-    function duplicateStatusAllowsAutoSelect(status: DuplicateStatus): boolean {
-        return status !== 'likely' && status !== 'pending_duplicate';
-    }
-
-    function duplicateStatusIsSelectedWarning(status: DuplicateStatus): boolean {
-        return status === 'likely' || status === 'pending_duplicate' || status === 'pending_possible_duplicate';
-    }
-
-    function normalizeAssetToken(value: string | null | undefined): string | null {
-        const token = String(value ?? '')
-            .trim()
-            .toLowerCase();
-        return token === '' ? null : token;
-    }
-
-    function resolveDedupAssetIdentity(tx: TransactionCreateItem, resolutionsByFake: Map<number, AssetResolution>): string {
-        const assetId = typeof tx.asset_id === 'number' ? tx.asset_id : null;
-        if (assetId === null) return 'asset:null';
-        if (!isFakeAssetId(assetId)) return `asset:${assetId}`;
-
-        const res = resolutionsByFake.get(assetId);
-        if (res?.resolvedAssetId != null) return `asset:${res.resolvedAssetId}`;
-        const isin = normalizeAssetToken(res?.extractedIsin);
-        if (isin) return `isin:${isin}`;
-        const symbol = normalizeAssetToken(res?.extractedSymbol);
-        if (symbol) return `symbol:${symbol}`;
-        const name = normalizeAssetToken(res?.extractedName);
-        if (name) return `name:${name}`;
-        return `fake:${assetId}`;
-    }
-
-    function getDedupCurrency(raw: unknown): {code: string; amount: number} | null {
-        const cur = Array.isArray(raw) ? raw.find((entry) => entry && typeof entry === 'object') : raw;
-        if (!cur || typeof cur !== 'object') return null;
-        const code = String((cur as {code?: unknown}).code ?? '')
-            .trim()
-            .toUpperCase();
-        const amount = Number((cur as {amount?: unknown}).amount ?? 0);
-        if (!code || !Number.isFinite(amount)) return null;
-        return {code, amount};
-    }
-
-    function getDedupCash(tx: TransactionCreateItem): {code: string; amount: number} | null {
-        return getDedupCurrency(tx.cash);
-    }
-
-    function buildDedupKey(tx: TransactionCreateItem, resolutionsByFake: Map<number, AssetResolution>): DedupKey | null {
-        const quantity = Number(tx.quantity ?? 0);
-        if (!Number.isFinite(quantity)) return null;
-        const cash = getDedupCash(tx);
-        return {
-            broker: String(tx.broker_id ?? ''),
-            type: String(tx.type ?? ''),
-            date: String(tx.date ?? '').slice(0, 10),
-            quantity,
-            cashCode: cash?.code ?? null,
-            cashAmount: cash?.amount ?? null,
-            costOverride: getDedupCurrency((tx as {cost_basis_override?: unknown}).cost_basis_override)?.amount ?? null,
-            assetIdentity: resolveDedupAssetIdentity(tx, resolutionsByFake),
-        };
-    }
-
-    function dedupKeysMatch(a: DedupKey, b: DedupKey): boolean {
-        if (a.broker !== b.broker || a.type !== b.type || a.date !== b.date || a.cashCode !== b.cashCode || a.assetIdentity !== b.assetIdentity) return false;
-        if (Math.abs(a.quantity - b.quantity) > QUANTITY_TOLERANCE) return false;
-        if (a.cashAmount === null || b.cashAmount === null) {
-            if (a.cashAmount !== b.cashAmount) return false;
-        } else if (Math.abs(a.cashAmount - b.cashAmount) > AMOUNT_TOLERANCE) return false;
-        // Per-unit cost override distinguishes cashless ADJUSTMENT legs of the same
-        // security acquired at different book prices (e.g. succession transfers).
-        if (a.costOverride === null || b.costOverride === null) {
-            if (a.costOverride !== b.costOverride) return false;
-        } else if (Math.abs(a.costOverride - b.costOverride) > QUANTITY_TOLERANCE) return false;
-        return true;
-    }
-
-    function normalizeDedupDescription(tx: TransactionCreateItem): string {
-        // Whitespace-insensitive: some brokers (e.g. Crédit Agricole) reformat the SAME
-        // transaction's description between two exports by inserting/removing a space
-        // (observed: "DTEMISS." vs "DT EMISS."). Collapsing all whitespace lets genuine
-        // twins match while distinct rows (different ISIN / movement id) stay distinct.
-        return String(tx.description ?? '')
-            .toLowerCase()
-            .replace(/\s+/g, '');
-    }
-
-    function pendingDuplicateStatusFor(a: TransactionCreateItem, b: TransactionCreateItem): 'pending_duplicate' | 'pending_possible_duplicate' {
-        return normalizeDedupDescription(a) === normalizeDedupDescription(b) ? 'pending_duplicate' : 'pending_possible_duplicate';
-    }
-
-    function describeDedupKey(key: DedupKey): string {
-        return [key.broker, key.type, key.date, key.quantity.toFixed(4), key.cashCode ?? '', key.cashAmount?.toFixed(2) ?? '', key.costOverride?.toFixed(4) ?? '', key.assetIdentity].join('|');
-    }
-
-    function buildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>): DuplicateGroup[] {
-        const clusters: Array<{key: DedupKey; members: MergedTx[]}> = [];
-        for (const mt of txArr) {
-            const key = buildDedupKey(mt.tx, assetMap);
-            if (!key) continue;
-            const cluster = clusters.find((c) => dedupKeysMatch(key, c.key));
-            if (cluster) cluster.members.push(mt);
-            else clusters.push({key, members: [mt]});
-        }
-        return clusters
-            .filter((cluster) => new Set(cluster.members.map((mt) => mt.sourceFileId)).size >= 2)
-            .map((cluster) => {
-                // Partition the loose cluster by normalized description. A partition whose rows
-                // span >=2 source files is a confirmed cross-file duplicate set ("total overlap");
-                // a single-file partition is an ambiguous row with no exact twin ("partial").
-                const filesByDesc = new Map<string, Set<string>>();
-                for (const mt of cluster.members) {
-                    const d = normalizeDedupDescription(mt.tx);
-                    const files = filesByDesc.get(d) ?? new Set<string>();
-                    files.add(mt.sourceFileId);
-                    filesByDesc.set(d, files);
-                }
-                const allPartitionsCrossFile = [...filesByDesc.values()].every((files) => files.size >= 2);
-                return {
-                    key: describeDedupKey(cluster.key),
-                    memberIndices: cluster.members.map((mt) => mt.index),
-                    tier: (allPartitionsCrossFile ? 'sure' : 'probable') as DuplicateTier,
-                };
-            });
-    }
+    // Value-object types (MergedTx, AssetResolution, DedupKey, DuplicateGroup, …) and the
+    // dedup tolerances live in `$lib/utils/transactions/importTypes`, so the pure Step-4
+    // logic can be extracted and unit-tested. See the import at the top of this script.
 
     function syncDuplicateFilePriority() {
         const ids = parseResults.filter((r) => r.status === 'done').map((r) => r.fileId);
@@ -483,35 +295,15 @@
         crossFile: boolean;
     }
 
-    /**
-     * Partition a duplicate group by normalized description. Each partition is a set of rows
-     * that share the numeric/fixed key AND the (whitespace-insensitive) description. The primary
-     * is the partition member from the highest-priority file; the rest are exact cross-file twins.
-     */
+    // Duplicate-resolver logic lives in $lib/utils/transactions/importDuplicateResolver.ts; these
+    // thin wrappers inject the reactive wizard state (duplicateFilePriorityIds, the manual-choice
+    // set, the per-row selections) so all call sites and the markup stay unchanged.
     function groupPartitions(group: DuplicateGroup, txArr: MergedTx[] = mergedTransactions): GroupPartition[] {
-        const members = group.memberIndices.map((idx) => txArr.find((mt) => mt.index === idx)).filter((mt): mt is MergedTx => mt !== undefined);
-        if (members.length === 0) return [];
-        const priority = new Map(duplicateFilePriorityIds.map((id, idx) => [id, idx] as const));
-        const rank = (mt: MergedTx) => priority.get(mt.sourceFileId) ?? Number.MAX_SAFE_INTEGER;
-        const byDesc = new Map<string, MergedTx[]>();
-        for (const mt of members) {
-            const d = normalizeDedupDescription(mt.tx);
-            const arr = byDesc.get(d) ?? [];
-            arr.push(mt);
-            byDesc.set(d, arr);
-        }
-        return [...byDesc.values()].map((part) => {
-            const primary = part.reduce((best, mt) => (rank(mt) < rank(best) ? mt : best), part[0]);
-            const files = new Set(part.map((mt) => mt.sourceFileId));
-            return {primaryIndex: primary.index, memberIndices: part.map((mt) => mt.index), crossFile: files.size >= 2};
-        });
+        return groupPartitionsPure(group, txArr, duplicateFilePriorityIds);
     }
 
     function defaultKeeperIndices(group: DuplicateGroup, txArr: MergedTx[] = mergedTransactions): Set<number> {
-        // Keep exactly one primary per description-partition (highest file priority). A cross-file
-        // duplicate keeps a single copy; genuinely-distinct rows that only share the numeric key
-        // (different descriptions) are each their own partition primary, so all are kept.
-        return new Set(groupPartitions(group, txArr).map((p) => p.primaryIndex));
+        return defaultKeeperIndicesPure(group, txArr, duplicateFilePriorityIds);
     }
 
     function resolverHasManualChoice(group: DuplicateGroup): boolean {
@@ -519,11 +311,7 @@
     }
 
     function resolverSelectionFor(group: DuplicateGroup, rowIndex: number, txArr: MergedTx[] = mergedTransactions): boolean {
-        if (resolverHasManualChoice(group)) return duplicateResolverSelections[rowIndex] ?? false;
-        // Default keeps one primary per description-partition (BOTH tiers). Distinct rows that
-        // share the numeric key but not the description are each a partition primary, so they are
-        // all kept; only exact cross-file twins (secondaries) are deselected.
-        return defaultKeeperIndices(group, txArr).has(rowIndex);
+        return resolverSelectionForPure(group, rowIndex, txArr, duplicateFilePriorityIds, resolverHasManualChoice(group), duplicateResolverSelections);
     }
 
     function applyDuplicateResolverChoice(group: DuplicateGroup, rowIndex: number, selected: boolean) {
@@ -774,23 +562,15 @@
     );
 
     function getBrokerIdForTx(mt: MergedTx): number | null {
-        return parseResults.find((r) => r.fileId === mt.sourceFileId)?.brokerId ?? null;
+        return brokerIdForTx(mt, parseResults);
     }
 
     function getBeforeOpeningInfo(mt: MergedTx): {brokerId: number; openedAt: string} | null {
-        const brokerId = getBrokerIdForTx(mt);
-        if (brokerId === null) return null;
-        const openedAt = brokers.find((b) => b.id === brokerId)?.opened_at ?? null;
-        if (!openedAt) return null;
-        return {brokerId, openedAt};
+        return beforeOpeningInfo(mt, parseResults, brokers);
     }
 
     function isBeforeOpening(mt: MergedTx): boolean {
-        const info = getBeforeOpeningInfo(mt);
-        const txDate = mt.tx.date ? String(mt.tx.date) : '';
-        // Strict `<`: a tx dated exactly on the opening day (e.g. patrimonio opening seeds)
-        // is importable; only strictly-earlier movements are flagged before-opening.
-        return info !== null && txDate !== '' && txDate < info.openedAt;
+        return isBeforeOpeningPure(mt, parseResults, brokers);
     }
 
     let beforeOpeningIndices = $derived.by(() => new Set(mergedTransactions.filter(isBeforeOpening).map((t) => t.index)));
@@ -802,20 +582,7 @@
 
     /** True unless the row's asset is an unresolved fake mapping (no bound real asset yet). */
     function isRowAssetResolved(t: MergedTx): boolean {
-        if (typeof t.tx.asset_id === 'number' && isFakeAssetId(t.tx.asset_id)) {
-            return assetResolutions.find((r) => r.fakeAssetId === t.tx.asset_id)?.resolvedAssetId != null;
-        }
-        return true;
-    }
-
-    /**
-     * A resolved-away in-batch duplicate: a non-keeper member of a duplicate group that the user
-     * did not deliberately keep. These are hidden from step 4 entirely (out of table AND payload):
-     * only one keeper per group survives by default. Kept secondaries (selected) and bulk-modal
-     * duplicates (no dupGroupKey) are never hidden.
-     */
-    function isResolvedAwayDuplicate(t: MergedTx): boolean {
-        return t.dupGroupKey != null && t.isDupKeeper === false && !t.selected;
+        return isRowAssetResolvedPure(t, assetResolutions);
     }
 
     // Step 4 deriveds
@@ -870,124 +637,8 @@
      * Used to auto-bind an extracted asset whose ISIN uniquely matches one existing
      * asset even when the backend left selected_asset_id null.
      */
-    function uniqueExactCandidateId(candidates: AssetResolution['candidates']): number | null {
-        const exact = (candidates ?? []).filter((c) => String(c.match_confidence).toLowerCase() === 'exact');
-        return exact.length === 1 ? exact[0].asset_id : null;
-    }
-
     function mergeAllTransactions() {
-        const txArr: MergedTx[] = [];
-        const assetMap = new Map<number, AssetResolution>();
-        /** Which file each global fake id came from — the grouping layer needs the provenance. */
-        const fileIdOfFake = new Map<number, string>();
-        let globalIndex = 0;
-        // Global unique fake-id allocator. Each source file's plugin emits fake ids from the
-        // same FAKE_ASSET_ID_BASE downward, so ids collide across files. Re-map every file's
-        // fake ids to a globally-unique fake id (kept within the isFakeAssetId range) so a
-        // resolution is never shared between two different instruments from different files.
-        let nextFakeId = FAKE_ASSET_ID_BASE;
-        // DB ids the user marked for deletion in the bulk editor — excluded from DB dup matching.
-        const pendingDeleteSet = new Set<number>(pendingDeleteTxIds);
-
-        for (const result of parseResults.filter((r) => r.status === 'done' && r.response)) {
-            const resp = result.response!;
-            // Per-file map: original plugin fake id → globally-unique fake id.
-            const fakeRemap = new Map<number, number>();
-            // Build todos map by tx_index
-            const todosMap = new Map<number, ImportTodo[]>();
-            for (const ft of resp.field_todos ?? []) {
-                const idx = (ft as any).tx_index as number;
-                const list = todosMap.get(idx) ?? [];
-                list.push({field: (ft as any).field, severity: (ft as any).severity, reasonCode: (ft as any).reason_code, message: (ft as any).message, evidence: (ft as any).evidence ?? [], context: (ft as any).context ?? undefined});
-                todosMap.set(idx, list);
-            }
-
-            // Build duplicate sets (by tx_row_index) and match details map.
-            // DB matches against transactions the user has marked for deletion in the bulk
-            // editor are dropped: a re-imported row whose only DB match is a to-be-deleted
-            // row is no longer a duplicate (status stays 'unique', auto-selectable). A row
-            // with some surviving matches keeps its tier with the reduced match list.
-            const dups = resp.duplicates;
-            const likelyEntries = (dups && !Array.isArray(dups) ? (dups.tx_likely_duplicates ?? []) : []) as any[];
-            const possibleEntries = (dups && !Array.isArray(dups) ? (dups.tx_possible_duplicates ?? []) : []) as any[];
-            const likelySet = new Set<number>();
-            const possibleSet = new Set<number>();
-            const dupMatchesMap = new Map<number, BrimDuplicateMatch[]>();
-            const survivingMatches = (entry: any): {matches: BrimDuplicateMatch[]; hadMatches: boolean} => {
-                const raw = (entry.tx_existing_matches ?? []) as BrimDuplicateMatch[];
-                if (raw.length === 0) return {matches: raw, hadMatches: false};
-                return {matches: raw.filter((m) => !pendingDeleteSet.has(m.existing_tx_id)), hadMatches: true};
-            };
-            for (const d of likelyEntries) {
-                const {matches, hadMatches} = survivingMatches(d);
-                if (hadMatches && matches.length === 0) continue; // all DB matches deleted → not a duplicate
-                likelySet.add(d.tx_row_index as number);
-                dupMatchesMap.set(d.tx_row_index as number, matches);
-            }
-            for (const d of possibleEntries) {
-                const {matches, hadMatches} = survivingMatches(d);
-                if (hadMatches && matches.length === 0) continue; // all DB matches deleted → not a duplicate
-                possibleSet.add(d.tx_row_index as number);
-                dupMatchesMap.set(d.tx_row_index as number, matches);
-            }
-
-            for (const [txIdx, tx] of (resp.transactions ?? []).entries()) {
-                let dupStatus: DuplicateStatus = 'unique';
-                if (likelySet.has(txIdx)) dupStatus = 'likely';
-                else if (possibleSet.has(txIdx)) dupStatus = 'possible';
-                const openedAt = brokers.find((b) => b.id === result.brokerId)?.opened_at ?? null;
-                const beforeOpening = openedAt != null && String(tx.date ?? '') !== '' && String(tx.date ?? '') < openedAt;
-
-                // Clone so re-mapping the fake asset id never mutates the stored parse result
-                // (mergeAllTransactions may run again after a broker/opening edit).
-                const txClone = {...(tx as TransactionCreateItem)} as TransactionCreateItem;
-                const origAssetId = typeof txClone.asset_id === 'number' ? txClone.asset_id : null;
-                if (origAssetId !== null && isFakeAssetId(origAssetId)) {
-                    let globalFakeId = fakeRemap.get(origAssetId);
-                    if (globalFakeId === undefined) {
-                        globalFakeId = nextFakeId--;
-                        fakeRemap.set(origAssetId, globalFakeId);
-                        fileIdOfFake.set(globalFakeId, result.fileId);
-                        const mapping = (resp.asset_mappings ?? []).find((m: any) => m.fake_asset_id === origAssetId);
-                        if (mapping) {
-                            const candidates = (mapping.candidates ?? []) as AssetResolution['candidates'];
-                            const selected = typeof mapping.selected_asset_id === 'number' ? (mapping.selected_asset_id as number) : null;
-                            assetMap.set(globalFakeId, {
-                                fakeAssetId: globalFakeId,
-                                extractedSymbol: (mapping.extracted_symbol as string | null) ?? null,
-                                extractedIsin: (mapping.extracted_isin as string | null) ?? null,
-                                extractedName: (mapping.extracted_name as string | null) ?? null,
-                                candidates,
-                                // Auto-bind an exact-ISIN match even if the backend left it unselected.
-                                resolvedAssetId: selected ?? uniqueExactCandidateId(candidates),
-                                txCount: 0,
-                                sourceFiles: [],
-                                notices: ((mapping.notices ?? []) as Array<{kind?: string; reason?: string}>).map((n) => ({kind: String(n.kind ?? ''), reason: String(n.reason ?? '')})),
-                                groupIsins: [],
-                                groupSymbols: [],
-                                groupNames: [],
-                                groupMembers: [],
-                                groupState: 'single',
-                                groupLinks: [],
-                                groupPrimaryIsin: false,
-                                groupPrimarySymbol: false,
-                            });
-                        }
-                    }
-                    (txClone as {asset_id?: number | null}).asset_id = globalFakeId;
-                }
-
-                txArr.push({
-                    index: globalIndex++,
-                    sourceFileId: result.fileId,
-                    tx: txClone,
-                    selected: !beforeOpening && duplicateStatusAllowsAutoSelect(dupStatus),
-                    duplicateStatus: dupStatus,
-                    dupMatches: dupMatchesMap.get(txIdx) ?? [],
-                    todos: todosMap.get(txIdx) ?? [],
-                });
-            }
-        }
+        const {txArr, assetMap, fileIdOfFake} = buildMergedTransactions(parseResults, brokers, pendingDeleteTxIds);
 
         // Unification runs *before* anything else looks at assets: the duplicate report, the
         // correction step and the review all read the resulting list, so a partition applied
@@ -1075,15 +726,6 @@
     }
 
     /** Union of two candidate lists, keeping the strongest confidence seen for each asset. */
-    function mergeCandidates(a: AssetResolution['candidates'], b: AssetResolution['candidates']): AssetResolution['candidates'] {
-        const byId = new Map<number, AssetResolution['candidates'][number]>();
-        for (const candidate of [...a, ...b]) {
-            const existing = byId.get(candidate.asset_id);
-            if (!existing || (CONF_ORDER[candidate.match_confidence] ?? 9) < (CONF_ORDER[existing.match_confidence] ?? 9)) byId.set(candidate.asset_id, candidate);
-        }
-        return [...byId.values()].sort((x, y) => (CONF_ORDER[x.match_confidence] ?? 9) - (CONF_ORDER[y.match_confidence] ?? 9));
-    }
-
     /** Turns a per-row duplicate verdict into resolver groups and folds the panel sensibly. */
     function rebuildDuplicateGroups(txArr: MergedTx[], assetMap: Map<number, AssetResolution>) {
         const groups = buildDuplicateGroups(txArr, assetMap);
@@ -1204,15 +846,6 @@
     }
 
     /**
-     * Every name this resolution answers to: the group's names (elected one first, and any
-     * rename the user typed) plus the candidate names. They become search keys, so breadth is
-     * what matters here — a name that identified the instrument in *any* file must survive.
-     */
-    function createNamesFor(res: AssetResolution | undefined): string[] {
-        return res ? [...new Set([...res.groupNames, res.extractedName, ...(res.candidates ?? []).map((c) => c.name)].filter((n): n is string => !!n && n.trim() !== ''))] : [];
-    }
-
-    /**
      * Open the creation form for a resolution, electing the leading code first when the group
      * offers more than one and nobody has ruled yet.
      *
@@ -1251,14 +884,6 @@
         createPrimaryPending = null;
     }
 
-    /** Everything the group knows that is not the elected primary, ready for `identifier_other`. */
-    function createOtherFor(res: AssetResolution | undefined, primaryIsin: string | null, primarySymbol: string | null): string[] {
-        if (!res) return [];
-        const norm = (v: string) => v.trim().toUpperCase();
-        const rest = [...res.groupIsins.filter((v) => norm(v) !== norm(primaryIsin ?? '')), ...res.groupSymbols.filter((v) => norm(v) !== norm(primarySymbol ?? ''))];
-        return [...new Set([...createNamesFor(res), ...rest])];
-    }
-
     /**
      * Wizard create flow: the user selected a search result whose provider name matches an
      * existing asset and chose to reuse it (instead of creating a duplicate). Bind the fake id
@@ -1281,22 +906,6 @@
             return;
         }
         await checkAndPromptIdentifier(fakeId, existingAssetId, res, {clearOnCancel: false, extraOther: createNamesFor(res)});
-    }
-
-    /** Confidence sort order for sorting candidates list. Keys match the API's lowercase enum values. */
-    const CONF_ORDER: Record<string, number> = {exact: 0, high: 1, medium: 2, low: 3};
-
-    /**
-     * Two identifier-grade candidates for one extracted security almost always means the database
-     * holds the same instrument twice — typically the very duplicate an earlier import created
-     * before the identifier could be saved. Name matches are excluded: two funds from one issuer
-     * legitimately read alike, and offering to merge them would be dangerous advice.
-     *
-     * This is the moment the two are side by side, so it is the moment the fix costs least.
-     */
-    function duplicateCandidates(res: AssetResolution): AssetResolution['candidates'] {
-        const strong = res.candidates.filter((c) => c.match_confidence.toLowerCase() === 'exact' || c.match_confidence.toLowerCase() === 'high');
-        return strong.length >= 2 ? strong : [];
     }
 
     /** Asset offered for folding in the merge modal, opened from a resolution card. */
@@ -1533,11 +1142,8 @@
      * still offering the pre-unification assets.
      */
     function resolutionLabel(res: AssetResolution): string {
-        if (res.resolvedAssetId !== null) {
-            const dbName = getAssetInfo(res.resolvedAssetId)?.display_name ?? res.candidates.find((c) => c.asset_id === res.resolvedAssetId)?.name;
-            if (dbName && dbName.trim() !== '') return dbName;
-        }
-        return res.groupNames[0] || res.extractedName || res.extractedSymbol || res.extractedIsin || `#${res.fakeAssetId}`;
+        // Pure label logic lives in importResolutionHelpers; inject the store's display-name lookup.
+        return resolutionLabelPure(res, (id) => getAssetInfo(id)?.display_name);
     }
 
     function getAssetDisplayName(assetId: number | null | undefined): string {
@@ -1621,27 +1227,6 @@
      * transactions page (type icon, cash formatting) plus a keeper checkbox and a File column.
      * A function (not a derived) so the keeper column can close over the specific group.
      */
-    /** Indices of members whose `keyOf` value is NOT the majority within the group (empty if all equal). */
-    function outlierIndexSet(members: MergedTx[], keyOf: (mt: MergedTx) => string): Set<number> {
-        const counts = new Map<string, number>();
-        for (const mt of members) {
-            const k = keyOf(mt);
-            counts.set(k, (counts.get(k) ?? 0) + 1);
-        }
-        if (counts.size <= 1) return new Set();
-        let majority = '';
-        let best = -1;
-        for (const [k, c] of counts) {
-            if (c > best) {
-                best = c;
-                majority = k;
-            }
-        }
-        const out = new Set<number>();
-        for (const mt of members) if (keyOf(mt) !== majority) out.add(mt.index);
-        return out;
-    }
-
     function resolverMemberColumns(group: DuplicateGroup): ColumnDef<MergedTx>[] {
         const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const cmpMembers = resolverGroupMembers(group);
@@ -1785,76 +1370,7 @@
         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
     }
 
-    function buildDupTooltipHtml(baseText: string, matches: BrimDuplicateMatch[], labels: {date: string; type: string; amount: string; desc: string}): string {
-        if (!matches.length) return `<span>${baseText}</span>`;
-        const blocks = matches
-            .slice(0, 3)
-            .map((m, i) => {
-                const date = m.tx_date ?? '—';
-                const txType = String(m.tx_type ?? '—');
-                const slug = txType.toLowerCase().replace(/_/g, '-');
-                const typeIcon = `<img src="/icons/transactions/${slug}.png" style="width:13px;height:13px;vertical-align:middle;object-fit:contain;margin-right:3px" onerror="this.style.display='none'">`;
-                const rawAmount = m.tx_cash_amount ? (Array.isArray(m.tx_cash_amount) ? m.tx_cash_amount[0] : m.tx_cash_amount) : null;
-                const currency = m.tx_cash_currency ? (Array.isArray(m.tx_cash_currency) ? m.tx_cash_currency[0] : (m.tx_cash_currency as string)) : '';
-                const amount = rawAmount ? `${parseFloat(String(rawAmount)).toFixed(2)} ${currency}` : '—';
-                const rawDesc = m.tx_description ? (Array.isArray(m.tx_description) ? m.tx_description[0] : m.tx_description) : null;
-                const desc = rawDesc ? String(rawDesc).substring(0, 32) + (String(rawDesc).length > 32 ? '…' : '') : '—';
-                const sep = i > 0 ? `<div style="border-top:1px solid rgba(128,128,128,0.3);margin:5px 0"></div>` : '';
-                const row = (label: string, val: string) => `<div style="display:flex;gap:6px;margin:2px 0"><span style="opacity:0.6;min-width:48px;flex-shrink:0">${label}</span><span>${val}</span></div>`;
-                return `${sep}${row(labels.date, date)}${row(labels.type, typeIcon + txType)}${row(labels.amount, amount)}${row(labels.desc, desc)}`;
-            })
-            .join('');
-        return `<div style="font-size:0.75rem"><p style="margin:0 0 8px">${baseText}</p><div style="border-top:1px solid rgba(128,128,128,0.2);padding-top:6px">${blocks}</div></div>`;
-    }
-
     // ── N-way compare: shared source/cell/column builders ───────────────────
-
-    interface CmpSource {
-        date: string;
-        type: string;
-        cashAmount: number | null;
-        cashCode: string | null;
-        brokerId: number | null;
-        assetId: number | null;
-        description: string;
-    }
-
-    function escHtml(s: string): string {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function compareTypeCellHtml(type: string): string {
-        const slug = type.toLowerCase().replace(/_/g, '-');
-        const label = $t(`transactions.types.${type}`) || type;
-        return `<span class="inline-flex items-center gap-1.5"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.15rem;height:1.15rem" class="shrink-0 object-contain" onerror="this.style.display='none'"/><span>${escHtml(label)}</span></span>`;
-    }
-
-    function cmpSourceFromTx(tx: TransactionCreateItem, fallbackBrokerId: number | null = null): CmpSource {
-        const rawCash = tx.cash ? (Array.isArray(tx.cash) ? tx.cash[0] : tx.cash) : null;
-        const cash = rawCash && typeof rawCash === 'object' ? (rawCash as {code: string; amount: string}) : null;
-        const assetIdRaw = Array.isArray(tx.asset_id) ? tx.asset_id[0] : tx.asset_id;
-        return {
-            date: tx.date ? String(tx.date) : '',
-            type: tx.type ? String(tx.type) : '',
-            cashAmount: cash && cash.amount != null ? Number(cash.amount) : null,
-            cashCode: cash ? cash.code : null,
-            brokerId: typeof tx.broker_id === 'number' ? tx.broker_id : fallbackBrokerId,
-            assetId: typeof assetIdRaw === 'number' ? assetIdRaw : null,
-            description: String(tx.description ?? ''),
-        };
-    }
-
-    function cmpSourceFromExisting(tx: TXReadItem): CmpSource {
-        return {
-            date: tx.date ? String(tx.date) : '',
-            type: tx.type ? String(tx.type) : '',
-            cashAmount: tx.cash && tx.cash.amount != null ? Number(tx.cash.amount) : null,
-            cashCode: tx.cash ? tx.cash.code : null,
-            brokerId: typeof tx.broker_id === 'number' ? tx.broker_id : null,
-            assetId: typeof tx.asset_id === 'number' ? tx.asset_id : null,
-            description: String(tx.description ?? ''),
-        };
-    }
 
     /** Build the per-field comparison cells (display + normalized cmp token) for one column. */
     function buildCompareCells(src: CmpSource): Record<string, CompareCell> {
@@ -1862,7 +1378,7 @@
         const assetName = getAssetDisplayName(src.assetId);
         return {
             date: {display: src.date || '—', cmp: src.date},
-            type: src.type ? {display: compareTypeCellHtml(src.type), cmp: src.type, html: true} : {display: '—', cmp: ''},
+            type: src.type ? {display: compareTypeCellHtml(src.type, $t(`transactions.types.${src.type}`) || src.type), cmp: src.type, html: true} : {display: '—', cmp: ''},
             amount: amountCell,
             broker: src.brokerId != null ? {display: getBrokerName(src.brokerId), cmp: String(src.brokerId)} : {display: '—', cmp: ''},
             asset: {display: assetName, cmp: `${src.assetId ?? ''}|${assetName.toLowerCase()}`},

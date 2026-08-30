@@ -16,6 +16,7 @@
     import {_} from '$lib/i18n';
     import CalendarMonth from './CalendarMonth.svelte';
     import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
     // =========================================================================
@@ -261,9 +262,9 @@
     }
 
     function handleClickOutside(e: MouseEvent) {
-        const target = e.target as HTMLElement;
-        if (!target.isConnected) return;
-        if (!target.closest('.sdp-popover') && !target.closest('.sdp-trigger')) {
+        // The isConnected guard (target detached before the click — a nested
+        // SimpleSelect option removed on mousedown) now lives in isOutsideClick.
+        if (isOutsideClick(e.target, (el) => !!el.closest('.sdp-popover') || !!el.closest('.sdp-trigger'))) {
             closeCalendar();
         }
     }

@@ -23,6 +23,12 @@ Two properties of the input shape the whole design:
    function's `loc`. A nested closure is thus counted twice: once for itself and
    once for its parent. This is a ranking heuristic, not an exact metric — good
    enough to sort untested code by weight, not to be quoted as a percentage.
+
+3. **The unit is the line, not the statement.** The combined report merges two
+   compilations of the same `.svelte` file (vitest for jsdom, the production
+   build for E2E), and their statement positions do not coincide, so the merged
+   denominator counts one file twice. Lines survive that far better. See
+   `_statements_in_range` for the measurement and why it matters.
 """
 
 from __future__ import annotations
@@ -48,19 +54,35 @@ def is_istanbul(data: dict) -> bool:
 
 
 def _statements_in_range(file_data: dict, start_line: int, end_line: int) -> tuple[int, int]:
-    """Count (total, covered) statements whose start line falls inside the range."""
+    """Count (total, covered) *lines* whose statements fall inside the range.
+
+    Counted by line, not by statement, and that is a correction rather than a
+    simplification. The combined report merges two measurements of the same
+    ``.svelte`` file compiled twice — once by vitest for jsdom, once by the
+    production build the E2E suite drives — and the Svelte compiler emits
+    different code each time. Statement *positions* therefore do not line up:
+    ``DataTableColumnFilter`` had 532 statements under vitest, 484 under E2E and
+    791 in the merge, of which only 225 positions were shared. The merged
+    denominator was the union of two maps of one file.
+
+    That inflated 2 163 statements across 89 files, and it did so precisely on the
+    files that have a component test — so adding one made a file's combined number
+    look *worse*, and this analyser, which reads the combined report, sent us to
+    write tests for code that was already covered by the other level.
+
+    Lines survive the double compilation far better (356 of ~450 shared on that
+    same file), so they are the stable unit here. A line counts as covered when any
+    statement on it ran, which is what line coverage has always meant.
+    """
     statement_map = file_data.get("statementMap", {})
     counters = file_data.get("s", {})
-    total = 0
-    covered = 0
+    by_line: dict[int, bool] = {}
     for sid, loc in statement_map.items():
         line = loc.get("start", {}).get("line")
         if line is None or line < start_line or line > end_line:
             continue
-        total += 1
-        if counters.get(sid, 0) > 0:
-            covered += 1
-    return total, covered
+        by_line[line] = by_line.get(line, False) or counters.get(sid, 0) > 0
+    return len(by_line), sum(1 for hit in by_line.values() if hit)
 
 
 def _readable_name(raw_name: str, line: int) -> str:
@@ -68,6 +90,35 @@ def _readable_name(raw_name: str, line: int) -> str:
     if not raw_name or raw_name.startswith("(anonymous"):
         return f"block@{line}"
     return raw_name
+
+
+def _branches_in_range(file_data: dict, start_line: int, end_line: int) -> tuple[int, int]:
+    """Count (total, covered) branch arms whose branch starts inside the range.
+
+    A branch is counted once per *arm*: an `if/else` contributes two, and each is
+    covered only if that side actually ran. This is the measurement that says
+    whether a decision was exercised, as opposed to merely reached — a line like
+    ``if (err) log(err)`` in which ``err`` is always truthy is 100% covered by
+    line and 50% by branch, and only the second number is telling the truth.
+
+    The frontend's branch coverage sits 16 points below its statement coverage,
+    against 10 on the backend, so this is where the real gap is.
+    """
+    branch_map = file_data.get("branchMap", {})
+    counters = file_data.get("b", {})
+    total = 0
+    covered = 0
+    for bid, meta in branch_map.items():
+        loc = meta.get("loc") or {}
+        line = loc.get("start", {}).get("line")
+        if line is None:
+            line = meta.get("line")
+        if line is None or line < start_line or line > end_line:
+            continue
+        arms = counters.get(bid, [])
+        total += len(arms)
+        covered += sum(1 for hit in arms if hit > 0)
+    return total, covered
 
 
 def istanbul_to_analysis(data: dict) -> dict:
@@ -94,6 +145,8 @@ def istanbul_to_analysis(data: dict) -> dict:
                 total = 1
                 covered = 1 if hits > 0 else 0
 
+            br_total, br_covered = _branches_in_range(file_data, start_line, end_line)
+
             name = _readable_name(fn.get("name", ""), start_line)
             # Distinct closures can start on the same line (chained callbacks):
             # keep the id as a tiebreaker so none is silently dropped.
@@ -106,6 +159,9 @@ def istanbul_to_analysis(data: dict) -> dict:
                     "covered_lines": covered,
                     "missing_lines": total - covered,
                     "percent_covered": (covered / total * 100.0) if total else 0.0,
+                    "num_branches": br_total,
+                    "covered_branches": br_covered,
+                    "missing_branches": br_total - br_covered,
                 },
             }
 

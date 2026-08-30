@@ -28,6 +28,9 @@ from ._common import (
 from ._coverage import _clean_js_coverage_dirs, _finalize_coverage, _finalize_js_coverage, _handle_coverage_command
 from ._frontend_common import BACKEND_TEST_PATHS, _list_front_tests, _list_pytest_tests
 from ._registry import TEST_REGISTRY
+from ._run_cache import campaign_begin as _campaign_begin
+from ._run_cache import campaign_end as _campaign_end
+from ._run_cache import campaign_summary as _campaign_summary
 from ._run_cache import clear_all as _cache_clear_all
 from ._run_cache import show_status as _cache_show_status
 from ._suites import (
@@ -636,6 +639,41 @@ def _dispatch_to_category_body(category: str, test_names, verbose: bool, args) -
     return 0 if success else 1
 
 
+_UNTIMED_CATEGORIES = frozenset({"check-orphans", "coverage", "coverage-report", "list"})
+
+
+def _timed_run(args, body):
+    """Run ``body`` and close with how long the campaign has cost so far.
+
+    A campaign is opened by ``--fresh-run`` and continued by every ``--resume``,
+    so the note answers the question that a single invocation cannot: not "how
+    long was this run" but "how long has getting to green taken".
+
+    Only real runs are timed. ``--run-status``, a bare ``--fresh-run`` and the
+    reporting sub-commands execute no tests, and timing them would put 0s
+    invocations in the record — noise that makes the count of invocations mean
+    less than it should.
+    """
+    category = getattr(args, "category", None)
+    if not category or category in _UNTIMED_CATEGORIES or getattr(args, "run_status", False):
+        return body()
+
+    fresh = bool(getattr(args, "fresh_run", False))
+    resumed = bool(getattr(args, "resume", False))
+    _campaign_begin(reset=fresh)
+    rc = 1
+    try:
+        rc = body()
+        return rc
+    finally:
+        _campaign_end(success=rc == 0, label=str(getattr(args, "category", "run")), fresh=fresh, resumed=resumed)
+        note = _campaign_summary()
+        if note:
+            print()
+            print_header("Timing")
+            print(note)
+
+
 def _dispatch_test_command(args):
     """Dispatch test command from dev.py, optionally teeing the full log to a file."""
     log_file = getattr(args, "log_file", None)
@@ -644,14 +682,14 @@ def _dispatch_test_command(args):
             print_info(f"📝 Full run log → {log_file}")
             _activate_log_dir(args)
             try:
-                rc = _dispatch_test_command_body(args)
+                rc = _timed_run(args, lambda: _dispatch_test_command_body(args))
             finally:
                 _snapshot_log_dir_db()
             print_info(f"📝 Full run log saved to {log_file}")
         return rc
     _activate_log_dir(args)
     try:
-        return _dispatch_test_command_body(args)
+        return _timed_run(args, lambda: _dispatch_test_command_body(args))
     finally:
         _snapshot_log_dir_db()
 
@@ -1124,13 +1162,13 @@ def main():
         with _common.tee_output(log_file):
             print_info(f"📝 Full run log → {log_file}")
             _activate_log_dir(args)
-            rc = _main_body(parser, args)
+            rc = _timed_run(args, lambda: _main_body(parser, args))
             _snapshot_log_dir_db()
             print_info(f"📝 Full run log saved to {log_file}")
         return rc
     _activate_log_dir(args)
     try:
-        return _main_body(parser, args)
+        return _timed_run(args, lambda: _main_body(parser, args))
     finally:
         _snapshot_log_dir_db()
 

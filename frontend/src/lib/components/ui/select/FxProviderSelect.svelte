@@ -487,7 +487,7 @@
         {#if orderedSelected.length > 0}
             <OrderableList items={orderedSelected} keyFn={routeKey} onReorder={handleReorder} {disabled}>
                 {#snippet children({item: route, index})}
-                    <div class="flex items-center gap-2 min-w-0" data-testid="fx-route-selected" data-route-key={route.key} data-priority={index + 1}>
+                    <div class="flex items-center gap-2 min-w-0" data-testid="fx-route-selected" data-route-key={route.key} data-priority={index + 1} data-warnings={getRouteWarnings(route).length}>
                         <!-- Route visualization -->
                         {#if route.isDirect}
                             {@const step = route.chainSteps[0]}
@@ -652,6 +652,7 @@
                             <button
                                 type="button"
                                 data-testid="fx-route-direct-{route.providers[0]}"
+                                data-warnings={warnings.length}
                                 class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10"
                                 onclick={() => addRoute(route)}
                             >

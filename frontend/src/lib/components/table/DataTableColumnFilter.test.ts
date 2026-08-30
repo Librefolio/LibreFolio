@@ -557,3 +557,292 @@ describe('DataTableColumnFilter', () => {
         });
     });
 });
+
+/*
+ * ── Extended branch coverage ────────────────────────────────────────────────
+ * The block above proves the seven modes' happy paths and their `null` corners.
+ * What follows chases the decisions those tests never had a reason to reach —
+ * each is still a user standing somewhere: a slider dragged instead of typed, a
+ * saved filter re-opening, a broker logo that 404s, a column whose values are
+ * ratios rather than counts. The pure edges that have no such user (the two
+ * defensive `if (!item) return` guards, the malformed-JSON `catch`) are left,
+ * and named at the bottom.
+ */
+describe('DataTableColumnFilter — extended branch coverage', () => {
+    describe('number slider & precision', () => {
+        // The slider maps a 0–100 position onto [min,max] and rounds to a precision
+        // that suits the column's magnitude: five decimals for a ratio column, whole
+        // units for one that spans thousands. One mount per band, handle at 40%.
+        it.each([
+            {numberMax: 0.5, expected: 0.2}, // range < 1     → 5 decimals
+            {numberMax: 5, expected: 2}, //     range < 10    → 3 decimals
+            {numberMax: 50, expected: 20}, //   range < 100   → 2 decimals
+            {numberMax: 500, expected: 200}, // range < 1000  → 1 decimal
+            {numberMax: 5000, expected: 2000}, // otherwise    → integer
+        ])('rounds the min handle to the precision a 0–$numberMax column needs', async ({numberMax, expected}) => {
+            await setupI18n();
+            const {onApply} = mount({type: 'number', numberMin: 0, numberMax});
+            await fireEvent.input(screen.getByTestId('filter-number-slider-min'), {target: {value: '40'}});
+            expect(lastFilter(onApply)).toEqual({type: 'number', min: expected});
+        });
+
+        it('sets the upper bound from the max handle, and lifts it again at the far right', async () => {
+            await setupI18n();
+            const {onApply} = mount({type: 'number', numberMin: 0, numberMax: 100});
+            const maxSlider = screen.getByTestId('filter-number-slider-max');
+
+            await fireEvent.input(maxSlider, {target: {value: '60'}});
+            expect(lastFilter(onApply)).toEqual({type: 'number', max: 60});
+
+            // Back to the right edge: the ceiling is the column's own maximum, which
+            // restricts nothing — with the floor untouched the whole filter is null.
+            await fireEvent.input(maxSlider, {target: {value: '99'}});
+            expect(lastFilter(onApply)).toBeNull();
+        });
+
+        it('snaps the handle flush to the edge when released within the threshold', async () => {
+            await setupI18n();
+            mount({type: 'number', numberMin: 0, numberMax: 100});
+            const minSlider = screen.getByTestId('filter-number-slider-min');
+
+            // Dropped two units from the edge: the drag leaves the thumb at 2, release snaps it to 0.
+            await fireEvent.input(minSlider, {target: {value: '2'}});
+            await fireEvent.change(minSlider);
+            expect(minSlider).toHaveValue('0');
+        });
+
+        it('rounds a decimal typed into the max field on an integer column', async () => {
+            await setupI18n();
+            const {onApply} = mount({type: 'number', numberMin: 0, numberMax: 100, integerOnly: true});
+            const max = screen.getByTestId('filter-number-max');
+
+            await commit(max, '88.7');
+
+            expect(lastFilter(onApply)).toEqual({type: 'number', max: 89});
+            expect(max).toHaveValue(89);
+        });
+
+        it('re-opens a saved number filter with both bounds in place', async () => {
+            await setupI18n();
+            mount({type: 'number', numberMin: 0, numberMax: 100, initialValue: {type: 'number', min: 10, max: 90}});
+
+            expect(screen.getByTestId('filter-number-min')).toHaveValue(10);
+            expect(screen.getByTestId('filter-number-max')).toHaveValue(90);
+        });
+    });
+
+    describe('size units & sliders', () => {
+        const MB = 1024 * 1024;
+        const GB = 1024 * MB;
+
+        it('re-opens a saved filter showing the smallest unit each bound fits (B, KB)', async () => {
+            await setupI18n();
+            mount({type: 'size', numberMin: 0, numberMax: MB, initialValue: {type: 'size', minBytes: 500, maxBytes: 2048}});
+
+            expect(screen.getByTestId('filter-size-min')).toHaveValue(500);
+            expect(screen.getByTestId('filter-size-min-unit')).toHaveValue('B');
+            expect(screen.getByTestId('filter-size-max')).toHaveValue(2);
+            expect(screen.getByTestId('filter-size-max-unit')).toHaveValue('KB');
+        });
+
+        it('shows a gigabyte-scale bound in GB', async () => {
+            await setupI18n();
+            mount({type: 'size', numberMin: 0, numberMax: 4 * GB, initialValue: {type: 'size', maxBytes: 3 * GB}});
+
+            expect(screen.getByTestId('filter-size-max')).toHaveValue(3);
+            expect(screen.getByTestId('filter-size-max-unit')).toHaveValue('GB');
+        });
+
+        it('reports a ceiling with no floor', async () => {
+            await setupI18n();
+            const {onApply} = mount({type: 'size', numberMin: 0, numberMax: 10 * MB});
+
+            await commit(screen.getByTestId('filter-size-max'), '5');
+            await choose(screen.getByTestId('filter-size-max-unit'), 'MB');
+
+            // Floor still at the column's zero, so only `maxBytes` is a real restriction.
+            expect(lastFilter(onApply)).toEqual({type: 'size', maxBytes: 5 * MB});
+        });
+
+        it('sets a lower byte bound from the size floor slider', async () => {
+            await setupI18n();
+            const {onApply} = mount({type: 'size', numberMin: 0, numberMax: 10 * MB});
+            const minSlider = screen.getByTestId('filter-size-slider-min');
+
+            await fireEvent.input(minSlider, {target: {value: '50'}});
+            await fireEvent.change(minSlider); // release: finalize/snap
+
+            const filter = lastFilter(onApply);
+            expect(filter?.type).toBe('size');
+            // Log scale: mid-track on a 0–10 MB column lands well inside the range.
+            const minBytes = (filter as {minBytes?: number}).minBytes ?? 0;
+            expect(minBytes).toBeGreaterThan(0);
+            expect(minBytes).toBeLessThan(10 * MB);
+        });
+
+        it('sets an upper byte bound from the size ceiling slider', async () => {
+            await setupI18n();
+            const {onApply} = mount({type: 'size', numberMin: 0, numberMax: 10 * MB});
+            const maxSlider = screen.getByTestId('filter-size-slider-max');
+
+            await fireEvent.input(maxSlider, {target: {value: '50'}});
+            await fireEvent.change(maxSlider);
+
+            const filter = lastFilter(onApply);
+            expect(filter?.type).toBe('size');
+            const maxBytes = (filter as {maxBytes?: number}).maxBytes ?? Infinity;
+            expect(maxBytes).toBeLessThan(10 * MB);
+        });
+    });
+
+    describe('enum option icon fallback', () => {
+        it('walks to the next candidate URL when the first icon fails to load', async () => {
+            await setupI18n();
+            mount({
+                type: 'enum',
+                enumOptions: [{value: 'x', label: 'X', iconCandidates: ['http://h/a.png', 'http://h/b.png']}],
+            });
+            const img = screen.getByTestId('filter-enum-option-x').querySelector('img.enum-option-icon') as HTMLImageElement;
+            expect(img.src).toBe('http://h/a.png');
+
+            await fireEvent.error(img);
+
+            // The dead source is dropped and the next one tried.
+            expect(img.src).toBe('http://h/b.png');
+            expect(img.dataset.fallbacks).toBe('[]');
+        });
+
+        it('hides the badge once every candidate has failed', async () => {
+            await setupI18n();
+            mount({
+                type: 'enum',
+                enumOptions: [{value: 'y', label: 'Y', iconCandidates: ['http://h/only.png']}],
+            });
+            const img = screen.getByTestId('filter-enum-option-y').querySelector('img.enum-option-icon') as HTMLImageElement;
+
+            await fireEvent.error(img);
+
+            // No candidate left: the img is hidden rather than left showing a broken-image glyph.
+            expect(img.style.visibility).toBe('hidden');
+        });
+    });
+
+    describe('multi-enum', () => {
+        it('re-opens a saved multi-enum filter with its tags already ticked', async () => {
+            await setupI18n();
+            mount({type: 'multi-enum', enumOptions: OPTIONS, initialValue: {type: 'multi-enum', selected: ['a', 'c']}});
+
+            expect(screen.getByTestId('filter-multi-enum-option-a')).toHaveAttribute('data-checked', 'true');
+            expect(screen.getByTestId('filter-multi-enum-option-b')).toHaveAttribute('data-checked', 'false');
+            expect(screen.getByTestId('filter-multi-enum-option-c')).toHaveAttribute('data-checked', 'true');
+        });
+    });
+
+    describe('currency-stack sliders & bounds', () => {
+        const RANGES = new Map([
+            ['EUR', {min: 0, max: 1000}],
+            ['USD', {min: 0, max: 1000}],
+        ]);
+
+        function mountStack(codes: string[]) {
+            return mount({
+                type: 'currency-stack',
+                currencyOptions: [...RANGES.keys()],
+                currencyMinMaxByCode: RANGES,
+                initialValue: {type: 'currency-stack', items: codes.map((code) => ({code}))},
+            });
+        }
+
+        it("sets a currency's lower bound by dragging its min handle", async () => {
+            await setupI18n();
+            const {onApply} = mountStack(['EUR']);
+
+            await fireEvent.click(screen.getByTestId('filter-currency-funnel-EUR'));
+            await fireEvent.input(screen.getByTestId('filter-currency-slider-min-EUR'), {target: {value: '30'}});
+
+            // Linear scale on a 0–1000 currency: 30 % ⇒ 300.
+            expect(lastFilter(onApply)).toEqual({type: 'currency-stack', items: [{code: 'EUR', min: 300}]});
+        });
+
+        it("sets a currency's upper bound by dragging its max handle", async () => {
+            await setupI18n();
+            const {onApply} = mountStack(['EUR']);
+
+            await fireEvent.click(screen.getByTestId('filter-currency-funnel-EUR'));
+            await fireEvent.input(screen.getByTestId('filter-currency-slider-max-EUR'), {target: {value: '70'}});
+
+            expect(lastFilter(onApply)).toEqual({type: 'currency-stack', items: [{code: 'EUR', max: 700}]});
+        });
+
+        it('drops a currency bound when its field is cleared', async () => {
+            await setupI18n();
+            const {onApply} = mountStack(['EUR']);
+
+            await fireEvent.click(screen.getByTestId('filter-currency-funnel-EUR'));
+            await fireEvent.change(screen.getByTestId('filter-currency-min-EUR'), {target: {value: '200'}});
+            expect(lastFilter(onApply)).toEqual({type: 'currency-stack', items: [{code: 'EUR', min: 200}]});
+
+            // Emptying the box means "no lower bound", not "a bound of zero".
+            await fireEvent.change(screen.getByTestId('filter-currency-min-EUR'), {target: {value: ''}});
+            expect(lastFilter(onApply)).toEqual({type: 'currency-stack', items: [{code: 'EUR'}]});
+        });
+
+        it('leaves the open editor in place when a row below it is removed', async () => {
+            // Companion to the "row above" non-regression in the block above: removing a
+            // later row must not shuffle the expanded one (currencyOpenIdx < removedIdx).
+            await setupI18n();
+            mountStack(['EUR', 'USD']);
+
+            await fireEvent.click(screen.getByTestId('filter-currency-funnel-EUR'));
+            expect(screen.getByTestId('filter-currency-editor-EUR')).toBeInTheDocument();
+
+            await fireEvent.click(screen.getByTestId('filter-currency-trash-USD'));
+
+            expect(screen.getByTestId('filter-currency-editor-EUR')).toBeInTheDocument();
+            expect(screen.queryByTestId('filter-currency-row-USD')).toBeNull();
+        });
+
+        it('snaps a currency handle flush to the edge on release', async () => {
+            await setupI18n();
+            mountStack(['EUR']);
+
+            await fireEvent.click(screen.getByTestId('filter-currency-funnel-EUR'));
+            const minSlider = screen.getByTestId('filter-currency-slider-min-EUR');
+            await fireEvent.input(minSlider, {target: {value: '2'}});
+            await fireEvent.change(minSlider); // release: finalizeCurrencySlider snaps 2 → 0
+            expect(minSlider).toHaveValue('0');
+        });
+    });
+
+    describe('date', () => {
+        it('re-opens a saved date range without re-emitting on mount', async () => {
+            await setupI18n();
+            const {onApply} = mount({type: 'date', initialValue: {type: 'date', from: '2024-01-01', to: '2024-02-01'}});
+
+            // The pass-through initialises from the saved value (getInitialDateFrom/To);
+            // the picker's display format is its own contract, so we assert only that the
+            // mode mounted and nothing was published without a user action.
+            expect(screen.getByTestId('column-filter')).toHaveAttribute('data-filter-type', 'date');
+            expect(screen.getByTestId('date-range-input-start')).toBeInTheDocument();
+            expect(onApply).not.toHaveBeenCalled();
+        });
+    });
+});
+
+/*
+ * Branches deliberately left uncovered in DataTableColumnFilter.svelte (measured
+ * with monocart/v8). None describes a user who reaches the un-taken side:
+ *
+ *   - `handleEnumIconError`'s `catch`: the component itself writes `data-fallbacks`
+ *     with `JSON.stringify`, so the parse cannot throw. It guards against a hand-
+ *     edited DOM, which no user produces.
+ *   - `normalizeCurrencyBounds` / `updateCurrency*`'s `if (!item) return`: `idx`
+ *     always comes from `{#each currencyStack}`, so the row is always present.
+ *   - the popover's `onMount` positioning math (getBoundingClientRect, rAF, scroll
+ *     re-measure). jsdom reports zeroes for every rect and does not run layout, so
+ *     these are the documented geometry exclusions in the header, not new ones.
+ *   - a handful of slider crossing-clamp arms that only fire when one thumb is
+ *     dragged strictly past the other mid-gesture; the swap-on-commit paths that
+ *     matter to the user are covered, and forcing the intermediate DOM state would
+ *     assert on the absence of a layout engine rather than on behaviour.
+ */

@@ -15,7 +15,7 @@
  * (edit+edit pairs could never be promoted, because +11 + +11 is never 0).
  */
 import {describe, expect, it} from 'vitest';
-import {cashAmountsCancel, type CashCancelable} from '../transactions/promoteHelpers';
+import {cashAmountsCancel, mergeStrings, mergeTagSets, type CashCancelable} from '../transactions/promoteHelpers';
 import type {TypeRule} from '$lib/stores/transactions/transactionTypeStore';
 
 /** Rule stub — only `cashSign` is read by the helper under test. */
@@ -132,5 +132,46 @@ describe('cashAmountsCancel — representation independence', () => {
 
     it('returns false when an amount is not a number', () => {
         expect(cashAmountsCancel(op('abc'), op('100'), resolve)).toBe(false);
+    });
+});
+
+/**
+ * mergeStrings / mergeTagSets — pure field-merge helpers used by PromoteMergeModal to pre-fill
+ * the resolved description and tags when two rows are merged into a promoted pair.
+ */
+describe('mergeStrings', () => {
+    it('returns the other side when one is empty', () => {
+        expect(mergeStrings('', 'B')).toBe('B');
+        expect(mergeStrings('A', '')).toBe('A');
+    });
+
+    it('returns both empty as empty (first-branch short-circuit)', () => {
+        expect(mergeStrings('', '')).toBe('');
+    });
+
+    it('collapses identical sides to a single copy', () => {
+        expect(mergeStrings('same', 'same')).toBe('same');
+    });
+
+    it('stacks two distinct values on separate lines', () => {
+        expect(mergeStrings('first', 'second')).toBe('first\nsecond');
+    });
+});
+
+describe('mergeTagSets', () => {
+    it('unions two lists and de-duplicates, preserving first-seen order', () => {
+        expect(mergeTagSets(['a', 'b'], ['b', 'c'])).toEqual(['a', 'b', 'c']);
+    });
+
+    it('treats a nullish first list as empty', () => {
+        expect(mergeTagSets(null as unknown as string[], ['x'])).toEqual(['x']);
+    });
+
+    it('treats a nullish second list as empty', () => {
+        expect(mergeTagSets(['x'], undefined as unknown as string[])).toEqual(['x']);
+    });
+
+    it('returns [] when both are nullish', () => {
+        expect(mergeTagSets(null as unknown as string[], null as unknown as string[])).toEqual([]);
     });
 });

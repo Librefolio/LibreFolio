@@ -21,6 +21,7 @@
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
+    import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -59,7 +60,6 @@
     // LocalStorage keys (user-scoped via storage utils)
     const STORAGE_KEY_VIEW_MODE = 'filesPage_viewMode';
     const STORAGE_KEY_ACTIVE_TAB = 'filesPage_activeTab';
-    const STORAGE_KEY_BROKER_FILTER = 'filesPage_brokerFilter';
 
     // Load view mode from user-scoped localStorage (default: list/table)
     function loadViewMode(): 'grid' | 'list' {
@@ -82,22 +82,6 @@
     }
 
     // Load broker filter from user-scoped localStorage
-    function loadBrokerFilter(): Set<number> {
-        if (typeof window === 'undefined') return new Set();
-        try {
-            const stored = getUserStorage(STORAGE_KEY_BROKER_FILTER, '');
-            if (stored) {
-                return new Set(JSON.parse(stored) as number[]);
-            }
-        } catch {
-            // Ignore
-        }
-        return new Set();
-    }
-
-    function saveBrokerFilter(filter: Set<number>): void {
-        setUserStorage(STORAGE_KEY_BROKER_FILTER, JSON.stringify(Array.from(filter)));
-    }
 
     let activeTab: Tab = 'static';
     let staticFiles: UploadedFile[] = [];
@@ -116,7 +100,6 @@
     // Broker state for BRIM multi-user
     let brokers: StoreBrokerInfo[] = [];
     let brokerMap: Map<number, BrokerInfo> = new Map();
-    let selectedBrokerIds: Set<number> = new Set();
 
     // Broker IDs where user is VIEWER (cannot upload — greyed out in selector)
     $: viewerBrokerIds = new Set(brokers.filter((b) => b.user_role === 'VIEWER').map((b) => b.id));
@@ -195,7 +178,6 @@
             activeTab = loadActiveTab();
         }
 
-        selectedBrokerIds = loadBrokerFilter();
         await loadGlobalSettings();
         await ensurePluginIconsLoaded();
         await loadBrokers();
@@ -256,10 +238,6 @@
             // subscription (see below). Default-select-all runs only on the
             // first hydration when no filter is active.
             const list = getEditableBrokers();
-            if (selectedBrokerIds.size === 0 && list.length > 0) {
-                selectedBrokerIds = new Set(list.map((b) => b.id));
-                saveBrokerFilter(selectedBrokerIds);
-            }
         } catch (e) {
             console.error('Failed to load brokers:', e);
         }
@@ -293,29 +271,6 @@
         } finally {
             loading = false;
         }
-    }
-
-    function toggleBrokerFilter(brokerId: number) {
-        if (selectedBrokerIds.has(brokerId)) {
-            selectedBrokerIds.delete(brokerId);
-        } else {
-            selectedBrokerIds.add(brokerId);
-        }
-        selectedBrokerIds = new Set(selectedBrokerIds); // Trigger reactivity
-        saveBrokerFilter(selectedBrokerIds);
-        // No loadFiles() — filter is applied client-side on already-loaded data
-    }
-
-    function selectAllBrokers() {
-        selectedBrokerIds = new Set(brokers.map((b) => b.id));
-        saveBrokerFilter(selectedBrokerIds);
-        // No loadFiles() — filter is applied client-side
-    }
-
-    function clearBrokerFilter() {
-        selectedBrokerIds = new Set();
-        saveBrokerFilter(selectedBrokerIds);
-        // No loadFiles() — filter is applied client-side
     }
 
     async function handleUpload(event: CustomEvent<{files: globalThis.File[]}>) {
@@ -500,11 +455,6 @@
                 await axiosInstance.post(`/api/v1/brokers/import/upload?broker_id=${brokerId}`, formData);
             }
 
-            // Add used broker IDs to selected filter so uploaded files are visible
-            usedBrokerIds.forEach((id) => selectedBrokerIds.add(id));
-            selectedBrokerIds = new Set(selectedBrokerIds); // Trigger reactivity
-            saveBrokerFilter(selectedBrokerIds);
-
             // Reset state
             closeBrimUploadModal();
             await loadFiles();
@@ -671,13 +621,7 @@
     }
 
     function formatDate(dateStr: string): string {
-        return new Date(dateStr).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
+        return formatDateTime(dateStr);
     }
 
     // isImage and getFileIcon — now handled internally by FileGrid component

@@ -59,6 +59,15 @@ def utils_version(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Version utility tests", verbose=verbose)
 
 
+def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
+    print_section("Utils: JS Coverage Adapter")
+    print_info("Testing: scripts/coverage_js.py")
+    print_info("Tests: line-based counting across the vitest/E2E double compilation, istanbul conversion")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_coverage_js_adapter.py", test_names)
+    return run_command(cmd, "JS coverage adapter tests", verbose=verbose)
+
+
 def utils_sector_normalization(verbose: bool = False, test_names: list = None) -> bool:
     """Test FinancialSector enum and sector normalization."""
     print_section("Utils: Sector Normalization")
@@ -158,6 +167,17 @@ Tests for utility modules and helper functions:
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
     add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version, get_version_info")
+    add_test(
+        cat,
+        "coverage-js-adapter",
+        utils_coverage_js_adapter,
+        name="JS Coverage Adapter",
+        desc="Line-based counting across the vitest/E2E double compilation, istanbul conversion",
+        # Overrides the category default: these are functions over plain dicts
+        # built inside the test. No session, no server, no file read — the module
+        # imports nothing but stdlib.
+        isolation="pure",
+    )
     add_test(cat, "sector-normalization", utils_sector_normalization, name="Sector Normalization", desc="FinancialSector enum, aliases")
     add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")

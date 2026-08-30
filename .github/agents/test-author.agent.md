@@ -461,13 +461,39 @@ Useful flags — **global, so they go before the category**:
 | flag | why you want it |
 |---|---|
 | `--workers N` | run isolation-safe units in parallel. **This is the check that matters.** |
+| `--fresh-run` | clear the run cache first. **Start every campaign with this.** |
+| `--resume` | re-run only what has not passed yet |
 | `--log-dir PATH` | one log file per unit; previous logs are archived and compressed. Defaults to `.testLog` |
 | `--log-file PATH` | the whole run into one file |
 | `--fail-fast` | stop at the first red instead of running everything |
-| `--resume` | re-run only what failed |
 | `--assume-scoped` | ignore isolation declarations (experiment only, never commit under it) |
 
 `./dev.py test -q --workers 4 --log-dir /tmp/lf_logs services all`
+
+### The cache: `--fresh-run` first, `--resume` after a fix
+
+The runner remembers which units passed, in a cache that **survives between
+invocations**. The three states are not what they look like:
+
+| | clears the cache | which units run |
+|---|---|---|
+| `--fresh-run` | **yes** | all |
+| *neither flag* | **no** | all |
+| `--resume` | no | **only those not already marked passed** |
+
+So omitting both is **not** the same as `--fresh-run`: the units all run, but the
+cache is still whatever a previous invocation left there. The next `--resume`
+then reads that stale cache and skips units on the strength of a run you are no
+longer thinking about.
+
+**The rule: `--fresh-run` to open a campaign, `--resume` only to re-check a fix.**
+
+This is not hypothetical. A full run ended 14/15; `--resume` was used to re-check
+the one red and executed **two tests** out of the whole suite — correctly, since
+everything else was marked passed — but the coverage report that came out said
+*"No JS coverage data collected"*, because almost nothing had been measured. A
+`--resume` result is evidence about the units it actually ran, and about nothing
+else: read the count before believing the summary.
 
 Extra positional args after `<category> <action>` become a pytest `-k` filter.
 
@@ -484,6 +510,9 @@ Do not report a test as finished until **all** of these are true.
 - [ ] It passes **again**, in the same invocation as its whole category.
 - [ ] It passes with the category run in parallel (`./dev.py test --workers 4 <category> all`,
       which is how the suite ships) — or the exclusivity is declared **with a reason**.
+- [ ] The green comes from a run that **actually executed it**: a `--resume` invocation
+      skips whatever the cache already calls passed, so its summary is evidence about a
+      handful of units, not about the suite. Open with `--fresh-run`.
 - [ ] It contains no `sleep` / `waitForTimeout`.
 - [ ] It contains no unfiltered `.first()` / `[0]`, no literal count it did not create.
 - [ ] It asserts on `data-testid` / event payloads, never on CSS classes or translated text.

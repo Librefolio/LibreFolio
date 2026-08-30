@@ -136,6 +136,14 @@ export default defineConfig({
         // was still missing: ±700-1300 lines of backend coverage between two
         // identical runs, and one run where the Bank of England answered HTML.
         command: `cd .. && exec ./dev.py server --test --force --no-reload --no-scheduler --workers ${SERVER_WORKERS}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
+        // The server auto-rebuilds the frontend when it thinks the sources moved,
+        // and that rebuild does not know what kind of build the runner just made.
+        // Without this it produced a *plain* bundle on top of the instrumented
+        // one, deleting the instrumentation between the build and the tests —
+        // and the run then reported "no JS coverage collected" while every test
+        // passed. Passing the flags down means a rebuild, if one still happens,
+        // reproduces the same kind and has the heap to finish it.
+        env: process.env.COVERAGE_JS === '1' ? {COVERAGE_INSTRUMENT: '1', NODE_OPTIONS: '--max-old-space-size=8192'} : {},
         url: `${BASE_URL}/api/v1/system/health`,
         // In coverage mode, always start a fresh server (don't reuse a
         // non-coverage server that may already be running on the port) —

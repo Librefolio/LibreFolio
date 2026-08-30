@@ -266,6 +266,12 @@ def find_uncovered_functions(cov_data: dict, threshold: float = 0.0,
                 "stmts": num_stmts,
                 "covered": covered,
                 "missing": missing,
+                # Uncovered branch arms. Present only for JS reports; the Python
+                # converter does not supply them, hence the 0 default. Branches are
+                # what say whether a decision was *exercised* rather than merely
+                # reached, and the frontend's branch coverage runs 16 points below
+                # its statement coverage — so this is the column to steer by.
+                "missing_branches": summary.get("missing_branches", 0),
                 "pct": pct,
                 "start_line": func_info.get("start_line", 0),
                 "priority": priority,
@@ -297,13 +303,17 @@ def print_text_report(results: list[dict], priority_filter: str = None,
     # Summary table
     by_cat = Counter(r["category"] for r in results)
     stmts_by_cat = defaultdict(int)
+    branches_by_cat = defaultdict(int)
     for r in results:
         stmts_by_cat[r["category"]] += r["stmts"]
+        branches_by_cat[r["category"]] += r.get("missing_branches", 0)
+    has_branches = any(branches_by_cat.values())
 
     print(f"{'=' * 90}")
     print("COVERAGE ANALYSIS — Functions below threshold")
     print(f"{'=' * 90}")
-    print(f"\n{'Category':<18} {'Funcs':>5} {'Stmts':>6}  {'Impact':<12} Description")
+    br_head = f" {'Branch':>7}" if has_branches else ""
+    print(f"\n{'Category':<18} {'Funcs':>5} {'Stmts':>6}{br_head}  {'Impact':<12} Description")
     print(f"{'─' * 90}")
 
     for cat in CATEGORY_ORDER:
@@ -312,12 +322,18 @@ def print_text_report(results: list[dict], priority_filter: str = None,
             continue
         emoji, impact, desc = CATEGORY_INFO[cat]
         stmts = stmts_by_cat[cat]
-        print(f"{emoji} {cat:<16} {count:>5} {stmts:>6}  {impact:<12} {desc}")
+        br = f" {branches_by_cat[cat]:>7}" if has_branches else ""
+        print(f"{emoji} {cat:<16} {count:>5} {stmts:>6}{br}  {impact:<12} {desc}")
 
     total = len(results)
     total_stmts = sum(r["stmts"] for r in results)
+    total_br = sum(r.get("missing_branches", 0) for r in results)
     print(f"{'─' * 90}")
-    print(f"{'TOTAL':<18} {total:>5} {total_stmts:>6}")
+    br_tot = f" {total_br:>7}" if has_branches else ""
+    print(f"{'TOTAL':<18} {total:>5} {total_stmts:>6}{br_tot}")
+    if has_branches:
+        print("\n  'Branch' counts uncovered branch ARMS — the decisions never taken in")
+        print("  both directions. It is the honest measure of how deep the tests go.")
 
     # Detailed list
     print(f"\n{'=' * 90}")
@@ -372,30 +388,47 @@ def print_json_report(results: list[dict]):
 
 
 def print_summary(results: list[dict]):
-    """Print a short summary of counts by category."""
+    """Print a short summary of counts by category.
+
+    Sorted by uncovered *branches* when the report supplies them, because that is
+    the question worth asking: a statement is covered as soon as it is reached,
+    while a branch is covered only when the decision has gone both ways. On this
+    codebase the two disagree by 16 points on the frontend against 10 on the
+    backend — the frontend's coverage is not merely smaller, it is shallower.
+    """
     by_cat = Counter(r["category"] for r in results)
     stmts_by_cat = defaultdict(int)
+    branches_by_cat = defaultdict(int)
     for r in results:
         stmts_by_cat[r["category"]] += r["stmts"]
+        branches_by_cat[r["category"]] += r.get("missing_branches", 0)
+    has_branches = any(branches_by_cat.values())
+
+    order = sorted(CATEGORY_ORDER, key=lambda c: -branches_by_cat[c]) if has_branches else CATEGORY_ORDER
 
     print("\n📊 Coverage Analysis Summary")
-    print(f"{'─' * 50}")
-    for cat in CATEGORY_ORDER:
+    print(f"{'─' * 62}")
+    for cat in order:
         count = by_cat.get(cat, 0)
         if count == 0:
             continue
         emoji, impact, _ = CATEGORY_INFO[cat]
         stmts = stmts_by_cat[cat]
-        print(f"  {emoji} {cat:<16}  {count:>3} funcs  {stmts:>5} stmts  [{impact}]")
-    print(f"{'─' * 50}")
-    print(f"  TOTAL:  {len(results):>3} funcs  {sum(r['stmts'] for r in results):>5} stmts")
+        br = f"  {branches_by_cat[cat]:>5} branch" if has_branches else ""
+        print(f"  {emoji} {cat:<16}  {count:>4} funcs  {stmts:>5} stmts{br}  [{impact}]")
+    print(f"{'─' * 62}")
+    tot_br = f"  {sum(r.get('missing_branches', 0) for r in results):>5} branch" if has_branches else ""
+    print(f"  TOTAL:  {len(results):>4} funcs  {sum(r['stmts'] for r in results):>5} stmts{tot_br}")
 
     # Action summary
     skip_cats = {"ABSTRACT", "PROVIDER_META", "SCHEMA_PROP", "INFRA", "NOT_IMPL", "JS_INFRA"}
     actionable = [r for r in results if r["category"] not in skip_cats]
     skip = [r for r in results if r["category"] in skip_cats]
-    print(f"\n  ✅ Skip-safe:  {len(skip):>3} funcs  {sum(r['stmts'] for r in skip):>5} stmts")
-    print(f"  🔴 Actionable: {len(actionable):>3} funcs  {sum(r['stmts'] for r in actionable):>5} stmts")
+    print(f"\n  ✅ Skip-safe:  {len(skip):>4} funcs  {sum(r['stmts'] for r in skip):>5} stmts")
+    print(f"  🔴 Actionable: {len(actionable):>4} funcs  {sum(r['stmts'] for r in actionable):>5} stmts")
+    if has_branches:
+        print("\n  'branch' = uncovered branch arms: decisions never taken in both")
+        print("  directions. Rows are ordered by it, not by statements.")
 
 
 # ---------------------------------------------------------------------------

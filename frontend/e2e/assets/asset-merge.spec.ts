@@ -32,6 +32,7 @@ interface Pair {
     targetId: number;
     targetName: string;
     targetIsin: string;
+    brokerId: number;
 }
 
 /**
@@ -58,10 +59,17 @@ async function createDuplicatePair(page: Page): Promise<Pair> {
     const ids: number[] = body.results.map((r: {asset_id: number}) => r.asset_id);
     expect(ids.length).toBe(2);
 
-    const brokers = await page.request.get(`${API}/brokers`);
-    expect(brokers.ok()).toBeTruthy();
-    const brokerId = (await brokers.json()).items[0].id;
-
+    // A broker of its own, not `items[0]`. Borrowing the first row of a shared
+    // listing is the defect rule 1 names: under a full run the brokers table is
+    // written by other specs, and whichever row happens to be first is not the
+    // test's to use. It failed exactly that way — `POST /transactions/commit`
+    // answered 500 in a 47-minute run and passed in isolation, because the
+    // broker it had just read was gone by the time it posted.
+    const broker = await page.request.post(`${API}/brokers`, {
+        data: [{name: `Merge Fixture ${suffix}`, opened_at: '2020-01-01'}],
+    });
+    expect(broker.ok(), await broker.text()).toBeTruthy();
+    const brokerId: number = (await broker.json()).results[0].broker_id;
     const tx = await page.request.post(`${API}/transactions/commit`, {
         data: {
             creates: [
@@ -76,7 +84,20 @@ async function createDuplicatePair(page: Page): Promise<Pair> {
     const committed = await tx.json();
     expect(committed.committed, JSON.stringify(committed.issues ?? [])).toBe(true);
 
-    return {sourceId: ids[0], sourceName, sourceIsin, targetId: ids[1], targetName, targetIsin};
+    return {sourceId: ids[0], sourceName, sourceIsin, targetId: ids[1], targetName, targetIsin, brokerId};
+}
+
+/**
+ * Give back everything the fixture wrote.
+ *
+ * `force=true` on the broker takes its transactions with it, which is what
+ * makes the assets deletable afterwards. The source asset is expected to be
+ * gone already after AM-002 — the merge retires it — so a failure to delete it
+ * is not an error, and the calls are best-effort for that reason.
+ */
+async function dropFixture(page: Page, pair: Pair): Promise<void> {
+    await page.request.delete(`${API}/brokers?ids=${pair.brokerId}&force=true`).catch(() => {});
+    await page.request.delete(`${API}/assets?asset_ids=${pair.sourceId}&asset_ids=${pair.targetId}`).catch(() => {});
 }
 
 /** There is no `GET /assets/{id}`: existence is read from the bulk endpoint. */
@@ -132,6 +153,10 @@ test.describe('Assets — merge', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
         pair = await createDuplicatePair(page);
+    });
+
+    test.afterEach(async ({page}) => {
+        if (pair) await dropFixture(page, pair);
     });
 
     // -----------------------------------------------------------------------

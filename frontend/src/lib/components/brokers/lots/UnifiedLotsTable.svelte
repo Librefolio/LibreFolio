@@ -13,6 +13,8 @@
     import type {z} from 'zod';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {safeDecimal, safeNumber} from '$lib/types';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import {filterStates, findBroker, formatLotQuantity as formatQuantity, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumNumeric, weightedAverage} from './unifiedLotsTableHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotCustodySummarySchema = z.infer<typeof schemas.LotCustodySummarySchema>;
@@ -63,7 +65,6 @@
     }
 
     const PRIMARY_STATE_ORDER: PrimaryLotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DEGRADED'];
-    const SECONDARY_STATE_ORDER: LotState[] = ['DISTRIBUTED', 'IN_TRANSIT', 'DEGRADED'];
     const STATUS_FILTER_VALUES: LotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DISTRIBUTED', 'IN_TRANSIT', 'DEGRADED'];
     const IN_TRANSIT_FILTER_VALUE = '__IN_TRANSIT__';
 
@@ -83,15 +84,8 @@
         return translated === key ? fallback : translated;
     }
 
-    function formatQuantity(value: number | null): string {
-        return value == null ? '—' : value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
-    }
-
-    function formatPercent(value: number | null): string {
-        if (value == null) return '—';
-        const sign = value > 0 ? '+' : '';
-        return `${sign}${(value * 100).toFixed(2)}%`;
-    }
+    /** These come from the API as fractions, hence scale 100. */
+    const formatPercent = (value: number | null): string => sharedFormatPercent(value, {scale: 100});
 
     function stateLabel(state: LotState): string {
         switch (state) {
@@ -124,22 +118,6 @@
         };
     }
 
-    function primaryState(stateList: readonly string[]): PrimaryLotState {
-        if (stateList.includes('PARTIALLY_CLOSED')) return 'PARTIALLY_CLOSED';
-        if (stateList.includes('OPEN')) return 'OPEN';
-        if (stateList.includes('CLOSED')) return 'CLOSED';
-        return 'DEGRADED';
-    }
-
-    function secondaryStates(stateList: readonly string[]): LotState[] {
-        return SECONDARY_STATE_ORDER.filter((state) => stateList.includes(state));
-    }
-
-    function filterStates(stateList: readonly string[]): LotState[] {
-        const normalized = [primaryState(stateList), ...secondaryStates(stateList)];
-        return Array.from(new Set(normalized));
-    }
-
     function brokerStyle(brokerId: number): string {
         const color = getBrokerColor(brokerId, brokers);
         return `--broker-bg:${color.bg};--broker-text:${color.text};--broker-dark-bg:${color.darkBg};--broker-dark-text:${color.darkText};--broker-vivid:${color.vivid};--broker-vivid-light:${color.vividLight};`;
@@ -149,10 +127,7 @@
         return 'lot-row-tinted';
     }
 
-    function getBroker(brokerId: number | null | undefined): BrokerLike | null {
-        if (brokerId == null) return null;
-        return brokers.find((broker) => broker.id === brokerId) ?? null;
-    }
+    const getBroker = (brokerId: number | null | undefined): BrokerLike | null => findBroker(brokerId, brokers);
 
     function getBrokerName(brokerId: number | null | undefined): string {
         if (brokerId == null) return label('brokers.lots.inTransit', 'In transit');
@@ -289,12 +264,6 @@
         };
     }
 
-    function sameIdSet(left: readonly string[], right: readonly string[]): boolean {
-        if (left.length !== right.length) return false;
-        const rightSet = new Set(right);
-        return left.every((value) => rightSet.has(value));
-    }
-
     let rows = $derived.by<DisplayRow[]>(() =>
         lots.map((lot) => {
             const rawStates = lot.states ?? [];
@@ -415,38 +384,12 @@
     let hasPositiveAssetIncome = $derived.by(() => rows.some((row) => (row.assetIncome ?? 0) > 0));
     let hasNetCosts = $derived.by(() => rows.some((row) => (row.allocatedFees ?? 0) !== 0 || (row.allocatedTaxes ?? 0) !== 0));
 
-    function sumNumeric(footerRows: readonly DisplayRow[], getValue: (row: DisplayRow) => number | null): number | null {
-        let total = 0;
-        let count = 0;
-        for (const row of footerRows) {
-            const value = getValue(row);
-            if (value == null || !Number.isFinite(value)) continue;
-            total += value;
-            count += 1;
-        }
-        return count > 0 ? total : null;
-    }
-
-    function weightedAverage(footerRows: readonly DisplayRow[], getValue: (row: DisplayRow) => number | null, getWeight: (row: DisplayRow) => number | null): number | null {
-        let numerator = 0;
-        let denominator = 0;
-        for (const row of footerRows) {
-            const value = getValue(row);
-            const weight = getWeight(row);
-            if (value == null || weight == null || !Number.isFinite(value) || !Number.isFinite(weight) || weight === 0) continue;
-            const absWeight = Math.abs(weight);
-            numerator += value * absWeight;
-            denominator += absWeight;
-        }
-        return denominator > 0 ? numerator / denominator : null;
-    }
-
     function buildFooterCells(footerRows: DisplayRow[]): Record<string, FooterCellContent> {
         const totalPnl = sumNumeric(footerRows, (row) => row.totalPnl);
         const openingValueSum = sumNumeric(footerRows, (row) => row.openingValue);
-        const totalReturn = totalPnl != null && openingValueSum != null && openingValueSum !== 0 ? totalPnl / openingValueSum : null;
+        const totalReturn = ratioOrNull(totalPnl, openingValueSum);
         const netTotalPnl = sumNumeric(footerRows, (row) => row.netTotalPnl);
-        const netTotalReturn = netTotalPnl != null && openingValueSum != null && openingValueSum !== 0 ? netTotalPnl / openingValueSum : null;
+        const netTotalReturn = ratioOrNull(netTotalPnl, openingValueSum);
 
         return {
             'opening-date': label('brokers.lots.footerTotals', label('assets.distribution.total', 'Totals')),

@@ -118,9 +118,21 @@ test.describe('Tooltip component — pinned hover/click model', () => {
     test('click-outside dismisses a pinned tooltip immediately', async ({page}) => {
         const trigger = await openAdjustmentCostBasisTooltipTrigger(page);
         await trigger.click();
-        await expect(page.getByTestId('tooltip-content')).toBeVisible({timeout: 1_000});
+        const tooltip = page.getByTestId('tooltip-content');
+        await expect(tooltip).toBeVisible({timeout: 1_000});
+
+        // Being *visible* is not the same as being *dismissable*: the outside-click
+        // listener is attached by an `$effect`, which runs after the element is in
+        // the DOM. Clicking inside that window hits nobody, and a missed dismissal
+        // does not just arrive late — the tooltip stays pinned for its 30-second
+        // grace period, so the assertion below could never pass. That is what made
+        // this test fail about one run in four under load; a longer timeout would
+        // have hidden it rather than fixed it.
+        await expect(tooltip).toHaveAttribute('data-dismissable', 'true', {timeout: 2_000});
 
         await page.mouse.click(10, 10);
-        await expect(page.getByTestId('tooltip-content')).not.toBeVisible({timeout: 1_000});
+        // Retrying assertion: it returns as soon as the tooltip is gone, so the
+        // generous ceiling costs nothing when things are fast.
+        await expect(tooltip).not.toBeVisible({timeout: 5_000});
     });
 });

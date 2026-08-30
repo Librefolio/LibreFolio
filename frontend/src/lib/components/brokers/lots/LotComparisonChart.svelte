@@ -11,15 +11,38 @@
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
-    import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, computeDensity, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
+    import {aggregateLineSeries, cascadeResolution, chooseInitialResolution, computeDensity, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {finiteNumber} from '$lib/utils/core/finiteNumber';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
-    import {safeScalar, safeString} from '$lib/types';
+    import {formatAxisDate, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
+    import {safeDecimal} from '$lib/types';
+    import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
+    import {formatAxisNumber as sharedFormatAxisNumber, normalizeZero, resolveBrokerName, withAlpha} from './lotChartShared';
+    import {
+        buildBucketInfos,
+        buildZoomWindowForRange as sharedBuildZoomWindowForRange,
+        computeAutoYAxisRange,
+        computeBucketCounts as sharedComputeBucketCounts,
+        findPointAtOrBefore,
+        formatAxisPercent,
+        incomeEventColor as sharedIncomeEventColor,
+        logicalRangeFromBuckets,
+        lotColor as sharedLotColor,
+        lotIdFromSeriesId,
+        parseRequiredNumber,
+        parseTimeMs,
+        pointKey,
+        safeValueSource,
+        seriesValue,
+        tooltipRawDate,
+        tooltipTimestamp,
+        tooltipXValue,
+        type BucketInfo,
+    } from './lotComparisonChartHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -80,23 +103,6 @@
         totalReturn: number | null;
         openingValue: number;
         pnlWithIncome: number;
-    }
-
-    interface BucketInfo {
-        date: string;
-        bucketStart: string;
-        bucketEnd: string;
-        resolution: ChartResolution;
-    }
-
-    interface AutoYAxisRange {
-        min: number;
-        max: number;
-    }
-
-    interface StackAccumulator {
-        positive: Map<string, number>;
-        negative: Map<string, number>;
     }
 
     type ChartSeriesPoint = ReturnType<typeof namedPoint> & {
@@ -169,9 +175,30 @@
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
-    let resizeObserver: ResizeObserver | null = null;
     let resizeAnimationFrame: number | null = null;
     let lastObservedChartSize: {width: number; height: number} | null = null;
+    // The one caller that reads the entry: it thresholds sub-pixel jitter off the
+    // observed content box and resizes ECharts to that exact size (rAF-coalesced),
+    // rather than letting ECharts re-measure. `entry` is the forwarded first
+    // ResizeObserverEntry — see createResizeWatcher.
+    const resizeWatcher = createResizeWatcher((entry) => {
+        if (!entry) return;
+
+        const width = Math.round(entry.contentRect.width * 100) / 100;
+        const height = Math.round(entry.contentRect.height * 100) / 100;
+        if (width <= 0 || height <= 0) return;
+        if (lastObservedChartSize && Math.abs(lastObservedChartSize.width - width) < 0.5 && Math.abs(lastObservedChartSize.height - height) < 0.5) return;
+
+        lastObservedChartSize = {width, height};
+        if (resizeAnimationFrame != null) return;
+
+        resizeAnimationFrame = requestAnimationFrame(() => {
+            resizeAnimationFrame = null;
+            if (!chartInstance || !lastObservedChartSize) return;
+            chartInstance.resize(lastObservedChartSize);
+            scheduleResolutionSync();
+        });
+    });
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
@@ -182,79 +209,38 @@
     let resolutionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     let lastResolutionSourceSignature: string | null = null;
 
-    function safeValueSource(value: LotSummarySchema['value_source']): LotValueSource | null {
-        const source = safeString(value);
-        return source === 'MARKET_PRICE' || source === 'ESTIMATED_AT_COST' ? source : null;
-    }
-
-    function parseNumber(value: string | Array<string | null> | null | undefined): number | null {
-        const raw = safeString(value);
-        if (raw == null) return null;
-        const parsed = Number.parseFloat(raw);
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    function parseRequiredNumber(value: string | Array<string | null> | null | undefined): number {
-        return parseNumber(value) ?? 0;
-    }
-
-    function normalizeZero(value: number): number {
-        return Object.is(value, -0) ? 0 : value;
-    }
+    /** Local name for this chart's numeric unwrap. Delegates to the shared
+     *  `safeDecimal`: the body used to be copied five times, and two of those
+     *  copies went through `safeString`, which answers `null` for a value that
+     *  is already a number. */
+    const parseNumber = (value: unknown): number | null => safeDecimal(value);
 
     function syncTheme() {
         if (typeof document === 'undefined') return;
         isDark = document.documentElement.classList.contains('dark');
     }
 
-    function clamp(value: number, min: number, max: number): number {
-        return Math.min(max, Math.max(min, value));
-    }
-
-    function withAlpha(color: string, alpha: number): string {
-        const hslMatch = color.match(/^hsl\((.+)\)$/i);
-        if (hslMatch) return `hsla(${hslMatch[1]}, ${alpha})`;
-        const hexMatch = color.match(/^#([0-9a-f]{6})$/i);
-        if (hexMatch)
-            return `${color}${Math.round(clamp(alpha, 0, 1) * 255)
-                .toString(16)
-                .padStart(2, '0')}`;
-        return color;
-    }
-
+    // `parseDisplayDate` rather than `new Date`: the values here are bare
+    // `YYYY-MM-DD` days from the API, and `new Date('2024-03-15')` is midnight
+    // UTC — which renders as 14 March for every user west of Greenwich.
     function formatShortDate(value: string): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return value;
+        const date = parseDisplayDate(value);
+        if (!date) return value;
         return date.toLocaleDateString($currentLanguage || undefined, {day: '2-digit', month: '2-digit', year: '2-digit'});
     }
 
     function formatLongDate(value: number | string): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return String(value);
+        const date = parseDisplayDate(value);
+        if (!date) return String(value);
         return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
-    function formatPercent(value: number): string {
-        const normalized = normalizeZero(value);
-        const sign = normalized > 0 ? '+' : '';
-        return `${sign}${normalized.toFixed(2)}%`;
-    }
+    /** This chart's numbers are already percentages, hence scale 1 (the default). */
+    const formatPercent = (value: number): string => sharedFormatPercent(value);
 
-    function formatAxisPercent(value: number): string {
-        const normalized = normalizeZero(value);
-        const abs = Math.abs(normalized);
-        const decimals = abs < 10 && abs % 1 !== 0 ? 2 : 1;
-        return `${normalized.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: decimals})}%`;
-    }
-
-    function formatAxisNumber(value: number): string {
-        const normalized = normalizeZero(value);
-        const abs = Math.abs(normalized);
-        if (abs >= 1000) {
-            return new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(normalized);
-        }
-        return normalized.toLocaleString(undefined, {minimumFractionDigits: abs < 10 && abs % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2});
-    }
+    /** Machine locale for numbers (as opposed to `$currentLanguage` for words),
+     *  matching the original inline formatter. */
+    const formatAxisNumber = (value: number): string => sharedFormatAxisNumber(value);
 
     function formatAxisCurrency(value: number): string {
         const normalized = normalizeZero(value);
@@ -271,20 +257,13 @@
         }
     }
 
-    function lotColor(lotId: number): string {
-        const hue = Math.round((lotId * 137.508) % 360);
-        return isDark ? `hsl(${hue} 78% 68%)` : `hsl(${hue} 68% 44%)`;
-    }
+    /** Wrapper: passes the reactive `isDark` to the shared deterministic lot color. */
+    const lotColor = (lotId: number): string => sharedLotColor(lotId, isDark);
 
-    function brokerName(brokerId: number | null): string {
-        if (brokerId == null) return '—';
-        return brokers.find((broker) => broker.id === brokerId)?.name ?? `#${brokerId}`;
-    }
+    const brokerName = (brokerId: number | null): string => resolveBrokerName(brokerId, brokers);
 
-    function incomeEventColor(type: LotIncomeEvent['type']): string {
-        if (type === 'DIVIDEND') return isDark ? '#2dd4bf' : '#0f766e';
-        return isDark ? '#a78bfa' : '#6d28d9';
-    }
+    /** Wrapper: passes the reactive `isDark` to the shared income-event color. */
+    const incomeEventColor = (type: LotIncomeEvent['type']): string => sharedIncomeEventColor(type, isDark);
 
     function lotLabel(openingDate: string, direction: 'LONG' | 'SHORT'): string {
         const dateLabel = formatShortDate(openingDate);
@@ -296,76 +275,12 @@
         return !translated || translated === 'brokers.lots.lotLabel' ? `Lot ${dateLabel}` : translated;
     }
 
-    function pointKey(lotId: number, date: string): string {
-        return `${lotId}:${date}`;
-    }
-
-    function seriesValue(param: any): number | null {
-        const rawValue = Array.isArray(param?.value) ? param.value[1] : param?.value;
-        if (rawValue == null || rawValue === '') return null;
-        const value = Number(rawValue);
-        return Number.isFinite(value) ? value : null;
-    }
-
-    function parseTimeMs(value: unknown): number | null {
-        if (value instanceof Date) {
-            const time = value.getTime();
-            return Number.isFinite(time) ? time : null;
-        }
-        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-        if (typeof value !== 'string' || value.trim() === '') return null;
-
-        const numeric = Number(value);
-        if (Number.isFinite(numeric)) return numeric;
-
-        const parsed = Date.parse(value);
-        return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    function tooltipXValue(param: any): unknown {
-        if (param?.axisValue != null) return param.axisValue;
-        if (Array.isArray(param?.data?.value)) return param.data.value[0];
-        if (Array.isArray(param?.data)) return param.data[0];
-        if (Array.isArray(param?.value)) return param.value[0];
-        return null;
-    }
-
-    function tooltipRawDate(params: any[]): number | string {
-        for (const param of params) {
-            const raw = tooltipXValue(param);
-            if (typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '')) return raw;
-        }
-        return '';
-    }
-
-    function tooltipTimestamp(params: any[]): number | null {
-        return parseTimeMs(tooltipRawDate(params));
-    }
-
-    function findPointAtOrBefore<T extends {date: string}>(points: ReadonlyArray<T>, timestampMs: number): T | null {
-        let found: T | null = null;
-        for (const point of points) {
-            const pointTime = parseTimeMs(point.date);
-            if (pointTime == null) continue;
-            if (pointTime > timestampMs) break;
-            found = point;
-        }
-        return found;
-    }
-
     function valueEstimatedLineColor(): string {
         return isDark ? '#94a3b8' : '#64748b';
     }
 
     function aggregateReturnColor(): string {
         return isDark ? '#fbbf24' : '#d97706';
-    }
-
-    function lotIdFromSeriesId(param: any, prefix: string): number | null {
-        const raw = typeof param?.seriesId === 'string' || typeof param?.seriesId === 'number' ? String(param.seriesId) : '';
-        if (!raw.startsWith(prefix)) return null;
-        const lotId = Number(raw.slice(prefix.length));
-        return Number.isInteger(lotId) ? lotId : null;
     }
 
     function returnTooltipLotId(param: any): number | null {
@@ -416,103 +331,9 @@
         });
     }
 
-    function chartSeriesPointValue(raw: unknown, index: number): {key: string; value: number | null} | null {
-        const source = Array.isArray(raw) ? raw : raw && typeof raw === 'object' && 'value' in raw ? (raw as {value?: unknown}).value : raw;
-
-        if (Array.isArray(source)) {
-            const x = source[0];
-            if (typeof x !== 'string' && typeof x !== 'number') return null;
-            const y = source[1];
-            return {key: String(x), value: y == null ? null : finiteNumber(y)};
-        }
-
-        const value = source == null ? null : finiteNumber(source);
-        return value == null ? null : {key: `__index_${index}`, value};
-    }
-
-    function paddedAutoYAxisRange(min: number, max: number): AutoYAxisRange {
-        const range = max - min;
-        const magnitude = Math.max(Math.abs(min), Math.abs(max));
-        const padding = range > 0 ? range * 0.05 : Math.max(magnitude * 0.05, Number.EPSILON);
-        let paddedMin = min - padding;
-        let paddedMax = max + padding;
-
-        if (min > 0 && paddedMin <= 0) paddedMin = min * 0.95;
-        if (max < 0 && paddedMax >= 0) paddedMax = max * 0.95;
-
-        return {min: paddedMin, max: paddedMax};
-    }
-
-    function computeAutoYAxisRange(series: echarts.SeriesOption[]): AutoYAxisRange | null {
-        let min: number | null = null;
-        let max: number | null = null;
-        const stackTotals = new Map<string, StackAccumulator>();
-
-        for (const item of series) {
-            const data = (item as {data?: unknown[]}).data;
-            if (!Array.isArray(data)) continue;
-
-            const stack = (item as {stack?: unknown}).stack;
-            const stackKey = typeof stack === 'string' && stack.trim() !== '' ? stack : null;
-            let accumulator: StackAccumulator | null = null;
-            if (stackKey) {
-                accumulator = stackTotals.get(stackKey) ?? {positive: new Map<string, number>(), negative: new Map<string, number>()};
-                stackTotals.set(stackKey, accumulator);
-            }
-
-            for (const [index, raw] of data.entries()) {
-                const point = chartSeriesPointValue(raw, index);
-                if (!point || point.value == null) continue;
-
-                let plottedValue = point.value;
-                if (accumulator) {
-                    const totals = plottedValue >= 0 ? accumulator.positive : accumulator.negative;
-                    plottedValue = (totals.get(point.key) ?? 0) + plottedValue;
-                    totals.set(point.key, plottedValue);
-                }
-
-                if (plottedValue === 0) continue;
-                min = min == null ? plottedValue : Math.min(min, plottedValue);
-                max = max == null ? plottedValue : Math.max(max, plottedValue);
-            }
-        }
-
-        return min == null || max == null ? null : paddedAutoYAxisRange(min, max);
-    }
-
-    function buildBucketInfos(sourceDates: string[], resolution: ChartResolution): BucketInfo[] {
-        if (resolution === 'daily') {
-            return sourceDates.map((date) => ({date, bucketStart: date, bucketEnd: date, resolution}));
-        }
-
-        const buckets: BucketInfo[] = [];
-        let lastBucketEnd: string | null = null;
-
-        for (const date of sourceDates) {
-            const {bucketStart, bucketEnd} = mapDateToBucket(date, resolution);
-            if (bucketEnd === lastBucketEnd) continue;
-
-            buckets.push({date: bucketEnd, bucketStart, bucketEnd, resolution});
-            lastBucketEnd = bucketEnd;
-        }
-
-        return buckets;
-    }
-
-    function computeBucketCounts(startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
-        let dailyCount = 0;
-        const weekly = new Set<string>();
-        const monthly = new Set<string>();
-
-        for (const date of resolutionSourceDates) {
-            if (date < startDate || date > endDate) continue;
-            dailyCount += 1;
-            weekly.add(mapDateToBucket(date, 'weekly').bucketEnd);
-            monthly.add(mapDateToBucket(date, 'monthly').bucketEnd);
-        }
-
-        return {dailyCount, weeklyCount: weekly.size, monthlyCount: monthly.size};
-    }
+    /** Wrapper: counts daily/weekly/monthly buckets over the component's reactive
+     *  `resolutionSourceDates`. */
+    const computeBucketCounts = (startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number} => sharedComputeBucketCounts(resolutionSourceDates, startDate, endDate);
 
     function plotWidthPx(): number {
         return chartInstance?.getWidth() ?? chartContainer?.clientWidth ?? 0;
@@ -525,39 +346,11 @@
 
         const window = chartInstance ? getChartZoomWindow(chartInstance) : zoomWindow;
         if (window) zoomWindow = window;
-        const start = window?.start ?? 0;
-        const end = window?.end ?? 100;
-        const maxIndex = Math.max(buckets.length - 1, 0);
-        const startIndex = Math.max(0, Math.min(maxIndex, Math.floor((start / 100) * maxIndex)));
-        const endIndex = Math.max(startIndex, Math.min(maxIndex, Math.ceil((end / 100) * maxIndex)));
-        const startBucket = buckets[startIndex];
-        const endBucket = buckets[endIndex];
-
-        return {
-            startDate: startBucket.bucketStart,
-            endDate: endBucket.bucketEnd,
-        };
+        return logicalRangeFromBuckets(buckets, window?.start ?? 0, window?.end ?? 100);
     }
 
-    function buildZoomWindowForRange(resolution: ChartResolution, startDate: string, endDate: string): {start: number; end: number} {
-        const buckets = buildBucketInfos(resolutionSourceDates, resolution);
-        if (buckets.length <= 1) return {start: 0, end: 100};
-
-        const startIndex = Math.max(
-            0,
-            buckets.findIndex((bucket) => bucket.bucketEnd >= startDate),
-        );
-        const endIndex = Math.max(
-            startIndex,
-            buckets.findLastIndex((bucket) => bucket.bucketStart <= endDate),
-        );
-        const denominator = buckets.length - 1;
-
-        return {
-            start: (startIndex / denominator) * 100,
-            end: (endIndex / denominator) * 100,
-        };
-    }
+    /** Wrapper: builds the zoom window over the component's reactive `resolutionSourceDates`. */
+    const buildZoomWindowForRange = (resolution: ChartResolution, startDate: string, endDate: string): {start: number; end: number} => sharedBuildZoomWindowForRange(resolutionSourceDates, resolution, startDate, endDate);
 
     function syncInitialResolution(): void {
         if (currentResolution !== 'daily' || zoomWindow || resolutionSourceDates.length === 0) return;
@@ -1443,27 +1236,7 @@
     }
 
     function setupResizeObserver() {
-        if (!chartContainer || resizeObserver) return;
-        resizeObserver = new ResizeObserver((entries) => {
-            const entry = entries[0];
-            if (!entry) return;
-
-            const width = Math.round(entry.contentRect.width * 100) / 100;
-            const height = Math.round(entry.contentRect.height * 100) / 100;
-            if (width <= 0 || height <= 0) return;
-            if (lastObservedChartSize && Math.abs(lastObservedChartSize.width - width) < 0.5 && Math.abs(lastObservedChartSize.height - height) < 0.5) return;
-
-            lastObservedChartSize = {width, height};
-            if (resizeAnimationFrame != null) return;
-
-            resizeAnimationFrame = requestAnimationFrame(() => {
-                resizeAnimationFrame = null;
-                if (!chartInstance || !lastObservedChartSize) return;
-                chartInstance.resize(lastObservedChartSize);
-                scheduleResolutionSync();
-            });
-        });
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function renderChart() {
@@ -1473,8 +1246,7 @@
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
-            resizeObserver?.disconnect();
-            resizeObserver = null;
+            resizeWatcher.disconnect();
             resetResizeObserverState();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
@@ -1523,7 +1295,7 @@
         return () => {
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
-            resizeObserver?.disconnect();
+            resizeWatcher.disconnect();
             resetResizeObserverState();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;

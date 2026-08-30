@@ -12,6 +12,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {goto} from '$app/navigation';
     import {ExternalLink, Layers} from 'lucide-svelte';
     import {t} from '$lib/i18n';
@@ -23,7 +24,7 @@
     import {truncateName} from '$lib/utils/text';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {safeNumber, safeString} from '$lib/types';
+    import {safeDecimal, safeNumber, safeString} from '$lib/types';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -97,7 +98,7 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let scrollWrapper: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
-    let resizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => chartInstance?.resize());
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let isDark = $state(false);
@@ -148,12 +149,10 @@
     // Not `safeNumber` from $lib/types: this one parses a decimal *string*
     // and substitutes 0 for a missing or unparseable value, because a chart
     // series cannot carry a null. Keep the two apart.
-    function parseNumberOrZero(value: string | (string | null)[] | null | undefined): number {
-        const raw = safeString(value);
-        if (raw == null) return 0;
-        const parsed = Number.parseFloat(raw);
-        return Number.isFinite(parsed) ? parsed : 0;
-    }
+    /** Local name for this chart's numeric unwrap, which treats "missing" as
+     *  zero — a chart axis has no room for "unknown". The parsing itself is the
+     *  shared `safeDecimal`; only the fallback is this file's own choice. */
+    const parseNumberOrZero = (value: unknown): number => safeDecimal(value) ?? 0;
 
     function escapeRichText(value: string): string {
         return value.replace(/[{}]/g, '');
@@ -1030,10 +1029,7 @@
     }
 
     function setupResizeObserver() {
-        if (!chartContainer) return;
-        if (resizeObserver) return;
-        resizeObserver = new ResizeObserver(() => chartInstance?.resize());
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function renderChart() {
@@ -1043,8 +1039,7 @@
 
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
-            resizeObserver?.disconnect();
-            resizeObserver = null;
+            resizeWatcher.disconnect();
             chartInstance.dispose();
             chartInstance = undefined;
         }
@@ -1104,7 +1099,7 @@
         return () => {
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
-            resizeObserver?.disconnect();
+            resizeWatcher.disconnect();
             chartInstance?.dispose();
         };
     });

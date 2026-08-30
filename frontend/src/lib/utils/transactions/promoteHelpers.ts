@@ -45,3 +45,20 @@ export function cashAmountsCancel(a: CashCancelable, b: CashCancelable, resolveR
     // Exact cancellation: sum must be 0 within floating-point epsilon
     return Math.abs(numA + numB) / maxAbs < 1e-9;
 }
+
+/**
+ * Merge two free-text field values (e.g. descriptions) for the promote-merge modal.
+ * An empty side yields the other; identical sides collapse to one; otherwise the two are
+ * stacked on separate lines so nothing the user wrote is silently dropped.
+ */
+export function mergeStrings(a: string, b: string): string {
+    if (!a) return b;
+    if (!b) return a;
+    if (a === b) return a;
+    return `${a}\n${b}`;
+}
+
+/** Union of two tag lists, de-duplicated and order-preserving; nullish lists are treated as empty. */
+export function mergeTagSets(a: string[], b: string[]): string[] {
+    return [...new Set([...(a ?? []), ...(b ?? [])])];
+}

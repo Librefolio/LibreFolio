@@ -762,3 +762,112 @@ describe('ScheduledInvestmentEditor — telling an echo apart from a real update
         await waitFor(() => expect(tableRows()).toHaveLength(rowsAfterEdit));
     });
 });
+
+describe('ScheduledInvestmentEditor — bulk deleting periods (gap reflow)', () => {
+    /** Three contiguous four-month periods, distinct rates so the survivors are identifiable. */
+    function threePeriods(): Record<string, unknown> {
+        return {
+            initial_value: {code: 'EUR', amount: '5000'},
+            interest_type: 'COMPOUND',
+            day_count: 'ACT/360',
+            schedule: [
+                {start_date: '2024-01-01', end_date: '2024-04-30', annual_rate: '0.0100', maturation_frequency: 'MONTHLY', generate_interest: false},
+                {start_date: '2024-05-01', end_date: '2024-08-31', annual_rate: '0.0200', maturation_frequency: 'MONTHLY', generate_interest: false},
+                {start_date: '2024-09-01', end_date: '2024-12-31', annual_rate: '0.0300', maturation_frequency: 'MONTHLY', generate_interest: false},
+            ],
+            late_interest: null,
+            asset_events: [],
+        };
+    }
+
+    async function selectRow(rowIndex: number) {
+        const id = tableRows()[rowIndex].getAttribute('data-row-id');
+        await fireEvent.click(screen.getByTestId(`dt-row-checkbox-${id}`));
+    }
+
+    it('auto-resolves a head deletion by handing its range to the next survivor — no dialog', async () => {
+        await setupI18n();
+        const {onchange} = mount(threePeriods());
+
+        await selectRow(0);
+        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+
+        // A head block has no predecessor to negotiate a seam with, so no modal.
+        expect(screen.queryByTestId('boundary-modal-confirm')).toBeNull();
+        const schedule = lastSchedule(onchange);
+        expect(schedule).toHaveLength(2);
+        // The freed range folds forward: the new first period still opens the schedule.
+        expect(schedule[0].start_date).toBe('2024-01-01');
+        expect(schedule[0].annual_rate).toBe('0.0200');
+        expect(schedule[1].end_date).toBe('2024-12-31');
+    });
+
+    it('auto-resolves a tail deletion by extending the previous survivor — no dialog', async () => {
+        await setupI18n();
+        const {onchange} = mount(threePeriods());
+
+        await selectRow(2);
+        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+
+        expect(screen.queryByTestId('boundary-modal-confirm')).toBeNull();
+        const schedule = lastSchedule(onchange);
+        expect(schedule).toHaveLength(2);
+        // The freed range folds backward: the new last period still closes the schedule.
+        expect(schedule[0].start_date).toBe('2024-01-01');
+        expect(schedule[1].end_date).toBe('2024-12-31');
+        expect(schedule[1].annual_rate).toBe('0.0200');
+    });
+
+    it('asks where to place the seam when a middle block is deleted, then reflows the gap', async () => {
+        await setupI18n();
+        const {onchange} = mount(threePeriods());
+
+        await selectRow(1);
+        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+
+        // A middle block is bounded on both sides, so the user must place the seam.
+        await waitFor(() => expect(screen.getByTestId('boundary-modal-confirm')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('boundary-modal-confirm'));
+
+        const schedule = lastSchedule(onchange);
+        expect(schedule).toHaveLength(2);
+        // The neighbours split the gap; the outer edges of the schedule cannot move.
+        expect(schedule[0].start_date).toBe('2024-01-01');
+        expect(schedule[0].annual_rate).toBe('0.0100');
+        expect(schedule[1].end_date).toBe('2024-12-31');
+        expect(schedule[1].annual_rate).toBe('0.0300');
+    });
+
+    it('leaves the schedule untouched when the middle-delete dialog is cancelled', async () => {
+        await setupI18n();
+        const {onchange} = mount(threePeriods());
+
+        await selectRow(1);
+        await fireEvent.click(screen.getByTestId('schedule-bulk-delete'));
+        await waitFor(() => expect(screen.getByTestId('boundary-modal-cancel')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('boundary-modal-cancel'));
+
+        expect(onchange).not.toHaveBeenCalled();
+        expect(tableRows()).toHaveLength(3);
+    });
+});
+
+describe('ScheduledInvestmentEditor — editing an event note', () => {
+    it('rewrites the note the user pointed at, leaving value and siblings alone', async () => {
+        await setupI18n();
+        const value = {
+            ...twoPeriods(),
+            asset_events: [
+                {date: '2024-03-31', type: 'INTEREST', value: {code: 'EUR', amount: '10'}, notes: 'first'},
+                {date: '2024-06-30', type: 'INTEREST', value: {code: 'EUR', amount: '20'}, notes: 'second'},
+            ],
+        };
+        const {onchange} = mount(value);
+
+        await fireEvent.input(screen.getByTestId('schedule-event-notes-1'), {target: {value: 'amended'}});
+
+        const events = lastPayload(onchange)?.asset_events;
+        expect(events[0]).toMatchObject({notes: 'first', value: {amount: '10'}});
+        expect(events[1]).toMatchObject({notes: 'amended', value: {amount: '20'}});
+    });
+});

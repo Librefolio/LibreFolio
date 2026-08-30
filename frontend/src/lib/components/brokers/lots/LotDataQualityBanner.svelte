@@ -14,10 +14,10 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
+    import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
     import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, Crosshair} from 'lucide-svelte';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-
-    type IssueSeverity = 'error' | 'warning' | 'info';
+    import {buildIssueGroups, groupedSeverity, type IssueGroup, type IssueSeverity} from './lotDataQualityHelpers';
 
     interface Props {
         /** Raw FIFO data-quality issues (one per lot for lot-scoped codes). */
@@ -33,63 +33,13 @@
 
     let expanded = $state(false);
 
-    const severityOrder: Record<string, number> = {error: 0, warning: 1, info: 2};
-
-    interface LotChip {
-        lotId: number;
-        label: string;
-    }
-    interface IssueGroup {
-        code: string;
-        severity: IssueSeverity;
-        messageKey: string;
-        messageParams: Record<string, string | number | boolean | null | undefined>;
-        lots: LotChip[];
-    }
-
     function formatDate(value: string): string {
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+        return formatAxisDate($currentLanguage, value, true);
     }
 
     /** Group issues by code (dedup the repeated per-lot banners), resolving each issue's lot_id into a
      *  chip. Within a group, lots opened on the same day get a #index suffix to disambiguate them. */
-    let groups = $derived.by((): IssueGroup[] => {
-        const byCode = new Map<string, {code: string; severity: IssueSeverity; messageKey: string; messageParams: Record<string, string | number | boolean | null | undefined>; lotIds: number[]}>();
-        for (const issue of issues) {
-            let group = byCode.get(issue.code);
-            if (!group) {
-                group = {code: issue.code, severity: issue.severity, messageKey: issue.message_i18n_key, messageParams: issue.message_params ?? {}, lotIds: []};
-                byCode.set(issue.code, group);
-            }
-            const raw = issue.message_params?.lot_id;
-            const lotId = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
-            if (Number.isFinite(lotId) && lotDates.has(lotId) && !group.lotIds.includes(lotId)) {
-                group.lotIds.push(lotId);
-            }
-        }
-        const result: IssueGroup[] = [];
-        for (const group of byCode.values()) {
-            const sortedIds = [...group.lotIds].sort((a, b) => (lotDates.get(a) ?? '').localeCompare(lotDates.get(b) ?? '') || a - b);
-            const perDate = new Map<string, number>();
-            for (const id of sortedIds) {
-                const iso = lotDates.get(id) ?? '';
-                perDate.set(iso, (perDate.get(iso) ?? 0) + 1);
-            }
-            const seen = new Map<string, number>();
-            const lots: LotChip[] = sortedIds.map((id) => {
-                const iso = lotDates.get(id) ?? '';
-                const base = $_('brokers.lots.lotLabel', {values: {date: formatDate(iso)}});
-                const total = perDate.get(iso) ?? 1;
-                const index = (seen.get(iso) ?? 0) + 1;
-                seen.set(iso, index);
-                return {lotId: id, label: total > 1 ? `${base} #${index}` : base};
-            });
-            result.push({code: group.code, severity: group.severity, messageKey: group.messageKey, messageParams: group.messageParams, lots});
-        }
-        return result.sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9));
-    });
+    let groups = $derived.by((): IssueGroup[] => buildIssueGroups(issues, lotDates, (iso) => $_('brokers.lots.lotLabel', {values: {date: formatDate(iso)}})));
 
     let errorCount = $derived(groups.filter((group) => group.severity === 'error').length);
     let warningCount = $derived(groups.filter((group) => group.severity === 'warning').length);
@@ -100,12 +50,6 @@
         if (errorCount > 0) parts.push($_('dataQuality.headerErrors', {values: {errors: errorCount}}));
         if (warningCount > 0) parts.push($_('dataQuality.headerWarnings', {values: {warnings: warningCount}}));
         return parts.join(', ');
-    }
-
-    function groupedSeverity(): IssueSeverity {
-        if (errorCount > 0) return 'error';
-        if (warningCount > 0) return 'warning';
-        return 'info';
     }
 
     function severityStyles(severity: IssueSeverity) {
@@ -129,7 +73,7 @@
 </script>
 
 {#if groups.length > 0}
-    {@const styles = severityStyles(groupedSeverity())}
+    {@const styles = severityStyles(groupedSeverity(errorCount, warningCount))}
     <div class="border rounded-xl text-sm {styles.container} flex flex-col" data-testid="lot-data-quality-banner" role="status">
         <!-- Header — a toggle that folds/unfolds the whole list ("N warning(s)" when collapsed). -->
         <button type="button" class="flex items-center gap-2 font-medium p-4 w-full text-left" onclick={() => (expanded = !expanded)} aria-expanded={expanded} data-testid="lot-data-quality-toggle">

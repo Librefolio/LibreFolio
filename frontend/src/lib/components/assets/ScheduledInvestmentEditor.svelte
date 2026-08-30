@@ -32,18 +32,13 @@
     import {generateUUID} from '$lib/utils/core/uuid';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import {deserializeSchedule, deserializeEvents as deserializeEventRows, serializeSchedule, type ScheduleRow, type AssetEventRow} from './scheduleSerialization';
     // =========================================================================
     // Types
     // =========================================================================
 
-    interface AssetEventRow {
-        id: string;
-        date: string;
-        type: 'INTEREST' | 'PRICE_ADJUSTMENT' | 'MATURITY_SETTLEMENT';
-        value: number;
-        currency: string;
-        notes: string;
-    }
+    // ScheduleRow and AssetEventRow are defined in ./scheduleSerialization and
+    // imported above (single source of truth for the serialization boundary).
 
     // These event types are embedded in provider_params JSON and not exposed as
     // top-level OpenAPI schemas, so they cannot be auto-generated via api-sync.
@@ -58,19 +53,7 @@
     // Types
     // =========================================================================
 
-    interface ScheduleRow {
-        id: string;
-        start_date: string;
-        end_date: string;
-        annual_rate: number;
-        maturation_frequency: string;
-        generate_interest: boolean;
-        isLate: boolean;
-        grace_period_days: number;
-        enabled: boolean;
-        /** Interest type for late interest row only (SIMPLE/COMPOUND) */
-        lateInterestType: string;
-    }
+    // ScheduleRow is defined in ./scheduleSerialization and imported above.
 
     // =========================================================================
     // Props
@@ -308,74 +291,15 @@
     // =========================================================================
 
     function deserializeRows(val: Record<string, any>): ScheduleRow[] {
-        const result: ScheduleRow[] = [];
-        const schedule = val?.schedule ?? [];
-
-        for (const p of schedule) {
-            result.push({
-                id: generateUUID(),
-                start_date: p.start_date,
-                end_date: p.end_date,
-                annual_rate: Number(p.annual_rate) * 100,
-                maturation_frequency: p.maturation_frequency ?? 'MONTHLY',
-                generate_interest: p.generate_interest ?? false,
-                isLate: false,
-                grace_period_days: 0,
-                enabled: true,
-                lateInterestType: 'COMPOUND',
-            });
-        }
-
-        // Late interest — always present
-        const li = val?.late_interest;
-        result.push({
-            id: 'late-interest',
-            start_date: result.length > 0 ? addDays(result[result.length - 1].end_date, 1) : '',
-            end_date: '',
-            annual_rate: li ? Number(li.annual_rate) * 100 : 12,
-            maturation_frequency: li?.maturation_frequency ?? 'MONTHLY',
-            generate_interest: li?.generate_interest ?? false,
-            isLate: true,
-            grace_period_days: li?.grace_period_days ?? 0,
-            enabled: !!li,
-            lateInterestType: li?.interest_type ?? 'COMPOUND',
-        });
-
-        return result;
+        return deserializeSchedule(val);
     }
 
     function deserializeEvents(events: any[]): AssetEventRow[] {
-        return events.map((e: any) => ({
-            id: generateUUID(),
-            date: e.date ?? todayISO(),
-            type: e.type ?? 'INTEREST',
-            value: Number(e.value?.amount ?? e.value ?? 0),
-            currency: e.value?.code ?? e.currency ?? '',
-            notes: e.notes ?? '',
-        }));
+        return deserializeEventRows(events, todayISO());
     }
 
     function serialize(allRows: ScheduleRow[]): Record<string, any> {
-        const schedule = allRows
-            .filter((r) => !r.isLate)
-            .map((r) => ({
-                start_date: r.start_date,
-                end_date: r.end_date,
-                annual_rate: (r.annual_rate / 100).toFixed(4),
-                maturation_frequency: r.maturation_frequency,
-                generate_interest: r.generate_interest,
-            }));
-
-        const lr = allRows.find((r) => r.isLate && r.enabled);
-        const late_interest = lr
-            ? {
-                  annual_rate: (lr.annual_rate / 100).toFixed(4),
-                  grace_period_days: lr.grace_period_days,
-                  interest_type: lr.lateInterestType,
-                  maturation_frequency: lr.maturation_frequency,
-                  generate_interest: lr.generate_interest,
-              }
-            : null;
+        const {schedule, late_interest} = serializeSchedule(allRows);
 
         const serializedEvents = assetEvents.map((e) => ({
             date: e.date,

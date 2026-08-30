@@ -25,6 +25,7 @@
     import {createSignalConfig, getRegisteredSignalTypes, getSignalProblemSeverity, type SignalConfig, type SignalDefinition, type SignalIndicatorGroup, type SignalInputField, type SignalParamDescriptor, type SignalProblem, type SignalProblemSeverity, type SignalStyle} from '$lib/charts/signals';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {humanizeKey} from '$lib/utils/text';
+    import {INPUT_FIELD_ORDER, formatSignalProblem, getParamNumber, getParamString} from './chartSignalsHelpers';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -154,84 +155,9 @@
             .join(' · ');
     }
 
-    function problemCount(value: number | null): string {
-        return value === null ? '?' : String(value);
-    }
-
-    function formatSignalProblem(problem: SignalProblem): string {
-        const missingFields = problem.missingPriceFields.map(signalFieldLabel).join(', ');
-        const incompleteFields = INPUT_FIELD_ORDER.filter((field) => {
-            const coverage = problem.fieldCoverage[field];
-            return typeof coverage === 'number' && coverage < 1;
-        })
-            .map((field) => {
-                const percentage = Math.floor((problem.fieldCoverage[field] ?? 0) * 1000) / 10;
-                return `${signalFieldLabel(field)} ${percentage}%`;
-            })
-            .join(', ');
-
-        switch (problem.code) {
-            case 'missing_input_fields':
-                return $t('chartSettings.signalProblems.missingInputFields', {values: {fields: missingFields || 'OHLCV'}});
-            case 'insufficient_input_coverage':
-                return $t('chartSettings.signalProblems.incompleteInputCoverage', {
-                    values: {
-                        fields: incompleteFields || 'OHLCV',
-                        available: problemCount(problem.availablePoints),
-                        requested: problemCount(problem.requestedPoints),
-                    },
-                });
-            case 'insufficient_history':
-                return $t('chartSettings.signalProblems.insufficientHistory', {
-                    values: {
-                        available: problemCount(problem.availablePoints),
-                        required: problemCount(problem.minimumPoints),
-                    },
-                });
-            case 'incomplete_warmup':
-                return $t('chartSettings.signalProblems.incompleteWarmup', {
-                    values: {
-                        used: problemCount(problem.warmupUsedPoints),
-                        required: problemCount(problem.warmupRequiredPoints),
-                    },
-                });
-            case 'partial_input_coverage':
-            case 'partial_event_coverage':
-            case 'data_gap':
-                if (problem.selectedStartDate && problem.selectedEndDate) {
-                    return $t('chartSettings.signalProblems.partialContiguousSegment', {
-                        values: {
-                            start: problem.selectedStartDate,
-                            end: problem.selectedEndDate,
-                            excluded: problemCount(problem.excludedPoints),
-                            available: problemCount(problem.availablePoints),
-                            requested: problemCount(problem.requestedPoints),
-                            coverage: problemCount(problem.coveragePercent),
-                            consecutive: problemCount(problem.maxConsecutiveMissingPoints),
-                        },
-                    });
-                }
-                return $t('chartSettings.signalProblems.dataGaps', {
-                    values: {
-                        missing: problemCount(problem.missingPoints),
-                        requested: problemCount(problem.requestedPoints),
-                        coverage: problemCount(problem.coveragePercent),
-                    },
-                });
-            case 'missing_event_types':
-            case 'insufficient_event_coverage':
-                return $t('chartSettings.signalProblems.missingEvents', {values: {events: problem.missingEventTypes.join(', ') || '?'}});
-            case 'incompatible_domain':
-                return $t('chartSettings.signalProblems.incompatibleDomain');
-            case 'calculation_failed':
-                return $t('chartSettings.signalProblems.calculationFailed', {values: {message: problem.message || $t('common.error')}});
-            case 'result_missing':
-                return $t('chartSettings.signalProblems.resultMissing');
-            case 'partial':
-                return problem.message || $t('chartSettings.signalProblems.partialResult');
-            case 'unavailable':
-                return problem.message || $t('chartSettings.signalProblems.unavailable');
-        }
+    // Adapts the i18n store to the injected translator the pure formatter expects.
+    function translateProblem(key: string, values?: Record<string, string | number>): string {
+        return values ? $t(key, {values}) : $t(key);
     }
 
     interface SignalIssue {
@@ -243,7 +169,7 @@
         const summary = signalSummaries.get(signal.id);
         if (summary?.problem) {
             return {
-                message: formatSignalProblem(summary.problem),
+                message: formatSignalProblem(summary.problem, translateProblem, signalFieldLabel),
                 severity: getSignalProblemSeverity(summary.problem),
             };
         }
@@ -275,22 +201,11 @@
         return 'default';
     }
 
-    function getParamNumber(signal: SignalConfig, key: string, fallback: unknown): number {
-        const v = signal.params[key];
-        return typeof v === 'number' ? v : Number(fallback ?? 0);
-    }
-
-    function getParamString(signal: SignalConfig, key: string): string {
-        const v = signal.params[key];
-        return typeof v === 'string' ? v : '';
-    }
-
     // =========================================================================
     // Category dropdowns
     // =========================================================================
 
     const INDICATOR_GROUP_ORDER: SignalIndicatorGroup[] = ['trend', 'momentum', 'volatility', 'volume', 'risk'];
-    const INPUT_FIELD_ORDER: SignalInputField[] = ['open', 'high', 'low', 'close', 'volume'];
 
     function signalDataSubtitle(definition: SignalDefinition): string {
         const fields = new Set(definition.inputPriceFields ?? []);

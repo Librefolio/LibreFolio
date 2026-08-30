@@ -25,6 +25,7 @@
     import {SimpleSelect} from '$lib/components/ui/select';
     import {attachLayoutDebugExtra, type LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {dateArrowStep, resetDateArrowHold} from '$lib/utils/core/dateArrowStep';
 
     import {numericArrows} from '$lib/actions/numericArrows';
@@ -828,11 +829,9 @@
     });
 
     function handleClickOutside(e: MouseEvent) {
-        const target = e.target as HTMLElement;
-        // If the target was detached from DOM (e.g., SimpleSelect dropdown option removed
-        // on mousedown before the click event), skip — don't close customEditing
-        if (!target.isConnected) return;
-        if (!target.closest('.drp-popover') && !target.closest('.drp-trigger')) {
+        // The isConnected guard (target detached before the click — a nested
+        // SimpleSelect option removed on mousedown) now lives in isOutsideClick.
+        if (isOutsideClick(e.target, (el) => !!el.closest('.drp-popover') || !!el.closest('.drp-trigger'))) {
             closeCalendar();
             customEditing = false;
         }
@@ -1208,6 +1207,7 @@
                     type="number"
                     use:numericArrows
                     bind:value={customAmount}
+                    data-testid="date-range-custom-amount"
                     min="1"
                     max="999"
                     class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"

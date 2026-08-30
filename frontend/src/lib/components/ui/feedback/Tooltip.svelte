@@ -30,6 +30,7 @@
      */
     import type {Snippet} from 'svelte';
     import {escapeHtml, renderInlineMath} from '$lib/utils/inlineMath';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
 
     interface Props {
         text?: string;
@@ -74,6 +75,21 @@
      *  and tooltip elements when the pointer moves from one to the other,
      *  without introducing a perceptible "stays open" timer. */
     const HOVER_LEAVE_BRIDGE_MS = 150;
+
+    /** True once the dismissal listeners are actually attached.
+     *
+     *  They are attached by an `$effect`, which runs *after* the tooltip is in
+     *  the DOM — so between "visible" and "dismissable" there is a window where
+     *  a click outside hits nobody. A user does not notice: they cannot click
+     *  faster than a frame. A test can, and did: `tooltip-component.spec.ts`
+     *  clicked as soon as the element was visible and failed roughly one run in
+     *  four under load, because a missed dismissal does not merely delay the
+     *  close — it leaves the tooltip pinned for `PINNED_LEAVE_GRACE_MS`, thirty
+     *  seconds.
+     *
+     *  Published as `data-dismissable` so the state can be waited on instead of
+     *  guessed at. */
+    let listenersAttached = $state(false);
 
     /** Single pending-hide timer, shared by both the pinned grace period and
      *  the plain-hover bridge delay — always cancelled on re-entry. */
@@ -177,7 +193,7 @@
     }
 
     function handleClickOutside(event: MouseEvent) {
-        if (visible && triggerElement && !triggerElement.contains(event.target as Node) && !tooltipElement?.contains(event.target as Node)) {
+        if (visible && isOutsideClick(event.target, (el) => !triggerElement || triggerElement.contains(el) || (tooltipElement?.contains(el) ?? false))) {
             hide();
         }
     }
@@ -294,7 +310,9 @@
             document.addEventListener('touchstart', handleTouchOutside);
             document.addEventListener('scroll', schedulePositionUpdate, {capture: true, passive: true});
             window.addEventListener('resize', schedulePositionUpdate);
+            listenersAttached = true;
             return () => {
+                listenersAttached = false;
                 document.removeEventListener('click', handleClickOutside);
                 document.removeEventListener('touchstart', handleTouchOutside);
                 document.removeEventListener('scroll', schedulePositionUpdate, true);
@@ -355,7 +373,16 @@
 
 {#if visible}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div bind:this={tooltipElement} class="tooltip-fixed" style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;" role="tooltip" data-testid="tooltip-content" onmouseenter={handlePointerEnter} onmouseleave={handlePointerLeave}>
+    <div
+        bind:this={tooltipElement}
+        class="tooltip-fixed"
+        style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;"
+        role="tooltip"
+        data-testid="tooltip-content"
+        data-dismissable={listenersAttached ? 'true' : 'false'}
+        onmouseenter={handlePointerEnter}
+        onmouseleave={handlePointerLeave}
+    >
         {#if math || html}
             {@html renderedContent}
         {:else}

@@ -17,6 +17,7 @@
     import AssetIcon from './AssetIcon.svelte';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
 
     // =========================================================================
     // Types
@@ -368,8 +369,7 @@
     }
 
     function handleClickOutside(e: MouseEvent) {
-        const target = e.target as HTMLElement;
-        if (!target.closest('[data-search-autocomplete]')) {
+        if (isOutsideClick(e.target, (el) => !!el.closest('[data-search-autocomplete]'))) {
             showResults = false;
         }
     }
@@ -424,6 +424,8 @@
                 <button
                     type="button"
                     onclick={() => toggleProvider(prov.code)}
+                    data-testid="asset-search-provider-{prov.code}"
+                    data-selected={selectedProviders.has(prov.code)}
                     class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
                                {selectedProviders.has(prov.code) ? 'bg-libre-green/15 dark:bg-libre-green/25 border-libre-green/40 text-libre-green dark:text-green-400' : 'bg-gray-100/50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-gray-500 opacity-60'}"
                 >
@@ -466,7 +468,14 @@
                     </div>
                 {/if}
                 {#each results as result, i}
-                    <button type="button" class="w-full flex items-start sm:items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0" onclick={() => selectResult(result)}>
+                    <button
+                        type="button"
+                        data-testid="asset-search-result-{i}"
+                        data-identifier={result.identifier}
+                        data-provider={result.provider_code}
+                        class="w-full flex items-start sm:items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0"
+                        onclick={() => selectResult(result)}
+                    >
                         <!-- Icon placeholder -->
                         <AssetIcon assetType={result.asset_type} iconUrl={null} altText={result.display_name} size="sm" />
 

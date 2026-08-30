@@ -64,10 +64,22 @@ function formatUtc(d: Date): string {
     return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Format a Date as `YYYY-MM-DD` on the *user's* calendar, not in UTC.
+ *
+ * `toISOString().slice(0, 10)` is the tempting one-liner and it is wrong for
+ * anyone east of Greenwich: at 00:30 in Rome it still answers with yesterday.
+ * The two readings agree for 22 hours a day, which is exactly what makes the
+ * bug survive — it is invisible unless you look at the wrong hour, or freeze
+ * the clock on purpose.
+ */
+export function localIso(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Today, on the *user's* calendar. */
 export function todayIso(): string {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return localIso(new Date());
 }
 
 /** `isoDate` shifted by `days`, which may be negative. */

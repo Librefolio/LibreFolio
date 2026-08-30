@@ -21,6 +21,7 @@
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from '$lib/components/charts/echartsTooltipHelpers';
 
@@ -54,7 +55,9 @@
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | null = null;
-    let resizeObserver: ResizeObserver | null = null;
+    const resizeWatcher = createResizeWatcher(() => {
+        chartInstance?.resize();
+    });
     let needsInitialLayoutStabilityPass = false;
     let renderGeneration = 0;
 
@@ -89,17 +92,12 @@
     });
 
     function setupResizeObserver() {
-        if (resizeObserver || !chartContainer) return;
-        resizeObserver = new ResizeObserver(() => {
-            chartInstance?.resize();
-        });
-        resizeObserver.observe(chartContainer);
+        resizeWatcher.observe(chartContainer);
     }
 
     function cleanup() {
         renderGeneration++;
-        resizeObserver?.disconnect();
-        resizeObserver = null;
+        resizeWatcher.disconnect();
         if (chartInstance && !chartInstance.isDisposed()) {
             chartInstance.dispose();
         }

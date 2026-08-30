@@ -21,6 +21,7 @@
     import {currencyStoreVersion} from '$lib/stores/reference/currencyStore';
     import {clamp, DROPDOWN_VIEWPORT_MARGIN} from '$lib/utils/layout/dropdownPosition';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
 
     import {numericArrows} from '$lib/actions/numericArrows';
@@ -682,14 +683,14 @@
 
     // Click outside to close
     function handleClickOutside(event: MouseEvent) {
-        const target = event.target as HTMLElement;
-        if (target.closest('.filter-btn')) return;
-        // Skip clicks inside any combobox/listbox option (e.g. the
-        // CurrencySearchSelect dropdown used by the currency-stack filter
-        // mounts options outside `popoverElement`). Without this guard the
-        // popover closes on every option click (W27).
-        if (target.closest('[role="listbox"], [role="option"], [role="combobox"]')) return;
-        if (popoverElement && !popoverElement.contains(target)) {
+        // `.filter-btn` is the toggle itself; and any combobox/listbox option
+        // (e.g. the CurrencySearchSelect dropdown used by the currency-stack
+        // filter) mounts its options *outside* `popoverElement`. Without these
+        // skips the popover would close on the button's own click or on every
+        // option click (W27). They stay component-specific — they are this
+        // popover's notion of "inside", not a general one.
+        const isInside = (el: Element) => !!el.closest('.filter-btn') || !!el.closest('[role="listbox"], [role="option"], [role="combobox"]') || !popoverElement || popoverElement.contains(el);
+        if (isOutsideClick(event.target, isInside)) {
             onClose();
         }
     }
