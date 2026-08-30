@@ -87,6 +87,23 @@ def front_fx_sync(verbose: bool = False, ui: bool = False, headed: bool = False,
     return _run_playwright("fx/fx-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_fx_sync_mock(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run FX sync E2E tests against the deterministic mock providers.
+
+    Kept apart from ``fx-sync`` because the two ask different questions. That
+    one drives the modal on the seeded pairs, which route to real central banks;
+    this one owns four disposable pairs wired to ``MOCKFX`` and ``MOCKFX_FAIL``,
+    so it can assert *which* outcome each produced instead of only that a sync
+    happened. No network is involved, which is why the failure path is reachable
+    at all — a real provider cannot be asked to fail on command.
+    """
+    print_section("Frontend FX Sync (mock providers)")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("fx/fx-sync-mock.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_fx_api(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX API route E2E tests."""
     print_section("Frontend FX API Route Tests")
@@ -152,6 +169,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "fx-editor", front_fx_editor, name="FX Data Editor", desc="Inline editing, save, cancel", tests="fx/fx-data-editor.spec.ts")
     add_test(cat, "fx-csv-import", front_fx_csv_import, name="FX CSV Import", desc="CSV upload, preview, import", tests="fx/fx-csv-import.spec.ts")
     add_test(cat, "fx-sync", front_fx_sync, name="FX Sync Modal", desc="Sync modal, providers, results", tests="fx/fx-sync.spec.ts")
+    add_test(cat, "fx-sync-mock", front_fx_sync_mock, name="FX Sync (mock providers)", desc="Sync against MOCKFX/MOCKFX_FAIL: batch announcement, success/failure tallies, mixed batch + retry-failed, second sync reports nothing changed (disposable pairs, no network)", tests="fx/fx-sync-mock.spec.ts")
     add_test(cat, "fx-api", front_fx_api, name="FX API Routes", desc="API routes via Playwright", tests="fx/fx-api.spec.ts")
     add_test(cat, "fx-settings", front_fx_settings, name="FX Chart Settings", desc="Chart interval, granularity", tests="fx/fx-chart-settings.spec.ts")
     add_test(cat, "fx-bulk", front_fx_bulk, name="FX Bulk Actions", desc="List-view selection toolbar, bulk sync/invert/delete, second currency filter", tests="fx/fx-bulk.spec.ts")
