@@ -359,6 +359,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         aria-controls={listboxId}
+        aria-disabled={disabled}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         class="w-full flex items-center justify-between {compact ? 'px-3 py-2 text-sm' : 'px-3 py-2'} border rounded-lg
@@ -372,6 +373,7 @@
         onkeydown={handleTriggerKeydown}
         role="combobox"
         tabindex={disabled ? -1 : 0}
+        data-disabled={disabled ? 'true' : 'false'}
         data-testid={testId ? `${testId}-trigger` : undefined}
     >
         {#if inlineSearch && isOpen}

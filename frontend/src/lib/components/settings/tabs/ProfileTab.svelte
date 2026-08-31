@@ -253,7 +253,7 @@
     }
 </script>
 
-<div class="space-y-6" data-testid="profile-tab">
+<div class="space-y-6" data-testid="profile-tab" data-busy={saving ? 'true' : 'false'} aria-busy={saving}>
     <!-- Header with Lock/Unlock + Save/Undo All -->
     <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-700">
         <div>
@@ -490,7 +490,7 @@
 <!-- Discard Changes Confirmation -->
 {#if showDiscardConfirm}
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={cancelDiscard} on:keydown={(e) => e.key === 'Escape' && cancelDiscard()} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={cancelDiscard} on:keydown={(e) => e.key === 'Escape' && cancelDiscard()} role="dialog" data-testid="profile-discard-dialog" aria-modal="true" tabindex="-1">
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm p-6" role="document" on:click|stopPropagation on:keydown|stopPropagation>
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">
@@ -514,7 +514,7 @@
 <!-- Delete Account Confirmation Modal -->
 {#if showDeleteModal}
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_label_has_associated_control a11y_no_noninteractive_element_interactions -->
-    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={closeDeleteModal} on:keydown={(e) => e.key === 'Escape' && closeDeleteModal()} role="dialog" aria-modal="true" tabindex="-1">
+    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" on:click={closeDeleteModal} on:keydown={(e) => e.key === 'Escape' && closeDeleteModal()} role="dialog" data-testid="profile-delete-dialog" aria-modal="true" tabindex="-1">
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-6" role="document" on:click|stopPropagation on:keydown|stopPropagation>
             <div class="flex items-center gap-3 mb-4">

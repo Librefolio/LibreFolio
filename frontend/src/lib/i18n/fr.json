@@ -2080,24 +2080,6 @@
       "promoteSubtitle": "Sélectionnez la transaction de destination",
       "target": "Destination"
     },
-    "bulkDelete": {
-      "title": "Supprimer des transactions",
-      "intro": "Les transactions liées (transferts, conversions de devises) doivent être supprimées ensemble.",
-      "confirmSimple": "Supprimer {n} transaction(s) ?",
-      "confirmSimpleDesc": "Cette action est irréversible.",
-      "applyToAll": "Appliquer à toutes les lignes liées",
-      "removeAll": "Retirer de la sélection",
-      "extendAll": "Supprimer aussi le partenaire",
-      "colSelected": "Sélectionnée",
-      "colPartner": "Partenaire",
-      "colAction": "Action",
-      "extendRow": "Supprimer aussi #{id}",
-      "noConflict": "Les {n} autre(s) ligne(s) n'ont pas de partenaire lié — elles seront supprimées normalement.",
-      "summary": "Lot final : {total} à supprimer (nettes : {clean} · étendues : {extended} + {partners} partenaires · retirées : {removed})",
-      "confirm": "Supprimer {n}",
-      "deleting": "Suppression…",
-      "rolledBack": "Suppression annulée — aucune modification effectuée."
-    },
     "validate": {
       "now": "Valider maintenant",
       "validating": "validation…",

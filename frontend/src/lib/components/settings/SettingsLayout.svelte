@@ -34,6 +34,11 @@
     export let showLock: boolean = false;
     export let title: string = '';
     export let description: string = '';
+    /** Publishes "an async operation is in flight" — a load or a save — on the
+     *  layout root as `data-busy`, the attribute `waitForSettled()` reads. Both
+     *  a test and a screen reader can then read the state directly instead of
+     *  inferring it from a disabled button somewhere else in the tree. */
+    export let isBusy: boolean = false;
 
     // Mobile dropdown state
     let showDropdown = false;
@@ -130,7 +135,7 @@
     </div>
 </div>
 
-<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]">
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]" data-testid="settings-layout" data-busy={isBusy ? 'true' : 'false'} aria-busy={isBusy}>
     <!-- Desktop: Left sidebar category navigation (hidden on mobile) -->
     <div class="hidden sm:block w-48 flex-shrink-0">
         <nav class="space-y-1">
@@ -176,15 +181,21 @@
                     <div class="flex items-center gap-1 flex-shrink-0">
                         {#if !isLocked}
                             {#if hasChanges}
-                                <button type="button" on:click={() => dispatch('saveAll')} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90" title={$_('common.saveAll')}>
+                                <button type="button" on:click={() => dispatch('saveAll')} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90" data-testid="settings-save-all" title={$_('common.saveAll')}>
                                     <Save size={18} />
                                 </button>
-                                <button type="button" on:click={() => dispatch('undoAll')} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" title={$_('common.undoAll')}>
+                                <button type="button" on:click={() => dispatch('undoAll')} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" data-testid="settings-undo-all" title={$_('common.undoAll')}>
                                     <Undo size={18} />
                                 </button>
                             {/if}
                             {#if hasNonDefaults}
-                                <button type="button" on:click={() => dispatch('resetAll')} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" title={$_('common.resetAll')}>
+                                <button
+                                    type="button"
+                                    on:click={() => dispatch('resetAll')}
+                                    class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50"
+                                    data-testid="settings-reset-all"
+                                    title={$_('common.resetAll')}
+                                >
                                     <RotateCcw size={18} />
                                 </button>
                             {/if}

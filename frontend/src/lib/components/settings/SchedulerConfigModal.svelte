@@ -342,6 +342,8 @@
                 {#each DAY_KEYS as day}
                     <button
                         type="button"
+                        aria-pressed={selectedDays[day]}
+                        data-testid="scheduler-day-{day}"
                         class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors {selectedDays[day] ? 'bg-libre-green text-white border-libre-green' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-slate-600 hover:border-libre-green'}"
                         onclick={() => toggleDay(day)}
                     >

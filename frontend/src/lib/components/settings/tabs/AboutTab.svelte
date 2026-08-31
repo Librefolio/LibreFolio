@@ -271,7 +271,7 @@ Generated: ${new Date().toISOString()}
     <div class="pt-6 border-t border-gray-200">
         <div class="flex items-center justify-between mb-4">
             <h4 class="text-md font-medium text-gray-700">{$_('settings.systemInfo')}</h4>
-            <button class="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!systemInfo} on:click={copySystemInfo}>
+            <button class="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="about-copy-report" disabled={!systemInfo} on:click={copySystemInfo}>
                 {#if copied}
                     <Check size={16} class="text-green-600" />
                     <span class="text-green-600">{$_('common.copied')}</span>

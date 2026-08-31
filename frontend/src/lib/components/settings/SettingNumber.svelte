@@ -69,15 +69,15 @@
         {#if !isLocked}
             <div class="flex items-center space-x-1">
                 {#if isModified}
-                    <button type="button" onclick={() => onsave?.()} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                    <button type="button" onclick={() => onsave?.()} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" data-testid="setting-save" title={$_('common.save')}>
                         <Save size={14} />
                     </button>
-                    <button type="button" onclick={() => onundo?.()} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" title={$_('common.undo')}>
+                    <button type="button" onclick={() => onundo?.()} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" data-testid="setting-undo" title={$_('common.undo')}>
                         <Undo size={14} />
                     </button>
                 {/if}
                 {#if isNonDefault && !isModified}
-                    <button type="button" onclick={() => onreset?.()} class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors" title={$_('common.reset')}>
+                    <button type="button" onclick={() => onreset?.()} class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors" data-testid="setting-reset" title={$_('common.reset')}>
                         <RotateCcw size={14} />
                     </button>
                 {/if}

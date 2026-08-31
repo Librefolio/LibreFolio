@@ -441,7 +441,7 @@
     </div>
 </div>
 
-<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]" data-testid="global-settings-tab">
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]" data-testid="global-settings-tab" data-busy={isLoading || isSaving ? 'true' : 'false'} aria-busy={isLoading || isSaving}>
     <!-- Left sidebar: Category navigation (hidden on mobile) -->
     <div class="hidden sm:block w-48 flex-shrink-0">
         <nav class="space-y-1">
@@ -483,15 +483,15 @@
                     {#if canEdit}
                         {#if !isLocked}
                             {#if hasAnyChanges}
-                                <button on:click={saveAll} disabled={isSaving} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" title={$_('common.saveAll')}>
+                                <button on:click={saveAll} disabled={isSaving} class="p-2 rounded-lg transition-all bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" data-testid="settings-save-all" title={$_('common.saveAll')}>
                                     <Save size={18} />
                                 </button>
-                                <button on:click={undoAll} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" title={$_('common.undoAll')}>
+                                <button on:click={undoAll} class="p-2 rounded-lg transition-all bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600" data-testid="settings-undo-all" title={$_('common.undoAll')}>
                                     <Undo size={18} />
                                 </button>
                             {/if}
                             {#if hasAnyNonDefault}
-                                <button on:click={resetAllToDefaults} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" title={$_('common.resetAll')}>
+                                <button on:click={resetAllToDefaults} class="p-2 rounded-lg transition-all bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/50" data-testid="settings-reset-all" title={$_('common.resetAll')}>
                                     <RotateCcw size={18} />
                                 </button>
                             {/if}
@@ -608,15 +608,15 @@
                                         {#if !isLocked}
                                             <div class="flex items-center space-x-1">
                                                 {#if changedKeys.includes(setting.key)}
-                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" data-testid="setting-save" title={$_('common.save')}>
                                                         <Save size={14} />
                                                     </button>
-                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" title={$_('common.undo')}>
+                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" data-testid="setting-undo" title={$_('common.undo')}>
                                                         <Undo size={14} />
                                                     </button>
                                                 {/if}
                                                 {#if nonDefaultKeys.includes(setting.key)}
-                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" title={$_('common.reset')}>
+                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" data-testid="setting-reset" title={$_('common.reset')}>
                                                         <RotateCcw size={14} />
                                                     </button>
                                                 {/if}
@@ -637,15 +637,15 @@
                                         {#if !isLocked}
                                             <div class="flex items-center space-x-1">
                                                 {#if changedKeys.includes(setting.key)}
-                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" data-testid="setting-save" title={$_('common.save')}>
                                                         <Save size={14} />
                                                     </button>
-                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" title={$_('common.undo')}>
+                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" data-testid="setting-undo" title={$_('common.undo')}>
                                                         <Undo size={14} />
                                                     </button>
                                                 {/if}
                                                 {#if nonDefaultKeys.includes(setting.key)}
-                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" title={$_('common.reset')}>
+                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" data-testid="setting-reset" title={$_('common.reset')}>
                                                         <RotateCcw size={14} />
                                                     </button>
                                                 {/if}
@@ -665,15 +665,15 @@
                                         {#if !isLocked}
                                             <div class="flex items-center space-x-1">
                                                 {#if changedKeys.includes(setting.key)}
-                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" data-testid="setting-save" title={$_('common.save')}>
                                                         <Save size={14} />
                                                     </button>
-                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" title={$_('common.undo')}>
+                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" data-testid="setting-undo" title={$_('common.undo')}>
                                                         <Undo size={14} />
                                                     </button>
                                                 {/if}
                                                 {#if nonDefaultKeys.includes(setting.key)}
-                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" title={$_('common.reset')}>
+                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" data-testid="setting-reset" title={$_('common.reset')}>
                                                         <RotateCcw size={14} />
                                                     </button>
                                                 {/if}
@@ -693,15 +693,15 @@
                                         {#if !isLocked}
                                             <div class="flex items-center space-x-1">
                                                 {#if changedKeys.includes(setting.key)}
-                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" title={$_('common.save')}>
+                                                    <button on:click={() => saveSetting(setting.key)} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" data-testid="setting-save" title={$_('common.save')}>
                                                         <Save size={14} />
                                                     </button>
-                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" title={$_('common.undo')}>
+                                                    <button on:click={() => undoSetting(setting.key)} class="p-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors" data-testid="setting-undo" title={$_('common.undo')}>
                                                         <Undo size={14} />
                                                     </button>
                                                 {/if}
                                                 {#if nonDefaultKeys.includes(setting.key)}
-                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" title={$_('common.reset')}>
+                                                    <button on:click={() => resetSettingToDefault(setting.key)} class="p-1.5 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors" data-testid="setting-reset" title={$_('common.reset')}>
                                                         <RotateCcw size={14} />
                                                     </button>
                                                 {/if}
