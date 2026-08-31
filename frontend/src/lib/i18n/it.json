@@ -1567,6 +1567,7 @@
       "createIntermediatePairsHint": "Ogni passaggio delle catene selezionate verrà salvato come coppia autonoma con il suo provider, così da poterle sincronizzare indipendentemente.",
       "titleEdit": "Modifica Provider Coppia",
       "createFailed": "Creazione coppia FX fallita",
+      "createConflict": "Qualcun altro ha modificato questa rotta di conversione nello stesso momento. Non è stato salvato nulla: riprova.",
       "alreadyExists": "Questa coppia esiste già — sincronizza o modificala dalla pagina FX."
     },
     "sync": {
@@ -1666,6 +1667,7 @@
   "prices": {
     "sync": {
       "noResponse": "nessuna risposta",
+      "noReport": "Il server non ha riportato nulla su questo elemento",
       "partialSuffix": "parziale",
       "skippedSuffix": "saltato",
       "failedDefault": "fallito",

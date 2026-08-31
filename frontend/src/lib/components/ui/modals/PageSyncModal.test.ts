@@ -32,6 +32,10 @@ vi.mock('$lib/api', () => ({
         list_providers_api_v1_assets_provider_get: vi.fn().mockResolvedValue([{code: 'stooq', name: 'Stooq', icon_url: '/icons/providers/stooq.png'}]),
     },
 }));
+// The row copies the full error through this helper; jsdom has neither a
+// clipboard nor `execCommand`, and what the row promises is "the whole text
+// leaves the row", not how it travels.
+vi.mock('$lib/utils/clipboard', () => ({writeExportToClipboard: vi.fn()}));
 // The open-effect warms the FX provider cache; not the subject of this file, but
 // the cache backs the FX badge, so one provider is given an icon there too.
 vi.mock('$lib/stores/currencyGraphStore', async (importOriginal) => ({
@@ -42,9 +46,11 @@ vi.mock('$lib/stores/currencyGraphStore', async (importOriginal) => ({
 
 import PageSyncModal from './PageSyncModal.svelte';
 import {zodiosApi} from '$lib/api';
+import {writeExportToClipboard} from '$lib/utils/clipboard';
 
 const syncPrices = vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post);
 const syncRates = vi.mocked(zodiosApi.sync_rates_api_v1_fx_currencies_sync_post);
+const copied = vi.mocked(writeExportToClipboard);
 
 type WireResult = Record<string, unknown>;
 
@@ -110,6 +116,7 @@ beforeAll(async () => {
 beforeEach(() => {
     syncPrices.mockReset();
     syncRates.mockReset();
+    copied.mockClear();
 });
 
 // =========================================================================
@@ -280,18 +287,6 @@ describe('PageSyncModal — asset rows', () => {
         expect(rowOf('2').querySelector('img')).toHaveAttribute('src', '/icons/asset-types/etf.png');
     });
 
-    it('shows the message of a skipped asset and the first error of a failed one', async () => {
-        assetsRespond({asset_id: 1, status: 'skipped', message: 'no trading days in range'}, {asset_id: 2, status: 'failed', errors: ['upstream 502', 'and the retry also failed']});
-        mount({assets: [asset(1), asset(2)], fxPairs: []});
-
-        await startSync();
-        await settled();
-
-        expect(rowOf('1')).toHaveTextContent('no trading days in range');
-        expect(rowOf('2')).toHaveTextContent('upstream 502');
-        expect(summary()).toMatchObject({success: 0, total: 2, failed: 1});
-    });
-
     it('names a row it has no asset for by its id', async () => {
         assetsRespond({asset_id: 404, status: 'ok', points_fetched: 1, points_changed: 1});
         mount({assets: [asset(1)], fxPairs: []});
@@ -332,39 +327,41 @@ describe('PageSyncModal — FX rows', () => {
         expect(within(rowOf('RON-JPY')).getByTitle('frankfurter').querySelector('img')).toBeNull();
         expect(within(rowOf('RON-JPY')).getByTitle('frankfurter')).toHaveTextContent('frankfurter');
     });
+});
 
-    it('shows a skipped message and a failed error, and offers a retry only on the failure', async () => {
-        fxResponds({pair: 'EUR-USD', status: 'skipped', message: 'rates already complete'}, {pair: 'EUR-GBP', status: 'failed', message: 'provider returned nothing'});
-        mount({assets: [], fxPairs: ['EUR-USD', 'EUR-GBP']});
+// =========================================================================
+// The row itself, now that the four are one
+// =========================================================================
 
-        await startSync();
-        await settled();
-
-        expect(rowOf('EUR-USD')).toHaveTextContent('rates already complete');
-        expect(within(rowOf('EUR-USD')).queryByTestId('sync-retry-row')).toBeNull();
-        expect(rowOf('EUR-GBP')).toHaveTextContent('provider returned nothing');
-        expect(within(rowOf('EUR-GBP')).getByTestId('sync-retry-row')).toBeInTheDocument();
-    });
-
+describe('PageSyncModal — the shared result row', () => {
     /**
-     * ⚠ Minor inconsistency, pinned rather than fixed — see the report. Both row
-     * snippets here use one if/else-if chain, so `partial` matches the first arm
-     * (counters) and the error arm is never reached: a partial result shows a retry
-     * button and no reason for it. AssetSyncModal, doing the same job on the same
-     * data, uses separate blocks and shows both.
+     * The single fact about the row that belongs to this modal: it draws two
+     * sections, and until the four hand-written rows became one they did not
+     * behave alike — the FX side offered no way to read an error it had
+     * truncated, and no way to copy it. What the row does with a result now has
+     * one owner, in SyncResultRow.test.ts; what stays here is that *both*
+     * sections get that row and not a variation on it.
      */
-    it('says nothing about why a partial result was partial', async () => {
-        fxResponds({pair: 'EUR-USD', status: 'partial', points_fetched: 2, points_changed: 2, errors: ['only 2 of 30 days available']});
-        mount({assets: [], fxPairs: ['EUR-USD']});
+    it('gives both sections the same row, error and copy gesture alike', async () => {
+        fxResponds({pair: 'EUR-USD', status: 'failed', errors: ['pair first', 'pair second']});
+        assetsRespond({asset_id: 1, status: 'partial', points_fetched: 1, points_changed: 1, errors: ['asset first', 'asset second']});
+        mount({assets: [asset(1)], fxPairs: ['EUR-USD']});
 
         await startSync();
         await settled();
 
-        expect(rowOf('EUR-USD')).toHaveAttribute('data-status', 'partial');
-        expect(rowOf('EUR-USD')).toHaveTextContent('2↓ 2Δ');
-        expect(rowOf('EUR-USD')).not.toHaveTextContent('only 2 of 30 days available');
-        // The control to fix it is there, unexplained.
-        expect(within(rowOf('EUR-USD')).getByTestId('sync-retry-row')).toBeInTheDocument();
+        const fxError = within(rowOf('EUR-USD')).getByTestId('sync-row-error');
+        const assetError = within(rowOf('1')).getByTestId('sync-row-error');
+        expect(fxError).toHaveTextContent('pair first');
+        expect(assetError).toHaveTextContent('asset first');
+
+        // Visible: the first line only. Copied: all of them — in both sections,
+        // and on a `partial`, which is a status the FX row used to leave mute.
+        await fireEvent.dblClick(fxError);
+        expect(copied).toHaveBeenLastCalledWith('pair first; pair second', expect.anything(), expect.anything());
+        await fireEvent.dblClick(assetError);
+        expect(copied).toHaveBeenLastCalledWith('asset first; asset second', expect.anything(), expect.anything());
+        expect(copied).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -388,46 +385,30 @@ describe('PageSyncModal — the optional halves of the wire shape', () => {
         expect(summary()).toMatchObject({success: 2, total: 2, fetched: 0, changed: 0});
     });
 
-    it('hides the corporate-events group unless something was fetched, and defaults its delta', async () => {
-        assetsRespond({asset_id: 1, status: 'ok', points_fetched: 4, points_changed: 1, events_fetched: 0}, {asset_id: 2, status: 'ok', points_fetched: 4, points_changed: 1, events_fetched: 3});
-        mount({assets: [asset(1), asset(2)], fxPairs: []});
-
-        await startSync();
-        await settled();
-
-        // Asset 1: prices only. Asset 2: an events group whose delta is absent ⇒ 0.
-        expect(rowOf('1').querySelectorAll('span.inline-flex')).toHaveLength(1);
-        expect(rowOf('2').querySelectorAll('span.inline-flex')).toHaveLength(2);
-        expect(rowOf('2')).toHaveTextContent('3↓ 0Δ');
-    });
-
-    it('falls back to the message when a failure carries no error list', async () => {
-        assetsRespond({asset_id: 1, status: 'failed', message: 'provider disabled for this asset'});
-        mount({assets: [asset(1)], fxPairs: []});
-
-        await startSync();
-        await settled();
-
-        // `errors ?? []` is what keeps `.length` from throwing on the absent field.
-        expect(rowOf('1')).toHaveAttribute('data-status', 'failed');
-        expect(rowOf('1')).toHaveTextContent('provider disabled for this asset');
-    });
-
     /**
-     * ⚠ Pinned defect — see the report. A 200 whose body has no `results` key is
-     * indistinguishable from a sync that did nothing: no row, no summary, no error,
-     * and `onsynced` still fires, so the page reloads itself over unchanged data.
+     * `(r.results ?? [])` keeps the mapper from throwing on a body with no
+     * `results`; SyncModalBase then does the rest, turning every id it asked about
+     * and got no word on into a failed row. Both endpoints are answered that way
+     * here, so both sections have to behave the same.
      */
-    it('reports a body with no results as an uneventful success', async () => {
+    it('turns a body with no results into a failed row in each section', async () => {
         syncPrices.mockResolvedValue({} as never);
-        const {onsynced} = mount({assets: [asset(1)], fxPairs: []});
+        syncRates.mockResolvedValue({} as never);
+        const {onsynced} = mount({assets: [asset(1), asset(2)], fxPairs: ['EUR-USD']});
 
         await startSync();
         await settled();
 
-        expect(rowIds()).toEqual([]);
-        expect(screen.queryByTestId('sync-modal-results')).toBeNull();
+        expect(rowIds(sectionOf('assets')).sort()).toEqual(['1', '2']);
+        expect(rowIds(sectionOf('fx'))).toEqual(['EUR-USD']);
+        for (const id of ['1', '2', 'EUR-USD']) expect(rowOf(id)).toHaveAttribute('data-status', 'failed');
+        // Every section's counters agree with what it was asked to do.
+        expect(num(sectionOf('assets'), 'data-result-count')).toBe(num(sectionOf('assets'), 'data-target-count'));
+        expect(num(sectionOf('fx'), 'data-result-count')).toBe(num(sectionOf('fx'), 'data-target-count'));
+        // Reported per row, not as a global error: both calls did succeed.
         expect(errorBanner()).toBeNull();
+        expect(summary()).toMatchObject({success: 0, total: 3, failed: 3});
+        // The parent is told the run finished anyway — the user's decision.
         expect(onsynced).toHaveBeenCalledTimes(1);
     });
 });

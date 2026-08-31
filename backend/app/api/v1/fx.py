@@ -9,7 +9,9 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 from sqlmodel import delete as sql_delete
 from sqlmodel import select
 
@@ -753,8 +755,16 @@ async def create_routes_bulk(
     """
     Create or update multiple conversion routes in a single atomic transaction.
 
+    **The pair is normalised, not validated.** A route posted as ``EUR-DKK`` is
+    stored — and later listed, and addressed by the UI — as ``DKK-EUR``: the
+    endpoint sorts the two codes alphabetically and the caller is told nothing.
+    It is the same convention the rates use (see ``normalize_rate_for_storage``
+    in ``services/fx.py``), and it is what makes a pair one row instead of two
+    that can disagree. But a client that posts one direction and then looks for
+    that direction finds nothing, so it is worth saying out loud here rather
+    than leaving it to be discovered from the response.
+
     Validations:
-    - base < quote (alphabetical ordering)
     - Provider codes must be registered in FXProviderRegistry
     - Chain steps must be valid (continuity, no repeated edges, matching endpoints)
 
@@ -883,6 +893,26 @@ async def create_routes_bulk(
 
     except HTTPException:
         raise
+    except (IntegrityError, StaleDataError) as e:
+        # Two writers, one row. The upsert reads before it writes, so a second
+        # caller working on the same (base, quote, priority) lands either on the
+        # insert — `UNIQUE constraint failed` because both passed the existence
+        # check — or on the update, with `expected to update 1 row(s); 0 were
+        # matched` because the row went away in between.
+        #
+        # It is a genuine conflict, not a server fault: 409, and a sentence the
+        # UI can show as it stands. What must *not* travel is the driver's text,
+        # which carries the INSERT statement and its bound parameters and was
+        # being rendered verbatim in the add-pair dialog.
+        #
+        # Retrying is the user's move, not ours: the client cannot know whether
+        # the other writer meant to replace this route or a different one.
+        await session.rollback()
+        logger.warning("Concurrent write on fx_conversion_routes: %s", e)
+        raise HTTPException(
+            status_code=409,
+            detail="This conversion route was modified by another request at the same time. Nothing was saved — please try again.",
+        ) from e
     except Exception as e:
         await session.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create routes: {e!s}") from e

@@ -49,6 +49,14 @@ mkdocs_src/overrides/
 # Misc
 *.md
 !README.md
+# Not optional, and not documentation: the BSD/MIT/NCSA/Apache clauses of the
+# bundled Python packages require their copyright notices to travel with any
+# binary redistribution, and this image is one. The `*.md` sweep above removed
+# it from the build context, so `COPY LICENSE THIRD_PARTY_LICENSES.md` in the
+# Dockerfile failed the build with "not found" — a file that is present in the
+# repository and merely invisible from here. Docker takes the *last* matching
+# line, so this exception has to stay below the sweep.
+!THIRD_PARTY_LICENSES.md
 artwork/
 _backup_docs/
 

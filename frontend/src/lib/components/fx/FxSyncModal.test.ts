@@ -201,19 +201,38 @@ describe('FxSyncModal — mapping the response into rows', () => {
         expect(unknown).toHaveTextContent('frankfurter');
     });
 
-    it('shows the first error of a failed pair, falling back to the message', async () => {
-        respondWith({pair: 'EUR-USD', status: 'failed', errors: ['ecb refused the range', 'frankfurter had no data']}, {pair: 'EUR-GBP', status: 'failed', message: 'no provider configured'});
-        mount({pairs: ['EUR-USD', 'EUR-GBP']});
+    /**
+     * The props only this modal chooses. Whether the row *renders* a tooltip, or
+     * what it does without a glyph, is SyncResultRow.test.ts's business; what is
+     * FX's own is that it asks for the per-leg breakdown, and asks for no
+     * currency glyph in front of counters that count rates rather than money.
+     */
+    it('hands the row a per-leg breakdown and no currency glyph', async () => {
+        respondWith({pair: 'EUR-USD', status: 'ok', points_fetched: 12, points_changed: 9, provider_used: 'ecb'});
+        mount({pairs: ['EUR-USD']});
 
         await startSync();
         await settled();
 
-        // Both strings are ones this test injected, not catalogue entries.
-        expect(rowOf('EUR-USD')).toHaveTextContent('ecb refused the range');
-        expect(rowOf('EUR-GBP')).toHaveTextContent('no provider configured');
-        expect(summary()).toMatchObject({success: 0, total: 2, failed: 2});
+        const row = rowOf('EUR-USD');
+        expect(row).toHaveTextContent('12↓ 9Δ');
+
+        // The status icon comes first in the row, and here it is the tooltip's
+        // trigger. The listener sits on the wrapper, the icon's parent, because
+        // mouseenter does not bubble.
+        const icon = row.querySelector('svg') as SVGElement;
+        await fireEvent.mouseEnter(icon.parentElement as HTMLElement);
+        // Portaled out of the modal's stacking context, so it is read globally.
+        // Asserted on the counters, which this test injected; the rest of the
+        // detail line is translated and is not asserted on.
+        expect(await screen.findByTestId('tooltip-content')).toHaveTextContent('12↓ 9Δ');
     });
 
+    /**
+     * The one wiring test: this modal really renders the shared row, and the
+     * control the row offers really reaches this modal's endpoint with this
+     * modal's payload. The row's own repertoire lives in SyncResultRow.test.ts.
+     */
     it('offers a per-row retry on a partial result and asks only for that pair', async () => {
         syncRates.mockResolvedValueOnce({
             results: [
@@ -252,23 +271,30 @@ describe('FxSyncModal — mapping the response into rows', () => {
 // Pinned behaviour — see the report
 // =========================================================================
 
-describe('FxSyncModal — pinned defects', () => {
+describe('FxSyncModal — pinned behaviour', () => {
     /**
-     * ⚠ `(r.results ?? [])` on a body with no `results` yields an empty list, which
-     * SyncModalBase reads as "no results yet". The modal returns to its initial
-     * state and says nothing at all: no rows, no summary, no error.
+     * `(r.results ?? [])` on a body with no `results` yields an empty list, and an
+     * empty list no longer means "never mind": SyncModalBase turns every id it
+     * asked about and got no word on into a failed row. The wrapper's job here is
+     * only not to throw on the missing key.
      */
-    it('reports nothing when the response carries no results array', async () => {
+    it('turns a body with no results array into a failed row per requested pair', async () => {
         syncRates.mockResolvedValue({} as never);
-        const {onsynced} = mount({pairs: ['EUR-USD']});
+        const {onsynced} = mount({pairs: ['EUR-USD', 'EUR-GBP']});
 
         await startSync();
         await settled();
 
-        expect(rowIds()).toEqual([]);
-        expect(screen.queryByTestId('sync-modal-results')).toBeNull();
+        expect(rowIds().sort()).toEqual(['EUR-GBP', 'EUR-USD']);
+        expect(rowOf('EUR-USD')).toHaveAttribute('data-status', 'failed');
+        expect(rowOf('EUR-GBP')).toHaveAttribute('data-status', 'failed');
+        // Reported per row, not as a global error: the call itself did succeed.
         expect(errorBanner()).toBeNull();
-        // The parent is nonetheless told the sync completed.
+        expect(summary()).toMatchObject({success: 0, total: 2, failed: 2});
+        // Each row keeps its own way out.
+        expect(within(rowOf('EUR-USD')).getByTestId('sync-retry-row')).toBeInTheDocument();
+        // The parent is told the run finished anyway — the user's decision: it
+        // reloads regardless, and a failed row is still news.
         expect(onsynced).toHaveBeenCalledTimes(1);
         expect(screen.getByTestId('sync-modal-start')).toBeEnabled();
     });
