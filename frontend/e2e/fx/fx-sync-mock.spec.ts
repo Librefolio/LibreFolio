@@ -29,37 +29,39 @@
  * translated verb, so every number here is read from the `data-*` attributes
  * `SyncModalBase` publishes for exactly that reason — never from the sentence.
  *
- * The pairs are this file's own — one disjoint set per test, on currency codes
- * no other spec claims — and `afterAll` removes both the routes and the rates
- * they wrote.
+ * The pairs are **mock data**, not something this file creates. That is the
+ * point: `populate_mock_data --force` truncates `fx_conversion_routes`
+ * wholesale, and the frontend recovery net runs it whenever a spec destroys a
+ * baseline row — so pairs created by the test itself vanished mid-run, twice,
+ * once as a row that could not be found and once as a sync where every pair
+ * suddenly failed. A fixture that belongs to the baseline is *restored* by that
+ * net instead of being removed by it, which is why this file writes nothing and
+ * therefore has nothing to clean up.
  */
 
 import {expect, test, type Page} from '../fixtures/playwright';
-import type {APIRequestContext} from '@playwright/test';
 import {login} from '../fixtures/auth-helpers';
 import {maximisePageSize} from '../fixtures/paging';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxPage} from './fx-helpers';
 
-const API = '/api/v1';
-
 /**
- * Currency codes owned by this file — and one set per test.
+ * The deterministic pairs, one disjoint set per test.
+ *
+ * Declared in `populate_mock_data.py` next to the ECB routes: six through
+ * `MOCKFX`, which answers with a fixed rate for every date, and three through
+ * `MOCKFX_FAIL`, which always raises. Neither outcome can be asked of a real
+ * provider on demand, which is why the failure path had never been walked.
  *
  * Every quote sorts *after* `EUR`, and that is a requirement rather than a
  * style: a pair is stored and displayed in alphabetical order, so a route
  * created as `EUR-DKK` comes back as `DKK-EUR` and a spec looking for
  * `[data-row-id="EUR-DKK"]` finds nothing. Verified from the accessibility
- * snapshot of a failing run — the row was there, reading `DKK → EUR` — and
- * against the stored routes, every one of which is already ordered that way.
+ * snapshot of a failing run — the row was there, reading `DKK → EUR`.
  *
  * Deliberately disjoint from `fx-destructive.spec.ts` (NZD/SGD/MXN/ZAR/HKD/
- * SEK/NOK/PLN) and from the seeded pairs. The per-test split is not tidiness:
- * `fx_conversion_routes` has no `user_id`, and `POST /fx/providers/routes` is
- * not safe against two callers upserting the same row at once (see the note on
- * `route()`), so sharing a pair between tests that run in parallel produces a
- * 500 rather than an idempotent write. Each test creating only what it uses
- * removes the contention instead of tolerating it.
+ * SEK/NOK/PLN) and from the ECB-backed pairs, so no two specs arbitrate the
+ * same row.
  */
 const PAIRS = {
     announce: [
@@ -79,39 +81,7 @@ const PAIRS = {
     unchanged: [{base: 'EUR', quote: 'ILS'}],
 } as const;
 
-const ALL_PAIRS = Object.values(PAIRS).flat();
-
 const slug = (p: {base: string; quote: string}) => `${p.base}-${p.quote}`;
-
-/**
- * Create a route through a named provider.
- *
- * Documented as an upsert on `(base, quote, priority)`, and it is — serially.
- * Two callers writing the same row concurrently get a 500 instead: either
- * `UNIQUE constraint failed: fx_conversion_routes.base, quote, priority` when
- * both pass the existence check and both insert, or `UPDATE statement ...
- * expected to update 1 row(s); 0 were matched` when the row goes away between
- * the check and the write. Observed at four workers; reported, not worked
- * around — this file avoids it by giving every test its own pairs.
- */
-async function route(req: APIRequestContext, pair: {base: string; quote: string}, provider: string): Promise<void> {
-    const res = await req.post(`${API}/fx/providers/routes`, {
-        data: [{base: pair.base, quote: pair.quote, priority: 1, chain_steps: [{from: pair.base, to: pair.quote, provider}]}],
-    });
-    expect(res.ok(), `route ${slug(pair)} via ${provider}: ${res.status()} ${await res.text()}`).toBeTruthy();
-}
-
-/** Create every pair a test needs, in the order the test will use them. */
-async function seed(req: APIRequestContext, ok: readonly {base: string; quote: string}[], failing: readonly {base: string; quote: string}[] = []): Promise<void> {
-    for (const p of ok) await route(req, p, 'MOCKFX');
-    for (const p of failing) await route(req, p, 'MOCKFX_FAIL');
-}
-
-/** Remove a pair's route and every rate it holds. Idempotent. */
-async function dropPair(req: APIRequestContext, pair: {base: string; quote: string}): Promise<void> {
-    await req.delete(`${API}/fx/providers/routes`, {data: [{base: pair.base, quote: pair.quote}]}).catch(() => {});
-    await req.delete(`${API}/fx/currencies/rate`, {data: {from: pair.base, to: pair.quote, delete_all: true}}).catch(() => {});
-}
 
 /**
  * Select the given pairs in the list table and open the sync modal on them.
@@ -137,7 +107,9 @@ async function openSyncFor(page: Page, pairs: readonly {base: string; quote: str
 
     for (const p of pairs) {
         const row = page.locator(`[data-row-id="${slug(p)}"]`);
-        await expect(row).toBeVisible({timeout: 10_000});
+        // A missing row here is a seeding problem, not a timing one: the pair is
+        // declared in the baseline, so say where to go and fix it.
+        await expect(row, `${slug(p)} is not in the FX list — check the MOCKFX routes in populate_mock_data.py`).toBeVisible({timeout: 10_000});
         // The row selector is a button publishing `data-state`, not an `<input>`.
         // Asking for the state rather than clicking blind: a row that arrives
         // already selected would be *de*selected by an unconditional click, and
@@ -181,18 +153,10 @@ test.describe('FX sync — deterministic providers', () => {
         await login(page, TEST_USER);
     });
 
-    test.afterAll(async ({browser}) => {
-        const page = await browser.newPage();
-        await login(page, TEST_USER);
-        for (const p of ALL_PAIRS) await dropPair(page.request, p);
-        await page.close();
-    });
-
     // -----------------------------------------------------------------------
     // FSM-001 — the modal says what it will do before it does it
     // -----------------------------------------------------------------------
     test('FSM-001: the modal announces the batch, and does nothing until asked', async ({page}) => {
-        await seed(page.request, PAIRS.announce);
         await openSyncFor(page, PAIRS.announce);
         const modal = page.getByTestId('fx-sync-modal');
 
@@ -209,7 +173,6 @@ test.describe('FX sync — deterministic providers', () => {
     // FSM-002 — a successful sync reports numbers that came from the server
     // -----------------------------------------------------------------------
     test('FSM-002: a working provider is counted as a success, with its points', async ({page}) => {
-        await seed(page.request, PAIRS.success);
         await openSyncFor(page, PAIRS.success);
         await runSync(page);
 
@@ -231,7 +194,6 @@ test.describe('FX sync — deterministic providers', () => {
     // FSM-003 — a failing provider is reported as a failure
     // -----------------------------------------------------------------------
     test('FSM-003: a failing provider is counted as failed, not quietly as done', async ({page}) => {
-        await seed(page.request, [], PAIRS.failure);
         await openSyncFor(page, PAIRS.failure);
         await runSync(page);
 
@@ -246,7 +208,6 @@ test.describe('FX sync — deterministic providers', () => {
     // FSM-004 — a mixed batch is both, and offers to retry only the failures
     // -----------------------------------------------------------------------
     test('FSM-004: a mixed batch reports both halves and offers a retry of the failed', async ({page}) => {
-        await seed(page.request, PAIRS.mixedOk, PAIRS.mixedFail);
         await openSyncFor(page, [...PAIRS.mixedOk, ...PAIRS.mixedFail]);
         await runSync(page);
 
@@ -290,7 +251,6 @@ test.describe('FX sync — deterministic providers', () => {
         // MOCKFX returns the same fixed rate every time, so the second pass
         // writes nothing. That is the shape of the silent-failure the rule
         // exists to catch, produced here on purpose and from a provider we own.
-        await seed(page.request, PAIRS.unchanged);
         await openSyncFor(page, PAIRS.unchanged);
         await runSync(page);
         await page.getByTestId('fx-sync-modal').getByTestId('sync-modal-close').click();

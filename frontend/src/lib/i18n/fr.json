@@ -346,6 +346,7 @@
     "usernameOrEmail": "Nom d'utilisateur ou Email",
     "accountCreated": "Compte créé avec succès ! Veuillez vous connecter.",
     "registrationFailed": "L'inscription a échoué. Veuillez réessayer.",
+    "registrationDisabled": "L'inscription de nouveaux utilisateurs est actuellement désactivée par l'administrateur.",
     "passwordRecovery": "Récupération du mot de passe",
     "emailRecoveryNotAvailable": "La récupération par email n'est pas encore disponible. Veuillez utiliser le terminal du serveur pour réinitialiser votre mot de passe.",
     "serverTerminalInstructions": "Exécutez cette commande sur le serveur :",
