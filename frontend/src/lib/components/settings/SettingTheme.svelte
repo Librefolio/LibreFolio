@@ -4,17 +4,8 @@
      * SettingTheme.svelte
      * Theme setting with radio buttons and inline actions
      */
-    import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {RotateCcw, Save, Undo} from 'lucide-svelte';
-
-    type _DispatchEvents = {
-        save: void;
-        undo: void;
-        reset: void;
-        change: 'light' | 'dark' | 'auto';
-    };
-    const dispatch = createEventDispatcher();
+    import SettingActions from './SettingActions.svelte';
 
     // Props
     export let value: 'light' | 'dark' | 'auto' = 'auto';
@@ -24,6 +15,11 @@
     export let isModified: boolean = false;
     export let isNonDefault: boolean = false;
     export let isLocked: boolean = false;
+    export let isSaving: boolean = false;
+    export let onsave: (() => void) | undefined = undefined;
+    export let onundo: (() => void) | undefined = undefined;
+    export let onreset: (() => void) | undefined = undefined;
+    export let onchange: ((value: 'light' | 'dark' | 'auto') => void) | undefined = undefined;
 
     const themeOptions: Array<{value: 'light' | 'dark' | 'auto'; labelKey: string}> = [
         {value: 'light', labelKey: 'settings.themeLight'},
@@ -34,7 +30,7 @@
     function selectTheme(theme: 'light' | 'dark' | 'auto') {
         if (isLocked) return;
         value = theme;
-        dispatch('change', value);
+        onchange?.(value);
     }
 </script>
 
@@ -54,24 +50,7 @@
 
     <!-- Right: Actions + Radio buttons - On mobile, full width aligned right -->
     <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto">
-        <!-- Action buttons -->
-        {#if !isLocked}
-            <div class="flex items-center space-x-1">
-                {#if isModified}
-                    <button type="button" on:click={() => dispatch('save')} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="setting-save" title={$_('common.save')}>
-                        <Save size={14} />
-                    </button>
-                    <button type="button" on:click={() => dispatch('undo')} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" data-testid="setting-undo" title={$_('common.undo')}>
-                        <Undo size={14} />
-                    </button>
-                {/if}
-                {#if isNonDefault && !isModified}
-                    <button type="button" on:click={() => dispatch('reset')} class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors" data-testid="setting-reset" title={$_('common.reset')}>
-                        <RotateCcw size={14} />
-                    </button>
-                {/if}
-            </div>
-        {/if}
+        <SettingActions {isModified} {isNonDefault} {isLocked} {isSaving} {onsave} {onundo} {onreset} />
 
         <!-- Radio buttons - wrap on mobile if needed -->
         <div class="flex flex-wrap gap-2">

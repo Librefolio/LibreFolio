@@ -7,11 +7,11 @@
   Reusable in GlobalSettingsTab and future UserSettingsTab.
 -->
 <script lang="ts">
-    import {_} from '$lib/i18n';
-    import {AlertCircle, RotateCcw, Save, Undo} from 'lucide-svelte';
+    import {AlertCircle} from 'lucide-svelte';
     import type {Component} from 'svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import SettingActions from './SettingActions.svelte';
     interface Props {
         value: string;
         label: string;
@@ -65,24 +65,7 @@
 
     <!-- Right: Actions + Input -->
     <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
-        <!-- Action buttons -->
-        {#if !isLocked}
-            <div class="flex items-center space-x-1">
-                {#if isModified}
-                    <button type="button" onclick={() => onsave?.()} disabled={isSaving} class="p-1.5 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50" data-testid="setting-save" title={$_('common.save')}>
-                        <Save size={14} />
-                    </button>
-                    <button type="button" onclick={() => onundo?.()} class="p-1.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" data-testid="setting-undo" title={$_('common.undo')}>
-                        <Undo size={14} />
-                    </button>
-                {/if}
-                {#if isNonDefault && !isModified}
-                    <button type="button" onclick={() => onreset?.()} class="p-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors" data-testid="setting-reset" title={$_('common.reset')}>
-                        <RotateCcw size={14} />
-                    </button>
-                {/if}
-            </div>
-        {/if}
+        <SettingActions {isModified} {isNonDefault} {isLocked} {isSaving} {onsave} {onundo} {onreset} />
 
         <!-- Number input with optional unit -->
         <div class="flex flex-col items-end space-y-1">

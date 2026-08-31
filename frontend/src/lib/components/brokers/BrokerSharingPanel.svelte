@@ -72,6 +72,8 @@
     let loading = true;
     let saving = false;
     let error: string | null = null;
+    let errorKey: string | null = null;
+    let accessLoadState: 'loading' | 'ready' | 'error' = 'loading';
 
     // Add user state
     let showAddModal = false; // Add User as overlay modal
@@ -88,6 +90,8 @@
     let editRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
     let editSharePercent: number = 0;
     let showEditRoleDropdown = false;
+    let editError: string | null = null;
+    let editErrorKey: string | null = null;
 
     // Confirm dialogs
     let confirmRemoveOpen = false;
@@ -123,6 +127,7 @@
     // Users still addable: exclude anyone already granted access locally.
     $: selectableUsers = availableUsers.filter((u) => !existingUserIds.has(u.id));
     $: selectedUser = selectableUsers.find((u) => u.id === selectedUserId) ?? null;
+    $: canEditAccess = !readOnly && accessLoadState === 'ready';
 
     // For add form: max share available
     $: maxNewShare = newRole === 'OWNER' ? Math.max(0, Math.round((1 - totalAllocated) * 10000) / 100) : 0;
@@ -152,9 +157,16 @@
     // =========================================================================
     async function loadAccesses() {
         loading = true;
+        accessLoadState = 'loading';
         error = null;
+        errorKey = null;
+        editError = null;
+        editErrorKey = null;
         showAddModal = false;
         editingUserId = null;
+        showEditModal = false;
+        accesses = [];
+        originalAccesses = [];
 
         try {
             const response = await zodiosApi.list_broker_access_api_v1_brokers__broker_id__access_get({
@@ -169,8 +181,11 @@
                 share_percentage: parseFloat(String(item.share_percentage)) || 0,
             }));
             originalAccesses = JSON.parse(JSON.stringify(accesses));
-        } catch (e: any) {
-            error = e?.message || 'Failed to load access list';
+            accessLoadState = 'ready';
+        } catch {
+            errorKey = 'brokers.sharing.loadFailedBlocking';
+            error = $_(errorKey);
+            accessLoadState = 'error';
         } finally {
             loading = false;
         }
@@ -202,7 +217,7 @@
     // Add User (local)
     // =========================================================================
     function handleAddUser() {
-        if (readOnly || !selectedUser) return;
+        if (!canEditAccess || !selectedUser) return;
 
         const shareVal = newRole === 'OWNER' ? Math.min(newSharePercent, maxNewShare) / 100 : 0;
 
@@ -229,16 +244,25 @@
     // Edit User (local)
     // =========================================================================
     function startEdit(entry: AccessEntry) {
-        if (readOnly) return;
+        if (!canEditAccess) return;
         editingUserId = entry.user_id;
         editRole = entry.role;
         editSharePercent = Math.round(entry.share_percentage * 10000) / 100;
         showEditRoleDropdown = false;
+        editError = null;
+        editErrorKey = null;
         showEditModal = true;
     }
 
     function saveEdit() {
-        if (readOnly || editingUserId === null) return;
+        if (!canEditAccess || editingUserId === null) return;
+
+        const entry = accesses.find((a) => a.user_id === editingUserId);
+        if (entry?.role === 'OWNER' && editRole !== 'OWNER' && owners.length <= 1) {
+            editErrorKey = 'brokers.sharing.lastOwnerDemotionWarning';
+            editError = $_(editErrorKey);
+            return;
+        }
 
         accesses = accesses.map((a) => {
             if (a.user_id !== editingUserId) return a;
@@ -246,11 +270,15 @@
             return {...a, role: editRole, share_percentage: share};
         });
         editingUserId = null;
+        editError = null;
+        editErrorKey = null;
         showEditModal = false;
     }
 
     function cancelEdit() {
         editingUserId = null;
+        editError = null;
+        editErrorKey = null;
         showEditModal = false;
     }
 
@@ -258,10 +286,11 @@
     // Remove User (local with confirm)
     // =========================================================================
     function requestRemove(entry: AccessEntry) {
-        if (readOnly) return;
+        if (!canEditAccess) return;
         // Check: cannot remove last OWNER
         if (entry.role === 'OWNER' && owners.length <= 1) {
-            error = $_('brokers.sharing.lastOwnerWarning');
+            errorKey = 'brokers.sharing.lastOwnerRemovalWarning';
+            error = $_(errorKey);
             return;
         }
         confirmRemoveUserId = entry.user_id;
@@ -270,7 +299,7 @@
     }
 
     function confirmRemove() {
-        if (readOnly || confirmRemoveUserId === null) return;
+        if (!canEditAccess || confirmRemoveUserId === null) return;
         accesses = accesses.filter((a) => a.user_id !== confirmRemoveUserId);
         confirmRemoveOpen = false;
         confirmRemoveUserId = null;
@@ -281,8 +310,14 @@
     // =========================================================================
     async function handleSave() {
         if (readOnly) return;
+        if (accessLoadState !== 'ready') {
+            errorKey = 'brokers.sharing.saveRequiresLoadedAccess';
+            error = $_(errorKey);
+            return;
+        }
         saving = true;
         error = null;
+        errorKey = null;
 
         const body = accesses.map((a) => ({
             user_id: a.user_id,
@@ -304,6 +339,7 @@
             return;
         }
         error = result.message;
+        errorKey = null;
         saving = false;
     }
 
@@ -340,7 +376,7 @@
     $: roleOptions[2].shortLabel = $_('brokers.sharing.roleViewerShort');
 </script>
 
-<div class="space-y-4" data-testid="broker-sharing-panel">
+<div class="space-y-4" data-testid="broker-sharing-panel" data-access-state={accessLoadState} data-error-key={errorKey ?? undefined} aria-busy={loading ? 'true' : 'false'} aria-invalid={accessLoadState === 'error' ? 'true' : undefined}>
     <!-- Utility row: Reset (only when there are unsaved changes) -->
     {#if !readOnly && hasChanges}
         <div class="flex justify-end">
@@ -365,7 +401,30 @@
     {/if}
 
     <!-- Error / Success banners -->
-    <InfoBanner dismissible message={error} ondismiss={() => (error = null)} variant="error" />
+    <InfoBanner
+        dismissible
+        message={error}
+        ondismiss={() => {
+            error = null;
+            errorKey = null;
+        }}
+        variant="error"
+    />
+
+    {#if accessLoadState === 'error'}
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900/50 dark:bg-red-900/20" data-testid="sharing-load-error-state">
+            <span class="text-sm text-red-700 dark:text-red-200">{$_('brokers.sharing.loadFailedBlocking')}</span>
+            <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
+                data-testid="sharing-retry-load-btn"
+                on:click={loadAccesses}
+            >
+                <RotateCcw size={14} />
+                {$_('common.retry')}
+            </button>
+        </div>
+    {/if}
 
     {#if loading}
         <div class="flex items-center justify-center py-12">
@@ -384,7 +443,7 @@
                     <div class="text-xs text-gray-500 dark:text-gray-400">
                         {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{availablePercent.toFixed(1)}%</span>
                     </div>
-                    {#if !readOnly}
+                    {#if canEditAccess}
                         <button
                             type="button"
                             class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-libre-green text-white hover:bg-libre-green/90 transition-colors shadow-sm"
@@ -420,7 +479,7 @@
                             type="button"
                             class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30'}"
                             data-testid="access-entry-{entry.user_id}"
-                            disabled={readOnly}
+                            disabled={!canEditAccess}
                             on:click={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
@@ -456,7 +515,7 @@
                             type="button"
                             class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30'}"
                             data-testid="access-entry-{entry.user_id}"
-                            disabled={readOnly}
+                            disabled={!canEditAccess}
                             on:click={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
@@ -492,7 +551,7 @@
                             type="button"
                             class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700'}"
                             data-testid="access-entry-{entry.user_id}"
-                            disabled={readOnly}
+                            disabled={!canEditAccess}
                             on:click={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
@@ -527,7 +586,7 @@
                 <button
                     class="flex items-center gap-2 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     data-testid="sharing-save-btn"
-                    disabled={!hasChanges || saving}
+                    disabled={!hasChanges || saving || accessLoadState !== 'ready'}
                     on:click={handleSave}
                     type="button"
                 >
@@ -707,7 +766,8 @@
                 </div>
 
                 <!-- Body — compact inline layout -->
-                <div class="p-4 space-y-3">
+                <div class="p-4 space-y-3" data-edit-error-key={editErrorKey ?? undefined}>
+                    <InfoBanner message={editError} variant="error" />
                     <!-- Row 1: Avatar + Username + Role selector + Share % — all inline -->
                     <div class="flex items-center gap-3 flex-wrap">
                         <!-- Avatar -->
@@ -746,6 +806,8 @@
                                             type="button"
                                             class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
                                             on:click={() => {
+                                                editError = null;
+                                                editErrorKey = null;
                                                 editRole = opt.value;
                                                 showEditRoleDropdown = false;
                                                 if (opt.value !== 'OWNER') editSharePercent = 0;

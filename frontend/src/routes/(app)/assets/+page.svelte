@@ -46,7 +46,7 @@
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
     import {computeDerivedPriceState, computePeriodDelta, DELTA_PERIODS} from '$lib/utils/assetPriceDerived';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
@@ -936,6 +936,16 @@
         await Promise.allSettled(promises);
     }
 
+    function fxPointToLineDataPoint(point: {date: string; rate: number | null; backwardFillInfo?: {daysBack: number} | null}): LineDataPoint {
+        const rate = displayFxRate(point.rate, false);
+        return {
+            date: point.date,
+            value: rate ?? 0,
+            missing: rate === null,
+            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+        };
+    }
+
     /** Build pairsDataMap from FX stores for ChartSettingsModal preview */
     function buildPairsDataMap(): Record<string, LineDataPoint[]> {
         const entries: Array<[string, LineDataPoint[]]> = [];
@@ -944,7 +954,7 @@
                 const store = getFxStore(slug);
                 const data = store.getAllSorted();
                 if (data.length === 0) continue;
-                entries.push([slug, data.map((d) => ({date: d.date, value: d.rate, staleDays: d.backwardFillInfo?.daysBack ?? 0}))]);
+                entries.push([slug, data.map(fxPointToLineDataPoint)]);
             } catch {
                 /* skip */
             }
@@ -1012,10 +1022,7 @@
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => ({
-                        date: d.date,
-                        value: d.rate,
-                    }));
+                    instance.params._resolvedData = storeData.map(fxPointToLineDataPoint);
                 } catch {
                     continue;
                 }

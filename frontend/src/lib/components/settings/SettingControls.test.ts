@@ -25,8 +25,7 @@
  * identity translator so `title={$_('common.save')}` renders as that literal
  * key — every query names a key, stable in all four languages, never a
  * sentence. Where no attribute exists at all, the test asserts the callback the
- * component emits instead, which is its actual contract. The report asks for the
- * attributes that would make the visual state observable too.
+ * component emits instead, which is its actual contract.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable, writable} from 'svelte/store';
@@ -81,14 +80,7 @@ interface Reports {
     change: Mock;
 }
 
-/**
- * One mount signature over five components.
- *
- * Four of them report through Svelte 5 callback props (`onsave`, `onchange`, …);
- * `SettingTheme` is still on Svelte 4's `createEventDispatcher`, where the
- * listener arrives through the `$$events` prop. The adapter hides only that
- * difference — every other divergence is a finding, not plumbing.
- */
+/** One mount signature over five components. */
 interface Harness {
     name: string;
     mount(props?: Record<string, unknown>): Reports;
@@ -121,27 +113,7 @@ const HARNESSES: Harness[] = [
     callbackHarness('SettingNumber', SettingNumber, {value: '5'}),
     callbackHarness('SettingSelect', SettingSelect, {value: 'EUR', options: CURRENCY_OPTIONS}),
     callbackHarness('SettingCurrency', SettingCurrency, {value: 'EUR'}),
-    {
-        name: 'SettingTheme',
-        mount(props: Record<string, unknown> = {}): Reports {
-            const reports: Reports = {save: vi.fn(), undo: vi.fn(), reset: vi.fn(), change: vi.fn()};
-            render(
-                SettingTheme as never,
-                {
-                    label: 'SettingTheme label',
-                    value: 'auto',
-                    $$events: {
-                        save: reports.save,
-                        undo: reports.undo,
-                        reset: reports.reset,
-                        change: (event: CustomEvent) => reports.change(event.detail),
-                    },
-                    ...props,
-                } as never,
-            );
-            return reports;
-        },
-    },
+    callbackHarness('SettingTheme', SettingTheme, {value: 'auto'}),
 ];
 
 beforeEach(() => {
@@ -502,41 +474,11 @@ describe('SettingCurrency', () => {
     });
 });
 
-describe('the five controls do not actually agree about saving', () => {
-    // The header comments claim one API. They diverge on exactly one prop, and
-    // the divergence is not cosmetic: it decides whether a second click can send
-    // a second save.
-
-    it.each([
-        ['SettingNumber', 0],
-        ['SettingToggle', 1],
-    ])('%s withdraws Save while the save is running', (_name, index) => {
-        const harness = index === 0 ? HARNESSES[1] : HARNESSES[0];
+describe('the five controls now agree about saving', () => {
+    it.each(HARNESSES.map((harness) => [harness.name, harness] as const))('%s withdraws Save while the save is running', (_name, harness) => {
         harness.mount({isModified: true, isSaving: true});
 
         expect(screen.getByTitle(SAVE)).toBeDisabled();
-    });
-
-    it.each([
-        ['SettingSelect', 2],
-        ['SettingCurrency', 3],
-        ['SettingTheme', 4],
-    ])('%s has no such prop, so its Save button never goes quiet', async (_name, index) => {
-        // Characterisation of a real gap. These three take no `isSaving` at all,
-        // so nothing in the markup stops a second press while the first PUT is
-        // still open — two saves leave the browser. The parent tabs pass
-        // `isSaving` to the number and toggle rows and have nothing to pass here.
-        //
-        // When an `isSaving` prop is added to these three, this test goes red and
-        // names what changed.
-        const reports = HARNESSES[index].mount({isModified: true, isSaving: true});
-        const save = screen.getByTitle(SAVE);
-
-        expect(save).toBeEnabled();
-        await fireEvent.click(save);
-        await fireEvent.click(save);
-
-        expect(reports.save).toHaveBeenCalledTimes(2);
     });
 
     it('leaves every control editable during its own save', async () => {

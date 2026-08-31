@@ -7,8 +7,8 @@
  * buttons — save-all, undo-all, reset-all, lock — whose presence is decided by a
  * five-flag truth table. It owns no data and talks to no API: `categories`,
  * `selectedCategory`, `hasChanges`, `hasNonDefaults`, `isLocked` and `showLock`
- * come in as props, and `saveAll` / `undoAll` / `resetAll` / `toggleLock` go out
- * as events.
+ * come in as props, and `onsaveAll` / `onundoAll` / `onresetAll` /
+ * `ontoggleLock` go out as callback props.
  *
  * That truth table is the subject. `settings.spec.ts` drives the real settings
  * page, where the flags are whatever the stored settings happen to make them —
@@ -68,7 +68,10 @@ function mount(props: Record<string, unknown> = {}): Mounted {
         categories: CATEGORIES,
         selectedCategory: '',
         title: 'Settings under test',
-        $$events: {saveAll, undoAll, resetAll, toggleLock},
+        onsaveAll: saveAll,
+        onundoAll: undoAll,
+        onresetAll: resetAll,
+        ontoggleLock: toggleLock,
         ...props,
     } as never);
     return {container, saveAll, undoAll, resetAll, toggleLock};
@@ -317,6 +320,12 @@ describe('SettingsLayout — which actions are offered', () => {
         mount({hasChanges: true, hasNonDefaults: true, showLock: true, isLocked: false});
 
         expect(actionTitles()).toEqual(['common.saveAll', 'common.undoAll', 'common.resetAll', 'settings.lock']);
+    });
+
+    it('disables save all while a write is running', () => {
+        mount({hasChanges: true, isSaving: true});
+
+        expect(screen.getByTitle('common.saveAll')).toBeDisabled();
     });
 });
 

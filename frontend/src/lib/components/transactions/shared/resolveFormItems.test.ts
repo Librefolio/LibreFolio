@@ -14,9 +14,9 @@
  * assert that a lookup was *not* consulted — a claim the return value alone
  * cannot make.
  *
- * Note on `resolveFormItemsFromOps`: it currently has no runtime caller (see
- * the note above its describe block). It is exported public API of the module,
- * so its behaviour is pinned here anyway.
+ * Note on `resolveFormItemsFromOps`: it is the BulkModal edit-path resolver.
+ * Its adapter boundary matters: callers can project in-flight draft state
+ * before the pair guardrail runs.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -248,13 +248,7 @@ describe('resolveFormItemsForView', () => {
 //  resolveFormItemsFromOps
 // =============================================================================
 
-/**
- * No runtime caller: `TransactionBulkModal.openEditRowForm` builds the same
- * array inline (`formItems = partnerItem ? [mainItem, partnerItem] :
- * [mainItem]`), which skips both the orientation and the guardrail this
- * function applies. The tests below describe what the module promises, so that
- * whoever wires it up gets the contract rather than a rediscovery.
- */
+/** Runtime caller: `TransactionBulkModal.openEditRowForm`. */
 describe('resolveFormItemsFromOps', () => {
     const main: Op = {tempId: 'main', op: 'create', row: tx({id: 0, quantity: '10'})};
 
@@ -348,6 +342,42 @@ describe('resolveFormItemsFromOps', () => {
 
             expect(resolveFormItemsFromOps(editMain, [editMain], adapt, store.get)).toEqual([editMain.row]);
             expect(refusal).toHaveBeenCalled();
+        });
+
+        it('does not re-pair a split-queued edit tail after the caller projects the post-split type', () => {
+            const refusal = captureRefusal();
+            const splitTail: Op = {
+                tempId: 'tail',
+                op: 'edit',
+                txId: 6,
+                row: tx({
+                    id: 6,
+                    type: 'DEPOSIT',
+                    quantity: '0',
+                    cash: {code: 'EUR', amount: '100'},
+                    related_transaction_id: 5,
+                }),
+            };
+            const store = storeOf(
+                tx({
+                    id: 6,
+                    type: 'CASH_TRANSFER',
+                    quantity: '0',
+                    cash: {code: 'EUR', amount: '100'},
+                    related_transaction_id: 5,
+                }),
+                tx({
+                    id: 5,
+                    type: 'CASH_TRANSFER',
+                    quantity: '0',
+                    cash: {code: 'EUR', amount: '-100'},
+                    related_transaction_id: 6,
+                }),
+            );
+
+            expect(resolveFormItemsFromOps(splitTail, [splitTail], adapt, store.get)).toEqual([splitTail.row]);
+            expect(refusal).toHaveBeenCalled();
+            expect(store.asked).toEqual([6, 5]);
         });
 
         it.each([

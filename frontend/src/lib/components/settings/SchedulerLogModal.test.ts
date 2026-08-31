@@ -20,8 +20,8 @@
  * CSS class, and nothing waits on the clock: the two timed behaviours (the
  * `since` window and the 500 ms long-press) use fake timers.
  *
- * One characterisation is recorded and marked as such: a failed item with no
- * error message is rendered with the same green tick as a success.
+ * A failed item without an error message is still rendered as a failure, never
+ * as a success tick.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
@@ -540,18 +540,11 @@ describe('the price-run detail table', () => {
         expect(detail).toHaveTextContent('— quote unavailable');
     });
 
-    it('CHARACTERISATION: a failure with no message is ticked as if it succeeded', async () => {
-        // `{#if !item.ok && item.error}` … `{:else}` ✓ — the else arm covers
-        // both "it worked" and "it failed and said nothing", so an item the
-        // backend marked `ok: false` is presented to the user as a success.
-        // The row's own status dot still says error; the per-item cell does not.
-        //
-        // This test passes today. It will go red when the else arm stops
-        // claiming success for a failed item.
+    it('does not tick a failed item just because it has no error message', async () => {
         const detail = await openPriceDetail([{asset_id: 2, name: 'Nvidia', ok: false}]);
 
-        expect(detail).toHaveTextContent('✓');
-        expect(detail).not.toHaveTextContent('—');
+        expect(detail).toHaveTextContent('—');
+        expect(detail).not.toHaveTextContent('✓');
     });
 
     it('copies the message on a double click', async () => {

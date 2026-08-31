@@ -796,7 +796,10 @@
       "ownerDesc": "Contrôle total + % propriété",
       "editorDesc": "Peut modifier les transactions",
       "viewerDesc": "Lecture seule",
-      "lastOwnerWarning": "Impossible de supprimer le dernier propriétaire."
+      "loadFailedBlocking": "Impossible de charger les paramètres de partage actuels. L’enregistrement est désactivé tant qu’une nouvelle tentative n’a pas réussi.",
+      "saveRequiresLoadedAccess": "Chargez les paramètres de partage actuels avant d’enregistrer. Utilisez Réessayer.",
+      "lastOwnerRemovalWarning": "Impossible de supprimer le dernier owner. Promouvez d’abord un autre owner, ou supprimez le broker depuis la liste des brokers ; s’il a des transactions, utilisez la suppression forcée pour les supprimer aussi.",
+      "lastOwnerDemotionWarning": "Impossible de rétrograder le dernier owner. Promouvez d’abord un autre owner."
     },
     "lots": {
       "buyDate": "Date d'Achat",
@@ -1609,7 +1612,8 @@
       "toastOk": "{pair} supprimée ({count} taux supprimés)",
       "toastFailed": "Échec de suppression de {pair}",
       "resultDeleted": "supprimée ({n} taux)"
-    }
+    },
+    "rateNotAvailable": "Taux indisponible"
   },
   "fxDetail": {
     "editRates": "Modifier les taux",
@@ -1863,7 +1867,8 @@
           "configSummary": "Toutes les {freq}min · {times} · {days}"
         },
         "timezone": "Fuseau horaire",
-        "timezoneHint": "Les heures ci-dessous sont affichées dans ce fuseau horaire. Enregistrées en UTC."
+        "timezoneChangeWarning": "Changer de fuseau horaire conserve ces heures et jours inchangés, mais modifie l'instant d'exécution UTC réel.",
+        "timezoneHintLocal": "Les heures et jours ci-dessous sont interprétés dans ce fuseau horaire."
       }
     },
     "devicePixelRatioHint": "Rapport entre les pixels physiques de l'appareil et les pixels CSS. 1x = écran standard, 2x+ = écran Retina/HiDPI.",
@@ -1882,7 +1887,13 @@
     "pluginSystemAsset": "Actifs",
     "pluginSystemFx": "FX",
     "pluginSystemBrim": "BRIM",
-    "pluginSystemSignals": "Signaux"
+    "pluginSystemSignals": "Signaux",
+    "preferencesSaveFailed": "Impossible d’enregistrer les préférences",
+    "preferencesSavePartial": "Certaines préférences n’ont pas été enregistrées",
+    "profileSaveFailed": "Impossible d’enregistrer les modifications du profil",
+    "profileSavePartial": "Certaines modifications du profil n’ont pas été enregistrées",
+    "savedFields": "Enregistrés",
+    "failedFields": "Non enregistrés"
   },
   "sharedResource": {
     "syncAll": "Sync. Tout",

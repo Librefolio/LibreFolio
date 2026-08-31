@@ -340,7 +340,9 @@ describe('PreferencesTab — a modified row offers save and undo', () => {
 
 // =========================================================================
 describe('PreferencesTab — what a single-field save puts on the wire', () => {
-    it('sends the theme alone, and applies it locally before the request', async () => {
+    it('sends the theme alone, and applies it locally only after the request succeeds', async () => {
+        const pending = deferred<unknown>();
+        userPut().mockReturnValue(pending.promise as never);
         await mount();
         await chooseTheme('dark');
 
@@ -350,10 +352,41 @@ describe('PreferencesTab — what a single-field save puts on the wire', () => {
         // One key, not the whole settings object: a per-field save must not
         // resubmit the two fields the user did not touch.
         expect(userPut()).toHaveBeenCalledWith({theme: 'dark'});
+        expect(applyTheme).not.toHaveBeenCalled();
+
+        pending.resolve({});
+
+        await waitFor(() => expect(applyTheme).toHaveBeenCalledWith('dark'));
+    });
+
+    it('sends the language alone, and switches the app locale only after the request succeeds', async () => {
+        const pending = deferred<unknown>();
+        userPut().mockReturnValue(pending.promise as never);
+        await mount();
+        await chooseLanguage('Italiano');
+
+        await fireEvent.click(rowButton(languageRow(), 'save')!);
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
+        expect(userPut()).toHaveBeenCalledWith({language: 'it'});
+        expect(setLanguage).not.toHaveBeenCalled();
+
+        pending.resolve({});
+
+        await waitFor(() => expect(setLanguage).toHaveBeenCalledWith('it'));
+    });
+
+    it('applies the theme locally after a successful request', async () => {
+        await mount();
+        await chooseTheme('dark');
+
+        await fireEvent.click(rowButton(themeRow(), 'save')!);
+
+        await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(1));
         expect(applyTheme).toHaveBeenCalledWith('dark');
     });
 
-    it('sends the language alone, and switches the app locale', async () => {
+    it('switches the app locale after a successful request', async () => {
         await mount();
         await chooseLanguage('Italiano');
 
@@ -445,7 +478,13 @@ describe('PreferencesTab — when the save fails', () => {
 
         await waitFor(() => expect(banner()).not.toBeNull());
         expect(rowButton(themeRow(), 'save')).not.toBeNull();
-        expect(notify).not.toHaveBeenCalled();
+        expect(notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: 'settings.preferences.save.failed',
+                detail: {field: 'theme', reason: 'nope'},
+                toast: expect.objectContaining({variant: 'error'}),
+            }),
+        );
     });
 
     it('lets the user dismiss the banner without losing the edit', async () => {
@@ -473,12 +512,7 @@ describe('PreferencesTab — when the save fails', () => {
         await waitFor(() => expect(banner()).toBeNull());
     });
 
-    it('applies the theme locally even though the write failed: the screen and the server disagree', async () => {
-        // Characterisation, not an endorsement. `saveField('theme')` calls
-        // applyTheme() *before* awaiting the PUT and never rolls it back, so a
-        // rejected write leaves the app painted dark while the account is still
-        // light — and the next reload silently reverts it. Same shape for
-        // 'language': `currentLanguage.set()` also runs first.
+    it('does not apply the rejected theme locally, and raises an error toast', async () => {
         userPut().mockRejectedValue(axiosError('nope'));
         await mount();
         await chooseTheme('dark');
@@ -486,7 +520,25 @@ describe('PreferencesTab — when the save fails', () => {
         await fireEvent.click(rowButton(themeRow(), 'save')!);
 
         await waitFor(() => expect(banner()).not.toBeNull());
-        expect(applyTheme).toHaveBeenCalledWith('dark');
+        expect(applyTheme).not.toHaveBeenCalled();
+        expect(notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: 'settings.preferences.save.failed',
+                detail: {field: 'theme', reason: 'nope'},
+                toast: expect.objectContaining({variant: 'error'}),
+            }),
+        );
+    });
+
+    it('does not switch to the rejected language locally', async () => {
+        userPut().mockRejectedValue(axiosError('nope'));
+        await mount();
+        await chooseLanguage('Italiano');
+
+        await fireEvent.click(rowButton(languageRow(), 'save')!);
+
+        await waitFor(() => expect(banner()).not.toBeNull());
+        expect(setLanguage).not.toHaveBeenCalled();
     });
 });
 
@@ -500,6 +552,24 @@ describe('PreferencesTab — save all', () => {
 
         expect(bulk('saveAll')).toBeNull();
         expect(bulk('undoAll')).toBeNull();
+        expect(bulk('resetAll')).toBeNull();
+    });
+
+    it('offers reset all when at least one persisted value differs from the global default', async () => {
+        userGet().mockResolvedValue({language: 'it', base_currency: 'EUR', theme: 'auto'} as never);
+        await mount();
+
+        expect(rowButton(languageRow(), 'reset')).not.toBeNull();
+        expect(bulk('resetAll')).not.toBeNull();
+    });
+
+    it('does not offer reset all when every persisted value already matches the global defaults', async () => {
+        await mount();
+
+        expect(rowButton(languageRow(), 'reset')).toBeNull();
+        expect(rowButton(currencyRow(), 'reset')).toBeNull();
+        expect(rowButton(themeRow(), 'reset')).toBeNull();
+        expect(bulk('resetAll')).toBeNull();
     });
 
     it('sends one request per modified field and none for the untouched ones', async () => {
@@ -550,7 +620,7 @@ describe('PreferencesTab — save all', () => {
         await waitFor(() => expect(userPut()).toHaveBeenCalledTimes(3));
         expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {base_currency: 'USD'}, {theme: 'dark'}]);
         const event = notify.mock.calls[0][0];
-        expect(event.detail).toEqual({fields: 3, language: 'it', currency: 'USD', theme: 'dark'});
+        expect(event.detail).toMatchObject({fields: 3, saved: ['language', 'default_currency', 'theme'], failed: [], language: 'it', currency: 'USD', theme: 'dark'});
     });
 
     it('falls back to a translated failure when the bulk save trips on a non-axios error', async () => {
@@ -562,7 +632,13 @@ describe('PreferencesTab — save all', () => {
 
         await waitFor(() => expect(banner()).not.toBeNull());
         expect(banner()!).toHaveTextContent('settings.saveFailed');
-        expect(notify).not.toHaveBeenCalled();
+        expect(notify).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: 'settings.preferences.save.failed',
+                detail: expect.objectContaining({fields: 0, saved: [], failed: ['theme']}),
+                toast: expect.objectContaining({variant: 'error'}),
+            }),
+        );
     });
 
     it('reports how many fields were actually persisted', async () => {
@@ -574,7 +650,7 @@ describe('PreferencesTab — save all', () => {
         await waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
         const event = notify.mock.calls[0][0];
         expect(event.name).toBe('settings.preferences.saved');
-        expect(event.detail).toMatchObject({fields: 1, theme: 'dark'});
+        expect(event.detail).toMatchObject({fields: 1, saved: ['theme'], failed: [], theme: 'dark'});
         expect(event.toast.variant).toBe('success');
     });
 
@@ -591,10 +667,10 @@ describe('PreferencesTab — save all', () => {
         expect(notify).not.toHaveBeenCalled();
     });
 
-    it('stops at the first rejection and leaves the remaining fields unsaved', async () => {
-        // Language is attempted first; its failure aborts the try block before the
-        // theme PUT is ever issued. The user sees one error and two unsaved rows.
-        userPut().mockRejectedValue(axiosError('down'));
+    it('continues after a rejection and reports saved versus failed fields', async () => {
+        userPut()
+            .mockRejectedValueOnce(axiosError('down'))
+            .mockResolvedValueOnce({} as never);
         await mount();
         await chooseTheme('dark');
         await chooseLanguage('Italiano');
@@ -602,9 +678,16 @@ describe('PreferencesTab — save all', () => {
         await fireEvent.click(bulk('saveAll')!);
 
         await waitFor(() => expect(banner()).not.toBeNull());
-        expect(userPut()).toHaveBeenCalledTimes(1);
-        expect(notify).not.toHaveBeenCalled();
-        expect(rowButton(themeRow(), 'save')).not.toBeNull();
+        expect(userPut()).toHaveBeenCalledTimes(2);
+        expect(userPut().mock.calls.map((c) => c[0])).toEqual([{language: 'it'}, {theme: 'dark'}]);
+        expect(setLanguage).not.toHaveBeenCalled();
+        expect(applyTheme).toHaveBeenCalledWith('dark');
+        expect(rowButton(languageRow(), 'save')).not.toBeNull();
+        expect(rowButton(themeRow(), 'save')).toBeNull();
+        const event = notify.mock.calls[0][0];
+        expect(event.name).toBe('settings.preferences.save.partial');
+        expect(event.detail).toMatchObject({fields: 1, saved: ['theme'], failed: ['language'], reasons: {language: 'down'}});
+        expect(event.toast.variant).toBe('warning');
     });
 
     it('puts every row back on undo all', async () => {
@@ -624,15 +707,12 @@ describe('PreferencesTab — save all', () => {
         userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'dark'} as never);
         await mount();
 
-        // resetAll is only reachable through SettingsLayout when it is told there
-        // are non-defaults — PreferencesTab hardcodes `hasNonDefaults={false}`, so
-        // the bulk Reset button is never rendered. Per-row Reset is the only way in.
-        expect(bulk('resetAll')).toBeNull();
-        await fireEvent.click(rowButton(themeRow(), 'reset')!);
-        await fireEvent.click(rowButton(languageRow(), 'reset')!);
+        expect(bulk('resetAll')).not.toBeNull();
+        await fireEvent.click(bulk('resetAll')!);
 
         await waitFor(() => expect(rowButton(themeRow(), 'save')).not.toBeNull());
         expect(rowButton(languageRow(), 'save')).not.toBeNull();
+        expect(rowButton(currencyRow(), 'save')).not.toBeNull();
     });
 });
 

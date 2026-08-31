@@ -115,19 +115,33 @@ function roundOpacity(op: number): number {
     return op >= 1.0 ? 1.0 : 0.5;
 }
 
-export function buildMainSeries(values: number[], staleDays: number[], baseColor: string, greenColor: string, redColor: string, isDark: boolean, areaFill: boolean, lineWidth: number, seriesName: string, useBaseline: boolean, baseline: number, useStale: boolean): any[] {
+export function buildMainSeries(values: Array<number | null>, staleDays: number[], baseColor: string, greenColor: string, redColor: string, isDark: boolean, areaFill: boolean, lineWidth: number, seriesName: string, useBaseline: boolean, baseline: number, useStale: boolean): any[] {
     if (values.length === 0) return [];
 
     const n = values.length;
-
-    // ── Single-point: render as circle marker (no line segment possible) ──
-    if (n === 1) {
-        const color = useBaseline ? (values[0] >= baseline ? greenColor : redColor) : baseColor;
+    const presentValues = values.filter((value): value is number => value !== null);
+    if (presentValues.length === 0) {
         return [
             {
                 name: seriesName,
                 type: 'line',
-                data: [values[0]],
+                data: values,
+                showSymbol: false,
+                symbol: 'none',
+                lineStyle: {width: lineWidth, color: baseColor},
+                areaStyle: undefined,
+            },
+        ];
+    }
+
+    // ── Single-point: render as circle marker (no line segment possible) ──
+    if (presentValues.length === 1) {
+        const color = useBaseline ? (presentValues[0] >= baseline ? greenColor : redColor) : baseColor;
+        return [
+            {
+                name: seriesName,
+                type: 'line',
+                data: values,
                 showSymbol: true,
                 symbol: 'circle',
                 symbolSize: 8,
@@ -147,9 +161,15 @@ export function buildMainSeries(values: number[], staleDays: number[], baseColor
     const pointOpacities: number[] = new Array(n);
 
     for (let i = 0; i < n; i++) {
+        const value = values[i];
+        if (value === null) {
+            pointColors[i] = baseColor;
+            pointOpacities[i] = 1.0;
+            continue;
+        }
         // Determine color
         if (useBaseline) {
-            pointColors[i] = values[i] >= baseline ? greenColor : redColor;
+            pointColors[i] = value >= baseline ? greenColor : redColor;
         } else {
             pointColors[i] = baseColor;
         }
@@ -159,9 +179,30 @@ export function buildMainSeries(values: number[], staleDays: number[], baseColor
 
     // ── Step 2: Build contiguous segments ──
     const segments: Segment[] = [];
-    let segStart = 0;
-    for (let i = 1; i <= n; i++) {
-        const sameGroup = i < n && pointColors[i] === pointColors[segStart] && pointOpacities[i] === pointOpacities[segStart];
+    let segStart: number | null = null;
+    for (let i = 0; i <= n; i++) {
+        const value = i < n ? values[i] : null;
+        if (value === null) {
+            if (segStart !== null) {
+                const isStale = pointOpacities[segStart] < 1.0;
+                segments.push({
+                    start: segStart,
+                    end: i - 1,
+                    color: pointColors[segStart],
+                    opacity: pointOpacities[segStart],
+                    isStale,
+                    staleStart: staleDays[segStart] ?? 0,
+                    staleEnd: staleDays[i - 1] ?? 0,
+                });
+                segStart = null;
+            }
+            continue;
+        }
+        if (segStart === null) {
+            segStart = i;
+            continue;
+        }
+        const sameGroup = pointColors[i] === pointColors[segStart] && pointOpacities[i] === pointOpacities[segStart];
         if (!sameGroup) {
             const isStale = pointOpacities[segStart] < 1.0;
             segments.push({

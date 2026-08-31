@@ -10,8 +10,9 @@
  * Why a component test and not an E2E. `front-utility settings` already walks the
  * happy path. What it cannot reach is the half of this component that only exists
  * when the server refuses: `saveField` **puts the old value back in the input**
- * on failure, `saveAll` reports a partial list, the avatar save reverts, and
- * `handleDeleteAccount` has to survive a rejection without logging the user out.
+ * on failure, `saveAll` reports saved versus failed fields and reverts refusals,
+ * the avatar save reverts, and `handleDeleteAccount` has to survive a rejection
+ * without logging the user out.
  * Provoking those against a live backend means making it reject a profile PUT on
  * command; here they are four lines of setup. The error banner also disappears on
  * a 5 s timer, which a real clock makes either slow or flaky and fake timers make
@@ -476,10 +477,32 @@ describe('ProfileTab — save all', () => {
         expect(profilePut().mock.calls.map((c) => c[0])).toEqual([{username: 'alice2'}, {email: 'new@example.com'}]);
         const event = notify.mock.calls[0][0];
         expect(event.name).toBe('settings.profile.saved');
-        expect(event.detail).toEqual({fields: 2});
+        expect(event.detail).toMatchObject({fields: 2, saved: ['username', 'email'], failed: []});
     });
 
-    it('stops at the first rejection and leaves the second field unsaved', async () => {
+    it('tries every field, keeps what saved, and reverts what failed', async () => {
+        profilePut()
+            .mockRejectedValueOnce(axiosError('Username already taken'))
+            .mockResolvedValueOnce({} as never);
+        await mountUnlocked();
+        await type(username(), 'alice2');
+        await type(email(), 'new@example.com');
+
+        await fireEvent.click(saveAll()!);
+
+        await waitFor(() => expect(error()).not.toBeNull());
+        expect(profilePut()).toHaveBeenCalledTimes(2);
+        expect(profilePut().mock.calls.map((c) => c[0])).toEqual([{username: 'alice2'}, {email: 'new@example.com'}]);
+        expect(username()).toHaveValue('alice');
+        expect(email()).toHaveValue('new@example.com');
+        expect(checkAuth).toHaveBeenCalledTimes(1);
+        const event = notify.mock.calls[0][0];
+        expect(event.name).toBe('settings.profile.save.partial');
+        expect(event.detail).toMatchObject({fields: 1, saved: ['email'], failed: ['username'], reasons: {username: 'Username already taken'}});
+        expect(event.toast.variant).toBe('warning');
+    });
+
+    it('reverts every rejected field when the bulk save fails completely', async () => {
         profilePut().mockRejectedValue(axiosError('Username already taken'));
         await mountUnlocked();
         await type(username(), 'alice2');
@@ -488,12 +511,15 @@ describe('ProfileTab — save all', () => {
         await fireEvent.click(saveAll()!);
 
         await waitFor(() => expect(error()).not.toBeNull());
-        expect(profilePut()).toHaveBeenCalledTimes(1);
-        expect(notify).not.toHaveBeenCalled();
-        // Unlike the per-field path, saveAll does NOT revert: both edits are still
-        // on screen, which is what lets the user fix the username and retry.
-        expect(username()).toHaveValue('alice2');
-        expect(email()).toHaveValue('new@example.com');
+        expect(profilePut()).toHaveBeenCalledTimes(2);
+        expect(checkAuth).not.toHaveBeenCalled();
+        expect(username()).toHaveValue('alice');
+        expect(email()).toHaveValue('alice@example.com');
+        expect(saveAll()).toBeNull();
+        const event = notify.mock.calls[0][0];
+        expect(event.name).toBe('settings.profile.save.failed');
+        expect(event.detail).toMatchObject({fields: 0, saved: [], failed: ['username', 'email']});
+        expect(event.toast.variant).toBe('error');
     });
 
     it('puts both fields back on undo all', async () => {

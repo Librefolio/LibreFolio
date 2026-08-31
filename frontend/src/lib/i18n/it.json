@@ -796,7 +796,10 @@
       "ownerDesc": "Controllo totale + % possesso",
       "editorDesc": "Può modificare transazioni",
       "viewerDesc": "Sola lettura",
-      "lastOwnerWarning": "Non è possibile rimuovere l'ultimo proprietario."
+      "loadFailedBlocking": "Impossibile caricare le impostazioni di condivisione attuali. Il salvataggio è disabilitato finché un nuovo tentativo non riesce.",
+      "saveRequiresLoadedAccess": "Carica le impostazioni di condivisione attuali prima di salvare. Usa Riprova.",
+      "lastOwnerRemovalWarning": "Non puoi rimuovere l’ultimo owner. Promuovi prima un altro owner, oppure elimina il broker dalla lista broker; se ha transazioni, usa l’eliminazione forzata per eliminare anche quelle.",
+      "lastOwnerDemotionWarning": "Non puoi retrocedere l’ultimo owner. Promuovi prima un altro owner."
     },
     "lots": {
       "buyDate": "Data Acquisto",
@@ -1609,7 +1612,8 @@
       "toastOk": "{pair} eliminata ({count} tassi rimossi)",
       "toastFailed": "Impossibile eliminare {pair}",
       "resultDeleted": "eliminata ({n} tassi)"
-    }
+    },
+    "rateNotAvailable": "Tasso non disponibile"
   },
   "fxDetail": {
     "editRates": "Modifica tassi",
@@ -1863,7 +1867,8 @@
           "configSummary": "Ogni {freq}min · {times} · {days}"
         },
         "timezone": "Fuso orario",
-        "timezoneHint": "Gli orari sottostanti sono visualizzati in questo fuso orario. Salvati in UTC."
+        "timezoneChangeWarning": "Cambiare fuso mantiene invariati questi orari e giorni, ma cambia l'istante effettivo di esecuzione in UTC.",
+        "timezoneHintLocal": "Gli orari e i giorni qui sotto sono interpretati in questo fuso orario."
       }
     },
     "devicePixelRatioHint": "Rapporto tra i pixel fisici del dispositivo e i pixel CSS. 1x = schermo standard, 2x+ = schermo Retina/HiDPI.",
@@ -1882,7 +1887,13 @@
     "pluginSystemAsset": "Asset",
     "pluginSystemFx": "FX",
     "pluginSystemBrim": "BRIM",
-    "pluginSystemSignals": "Segnali"
+    "pluginSystemSignals": "Segnali",
+    "preferencesSaveFailed": "Impossibile salvare le preferenze",
+    "preferencesSavePartial": "Alcune preferenze non sono state salvate",
+    "profileSaveFailed": "Impossibile salvare le modifiche al profilo",
+    "profileSavePartial": "Alcune modifiche al profilo non sono state salvate",
+    "savedFields": "Salvati",
+    "failedFields": "Non salvati"
   },
   "sharedResource": {
     "syncAll": "Sinc. Tutto",

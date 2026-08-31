@@ -19,10 +19,10 @@ except ImportError:
 class SchedulerSettings:
     scheduler_enabled: bool
     current_price_frequency_minutes: int
-    history_sync_times: List[time]  # UTC time objects
-    history_sync_days: List[str]  # ["mon", "tue", ...]
+    history_sync_times: List[time]  # local time objects in scheduler_timezone
+    history_sync_days: List[str]  # local day codes ["mon", "tue", ...]
     history_sync_horizon_days: int
-    scheduler_timezone: str  # IANA timezone (for frontend display only)
+    scheduler_timezone: str  # IANA timezone used to decide history-sync due slots
 
 
 def _parse_times(csv: str) -> List[time]:
@@ -37,11 +37,7 @@ def _parse_times(csv: str) -> List[time]:
 
 
 def _local_times_to_utc(local_times: List[time], tz_name: str) -> List[time]:
-    """Convert a list of local times to UTC using today's date for DST offset.
-
-    Used only for computing first-boot defaults — once times are saved they
-    are already stored in UTC.
-    """
+    """Convert local times to UTC using today's date for legacy UTC-storage data."""
     try:
         tz = ZoneInfo(tz_name)
     except (KeyError, Exception):
@@ -66,9 +62,8 @@ def _parse_days(csv: str) -> List[str]:
 async def load_scheduler_settings() -> SchedulerSettings:
     """Read scheduler settings from GlobalSetting table (own session).
 
-    Times are stored in UTC. If no times are configured yet (first boot),
-    compute defaults of "06:00,23:00" in the configured timezone and convert
-    to UTC before returning.
+    Times and days are stored in the configured scheduler timezone. The scheduler
+    converts each local slot to a UTC instant only when deciding whether it is due.
     """
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
@@ -81,12 +76,10 @@ async def load_scheduler_settings() -> SchedulerSettings:
 
     scheduler_tz = str(tz_name) if tz_name else "UTC"
 
-    # If times are not configured yet → compute defaults in configured timezone → UTC
     if times_csv:
         sync_times = _parse_times(str(times_csv))
     else:
-        default_local = _parse_times("06:00,23:00")
-        sync_times = _local_times_to_utc(default_local, scheduler_tz)
+        sync_times = _parse_times("06:00,23:00")
 
     return SchedulerSettings(
         scheduler_enabled=enabled if isinstance(enabled, bool) else str(enabled).lower() == "true",

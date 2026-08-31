@@ -2,8 +2,8 @@
   SchedulerConfigModal.svelte — Svelte 5
 
   Modal for configuring scheduler settings: frequency, time slots, days, horizon.
-  Times are stored in UTC. The user selects an IANA timezone and sees/edits times
-  in that timezone; conversion to/from UTC happens on open/save.
+  Times and days are stored in the configured scheduler timezone. The backend
+  converts local slots to UTC only when deciding if a job is due.
   Uses ModalBase + InfoBanner. Saves each key individually via PUT.
 -->
 <script lang="ts">
@@ -49,6 +49,7 @@
     let saving = $state(false);
     let error: string | null = $state(null);
     let selectedTz = $state('UTC');
+    let initialTz = $state('UTC');
     let tzSearch = $state('');
     let tzDropdownOpen = $state(false);
 
@@ -65,50 +66,6 @@
 
     let filteredTimezones = $derived(tzSearch.length > 0 ? TIMEZONES.filter((tz) => tz.toLowerCase().includes(tzSearch.toLowerCase())).slice(0, 30) : TIMEZONES.slice(0, 30));
 
-    // ── UTC ↔ Local conversion helpers ──
-
-    function utcToLocal(utcTime: string, tz: string): string {
-        try {
-            const [h, m] = utcTime.split(':').map(Number);
-            const now = new Date();
-            const utcDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), h, m));
-            const localStr = utcDate.toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: tz, hour12: false});
-            return localStr;
-        } catch {
-            return utcTime;
-        }
-    }
-
-    function localToUtc(localTime: string, tz: string): string {
-        try {
-            const [h, m] = localTime.split(':').map(Number);
-            // Create a date in the target timezone and find the UTC equivalent
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-            // Use Intl to find the UTC offset for this timezone
-            const formatter = new Intl.DateTimeFormat('en-US', {timeZone: tz, timeZoneName: 'shortOffset'});
-            const parts = formatter.formatToParts(new Date(dateStr));
-            const offsetPart = parts.find((p) => p.type === 'timeZoneName')?.value ?? '+00:00';
-            // Parse offset
-            const match = offsetPart.match(/GMT([+-]?\d+)?(?::(\d+))?/);
-            let offsetMinutes = 0;
-            if (match) {
-                const hours = parseInt(match[1] || '0', 10);
-                const mins = parseInt(match[2] || '0', 10);
-                offsetMinutes = hours * 60 + (hours >= 0 ? mins : -mins);
-            }
-            // Subtract offset to get UTC
-            let totalMinutes = h * 60 + m - offsetMinutes;
-            if (totalMinutes < 0) totalMinutes += 24 * 60;
-            if (totalMinutes >= 24 * 60) totalMinutes -= 24 * 60;
-            const utcH = Math.floor(totalMinutes / 60);
-            const utcM = totalMinutes % 60;
-            return `${String(utcH).padStart(2, '0')}:${String(utcM).padStart(2, '0')}`;
-        } catch {
-            return localTime;
-        }
-    }
-
     // Reset local state only on open transition (false → true).
     // untrack(currentValues) prevents re-triggering when parent re-renders the inline object.
     let wasOpen = $state(false);
@@ -117,10 +74,9 @@
         if (isOpen && !wasOpen) {
             untrack(() => {
                 frequency = currentValues.frequency;
-                // Times from backend are in UTC — convert to local display
-                selectedTz = schedulerTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-                const utcTimes = currentValues.times ? currentValues.times.split(',').filter(Boolean) : [];
-                timeSlots = utcTimes.map((t) => utcToLocal(t, selectedTz));
+                selectedTz = schedulerTimezone || 'UTC';
+                initialTz = selectedTz;
+                timeSlots = currentValues.times ? currentValues.times.split(',').filter(Boolean) : [];
                 const activeDays = currentValues.days ? currentValues.days.split(',').map((d: string) => d.trim().toLowerCase()) : [];
                 selectedDays = Object.fromEntries(DAY_KEYS.map((d) => [d, activeDays.includes(d)]));
                 horizon = currentValues.horizon;
@@ -145,6 +101,11 @@
         timeSlots = timeSlots.filter((s) => s !== t);
     }
 
+    function changeTimezone(nextTz: string) {
+        if (nextTz === selectedTz) return;
+        selectedTz = nextTz;
+    }
+
     function toggleDay(day: string) {
         // Don't allow unchecking the last selected day
         const currentSelected = Object.entries(selectedDays).filter(([, v]) => v);
@@ -155,18 +116,16 @@
     let hasAtLeastOneDay = $derived(Object.values(selectedDays).some((v) => v));
     let hasAtLeastOneTime = $derived(timeSlots.length > 0);
     let canSave = $derived(frequency >= 1 && frequency <= 1440 && hasAtLeastOneTime && hasAtLeastOneDay && horizon >= 1 && horizon <= 365);
+    let timezoneChanged = $derived(selectedTz !== initialTz);
 
     async function handleSave() {
         if (!canSave) return;
         saving = true;
         error = null;
 
-        // Convert local display times → UTC for storage
-        const utcTimes = timeSlots.map((t) => localToUtc(t, selectedTz));
-
         const keysToSave: [string, string][] = [
             ['scheduler_current_price_frequency_minutes', String(frequency)],
-            ['scheduler_history_sync_times', utcTimes.join(',')],
+            ['scheduler_history_sync_times', timeSlots.join(',')],
             [
                 'scheduler_history_sync_days',
                 Object.entries(selectedDays)
@@ -188,7 +147,7 @@
             // else, so without this the user cannot tell a save from a dismiss.
             notify({
                 name: 'settings.scheduler.saved',
-                detail: {frequencyMinutes: frequency, horizonDays: horizon, timezone: selectedTz, times: utcTimes.length},
+                detail: {frequencyMinutes: frequency, horizonDays: horizon, timezone: selectedTz, times: timeSlots.length},
                 toast: {variant: 'success', message: $_('settings.savedSuccessfully')},
             });
         } catch (e: any) {
@@ -258,7 +217,7 @@
                                 class="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 {tz === selectedTz ? 'text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300'}"
                                 onmousedown={(e) => e.preventDefault()}
                                 onclick={() => {
-                                    selectedTz = tz;
+                                    changeTimezone(tz);
                                     tzSearch = '';
                                     tzDropdownOpen = false;
                                 }}>{tz}</button
@@ -267,7 +226,12 @@
                     </div>
                 {/if}
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.timezoneHint') || 'Times below are displayed in this timezone. Stored in UTC.'}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.timezoneHintLocal')}</p>
+            {#if timezoneChanged}
+                <div data-testid="scheduler-timezone-change-warning" class="mt-2">
+                    <InfoBanner variant="warning" message={$_('settings.global.scheduler.timezoneChangeWarning')} />
+                </div>
+            {/if}
         </section>
 
         <!-- Error -->

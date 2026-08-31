@@ -228,6 +228,8 @@ export interface RenderedSignal {
     aggregationProfile: SignalAggregationProfile;
     /** Signed histograms keep semantic green/red bars until explicitly overridden. */
     barColorMode?: 'signed' | 'single';
+    /** Whether ECharts may connect gaps in sparse overlay series. Default preserves legacy true. */
+    connectNulls?: boolean;
     /**
      * Band data for confidence-band rendering (seriesType === 'band').
      * Contains parallel arrays for upper, middle, lower values aligned to `data[].date`.

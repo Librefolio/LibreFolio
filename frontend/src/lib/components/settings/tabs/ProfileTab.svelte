@@ -151,34 +151,62 @@
         saving = true;
         error = null;
 
-        const saved: string[] = [];
+        const fields: ('username' | 'email')[] = [];
+        if (usernameModified) fields.push('username');
+        if (emailModified) fields.push('email');
 
-        try {
-            if (usernameModified) {
-                await zodiosApi.update_profile_api_v1_auth_profile_put({username: editedUsername});
-                saved.push($_('auth.username'));
-            }
-            if (emailModified) {
-                await zodiosApi.update_profile_api_v1_auth_profile_put({email: editedEmail});
-                saved.push($_('auth.email'));
-            }
+        const saved: {field: 'username' | 'email'; label: string}[] = [];
+        const failed: {field: 'username' | 'email'; label: string; reason: string}[] = [];
 
-            if (saved.length > 0) {
-                await auth.checkAuth();
-                notify({
-                    name: 'settings.profile.saved',
-                    detail: {fields: saved.length},
-                    toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${saved.map((l) => `<li>${l}</li>`).join('')}</ul>`},
+        for (const field of fields) {
+            try {
+                const payload = field === 'username' ? {username: editedUsername} : {email: editedEmail};
+                await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
+                saved.push({field, label: field === 'username' ? $_('auth.username') : $_('auth.email')});
+                if (field === 'username') originalUsername = editedUsername;
+                else originalEmail = editedEmail;
+            } catch (e: unknown) {
+                debug.error('ProfileTab', 'saveAll field failed', e);
+                const detail = isAxiosError(e) ? e.response?.data?.detail : null;
+                failed.push({
+                    field,
+                    label: field === 'username' ? $_('auth.username') : $_('auth.email'),
+                    reason: detail || (e instanceof Error ? e.message : $_('settings.updateFailed')),
                 });
+                if (field === 'username') editedUsername = originalUsername;
+                else editedEmail = originalEmail;
             }
-        } catch (e: unknown) {
-            debug.error('ProfileTab', 'saveAll failed', e);
-            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
-            error = detail || (e instanceof Error ? e.message : $_('settings.updateFailed'));
-            setTimeout(() => (error = null), 5000);
-        } finally {
-            saving = false;
         }
+
+        if (saved.length > 0) {
+            await auth.checkAuth();
+        }
+
+        if (failed.length > 0) {
+            error = failed.map((f) => `${f.label}: ${f.reason}`).join('\n');
+            setTimeout(() => (error = null), 5000);
+        }
+
+        if (saved.length > 0 || failed.length > 0) {
+            const savedList = saved.map((s) => `<li>${s.label}</li>`).join('');
+            const failedList = failed.map((f) => `<li>${f.label}</li>`).join('');
+            const message =
+                failed.length === 0
+                    ? `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${savedList}</ul>`
+                    : `${$_(saved.length === 0 ? 'settings.profileSaveFailed' : 'settings.profileSavePartial')}:<div class="mt-1">${$_('settings.savedFields')}</div><ul class="list-inside list-disc">${savedList}</ul><div class="mt-1">${$_('settings.failedFields')}</div><ul class="list-inside list-disc">${failedList}</ul>`;
+            notify({
+                name: failed.length === 0 ? 'settings.profile.saved' : saved.length === 0 ? 'settings.profile.save.failed' : 'settings.profile.save.partial',
+                detail: {
+                    fields: saved.length,
+                    saved: saved.map((s) => s.field),
+                    failed: failed.map((f) => f.field),
+                    reasons: Object.fromEntries(failed.map((f) => [f.field, f.reason])),
+                },
+                toast: {variant: failed.length === 0 ? 'success' : saved.length === 0 ? 'error' : 'warning', message},
+            });
+        }
+
+        saving = false;
     }
 
     // Undo all changes

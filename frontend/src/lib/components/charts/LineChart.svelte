@@ -33,6 +33,8 @@
     export interface LineDataPoint {
         date: string;
         value: number;
+        /** True when the point exists but its numeric value is unavailable; rendered as an ECharts null gap. */
+        missing?: boolean;
         staleDays?: number;
         fxStaleDays?: number;
         originalCurrency?: string;
@@ -322,7 +324,7 @@
                 chartInstance.on('click', 'series.line', (params: any) => {
                     if (params.dataIndex !== undefined && currentRenderedData[params.dataIndex]) {
                         const point = currentRenderedData[params.dataIndex];
-                        onPointClick!(point.date, point.value);
+                        if (!point.missing) onPointClick!(point.date, point.value);
                     }
                 });
             }
@@ -372,7 +374,8 @@
 
         // Determine if we need baseline coloring (green above baseline, red below)
         const useBaselineColoring = colorByBaseline && !compact;
-        const baselineValue = isPercentage ? 0 : (renderedData[0]?.value ?? 0);
+        const firstValue = renderedData.find((point) => !point.missing)?.value ?? 0;
+        const baselineValue = isPercentage ? 0 : firstValue;
 
         // Build per-point stale data array
         const staleDaysArr = renderedData.map((d) => d.staleDays ?? 0);
@@ -384,7 +387,7 @@
 
         // ── Unified main series: handles baseline coloring + stale gradient together ──
         {
-            const values = renderedData.map((d) => d.value);
+            const values = renderedData.map((d) => (d.missing ? null : d.value));
             const lineW = compact ? 1.5 : 2;
             const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, lineW, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
             series.push(...mainSeriesList);
@@ -448,7 +451,7 @@
                     type: 'line',
                     name: signal.label,
                     data: signalSeriesData,
-                    connectNulls: true,
+                    connectNulls: signal.connectNulls ?? true,
                     smooth: false,
                     symbol: 'none',
                     showSymbol: false,

@@ -796,7 +796,10 @@
       "ownerDesc": "Control total + % propiedad",
       "editorDesc": "Puede modificar transacciones",
       "viewerDesc": "Solo lectura",
-      "lastOwnerWarning": "No se puede eliminar al último propietario."
+      "loadFailedBlocking": "No se pudieron cargar los ajustes de uso compartido actuales. El guardado está desactivado hasta que un nuevo intento se complete correctamente.",
+      "saveRequiresLoadedAccess": "Carga los ajustes de uso compartido actuales antes de guardar. Usa Reintentar.",
+      "lastOwnerRemovalWarning": "No puedes eliminar el último owner. Promociona primero a otro owner, o elimina el broker desde la lista de brokers; si tiene transacciones, usa la eliminación forzada para eliminarlas también.",
+      "lastOwnerDemotionWarning": "No puedes degradar al último owner. Promociona primero a otro owner."
     },
     "lots": {
       "buyDate": "Fecha de Compra",
@@ -1609,7 +1612,8 @@
       "toastOk": "{pair} eliminado ({count} tasas eliminadas)",
       "toastFailed": "Error al eliminar {pair}",
       "resultDeleted": "eliminado ({n} tasas)"
-    }
+    },
+    "rateNotAvailable": "Tipo de cambio no disponible"
   },
   "fxDetail": {
     "editRates": "Editar tasas",
@@ -1863,7 +1867,8 @@
           "configSummary": "Cada {freq}min · {times} · {days}"
         },
         "timezone": "Zona horaria",
-        "timezoneHint": "Las horas siguientes se muestran en esta zona horaria. Guardadas en UTC."
+        "timezoneChangeWarning": "Cambiar la zona horaria mantiene iguales estas horas y días, pero cambia el instante real de ejecución en UTC.",
+        "timezoneHintLocal": "Las horas y los días siguientes se interpretan en esta zona horaria."
       }
     },
     "devicePixelRatioHint": "Relación entre los píxeles físicos del dispositivo y los píxeles CSS. 1x = pantalla estándar, 2x+ = pantalla Retina/HiDPI.",
@@ -1882,7 +1887,13 @@
     "pluginSystemAsset": "Activos",
     "pluginSystemFx": "FX",
     "pluginSystemBrim": "BRIM",
-    "pluginSystemSignals": "Señales"
+    "pluginSystemSignals": "Señales",
+    "preferencesSaveFailed": "No se pudieron guardar las preferencias",
+    "preferencesSavePartial": "Algunas preferencias no se guardaron",
+    "profileSaveFailed": "No se pudieron guardar los cambios del perfil",
+    "profileSavePartial": "Algunos cambios del perfil no se guardaron",
+    "savedFields": "Guardados",
+    "failedFields": "No guardados"
   },
   "sharedResource": {
     "syncAll": "Sinc. Todo",

@@ -796,7 +796,10 @@
       "ownerDesc": "Full control + ownership %",
       "editorDesc": "Can modify transactions",
       "viewerDesc": "Read only",
-      "lastOwnerWarning": "Cannot remove the last owner."
+      "loadFailedBlocking": "Could not load current sharing settings. Saving is disabled until you retry successfully.",
+      "saveRequiresLoadedAccess": "Load the current sharing settings before saving. Use Retry.",
+      "lastOwnerRemovalWarning": "Cannot remove the last owner. Promote another owner first, or delete the broker from the broker list; if it has transactions, use force delete to delete them too.",
+      "lastOwnerDemotionWarning": "Cannot demote the last owner. Promote another owner first."
     },
     "lots": {
       "unifiedLots": "Lots",
@@ -1609,7 +1612,8 @@
       "toastOk": "{pair} deleted ({count} rates removed)",
       "toastFailed": "Failed to delete {pair}",
       "resultDeleted": "deleted ({n} rates)"
-    }
+    },
+    "rateNotAvailable": "Rate not available"
   },
   "fxDetail": {
     "editRates": "Edit Rates",
@@ -1863,7 +1867,8 @@
           "configSummary": "Every {freq}min · {times} · {days}"
         },
         "timezone": "Timezone",
-        "timezoneHint": "Times below are displayed in this timezone. Stored in UTC."
+        "timezoneChangeWarning": "Changing the timezone keeps these clock times and weekdays unchanged, but changes the actual UTC execution instant.",
+        "timezoneHintLocal": "Times and weekdays below are interpreted in this timezone."
       }
     },
     "devicePixelRatioHint": "Ratio between physical device pixels and CSS pixels. 1x = standard display, 2x+ = Retina/HiDPI display.",
@@ -1882,7 +1887,13 @@
     "pluginSystemAsset": "Asset",
     "pluginSystemFx": "FX",
     "pluginSystemBrim": "BRIM",
-    "pluginSystemSignals": "Signals"
+    "pluginSystemSignals": "Signals",
+    "preferencesSaveFailed": "Could not save preferences",
+    "preferencesSavePartial": "Some preferences were not saved",
+    "profileSaveFailed": "Could not save profile changes",
+    "profileSavePartial": "Some profile changes were not saved",
+    "savedFields": "Saved",
+    "failedFields": "Not saved"
   },
   "sharedResource": {
     "syncAll": "Sync All",

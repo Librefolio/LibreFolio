@@ -46,7 +46,9 @@
  * `handleAddUser` / `startEdit` / `confirmRemove` / `handleSave` — when `readOnly`
  * is set the entire `{#if !readOnly}` block that hosts those controls is never
  * rendered, so the guards have no caller. What *is* asserted is the surface: that
- * a read-only panel offers no way in.
+ * a read-only panel offers no way in. The load-failed guards are asserted through
+ * their public state (`data-access-state`) and by synthetic save dispatch, because
+ * the real button is disabled.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -122,10 +124,8 @@ interface MountOptions {
 }
 
 /**
- * Render the panel with both read calls programmed, and wait until the load has
- * finished. The barrier is the owners column, which lives in the `{:else}` of the
- * loading spinner — it is therefore present exactly when `loading` is false, on
- * the failure path too, and does not depend on any row existing.
+ * Render the panel with both read calls programmed, and wait until the access list
+ * is known-good. Failed reads are a different state, not an empty-good list.
  */
 async function mountPanel({accesses = [], users = [], props = {}}: MountOptions = {}) {
     api[LIST].mockResolvedValue({items: accesses});
@@ -136,7 +136,23 @@ async function mountPanel({accesses = [], users = [], props = {}}: MountOptions 
 }
 
 async function settled() {
-    await waitFor(() => expect(screen.getByTestId('sharing-owners-column')).toBeInTheDocument());
+    await waitFor(() => expect(panel()).toHaveAttribute('data-access-state', 'ready'));
+}
+
+async function loadFailed() {
+    await waitFor(() => expect(panel()).toHaveAttribute('data-access-state', 'error'));
+}
+
+function panel(): HTMLElement {
+    return screen.getByTestId('broker-sharing-panel');
+}
+
+function panelErrorKey(): string | null {
+    return panel().getAttribute('data-error-key');
+}
+
+function editErrorKey(): string | null {
+    return screen.getByTestId('sharing-edit-user-modal').querySelector('[data-edit-error-key]')?.getAttribute('data-edit-error-key') ?? null;
 }
 
 // =========================================================================
@@ -282,6 +298,23 @@ beforeEach(() => {
 // =========================================================================
 
 describe('BrokerSharingPanel — loading', () => {
+    it('publishes loading before the access read settles, then ready after it succeeds', async () => {
+        await setupI18n();
+        const flight = deferred<{items: ReturnType<typeof access>[]}>();
+        api[LIST].mockReturnValue(flight.promise);
+
+        render(BrokerSharingPanel, {brokerId: 7});
+
+        expect(panel()).toHaveAttribute('data-access-state', 'loading');
+        expect(panel()).toHaveAttribute('aria-busy', 'true');
+
+        flight.resolve({items: [access(1, 'alice', 'OWNER', 1)]});
+
+        await settled();
+        expect(panel()).toHaveAttribute('aria-busy', 'false');
+        expect(columnOf(1)).toBe('OWNER');
+    });
+
     it('asks for the broker it was given and files each grant under its role', async () => {
         await setupI18n();
         await mountPanel({
@@ -347,20 +380,50 @@ describe('BrokerSharingPanel — loading', () => {
         expect(saveBtn()).toBeDisabled();
     });
 
-    it('renders a failed load inline and keeps every editing control on offer', async () => {
+    it('renders a failed load as a blocked, retryable state instead of an editable empty list', async () => {
         await setupI18n();
         api[LIST].mockRejectedValue(new Error('NEEDLE-LOAD-FAILED'));
         render(BrokerSharingPanel, {brokerId: 7});
-        await settled();
+        await loadFailed();
 
-        // The message is the error's own, rendered in the panel's error banner.
-        expect(errorText()).toBe('NEEDLE-LOAD-FAILED');
-        // And the panel below it is fully live: an empty access list that is
-        // indistinguishable from a broker nobody shares. See the two tests under
-        // "states the panel offers" for what that costs.
-        expect(screen.getByTestId('sharing-add-user-btn')).toBeVisible();
+        // The failed GET is not collapsed into "empty, therefore safe to edit".
+        expect(panelErrorKey()).toBe('brokers.sharing.loadFailedBlocking');
+        expect(screen.getByTestId('sharing-load-error-state')).toBeInTheDocument();
+        expect(screen.getByTestId('sharing-retry-load-btn')).toBeVisible();
+        expect(panel()).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.queryByTestId('sharing-add-user-btn')).not.toBeInTheDocument();
         expect(idsIn('sharing-owners-column')).toEqual([]);
         expect(saveBtn()).toBeDisabled();
+    });
+
+    it('returns to a normal editable state after a failed load is retried successfully', async () => {
+        await setupI18n();
+        api[LIST].mockRejectedValueOnce(new Error('NEEDLE-FIRST-LOAD-FAILED')).mockResolvedValueOnce({items: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'VIEWER')]});
+        render(BrokerSharingPanel, {brokerId: 7});
+        await loadFailed();
+
+        await fireEvent.click(screen.getByTestId('sharing-retry-load-btn'));
+
+        await settled();
+        expect(panel()).not.toHaveAttribute('aria-invalid');
+        expect(errorText()).toBeNull();
+        expect(columnOf(1)).toBe('OWNER');
+        expect(screen.getByTestId('sharing-add-user-btn')).toBeVisible();
+        expect(saveBtn()).toBeDisabled();
+        expect(api[LIST]).toHaveBeenCalledTimes(2);
+
+        const dialog = await openEdit(2);
+        await pickRole(dialog, 'EDITOR', {triggerIndex: 1});
+        await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
+        await waitFor(() => expect(saveBtn()).toBeEnabled());
+
+        await fireEvent.click(saveBtn());
+
+        await waitFor(() => expect(api[PUT]).toHaveBeenCalledTimes(1));
+        expect(lastPutBody()).toEqual([
+            {user_id: 1, role: 'OWNER', share_percentage: 1},
+            {user_id: 2, role: 'EDITOR', share_percentage: 0},
+        ]);
     });
 
     it('reloads when the broker changes, and drops the previous broker rows', async () => {
@@ -380,12 +443,13 @@ describe('BrokerSharingPanel — loading', () => {
         await setupI18n();
         api[LIST].mockRejectedValue(new Error('NEEDLE-DISMISS-ME'));
         render(BrokerSharingPanel, {brokerId: 7});
-        await settled();
-        expect(errorText()).toBe('NEEDLE-DISMISS-ME');
+        await loadFailed();
+        expect(panelErrorKey()).toBe('brokers.sharing.loadFailedBlocking');
 
         await fireEvent.click(within(screen.getByTestId('info-banner-error')).getByRole('button', {name: 'Dismiss'}));
 
         await waitFor(() => expect(screen.queryByTestId('info-banner-error')).not.toBeInTheDocument());
+        expect(panelErrorKey()).toBeNull();
     });
 });
 
@@ -809,6 +873,7 @@ describe('BrokerSharingPanel — edit and remove', () => {
         await fireEvent.click(editRemoveButton(await openEdit(1)));
 
         await waitFor(() => expect(screen.getByTestId('info-banner-error')).toBeInTheDocument());
+        expect(panelErrorKey()).toBe('brokers.sharing.lastOwnerRemovalWarning');
         expect(screen.queryByTestId('confirm-modal-confirm')).not.toBeInTheDocument();
         expect(columnOf(1)).toBe('OWNER');
         expect(saveBtn()).toBeDisabled();
@@ -890,10 +955,7 @@ describe('BrokerSharingPanel — states the panel offers', () => {
         expect(lastPutBody()).toContainEqual({user_id: 2, role: 'OWNER', share_percentage: 2.5});
     });
 
-    it('lets the last owner demote themselves, which removal refuses to let them do', async () => {
-        // The asymmetry is the finding: `requestRemove` counts owners and blocks
-        // the last one, `saveEdit` counts nothing. Same net effect — a broker with
-        // no owner — reached through the dialog next door.
+    it('refuses to demote the last owner to viewer or editor, and tells them to promote another owner first', async () => {
         await setupI18n();
         await mountPanel({accesses: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'VIEWER')]});
 
@@ -901,62 +963,52 @@ describe('BrokerSharingPanel — states the panel offers', () => {
         await pickRole(dialog, 'VIEWER', {triggerIndex: 1});
         await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
 
-        await waitFor(() => expect(columnOf(1)).toBe('VIEWER'));
-        expect(idsIn('sharing-owners-column')).toEqual([]);
-        expect(slices()).toEqual([]);
-        expect(errorText()).toBeNull(); // no warning of any kind
-        expect(saveBtn()).toBeEnabled();
-        await fireEvent.click(saveBtn());
-        await waitFor(() => expect(api[PUT]).toHaveBeenCalled());
-        expect(lastPutBody()!.every((a) => a.role !== 'OWNER')).toBe(true);
+        await waitFor(() => expect(editErrorKey()).toBe('brokers.sharing.lastOwnerDemotionWarning'));
+        expect(columnOf(1)).toBe('OWNER');
+        expect(screen.getByTestId('sharing-edit-user-modal')).toBeInTheDocument();
+        expect(saveBtn()).toBeDisabled();
+        expect(api[PUT]).not.toHaveBeenCalled();
+
+        await pickRole(dialog, 'EDITOR', {triggerIndex: 1});
+        await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
+
+        await waitFor(() => expect(editErrorKey()).toBe('brokers.sharing.lastOwnerDemotionWarning'));
+        expect(columnOf(1)).toBe('OWNER');
+        expect(saveBtn()).toBeDisabled();
     });
 
-    it('and once nobody owns it, everyone can be removed and an empty list saved', async () => {
+    it('keeps the last owner invariant intact after a refused demotion, so the old empty-list save path stays closed', async () => {
         await setupI18n();
         await mountPanel({accesses: [access(1, 'alice', 'OWNER', 1)]});
 
-        // Demote, which the last-owner guard does not watch…
         const dialog = await openEdit(1);
         await pickRole(dialog, 'VIEWER', {triggerIndex: 1});
         await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
-        await waitFor(() => expect(columnOf(1)).toBe('VIEWER'));
+        await waitFor(() => expect(editErrorKey()).toBe('brokers.sharing.lastOwnerDemotionWarning'));
+        expect(columnOf(1)).toBe('OWNER');
 
-        // …and now the same removal that was refused a moment ago goes through,
-        // because the guard asks about the role rather than about what is left.
-        await fireEvent.click(editRemoveButton(await openEdit(1)));
-        await waitFor(() => expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument());
-        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await fireEvent.click(editRemoveButton(screen.getByTestId('sharing-edit-user-modal')));
 
-        await waitFor(() => expect(screen.queryByTestId('access-entry-1')).not.toBeInTheDocument());
-        expect(saveBtn()).toBeEnabled();
-        await fireEvent.click(saveBtn());
-        await waitFor(() => expect(api[PUT]).toHaveBeenCalled());
-        expect(lastPutBody()).toEqual([]);
+        await waitFor(() => expect(panelErrorKey()).toBe('brokers.sharing.lastOwnerRemovalWarning'));
+        expect(screen.queryByTestId('confirm-modal-confirm')).not.toBeInTheDocument();
+        expect(columnOf(1)).toBe('OWNER');
+        expect(saveBtn()).toBeDisabled();
+        expect(api[PUT]).not.toHaveBeenCalled();
     });
 
-    it('after a failed load, saving would send the empty list as the complete truth', async () => {
-        // The one with teeth. The load failed, so `accesses` is empty — not
-        // "unknown", empty — and the panel stays editable. Add one user, press
-        // Save, and the endpoint is handed a complete desired list of exactly one
-        // grant. It has no way to tell this from a deliberate revocation of
-        // everyone else, and the accompanying error banner says only that a read
-        // failed.
+    it('after a failed load, save refuses to write the unknown access list', async () => {
         await setupI18n();
         api[LIST].mockRejectedValue(new Error('NEEDLE-LOAD-FAILED'));
         api[SEARCH].mockResolvedValue({items: [{id: 9, username: 'zoe', avatar_url: null}]});
         render(BrokerSharingPanel, {brokerId: 7});
-        await settled();
-        expect(errorText()).toBe('NEEDLE-LOAD-FAILED');
+        await loadFailed();
 
-        await openAdd();
-        await pickUser(9);
-        await fireEvent.click(screen.getByTestId('sharing-confirm-add'));
-        await waitFor(() => expect(columnOf(9)).toBe('VIEWER'));
-
-        expect(saveBtn()).toBeEnabled();
+        expect(screen.queryByTestId('sharing-add-user-btn')).not.toBeInTheDocument();
+        expect(saveBtn()).toBeDisabled();
         await fireEvent.click(saveBtn());
 
-        await waitFor(() => expect(api[PUT]).toHaveBeenCalled());
-        expect(lastPutBody()).toEqual([{user_id: 9, role: 'VIEWER', share_percentage: 0}]);
+        expect(api[PUT]).not.toHaveBeenCalled();
+        expect(lastPutBody()).toBeUndefined();
+        expect(panel()).toHaveAttribute('data-access-state', 'error');
     });
 });

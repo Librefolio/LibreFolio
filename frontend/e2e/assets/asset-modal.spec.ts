@@ -419,6 +419,18 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
         const label = `E2E Param ${uniqueToken(6)}`;
         let assetId: number | null = null;
 
+        // The stretch of calendar the invented series occupies. It is not decoration:
+        // every assertion about the series being present or gone is scoped to it, because
+        // it is the one window no other worker can write into (see the stub comment below).
+        const SERIES_START = '2024-01-15';
+        const SERIES_END = '2026-01-15';
+
+        // That scoping argument holds only while the window is entirely in the past: the
+        // single row a foreign context can create is *today's*. Verify it rather than infer
+        // it — whoever moves these dates forward has to be told why it matters.
+        const today = new Date().toISOString().slice(0, 10);
+        expect(today > SERIES_END, `the invented window must end before today (${SERIES_END} vs ${today}), or a foreign OHLC write-back can land inside it`).toBe(true);
+
         // Seed through the API *before* installing any route, so the seeding calls
         // reach the real backend: the test needs a genuine invented series to count.
         const createRes = await page.request.post('/api/v1/assets', {
@@ -439,7 +451,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
                             initial_value: {code: 'EUR', amount: 10000},
                             interest_type: 'SIMPLE',
                             day_count: 'ACT/365',
-                            schedule: [{start_date: '2024-01-15', end_date: '2026-01-15', annual_rate: 0.035, maturation_frequency: 'MONTHLY', generate_interest: true}],
+                            schedule: [{start_date: SERIES_START, end_date: SERIES_END, annual_rate: 0.035, maturation_frequency: 'MONTHLY', generate_interest: true}],
                         },
                     },
                 ],
@@ -447,21 +459,37 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             expect(assignRes.ok(), `parametric assignment must succeed: ${await assignRes.text()}`).toBeTruthy();
 
             const syncRes = await page.request.post('/api/v1/assets/prices/sync', {
-                data: [{asset_id: assetId, date_range: {start: '2024-01-15', end: '2026-01-15'}}],
+                data: [{asset_id: assetId, date_range: {start: SERIES_START, end: SERIES_END}}],
             });
             expect(syncRes.ok(), 'parametric sync must succeed').toBeTruthy();
 
             // Stored rows, not the width of a query window: the price-query endpoint
-            // backward-fills every calendar day in the requested range, so it answers
-            // with the size of the question. The market-data summary counts the rows.
+            // backward-fills every calendar day in the requested range, so it answers with
+            // the size of the question. Two reads, because there are two questions:
+            //
+            //  * `countPrices()` — the summary counter, i.e. the *global* total of stored
+            //    rows for this asset. That is the number the modal quotes, so it is the
+            //    right read for the warning's text and the wrong one for "is it gone".
+            //  * `inventedDates()` — the rows this test authored, identified by their date.
+            //    The backup stream is the only read that returns stored rows verbatim, one
+            //    per (asset_id, date) and with no backfill, so the window filter applies to
+            //    real stored dates. Same mechanism `fx-destructive.spec.ts` uses.
             const marketData = async () => {
                 const res = await page.request.get(`/api/v1/assets/${assetId}/market-data/summary`);
                 return (await res.json()) as {prices: number; events_provider: number; events_manual: number};
             };
             const countPrices = async () => (await marketData()).prices;
+            const inventedDates = async (): Promise<string[]> => {
+                const res = await page.request.get(`/api/v1/backup/asset/${assetId}/prices?format=json`);
+                expect(res.ok(), `the price export must answer: ${res.status()} ${await res.text()}`).toBeTruthy();
+                const rows = ((await res.json()) as {rows: Array<{date: string}>}).rows;
+                return rows.map((r) => r.date).filter((d) => d >= SERIES_START && d <= SERIES_END);
+            };
 
-            const pricesBefore = await countPrices();
-            expect(pricesBefore, 'the seeded parametric asset must actually have an invented series').toBeGreaterThan(0);
+            // Presence barrier for the absence assertion at the end: a wipe can only be
+            // proved on a series that demonstrably existed.
+            const inventedBefore = await inventedDates();
+            expect(inventedBefore.length, 'the seeded parametric asset must actually have an invented series').toBeGreaterThan(0);
 
             // Pick a real non-parametric provider rather than hardcoding one.
             const providers = (await (await page.request.get('/api/v1/assets/provider')).json()) as Array<{code: string}>;
@@ -489,13 +517,26 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             });
             // Same reason, second writer — and this one is not obvious. Fetching a current
             // price is not a read: `get_current_prices_bulk` documents an OHLC write-back
-            // (F.2/F.3) that creates today's row on every successful provider fetch. So the
+            // (F.2/F.3) that creates today's row on every successful provider fetch. So a
             // detail page *adds* a price row simply by displaying the asset, and a fetch
             // still in flight when the wipe commits lands after it — leaving exactly one
-            // survivor that no later poll will ever remove. That is what made this test
-            // fail only under load, at `toBe(0)` with 1 received. Stubbing it keeps the
-            // assertion exact instead of tolerant: the count after the wipe is 0 because
-            // nothing else is allowed to write.
+            // survivor that no later poll would ever remove.
+            //
+            // Stubbing it silences this browser context. It does **not** silence the suite,
+            // and the earlier version of this comment claimed it did. `Asset` and
+            // `PriceHistory` carry no `user_id`: the asset created above is global, visible
+            // to every worker, while `page.route()` only binds the context that installs it.
+            // Any other worker that renders the asset list or a detail page fetches current
+            // prices for *all* assets — this one included — and writes today's row through a
+            // context this test cannot intercept. The backend log of the failing full run
+            // says it plainly: 217 commits of "14 row(s) written/updated", fourteen being
+            // every asset in the database.
+            //
+            // So no assertion here may speak about the *total*: that number has several
+            // authors. What this test owns is the window [SERIES_START, SERIES_END], which
+            // lies in the past, whereas a foreign write-back can only ever create today's
+            // row. That is why the wipe is asserted through `inventedDates()` and never
+            // through `countPrices()`.
             await page.route('**/api/v1/assets/prices/current', async (route) => {
                 await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: []})});
             });
@@ -519,22 +560,33 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             };
 
             await selectNewProvider();
-            // Re-read rather than reuse the seed count. With the current-price write-back
-            // stubbed the two should now agree, but the warning must quote what exists
-            // *at save time*, and asserting on a number read earlier would be a guess:
-            // if anything ever writes here again, this read is what makes the mismatch
-            // visible instead of silently shifting the expected message.
+            // Two reads, two purposes. `inventedAtSave` is what the wipe must destroy and
+            // what the cancel branch must find intact. `pricesAtSave` is the global total,
+            // read here only because the modal quotes it: `countGeneratedSeries()` in
+            // AssetModal.svelte calls the very same summary endpoint.
+            const inventedAtSave = (await inventedDates()).length;
+            expect(inventedAtSave, 'the series must still be there when the switch is attempted').toBeGreaterThan(0);
             const pricesAtSave = await countPrices();
-            expect(pricesAtSave).toBeGreaterThan(0);
             await page.getByTestId('asset-modal-save').click();
 
             // Branch 1 — the warning appears, and it can say how much it is about to destroy.
             await expect(page.getByTestId('asset-parametric-switch-confirm')).toBeVisible({timeout: 15_000});
-            await expect(page.getByTestId('confirm-modal-message')).toContainText(String(pricesAtSave));
+            // The modal fetched that total itself, somewhere between the click and now, and
+            // the total is global: a foreign write-back landing in that gap makes the quoted
+            // number one higher than the one read a moment ago. Nothing deletes before the
+            // confirm, so the total can only grow — bracket it between the two reads instead
+            // of pinning it to either. The claim is unchanged: the warning quotes a real count.
+            const pricesAtWarning = await countPrices();
+            expect(pricesAtWarning, 'nothing may delete rows before the confirm').toBeGreaterThanOrEqual(pricesAtSave);
+            const quotable = Array.from({length: pricesAtWarning - pricesAtSave + 1}, (_, i) => String(pricesAtSave + i));
+            await expect(page.getByTestId('confirm-modal-message')).toContainText(new RegExp(`\\b(${quotable.join('|')})\\b`));
 
             await page.getByTestId('confirm-modal-cancel').click();
             await expect(page.getByTestId('asset-parametric-switch-confirm')).not.toBeVisible({timeout: 5000});
-            expect(await countPrices(), 'cancelling must not destroy anything').toBeGreaterThanOrEqual(pricesAtSave);
+            // Exact rather than `>=`: inside the window this test is the only author, so
+            // "nothing was destroyed" means the same rows are still there, not "at least
+            // as many as before".
+            expect((await inventedDates()).length, 'cancelling must not destroy anything').toBe(inventedAtSave);
 
             // Branch 2 — confirming goes through and the invented series is gone.
             await page.getByTestId('asset-modal-save').click();
@@ -542,7 +594,11 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             await page.getByTestId('confirm-modal-confirm').click();
             await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 20_000});
 
-            await expect.poll(async () => await countPrices(), {message: 'confirming the switch must discard the invented series', timeout: 20_000}).toBe(0);
+            // Empty *inside the window*. Today's row may or may not be there, depending on
+            // what the rest of the suite was doing with the asset list while this ran; a row
+            // dated between 2024-01-15 and 2026-01-15 can only be a survivor of the wipe.
+            // Polling the dates rather than a count also makes the failure name them.
+            await expect.poll(async () => await inventedDates(), {message: 'confirming the switch must discard the invented series', timeout: 20_000}).toEqual([]);
         } finally {
             if (assetId !== null) {
                 await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});

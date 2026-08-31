@@ -415,7 +415,9 @@
                                                             <span class="font-medium text-gray-700 dark:text-gray-300">{item.name}</span>
                                                         </td>
                                                         <td class="py-1">
-                                                            {#if !item.ok && item.error}
+                                                            {#if item.ok}
+                                                                <span class="text-green-600 dark:text-green-400">✓</span>
+                                                            {:else if item.error}
                                                                 <Tooltip text={item.error} position="top" maxWidth="500px">
                                                                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                                                                     <span class="text-red-500 truncate max-w-[250px] cursor-help inline-block" ondblclick={() => copyErrorToClipboard(item.error ?? '')} ontouchstart={() => handleTouchStart(item.error ?? '')} ontouchend={handleTouchEnd}
@@ -423,7 +425,7 @@
                                                                     >
                                                                 </Tooltip>
                                                             {:else}
-                                                                <span class="text-green-600 dark:text-green-400">✓</span>
+                                                                <span class="text-red-500">—</span>
                                                             {/if}
                                                         </td>
                                                     </tr>
