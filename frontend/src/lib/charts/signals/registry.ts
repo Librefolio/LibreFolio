@@ -52,11 +52,15 @@ function hexToHue(hex: string): number {
 
 /**
  * Pick the palette color with max minimum-distance (hue-based, circular)
- * from all colors already in use. Falls back to simple index if no
- * usedColors are provided.
+ * from all colors already in use.
+ *
+ * **Requires a non-empty list.** The function is private to this module and
+ * both call sites guard it with `usedColors.length > 0`, choosing an
+ * index-based colour themselves when there is nothing to keep a distance from —
+ * so the empty case never arrives here, and a branch for it would be one no
+ * test could honestly reach.
  */
 function pickBestColor(usedColors: string[]): string {
-    if (!usedColors.length) return DEFAULT_SIGNAL_COLORS[0];
     const usedHues = usedColors.map(hexToHue);
     let bestColor = DEFAULT_SIGNAL_COLORS[0];
     let bestDist = -1;

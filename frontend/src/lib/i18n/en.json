@@ -2080,24 +2080,6 @@
       "promoteSubtitle": "2 standalone → 1 paired",
       "target": "Target"
     },
-    "bulkDelete": {
-      "title": "Delete transactions",
-      "intro": "Linked transactions (transfers, FX conversions) must be deleted together.",
-      "confirmSimple": "Delete {n} transaction(s)?",
-      "confirmSimpleDesc": "This action cannot be undone.",
-      "applyToAll": "Apply to all linked rows",
-      "removeAll": "Remove from selection",
-      "extendAll": "Also delete partner",
-      "colSelected": "Selected",
-      "colPartner": "Partner",
-      "colAction": "Action",
-      "extendRow": "Also delete #{id}",
-      "noConflict": "Other {n} row(s) have no linked partner — will be deleted as-is.",
-      "summary": "Final batch: {total} to delete (clean: {clean} · extended: {extended} + {partners} partners · removed: {removed})",
-      "confirm": "Delete {n}",
-      "deleting": "Deleting…",
-      "rolledBack": "Delete was cancelled — no changes were made."
-    },
     "validate": {
       "now": "Validate now",
       "validating": "validating…",

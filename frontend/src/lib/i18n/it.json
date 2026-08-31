@@ -2080,24 +2080,6 @@
       "promoteSubtitle": "Seleziona la transazione di destinazione",
       "target": "Destinazione"
     },
-    "bulkDelete": {
-      "title": "Elimina transazioni",
-      "intro": "Le transazioni collegate (trasferimenti, cambi valuta) devono essere eliminate insieme.",
-      "confirmSimple": "Eliminare {n} transazione/i?",
-      "confirmSimpleDesc": "Questa azione non può essere annullata.",
-      "applyToAll": "Applica a tutte le righe collegate",
-      "removeAll": "Rimuovi dalla selezione",
-      "extendAll": "Elimina anche il partner",
-      "colSelected": "Selezionata",
-      "colPartner": "Partner",
-      "colAction": "Azione",
-      "extendRow": "Elimina anche #{id}",
-      "noConflict": "Le altre {n} riga/e non hanno partner collegati — saranno eliminate normalmente.",
-      "summary": "Batch finale: {total} da eliminare (pulite: {clean} · estese: {extended} + {partners} partner · rimosse: {removed})",
-      "confirm": "Elimina {n}",
-      "deleting": "Eliminazione…",
-      "rolledBack": "Eliminazione annullata — nessuna modifica effettuata."
-    },
     "validate": {
       "now": "Verifica ora",
       "validating": "verifica in corso…",

@@ -263,7 +263,7 @@
     }
 </script>
 
-<SettingsLayout bind:selectedCategory {categories} {hasChanges} hasNonDefaults={false} isLocked={false} on:resetAll={resetAll} on:saveAll={saveAll} on:undoAll={undoAll} showLock={false} title={$_('settings.userPreferences')}>
+<SettingsLayout bind:selectedCategory {categories} {hasChanges} hasNonDefaults={false} isBusy={isLoading || isSaving} isLocked={false} on:resetAll={resetAll} on:saveAll={saveAll} on:undoAll={undoAll} showLock={false} title={$_('settings.userPreferences')}>
     <!-- Error message (success is a toast: see notify() above) -->
     <InfoBanner class="mb-4" dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
