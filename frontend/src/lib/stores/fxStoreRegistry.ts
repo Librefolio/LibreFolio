@@ -32,13 +32,25 @@ export type {ChainStep};
 export interface FxDataPoint extends TimeSeriesPoint {
     /** ISO date YYYY-MM-DD */
     date: string;
-    /** Exchange rate (1 base = rate * quote) */
-    rate: number;
+    /** Exchange rate (1 base = rate * quote); null means API has a point without a rate */
+    rate: number | null;
     /** Backward-fill info — null means exact date match */
     backwardFillInfo: {
         actualRateDate: string;
         daysBack: number; // = staleDays for gradient opacity
     } | null;
+}
+
+export function parseFxRate(rate: string | number | null | undefined): number | null {
+    if (rate === null || rate === undefined || rate === '') return null;
+    const parsed = Number(rate);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function displayFxRate(rate: number | null, inverted: boolean): number | null {
+    if (rate === null || rate <= 0) return null;
+    if (!inverted) return rate;
+    return 1 / rate;
 }
 
 /**
@@ -165,7 +177,7 @@ export function apiResultToFxDataPoint(result: {
 }): FxDataPoint {
     return {
         date: result.conversion_date,
-        rate: result.rate ? parseFloat(String(result.rate)) : 0,
+        rate: parseFxRate(result.rate),
         backwardFillInfo: result.backward_fill_info
             ? {
                   actualRateDate: result.backward_fill_info.actual_rate_date,
@@ -176,7 +188,7 @@ export function apiResultToFxDataPoint(result: {
 }
 
 export function apiResultsToCanonicalFxDataPoints(results: Array<Parameters<typeof apiResultToFxDataPoint>[0]>, displayedOrientationIsInverted: boolean): FxDataPoint[] {
-    return results.map(apiResultToFxDataPoint).map((point) => (displayedOrientationIsInverted && point.rate !== 0 ? {...point, rate: 1 / point.rate} : point));
+    return results.map(apiResultToFxDataPoint).map((point) => (displayedOrientationIsInverted ? {...point, rate: displayFxRate(point.rate, true)} : point));
 }
 
 // ============================================================================
@@ -194,9 +206,9 @@ export function lookupFxRateSync(base: string, quote: string, date: string): FxD
     const point = store.get(date);
     if (!point) return undefined;
     const {base: canonBase} = parsePairSlug(slug);
-    if (canonBase === base.toUpperCase()) return point;
+    if (canonBase === base.toUpperCase()) return {...point, rate: displayFxRate(point.rate, false)};
     // Invert: stored is canonBase→canonQuote, we need base→quote where base != canonBase
-    return {...point, rate: point.rate !== 0 ? 1 / point.rate : 0};
+    return {...point, rate: displayFxRate(point.rate, true)};
 }
 
 // ============================================================================
@@ -430,6 +442,7 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
  * Async lookup with auto-fetch. Checks cache first, fetches from backend if miss.
  * Result is merged into TimeSeriesStore for future cache hits.
  * Returns null if the pair is not configured (404) or fetch fails.
+ * A returned point may carry rate:null when the API has the date but no rate.
  */
 export async function lookupFxRate(base: string, quote: string, date: string): Promise<FxDataPoint | null> {
     const cached = lookupFxRateSync(base, quote, date);
@@ -448,13 +461,12 @@ export async function lookupFxRate(base: string, quote: string, date: string): P
         const results = (response as any)?.results || [];
         if (results.length === 0) return null;
         const point = apiResultToFxDataPoint(results[0]);
-        if (point.rate === 0) return null;
         // Merge into cache
         const store = getFxStore(slug);
         store.merge([point]);
         // Return in requested direction
         if (canonBase === base.toUpperCase()) return point;
-        return {...point, rate: point.rate !== 0 ? 1 / point.rate : 0};
+        return {...point, rate: displayFxRate(point.rate, true)};
     } catch {
         return null;
     }

@@ -55,6 +55,7 @@ const DICT: Record<string, string> = {
     'settings.defaultCurrency': 'Default currency',
     'settings.security': 'Security',
     'settings.all': 'All',
+    'common.other': 'Other',
 };
 
 vi.mock('$lib/i18n', () => {
@@ -759,12 +760,13 @@ describe('GlobalSettingsTab — the three picker rows', () => {
 describe('GlobalSettingsTab — the category filter', () => {
     const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('enable_registration', 'true', 'bool'), setting('custom_banner', 'hello', 'string')];
 
-    it('shows everything the server sent by default', async () => {
+    it('shows everything the server sent by default, with no duplicate rows', async () => {
         await mount(ITEMS);
 
         expect(screen.getByRole('spinbutton')).toBeInTheDocument();
         expect(screen.getByRole('switch', {name: 'Toggle Registration open'})).toBeInTheDocument();
         expect(textInput('custom_banner')).toBeInTheDocument();
+        expect(document.querySelectorAll('#custom_banner')).toHaveLength(1);
     });
 
     it('narrows to the keys a category claims', async () => {
@@ -777,19 +779,33 @@ describe('GlobalSettingsTab — the category filter', () => {
         expect(textInput('custom_banner')).toBeNull();
     });
 
-    it('hides a key no category claims as soon as any category is chosen', async () => {
-        // Characterisation, and worth knowing: `filteredSettings` only falls back to
-        // "show it" when the *selected id* is not a known category, which the UI can
-        // never produce. So a backend key nobody filed under a category is reachable
-        // from "All" alone — add a setting server-side and it silently disappears
-        // from every tab but the first.
+    it('collects a key no claimed category owns under Other', async () => {
         await mount(ITEMS);
+
+        expect(screen.getByTestId('global-settings-category-other')).toHaveTextContent('Other');
 
         await fireEvent.click(screen.getByTestId('global-settings-category-security'));
 
         await waitFor(() => expect(screen.queryByRole('spinbutton')).toBeNull());
         expect(screen.getByRole('switch', {name: 'Toggle Registration open'})).toBeInTheDocument();
         expect(textInput('custom_banner')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('global-settings-category-other'));
+
+        await waitFor(() => expect(textInput('custom_banner')).toBeInTheDocument());
+        expect(screen.queryByRole('spinbutton')).toBeNull();
+        expect(screen.queryByRole('switch', {name: 'Toggle Registration open'})).toBeNull();
+    });
+
+    it('hides the Other category when every visible key is already claimed', async () => {
+        await mount([setting('session_ttl_hours', '24', 'int'), setting('enable_registration', 'true', 'bool')]);
+
+        expect(screen.queryByTestId('global-settings-category-other')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('global-settings-category-security'));
+
+        await waitFor(() => expect(screen.queryByRole('spinbutton')).toBeNull());
+        expect(screen.getByRole('switch', {name: 'Toggle Registration open'})).toBeInTheDocument();
     });
 
     it('restores the full list when All is chosen again', async () => {

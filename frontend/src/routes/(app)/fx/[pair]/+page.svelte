@@ -56,7 +56,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {globalSettings} from '$lib/stores/app/globalSettings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
-    import {apiResultsToCanonicalFxDataPoints, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -253,25 +253,29 @@
     let lastRate = $derived.by(() => {
         if (chartData.length === 0) return null;
         const last = chartData[chartData.length - 1];
-        return inverted && last.rate !== 0 ? 1 / last.rate : last.rate;
+        return displayFxRate(last.rate, inverted);
     });
 
     let deltaPercent = $derived.by(() => {
         if (chartData.length < 2) return null;
         const first = chartData[0].rate;
         const last = chartData[chartData.length - 1].rate;
-        if (first === 0) return null;
+        if (first === null || last === null || first === 0 || last === 0) return null;
         const pct = ((last - first) / first) * 100;
         return inverted ? -pct : pct;
     });
 
-    let lineData: LineDataPoint[] = $derived(
-        chartData.map((d) => ({
-            date: d.date,
-            value: inverted && d.rate !== 0 ? 1 / d.rate : d.rate,
-            staleDays: d.backwardFillInfo?.daysBack ?? 0,
-        })),
-    );
+    function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
+        const rate = displayFxRate(point.rate, inverted);
+        return {
+            date: point.date,
+            value: rate ?? 0,
+            missing: rate === null,
+            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+        };
+    }
+
+    let lineData: LineDataPoint[] = $derived(chartData.map((d) => fxPointToLineDataPoint(d, inverted)));
 
     /** First data point date — used for "no data before" banner */
     let firstDataDate = $derived(chartData.length > 0 ? chartData[0].date : null);
@@ -338,10 +342,7 @@
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => ({
-                        date: d.date,
-                        value: d.rate,
-                    }));
+                    instance.params._resolvedData = storeData.map((d) => fxPointToLineDataPoint(d, false));
                 } catch {
                     continue; // Store not available for this pair
                 }

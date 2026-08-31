@@ -28,7 +28,7 @@
     import {type ChartSettings, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import {createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -175,10 +175,21 @@
                 break;
             }
         }
-        if (!refPoint || refPoint.rate === 0 || lastPoint.rate === 0) return null;
-        const refVal = inverted ? 1 / refPoint.rate : refPoint.rate;
-        const lastVal = inverted ? 1 / lastPoint.rate : lastPoint.rate;
+        if (!refPoint || refPoint.rate === null || lastPoint.rate === null || refPoint.rate === 0 || lastPoint.rate === 0) return null;
+        const refVal = displayFxRate(refPoint.rate, inverted);
+        const lastVal = displayFxRate(lastPoint.rate, inverted);
+        if (refVal === null || lastVal === null) return null;
         return ((lastVal - refVal) / refVal) * 100;
+    }
+
+    function fxPointToLineDataPoint(point: FxDataPoint, inverted: boolean): LineDataPoint {
+        const rate = displayFxRate(point.rate, inverted);
+        return {
+            date: point.date,
+            value: rate ?? 0,
+            missing: rate === null,
+            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+        };
     }
 
     // Extract unique currencies from configured pairs for filter dropdown
@@ -584,10 +595,7 @@
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
                     // Inject resolved data as LineDataPoint[]
-                    instance.params._resolvedData = storeData.map((d) => ({
-                        date: d.date,
-                        value: d.rate,
-                    }));
+                    instance.params._resolvedData = storeData.map((d) => fxPointToLineDataPoint(d, false));
                 } catch {
                     continue; // Store not available for this pair
                 }
@@ -659,11 +667,7 @@
         const pair = pairs.find((item) => item.config.slug === settingsTargetSlug);
         if (!pair?.data.length) return [];
         const inverted = isCardInverted(settingsTargetSlug);
-        const absoluteData = pair.data.map((point) => ({
-            date: point.date,
-            value: inverted && point.rate !== 0 ? 1 / point.rate : point.rate,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
-        }));
+        const absoluteData = pair.data.map((point) => fxPointToLineDataPoint(point, inverted));
         return getRenderedSignals(settingsTargetSlug, absoluteData, viewMode);
     }
 
@@ -1194,8 +1198,7 @@
               .find((p) => p.config.slug === settingsTargetSlug)
               ?.data?.map((d) => {
                   const inv = isCardInverted(settingsTargetSlug ?? '');
-                  const rate = inv && d.rate !== 0 ? 1 / d.rate : d.rate;
-                  return {date: d.date, value: rate, staleDays: d.backwardFillInfo?.daysBack ?? 0};
+                  return fxPointToLineDataPoint(d, inv);
               })
         : undefined}
     pairsDataMap={Object.fromEntries(
@@ -1206,8 +1209,7 @@
                 return [
                     p.config.slug,
                     p.data.map((d) => {
-                        const rate = inv && d.rate !== 0 ? 1 / d.rate : d.rate;
-                        return {date: d.date, value: rate, staleDays: d.backwardFillInfo?.daysBack ?? 0};
+                        return fxPointToLineDataPoint(d, inv);
                     }),
                 ];
             }),

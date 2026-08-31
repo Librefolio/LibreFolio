@@ -15,7 +15,7 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {fxProviderBadgeHtml} from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
-    import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
 
     // =========================================================================
@@ -100,7 +100,7 @@
         void inversionVersion;
         if (row.data.length === 0) return null;
         const last = row.data[row.data.length - 1];
-        return isCardInverted(row.slug) && last.rate !== 0 ? 1 / last.rate : last.rate;
+        return displayFxRate(last.rate, isCardInverted(row.slug));
     }
 
     function getDelta(row: FxRow): {abs: number | null; pct: number | null} {
@@ -108,7 +108,7 @@
         if (row.data.length < 2) return {abs: null, pct: null};
         const first = row.data[0];
         const last = row.data[row.data.length - 1];
-        if (first.rate === 0 || last.rate === 0) return {abs: null, pct: null};
+        if (first.rate === null || last.rate === null || first.rate === 0 || last.rate === 0) return {abs: null, pct: null};
         const inv = isCardInverted(row.slug);
         const fv = inv ? 1 / first.rate : first.rate;
         const lv = inv ? 1 / last.rate : last.rate;
@@ -193,10 +193,10 @@
                 header: 'Rate',
                 cell: (row) => {
                     const r = getRate(row);
-                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${r.toFixed(4)}</span>`} : '—';
+                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${r.toFixed(4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-gray-400 dark:text-gray-500">${$t('fx.rateNotAvailable')}</span>`};
                 },
                 type: 'number',
-                getValue: (row) => getRate(row) ?? 0,
+                getValue: (row) => getRate(row),
                 width: 110,
                 minWidth: 80,
             },
@@ -208,7 +208,7 @@
                     return {type: 'html', html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
                 },
                 type: 'number',
-                getValue: (row) => row.deltas?.['1D'] ?? 0,
+                getValue: (row) => row.deltas?.['1D'] ?? null,
                 width: 90,
                 minWidth: 70,
             },
@@ -220,7 +220,7 @@
                     return {type: 'html', html: `<span class="font-mono ${deltaColorClass(d.abs)}">${formatDelta(d.abs)}</span>`};
                 },
                 type: 'number',
-                getValue: (row) => getDelta(row).abs ?? 0,
+                getValue: (row) => getDelta(row).abs,
                 width: 110,
                 minWidth: 80,
             },
@@ -232,7 +232,7 @@
                     return {type: 'html', html: `<span class="font-mono ${deltaColorClass(d.pct)}">${formatDeltaPct(d.pct)}</span>`};
                 },
                 type: 'number',
-                getValue: (row) => getDelta(row).pct ?? 0,
+                getValue: (row) => getDelta(row).pct,
                 width: 90,
                 minWidth: 70,
             },
@@ -245,7 +245,7 @@
                     return {type: 'html' as const, html: `<span class="font-mono ${deltaColorClass(val)}">${formatDeltaPct(val)}</span>`};
                 },
                 type: 'number' as const,
-                getValue: (row: FxRow) => row.deltas?.[p.key] ?? 0,
+                getValue: (row: FxRow) => row.deltas?.[p.key] ?? null,
                 width: 90,
                 minWidth: 70,
             })),

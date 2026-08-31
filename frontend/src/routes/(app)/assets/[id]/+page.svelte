@@ -66,7 +66,7 @@
     import type {ViewMode, ChartType} from '$lib/components/charts/ChartToolbar.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
-    import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {getAssetTypeIconUrl, buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
@@ -650,7 +650,10 @@
                     const store = getFxStore(pairSlug);
                     const storeData = store.getAllSorted();
                     if (storeData.length === 0) continue;
-                    instance.params._resolvedData = storeData.map((d) => ({date: d.date, value: d.rate}));
+                    instance.params._resolvedData = storeData.map((d) => {
+                        const rate = displayFxRate(d.rate, false);
+                        return {date: d.date, value: rate ?? 0, missing: rate === null};
+                    });
                 } catch {
                     continue;
                 }

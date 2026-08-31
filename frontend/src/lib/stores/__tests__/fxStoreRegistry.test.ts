@@ -5,10 +5,8 @@
  * fetch + merge + return flow of the three loaders, and the two single-day
  * lookups. zodiosApi is mocked so no real network calls are made.
  *
- * Two things the suite deliberately pins rather than asserts as correct, both
+ * One behaviour the suite deliberately pins rather than asserts as correct,
  * flagged in the coverage report:
- *   - `lookupFxRate` answers `null` for a zero rate it fetches, but hands back
- *     a cached `{rate: 0}` point unchanged;
  *   - `loadFxRatesAndSignalsBulk` re-throws where the two `ensureFxRangeLoaded*`
  *     siblings swallow.
  */
@@ -26,6 +24,7 @@ import {
     apiResultToFxDataPoint,
     apiResultsToCanonicalFxDataPoints,
     createPairSlug,
+    displayFxRate,
     ensureFxRangeLoaded,
     ensureFxRangeLoadedBulk,
     getFxStore,
@@ -103,6 +102,10 @@ describe('ensureFxRangeLoaded', () => {
 
         it('inverts displayed reverse-orientation rates before caching canonically', () => {
             expect(apiResultsToCanonicalFxDataPoints([result], true)[0].rate).toBe(1.25);
+        });
+
+        it('keeps a missing reverse-orientation rate missing instead of caching zero', () => {
+            expect(apiResultsToCanonicalFxDataPoints([{...result, rate: null}], true)[0].rate).toBeNull();
         });
     });
 
@@ -465,8 +468,22 @@ describe('apiResultToFxDataPoint', () => {
         ['undefined', undefined],
         ['the empty string', ''],
         ['a literal zero', '0'],
-    ])('turns a rate of %s into 0', (_label, rate) => {
-        expect(apiResultToFxDataPoint({conversion_date: '2024-01-02', rate, backward_fill_info: null}).rate).toBe(0);
+    ])('keeps an absent or invalid rate of %s as null', (_label, rate) => {
+        expect(apiResultToFxDataPoint({conversion_date: '2024-01-02', rate, backward_fill_info: null}).rate).toBeNull();
+    });
+});
+
+describe('displayFxRate', () => {
+    it('keeps missing rates missing in both orientations', () => {
+        expect(displayFxRate(null, false)).toBeNull();
+        expect(displayFxRate(null, true)).toBeNull();
+    });
+
+    it('inverts only present positive rates and hides legacy zero sentinels', () => {
+        expect(displayFxRate(1.25, false)).toBe(1.25);
+        expect(displayFxRate(1.25, true)).toBe(0.8);
+        expect(displayFxRate(0, false)).toBeNull();
+        expect(displayFxRate(0, true)).toBeNull();
     });
 });
 
@@ -485,11 +502,11 @@ describe('lookupFxRateSync', () => {
         expect(lookupFxRateSync('EUR', 'USD', '2024-01-02')).toBeUndefined();
     });
 
-    it('returns the stored point unchanged in the canonical direction', () => {
+    it('returns the stored point value in the canonical direction', () => {
         const point = {date: '2024-01-01', rate: 1.25, backwardFillInfo: null};
         getFxStore('EUR-USD').merge([point]);
 
-        expect(lookupFxRateSync('EUR', 'USD', '2024-01-01')).toBe(point);
+        expect(lookupFxRateSync('EUR', 'USD', '2024-01-01')).toEqual(point);
     });
 
     it('inverts the rate when the caller asks for the other direction', () => {
@@ -504,10 +521,16 @@ describe('lookupFxRateSync', () => {
         expect(lookupFxRateSync('USD', 'EUR', '2024-01-02')?.backwardFillInfo).toEqual({actualRateDate: '2024-01-01', daysBack: 1});
     });
 
-    it('does not divide by a zero rate', () => {
+    it('returns a missing-rate point when a reverse lookup would need to invert a missing rate', () => {
+        getFxStore('EUR-USD').merge([{date: '2024-01-01', rate: null, backwardFillInfo: null}]);
+
+        expect(lookupFxRateSync('USD', 'EUR', '2024-01-01')).toEqual({date: '2024-01-01', rate: null, backwardFillInfo: null});
+    });
+
+    it('normalizes a legacy cached zero rate to a missing-rate point', () => {
         getFxStore('EUR-USD').merge([{date: '2024-01-01', rate: 0, backwardFillInfo: null}]);
 
-        expect(lookupFxRateSync('USD', 'EUR', '2024-01-01')?.rate).toBe(0);
+        expect(lookupFxRateSync('EUR', 'USD', '2024-01-01')).toEqual({date: '2024-01-01', rate: null, backwardFillInfo: null});
     });
 
     it('accepts lower-case currency codes', () => {
@@ -873,7 +896,7 @@ describe('lookupFxRate', () => {
         const point = {date: '2024-01-01', rate: 1.25, backwardFillInfo: null};
         getFxStore('EUR-USD').merge([point]);
 
-        expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toBe(point);
+        expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toEqual(point);
         expect(mockConvert).not.toHaveBeenCalled();
     });
 
@@ -915,11 +938,11 @@ describe('lookupFxRate', () => {
         expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toBeNull();
     });
 
-    it('returns null for a day the backend has no rate for, and caches nothing', async () => {
+    it('returns a missing-rate point for a day the backend has no rate for, and caches that fact', async () => {
         mockConvert.mockResolvedValueOnce(oneResult(null));
 
-        expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toBeNull();
-        expect(getFxStore('EUR-USD').get('2024-01-01')).toBeUndefined();
+        expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toEqual({date: '2024-01-01', rate: null, backwardFillInfo: null});
+        expect(getFxStore('EUR-USD').get('2024-01-01')).toEqual({date: '2024-01-01', rate: null, backwardFillInfo: null});
     });
 
     it('returns null rather than propagating a failure', async () => {
@@ -928,15 +951,11 @@ describe('lookupFxRate', () => {
         expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toBeNull();
     });
 
-    it('hands back a cached zero rate instead of the null it would answer on a miss', async () => {
-        // Current behaviour, pinned deliberately. `ensureFxRangeLoaded` stores a
-        // day the backend reported without a rate as `rate: 0`; the cache branch
-        // of `lookupFxRate` has no zero check, so the same day answers `null` on
-        // a miss and `{rate: 0}` on a hit. See the note in the coverage report.
+    it('hands back a cached direct missing rate for the tooltip helper to reject', async () => {
         mockConvert.mockResolvedValueOnce({success_count: 1, results: [{conversion_date: '2024-01-01', rate: null, backward_fill_info: null}]} as any);
         await ensureFxRangeLoaded('EUR-USD', '2024-01-01', '2024-01-01');
 
-        expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toEqual({date: '2024-01-01', rate: 0, backwardFillInfo: null});
+        expect(await lookupFxRate('EUR', 'USD', '2024-01-01')).toEqual({date: '2024-01-01', rate: null, backwardFillInfo: null});
     });
 });
 
@@ -950,8 +969,4 @@ describe('lookupFxRate', () => {
 //      immediately followed by `.push(point)`. No key can ever hold an empty
 //      array, so the guard is never false.
 //
-//  fxStoreRegistry.ts:457  `point.rate !== 0 ? 1 / point.rate : 0`  (false arm)
-//      Line 451 already returned `null` for `point.rate === 0`, so the zero
-//      case cannot arrive here. (The same expression inside `lookupFxRateSync`
-//      *is* reachable and is tested — the cache has no such guard.)
 // =============================================================================

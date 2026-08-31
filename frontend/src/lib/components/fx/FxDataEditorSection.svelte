@@ -105,7 +105,10 @@
         // Convert edited/appended rows to a RenderedSignal overlay for chart preview
         const pendingPoints: LineDataPoint[] = dirtyRows
             .filter((r) => r.status === 'edited' || r.status === 'appended')
-            .filter((r) => r.values.rate !== undefined && r.values.rate !== null)
+            .filter((r) => {
+                const rate = Number(r.values.rate);
+                return Number.isFinite(rate) && rate > 0;
+            })
             .map((r) => ({
                 date: r.date,
                 value: Number(r.values.rate),

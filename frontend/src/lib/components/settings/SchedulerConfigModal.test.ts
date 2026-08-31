@@ -4,36 +4,24 @@
  *
  * The dialog that decides when the scheduler runs: a polling frequency, a set of
  * history-sync times, the weekdays it runs on, a lookback horizon, and the IANA
- * timezone the times are *displayed* in. Times are stored in UTC and converted
- * both ways, which is where nearly all of its branches live.
+ * timezone that defines those local wall-clock times. Times are stored exactly
+ * as shown; the backend converts each local slot when deciding whether it is due.
  *
- * Why a component test. The interesting half of this file is arithmetic —
- * midnight wrap in both directions, a duplicate that must be swallowed, a last
- * weekday that must refuse to switch off, and the `catch` that gives up on an
- * unparseable timezone. An E2E can reach the happy save; it cannot make the
- * clock cross midnight or the server fail on demand without changing global
- * settings that every other test in the suite reads.
+ * Why a component test. The interesting half of this file is local state:
+ * duplicate times must be swallowed, a last weekday must refuse to switch off,
+ * timezone changes must warn without mutating visible chips, and failed saves
+ * must keep the dialog open. An E2E can reach the happy save; it cannot cover
+ * those branches without changing global settings that every other test reads.
  *
  * On not asserting translated text. `$lib/i18n` is mocked with an identity
  * translator, so `$_('settings.global.scheduler.historyDaysMon')` renders as
  * that literal key. Assertions name keys, never sentences.
  *
- * On not asserting CSS. A selected weekday is expressed *only* by a Tailwind
- * class — there is no `aria-pressed`, no `data-selected` (this is in the report
- * as a requested attribute). So day selection is never read off the button; it
- * is read off the two places the product does publish it: the `days` string in
- * the save payload, and whether Save is enabled at all, since `canSave` requires
- * at least one day. Both are contracts rather than styling.
+ * On not asserting CSS. Day selection is read from `aria-pressed` or from the
+ * saved `days` payload, never from visual classes.
  *
- * Timezones are pinned to fixed-offset zones — Asia/Kolkata (+05:30) and
- * America/Bogota (−05:00) never observe DST — so the expected values are
- * constants and not a function of the day the suite runs on. No clock stubbing
- * is needed for them, and none is done.
- *
- * One behaviour recorded here is a characterisation, not an endorsement, and it
- * says so in its own test: changing the timezone does not re-convert the times
- * already on screen, so the same digits silently come to mean a different
- * instant.
+ * Changing the timezone changes schedule semantics, not chip digits. A warning
+ * appears because the same local HH:MM now maps to a different UTC instant.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
@@ -51,12 +39,6 @@ import {notify} from '$lib/stores/app/notify.svelte';
 const patch = vi.mocked(zodiosApi.axios.patch);
 const notified = vi.mocked(notify);
 
-/**
- * +05:30 all year: no DST, so every expected value below is a constant. Used as
- * a *stored* zone only — ICU still lists it under its legacy alias
- * (`Asia/Calcutta`), so it is not a zone the picker can be asked to show.
- */
-const KOLKATA = 'Asia/Kolkata';
 /** −05:00 all year, and spelled the same in the picker's list as in ICU. */
 const BOGOTA = 'America/Bogota';
 
@@ -199,14 +181,10 @@ describe('opening', () => {
         });
     });
 
-    it('falls back to the browser timezone when none is configured', () => {
-        // The right-hand side of `schedulerTimezone || resolvedOptions().timeZone`.
-        // The expectation reads the platform, not the component: this is what
-        // `Intl` says in this process, independently of the code under test.
-        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    it('falls back to UTC when none is configured', () => {
         mount({schedulerTimezone: ''});
 
-        expect(tzSearchInput()).toHaveAttribute('placeholder', browserTz);
+        expect(tzSearchInput()).toHaveAttribute('placeholder', 'UTC');
     });
 
     it('shows a dash instead of a blank when the server clock is unknown', () => {
@@ -587,32 +565,31 @@ describe('the timezone picker', () => {
     });
 });
 
-describe('UTC in, local out', () => {
-    it('shows the stored UTC times in the chosen zone', () => {
-        mount({schedulerTimezone: KOLKATA, currentValues: {...DEFAULTS, times: '09:00,17:30'}});
+describe('local scheduler slots', () => {
+    it('shows stored local times unchanged in the chosen zone', () => {
+        mount({schedulerTimezone: BOGOTA, currentValues: {...DEFAULTS, times: '09:00,17:30'}});
 
-        expect(slots()).toEqual(['14:30', '23:00']);
+        expect(slots()).toEqual(['09:00', '17:30']);
     });
 
-    it('gives back the same UTC it was given, untouched', async () => {
-        mount({schedulerTimezone: KOLKATA});
+    it('saves the visible local times as stored scheduler times', async () => {
+        mount({schedulerTimezone: BOGOTA});
 
         await fireEvent.click(saveButton());
         await waitFor(() => expect(patch).toHaveBeenCalled());
 
         expect(savedKeys().scheduler_history_sync_times).toBe('09:00,17:30');
-        expect(savedKeys().scheduler_timezone).toBe(KOLKATA);
+        expect(savedKeys().scheduler_timezone).toBe(BOGOTA);
     });
 
-    it('carries a time across midnight forwards', () => {
-        // 23:00 UTC is 04:30 the next morning in Kolkata.
-        mount({schedulerTimezone: KOLKATA, currentValues: {...DEFAULTS, times: '23:00'}});
+    it('does not change midnight-crossing digits on open', () => {
+        mount({schedulerTimezone: BOGOTA, currentValues: {...DEFAULTS, times: '23:00'}});
 
-        expect(slots()).toEqual(['04:30']);
+        expect(slots()).toEqual(['23:00']);
     });
 
-    it('carries it back across midnight on save', async () => {
-        mount({schedulerTimezone: KOLKATA, currentValues: {...DEFAULTS, times: '23:00'}});
+    it('saves midnight-crossing digits as shown', async () => {
+        mount({schedulerTimezone: BOGOTA, currentValues: {...DEFAULTS, times: '23:00'}});
 
         await fireEvent.click(saveButton());
         await waitFor(() => expect(patch).toHaveBeenCalled());
@@ -620,8 +597,7 @@ describe('UTC in, local out', () => {
         expect(savedKeys().scheduler_history_sync_times).toBe('23:00');
     });
 
-    it('wraps the other way for a zone behind UTC', async () => {
-        // 20:00 in Bogotá (−05:00) is 01:00 UTC the next day.
+    it('does not convert newly added local times before saving', async () => {
         mount({schedulerTimezone: BOGOTA, currentValues: {...DEFAULTS, times: ''}});
         await typeTime('20:00');
         await fireEvent.click(screen.getByTestId('scheduler-config-time-add'));
@@ -629,44 +605,56 @@ describe('UTC in, local out', () => {
         await fireEvent.click(saveButton());
         await waitFor(() => expect(patch).toHaveBeenCalled());
 
-        expect(savedKeys().scheduler_history_sync_times).toBe('01:00');
+        expect(savedKeys().scheduler_history_sync_times).toBe('20:00');
     });
 
-    it('leaves the times alone when the zone is not a zone', async () => {
-        // Both conversions are wrapped in a `catch` that returns the input. A
-        // stored `scheduler_timezone` the browser does not know must not turn
-        // the schedule into `NaN:NaN`.
-        mount({schedulerTimezone: 'Not/AZone'});
-        expect(slots()).toEqual(['09:00', '17:30']);
-
-        await fireEvent.click(saveButton());
-        await waitFor(() => expect(patch).toHaveBeenCalled());
-
-        expect(savedKeys().scheduler_history_sync_times).toBe('09:00,17:30');
-    });
-
-    it('CHARACTERISATION: picking a zone reschedules the job without moving the times on screen', async () => {
-        // The hint under the field says "times below are displayed in this
-        // timezone", but `selectedTz` is only read on open and on save — the
-        // chips are never re-converted. So a user who opens the dialog on UTC,
-        // sees 09:00, and then sets their own zone to Bogotá saves a job that
-        // now runs at 14:00 UTC, with 09:00 still on screen. Nothing warns them.
-        //
-        // This test passes today. It will go red when the times are re-converted
-        // on a zone change, and that red is the fix landing.
+    it('keeps visible chips unchanged when the timezone changes and saves them as shown', async () => {
         mount({schedulerTimezone: 'UTC', currentValues: {...DEFAULTS, times: '09:00'}});
         expect(slots()).toEqual(['09:00']);
+        expect(screen.queryByTestId('scheduler-timezone-change-warning')).toBeNull();
 
         await fireEvent.focus(tzSearchInput());
         await fireEvent.input(tzSearchInput(), {target: {value: 'bogota'}});
         await fireEvent.click(screen.getByRole('button', {name: BOGOTA}));
 
         expect(slots()).toEqual(['09:00']);
+        expect(screen.getByTestId('scheduler-timezone-change-warning')).toBeInTheDocument();
 
         await fireEvent.click(saveButton());
         await waitFor(() => expect(patch).toHaveBeenCalled());
 
-        expect(savedKeys().scheduler_history_sync_times).toBe('14:00');
+        expect(savedKeys().scheduler_history_sync_times).toBe('09:00');
+    });
+
+    it('warns on timezone change even when local time crosses a UTC day boundary', async () => {
+        mount({schedulerTimezone: 'UTC', currentValues: {...DEFAULTS, times: '01:00'}});
+        expect(slots()).toEqual(['01:00']);
+
+        await fireEvent.focus(tzSearchInput());
+        await fireEvent.input(tzSearchInput(), {target: {value: 'bogota'}});
+        await fireEvent.click(screen.getByRole('button', {name: BOGOTA}));
+
+        expect(slots()).toEqual(['01:00']);
+        expect(screen.getByTestId('scheduler-timezone-change-warning')).toBeInTheDocument();
+
+        await fireEvent.click(saveButton());
+        await waitFor(() => expect(patch).toHaveBeenCalled());
+
+        expect(savedKeys().scheduler_history_sync_times).toBe('01:00');
+    });
+
+    it('stores a rectangular local schedule, so weekdays and visible times stay paired', async () => {
+        mount({schedulerTimezone: BOGOTA, currentValues: {...DEFAULTS, times: '02:00', days: 'mon'}});
+
+        expect(slots()).toEqual(['02:00']);
+        expect(dayButton('mon')).toHaveAttribute('aria-pressed', 'true');
+        expect(dayButton('sun')).toHaveAttribute('aria-pressed', 'false');
+
+        await fireEvent.click(saveButton());
+        await waitFor(() => expect(patch).toHaveBeenCalled());
+
+        expect(savedKeys().scheduler_history_sync_times).toBe('02:00');
+        expect(savedKeys().scheduler_history_sync_days).toBe('mon');
     });
 });
 

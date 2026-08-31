@@ -65,7 +65,7 @@
     import ImportWizardModal from './ImportWizardModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/transactions/txStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import type {FormModalItems} from '../shared/resolveFormItems';
+    import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
 
@@ -543,6 +543,19 @@
     }
     void addRow;
 
+    function postSplitTypeForForm(d: PendingOp): string {
+        if (d.op !== 'edit' || !splitTxIdsSet.has(d.txId)) return d.fields.type;
+        const splitEntry = pendingSplits.find((s) => s.id_a === d.txId || s.id_b === d.txId);
+        const origType = splitEntry?.originalType ?? d.fields.type;
+        const splitTypes = SPLIT_TYPE_MAP[origType];
+        if (!splitTypes) return d.fields.type;
+
+        const qty = Number(d.fields.quantity ?? 0);
+        const cashAmt = Number(d.fields.cash?.amount ?? 0);
+        const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
+        return (isSender ? splitTypes[0] : splitTypes[1]) as string;
+    }
+
     /** Convert a PendingOp to a TXReadItem-shaped object so it can be fed back to
      *  TransactionFormModal as `initialRow`. We reuse the BulkModal's in-flight
      *  draft state, NOT a server-persisted row, so id/timestamps are synthetic. */
@@ -569,6 +582,12 @@
             created_at: orig?.created_at,
             updated_at: orig?.updated_at,
         };
+    }
+
+    function opToTxLikeForForm(d: PendingOp): TXReadItem {
+        const item = opToTxLike(d);
+        item.type = postSplitTypeForForm(d);
+        return item;
     }
 
     /** Collapse paired drafts in an array: detect partners via
@@ -2260,24 +2279,11 @@
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
         formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
-        let mainItem = opToTxLike(row);
-        // SP-C Step 2: if split-queued, override type with post-split target
-        if (row.op === 'edit' && splitTxIdsSet.has(row.txId) && mainItem) {
-            const splitEntry = pendingSplits.find((s) => s.id_a === row.txId || s.id_b === row.txId);
-            const origType = splitEntry?.originalType ?? row.fields.type;
-            const splitTypes = SPLIT_TYPE_MAP[origType];
-            if (splitTypes) {
-                const qty = Number(row.fields.quantity ?? 0);
-                const cashAmt = Number(row.fields.cash?.amount ?? 0);
-                const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
-                mainItem.type = (isSender ? splitTypes[0] : splitTypes[1]) as string;
-            }
-        }
         formEditingTempId = row.tempId;
-        // Resolve partner from hidden partner op or txStore fallback
-        const pOp = getPartnerOp(row.tempId);
-        const partnerItem = pOp ? opToTxLike(pOp) : null;
-        formItems = partnerItem ? [mainItem, partnerItem] : [mainItem];
+        // Project post-split type before validatePair: handleSplitRow already
+        // un-paired split tails, so the mismatch must stop txStore fallback from
+        // re-pairing them as the original transfer.
+        formItems = resolveFormItemsFromOps(row, ops, opToTxLikeForForm, txStoreGet);
         formKey++;
         formOpen = true;
     }

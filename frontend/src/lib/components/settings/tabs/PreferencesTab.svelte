@@ -122,6 +122,7 @@
 
     // Check if any field is modified
     $: hasChanges = languageModified || currencyModified || themeModified;
+    $: hasNonDefaults = languageNonDefault || currencyNonDefault || themeNonDefault;
 
     // Filter settings by category
     // Avatar is always shown at the top, regardless of category selection
@@ -141,52 +142,64 @@
     // Get visible fields (avatar is always visible, handled separately in template)
     $: visibleFields = selectedCategory === '' ? (['language', 'default_currency', 'theme'] as const) : (getCategoryFields(selectedCategory) as (keyof typeof editedValues)[]);
 
+    type PreferenceField = keyof typeof editedValues;
+
+    function fieldLabel(field: PreferenceField): string {
+        if (field === 'language') return $_('settings.language');
+        if (field === 'default_currency') return $_('settings.defaultCurrency');
+        return $_('settings.theme');
+    }
+
+    function savePayload(field: PreferenceField) {
+        if (field === 'language') return {language: editedValues.language};
+        if (field === 'default_currency') return {base_currency: editedValues.default_currency};
+        return {theme: editedValues.theme};
+    }
+
+    function applyPersistedSideEffect(field: PreferenceField) {
+        if (field === 'language') {
+            currentLanguage.set(editedValues.language as SupportedLocale);
+        } else if (field === 'theme') {
+            applyTheme(editedValues.theme as 'light' | 'dark' | 'auto');
+        }
+    }
+
+    function syncPersistedPreferences(values = originalValues) {
+        userSettings.setDirect({
+            language: values.language,
+            base_currency: values.default_currency,
+            theme: values.theme,
+        });
+    }
+
+    function failureMessage(e: unknown): string {
+        if (isAxiosError(e)) return e.message;
+        return $_('settings.saveFailed');
+    }
+
     // Single field actions
-    async function saveField(field: keyof typeof editedValues) {
+    async function saveField(field: PreferenceField) {
         isSaving = true;
         error = null;
 
         try {
-            if (field === 'language') {
-                currentLanguage.set(editedValues.language as SupportedLocale);
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({language: editedValues.language});
-                // Sync userSettings store
-                userSettings.setDirect({
-                    language: editedValues.language,
-                    base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                });
-            } else if (field === 'default_currency') {
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({base_currency: editedValues.default_currency});
-                // Sync userSettings store
-                userSettings.setDirect({
-                    language: editedValues.language,
-                    base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                });
-            } else if (field === 'theme') {
-                applyTheme(editedValues.theme as 'light' | 'dark' | 'auto');
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({theme: editedValues.theme});
-                // Sync userSettings store
-                userSettings.setDirect({
-                    language: editedValues.language,
-                    base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                });
-            }
-
-            originalValues = {...originalValues, [field]: editedValues[field]};
+            await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put(savePayload(field));
+            const nextValues = {...originalValues, [field]: editedValues[field]};
+            originalValues = nextValues;
+            applyPersistedSideEffect(field);
+            syncPersistedPreferences(nextValues);
             notify({
                 name: 'settings.preferences.saved',
                 detail: {fields: 1, field, value: editedValues[field]},
                 toast: {variant: 'success', message: $_('settings.savedSuccessfully')},
             });
         } catch (e) {
-            if (isAxiosError(e)) {
-                error = e.message;
-            } else {
-                error = $_('settings.saveFailed');
-            }
+            error = failureMessage(e);
+            notify({
+                name: 'settings.preferences.save.failed',
+                detail: {field, reason: error},
+                toast: {variant: 'error', message: $_('settings.preferencesSaveFailed')},
+            });
         } finally {
             isSaving = false;
         }
@@ -205,53 +218,56 @@
         isSaving = true;
         error = null;
 
-        const saved: string[] = [];
+        const fields: PreferenceField[] = [];
+        if (languageModified) fields.push('language');
+        if (currencyModified) fields.push('default_currency');
+        if (themeModified) fields.push('theme');
 
-        try {
-            if (languageModified) {
-                currentLanguage.set(editedValues.language as SupportedLocale);
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({language: editedValues.language});
-                originalValues.language = editedValues.language;
-                saved.push($_('settings.language'));
-            }
+        const saved: {field: PreferenceField; label: string}[] = [];
+        const failed: {field: PreferenceField; label: string; reason: string}[] = [];
+        let nextValues = {...originalValues};
 
-            if (currencyModified) {
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({base_currency: editedValues.default_currency});
-                originalValues.default_currency = editedValues.default_currency;
-                saved.push($_('settings.defaultCurrency'));
+        for (const field of fields) {
+            try {
+                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put(savePayload(field));
+                nextValues = {...nextValues, [field]: editedValues[field]};
+                saved.push({field, label: fieldLabel(field)});
+                applyPersistedSideEffect(field);
+            } catch (e) {
+                failed.push({field, label: fieldLabel(field), reason: failureMessage(e)});
             }
-
-            if (themeModified) {
-                applyTheme(editedValues.theme as 'light' | 'dark' | 'auto');
-                await zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put({theme: editedValues.theme});
-                originalValues.theme = editedValues.theme;
-                saved.push($_('settings.theme'));
-            }
-
-            // Sync userSettings store after all saves
-            if (saved.length > 0) {
-                userSettings.setDirect({
-                    language: editedValues.language,
-                    base_currency: editedValues.default_currency,
-                    theme: editedValues.theme,
-                });
-                // The base-currency change is the exact case that had no signal: the value
-                // is cached from login and nothing said when the new one took effect.
-                notify({
-                    name: 'settings.preferences.saved',
-                    detail: {fields: saved.length, language: editedValues.language, currency: editedValues.default_currency, theme: editedValues.theme},
-                    toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${saved.map((l) => `<li>${l}</li>`).join('')}</ul>`},
-                });
-            }
-        } catch (e) {
-            if (isAxiosError(e)) {
-                error = e.message;
-            } else {
-                error = $_('settings.saveFailed');
-            }
-        } finally {
-            isSaving = false;
         }
+
+        originalValues = nextValues;
+        if (saved.length > 0) syncPersistedPreferences(nextValues);
+
+        if (failed.length > 0) {
+            error = failed.map((f) => `${f.label}: ${f.reason}`).join('\n');
+        }
+
+        if (saved.length > 0 || failed.length > 0) {
+            const savedList = saved.map((s) => `<li>${s.label}</li>`).join('');
+            const failedList = failed.map((f) => `<li>${f.label}</li>`).join('');
+            const message =
+                failed.length === 0
+                    ? `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${savedList}</ul>`
+                    : `${$_(saved.length === 0 ? 'settings.preferencesSaveFailed' : 'settings.preferencesSavePartial')}:<div class="mt-1">${$_('settings.savedFields')}</div><ul class="list-inside list-disc">${savedList}</ul><div class="mt-1">${$_('settings.failedFields')}</div><ul class="list-inside list-disc">${failedList}</ul>`;
+            notify({
+                name: failed.length === 0 ? 'settings.preferences.saved' : saved.length === 0 ? 'settings.preferences.save.failed' : 'settings.preferences.save.partial',
+                detail: {
+                    fields: saved.length,
+                    saved: saved.map((s) => s.field),
+                    failed: failed.map((f) => f.field),
+                    reasons: Object.fromEntries(failed.map((f) => [f.field, f.reason])),
+                    language: nextValues.language,
+                    currency: nextValues.default_currency,
+                    theme: nextValues.theme,
+                },
+                toast: {variant: failed.length === 0 ? 'success' : saved.length === 0 ? 'error' : 'warning', message},
+            });
+        }
+
+        isSaving = false;
     }
 
     function undoAll() {
@@ -263,7 +279,7 @@
     }
 </script>
 
-<SettingsLayout bind:selectedCategory {categories} {hasChanges} hasNonDefaults={false} isBusy={isLoading || isSaving} isLocked={false} on:resetAll={resetAll} on:saveAll={saveAll} on:undoAll={undoAll} showLock={false} title={$_('settings.userPreferences')}>
+<SettingsLayout bind:selectedCategory {categories} {hasChanges} {hasNonDefaults} isBusy={isLoading || isSaving} {isSaving} isLocked={false} onresetAll={resetAll} onsaveAll={saveAll} onundoAll={undoAll} showLock={false} title={$_('settings.userPreferences')}>
     <!-- Error message (success is a toast: see notify() above) -->
     <InfoBanner class="mb-4" dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
@@ -282,6 +298,7 @@
                     isModified={languageModified}
                     isNonDefault={languageNonDefault}
                     isLocked={false}
+                    {isSaving}
                     onsave={() => saveField('language')}
                     onundo={() => undoField('language')}
                     onreset={() => resetField('language')}
@@ -299,6 +316,7 @@
                     isModified={currencyModified}
                     isNonDefault={currencyNonDefault}
                     isLocked={false}
+                    {isSaving}
                     onsave={() => saveField('default_currency')}
                     onundo={() => undoField('default_currency')}
                     onreset={() => resetField('default_currency')}
@@ -317,9 +335,10 @@
                     isModified={themeModified}
                     isNonDefault={themeNonDefault}
                     isLocked={false}
-                    on:save={() => saveField('theme')}
-                    on:undo={() => undoField('theme')}
-                    on:reset={() => resetField('theme')}
+                    {isSaving}
+                    onsave={() => saveField('theme')}
+                    onundo={() => undoField('theme')}
+                    onreset={() => resetField('theme')}
                 />
             </div>
         {/if}

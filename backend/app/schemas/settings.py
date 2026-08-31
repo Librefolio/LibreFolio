@@ -114,7 +114,7 @@ GLOBAL_SETTINGS_DEFAULTS = {
     "scheduler_history_sync_times": {
         "value": "06:00,23:00",
         "type": "str",
-        "description": "Comma-separated HH:MM times for daily history sync (server local time)",
+        "description": "Comma-separated HH:MM local times for history sync in scheduler_timezone",
     },
     "scheduler_history_sync_days": {
         "value": "mon,tue,wed,thu,fri,sat",
@@ -129,7 +129,7 @@ GLOBAL_SETTINGS_DEFAULTS = {
     "scheduler_timezone": {
         "value": "UTC",
         "type": "str",
-        "description": "IANA timezone used to display and enter scheduler times (storage stays UTC)",
+        "description": "IANA timezone used to store and evaluate scheduler history-sync days and times",
     },
     # Display
     "default_currency": {

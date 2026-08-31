@@ -42,7 +42,7 @@ export class FxPairSignal extends ChartSignal {
         const points: LineDataPoint[] = [];
         for (const bd of baseData) {
             const val = lookup.get(bd.date);
-            if (val !== undefined && val !== 0) {
+            if (val !== undefined && val !== null && val !== 0) {
                 points.push({date: bd.date, value: isInverted ? 1 / val : val});
             }
         }
@@ -84,6 +84,7 @@ export class FxPairSignal extends ChartSignal {
             markerEnd: this.style.markerEnd,
             yAxisIndex: 0,
             aggregationProfile: 'last_with_range',
+            connectNulls: false,
         };
     }
 

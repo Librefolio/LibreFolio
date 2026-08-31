@@ -27,10 +27,8 @@
  * `createEventDispatcher` is Svelte 4 API kept alive by Svelte 5's legacy layer:
  * `$on()` is gone, and the listener arrives through the `$$events` prop instead.
  *
- * Two behaviours recorded here are characterisations, not endorsements, and both
- * are called out in their own tests: the submit *event* bypasses `canSubmit`
- * entirely, and the Save button comes back to life during the 1500 ms victory
- * lap while the old password is still on screen.
+ * One behaviour recorded here is a characterisation, not an endorsement: the
+ * submit *event* bypasses `canSubmit` entirely.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
@@ -388,13 +386,13 @@ describe('PasswordChangeModal — after the password has changed', () => {
         expect(close).toHaveBeenCalledTimes(1);
     });
 
-    it('empties every field on the way out, so nothing is left for the next open', async () => {
+    it('empties every field as soon as the change succeeds, so the old password cannot be sent again', async () => {
         vi.useFakeTimers();
         mount();
         await fillValid();
 
         await fireEvent.click(saveButton());
-        await vi.advanceTimersByTimeAsync(1500);
+        await vi.advanceTimersByTimeAsync(0);
         await tick();
 
         expect(screen.getByTestId('password-current')).toHaveValue('');
@@ -402,26 +400,9 @@ describe('PasswordChangeModal — after the password has changed', () => {
         expect(screen.getByTestId('password-confirm')).toHaveValue('');
     });
 
-    it('re-enables Save during the 1500 ms confirmation, with the stale password still loaded', async () => {
-        // Characterisation of a real gap, not an endorsement.
-        //
-        // `handleSubmit` sets `isSubmitting = false` synchronously after the await,
-        // then schedules the close 1500 ms later. For that second and a half the
-        // dialog is fully interactive and all three fields still hold the values
-        // that were just spent: `canSubmit` is true again, so the Save button is
-        // enabled underneath the success message.
-        //
-        // A second click there sends `current_password` = the password that no
-        // longer exists, and the server answers "Current password is incorrect" —
-        // so the user, having just succeeded, is told their password is wrong. The
-        // pending `setTimeout` still fires and closes the dialog on top of that
-        // error, which is why it is easy to miss.
-        //
-        // The fix is one line (`if (isSubmitting || success) return;` in
-        // `handleSubmit`, or keeping `isSubmitting` true until the timer runs).
-        // When it lands, this test goes red and says exactly what changed.
+    it('keeps Save disabled during the 1500 ms confirmation and ignores another submit', async () => {
         vi.useFakeTimers();
-        mount();
+        const {container} = mount();
         await fillValid();
 
         await fireEvent.click(saveButton());
@@ -429,13 +410,13 @@ describe('PasswordChangeModal — after the password has changed', () => {
         await tick();
 
         expect(screen.getByText('settings.passwordChanged')).toBeInTheDocument();
-        expect(saveButton()).toBeEnabled();
+        expect(saveButton()).toBeDisabled();
 
         await fireEvent.click(saveButton());
+        await fireEvent.submit(container.querySelector('form') as HTMLFormElement);
         await vi.advanceTimersByTimeAsync(0);
 
-        expect(changePassword).toHaveBeenCalledTimes(2);
-        expect(changePassword).toHaveBeenLastCalledWith({current_password: OLD_PASSWORD, new_password: GOOD_PASSWORD});
+        expect(changePassword).toHaveBeenCalledTimes(1);
     });
 });
 
