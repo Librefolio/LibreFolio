@@ -1567,6 +1567,7 @@
       "createIntermediatePairsHint": "Each step of the selected chain routes will be saved as a standalone pair with its provider, so they can be synced independently.",
       "titleEdit": "Edit Pair Providers",
       "createFailed": "Failed to create FX pair",
+      "createConflict": "Someone else changed this conversion route at the same time. Nothing was saved — please try again.",
       "alreadyExists": "This pair already exists — sync or edit it from the FX page."
     },
     "sync": {
@@ -1666,6 +1667,7 @@
   "prices": {
     "sync": {
       "noResponse": "no response",
+      "noReport": "The server did not report on this item",
       "partialSuffix": "partial",
       "skippedSuffix": "skipped",
       "failedDefault": "failed",

@@ -410,8 +410,8 @@ class FXConversionRouteItem(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    base: str = Field(..., min_length=3, max_length=3)
-    quote: str = Field(..., min_length=3, max_length=3)
+    base: str = Field(..., min_length=3, max_length=3, description="Base currency. Stored alphabetically: posting EUR/DKK yields a DKK-EUR row.")
+    quote: str = Field(..., min_length=3, max_length=3, description="Quote currency. See `base` — the pair is sorted on write, not rejected.")
     priority: int = Field(..., ge=1)
     chain_steps: list[FXRouteStep] = Field(..., min_length=1, description="Ordered list of conversion steps (edges of the graph)")
 

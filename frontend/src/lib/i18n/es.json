@@ -1567,6 +1567,7 @@
       "createIntermediatePairsHint": "Cada paso de las cadenas seleccionadas se guardará como par autónomo con su proveedor, para poder sincronizarlos de forma independiente.",
       "titleEdit": "Editar Proveedores del Par",
       "createFailed": "Error al crear el par FX",
+      "createConflict": "Otra persona ha modificado esta ruta de conversión al mismo tiempo. No se ha guardado nada: inténtalo de nuevo.",
       "alreadyExists": "Este par ya existe — sincronízalo o edítalo desde la página FX."
     },
     "sync": {
@@ -1666,6 +1667,7 @@
   "prices": {
     "sync": {
       "noResponse": "sin respuesta",
+      "noReport": "El servidor no ha informado sobre este elemento",
       "partialSuffix": "parcial",
       "skippedSuffix": "omitido",
       "failedDefault": "fallido",

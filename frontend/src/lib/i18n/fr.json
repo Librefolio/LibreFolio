@@ -1567,6 +1567,7 @@
       "createIntermediatePairsHint": "Chaque étape des chaînes sélectionnées sera sauvegardée comme paire autonome avec son fournisseur, afin de pouvoir les synchroniser indépendamment.",
       "titleEdit": "Modifier les Fournisseurs",
       "createFailed": "Échec de la création de la paire FX",
+      "createConflict": "Quelqu'un d'autre a modifié cette route de conversion au même moment. Rien n'a été enregistré — veuillez réessayer.",
       "alreadyExists": "Cette paire existe déjà — synchronisez-la ou modifiez-la depuis la page FX."
     },
     "sync": {
@@ -1666,6 +1667,7 @@
   "prices": {
     "sync": {
       "noResponse": "aucune réponse",
+      "noReport": "Le serveur n'a rien signalé pour cet élément",
       "partialSuffix": "partielle",
       "skippedSuffix": "ignoré",
       "failedDefault": "échec",

@@ -12,6 +12,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {onDestroy} from 'svelte';
     import {Clock, Info, RefreshCw, SkipForward, Timer, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -74,6 +75,8 @@
     let elapsedMs = $state(0);
     let countdownInterval: ReturnType<typeof setInterval> | null = null;
     let wasOpen = $state(false);
+    /** Increments on every open: identifies the run the user is watching. */
+    let session = $state(0);
 
     // =========================================================================
     // Derived
@@ -105,24 +108,57 @@
     // Effects
     // =========================================================================
 
-    // Reset state on open transition
+    // Reset on open, tidy up on close
     $effect(() => {
         const isOpen = open;
         if (isOpen && !wasOpen) {
+            // A new session, and the number is what makes it one. Closing does
+            // not cancel the request — that is deliberate: the backend keeps
+            // working through the providers and the timeout here is the user's
+            // patience, not the server's. But a response from the run the user
+            // walked away from must not land in the run they are looking at
+            // now, and it used to: the reset cleared the results and left
+            // `syncing` alone, so the modal reopened busy, showing the previous
+            // request's progress bar, and that request's results then merged
+            // into the new session.
+            session += 1;
             sectionResults = new Map();
             error = null;
             isTimeout = false;
             elapsedMs = 0;
+            syncing = false;
+            stopCountdown();
             timeoutSec = Math.max(20, itemCount);
+        } else if (!isOpen && wasOpen) {
+            // The ticker is the one thing that must stop when the user walks
+            // away, and it is the one thing the session guard cannot stop: the
+            // `finally` of the abandoned run only runs its cleanup when its
+            // epoch is still current, which by then it is not. Without this the
+            // interval outlives the run — and where the parent unmounts the
+            // modal behind an `{#if}` (TransactionFormModal does), it outlives
+            // the component too, writing to a `$state` nobody will ever read
+            // again, ten times a second, for the life of the page.
+            stopCountdown();
         }
         wasOpen = isOpen;
     });
+
+    // The `{#if}` case again: an unmount is a close the effect never sees.
+    onDestroy(stopCountdown);
+
+    /** True while `epoch` is still the session the user is looking at. */
+    function current(epoch: number): boolean {
+        return epoch === session && open;
+    }
 
     // =========================================================================
     // Countdown
     // =========================================================================
 
     function startCountdown() {
+        // Never leave a previous ticker behind: the reference is single, so a
+        // second start without a stop loses the first one for good.
+        stopCountdown();
         elapsedMs = 0;
         const start = Date.now();
         countdownInterval = setInterval(() => {
@@ -147,18 +183,21 @@
     }
 
     /** Sync specific IDs within a single section */
-    async function doSyncSection(section: SyncSection, ids: string[]): Promise<SyncResult[]> {
+    async function doSyncSection(section: SyncSection, ids: string[], epoch: number): Promise<SyncResult[]> {
         try {
             return await section.doSyncFn(ids);
         } catch (e: any) {
             let errMsg: string;
             if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout')) {
-                isTimeout = true;
                 errMsg = `Timeout after ${timeoutSec}s`;
-                error = `Request timed out after ${timeoutSec}s. Increase the timeout and retry.`;
+                // The banner and the timeout flag belong to a session on screen.
+                if (current(epoch)) {
+                    isTimeout = true;
+                    error = `Request timed out after ${timeoutSec}s. Increase the timeout and retry.`;
+                }
             } else {
                 errMsg = e?.response?.data?.detail || e?.message || 'Sync failed';
-                error = errMsg;
+                if (current(epoch)) error = errMsg;
             }
             return ids.map((id) => ({
                 id,
@@ -170,10 +209,40 @@
         }
     }
 
-    /** Merge new results into sectionResults for a given section */
-    function mergeResults(sectionId: string, newResults: SyncResult[], retriedIds: Set<string>) {
+    /**
+     * Fold a section's answer into what is already on screen.
+     *
+     * The rule this enforces: **an item that was asked about never leaves the
+     * list without an outcome.** The previous version removed every requested
+     * id and appended whatever came back, which is right when the answer covers
+     * the question and destructive when it does not — a retry answered with
+     * `[]` deleted the very failures it was meant to repair, taking their retry
+     * button with them, and an initial sync that reported on one of two ids left
+     * the second with no row at all while the summary read "1/1" in green.
+     *
+     * So: rows nobody answered about are kept as they were, and a requested id
+     * that has never been reported on gets a row saying exactly that. Silence is
+     * an outcome, and it is not a success.
+     */
+    function mergeResults(sectionId: string, newResults: SyncResult[], requestedIds: Set<string>) {
         const existing = sectionResults.get(sectionId) ?? [];
-        const merged = [...existing.filter((r) => !retriedIds.has(r.id)), ...newResults];
+        const answered = new Set(newResults.map((r) => r.id));
+
+        // Replaced only where there is something to replace them with.
+        const kept = existing.filter((r) => !answered.has(r.id));
+
+        const known = new Set([...kept.map((r) => r.id), ...answered]);
+        const unreported: SyncResult[] = [...requestedIds]
+            .filter((id) => !known.has(id))
+            .map((id) => ({
+                id,
+                status: 'failed' as const,
+                points_fetched: 0,
+                points_changed: 0,
+                message: $t('prices.sync.noReport') ?? 'The server did not report on this item',
+            }));
+
+        const merged = [...kept, ...newResults, ...unreported];
         // Trigger reactivity by creating a new Map
         const updated = new Map(sectionResults);
         updated.set(sectionId, merged);
@@ -182,6 +251,7 @@
 
     /** Sync all sections in parallel */
     async function handleSyncAll() {
+        const epoch = session;
         syncing = true;
         error = null;
         isTimeout = false;
@@ -191,19 +261,25 @@
         try {
             await Promise.all(
                 activeSections.map(async (section) => {
-                    const results = await doSyncSection(section, section.targetIds);
-                    mergeResults(section.id, results, new Set(section.targetIds));
+                    const results = await doSyncSection(section, section.targetIds, epoch);
+                    if (current(epoch)) mergeResults(section.id, results, new Set(section.targetIds));
                 }),
             );
-            onsynced();
+            // `onsynced` makes the parent reload. Firing it for a session the
+            // user has closed reloads a page on behalf of a modal that is no
+            // longer on screen.
+            if (current(epoch)) onsynced();
         } finally {
-            syncing = false;
-            stopCountdown();
+            if (current(epoch)) {
+                syncing = false;
+                stopCountdown();
+            }
         }
     }
 
     /** Retry all failed items across all sections */
     async function handleRetryFailed() {
+        const epoch = session;
         syncing = true;
         error = null;
         isTimeout = false;
@@ -224,33 +300,51 @@
                 Array.from(failedBySection.entries()).map(async ([sectionId, ids]) => {
                     const section = activeSections.find((s) => s.id === sectionId);
                     if (!section) return;
-                    const results = await doSyncSection(section, ids);
-                    mergeResults(sectionId, results, new Set(ids));
+                    const results = await doSyncSection(section, ids, epoch);
+                    if (current(epoch)) mergeResults(sectionId, results, new Set(ids));
                 }),
             );
-            onsynced();
+            if (current(epoch)) onsynced();
         } finally {
-            syncing = false;
-            stopCountdown();
+            if (current(epoch)) {
+                syncing = false;
+                stopCountdown();
+            }
         }
     }
 
     /** Retry a single item (called from result row snippet) */
     export async function handleRetrySingle(id: string) {
+        // The markup hides the retry button while `syncing`, which is enough for
+        // a finger — ~100 ms apart, the second press lands on nothing. It is not
+        // enough for the same tick: two calls before the DOM flushes both get
+        // through and the server is asked twice for the same id. The affordance
+        // being invisible is not the same as the action being impossible.
+        if (syncing) return;
+
         const section = findSectionForId(id);
         if (!section) return;
 
+        const epoch = session;
         syncing = true;
         error = null;
+        // Cleared here too, and it was not: the flag chooses the footer's label,
+        // so a successful single-row retry left the modal claiming it had timed
+        // out while showing a success.
+        isTimeout = false;
         startCountdown();
 
         try {
-            const results = await doSyncSection(section, [id]);
-            mergeResults(section.id, results, new Set([id]));
-            onsynced();
+            const results = await doSyncSection(section, [id], epoch);
+            if (current(epoch)) {
+                mergeResults(section.id, results, new Set([id]));
+                onsynced();
+            }
         } finally {
-            syncing = false;
-            stopCountdown();
+            if (current(epoch)) {
+                syncing = false;
+                stopCountdown();
+            }
         }
     }
 </script>

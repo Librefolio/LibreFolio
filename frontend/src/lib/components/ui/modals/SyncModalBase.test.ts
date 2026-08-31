@@ -29,10 +29,12 @@
  *   - the elapsed/remaining *rendering*. `formatTime` lives in syncHelpers and has
  *     its own unit test; what is asserted here is `data-remaining`, the number.
  *
- * Several tests below pin behaviour that is arguably wrong (a timeout that times
- * nothing out, results that vanish when the backend returns fewer rows than were
- * asked for). They are written as descriptions of what the code does today, and
- * flagged in the report, because changing them changes what the user sees.
+ * A few tests below pin behaviour that is deliberate rather than obvious: the
+ * timeout is a display and not a limit (it measures the user's patience, not the
+ * server's), `onsynced` fires even when every item failed, and closing the modal
+ * does not cancel the request — it only makes the modal stop listening. They are
+ * written as descriptions of a decision, so that changing the decision shows up
+ * here first.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
@@ -138,6 +140,24 @@ const bodyState = (attr: string) => screen.getByTestId('sync-modal-body').getAtt
 /** Results land through two awaits and an effect flush; wait for the summary. */
 async function settled() {
     await waitFor(() => expect(screen.queryByTestId('sync-modal-results')).not.toBeNull());
+}
+
+/**
+ * Waits for the run to be *over*, which is not the same as the first result
+ * being on screen: a retry that changes nothing visible still has a beginning
+ * and an end, and `data-busy` is the only thing that says so.
+ */
+async function idle() {
+    await waitFor(() => expect(bodyState('data-busy')).toBe('false'));
+}
+
+/**
+ * Drains the microtask queue and flushes effects, without touching the clock.
+ * Used where the thing under test is an *absence* — a stale answer that must not
+ * land — so there is nothing to wait *for*, only a queue to exhaust.
+ */
+async function flush(times = 5) {
+    for (let i = 0; i < times; i++) await tick();
 }
 
 beforeAll(async () => {
@@ -421,6 +441,44 @@ describe('SyncModalBase — retry', () => {
         expect(statusOf('a2')).toBe('failed');
     });
 
+    /**
+     * The three production rows hide their retry control while a run is in
+     * flight, and for a finger that is enough: two presses are ~100 ms apart and
+     * the second lands on nothing. It is not enough within one tick, before the
+     * DOM has flushed — and the server would be asked twice for the same id. So
+     * the refusal lives in the handler, not in the markup, and it is tested here
+     * on the base's own terms: the harness offers the control throughout, which
+     * is exactly what makes the same-tick case expressible.
+     */
+    it('refuses a second request for a row while one is already in flight', async () => {
+        const held = deferred<SyncResult[]>();
+        let call = 0;
+        const fn = vi.fn((ids: string[]) => {
+            call += 1;
+            return call === 1 ? Promise.resolve(ids.map((id) => result(id, 'failed'))) : held.promise;
+        });
+        mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: fn}]);
+
+        await fireEvent.click(startButton());
+        await waitFor(() => expect(statusOf('a1')).toBe('failed'));
+
+        // The retry is pressed and held open, so the modal is busy…
+        const retry = within(rowOf('a1')).getByTestId('sync-retry-row');
+        await fireEvent.click(retry);
+        await tick();
+        expect(bodyState('data-busy')).toBe('true');
+
+        // …and pressing it again asks nobody anything.
+        await fireEvent.click(retry);
+        await flush();
+        expect(fn).toHaveBeenCalledTimes(2);
+
+        held.resolve([result('a1', 'ok')]);
+        await held.promise;
+        await idle();
+        expect(statusOf('a1')).toBe('ok');
+    });
+
     it('retries every failure across sections, each with only its own ids', async () => {
         const alpha = answersFrom({a1: 'failed', a2: 'partial', a3: 'ok'}, {a1: 'ok', a2: 'ok'});
         const beta = answersFrom({b1: 'failed'}, {b1: 'ok'});
@@ -569,12 +627,13 @@ describe('SyncModalBase — countdown', () => {
     });
 
     /**
-     * ⚠ Product defect, pinned rather than fixed — see the report.
+     * Deliberate, and pinned so that changing it has to be a decision.
      *
      * `timeoutSec` drives the countdown and nothing else: there is no timer that
      * aborts, and the wrappers pass a hardcoded 120s to axios regardless of what
      * the user typed. Past the deadline the counter sits at 0, the bar is full, and
-     * the modal stays busy for as long as the backend cares to take.
+     * the modal stays busy for as long as the backend cares to take — because the
+     * number measures the user's patience, not the server's.
      */
     it('keeps waiting after the countdown reaches zero: the timeout is a display, not a limit', async () => {
         vi.useFakeTimers();
@@ -596,6 +655,104 @@ describe('SyncModalBase — countdown', () => {
             await tick();
             // …and it is still accepted, a minute past the stated timeout.
             expect(statusOf('a1')).toBe('ok');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+// =========================================================================
+// What the ticker must not outlive
+// =========================================================================
+
+/**
+ * Repeating timers still alive, once every one-shot has had its chance to fire.
+ *
+ * A `setTimeout` that has not fired yet is a pending timer too, and opening the
+ * modal schedules a few, so a raw count says nothing. Advance the clock far
+ * enough and only a *repeating* timer can still be there — and the component has
+ * exactly one, the 100 ms countdown ticker.
+ *
+ * Counting timers is a strange thing for a component test to do, and it is the
+ * right thing here: an orphaned ticker writes to a `$state` that nothing renders
+ * any more, so it has no shape in the DOM at all. There is nothing else to look
+ * at. It simply keeps waking the machine ten times a second.
+ */
+async function tickersAlive(): Promise<number> {
+    await vi.advanceTimersByTimeAsync(2_000);
+    await flush();
+    return vi.getTimerCount();
+}
+
+/**
+ * A third test used to live here: that starting a second run over a first does
+ * not lose the first ticker — the reference is a single variable, so overwriting
+ * it puts the old interval beyond the reach of any later `stopCountdown()`. It
+ * was a real condition, reachable through `handleRetrySingle`, which did not
+ * gate on `syncing` and so let two runs overlap. It is gone because the path is:
+ * `handleRetrySingle` now returns early while a run is in flight, and it was the
+ * only door — `handleSyncAll` and `handleRetryFailed` are not exported, the
+ * footer button is disabled while syncing, and a reopened modal has no rows to
+ * retry from. The `stopCountdown()` that now opens `startCountdown()` is what
+ * remains: a net under a condition nobody can create today, kept for the day the
+ * guard moves. It has no test because it can no longer be provoked, and this
+ * paragraph is the reason rather than an oversight.
+ */
+describe('SyncModalBase — the ticker outlives neither the modal nor the run', () => {
+    /**
+     * The abandoned run cannot stop its own ticker: its `finally` only cleans up
+     * while its epoch is still on screen, and by then it is not — that is the
+     * whole point of the session guard. So the close has to do it, and the close
+     * is the moment to do it: the countdown is a display, and nobody is looking.
+     */
+    it('stops ticking the moment the user walks away, without waiting for the answer', async () => {
+        vi.useFakeTimers();
+        try {
+            const inflight = deferred<SyncResult[]>();
+            const {rerender} = mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: () => inflight.promise}]);
+
+            await fireEvent.click(startButton());
+            await vi.advanceTimersByTimeAsync(3_000);
+            await tick();
+            // Precondition, verified rather than assumed: it really is ticking —
+            // the number on screen moved…
+            expect(screen.getByTestId('sync-modal-progress')).toHaveAttribute('data-remaining', '17');
+            // …and there is exactly one repeating timer behind it.
+            expect(await tickersAlive()).toBe(1);
+
+            await rerender({open: false});
+            expect(await tickersAlive()).toBe(0);
+
+            // The request is still out there — closing does not cancel it, which
+            // is deliberate — so its answer lands on a session nobody is watching.
+            // That must not bring anything back to life either.
+            inflight.resolve([result('a1', 'ok')]);
+            await inflight.promise;
+            expect(await tickersAlive()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    /**
+     * `open` is never set to false here. That is the `{#if}` case —
+     * TransactionFormModal drops the whole component rather than closing it — so
+     * the effect's close branch never runs, and the destroy hook is the only
+     * thing left between a ticker and the life of the page.
+     */
+    it('stops ticking when the modal is destroyed, which is a close the effect never sees', async () => {
+        vi.useFakeTimers();
+        try {
+            const inflight = deferred<SyncResult[]>();
+            const {unmount} = mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: () => inflight.promise}]);
+
+            await fireEvent.click(startButton());
+            await tick();
+            expect(screen.getByTestId('sync-modal-progress')).toBeInTheDocument();
+            expect(await tickersAlive()).toBe(1);
+
+            unmount();
+            expect(await tickersAlive()).toBe(0);
         } finally {
             vi.useRealTimers();
         }
@@ -630,39 +787,63 @@ describe('SyncModalBase — callbacks', () => {
 });
 
 // =========================================================================
-// Pinned defects — behaviour described, not endorsed (see the report)
+// Silence is an outcome — an item asked about never leaves without one
 // =========================================================================
 
-describe('SyncModalBase — pinned defects', () => {
+describe('SyncModalBase — items the answer does not cover', () => {
     /**
-     * ⚠ The denominator of the summary is "results received", not "items asked
-     * for". A backend that answers about fewer ids than were requested makes the
-     * missing ones disappear without a word, and the banner reads as a clean run.
+     * The rule: an id that was requested and never reported on gets a row of its
+     * own, marked failed. It used to get nothing — no row, and a summary whose
+     * denominator was "results received", so a backend answering about one of two
+     * ids produced a green "1/1".
      */
-    it('silently drops ids the section did not report on, and still calls the run complete', async () => {
+    it('gives an id the section never reported on a failed row of its own', async () => {
         const partialAnswer = vi.fn(async () => [result('a1', 'ok', 5, 5)]);
         mount([{id: 'alpha', targetIds: ['a1', 'a2'], doSyncFn: partialAnswer}]);
 
         await fireEvent.click(startButton());
-        await settled();
+        await idle();
 
         expect(partialAnswer).toHaveBeenCalledWith(['a1', 'a2']);
-        expect(rowIds()).toEqual(['a1']); // a2 has no row at all
-        // The only surviving trace of the request is the section's own counters.
-        expect(num(sectionOf('alpha'), 'data-result-count')).toBe(1);
+        // Both ids are on screen, and the one nobody spoke about is a failure.
+        expect(rowIds().sort()).toEqual(['a1', 'a2']);
+        expect(statusOf('a1')).toBe('ok');
+        expect(statusOf('a2')).toBe('failed');
+        // The section's own counters now agree, which is the point.
+        expect(num(sectionOf('alpha'), 'data-result-count')).toBe(2);
         expect(num(sectionOf('alpha'), 'data-target-count')).toBe(2);
-        // …while the summary says the run was a complete success.
-        expect(summary()).toMatchObject({success: 1, total: 1, failed: 0});
-        expect(summaryVariant()).toBe('info-banner-success');
+        // And the run cannot be read as a clean success any more.
+        expect(summary()).toMatchObject({success: 1, total: 2, failed: 1});
+        expect(summaryVariant()).toBe('info-banner-warning');
     });
 
     /**
-     * ⚠ Same mechanism, worse consequence: an empty answer to a retry erases the
-     * failure it was meant to fix, and with the last failure gone the modal
-     * withdraws the retry control too. The user is left with no failure and no
-     * way to try again.
+     * The synthetic row is a failure like any other, so it is retryable: the
+     * footer button switches to the retry job and asks about the silent id alone.
      */
-    it('erases a failed row when the retry answers with nothing', async () => {
+    it('lets the user retry the id that was never reported on', async () => {
+        let call = 0;
+        const fn = vi.fn(async (ids: string[]) => (call++ === 0 ? [result('a1', 'ok', 5, 5)] : ids.map((id) => result(id, 'ok', 2, 2))));
+        mount([{id: 'alpha', targetIds: ['a1', 'a2'], doSyncFn: fn}]);
+
+        await fireEvent.click(startButton());
+        await idle();
+        expect(statusOf('a2')).toBe('failed');
+
+        // One failure only, so the bulk control stays away and the footer does it.
+        expect(screen.queryByTestId('sync-modal-retry-failed')).toBeNull();
+        await fireEvent.click(startButton());
+        await waitFor(() => expect(statusOf('a2')).toBe('ok'));
+
+        expect(fn).toHaveBeenNthCalledWith(2, ['a2']);
+        expect(summary()).toMatchObject({success: 2, total: 2, failed: 0});
+    });
+
+    /**
+     * The other half of the same rule: an answer that covers nothing replaces
+     * nothing. The failures — and the controls that repair them — survive.
+     */
+    it('keeps the failed rows, and their retry control, when the retry answers with nothing', async () => {
         let call = 0;
         const fn = vi.fn(async (ids: string[]) => (call++ === 0 ? ids.map((id) => result(id, 'failed')) : []));
         mount([{id: 'alpha', targetIds: ['a1', 'a2'], doSyncFn: fn}]);
@@ -672,21 +853,52 @@ describe('SyncModalBase — pinned defects', () => {
         expect(summary().failed).toBe(2);
 
         await fireEvent.click(screen.getByTestId('sync-modal-retry-failed'));
-        await waitFor(() => expect(rowIds()).toEqual([]));
+        await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
+        await idle();
 
-        // No rows, no failures, and no control left to start anything.
-        expect(screen.queryByTestId('sync-modal-results')).toBeNull();
-        expect(screen.queryByTestId('sync-modal-start')).not.toBeNull(); // back to "sync all"
         expect(fn).toHaveBeenNthCalledWith(2, ['a1', 'a2']);
+        // Nothing was erased, nothing was invented, and the way out is still there.
+        expect(rowIds().sort()).toEqual(['a1', 'a2']);
+        expect(statusOf('a1')).toBe('failed');
+        expect(statusOf('a2')).toBe('failed');
+        expect(summary()).toMatchObject({success: 0, total: 2, failed: 2});
+        expect(screen.getByTestId('sync-modal-retry-failed')).toBeInTheDocument();
     });
 
     /**
-     * ⚠ `handleSyncAll` and `handleRetryFailed` both clear `isTimeout`;
-     * `handleRetrySingle` clears `error` and forgets it. A per-row retry that
-     * succeeds therefore leaves the modal claiming the previous attempt timed
-     * out — which is what decides the footer label (Close instead of Cancel).
+     * A row that already has an outcome is not overwritten by silence either:
+     * the successful half of a first run survives a retry aimed at the failures.
      */
-    it('leaves the timeout flag set after a successful single-row retry', async () => {
+    it('leaves untouched the rows the retry did not ask about', async () => {
+        const fn = answersFrom({a1: 'ok', a2: 'failed'}, {a2: 'ok'});
+        mount([{id: 'alpha', targetIds: ['a1', 'a2'], doSyncFn: fn}]);
+
+        await fireEvent.click(startButton());
+        await idle();
+        expect(statusOf('a1')).toBe('ok');
+
+        await fireEvent.click(startButton());
+        await waitFor(() => expect(statusOf('a2')).toBe('ok'));
+
+        expect(fn).toHaveBeenNthCalledWith(2, ['a2']);
+        expect(statusOf('a1')).toBe('ok');
+        expect(rowIds().sort()).toEqual(['a1', 'a2']);
+        expect(summary()).toMatchObject({success: 2, total: 2, failed: 0});
+    });
+});
+
+// =========================================================================
+// One session at a time
+// =========================================================================
+
+describe('SyncModalBase — sessions', () => {
+    /**
+     * `handleRetrySingle` was the only one of the three entry points that did not
+     * clear `isTimeout`, so a successful per-row retry left the modal claiming the
+     * previous attempt had timed out — and that flag is what picks the footer's
+     * label.
+     */
+    it('clears the timeout flag after a successful single-row retry', async () => {
         let call = 0;
         const fn = vi.fn(async (ids: string[]) => {
             if (call++ === 0) throw {code: 'ECONNABORTED', message: 'aborted'};
@@ -700,39 +912,56 @@ describe('SyncModalBase — pinned defects', () => {
 
         await fireEvent.click(within(rowOf('a1')).getByTestId('sync-retry-row'));
         await waitFor(() => expect(statusOf('a1')).toBe('ok'));
+        await idle();
 
-        // The run succeeded, the error banner is gone — and the flag is still up.
         expect(errorBanner()).toBeNull();
-        expect(bodyState('data-timeout')).toBe('true');
+        expect(bodyState('data-timeout')).toBe('false');
     });
 
     /**
-     * ⚠ Closing the modal neither cancels the request nor stops the countdown, and
-     * `onsynced` fires into a parent that has already dismissed the dialog. Reopen
-     * before it lands and the reset effect wipes the results while `syncing` stays
-     * true, so the new session opens stuck on the old request's progress bar.
+     * Closing does not cancel: the backend keeps working, deliberately. What
+     * changed is that the abandoned run's signals are ignored — reopening gives a
+     * clean, idle modal, and the late answer lands nowhere.
+     *
+     * The absence is only worth asserting next to a presence, so the last act
+     * starts a fresh sync in the new session and watches it render: the modal was
+     * perfectly able to show a result, it just would not show *that* one.
      */
-    it('keeps an in-flight sync running across a close, and reopens busy on it', async () => {
-        const slow = deferred<SyncResult[]>();
-        const {onsynced, rerender} = mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: () => slow.promise}]);
+    it('ignores the answer to a run the user has walked away from', async () => {
+        const stale = deferred<SyncResult[]>();
+        let answer: () => Promise<SyncResult[]> = () => stale.promise;
+        const fn = vi.fn(() => answer());
+        const {onsynced, rerender} = mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: fn}]);
 
         await fireEvent.click(startButton());
         await waitFor(() => expect(bodyState('data-busy')).toBe('true'));
 
         await rerender({open: false});
-        expect(screen.queryByTestId('sync-modal-body')).toBeNull(); // dialog is gone
+        expect(screen.queryByTestId('sync-modal-body')).toBeNull();
 
         await rerender({open: true});
         await tick();
-        // A brand-new open, already busy on a request the user cannot see.
-        expect(bodyState('data-busy')).toBe('true');
-        expect(startButton()).toBeDisabled();
+        // A new session: idle, empty, and ready — not stuck on the old progress bar.
+        expect(bodyState('data-busy')).toBe('false');
+        expect(startButton()).toBeEnabled();
+        expect(rowIds()).toEqual([]);
+        expect(screen.queryByTestId('sync-modal-results')).toBeNull();
 
-        slow.resolve([result('a1', 'ok')]);
-        await settled();
-        // The stale answer lands in the fresh session, and the parent is told to
-        // refresh as if the user had asked for it here.
-        expect(statusOf('a1')).toBe('ok');
+        stale.resolve([result('a1', 'ok', 9, 9)]);
+        await stale.promise;
+        await flush();
+
+        // The late answer is dropped, and the parent is not told to reload.
+        expect(rowIds()).toEqual([]);
+        expect(screen.queryByTestId('sync-modal-results')).toBeNull();
+        expect(bodyState('data-busy')).toBe('false');
+        expect(onsynced).not.toHaveBeenCalled();
+
+        // Presence barrier: the same modal renders a result asked for here.
+        answer = async () => [result('a1', 'partial', 3, 3)];
+        await fireEvent.click(startButton());
+        await idle();
+        expect(statusOf('a1')).toBe('partial');
         expect(onsynced).toHaveBeenCalledTimes(1);
     });
 });

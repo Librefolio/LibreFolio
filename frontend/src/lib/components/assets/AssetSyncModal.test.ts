@@ -172,7 +172,7 @@ describe('AssetSyncModal — mapping the response into rows', () => {
         expect(rowOf('1').querySelector('[title="yfinance"]')).toBeNull();
     });
 
-    it('shows the corporate-event counters only when events were actually fetched', async () => {
+    it('carries the corporate-event counters through into the row', async () => {
         respondWith({asset_id: 1, status: 'ok', points_fetched: 10, points_changed: 2, events_fetched: 4, events_changed: 1}, {asset_id: 2, status: 'ok', points_fetched: 10, points_changed: 2, events_fetched: 0});
         mount({assets: [asset(1), asset(2)]});
 
@@ -222,46 +222,28 @@ describe('AssetSyncModal — mapping the response into rows', () => {
         expect(unknown).toHaveTextContent('yfinance');
     });
 
-    it('shows the message of a skipped asset and offers it no retry', async () => {
-        respondWith({asset_id: 1, status: 'skipped', message: 'already up to date'});
-        mount({assets: [asset(1)]});
-
-        await startSync();
-        await settled();
-
-        expect(rowOf('1')).toHaveAttribute('data-status', 'skipped');
-        expect(rowOf('1')).toHaveTextContent('already up to date');
-        // Skipped is not a failure: nothing to retry, and the summary is not a success.
-        expect(within(rowOf('1')).queryByTestId('sync-retry-row')).toBeNull();
-        expect(summary()).toMatchObject({success: 0, total: 1, failed: 0});
-    });
-
-    it('leaves a skipped row silent when the backend gives no reason', async () => {
-        respondWith({asset_id: 1, status: 'skipped'});
-        mount({assets: [asset(1)]});
-
-        await startSync();
-        await settled();
-
-        // The italic explanation is conditional on the message, not on the status:
-        // a reasonless skip is a row with a name and nothing else to read.
-        expect(rowOf('1')).toHaveAttribute('data-status', 'skipped');
-        expect(rowOf('1')).toHaveTextContent('Asset 1');
-        expect(rowOf('1').querySelector('span.italic')).toBeNull();
-    });
-
-    it('shows the first error of a failed asset, falling back to the message', async () => {
-        respondWith({asset_id: 1, status: 'failed', errors: ['symbol not found', 'and the fallback failed too']}, {asset_id: 2, status: 'partial', message: 'only 3 of 20 days'});
+    /**
+     * The one wiring test for this modal. What the row *does* with a result —
+     * which statuses afford a retry, how the visible error is picked out of the
+     * list, the copy gestures, the skipped note — belongs to
+     * SyncResultRow.test.ts, in one place, because the four hand-written copies
+     * of that row drifted apart precisely by being read one at a time. What is
+     * this modal's own is that it hands the shared row its results at all, and
+     * that what the row says is what the tally counts.
+     */
+    it('renders the shared result row, and counts what the rows say', async () => {
+        respondWith({asset_id: 1, status: 'failed', errors: ['symbol not found']}, {asset_id: 2, status: 'skipped', message: 'already up to date'});
         mount({assets: [asset(1), asset(2)]});
 
         await startSync();
         await settled();
 
-        expect(rowOf('1')).toHaveTextContent('symbol not found');
-        expect(rowOf('2')).toHaveTextContent('only 3 of 20 days');
-        // Both are retryable, which is what puts the bulk control on screen.
-        expect(summary().failed).toBe(2);
-        expect(screen.getByTestId('sync-modal-retry-failed')).toBeInTheDocument();
+        expect(within(rowOf('1')).getByTestId('sync-row-error')).toHaveTextContent('symbol not found');
+        expect(within(rowOf('2')).getByTestId('sync-row-skipped')).toHaveTextContent('already up to date');
+        // Skipped is not a failure: nothing to retry on that row, and it counts
+        // as neither a success nor a failure.
+        expect(within(rowOf('2')).queryByTestId('sync-retry-row')).toBeNull();
+        expect(summary()).toMatchObject({success: 0, total: 2, failed: 1});
     });
 
     it('retries a single asset with only that id', async () => {
