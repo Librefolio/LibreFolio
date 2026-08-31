@@ -27,6 +27,7 @@ import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToFxPage, goToFxDetailPage} from './fx-helpers';
 import {daysAgoIso} from '../fixtures/dates';
+import {maximisePageSize} from '../fixtures/paging';
 import {apiLogin, REPOPULATE_ALLOWED, repopulateMockData} from '../fixtures/mock-restore';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,10 +101,18 @@ async function ratesDates(req: APIRequestContext, base: string, quote: string): 
 }
 
 /** Switch the list page into table view and wait for a specific disposable row to
- *  render — the FxTable + its checkboxes only exist in list view. */
+ *  render — the FxTable + its checkboxes only exist in list view.
+ *
+ *  The page size is raised first, and that is not a precaution: this used to
+ *  assert the row was visible on whatever page happened to be showing, which is
+ *  a claim about how many pairs exist rather than about this file's fixture.
+ *  It held until nine deterministic MOCKFX routes joined the baseline and
+ *  pushed `EUR-ZAR` onto page two. "If it pages, walk the pages" — or, cheaper
+ *  when the question is only "is it there at all", show them all. */
 async function openListViewWithRow(page: import('@playwright/test').Page, slug: string): Promise<void> {
     await goToFxPage(page);
     await page.getByTestId('view-mode-list').click();
+    await maximisePageSize(page, page.getByTestId('fx-page'));
     await expect(page.locator(`[data-row-id="${slug}"]`)).toBeVisible({timeout: 8_000});
 }
 

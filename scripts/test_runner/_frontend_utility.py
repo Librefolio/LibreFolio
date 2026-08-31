@@ -23,6 +23,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/parseTypedDate.test.ts",
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
             "src/lib/utils/__tests__/urlFilters.test.ts",
+            "src/lib/utils/__tests__/trySave.test.ts",
+            "src/lib/charts/__tests__/loadComparisonData.test.ts",
             "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
             "src/lib/utils/core/__tests__/formatDecimal.test.ts",
             "src/lib/utils/core/__tests__/escapeHtml.test.ts",
@@ -72,6 +74,15 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/brokers/lots/lotCustodyModalHelpers.test.ts",
             "src/lib/components/brokers/lots/lotsAnalysisHelpers.test.ts",
             "src/lib/components/brokers/lots/lotDataQualityHelpers.test.ts",
+            "src/lib/stores/chartSettingsStore.test.ts",
+            "src/lib/stores/chartSettingsStoreSsr.test.ts",
+            "src/lib/charts/signals/__tests__/registry.test.ts",
+            "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
+            "src/lib/charts/signals/__tests__/comparisonSignals.test.ts",
+            "src/lib/charts/signals/__tests__/measureSignal.test.ts",
+            "src/lib/charts/signals/__tests__/signalProblemSeverity.test.ts",
+            "src/lib/charts/signals/__tests__/catalogPartitions.test.ts",
+            "src/lib/charts/signals/__tests__/backendRendererSegments.test.ts",
         ],
         cwd="frontend",
         capture_output=not verbose,
@@ -129,7 +140,10 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/fx/FxSyncModal.test.ts",
             "src/lib/components/files/FilePreviewModal.test.ts",
             "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
+            "src/lib/components/transactions/modals/TransactionCompareModal.test.ts",
             "src/lib/components/charts/MeasurePanel.test.ts",
+            "src/lib/components/auth/RegisterCard.test.ts",
+            "src/lib/components/auth/DonationPopupModal.test.ts",
         ],
         cwd="frontend",
         capture_output=not verbose,
@@ -244,8 +258,8 @@ def populate_registry(registry: dict) -> None:
         help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)",
         description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
-    add_test(cat, "core-unit", front_utility_unit, test_names=False, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting)", tests="src/lib/stores/core/entityStore.test.ts")
-    add_test(cat, "component-unit", front_component_unit, test_names=False, name="Svelte Component Unit Tests", desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table", tests="src/lib/components/ui/date/CalendarMonth.test.ts")
+    add_test(cat, "core-unit", front_utility_unit, test_names=False, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping", tests="src/lib/stores/core/entityStore.test.ts")
+    add_test(cat, "component-unit", front_component_unit, test_names=False, name="Svelte Component Unit Tests", desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch", tests="src/lib/components/ui/date/CalendarMonth.test.ts")
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")

@@ -2712,6 +2712,34 @@ def populate_fx_currency_pair_sources(session: Session):
         ("CAD", "EUR", [{"from": "CAD", "to": "EUR", "provider": "ECB"}]),
     ]
 
+    # ── Deterministic sync fixtures ──
+    #
+    # Two routes that always work and two that always fail, on currencies no
+    # other fixture touches. They exist so the sync flow can be tested without
+    # a network: MOCKFX returns a fixed rate for every date, MOCKFX_FAIL always
+    # raises, and neither can be asked of a real provider on demand.
+    #
+    # They live *here*, in the baseline, rather than being created by the spec
+    # that uses them, and the reason is measured. `populate_mock_data --force`
+    # truncates `fx_conversion_routes` wholesale, and the frontend recovery net
+    # runs it whenever a spec destroys a baseline row — so a pair created by a
+    # test vanished mid-run, twice, and the symptom was a row "not found" or a
+    # sync where every pair suddenly failed. A fixture that belongs to the
+    # baseline is *restored* by that net instead of being removed by it.
+    eur_direct_routes.extend(
+        [
+            ("EUR", "TRY", [{"from": "EUR", "to": "TRY", "provider": "MOCKFX"}]),
+            ("EUR", "THB", [{"from": "EUR", "to": "THB", "provider": "MOCKFX"}]),
+            ("EUR", "PHP", [{"from": "EUR", "to": "PHP", "provider": "MOCKFX"}]),
+            ("EUR", "TWD", [{"from": "EUR", "to": "TWD", "provider": "MOCKFX"}]),
+            ("EUR", "MYR", [{"from": "EUR", "to": "MYR", "provider": "MOCKFX"}]),
+            ("EUR", "ILS", [{"from": "EUR", "to": "ILS", "provider": "MOCKFX"}]),
+            ("EUR", "KRW", [{"from": "EUR", "to": "KRW", "provider": "MOCKFX_FAIL"}]),
+            ("EUR", "INR", [{"from": "EUR", "to": "INR", "provider": "MOCKFX_FAIL"}]),
+            ("EUR", "HUF", [{"from": "EUR", "to": "HUF", "provider": "MOCKFX_FAIL"}]),
+        ]
+    )
+
     for base, quote, steps in eur_direct_routes:
         route = FxConversionRoute(
             base=base,

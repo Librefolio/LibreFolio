@@ -346,6 +346,7 @@
     "usernameOrEmail": "Username or Email",
     "accountCreated": "Account created successfully! Please log in.",
     "registrationFailed": "Registration failed. Please try again.",
+    "registrationDisabled": "New user registration is currently disabled by the administrator.",
     "passwordRecovery": "Password Recovery",
     "emailRecoveryNotAvailable": "Email recovery is not yet available. Please use the server terminal to reset your password.",
     "serverTerminalInstructions": "Run this command on the server:",

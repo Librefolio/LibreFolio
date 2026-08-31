@@ -180,6 +180,8 @@
                                         {#if showKeep && col.selectable}
                                             <button
                                                 type="button"
+                                                role="switch"
+                                                aria-checked={kept.has(col.id)}
                                                 onclick={() => toggleKept(col.id)}
                                                 aria-label={$t('importWizard.compareModal.keep')}
                                                 title={$t('importWizard.compareModal.keep')}
@@ -203,7 +205,7 @@
                     <tbody>
                         {#each fields as field (field.key)}
                             {@const differs = fieldDiffers(field.key)}
-                            <tr class={differs ? 'bg-amber-50/40 dark:bg-amber-900/10' : ''}>
+                            <tr class={differs ? 'bg-amber-50/40 dark:bg-amber-900/10' : ''} data-differs={differs ? 'true' : 'false'} data-field={field.key} data-testid="import-wizard-compare-row">
                                 <th class="sticky left-0 z-10 border-b border-gray-100 bg-white px-2 py-1.5 text-left align-top text-xs font-medium dark:border-slate-800 dark:bg-slate-900 {differs ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}">
                                     <span class="inline-flex items-center gap-1">
                                         {#if differs}<span aria-hidden="true">≠</span>{/if}
@@ -215,6 +217,9 @@
                                     {@const outlier = cellIsOutlier(field.key, col)}
                                     {@const parts = differs && cell && !cell.html ? diffParts(cell.display, referenceDisplay(field.key, colIndex)) : null}
                                     <td
+                                        data-col={col.id}
+                                        data-outlier={outlier ? 'true' : 'false'}
+                                        data-testid="import-wizard-compare-cell"
                                         class="border-b border-l border-gray-100 px-2 py-1.5 align-top text-xs dark:border-slate-800 {outlier ? 'bg-amber-100 font-medium text-amber-900 dark:bg-amber-900/30 dark:text-amber-200' : 'text-gray-700 dark:text-gray-200'} {field.align === 'right'
                                             ? 'text-right'
                                             : field.align === 'center'
