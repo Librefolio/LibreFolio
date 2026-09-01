@@ -59,9 +59,14 @@
         ondelete?: (asset: AssetRow) => void;
         onmerge?: (asset: AssetRow) => void;
         onselectionchange?: (rows: AssetRow[]) => void;
+        /** F15 round-2 — stacked usage tables share column layout; this callback
+         *  lets the parent mirror live resizes onto the sibling instances. */
+        onColumnResize?: (columnId: string, width: number) => void;
+        /** Distinct storageKey per stacked instance (independent client state). */
+        storageKey?: string;
     }
 
-    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange}: Props = $props();
+    let {data = [], loading = false, visiblePeriods = [], livePriceMap = new Map(), dateStart, dateEnd, onsync, onrefresh, ondelete, onmerge, onselectionchange, onColumnResize, storageKey = 'assetsTable'}: Props = $props();
 
     ensureCurrenciesLoaded($currentLanguage);
     ensureAssetProvidersCached();
@@ -344,6 +349,7 @@
                 variant: 'danger',
             },
         ]}
-        storageKey="assetsTable"
+        {storageKey}
+        {onColumnResize}
     />
 </div>

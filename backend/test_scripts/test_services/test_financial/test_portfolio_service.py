@@ -27,10 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.portfolio_engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.brokers import BRAccessBulkItem
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import AssetPeriodContribution, IssueCode, PortfolioReportQuery
+from backend.app.services.broker_service import BrokerService
 from backend.app.services.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
@@ -111,7 +113,7 @@ async def broker_with_access(session, test_user) -> tuple[Broker, BrokerUserAcce
     access = BrokerUserAccess(
         broker_id=broker.id,
         user_id=test_user.id,
-        role="OWNER",
+        role=UserRole.OWNER,
         share_percentage=Decimal("1.0"),
     )
     session.add(access)
@@ -520,7 +522,7 @@ class TestPortfolioServiceGetSummary:
             BrokerUserAccess(
                 broker_id=broker_two.id,
                 user_id=test_user.id,
-                role="OWNER",
+                role=UserRole.OWNER,
                 share_percentage=Decimal("1.0"),
             )
         )
@@ -660,7 +662,7 @@ class TestRoleAwareShareScaling:
         broker = Broker(name=f"PfBroker_F2_contrib_{utcnow().timestamp()}")
         session.add(broker)
         await session.flush()
-        access = BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("0"))
+        access = BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("0"))
         session.add(access)
         session.add_all(
             [
@@ -697,14 +699,17 @@ class TestRoleAwareShareScaling:
         assert row.end_value == Decimal("0"), f"0%-owner end value must be 0, got {row.end_value}"
 
         # Same row as EDITOR (share stays 0 per the schema rule) → FULL data.
-        access.role = "EDITOR"
+        # Assign the enum, not a raw string: the ORM does not coerce attribute
+        # writes, and the engine's cache fingerprint reads `role.value` — a raw
+        # str would never occur from a DB load, so the test must not invent one.
+        access.role = UserRole.EDITOR
         await session.flush()
         row = await contribution_row()
         assert row.period_income == Decimal("100"), f"EDITOR income must be full, got {row.period_income}"
         assert row.end_value == Decimal("1100"), f"EDITOR end value must be full (10 × 110), got {row.end_value}"
 
         # OWNER with share=1 → full again (the scale=1 anchor).
-        access.role = "OWNER"
+        access.role = UserRole.OWNER
         access.share_percentage = Decimal("1")
         await session.flush()
         row = await contribution_row()
@@ -717,6 +722,134 @@ class TestRoleAwareShareScaling:
         row = await contribution_row()
         assert row.period_income == Decimal("30"), f"30%-owner income must be 30, got {row.period_income}"
         assert row.end_value == Decimal("330"), f"30%-owner end value must be 330 (3 × 110), got {row.end_value}"
+
+
+class TestAccessFingerprintCacheBust:
+    """R2-F2a — role/share edits must bust the report caches.
+
+    get_report is guarded by two caches: the L2 report cache (30 min TTL) and
+    the engine's daily-states blob cache (24 h TTL). Both keys now include an
+    access fingerprint (broker_id, role, share per access row). Before that, a
+    share edit moved no tx/price fingerprint, so every scaled number stayed
+    stale for the whole TTL — the user changed their ownership % and kept
+    seeing the old values.
+
+    One test suffices for both layers: the L2 key change forces the miss that
+    reaches the engine, and the engine blob key change is what makes THAT
+    recompute return fresh numbers instead of a stale blob — a missing
+    fingerprint in either layer shows up as r2 still saying 1000.
+    """
+
+    @pytest.mark.asyncio
+    async def test_share_change_busts_report_caches(self, session, test_user):
+        broker = Broker(name=f"PfBroker_F2cache_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("1000"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(include_summary=True, include_history=False, include_allocation_history=False)
+
+        async def net_worth() -> Decimal:
+            report = await service.get_report(test_user.id, query)
+            assert report.summary is not None
+            return report.summary.net_worth.amount
+
+        async def set_share(share: str) -> None:
+            """Through BrokerService.bulk_update_access — the production write path."""
+            ok, message, _ = await BrokerService(session).bulk_update_access(
+                broker.id,
+                [BRAccessBulkItem(user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal(share))],
+                current_user_id=test_user.id,
+            )
+            assert ok, f"share update to {share} refused: {message}"
+
+        # Baseline at 100%.
+        assert await net_worth() == Decimal("1000")
+
+        # Share 1.0 → 0.3: both cache keys must move, so this is a MISS and a
+        # recompute — not a stale hit. 300, not 1000.
+        await set_share("0.3")
+        assert await net_worth() == Decimal("300"), "share edit did not bust the report caches — stale 1000 served"
+
+        # And back: 1.0 restores the original numbers (a legitimately-cached or
+        # freshly-recomputed 1000 — same fingerprint, same truth).
+        await set_share("1")
+        assert await net_worth() == Decimal("1000")
+
+    @pytest.mark.asyncio
+    async def test_role_change_busts_report_caches(self, session, test_user):
+        """Same fingerprint, other field: OWNER(1) → EDITOR keeps the FULL numbers
+        (role-aware scaling, F2) — but only if the cache actually misses. A stale
+        hit would be invisible here numerically, so this flips twice: 1 → 0.5 →
+        EDITOR. If the role were missing from the key, the second flip would still
+        serve the cached 500."""
+        broker = Broker(name=f"PfBroker_F2role_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        # A co-owner (share 0) exists only so the bulk path allows the last-step
+        # demotion (F4: a last OWNER cannot demote themselves). Their row never
+        # enters test_user's report scope — get_report filters accesses by
+        # user_id — so the numbers below are test_user's alone.
+        co_owner = User(username=f"pfco_{utcnow().timestamp()}", email=f"pfco_{utcnow().timestamp()}@test.com", hashed_password="fakehash", is_active=True)
+        session.add(co_owner)
+        await session.flush()
+        session.add_all(
+            [
+                BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")),
+                BrokerUserAccess(broker_id=broker.id, user_id=co_owner.id, role=UserRole.OWNER, share_percentage=Decimal("0")),
+            ]
+        )
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal("1000"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(include_summary=True, include_history=False, include_allocation_history=False)
+
+        assert (await service.get_report(test_user.id, query)).summary.net_worth.amount == Decimal("1000")
+
+        # Halve the share: 500, cached under the (OWNER, 0.5) fingerprint.
+        ok, message, _ = await BrokerService(session).bulk_update_access(
+            broker.id,
+            [
+                BRAccessBulkItem(user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("0.5")),
+                BRAccessBulkItem(user_id=co_owner.id, role=UserRole.OWNER, share_percentage=Decimal("0")),
+            ],
+            current_user_id=test_user.id,
+        )
+        assert ok, message
+        assert (await service.get_report(test_user.id, query)).summary.net_worth.amount == Decimal("500")
+
+        # OWNER(0.5) → EDITOR(0): role-aware scaling says EDITOR sees FULL data
+        # (1000). A cache keyed without the role would serve the stale 500.
+        ok, message, _ = await BrokerService(session).bulk_update_access(
+            broker.id,
+            [
+                BRAccessBulkItem(user_id=test_user.id, role=UserRole.EDITOR, share_percentage=Decimal("0")),
+                BRAccessBulkItem(user_id=co_owner.id, role=UserRole.OWNER, share_percentage=Decimal("0")),
+            ],
+            current_user_id=test_user.id,
+        )
+        assert ok, message
+        assert (await service.get_report(test_user.id, query)).summary.net_worth.amount == Decimal("1000"), "role edit did not bust the report caches — stale 500 served"
 
 
 class TestPortfolioServicePrivateHelpers:
@@ -1414,7 +1547,7 @@ class TestPortfolioServiceDateAwareDashboardData:
         broker_two = Broker(name=f"PfBroker_{utcnow().timestamp()}_split_two")
         session.add(broker_two)
         await session.flush()
-        session.add(BrokerUserAccess(broker_id=broker_two.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("1")))
+        session.add(BrokerUserAccess(broker_id=broker_two.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
 
         split_event = AssetEvent(
             asset_id=test_asset.id,

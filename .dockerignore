@@ -21,6 +21,12 @@ htmlcov/
 # Test data
 backend/data/test/
 
+# Runtime data and tests never belong in the image: backend/data/ holds local
+# prod/dev databases and uploads (hundreds of MB, and a data-leak risk in a
+# published image); the runtime data dir is created/mounted at container start.
+backend/data/
+backend/test_scripts/
+
 # Development files
 LibreFolio_developer_journal/
 e2e/

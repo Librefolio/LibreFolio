@@ -89,8 +89,23 @@
     let loading = $state(true);
     let refreshing = $state(false);
     let error = $state<string | null>(null);
-    let assetTableComponent: AssetTable | undefined = $state(undefined);
-    let selectedAssetRows = $state<AssetRow[]>([]);
+    // F15 round-2 — one AssetTable per usage panel (own / others / watched).
+    // Column layout is mirrored live across the three; pagination stays independent.
+    let assetTableRefs: Record<string, AssetTable | undefined> = $state({});
+    let panelSelections: Record<string, AssetRow[]> = $state({});
+    let selectedAssetRows = $derived(Object.values(panelSelections).flat());
+
+    /** Mirror a live column resize onto the sibling tables. */
+    function mirrorColumnResize(sourcePanel: string, columnId: string, width: number) {
+        for (const pid of ['own', 'others', 'analysis']) {
+            if (pid !== sourcePanel) assetTableRefs[pid]?.getTableRef()?.setColumnWidth(columnId, width);
+        }
+    }
+
+    function clearAllTableSelections() {
+        for (const ref of Object.values(assetTableRefs)) ref?.getTableRef()?.clearSelection();
+        panelSelections = {};
+    }
     /** Set of asset IDs currently syncing (for per-card/row rotating icon) */
     let syncingAssetIds = $state<Set<number>>(new Set());
 
@@ -863,8 +878,7 @@
         for (const a of assets) invalidateAssetPriceStore(a.id);
         rearmMaxPendingBeforeReload();
         await fetchAllPriceData();
-        assetTableComponent?.getTableRef()?.clearSelection();
-        selectedAssetRows = [];
+        clearAllTableSelections();
     }
 
     function handleBulkDeleteAssets() {
@@ -895,8 +909,7 @@
             toasts.error('Delete failed: ' + (e?.message || 'unknown'));
             bulkDeleteDialogOpen = false;
             deletingAssets = [];
-            assetTableComponent?.getTableRef()?.clearSelection();
-            selectedAssetRows = [];
+            clearAllTableSelections();
         }
     }
 
@@ -913,8 +926,7 @@
         bulkDeleteDialogOpen = false;
         bulkDeleteResults = [];
         deletingAssets = [];
-        assetTableComponent?.getTableRef()?.clearSelection();
-        selectedAssetRows = [];
+        clearAllTableSelections();
     }
 
     function handleGlobalSettings() {
@@ -1134,8 +1146,7 @@
                         {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
                     ]}
                     onClearSelection={() => {
-                        assetTableComponent?.getTableRef()?.clearSelection();
-                        selectedAssetRows = [];
+                        clearAllTableSelections();
                     }}
                 />
             {/if}
@@ -1375,7 +1386,7 @@
         {#snippet actions({showActionLabels})}
             <!-- Top-left: ColumnVisibility in table mode, Abs/% toggle in grid mode -->
             {#if viewMode === 'list'}
-                <ColumnVisibilityToggle tableRef={assetTableComponent?.getTableRef()} showLabel={showActionLabels} />
+                <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
             {:else}
                 <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
                     <button
@@ -1529,23 +1540,42 @@
             {/each}
         </div>
     {:else}
-        <!-- Table View -->
-        <AssetTable
-            bind:this={assetTableComponent}
-            data={tableRows}
-            loading={false}
-            {visiblePeriods}
-            {livePriceMap}
-            dateStart={urlDateStart}
-            dateEnd={urlDateEnd}
-            onsync={handleSyncAsset}
-            onrefresh={handleRefreshAsset}
-            ondelete={handleDeleteAsset}
-            onmerge={handleMergeAsset}
-            onselectionchange={(rows) => {
-                selectedAssetRows = rows;
-            }}
-        />
+        <!-- Table View — F15 round-2: three stacked tables (yours / other users' /
+             watched). Column widths, order and visibility stay in sync across the
+             three (width via mirrorColumnResize, order/visibility via the toggle's
+             additionalTableRefs); pagination is independent per table. -->
+        <div class="space-y-6">
+            {#each assetPanels as panel (panel.id)}
+                {#if panel.items.length > 0}
+                    <section data-testid="assets-table-panel-{panel.id}">
+                        <header class="mb-2 px-1">
+                            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                {$t(`assets.panels.${panel.id}`)} <span class="text-gray-400 dark:text-gray-500 font-normal">({panel.items.length})</span>
+                            </h2>
+                            <p class="text-[11px] text-gray-400 dark:text-gray-500">{$t(`assets.panels.${panel.id}Hint`)}</p>
+                        </header>
+                        <AssetTable
+                            bind:this={assetTableRefs[panel.id]}
+                            data={tableRows.filter((r) => r.txScope === panel.id)}
+                            loading={false}
+                            {visiblePeriods}
+                            {livePriceMap}
+                            dateStart={urlDateStart}
+                            dateEnd={urlDateEnd}
+                            storageKey="assetsTable-{panel.id}"
+                            onsync={handleSyncAsset}
+                            onrefresh={handleRefreshAsset}
+                            ondelete={handleDeleteAsset}
+                            onmerge={handleMergeAsset}
+                            onColumnResize={(colId, w) => mirrorColumnResize(panel.id, colId, w)}
+                            onselectionchange={(rows) => {
+                                panelSelections = {...panelSelections, [panel.id]: rows};
+                            }}
+                        />
+                    </section>
+                {/if}
+            {/each}
+        </div>
     {/if}
 </div>
 

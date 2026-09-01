@@ -16,15 +16,17 @@
 set -e
 
 DATA_DIR="${LIBREFOLIO_DATA_DIR:-/app/backend/data/prod-docker}"
-TARGET_USER="${LIBREFOLIO_USER:-librefolio}"
+# Numeric ids, not names: the build's UID/GID can collide with existing
+# base-image groups, so a named user/group is not guaranteed to exist.
+TARGET_IDS="${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}"
 
 # If running as root, fix permissions and drop privileges
 if [ "$(id -u)" = "0" ]; then
     # Ensure data dir exists and is owned by target user
     mkdir -p "$DATA_DIR"
-    chown -R "$TARGET_USER:$TARGET_USER" "$DATA_DIR"
+    chown -R "$TARGET_IDS" "$DATA_DIR"
     # Drop to non-root and re-exec
-    exec gosu "$TARGET_USER" "$@"
+    exec gosu "$TARGET_IDS" "$@"
 fi
 
 # Already running as non-root (e.g. user: directive in compose) — just exec

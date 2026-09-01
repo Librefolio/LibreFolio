@@ -335,8 +335,8 @@
       "ownHint": "Con transazioni in broker di cui sei owner",
       "others": "Asset degli altri utenti",
       "othersHint": "Con transazioni non tue",
-      "analysis": "Sotto analisi",
-      "analysisHint": "Salvati ma mai usati in una transazione"
+      "analysis": "Osservati",
+      "analysisHint": "Salvati ma senza transazioni — tenuti d'occhio"
     }
   },
   "auth": {
