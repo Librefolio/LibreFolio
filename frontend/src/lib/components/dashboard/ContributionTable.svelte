@@ -62,9 +62,11 @@
         displayCurrency?: string;
         brokers?: ReadonlyArray<BrokerLike>;
         onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
+        analyzedAssetId?: number | null;
     }
 
-    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze}: Props = $props();
+    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
@@ -202,7 +204,7 @@
     }
 
     function getRowClass(row: DisplayRow): string {
-        return row.isFullySold ? 'italic' : '';
+        return `${row.isFullySold ? 'italic' : ''} ${row.assetId === analyzedAssetId ? 'row-analyzed' : ''}`.trim();
     }
 
     /** Desktop double-click / mobile long-press → asset detail page. The plain `goto()`

@@ -542,6 +542,10 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         start=1,
     ):
         custody = tuple(AssetLotCustodyRow(broker_id=slice_.broker_id, custody_type=slice_.custody_type, quantity=slice_.quantity) for slice_ in lot.current_custody)
+        # F6: market value of the lot at its opening date = reference unit price
+        # (market quote at open, or the buy-price fallback used by the lots
+        # service) × the lot's original quantity. None when no reference exists.
+        opening_market_value = lot.reference_unit_price * lot.original_quantity if lot.reference_unit_price is not None else None
         rows.append(
             AssetLotDetailRow(
                 lot_ref=f"L{index}",
@@ -566,6 +570,9 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
                 states=tuple(lot.states),
                 closing_date=lot.closing_date,
                 current_custody=custody,
+                opening_reference_unit_price=lot.reference_unit_price,
+                opening_reference_price_source=lot.reference_price_source,
+                opening_market_value=opening_market_value,
             )
         )
 
@@ -655,7 +662,7 @@ ASSET_PERFORMANCE_SPEC = ComponentSpec(
 
 ASSET_LOT_DETAIL_SPEC = ComponentSpec(
     component_id="asset.lot_detail",
-    version=1,
+    version=2,  # v2 (F6): opening_reference_unit_price/_source + opening_market_value
     domains=frozenset({Domain.ASSET}),
     output_model=AssetLotDetailPayload,
     builder=_build_lot_detail,

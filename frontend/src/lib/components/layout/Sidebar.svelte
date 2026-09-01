@@ -9,9 +9,13 @@
     import {resetNavDepth} from '$lib/stores/app/navigationStore';
     import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, X} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
+    import ChangelogModal from './ChangelogModal.svelte';
 
     // Mobile sidebar state (exported so parent can control it)
     export let isOpen = false;
+
+    /** Changelog modal visibility (F12) */
+    let changelogOpen = false;
 
     // Collapsed state (icons only) - exported and persisted in localStorage
     export let collapsed = false;
@@ -243,11 +247,13 @@
             {/if}
         </button>
 
-        <!-- Version -->
+        <!-- Version — click opens the bundled changelog (F12) -->
         {#if !collapsed}
-            <div class="text-center text-white/40 text-xs pt-2" title="LibreFolio {APP_VERSION}">
+            <button type="button" class="w-full text-center text-white/40 hover:text-white/70 text-xs pt-2 transition-colors cursor-pointer" title="LibreFolio {APP_VERSION} — {$_('changelog.title')}" on:click={() => (changelogOpen = true)} data-testid="sidebar-version">
                 {APP_VERSION}
-            </div>
+            </button>
         {/if}
     </div>
+
+    <ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} />
 </nav>

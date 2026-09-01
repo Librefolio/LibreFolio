@@ -36,6 +36,7 @@ from backend.app.db.models import (
     PriceHistory,
     Transaction,
     TransactionType,
+    UserRole,
 )
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
@@ -1023,7 +1024,9 @@ class PortfolioService:
 
         for access in accesses:
             broker_id = access.broker_id
-            share = access.share_percentage or Decimal("1")
+            # F2 — OWNER share scales (0% is valid, contributes nothing); EDITOR/VIEWER
+            # always carry share 0 by schema rule but see full data → scale 1 for them.
+            share = (access.share_percentage if access.share_percentage is not None else Decimal("1")) if access.role == UserRole.OWNER else Decimal("1")
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
             broker_names[broker_id] = broker_name
@@ -1747,7 +1750,9 @@ class PortfolioService:
 
         for access in accesses:
             broker_id = access.broker_id
-            share = access.share_percentage or Decimal("1")
+            # F2 — OWNER share scales (0% is valid, contributes nothing); EDITOR/VIEWER
+            # always carry share 0 by schema rule but see full data → scale 1 for them.
+            share = (access.share_percentage if access.share_percentage is not None else Decimal("1")) if access.role == UserRole.OWNER else Decimal("1")
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
 

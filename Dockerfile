@@ -8,7 +8,37 @@
 #
 # Prefer `./dev.py docker build` — it also regenerates requirements.txt and
 # VERSION (used below) automatically, on top of the above.
+#
+# Variants (build-arg DOCS_VARIANT=full|light, default: full):
+#   full  — complete image, documentation images included (docs work offline)
+#   light — documentation text pages only; doc images (gallery screenshots,
+#           hundreds of MB) are excluded and loaded on demand from the online
+#           docs site → viewing them requires an internet connection.
 # =============================================================================
+
+# Declared before the first FROM so it can select the docs stage below.
+ARG DOCS_VARIANT=full
+
+# --- Documentation stages ---------------------------------------------------
+# The pre-built docs site is COPYed into an intermediate stage so the "light"
+# variant can prune the image files BEFORE they reach the final image: a
+# `RUN rm` after a COPY in the final stage would NOT shrink the image, because
+# the files would still exist in the earlier layer.
+FROM python:3.13-slim AS docs-full
+COPY mkdocs_src/site/ /site/
+
+FROM python:3.13-slim AS docs-light
+COPY mkdocs_src/site/ /site/
+# Strip documentation images — the weight is in the gallery screenshots.
+# Text pages are kept; missing images fall back to the online docs site
+# (mkdocs_src/docs/javascripts/gallery-img-loader.js → GitHub Pages).
+RUN find /site/gallery -type f \( \
+        -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.gif' -o -iname '*.webp' -o -iname '*.svg' \
+        -o -iname '*.mp4' \
+    \) -delete
+
+FROM docs-${DOCS_VARIANT} AS docs
 
 FROM python:3.13-slim
 
@@ -52,8 +82,9 @@ COPY VERSION ./
 # Copy pre-built frontend (must run ./dev.py front build on host first)
 COPY frontend/build/ ./frontend/build/
 
-# Copy pre-built docs (must run ./dev.py mkdocs build on host first)
-COPY mkdocs_src/site/ ./mkdocs_src/site/
+# Copy pre-built docs (must run ./dev.py mkdocs build on host first).
+# Comes from the DOCS_VARIANT-selected stage above: "light" has no doc images.
+COPY --from=docs /site/ ./mkdocs_src/site/
 
 # Copy environment config
 COPY .env.example ./.env

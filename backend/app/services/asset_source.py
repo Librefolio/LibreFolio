@@ -50,6 +50,7 @@ from backend.app.db.models import (
     ProviderInputType,
     Transaction,
     User,
+    UserRole,
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import (
@@ -3883,7 +3884,7 @@ class AssetCRUDService:
         return FABulkAssetCreateResponse(results=results, success_count=success_count, errors=[])
 
     @staticmethod
-    async def list_assets(filters: FAAinfoFiltersRequest, session: AsyncSession) -> List[FAinfoResponse]:
+    async def list_assets(filters: FAAinfoFiltersRequest, session: AsyncSession, user_id: int | None = None) -> List[FAinfoResponse]:
         """
         List assets with optional filters - enhanced for BRIM asset matching.
 
@@ -3977,6 +3978,27 @@ class AssetCRUDService:
         result = await session.execute(stmt)
         rows = result.all()
 
+        # F15 usage counters: per-asset transaction totals (global) and "own"
+        # totals (brokers the current user OWNs with a positive share; a NULL
+        # share is the legacy unset value and counts as full ownership).
+        tx_total_by_asset: dict[int, int] = {}
+        tx_own_by_asset: dict[int, int] = {}
+        if rows:
+            total_stmt = select(Transaction.asset_id, func.count()).group_by(Transaction.asset_id)
+            tx_total_by_asset = {asset_id: count for asset_id, count in (await session.execute(total_stmt)).all() if asset_id is not None}
+        if rows and user_id is not None:
+            own_brokers_sq = (
+                select(BrokerUserAccess.broker_id)
+                .where(
+                    BrokerUserAccess.user_id == user_id,
+                    BrokerUserAccess.role == UserRole.OWNER,
+                    or_(BrokerUserAccess.share_percentage.is_(None), BrokerUserAccess.share_percentage > 0),
+                )
+                .scalar_subquery()
+            )
+            own_stmt = select(Transaction.asset_id, func.count()).where(Transaction.broker_id.in_(own_brokers_sq)).group_by(Transaction.asset_id)
+            tx_own_by_asset = {asset_id: count for asset_id, count in (await session.execute(own_stmt)).all() if asset_id is not None}
+
         # Build response with identifier info
         assets = []
         for row in rows:
@@ -3998,6 +4020,8 @@ class AssetCRUDService:
                     user_url=asset.user_url,
                     provider_code=provider_code,
                     has_metadata=asset.classification_params is not None,
+                    tx_count=tx_total_by_asset.get(asset.id, 0),
+                    tx_count_own=tx_own_by_asset.get(asset.id, 0),
                     # Identifier columns from Asset
                     identifier_isin=asset.identifier_isin,
                     identifier_ticker=asset.identifier_ticker,

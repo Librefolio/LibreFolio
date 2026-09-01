@@ -181,3 +181,30 @@ test.describe('Dashboard charts and view matrix', () => {
         await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 15_000});
     });
 });
+
+/**
+ * F1 guard — the AI export trigger at mobile width.
+ *
+ * Beta feedback: the dashboard's AiExportMenu disappeared at mobile viewport,
+ * then recovered, with the cause never isolated. That is exactly the failure
+ * shape a regression guard exists for: the mechanism is unknown, so the
+ * assertion is on the OUTCOME — the trigger is on screen at phone width.
+ *
+ * `setViewportSize` is called inside the test (rather than relying on the
+ * `mobile` project) so the guard is deterministic on every project it runs
+ * under. The button may be *disabled* while the catalog probe is in flight —
+ * disabled is a state, absent/invisible is the regression.
+ */
+test.describe('Dashboard toolbar — AI export at mobile viewport (F1 guard)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the AI export trigger stays visible at phone width', async ({page}) => {
+        await page.setViewportSize({width: 375, height: 800});
+        await page.goto('/dashboard');
+        await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
+
+        await expect(page.getByTestId('ai-export-button')).toBeVisible({timeout: 15_000});
+    });
+});

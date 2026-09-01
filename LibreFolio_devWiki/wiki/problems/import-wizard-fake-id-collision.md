@@ -3,7 +3,7 @@ title: "Import wizard fake asset-id collision across multiple files"
 category: problem
 date: 2026-07-26
 tags: [frontend, brim, import, asset-resolution, data-integrity]
-related: [[entities/import-wizard-modal]]
+related: [entities/import-wizard-modal]
 ---
 
 # Import wizard fake asset-id collision across multiple files

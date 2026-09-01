@@ -61,7 +61,7 @@ type)` to its target lot(s); assetless costs never enter this flow at all; unmat
 ## Related
 - [[concepts/deterministic-cost-matching-ladder]]
 - [[concepts/asset-orphan-vs-portfolio-level-cost]]
-- [[fifo-v4-income-eligibility-d1]] — TAX's income-first step reuses the same D-1/broker eligibility rule
+- [[decisions/fifo-v4-income-eligibility-d1]] — TAX's income-first step reuses the same D-1/broker eligibility rule
 - [[entities/fifo-lot-engine]]
 - [[sources/fifo-v4-fee-tax-integration]]
 

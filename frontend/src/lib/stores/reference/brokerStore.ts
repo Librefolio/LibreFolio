@@ -45,6 +45,8 @@ export interface BrokerInfo {
     is_active?: boolean;
     opened_at?: string | null;
     user_role?: string | null;
+    /** Current user's ownership share as a decimal string ("0".."1"); null = unset (treated as 100% for OWNER). */
+    user_share_percentage?: string | null;
     /** Carried for compatibility with the wider `Broker` type (BRReadItem). */
     created_at?: string;
     /** Carried for compatibility with the wider `Broker` type (BRReadItem). */
@@ -76,6 +78,7 @@ function normalize(raw: Record<string, unknown>): BrokerInfo {
     copy('is_active');
     copy('opened_at');
     copy('user_role');
+    copy('user_share_percentage');
     copy('created_at');
     copy('updated_at');
     return out as unknown as BrokerInfo;
@@ -227,6 +230,19 @@ export function canEditPaired(brokerIdA: number, brokerIdB: number): boolean {
 /** All brokers the user has some access to (user_role != null). */
 export function getAccessibleBrokers(): BrokerInfo[] {
     return store.getAll().filter((b) => b.user_role != null);
+}
+
+/**
+ * Brokers the user actually OWNS with a positive share (F2 dashboard scope).
+ * A 0% share is valid and behaves like EDITOR/VIEWER — excluded here.
+ * Null share (legacy, never set) counts as 100% for an OWNER.
+ */
+export function getOwnedBrokers(): BrokerInfo[] {
+    return store.getAll().filter((b) => {
+        if (b.user_role !== 'OWNER') return false;
+        const share = b.user_share_percentage;
+        return share == null || parseFloat(share) > 0;
+    });
 }
 
 /** Only brokers where user is OWNER or EDITOR. */

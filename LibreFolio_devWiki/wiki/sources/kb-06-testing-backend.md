@@ -37,6 +37,6 @@ Comprehensive backend test architecture guide covering: test structure (7 catego
 | Test utilities | `backend/test_scripts/test_utils.py` |
 | Mock data | `backend/test_scripts/test_db/populate_mock_data.py` |
 | API tests directory | `backend/test_scripts/test_api/` |
-| Test runner | `scripts/test_runner.py` |
+| Test runner | `scripts/test_runner/` |
 | Coverage config | `.coveragerc` |
 | Coverage analysis | `scripts/coverage_analysis.py` |

@@ -30,7 +30,7 @@ import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.portfolio import IssueCode, PortfolioReportQuery
+from backend.app.schemas.portfolio import AssetPeriodContribution, IssueCode, PortfolioReportQuery
 from backend.app.services.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
@@ -561,6 +561,162 @@ class TestPortfolioServiceGetSummary:
         assert summary is not None
         assert summary.holdings == []
         assert summary.net_worth.amount == Decimal("0")
+
+
+class TestRoleAwareShareScaling:
+    """F2 — broker share scaling is role-aware.
+
+    An OWNER row scales the broker's contribution by share_percentage: 0% is a
+    valid share and contributes nothing, NULL (legacy unset) means 100%.
+    EDITOR/VIEWER rows always carry share 0 by schema rule, yet they must still
+    see the FULL broker data — an intermediate version of this fix scaled them
+    to 0 too and blanked every editor's dashboard/risk view (caught in CI).
+    """
+
+    async def _make_broker_with_role(self, session, user: User, role: str, share: Decimal | None, deposit: str = "1000") -> Broker:
+        """One broker, one access row with the given role/share, one DEPOSIT."""
+        broker = Broker(name=f"PfBroker_F2_{role}_{share}_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=role, share_percentage=share))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2025, 1, 1),
+                amount=Decimal(deposit),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        return broker
+
+    @pytest.mark.asyncio
+    async def test_owner_with_zero_share_contributes_nothing(self, session, test_user):
+        """OWNER share=0% is valid and contributes 0 to the summary."""
+        await self._make_broker_with_role(session, test_user, "OWNER", Decimal("0"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("0"), f"0%-owner cash must be 0, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("0"), f"0%-owner net_worth must be 0, got {summary.net_worth}"
+        assert summary.total_invested.amount == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_owner_with_full_share_contributes_full(self, session, test_user):
+        """OWNER share=1 boundary: contributes 100% (the scale=1 anchor).
+
+        NOTE on NULL: the column is NOT NULL DEFAULT 1, so a NULL share cannot
+        exist at this layer — the `is not None` branch in the fix is reachable
+        only from API payloads, and that semantic is covered frontend-side
+        (brokerStore.getOwnedBrokers treats a null share as 100% for an OWNER).
+        """
+        await self._make_broker_with_role(session, test_user, "OWNER", Decimal("1"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("1000"), f"full-share owner must see full cash, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("1000")
+
+    @pytest.mark.asyncio
+    async def test_owner_with_partial_share_scales(self, session, test_user):
+        """OWNER share=30% contributes exactly 30% — pins the scale direction."""
+        await self._make_broker_with_role(session, test_user, "OWNER", Decimal("0.3"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("300"), f"30%-owner cash must be 300, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("300")
+
+    @pytest.mark.asyncio
+    async def test_editor_sees_full_data_despite_zero_share(self, session, test_user):
+        """EDITOR rows carry share 0 by schema rule but must see FULL data.
+
+        This is the risk-API regression lock: scale-by-share without the role
+        check zeroes every non-owner's view.
+        """
+        await self._make_broker_with_role(session, test_user, "EDITOR", Decimal("0"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("1000"), f"EDITOR must see full cash, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("1000"), f"EDITOR must see full net worth, got {summary.net_worth}"
+
+    @pytest.mark.asyncio
+    async def test_viewer_sees_full_data_despite_zero_share(self, session, test_user):
+        """VIEWER rows carry share 0 by schema rule but must see FULL data."""
+        await self._make_broker_with_role(session, test_user, "VIEWER", Decimal("0"))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id)
+
+        assert summary.cash_total.amount == Decimal("1000"), f"VIEWER must see full cash, got {summary.cash_total}"
+        assert summary.net_worth.amount == Decimal("1000")
+
+    @pytest.mark.asyncio
+    async def test_positions_contribution_scales_by_owner_share_not_by_role(self, session, test_user, test_asset):
+        """get_positions_contribution applies the same rule: the same access row
+        flipped OWNER(0) → EDITOR(0) → OWNER(NULL) → OWNER(0.3) must move the
+        numbers — the role/share pair is the only variable."""
+        broker = Broker(name=f"PfBroker_F2_contrib_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        access = BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("0"))
+        session.add(access)
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.BUY, date=date(2025, 1, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 15), amount=Decimal("100"), currency="EUR"),
+                PriceHistory(
+                    asset_id=test_asset.id,
+                    date=date(2025, 1, 31),
+                    open=Decimal("110"),
+                    high=Decimal("110"),
+                    low=Decimal("110"),
+                    close=Decimal("110"),
+                    volume=Decimal("1"),
+                    currency="EUR",
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+
+        async def contribution_row() -> AssetPeriodContribution:
+            contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 1, 1), date_to=date(2025, 1, 31))
+            row = next((p for p in contribution.positions if p.broker_id == broker.id and p.asset_id == test_asset.id), None)
+            assert row is not None, "position row for this test's broker+asset missing"
+            return row
+
+        # OWNER share=0 → everything scaled to nothing (income 100×0, qty 10×0).
+        # The row contract encodes "zero" as None (`income if income else None`),
+        # so normalize before comparing: the assertion is "contributes nothing".
+        row = await contribution_row()
+        assert (row.period_income or Decimal("0")) == Decimal("0"), f"0%-owner income must be zero, got {row.period_income}"
+        assert row.end_value == Decimal("0"), f"0%-owner end value must be 0, got {row.end_value}"
+
+        # Same row as EDITOR (share stays 0 per the schema rule) → FULL data.
+        access.role = "EDITOR"
+        await session.flush()
+        row = await contribution_row()
+        assert row.period_income == Decimal("100"), f"EDITOR income must be full, got {row.period_income}"
+        assert row.end_value == Decimal("1100"), f"EDITOR end value must be full (10 × 110), got {row.end_value}"
+
+        # OWNER with share=1 → full again (the scale=1 anchor).
+        access.role = "OWNER"
+        access.share_percentage = Decimal("1")
+        await session.flush()
+        row = await contribution_row()
+        assert row.period_income == Decimal("100"), f"full-share owner income must be full, got {row.period_income}"
+        assert row.end_value == Decimal("1100")
+
+        # OWNER with 30% → exactly 30%.
+        access.share_percentage = Decimal("0.3")
+        await session.flush()
+        row = await contribution_row()
+        assert row.period_income == Decimal("30"), f"30%-owner income must be 30, got {row.period_income}"
+        assert row.end_value == Decimal("330"), f"30%-owner end value must be 330 (3 × 110), got {row.end_value}"
 
 
 class TestPortfolioServicePrivateHelpers:

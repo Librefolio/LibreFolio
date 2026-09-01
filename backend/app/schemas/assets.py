@@ -775,6 +775,12 @@ class FAinfoResponse(StrictModel):
     provider_code: Optional[str] = Field(None, description="Provider code if assigned (e.g. 'yfinance')")
     has_metadata: bool = Field(..., description="Whether asset has classification metadata")
 
+    # Usage counters (F15) — drive the "your assets / other users' assets / under
+    # analysis" panels on the global assets page. `tx_count_own` counts only
+    # transactions in brokers the current user OWNs with a positive share.
+    tx_count: int = Field(0, description="Total transactions referencing this asset (any broker)")
+    tx_count_own: int = Field(0, description="Transactions in brokers the current user owns (share > 0)")
+
     # Identifier columns (one per IdentifierType)
     identifier_isin: Optional[str] = Field(None, description="ISIN code")
     identifier_ticker: Optional[str] = Field(None, description="Ticker symbol")

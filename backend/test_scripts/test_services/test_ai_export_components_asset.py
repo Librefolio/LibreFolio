@@ -225,6 +225,8 @@ def _lot(
     open_quantity: object = 10,
     custody: tuple[LotCustodySummarySchema, ...] = (),
     lot_id: int = 1,
+    reference_unit_price: object | None = None,
+    reference_price_source: str | None = None,
 ) -> LotSummarySchema:
     return LotSummarySchema(
         lot_id=lot_id,
@@ -241,6 +243,8 @@ def _lot(
         realized_quantity=Decimal(str(Decimal(str(original_quantity)) - Decimal(str(open_quantity)))),
         realized_pnl=Decimal("0"),
         cumulative_proceeds=Decimal("0"),
+        reference_unit_price=(Decimal(str(reference_unit_price)) if reference_unit_price is not None else None),
+        reference_price_source=reference_price_source,
         current_custody=list(custody),
     )
 
@@ -779,6 +783,61 @@ class TestLotDetail:
 
         assert len(envelope.payload["lots"]) == 1
         assert envelope.payload["omitted_degraded_lot_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_opening_reference_fields_carry_price_source_and_market_value(self, monkeypatch):
+        """F6: each lot row exposes the opening reference unit price, its source,
+        and the opening market value = reference × ORIGINAL quantity."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        lots = [
+            # market quote existed at open: 95.50 × 10 = 955.00
+            _lot(lot_id=1, closing_date=None, original_quantity=10, open_quantity=10, reference_unit_price="95.50", reference_price_source="exact"),
+            # no market quote: buy-price fallback; partially closed (4 of 10 open)
+            _lot(lot_id=2, closing_date=None, original_quantity=10, open_quantity=4, reference_unit_price="100", reference_price_source="fallback"),
+        ]
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, lots))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.lot_detail", required=True)
+
+        # Exact decimal arithmetic: SafeDecimal serializes the literal it holds.
+        rows = {row["lot_ref"]: row for row in envelope.payload["lots"]}
+        assert rows["L1"]["opening_reference_unit_price"] == "95.50"
+        assert rows["L1"]["opening_reference_price_source"] == "exact"
+        assert rows["L1"]["opening_market_value"] == "955.00"
+        assert rows["L2"]["opening_reference_unit_price"] == "100"
+        assert rows["L2"]["opening_reference_price_source"] == "fallback"
+        # Original quantity (10), not the remaining open quantity (4).
+        assert rows["L2"]["opening_market_value"] == "1000"
+
+    @pytest.mark.asyncio
+    async def test_opening_reference_fields_are_none_when_no_reference_exists(self, monkeypatch):
+        """F6: a lot without a reference price exposes None for all three fields
+        (never a silent 0 — absence and zero are different facts for an analysis)."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        lots = [_lot(lot_id=1, closing_date=None, open_quantity=10, reference_unit_price=None, reference_price_source=None)]
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, lots))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.lot_detail", required=True)
+
+        (row,) = envelope.payload["lots"]
+        assert row["opening_reference_unit_price"] is None
+        assert row["opening_reference_price_source"] is None
+        assert row["opening_market_value"] is None
+
+    @pytest.mark.asyncio
+    async def test_lot_detail_component_is_versioned_v2_in_registry_and_placeholder(self):
+        """F6 bumped asset.lot_detail to version 2 — the real spec and the frozen
+        catalog placeholder must move together (the registry consistency test
+        compares them; this pins the number itself so a revert on one side only
+        cannot stay green)."""
+        real = next(spec for spec in asset_core.ASSET_CORE_COMPONENTS if spec.component_id == "asset.lot_detail")
+        assert real.version == 2
 
 
 # =============================================================================

@@ -515,6 +515,11 @@
 <div class="space-y-4">
     <InfoBanner variant="info" message={$t('importWizard.fixStep.intro')} />
 
+    <InfoBanner variant="warning">
+        {$t('importWizard.fixStep.reportIssueHint')}
+        <a href="https://github.com/Librefolio/LibreFolio/issues/new" target="_blank" rel="noopener noreferrer" class="font-medium underline underline-offset-2 hover:opacity-80" data-testid="fix-step-report-issue-link">{$t('importWizard.fixStep.reportIssueLink')}</a>
+    </InfoBanner>
+
     {#if rows.length === 0}
         <div class="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" data-testid="fix-step-empty">
             <CheckCircle size={16} />

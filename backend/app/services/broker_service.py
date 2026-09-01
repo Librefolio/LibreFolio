@@ -872,3 +872,76 @@ class BrokerService:
         await self.session.flush()
 
         return True, "Access configuration updated", []
+
+    async def leave_broker(
+        self,
+        broker_id: int,
+        user_id: int,
+    ) -> tuple[bool, str, bool]:
+        """Remove the caller's own access to a broker (F4).
+
+        Rules:
+        - EDITOR/VIEWER: always allowed.
+        - OWNER: allowed when at least one other OWNER remains.
+        - The LAST owner leaving deletes the broker entirely (cascade over
+          transactions; BRIM report files are cleaned up by the API layer),
+          per the confirmed F4 semantics.
+
+        Returns:
+            Tuple of (success, message, broker_deleted)
+        """
+        stmt = select(BrokerUserAccess).where(and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == user_id))
+        access = (await self.session.execute(stmt)).scalars().first()
+        if not access:
+            return False, "You have no access to this broker", False
+
+        if access.role == UserRole.OWNER:
+            owners_stmt = select(func.count()).select_from(BrokerUserAccess).where(and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.role == UserRole.OWNER))
+            owner_count = (await self.session.execute(owners_stmt)).scalar_one()
+            if owner_count <= 1:
+                response = await self.delete_bulk([BRDeleteItem(id=broker_id, force=True)], user_id=user_id)
+                result = response.results[0] if response.results else None
+                if not result or not result.success:
+                    return False, (result.message if result else None) or "Broker deletion failed", False
+                return True, "Broker deleted: the last owner left", True
+
+        await self.session.delete(access)
+        await self.session.flush()
+        return True, "Access removed", False
+
+    async def update_own_role(
+        self,
+        broker_id: int,
+        user_id: int,
+        new_role: UserRole,
+    ) -> tuple[bool, str]:
+        """Self-demotion only (F4): EDITOR → VIEWER, or OWNER → EDITOR/VIEWER when
+        at least one other OWNER remains. Promotions stay on the OWNER-only bulk path.
+
+        Demoting from OWNER also zeroes the share (only OWNERs may hold share > 0).
+
+        Returns:
+            Tuple of (success, message)
+        """
+        stmt = select(BrokerUserAccess).where(and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.user_id == user_id))
+        access = (await self.session.execute(stmt)).scalars().first()
+        if not access:
+            return False, "You have no access to this broker"
+
+        current = access.role
+        allowed = (current == UserRole.EDITOR and new_role == UserRole.VIEWER) or (current == UserRole.OWNER and new_role in (UserRole.EDITOR, UserRole.VIEWER))
+        if not allowed:
+            return False, f"Self role change {current.value} → {new_role.value} is not allowed"
+
+        if current == UserRole.OWNER:
+            owners_stmt = select(func.count()).select_from(BrokerUserAccess).where(and_(BrokerUserAccess.broker_id == broker_id, BrokerUserAccess.role == UserRole.OWNER))
+            owner_count = (await self.session.execute(owners_stmt)).scalar_one()
+            if owner_count <= 1:
+                return False, "The last OWNER cannot demote themselves — promote another user first"
+
+        access.role = new_role
+        if current == UserRole.OWNER:
+            access.share_percentage = Decimal("0")
+        access.updated_at = utcnow()
+        await self.session.flush()
+        return True, f"Role updated to {new_role.value}"

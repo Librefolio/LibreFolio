@@ -108,11 +108,11 @@
 | WAC service | `backend/app/services/wac_service.py` |
 | Financial utils | `backend/app/utils/financial_utils.py` |
 | Transaction service | `backend/app/services/transaction_service.py` |
-| FormModal | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
-| WacPreviewSection | `frontend/src/lib/components/transactions/WacPreviewSection.svelte` |
-| AssetEventPicker | `frontend/src/lib/components/transactions/AssetEventPicker.svelte` |
+| FormModal | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| WacPreviewSection | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
+| AssetEventPicker | `frontend/src/lib/components/transactions/events/AssetEventPicker.svelte` |
 | FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
-| ValidateScheduler | `frontend/src/lib/components/transactions/useValidateScheduler.ts` |
+| ValidateScheduler | `frontend/src/lib/utils/transactions/useValidateScheduler.svelte.ts` |
 | E2E WAC FX | `frontend/e2e/transactions/tx-wac-fx.spec.ts` |
 | E2E WAC mode | `frontend/e2e/transactions/tx-wac-mode.spec.ts` |
 

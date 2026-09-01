@@ -152,7 +152,11 @@ Use the `find-skills` skill when looking for new capabilities to install (see `~
 
 ### Graphify Knowledge Graph
 
-The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`) — 9259 nodes, 14151 edges, 748 communities covering backend, frontend, wiki, roadmap and docs.
+The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/graphify-out/graph.json`). Read its real size from `graphify-out/GRAPH_REPORT.md` rather than from here: as of 2026-09-01 it holds ~1 617 nodes / 2 277 edges / 167 communities, built from **100 files**. A number written in prose ages; the report does not.
+
+> ⚠️ **The graph covers the wiki, not the code.** Its manifest holds ~363 wiki pages against ~91 code files, out of a corpus of ~2 750. So a BFS/DFS query about *accumulated knowledge* is reliable, while one about *the code* answers partially and **looks complete** — which is the dangerous half. A lint on 2026-09-01 found 144 broken source-file references that no graph query would have surfaced, because the graph does not contain the files that were missing; a filesystem check found all of them in a fraction of a second.
+>
+> Before writing a wiki page, run `python3 LibreFolio_devWiki/check_source_paths.py`. Every path cited in a `## Source files` table must exist. And remember that **a plan is not a chronicle**: a path read out of a proposal is not a path that was delivered.
 
 - `wiki-search` uses graphify BFS/DFS as primary lookup (much faster than reading raw files)
 - `./dev.py graph update` — incremental code-only rebuild after code changes (no LLM, ~5s)

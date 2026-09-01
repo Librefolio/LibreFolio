@@ -40,4 +40,4 @@ Complete Playwright E2E testing guide covering: 181+ tests across 7 categories, 
 | Test users | `frontend/e2e/fixtures/test-users.ts` |
 | Gallery spec | `frontend/e2e/gallery.spec.ts` |
 | E2E tests directory | `frontend/e2e/` |
-| Test runner | `scripts/test_runner.py` |
+| Test runner | `scripts/test_runner/` |

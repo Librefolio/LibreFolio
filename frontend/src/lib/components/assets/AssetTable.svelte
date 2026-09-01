@@ -38,6 +38,10 @@
         deltaAbs?: number | null;
         deltaPercent?: number | null;
         deltas?: Record<string, number | null>;
+        /** F15 — transactions using this asset. */
+        txCount?: number;
+        /** F15 — usage scope: own (tx in your brokers) / others / analysis (unused). */
+        txScope?: 'own' | 'others' | 'analysis';
     }
 
     interface Props {
@@ -146,6 +150,23 @@
                 getValue: (row) => row.display_name,
                 width: 220,
                 minWidth: 150,
+            },
+            {
+                id: 'txCount',
+                header: () => $t('assets.table.txCount'),
+                headerTooltip: () => $t('assets.table.txCountTooltip'),
+                cell: (row) => {
+                    const scopeCls =
+                        row.txScope === 'own' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : row.txScope === 'others' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400';
+                    return {
+                        type: 'html',
+                        html: `<span class="inline-flex items-center justify-center min-w-8 px-1.5 py-0.5 rounded-md text-[11px] font-mono font-medium ${scopeCls}">${row.txCount ?? 0}</span>`,
+                    };
+                },
+                type: 'number',
+                getValue: (row) => row.txCount ?? 0,
+                width: 60,
+                minWidth: 48,
             },
             {
                 id: 'type',

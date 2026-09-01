@@ -48,9 +48,12 @@
          *  (double-click still navigates to asset detail, unchanged). Forwarded as-is to all
          *  4 sub-views. */
         onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its table row stays tinted (F9).
+         *  Forwarded to the table sub-views. */
+        analyzedAssetId?: number | null;
     }
 
-    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution, onAnalyze}: Props = $props();
+    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution, onAnalyze, analyzedAssetId = null}: Props = $props();
 
     // =========================================================================
     // Toggle state (persisted in localStorage)
@@ -197,11 +200,11 @@
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable bind:this={exposureTableComponent} {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} />
+                <ExposureTable bind:this={exposureTableComponent} {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
                 <ExposureTreemap {holdings} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}
-                <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} />
+                <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
                 <OtherPeriodEffectsTable effects={otherEffects} {displayCurrency} />
             {:else if semanticMode === 'performance' && visualMode === 'map' && contribution}
                 <PerformanceChart positions={contributionPositions} {otherEffects} {displayCurrency} {onAnalyze} />

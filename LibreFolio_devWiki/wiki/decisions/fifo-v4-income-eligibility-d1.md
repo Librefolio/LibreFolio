@@ -56,7 +56,7 @@ included same-day BUYs, excluded same-day SELLs, and credited income to brokers 
 
 ## Related
 - [[concepts/d1-income-eligibility-window]]
-- [[fifo-v4-cost-allocation-ladder]] — TAX pools reuse the same broker/D-1 eligibility semantics before falling
+- [[decisions/fifo-v4-cost-allocation-ladder]] — TAX pools reuse the same broker/D-1 eligibility semantics before falling
   back to the cost ladder
 - [[entities/fifo-lot-engine]]
 - [[sources/fifo-v4-fee-tax-integration]]

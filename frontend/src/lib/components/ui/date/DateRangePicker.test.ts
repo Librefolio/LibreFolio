@@ -480,3 +480,44 @@ describe('DateRangePicker — compact fields show the raw ISO', () => {
         expect(endInput).toHaveValue('2024-02-20');
     });
 });
+
+// ---------------------------------------------------------------------------
+// F17 — iOS zoom-guard exemption. app.css forces font-size:16px on every
+// input/select/textarea below 768px to stop iOS auto-zoom-on-focus; that rule
+// breaks dense toolbar fields, which therefore carry `.zoom-guard-exempt`. The
+// contract has two halves and both are pinned: the class on the component's
+// three compact inputs, and the `:not(.zoom-guard-exempt)` carve-out in the
+// stylesheet itself (read as a file — a rule deleted from app.css while the
+// classes stay would otherwise look green here).
+// ---------------------------------------------------------------------------
+
+describe('DateRangePicker — zoom-guard exemption (F17)', () => {
+    it('marks the start and end fields zoom-guard-exempt', () => {
+        const {startInput, endInput} = setup();
+        expect(startInput.className).toContain('zoom-guard-exempt');
+        expect(endInput.className).toContain('zoom-guard-exempt');
+    });
+
+    it('marks the compact custom-window amount input zoom-guard-exempt', async () => {
+        setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+        const amount = screen.getByTestId('date-range-custom-amount');
+        expect(amount.className).toContain('zoom-guard-exempt');
+    });
+
+    it('the stylesheet exempts that class from the mobile 16px rule', async () => {
+        const {readFileSync} = await import('node:fs');
+        const {resolve} = await import('node:path');
+        const css = readFileSync(resolve(process.cwd(), 'src/app.css'), 'utf8');
+
+        // The mobile guard exists and every selector in it excludes the class.
+        const guard = css.match(/@media\s*\(max-width:\s*768px\)\s*\{([\s\S]*?)\n\}/);
+        expect(guard, 'no max-width:768px media block found in app.css').not.toBeNull();
+        const block = guard![1];
+        expect(block).toContain('font-size: 16px');
+        const selectors = block.split('{')[0];
+        expect(selectors).toContain('input:not(.zoom-guard-exempt)');
+        expect(selectors).toContain('select:not(.zoom-guard-exempt)');
+        expect(selectors).toContain('textarea:not(.zoom-guard-exempt)');
+    });
+});

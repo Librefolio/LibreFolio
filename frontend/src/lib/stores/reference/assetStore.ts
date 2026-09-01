@@ -49,6 +49,10 @@ export interface AssetInfo {
     active: boolean;
     user_url?: string | null;
     has_metadata?: boolean;
+    /** F15 usage counters — drive the "your/others/under analysis" panels. */
+    tx_count?: number;
+    /** F15 — transactions in brokers the current user owns (share > 0). */
+    tx_count_own?: number;
     identifier_isin?: string | null;
     identifier_ticker?: string | null;
     identifier_cusip?: string | null;
@@ -87,6 +91,8 @@ function normalize(raw: Record<string, unknown>): AssetInfo {
     copyDirect('active');
     copyFlat('user_url');
     copyDirect('has_metadata');
+    copyDirect('tx_count');
+    copyDirect('tx_count_own');
     copyFlat('identifier_isin');
     copyFlat('identifier_ticker');
     copyFlat('identifier_cusip');

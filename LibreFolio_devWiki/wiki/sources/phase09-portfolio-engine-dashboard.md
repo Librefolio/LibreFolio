@@ -59,11 +59,11 @@ Phase 09 Milestone 2 delivers the production-grade portfolio calculation engine 
 | Mathematical model | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | MWRR fix analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |
 | P&L breakdown analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/pnl_breakdown_analysis.md` |
-| Dashboard UI plan | `LibreFolio_developer_journal/RoadmapV4_UI/phase-09-subplan/plan_ui_dashboard.md` |
+| Dashboard UI plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/plan_ui_dashboard.md` |
 | Engine | `backend/app/services/portfolio_engine.py` |
 | Service | `backend/app/services/portfolio_service.py` |
 | API | `backend/app/api/v1/portfolio_api.py` |
-| Frontend store | `frontend/src/lib/stores/portfolioStore.svelte.ts` |
-| ROI utilities | `backend/app/utils/roi_utils.py` |
-| FIFO utilities | `backend/app/utils/fifo_utils.py` |
-| WAC utilities | `backend/app/utils/wac_utils.py` |
+| Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
+| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
+| FIFO utilities | `backend/app/utils/financial/fifo_utils.py` |
+| WAC utilities | `backend/app/utils/financial/wac_utils.py` |
