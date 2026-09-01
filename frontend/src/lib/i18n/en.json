@@ -821,7 +821,8 @@
       "leaveLastOwnerWarning": "You are the only owner: leaving deletes this broker with all its reports and transactions. This cannot be undone.",
       "leaveDone": "You left the broker",
       "leaveDeletedBroker": "Broker deleted: you were the last owner",
-      "selfDemoteDone": "You are now a viewer"
+      "selfDemoteDone": "You are now a viewer",
+      "leaveLastOwnerHint": "If that's not what you want, assign another user as owner first, then leave."
     },
     "lots": {
       "unifiedLots": "Lots",
@@ -3098,6 +3099,13 @@
   "changelog": {
     "title": "Changelog",
     "viewRemote": "View on GitHub",
-    "empty": "No changelog is bundled with this build."
+    "empty": "No changelog is bundled with this build.",
+    "searchPlaceholder": "Search the changelog…",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "checkNow": "Check for updates",
+    "upToDate": "You are running the latest version.",
+    "askAdmin": "A newer version exists. Ask an administrator to update:",
+    "searchResults": "Matches:"
   }
 }

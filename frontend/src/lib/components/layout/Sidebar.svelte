@@ -258,4 +258,4 @@
 
 <!-- Rendered OUTSIDE <nav>: the sidebar's transform/overflow-hidden would trap
      the modal's fixed positioning inside the narrow drawer (F12 round-2). -->
-<ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} />
+<ChangelogModal open={changelogOpen} onClose={() => (changelogOpen = false)} currentVersion={APP_VERSION} />

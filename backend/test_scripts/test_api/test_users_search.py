@@ -15,8 +15,11 @@ from typing import Optional
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.db.session import get_async_engine
+from backend.app.services import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -252,6 +255,111 @@ class TestUserSearch:
                 assert "avatar_url" in u
 
             print_success("✓ Avatar URL field present in results")
+
+    @pytest.mark.asyncio
+    async def test_search_admins_only_returns_flagged_superusers(self, test_server):
+        """USEARCH-006: admins=true returns only superusers, each flagged is_admin=true.
+
+        Used by the update-check hint that points non-admins at an administrator.
+        The test creates its own admin (promoted via the service layer, like
+        test_settings_api does) and its own plain user, both under one unique
+        fragment, so the scoped query matches exactly what this test wrote.
+        Cleanup: the promoted user is demoted again — whoever writes, cleans up.
+        """
+        print_section("USEARCH-006: admins=true filters to flagged superusers")
+
+        fragment = f"usearch_adm_{uuid.uuid4().hex[:8]}"
+        admin_username = f"{fragment}_root"
+        plain_username = f"{fragment}_user"
+
+        async with httpx.AsyncClient() as client:
+            await create_user_and_login(client, username=admin_username)
+            # Second login replaces the session cookie: the caller's own role is
+            # irrelevant for this endpoint, any authenticated user may search.
+            await create_user_and_login(client, username=plain_username)
+
+            engine = get_async_engine()
+            async with AsyncSession(engine) as session:
+                success, error = await user_service.set_user_admin(session, admin_username, is_admin=True)
+                assert success or (error and "already an admin" in error), f"Promotion failed: {error}"
+
+            try:
+                # Scoped query: the fragment matches exactly the two users above;
+                # with admins=true only the promoted one may survive.
+                resp = await client.get(
+                    f"{API_BASE}/users/search",
+                    params={"q": fragment, "admins": True},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+                items = resp.json()["items"]
+                assert len(items) == 1, f"Only the promoted admin may match, got: {[u['username'] for u in items]}"
+                assert items[0]["username"] == admin_username
+                assert items[0]["is_admin"] is True
+
+                # Unscoped query on the shared DB: other admins exist (mock data,
+                # other tests) — assert the INVARIANT on every row, never a count.
+                resp = await client.get(
+                    f"{API_BASE}/users/search",
+                    params={"q": "", "admins": True},
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+                items = resp.json()["items"]
+                assert any(u["username"] == admin_username for u in items), "Promoted admin missing from admins list"
+                assert not any(u["username"] == plain_username for u in items), "Plain user leaked into admins list"
+                for u in items:
+                    assert "is_admin" in u, "admins=true rows must carry the flag"
+                    assert u["is_admin"] is True, f"Non-superuser or unflagged row in admins list: {u['username']}"
+                    assert "email" not in u, "Email must stay hidden on the admins path too"
+
+                print_success("✓ admins=true returns only superusers, each flagged is_admin=true")
+            finally:
+                # Demote back: the shared DB must not keep an extra admin.
+                async with AsyncSession(engine) as session:
+                    await user_service.set_user_admin(session, admin_username, is_admin=False)
+
+    @pytest.mark.asyncio
+    async def test_search_without_admins_flag_omits_is_admin_key(self, test_server):
+        """USEARCH-007: without admins=true, items have NO is_admin key (opt-in).
+
+        The is_admin field exists for the update-check hint only. The route uses
+        `response_model_exclude_unset=True`, and the service only puts is_admin
+        into the dict when admins_only is set — so on the plain path the key is
+        absent (never set), while avatar_url, always set explicitly (even as
+        None), keeps being present. This locks the documented opt-in shape.
+        """
+        print_section("USEARCH-007: No is_admin key without the flag")
+
+        async with httpx.AsyncClient() as client:
+            user_data = await create_user_and_login(client)
+
+            # Scoped: this test's own user.
+            resp = await client.get(
+                f"{API_BASE}/users/search",
+                params={"q": user_data["username"][:10]},
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            items = resp.json()["items"]
+            assert len(items) >= 1
+            for u in items:
+                assert "is_admin" not in u, f"is_admin key leaked without admins=true: {u}"
+                assert "avatar_url" in u, "avatar_url must survive exclude_unset (always set explicitly)"
+
+            # Full list on the shared DB (includes real superusers from mock
+            # data): even they must not carry the key on the plain path.
+            resp = await client.get(
+                f"{API_BASE}/users/search",
+                timeout=TIMEOUT,
+            )
+            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            items = resp.json()["items"]
+            assert len(items) >= 1
+            for u in items:
+                assert "is_admin" not in u, f"is_admin key leaked without admins=true for: {u['username']}"
+
+            print_success("✓ Without admins=true the is_admin key is absent; avatar_url stays")
 
 
 # ============================================================================

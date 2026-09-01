@@ -821,7 +821,8 @@
       "leaveLastOwnerWarning": "Sei l'unico owner: abbandonando eliminerai questo broker con tutti i suoi report e le sue transazioni. L'operazione è irreversibile.",
       "leaveDone": "Hai abbandonato il broker",
       "leaveDeletedBroker": "Broker eliminato: eri l'ultimo owner",
-      "selfDemoteDone": "Ora sei un visualizzatore"
+      "selfDemoteDone": "Ora sei un visualizzatore",
+      "leaveLastOwnerHint": "Se non è ciò che vuoi, assegna prima un altro utente come owner e poi abbandona."
     },
     "lots": {
       "buyDate": "Data Acquisto",
@@ -3098,6 +3099,13 @@
   "changelog": {
     "title": "Note di rilascio",
     "viewRemote": "Vedi su GitHub",
-    "empty": "Nessun changelog incluso in questa build."
+    "empty": "Nessun changelog incluso in questa build.",
+    "searchPlaceholder": "Cerca nelle note di rilascio…",
+    "expandAll": "Espandi tutto",
+    "collapseAll": "Comprimi tutto",
+    "checkNow": "Verifica aggiornamenti",
+    "upToDate": "Stai usando l'ultima versione.",
+    "askAdmin": "Esiste una versione più recente. Chiedi a un amministratore di aggiornare:",
+    "searchResults": "Risultati:"
   }
 }

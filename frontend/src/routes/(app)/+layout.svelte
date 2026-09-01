@@ -63,8 +63,10 @@
             window.librefolioDebug = {
                 ...window.librefolioDebug,
                 showDonationPopup: () => donationPopup.forceShow(),
+                // F14: force the update-available modal with a fake future release
+                showUpdateModal: () => updateAvailable.show({version: '99.0.0', url: 'https://github.com/Librefolio/LibreFolio/releases', name: 'Debug test'}),
             };
-            debug.log('AppLayout', 'Registered window.librefolioDebug.showDonationPopup()');
+            debug.log('AppLayout', 'Registered window.librefolioDebug.showDonationPopup()/.showUpdateModal()');
         }
 
         // Check authentication with timeout

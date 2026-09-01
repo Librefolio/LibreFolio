@@ -164,6 +164,30 @@ The devWiki is backed by a **graphify knowledge graph** (`LibreFolio_devWiki/gra
 - `./dev.py graph query "TOPIC"` — quick BFS query from the CLI
 - Full semantic rebuild (new .md files): invoke the `graphify` skill through the AI assistant
 
+## Changelog Rules (CHANGELOG.md)
+
+The repo-root `CHANGELOG.md` is bundled into the app at build time and shown in the
+in-app changelog modal (sidebar version click → foldable panels). Keep it accurate.
+
+**Structure** — Keep a Changelog, SemVer:
+- One chapter per release: `## [x.y.z] - YYYY-MM-DD` (`## [Unreleased]` has no date
+  and is supported — the parser keeps it).
+- Inside a chapter: `###` sections, always with the leading emoji —
+  `### 🧪 Beta` (beta subsystems), `### ✨ Added`, `### 🔄 Changed`, `### 🐛 Fixed`,
+  `### ⚠️ Breaking changes`. Add an optional free-text intro paragraph before the
+  first `###` to present the release in two or three sentences.
+- `####` sub-headings group related items inside a `###` section (e.g.
+  `#### 🧠 Technical Analysis — backend Signals platform`); each carries an emoji too.
+- The modal folds `##` → `###` → `####` progressively, so headlines must be
+  self-explanatory: the detail lives in the bullet list under them.
+
+**Keeping it up to date**:
+- While a release is being prepared, its chapter is the single place that accumulates
+  user-visible changes (features, fixes, breaking notes) — add entries as work lands.
+- On release: set the chapter date, tag `vX.Y.Z`; the next Docker/CI build bundles it.
+- Entries are user-facing: no internal refactors unless they change observable behavior.
+- The in-app modal also links to the remote file; GitHub Releases notes can point here.
+
 ## Writing Tests
 
 **Every test runs against one shared database and one shared backend, alongside its

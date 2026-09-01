@@ -18,6 +18,7 @@ class UserSearchItem(StrictModel):
     id: int = Field(..., description="User ID")
     username: str = Field(..., description="Username")
     avatar_url: Optional[str] = Field(None, description="User avatar URL")
+    is_admin: Optional[bool] = Field(None, description="Present only when the request asks for it (admins=True) — for the update-check hint that points non-admins to an administrator")
 
 
 class UserSearchResponse(BaseListResponse[UserSearchItem]):

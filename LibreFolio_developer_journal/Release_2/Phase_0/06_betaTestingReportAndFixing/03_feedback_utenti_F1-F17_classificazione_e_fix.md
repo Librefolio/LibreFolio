@@ -102,6 +102,65 @@ scalati corretti (NAV 11.983,54 = 30%), card OK sul build corrente.
 > front-asset 8/8 unità ✅ (asset-list 20/20). Nota igienica: `role` può arrivare come `str`
 > da costruttori SQLModel in-session → fingerprint usa `getattr(role,'value',role)`.
 
+## 6. Round 3 — rifiniture post-commit (01/09 sera)
+
+- **F12 rework modale**: niente più header sticky (il "buco" nel titolo era il capitolo sticky
+  dentro l'area scrollabile con padding). Ora: pannello foldabile per versione (solo la più
+  recente aperta), sotto-sezioni `###` foldabili con click, indice a chip con salto+scroll,
+  modale fuori dalla nav (round 2) e larga 4xl. Verificato live su :6040.
+- **CHANGELOG 1.1.0**: data → **2026-09-07** (lunedì successivo, mai andata live); capitolo
+  arricchito da git log (07.08→01.09): import flow/asset identity, test infrastructure,
+  consolidamento feedback seconda ondata; intro aggiornata.
+- **F4**: il warning rosso di cascata ora suggerisce l'alternativa (assegnare un altro owner
+  prima di uscire); fix ordine chiusura: `goto('/brokers')` PRIMA di `onChanged` — sul broker
+  detail il reload del broker appena cancellato poteva lanciare e saltare la navigazione,
+  lasciando la pagina aperta su dati vecchi.
+- **F13 Q&A**: la pulizia non cambia significativamente il tempo di build (stessi download/
+  compilazioni pip, cache mount invariato); i benefici sono dimensione, push/pull e igiene
+  (niente DB locali nell'immagine pubblicata).
+
+## 7. Round 4 — modale changelog interattiva (01/09 sera)
+
+- **Indice chip**: il click ora apre E scorre (await tick → scrollIntoView).
+- **Fold a 3 livelli**: `##` versione → `###` sezione → `####` sotto-sezione (es. 🧠 Signals,
+  🤖 AI Export), ciascuno apribile a click.
+- **Ricerca**: il campo cerca scende nei fold — i rami che contengono la query si aprono da
+  soli e i titoli corrispondenti si evidenziano. Pulsanti **espandi/comprimi tutto**.
+- **CHANGELOG.md**: cappello di presentazione del progetto su v1.0.0; emoji di sezione
+  convenzionate (✨ Added, 🔄 Changed, 🐛 Fixed, 🧪 Beta, ⚠️ Breaking) su entrambi i capitoli.
+- **Regole di scrittura**: nuova sezione "Changelog Rules" in `.github/copilot-instructions.md`
+  (struttura, emoji, fold semantico, aggiornamento a release).
+- **F4**: il monito alternativo ("assegna prima un altro owner…") ora è un paragrafo a parte
+  in corsivo (ConfirmModal `description` + nuovo prop opt-in `descriptionItalic`).
+- **Debug**: `window.librefolioDebug.showUpdateModal()` per forzare la modale F14 nelle build
+  debug (in prod: seed della cache `librefolio-update-check` via console).
+- **Bug in corsa (round 4)**: la ricerca del changelog non era case-insensitive (ago mai
+  minuscolato) — scoperto dal test-author con `it.fails`, corretto (`needle` normalizzato),
+  test promosso a guardia.
+
+## 8. Round 5 — update check nella modale + ricerca navigabile (01/09 tardo pomeriggio)
+
+- **F4**: la sharing modale ora si chiude da sola dopo il leave (`onCancel` alla fine della
+  catena, dopo `goto` e `onChanged`).
+- **Pulsante "Verifica aggiornamenti"** nell'header della changelog modal: usa la STESSA
+  `checkForNewerRelease()` del flusso login (nessuna duplicazione). Admin con novità → apre
+  la modale F14; non-admin con novità → banner ambra con i badge degli amministratori
+  (nuovo param opt-in `admins=true` su `GET /users/search`, che espone `is_admin` solo in
+  quel caso); aggiornato → riga verde "ultima versione".
+- **Ricerca con risultati cliccabili**: sotto il campo compaiono fino a 8 chip con i titoli
+  delle sezioni/sotto-sezioni che matchano; click → apre il ramo completo (versione →
+  sezione → sotto-sezione) e scrolla al toggle bersaglio. Gli hit matchano anche il **corpo**
+  delle sezioni, non solo i titoli (seguìto al collaudo: "funziona solo sui titoli?").
+- **Debug**: in build debug il check scrive in console cosa ritorna la fetch, la versione
+  rilevata e l'età della cache (`[UpdateCheck] probe → {current, latest, …}`); lo show della
+  modale è loggato anch'esso.
+- **Contratto `/users/search`**: `is_admin` è assente (non `null`) senza `admins=true`
+  (`response_model_exclude_unset`) — drift schema/wire trovato e chiuso in round 5.
+- **Evidenziazione nel testo** (seguìto al collaudo): le occorrenze della query nei corpi
+  renderizzati vengono wrappate in `<mark>` giallo (light e dark), tag HTML preservati.
+  Convenzione release documentata per l'utente: conta il **tag** `vX.Y.Z` (non draft, non
+  prerelease) letto da `releases/latest`; il nome libero della release è solo display.
+
 ## 4. Collegamenti
 
 - Piani agganciati ancora aperti: **P2** ImportWizardUx (F11 vi si inserisce),
