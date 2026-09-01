@@ -821,7 +821,8 @@
       "leaveLastOwnerWarning": "Eres el único propietario: al abandonar eliminarás este bróker con todos sus informes y transacciones. Esta acción no se puede deshacer.",
       "leaveDone": "Has abandonado el bróker",
       "leaveDeletedBroker": "Bróker eliminado: eras el último propietario",
-      "selfDemoteDone": "Ahora eres visor"
+      "selfDemoteDone": "Ahora eres visor",
+      "leaveLastOwnerHint": "Si no es lo que quieres, asigna primero a otro usuario como propietario y luego abandona."
     },
     "lots": {
       "buyDate": "Fecha de Compra",
@@ -3098,6 +3099,13 @@
   "changelog": {
     "title": "Registro de cambios",
     "viewRemote": "Ver en GitHub",
-    "empty": "No hay registro de cambios incluido en esta build."
+    "empty": "No hay registro de cambios incluido en esta build.",
+    "searchPlaceholder": "Buscar en el registro…",
+    "expandAll": "Expandir todo",
+    "collapseAll": "Contraer todo",
+    "checkNow": "Buscar actualizaciones",
+    "upToDate": "Estás usando la última versión.",
+    "askAdmin": "Existe una versión más reciente. Pide a un administrador que actualice:",
+    "searchResults": "Resultados:"
   }
 }

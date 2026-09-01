@@ -15,11 +15,13 @@
 
 import type {NewerRelease} from './updateCheck';
 import {dismissVersion} from './updateCheck';
+import {debug} from '$lib/debug';
 import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 let release = $state<NewerRelease | null>(null);
 
 function show(r: NewerRelease) {
+    debug.log('UpdateCheck', 'prompting for release', r);
     release = r;
 }
 

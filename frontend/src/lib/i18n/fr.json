@@ -821,7 +821,8 @@
       "leaveLastOwnerWarning": "Vous êtes le seul propriétaire : en quittant, vous supprimerez ce courtier avec tous ses rapports et transactions. Cette action est irréversible.",
       "leaveDone": "Vous avez quitté le courtier",
       "leaveDeletedBroker": "Courtier supprimé : vous étiez le dernier propriétaire",
-      "selfDemoteDone": "Vous êtes maintenant lecteur"
+      "selfDemoteDone": "Vous êtes maintenant lecteur",
+      "leaveLastOwnerHint": "Si ce n'est pas ce que vous voulez, désignez d'abord un autre utilisateur comme propriétaire, puis quittez."
     },
     "lots": {
       "buyDate": "Date d'Achat",
@@ -3098,6 +3099,13 @@
   "changelog": {
     "title": "Journal des modifications",
     "viewRemote": "Voir sur GitHub",
-    "empty": "Aucun journal des modifications inclus dans cette build."
+    "empty": "Aucun journal des modifications inclus dans cette build.",
+    "searchPlaceholder": "Rechercher dans le journal…",
+    "expandAll": "Tout déplier",
+    "collapseAll": "Tout replier",
+    "checkNow": "Vérifier les mises à jour",
+    "upToDate": "Vous utilisez la dernière version.",
+    "askAdmin": "Une version plus récente existe. Demandez à un administrateur de mettre à jour :",
+    "searchResults": "Résultats :"
   }
 }

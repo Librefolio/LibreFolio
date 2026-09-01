@@ -167,17 +167,22 @@
         try {
             const res = await zodiosApi.leave_broker_access_api_v1_brokers__broker_id__access_me_delete(undefined, {params: {broker_id: brokerId}});
             confirmLeaveOpen = false;
+            // Navigate FIRST: on broker detail, onChanged reloads the very broker
+            // that was just cascade-deleted and can throw, which used to skip the
+            // goto entirely — the modal stayed open over the stale page (round 3).
             if (res.broker_deleted) {
                 toasts.success($_('brokers.sharing.leaveDeletedBroker'));
-                onChanged?.();
-                // The broker no longer exists — leave any page that assumes it does
                 goto('/brokers');
+                onChanged?.();
             } else {
                 toasts.success($_('brokers.sharing.leaveDone'));
-                onChanged?.();
                 // Access lost — back to the broker list
                 goto('/brokers');
+                onChanged?.();
             }
+            // Close the host modal (round 5): onCancel is handleRequestClose when
+            // embedded in BrokerSharingModal, a no-op when embedded in a page tab.
+            onCancel?.();
         } catch {
             toasts.error($_('brokers.sharing.saveFailed'));
         } finally {
@@ -974,6 +979,8 @@
 <ConfirmModal
     danger={selfIsLastOwner}
     message={selfIsLastOwner ? $_('brokers.sharing.leaveLastOwnerWarning') : $_('brokers.sharing.leaveConfirm')}
+    description={selfIsLastOwner ? $_('brokers.sharing.leaveLastOwnerHint') : ''}
+    descriptionItalic={selfIsLastOwner}
     onCancel={() => (confirmLeaveOpen = false)}
     onConfirm={handleSelfLeave}
     open={confirmLeaveOpen}

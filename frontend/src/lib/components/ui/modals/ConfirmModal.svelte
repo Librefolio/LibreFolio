@@ -23,6 +23,8 @@
         message: string;
         /** Optional description rendered below message (e.g., warning text) */
         description?: string;
+        /** Render the description in italics (e.g. an alternative-route hint) */
+        descriptionItalic?: boolean;
         /** Optional list of items to show (collapsible) */
         items?: string[];
         /** Label for the list section */
@@ -51,7 +53,7 @@
         testId?: string;
     }
 
-    let {open, title, message, description = '', items = [], itemsLabel = '', confirmText = $t('common.confirm'), cancelText = $t('common.cancel'), danger = false, warning = false, onConfirm, onCancel, zIndex = 60, results = [], testId = ''}: Props = $props();
+    let {open, title, message, description = '', descriptionItalic = false, items = [], itemsLabel = '', confirmText = $t('common.confirm'), cancelText = $t('common.cancel'), danger = false, warning = false, onConfirm, onCancel, zIndex = 60, results = [], testId = ''}: Props = $props();
 
     // Auto-show items if there's only 1 (no need for toggle)
     let showItems = $state(false);
@@ -97,7 +99,7 @@
         {:else}
             <p class="message" data-testid="confirm-modal-message">{message}</p>
             {#if description}
-                <p class="description">{description}</p>
+                <p class="description" class:italic={descriptionItalic}>{description}</p>
             {/if}
 
             {#if items.length > 0}

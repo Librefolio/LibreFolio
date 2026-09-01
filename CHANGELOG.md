@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.0] - 2026-08-07
+## [1.1.0] - 2026-09-07
 
-The first feature release after 1.0. It introduces the **Risk Analysis** subsystem (beta), rebuilds technical analysis as a backend plugin platform, ships the first public **AI Export V1** catalog, adds 19 new broker importers, and replaces the legacy valuation cascade with a single unified price resolver.
+The first feature release after 1.0. It introduces the **Risk Analysis** subsystem (beta), rebuilds technical analysis as a backend plugin platform, ships the first public **AI Export V1** catalog, adds 19 new broker importers, and replaces the legacy valuation cascade with a single unified price resolver. Two beta-testing waves (early August with real Crédit Agricole reports, late August on a fresh production install) reshaped the import wizard around asset identity and added an ownership-aware dashboard, broker self-service sharing, a Docker light variant and an in-app changelog on top.
 
 ### 🧪 Beta
 
@@ -35,7 +35,7 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 - **Cached Risk UI** with shared Asset/FX detail controls and content-keyed result caching.
 - Monte Carlo random seeds are kept separate from QMC Sobol start indexes, so runs stay reproducible and low-discrepancy sequences are not accidentally correlated.
 
-### Added
+### ✨ Added
 
 #### 🧠 Technical Analysis — backend Signals platform
 - **Indicators are now backend Python plugins**: a single validated implementation is shared by charts, the REST API and AI consumers, replacing the previous browser-side calculations.
@@ -82,7 +82,30 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 - **Delete guard** — deleting a broker that still holds transactions now returns the transaction count and opens a guard dialog linking to the filtered view, instead of failing silently.
 - All broker pickers list only brokers you can actually access, with sharing-level icons.
 
-### Changed
+#### 🔁 Import flow & asset identity (post-beta)
+
+- **Instrument unification inside the wizard** — a dedicated step proposes merges for instruments that already exist in your library (certain / proposed / lone), before duplicate checking, so re-imports no longer create parallel assets for the same security. Existing duplicates can be merged later from the asset page.
+- **Crédit Agricole trades branch** — `COMPRAVENDITA TITOLI/FONDI/OPZIONI` rows are now imported as real buy/sell trades instead of falling back to generic cash movements, with a pre-alarm net validated on four real trades.
+- **Wizard rework** — a 7-step conditional flow (upload → parse → corrections → unify assets → duplicates → review → done), with cross-file and database duplicate detection after your corrections, and per-row repair panels for ambiguous cash movements, bundled amounts, and instrument-less fees.
+
+#### 🧪 Test infrastructure
+
+- **Parallel Playwright suite** — the whole frontend E2E suite shares one backend and declares what each spec owns; waits are on published product state (`data-busy`, `data-chart-ready`), never on the clock.
+- **One backend per API run**, a reachability check that keeps every registered suite inside `all`, and branch-accurate JS/Svelte coverage via a shared Istanbul instrumentation.
+- **jsdom component harness** for fast unit tests of Svelte components alongside the E2E suite.
+
+#### 📦 Beta feedback consolidation (second wave)
+
+- **Ownership-aware dashboard** — the dashboard aggregates only brokers you own, scaled by your ownership share (0% is a valid share and behaves like editor/viewer); broker cards scale likewise, and share/role edits invalidate cached numbers immediately.
+- **Broker self-service** — editors can demote themselves to viewer, editors and viewers can leave a broker, and the last owner leaving deletes the broker with its reports and transactions (with a destructive-action warning).
+- **Assets page usage panels** — your assets / other users' assets / watched (saved but unused), with a transaction-count badge per asset in both the grid and the (stacked, layout-synchronised) tables.
+- **AI Export lot detail v2** — each lot now carries the market reference price and market value at its opening date, so analyses can reason about entry conditions (e.g. recovery value), not only about cost.
+- **In-app changelog** — clicking the version in the sidebar opens the bundled changelog as foldable per-release panels with foldable sub-sections and a version index.
+- **Update prompt for admins** — after login, admins see a one-day-throttled prompt when a newer stable release exists on GitHub, linking the updating guide (which now documents Watchtower).
+- **Docker light variant** — `dev.py docker build --light` / `*-light` tags ship the documentation without its images (they load from the online docs site on demand). The diet also removed the duplicated chown layer, the build-time pip toolchain from the runtime image, and the accidental inclusion of local databases in published images. Light is ~1.5 GB vs ~2.9 GB full.
+- Mobile fixes: compact date inputs keep their intended size (the iOS zoom guard no longer inflates them), and table header tooltips open upward instead of covering the rows below.
+
+### 🔄 Changed
 
 - **Legacy valuation engine removed** — the unified resolver is the only valuation path. The `LIBREFOLIO_RESOLVER_VALUATION` transition flag, the `LAST_BUY_PRICE` / `LAST_SEED_COST` fallback tiers and the duplicate per-path price maps are gone.
 - **Legacy AI Export runtime removed** — the unreachable profile/assembler stack was deleted so the catalog, prompts and tests cannot drift apart. The final V1 prompt outputs were preserved during the cleanup.
@@ -94,7 +117,7 @@ Quantitative risk and allocation analytics, powered by [QuantLib](https://www.qu
 - The dashboard data-quality banner is foldable and offers one "go to asset" link per affected asset, instead of a single CTA that only opened the first one.
 - Documentation: the English MkDocs set was realigned with the shipped code, adding Price Resolution and Net Annualized Return pages, a duplicate-detection developer page, and user guides for the new brokers.
 
-### Fixed
+### 🐛 Fixed
 
 - **Inflated ROI on portfolios seeded in kind** — in-kind adjustments contributed to the capital baseline but not to the cash-only flow used as the ROI denominator, so transferred-in capital appeared as pure gain. ROI, TWRR, MWRR and the headline figures now all derive from the same flows.
 - **Fully-closed positions showed "—" for annualized return** — realized net return is now annualised over the position's real flight time, dust-aware for partial redemptions.
@@ -119,7 +142,13 @@ These affect newly introduced analytics or local UI persistence only — the sta
 
 ## [1.0.0] - 2026-07-20
 
-### Added
+LibreFolio is a self-hosted, open-source portfolio tracker: your brokers' reports in,
+a clear and honest picture of your wealth out. No cloud service in between — the whole
+stack (FastAPI backend, SvelteKit frontend, SQLite database) runs in a single Docker
+container on your own hardware. This first release packages the core engine, the import
+wizard, and the dashboards that grew up over the project's first months.
+
+### ✨ Added
 
 #### 📊 Core & Dashboard Engine
 - **3-Pool Cash Model Engine**: Accurate event-driven balance tracking (Known/Resolved/Working cash pools) with precise separation of transactions.

@@ -11,6 +11,8 @@
  * will prompt again.
  */
 
+import {debug} from '$lib/debug';
+
 export interface NewerRelease {
     /** Tag without the leading "v", e.g. "0.11.0". */
     version: string;
@@ -116,8 +118,11 @@ export async function checkForNewerRelease(currentVersion: string, fetchFn?: typ
     let cache = readCache();
     if (isProbeDue(cache)) {
         const latest = await probeLatestRelease(fetchFn);
+        debug.log('UpdateCheck', 'probe →', {current: currentVersion, latest: latest?.version ?? null, fresh: true});
         cache = {checkedAt: Date.now(), latest, dismissedVersion: cache?.dismissedVersion};
         writeCache(cache);
+    } else {
+        debug.log('UpdateCheck', 'cache fresh →', {current: currentVersion, latest: cache?.latest?.version ?? null, ageMinutes: Math.round((Date.now() - (cache?.checkedAt ?? 0)) / 60000)});
     }
     return shouldPrompt(cache, currentVersion).release;
 }

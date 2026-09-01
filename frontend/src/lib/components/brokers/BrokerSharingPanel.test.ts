@@ -76,6 +76,30 @@ vi.mock('$lib/api', () => {
 vi.mock('$lib/stores/app/toastStore.svelte', () => ({
     toasts: {success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn()},
 }));
+
+// $app/navigation: goto is the R3-F4 subject (leave flow navigates on success).
+vi.mock('$app/navigation', () => ({goto: vi.fn()}));
+
+// auth: a minimal controllable readable store. Default `user: null` keeps every
+// pre-existing test on its current path (no self-service block); the leave
+// tests set a user whose id is present in the mounted access list.
+const authStore = vi.hoisted(() => {
+    type AuthState = {user: {id: number; username: string} | null};
+    let value: AuthState = {user: null};
+    const subs = new Set<(v: AuthState) => void>();
+    return {
+        subscribe(fn: (v: AuthState) => void) {
+            subs.add(fn);
+            fn(value);
+            return () => subs.delete(fn);
+        },
+        set(v: AuthState) {
+            value = v;
+            for (const fn of subs) fn(value);
+        },
+    };
+});
+vi.mock('$lib/stores/app/auth', () => ({auth: authStore}));
 vi.mock('$lib/components/charts/SemiDonutChart.svelte', async () => ({
     default: (await import('$test/harness/SemiDonutChartStub.svelte')).default,
 }));
@@ -83,13 +107,16 @@ vi.mock('$lib/components/charts/SemiDonutChart.svelte', async () => ({
 import BrokerSharingPanel from './BrokerSharingPanel.svelte';
 import BrokerSharingPanelHarness from '$test/harness/BrokerSharingPanelHarness.svelte';
 import {zodiosApi} from '$lib/api';
+import {goto} from '$app/navigation';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = zodiosApi as any;
+const gotoMock = vi.mocked(goto);
 const LIST = 'list_broker_access_api_v1_brokers__broker_id__access_get';
 const SEARCH = 'search_users_endpoint_api_v1_users_search_get';
 const PUT = 'bulk_update_broker_access_api_v1_brokers__broker_id__access_put';
+const DELETE_ME = 'leave_broker_access_api_v1_brokers__broker_id__access_me_delete';
 
 type Role = 'OWNER' | 'EDITOR' | 'VIEWER';
 
@@ -288,10 +315,12 @@ function editRemoveButton(dialog: HTMLElement): HTMLButtonElement {
 }
 
 beforeEach(() => {
-    for (const name of [LIST, SEARCH, PUT]) api[name].mockReset();
+    for (const name of [LIST, SEARCH, PUT, DELETE_ME]) api[name].mockReset();
     api[PUT].mockResolvedValue({results: [], success_count: 0});
     vi.mocked(toasts.success).mockClear();
     vi.mocked(toasts.error).mockClear();
+    gotoMock.mockClear();
+    authStore.set({user: null});
 });
 
 // =========================================================================
@@ -1050,5 +1079,134 @@ describe('BrokerSharingPanel — states the panel offers', () => {
         expect(api[PUT]).not.toHaveBeenCalled();
         expect(lastPutBody()).toBeUndefined();
         expect(panel()).toHaveAttribute('data-access-state', 'error');
+    });
+});
+
+// =========================================================================
+// Self-service leave (F4) — navigation ordering (R3-F4)
+// =========================================================================
+
+describe('BrokerSharingPanel — self-service leave (F4, R3-F4, R5-F4)', () => {
+    /**
+     * R3-F4: on a successful leave the panel must navigate to /brokers BEFORE
+     * calling onChanged — on the broker detail page, onChanged reloads the very
+     * broker that was just cascade-deleted, and when that reload threw, the
+     * earlier order (onChanged first) skipped the goto entirely: the modal
+     * stayed open over a stale page. The assertions therefore check not only
+     * THAT both fire, but their invocation order.
+     *
+     * R5-F4: a successful leave ends with `onCancel?.()` so the host modal
+     * (BrokerSharingModal's handleRequestClose) closes too, instead of staying
+     * open over the /brokers page the goto just navigated to. The locked order
+     * is therefore goto → onChanged → onCancel; a failed leave fires NONE of
+     * the three (error toast only — the panel must stay open with its data).
+     *
+     * Both response branches are covered: broker_deleted true (last owner,
+     * cascade) and false (access lost, broker survives) — both navigate.
+     */
+
+    /** Mount with alice (id 1) as the signed-in user and an OWNER of the broker. */
+    async function mountAsAlice() {
+        authStore.set({user: {id: 1, username: 'alice'}});
+        const onChanged = vi.fn();
+        const onCancel = vi.fn();
+        await mountPanel({
+            accesses: [access(1, 'alice', 'OWNER', 0.5), access(2, 'bob', 'OWNER', 0.5)],
+            props: {onChanged, onCancel},
+        });
+        return {onChanged, onCancel};
+    }
+
+    /** Open the leave confirm and accept it; ends when the DELETE has fired. */
+    async function confirmLeave() {
+        await fireEvent.click(screen.getByTestId('sharing-self-leave-btn'));
+        await waitFor(() => expect(screen.getByTestId('confirm-modal-confirm')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await waitFor(() => expect(api[DELETE_ME]).toHaveBeenCalledTimes(1));
+    }
+
+    it('leave with broker surviving: navigates to /brokers BEFORE onChanged, then closes the host modal', async () => {
+        await setupI18n();
+        const {onChanged, onCancel} = await mountAsAlice();
+        api[DELETE_ME].mockResolvedValue({success: true, message: 'Access removed', broker_deleted: false});
+
+        await confirmLeave();
+        // The confirm is spent — the modal closed.
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).not.toBeInTheDocument());
+
+        await waitFor(() => expect(gotoMock).toHaveBeenCalledWith('/brokers'));
+        await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+        // R5-F4: the host modal is closed after a successful leave.
+        await waitFor(() => expect(onCancel).toHaveBeenCalledTimes(1));
+        // R3-F4 + R5-F4: the ordering IS the fix — goto → onChanged → onCancel.
+        expect(gotoMock.mock.invocationCallOrder[0]).toBeLessThan(onChanged.mock.invocationCallOrder[0]);
+        expect(onChanged.mock.invocationCallOrder[0]).toBeLessThan(onCancel.mock.invocationCallOrder[0]);
+        // The call carried the broker this panel is mounted for.
+        expect(api[DELETE_ME].mock.calls[0][1]).toEqual({params: {broker_id: 7}});
+        expect(toasts.success).toHaveBeenCalledTimes(1);
+    });
+
+    it('leave with broker cascade-deleted (last owner): same navigation, same order, same close', async () => {
+        await setupI18n();
+        const {onChanged, onCancel} = await mountAsAlice();
+        api[DELETE_ME].mockResolvedValue({success: true, message: 'Broker deleted: the last owner left', broker_deleted: true});
+
+        await confirmLeave();
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).not.toBeInTheDocument());
+
+        await waitFor(() => expect(gotoMock).toHaveBeenCalledWith('/brokers'));
+        await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(onCancel).toHaveBeenCalledTimes(1));
+        expect(gotoMock.mock.invocationCallOrder[0]).toBeLessThan(onChanged.mock.invocationCallOrder[0]);
+        expect(onChanged.mock.invocationCallOrder[0]).toBeLessThan(onCancel.mock.invocationCallOrder[0]);
+    });
+
+    it('a failed leave neither navigates nor reports a change nor closes the modal', async () => {
+        await setupI18n();
+        const {onChanged, onCancel} = await mountAsAlice();
+        api[DELETE_ME].mockRejectedValue(new Error('NEEDLE-LEAVE-FAILED'));
+
+        await confirmLeave();
+
+        await waitFor(() => expect(toasts.error).toHaveBeenCalledTimes(1));
+        expect(gotoMock).not.toHaveBeenCalled();
+        expect(onChanged).not.toHaveBeenCalled();
+        // R5-F4: the failure path must not close the host modal either.
+        expect(onCancel).not.toHaveBeenCalled();
+    });
+
+    // R4-F4 — the leave confirm carries the "what to do instead" hint ONLY for
+    // the last owner (whose leaving cascade-deletes the broker), rendered in
+    // italics (ConfirmModal.descriptionItalic). ConfirmModal's description <p>
+    // has no data-testid; it is located structurally as the sibling of
+    // `confirm-modal-message`, and the asserted class (`italic`) IS the feature
+    // — the same deliberate exception as the F15 badge palette.
+    function leaveDescription(): HTMLElement | null {
+        return screen.getByTestId('confirm-modal-message').parentElement?.querySelector('p.description') ?? null;
+    }
+
+    it('last-owner leave confirm shows the italic guidance hint', async () => {
+        await setupI18n();
+        // Alice is the ONLY owner → selfIsLastOwner.
+        authStore.set({user: {id: 1, username: 'alice'}});
+        await mountPanel({accesses: [access(1, 'alice', 'OWNER', 1)]});
+
+        await fireEvent.click(screen.getByTestId('sharing-self-leave-btn'));
+        await waitFor(() => expect(screen.getByTestId('confirm-modal-message')).toBeInTheDocument());
+
+        const desc = leaveDescription();
+        expect(desc, 'last-owner leave must carry the guidance hint paragraph').not.toBeNull();
+        expect(desc!.classList.contains('italic')).toBe(true);
+        expect(desc!.textContent?.trim().length).toBeGreaterThan(0);
+    });
+
+    it('non-last-owner leave confirm shows no hint paragraph at all', async () => {
+        await setupI18n();
+        await mountAsAlice(); // alice + bob both OWNER → not the last one
+
+        await fireEvent.click(screen.getByTestId('sharing-self-leave-btn'));
+        await waitFor(() => expect(screen.getByTestId('confirm-modal-message')).toBeInTheDocument());
+
+        expect(leaveDescription()).toBeNull();
     });
 });
