@@ -102,16 +102,23 @@ test.describe('Asset List Page', () => {
     test('view-mode toggle switches between card grid and data table', async ({page}) => {
         await goToAssetsPage(page);
 
-        // → List view: the DataTable select-all control appears, cards disappear.
+        // → List view: the three usage-panel tables render (F15 round-2: one
+        // DataTable per panel — own/others/analysis), each with its own select-all,
+        // and the cards disappear. Scoping matters: `dt-select-all` exists once PER
+        // PANEL, so a bare getByTestId is a strict-mode violation waiting to happen.
         await page.getByTestId('view-mode-list').click();
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
-        await expect(page.getByTestId('dt-select-all')).toBeVisible();
+        for (const panelId of ['own', 'others', 'analysis'] as const) {
+            const panel = page.getByTestId(`assets-table-panel-${panelId}`);
+            await expect(panel, `panel ${panelId} must render in list mode (mock data puts assets in each — see populate_mock_data.py)`).toBeVisible();
+            await expect(panel.getByTestId('dt-select-all')).toBeVisible();
+        }
         await expect(page.locator('[data-testid^="asset-card-"]')).toHaveCount(0);
 
-        // → Grid view: the seeded Apple card is back and the table control is gone.
+        // → Grid view: the seeded Apple card is back and the table controls are gone.
         await page.getByTestId('view-mode-grid').click();
         await expect(page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first()).toBeVisible();
-        await expect(page.getByTestId('dt-select-all')).toHaveCount(0);
+        await expect(page.locator('[data-testid="dt-select-all"]')).toHaveCount(0);
     });
 
     // ========================================================================
@@ -165,15 +172,17 @@ test.describe('Asset List Page', () => {
     test('selected view mode persists across a reload', async ({page}) => {
         await goToAssetsPage(page);
 
-        // Switch to the table view and confirm it took effect.
+        // Switch to the table view and confirm it took effect. The list view is
+        // three per-panel tables (F15 round-2), so the check is scoped to one
+        // panel — a bare `dt-select-all` matches all three.
         await page.getByTestId('view-mode-list').click();
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
-        await expect(page.getByTestId('dt-select-all')).toBeVisible();
+        await expect(page.getByTestId('assets-table-panel-own').getByTestId('dt-select-all')).toBeVisible();
 
         // Reload: the mount effect must restore list view from localStorage.
         await page.reload();
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
-        await expect(page.getByTestId('dt-select-all')).toBeVisible();
+        await expect(page.getByTestId('assets-table-panel-own').getByTestId('dt-select-all')).toBeVisible();
         await expect(page.locator('[data-testid^="asset-card-"]')).toHaveCount(0);
     });
 
@@ -350,5 +359,108 @@ test.describe('Asset List Page', () => {
                 await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
             }
         }
+    });
+
+    // ========================================================================
+    // Test 16 (F15 round-2): the list view is THREE stacked tables, one per
+    // usage scope. The bucketing contract is the txCount badge palette (own →
+    // emerald, others → blue, analysis → gray — the class IS the feature here,
+    // as sanctioned for the AssetTable component test): every row of a panel
+    // must carry that panel's badge, and the seeded Apple position (transacted
+    // on Interactive Brokers, which TEST_USER owns at 30%) must land in "own".
+    // ========================================================================
+    test('list view buckets every row into its usage panel', async ({page}) => {
+        await goToAssetsPage(page);
+        await page.getByTestId('view-mode-list').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        const panels = [
+            {id: 'own', badge: 'bg-emerald-100'},
+            {id: 'others', badge: 'bg-blue-100'},
+            {id: 'analysis', badge: 'bg-gray-100'},
+        ] as const;
+
+        for (const {id, badge} of panels) {
+            const panel = page.getByTestId(`assets-table-panel-${id}`);
+            await expect(panel, `panel "${id}" empty or missing — the mock data puts assets in all three (populate_mock_data.py)`).toBeVisible();
+            // Retry until rows are painted; a bare count() would read mid-render.
+            await expect.poll(async () => panel.locator('tbody tr[data-row-id]').count(), {timeout: 10_000}).toBeGreaterThan(0);
+            const rowCount = await panel.locator('tbody tr[data-row-id]').count();
+            // font-mono pins the txCount badge specifically — other cells can share
+            // the palette token (a provider chip also uses blue, e.g.).
+            const badgeCount = await panel.locator(`tbody tr[data-row-id] span.font-mono[class*="${badge}"]`).count();
+            expect(badgeCount, `panel "${id}": every row must carry the ${badge} scope badge`).toBe(rowCount);
+        }
+
+        // Placement proof, not just palette: the seeded Apple row sits in "own".
+        const appleRow = page.getByTestId('assets-table-panel-own').locator('tbody tr', {hasText: /Apple/i});
+        await expect(appleRow.first(), 'seeded Apple (tx on a broker TEST_USER owns) must bucket into "own" — populate_mock_data.py').toBeVisible();
+    });
+
+    // ========================================================================
+    // Test 17 (F15 round-2): selection made in ANY panel feeds the one shared
+    // bulk toolbar. Picks one row from "analysis" (a brand-new asset this test
+    // owns, identifiable by id) and one from "own" (identity irrelevant — the
+    // subject is the plumbing), and checks the toolbar aggregates both.
+    // ========================================================================
+    test('bulk selection from different panels aggregates into the shared toolbar', async ({page}) => {
+        const token = uniqueToken(6);
+        let createdId: number | null = null;
+        try {
+            const createRes = await page.request.post('/api/v1/assets', {
+                data: [{display_name: `E2E CrossSel ${token}`, currency: 'EUR', asset_type: 'STOCK'}],
+            });
+            expect(createRes.ok(), `asset create must succeed: ${await createRes.text()}`).toBeTruthy();
+            createdId = ((await createRes.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+
+            await goToAssetsPage(page);
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+            // Row 1 — the created asset, unused anywhere → the analysis panel.
+            const analysisPanel = page.getByTestId('assets-table-panel-analysis');
+            const createdCheckbox = analysisPanel.getByTestId(`dt-row-checkbox-${createdId}`);
+            await expect(createdCheckbox, 'newly created asset (0 tx) must bucket into "analysis"').toBeVisible({timeout: 10_000});
+            await createdCheckbox.click();
+
+            // Row 2 — any row of the own panel (seeded by mock data).
+            const ownPanel = page.getByTestId('assets-table-panel-own');
+            const ownRowCheckbox = ownPanel.locator('tbody tr[data-row-id] [data-testid^="dt-row-checkbox-"]').first();
+            await expect(ownRowCheckbox, 'no own-panel rows — check populate_mock_data.py').toBeVisible();
+            await ownRowCheckbox.click();
+
+            // One shared toolbar, two panels' selections summed.
+            const toolbar = page.getByTestId('selection-toolbar');
+            await expect(toolbar).toHaveAttribute('data-selected-count', '2');
+
+            // Restore: deselect both — the toolbar unmounts at zero (the page only
+            // renders it with a non-empty selection).
+            await createdCheckbox.click();
+            await ownRowCheckbox.click();
+            await expect(page.getByTestId('selection-toolbar')).toHaveCount(0);
+        } finally {
+            if (createdId != null) await page.request.delete(`/api/v1/assets?asset_ids=${createdId}`).catch(() => {});
+        }
+    });
+
+    // ========================================================================
+    // Test 18 (F15): the GRID view got the same three usage panels in round 1 —
+    // as card sections, not tables. No spec had looked at them yet.
+    // ========================================================================
+    test('grid view renders the three usage panels with the seeded cards bucketed', async ({page}) => {
+        await goToAssetsPage(page);
+        // Grid is the default view, but localStorage may remember list from a
+        // previous test in this context — drive to the end state explicitly.
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('assets-page'), 20_000);
+
+        for (const panelId of ['own', 'others', 'analysis'] as const) {
+            const panel = page.getByTestId(`assets-panel-${panelId}`);
+            await expect(panel, `grid panel "${panelId}" empty or missing — populate_mock_data.py seeds all three scopes`).toBeVisible();
+            await expect.poll(async () => panel.locator('[data-testid^="asset-card-"]').count(), {timeout: 10_000}).toBeGreaterThan(0);
+        }
+
+        // Same placement rule as the table: Apple is used on a broker TEST_USER owns.
+        await expect(page.getByTestId('assets-panel-own').locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first()).toBeVisible();
     });
 });

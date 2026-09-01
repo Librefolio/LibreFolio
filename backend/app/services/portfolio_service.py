@@ -2169,7 +2169,11 @@ class PortfolioService:
         if broker_ids_for_scope:
             scope_stmt = scope_stmt.where(BrokerUserAccess.broker_id.in_(broker_ids_for_scope))
         scope_result = await self.db.execute(scope_stmt)
-        scope_broker_ids = sorted({a.broker_id for a in scope_result.scalars().all()})
+        scope_accesses = list(scope_result.scalars().all())
+        scope_broker_ids = sorted({a.broker_id for a in scope_accesses})
+        # Role/share edits change every scaled number but not the data
+        # fingerprints — they must bust the cache (F2 follow-up).
+        access_fp = tuple(sorted((a.broker_id, getattr(a.role, "value", a.role), str(a.share_percentage)) for a in scope_accesses))
 
         if scope_broker_ids:
             # Quick fingerprints for cache key (lightweight queries)
@@ -2188,6 +2192,7 @@ class PortfolioService:
             l2_key = (
                 user_id,
                 tuple(scope_broker_ids),
+                access_fp,
                 base_currency,
                 str(date_from),
                 str(date_to),

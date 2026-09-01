@@ -335,8 +335,8 @@
       "ownHint": "With transactions in brokers you own",
       "others": "Other users' assets",
       "othersHint": "With transactions you do not own",
-      "analysis": "Under analysis",
-      "analysisHint": "Saved but never used in any transaction"
+      "analysis": "Watched",
+      "analysisHint": "Saved but with no transactions — kept on the radar"
     }
   },
   "auth": {

@@ -2053,10 +2053,16 @@ class PortfolioCalculationEngine:
             tuple(sorted((record.event_id, record.asset_id, record.date.isoformat(), str(record.ratio)) for record in split_records_by_event_id.values())),
         )
 
-        # Blob key: independent of date range (blob stores its own range)
+        # Blob key: independent of date range (blob stores its own range).
+        # The access fingerprint (role + share per broker) MUST be part of the
+        # key: editing a share or a role changes every scaled number, and the
+        # tx/price fingerprints don't move (F2 follow-up: users changed their
+        # ownership % and kept seeing the old values for the 24h TTL).
+        access_fingerprint = tuple(sorted((a.broker_id, getattr(a.role, "value", a.role), str(a.share_percentage)) for a in accesses))
         blob_key = (
             user_id,
             tuple(sorted(scope_broker_ids)),
+            access_fingerprint,
             target_currency,
             tx_fingerprint,
             price_fingerprint,

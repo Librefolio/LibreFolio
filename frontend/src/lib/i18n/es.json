@@ -335,8 +335,8 @@
       "ownHint": "Con transacciones en brókers de los que eres propietario",
       "others": "Activos de otros usuarios",
       "othersHint": "Con transacciones que no son tuyas",
-      "analysis": "En análisis",
-      "analysisHint": "Guardados pero nunca usados en una transacción"
+      "analysis": "Observados",
+      "analysisHint": "Guardados pero sin transacciones — bajo observación"
     }
   },
   "auth": {

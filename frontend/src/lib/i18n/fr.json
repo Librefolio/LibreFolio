@@ -335,8 +335,8 @@
       "ownHint": "Avec des transactions dans des courtiers que vous possédez",
       "others": "Actifs des autres utilisateurs",
       "othersHint": "Avec des transactions qui ne sont pas les vôtres",
-      "analysis": "À l'étude",
-      "analysisHint": "Enregistrés mais jamais utilisés dans une transaction"
+      "analysis": "Surveillés",
+      "analysisHint": "Enregistrés mais sans transactions — gardés à l'œil"
     }
   },
   "auth": {

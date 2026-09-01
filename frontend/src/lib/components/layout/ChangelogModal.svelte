@@ -22,7 +22,7 @@
     }
 </script>
 
-<ModalBase {open} onRequestClose={onClose} maxWidth="2xl" testId="changelog-modal">
+<ModalBase {open} onRequestClose={onClose} maxWidth="4xl" testId="changelog-modal">
     <div class="bg-white dark:bg-slate-800 rounded-xl flex flex-col max-h-[85vh]">
         <!-- Header -->
         <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">

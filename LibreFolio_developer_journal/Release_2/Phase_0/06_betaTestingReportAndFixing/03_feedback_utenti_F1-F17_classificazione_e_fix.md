@@ -76,6 +76,32 @@ test-author con test `it.fails` documentato, corretto, test promosso a guardia.
 > è EDITOR-only per l'utente test → fuori dalla dashboard owned-only; ora il test patcha
 > l'icona su Interactive Brokers, owned 30%).
 
+## 5. Round 2 — collaudo live del 01/09 pomeriggio (server prod 6040)
+
+Esito collaudo utente: F3/F4/F5/F7/F9/F10/F11/F17 confermati OK; F6/F14 accettati a fiducia
+(F6 poi verificato live: `asset.lot_detail` v2 con `opening_market_value` corretto, es.
+7.675 × 36 = 276.30). Nuovi rilievi e fix:
+
+| Rilievo | Causa | Fix |
+|---|---|---|
+| Card broker a zero + edit % senza effetto per 24h | **blob cache engine (24h) e L2 report (30min) senza role/share nella chiave** | fingerprint (broker_id, role, share) in entrambe le chiavi → invalidazione naturale |
+| F12: modale changelog intrappolata nella sidebar | `<nav>` con `transform`+`overflow-hidden` intrappola il `position:fixed` | ChangelogModal resa fuori da `<nav>` + maxWidth 4xl |
+| F15: nome "Sotto analisi" | gusto | rinominato **Osservati/Watched/Surveillés/Observados** |
+| F15: tabella unica | richiesta: 3 tabelle impilate | 3 AssetTable (testid `assets-table-panel-*`), larghezze sincronizzate live (`onColumnResize`→`setColumnWidth`), ordine/visibilità via `additionalTableRefs` del toggle, paginazione indipendente (storageKey per pannello) |
+| F15: "tuoi asset comprende tutto" | **non confermato**: verificato live (marci EDITOR su directa → quegli asset correttamente in "altri utenti"); probabile build intermedia o percezione | nessuna |
+| F13: 2GB di codice+librerie | (a) `chown -R /app` duplicava ogni file in un layer; (b) gcc/git/libffi-dev (toolchain build-time, ~200MB) nella final image; (c) **`.dockerignore` non escludeva `backend/data/` → i DB locali finivano nell'immagine (anche rischio leak)**; (d) `backend/test_scripts/` inclusi | COPY --chown ovunque, pybuilder stage, dockerignore allargato. **Light: 2.27→1.50 GB**. Bug entrypoint collaterale: UID/GID host (501/20) collidevano con gruppi base → entrypoint numerico |
+| F1/F17 mobile | transitori di connessione (download CSS parziale), come ipotizzato dall'utente | nessuna ulteriore |
+
+Verifica live usata come prova: login alfy/marci su :6040, report con share 0.3 → valori
+scalati corretti (NAV 11.983,54 = 30%), card OK sul build corrente.
+
+> Test round 2 (test-author): `TestAccessFingerprintCacheBust` (share/role edit → cache miss
+> → numeri nuovi, con prova "a denti": rimossa la fingerprint torna rosso), breakdown by_broker
+> scalato 30% via API, spec `asset-list` riparate per le 3 tabelle + 3 nuovi test (bucketing,
+> selezione cross-panel, pannelli grid). Verde seriale: roi-fifo-utils ✅, api portfolio ✅,
+> front-asset 8/8 unità ✅ (asset-list 20/20). Nota igienica: `role` può arrivare come `str`
+> da costruttori SQLModel in-session → fingerprint usa `getattr(role,'value',role)`.
+
 ## 4. Collegamenti
 
 - Piani agganciati ancora aperti: **P2** ImportWizardUx (F11 vi si inserisce),
