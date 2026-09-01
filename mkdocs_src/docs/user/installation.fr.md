@@ -165,6 +165,29 @@ Cependant, pour une simplicité et une sécurité maximales sans ouvrir de ports
 
 ---
 
+## 🏷️ Variantes de l'Image : Full et Light
+
+L'image officielle est publiée en deux variantes :
+
+- 🗂️ **`latest`** (full) — inclut l'intégralité de la documentation avec captures d'écran et images, pour une utilisation entièrement hors ligne.
+- 🪶 **`latest-light`** — la même application, mais **sans les images de la documentation**, ce qui allège l'image de plusieurs centaines de Mo. Toutes les pages de texte de la documentation restent incluses : lorsque vous ouvrez une page contenant des captures d'écran, les images sont chargées à la demande depuis le site de documentation en ligne.
+
+Chaque tag de version possède également un équivalent light (par exemple, `ghcr.io/librefolio/librefolio:v0.10.0-light`).
+
+!!! warning "La variante light nécessite internet pour les images de la documentation"
+
+    Avec l'image `-light`, l'affichage des captures d'écran et des images dans la documentation intégrée (menu Aide) nécessite une **connexion internet**, car elles sont récupérées depuis le site de documentation en ligne. Tout le reste — l'application complète et tous les textes de la documentation — fonctionne entièrement hors ligne.
+
+Pour utiliser la variante light, remplacez le tag de l'image dans votre `docker-compose.yml` :
+
+```yaml
+services:
+  librefolio:
+    image: ghcr.io/librefolio/librefolio:latest-light
+```
+
+---
+
 ## ⚙️ Options de Configuration
 
 Tous les paramètres de LibreFolio (tels que les ports, la devise de base et les clés de sécurité de session) sont gérés via des variables d'environnement dans le fichier `.env`.

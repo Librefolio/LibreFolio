@@ -168,8 +168,8 @@ The completed Phase 0 plan records approval by the project owner and implementat
 | Frontend compatibility handshake | `frontend/src/lib/features/ai-export/catalog/compatibility.ts` |
 | Analysis selection and Snapshot mapping | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/features/ai-export/aiExportOptions.ts` |
 | Contextual UI memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts`, `frontend/src/lib/stores/app/clientSession.ts` |
-| Locale-derived response language | `frontend/src/lib/features/ai-export/AiExportMenuV2.svelte`, `frontend/src/lib/features/ai-export/ui.ts` |
-| Body portal and focus/session ownership | `frontend/src/lib/features/ai-export/AiExportMenuV2.svelte` |
+| Locale-derived response language | `frontend/src/lib/features/ai-export/AiExportMenu.svelte`, `frontend/src/lib/features/ai-export/ui.ts` |
+| Body portal and focus/session ownership | `frontend/src/lib/features/ai-export/AiExportMenu.svelte` |
 | Domain-aware manual link | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/components/ui/DocsLink.svelte` |
 | Safe serialization | `frontend/src/lib/features/ai-export/serialization/` |
 | Prompt renderer | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |
@@ -181,6 +181,6 @@ The completed Phase 0 plan records approval by the project owner and implementat
 | Clipboard fallback regression | `frontend/src/lib/features/ai-export/__tests__/aiExportClipboard.test.ts` |
 | Canonical test registration | `scripts/test_runner/_backend_services.py`, `scripts/test_runner/_backend_schemas.py`, `scripts/test_runner/_backend_api.py`, `scripts/test_runner/_frontend_ai_export.py`, `scripts/test_runner/_registry.py`, `scripts/test_runner/_suites.py` |
 | Final UI unit coverage | `frontend/src/lib/features/ai-export/__tests__/aiExportMemory.test.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportOptions.test.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportUi.test.ts` |
-| Final UI browser coverage | `frontend/e2e/ai-export.spec.ts` |
+| Final UI browser coverage | `frontend/e2e/ai-export/` |
 | AI Export test walkthrough | `mkdocs_src/docs/developer/test-walkthrough/api.md` |
 | Repository product/boundary instructions | `.github/copilot-instructions.md` |

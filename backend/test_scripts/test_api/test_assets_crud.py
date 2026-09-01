@@ -1024,5 +1024,139 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         print_success("✓ Market-data wipe removed prices/events and disconnected tx links")
 
 
+# ============================================================================
+# F15 — Usage counters: tx_count (global) vs tx_count_own (owned brokers only)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_list_tx_count_own_scopes_to_positively_owned_brokers(test_server):
+    """Test 17 (F15): tx_count counts every transaction referencing the asset
+    (any broker, any user); tx_count_own counts only transactions in brokers the
+    caller OWNs with share > 0 (or NULL, the legacy full-ownership default).
+
+    Scenario (asserted in two steps, so a regression points at its cause):
+      1. A owns broker_full (share 1) and broker_zero (share 0 — valid, F2),
+         each with one tx → A sees tx_count 2, tx_count_own 1.
+      2. A adds broker_shared (A OWNER 100%, B VIEWER) with one tx →
+         A sees tx_count 3, tx_count_own 2; B sees tx_count 3 (global),
+         tx_count_own 0 (a viewer owns nothing).
+    """
+    print_section("Test 17 (F15): GET /assets/query - tx_count vs tx_count_own")
+
+    marker = unique_id("F15USAGE")
+    asset_id = None
+    broker_full_id = None
+    broker_zero_id = None
+    broker_shared_id = None
+
+    async with httpx.AsyncClient() as client_a, httpx.AsyncClient() as client_b:
+        try:
+            await create_user_and_login(client_a)
+            await create_user_and_login(client_b)
+
+            # --- one asset only this test references -------------------------
+            item = FAAssetCreateItem(display_name=f"F15 Usage {marker}", currency="EUR")
+            create_resp = await client_a.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+            assert create_resp.status_code == 201, f"Expected 201, got {create_resp.status_code}: {create_resp.text}"
+            asset_id = FABulkAssetCreateResponse(**create_resp.json()).results[0].asset_id
+            assert asset_id is not None
+
+            async def create_broker(client: httpx.AsyncClient, name: str) -> int:
+                resp = await client.post(f"{API_BASE}/brokers", json=[{"name": name, "allow_cash_overdraft": True}], timeout=TIMEOUT)
+                assert resp.status_code == 200, f"Broker create failed: {resp.text}"
+                return resp.json()["results"][0]["broker_id"]
+
+            async def commit_buy(client: httpx.AsyncClient, broker_id: int) -> None:
+                """One BUY referencing this test's asset — what tx_count counts."""
+                resp = await client.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={
+                        "creates": [
+                            {
+                                "broker_id": broker_id,
+                                "asset_id": asset_id,
+                                "type": "BUY",
+                                "date": date.today().isoformat(),
+                                "quantity": "1",
+                                "cash": {"code": "EUR", "amount": "-100"},
+                            }
+                        ]
+                    },
+                    timeout=TIMEOUT,
+                )
+                assert resp.status_code == 200, f"BUY commit failed: {resp.text}"
+                body = resp.json()
+                assert body["committed"] is True, f"BUY refused: {resp.text}"
+                assert body["results"][0]["status"] == "success", f"BUY refused: {resp.text}"
+
+            # broker_full: A owns 100% (creation default) + one tx
+            broker_full_id = await create_broker(client_a, f"F15 Full {marker}")
+            await commit_buy(client_a, broker_full_id)
+
+            # broker_zero: A owns 0% (a valid share per F2) + one tx
+            broker_zero_id = await create_broker(client_a, f"F15 Zero {marker}")
+            me_resp = await client_a.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me_resp.status_code == 200, me_resp.text
+            user_a_id = me_resp.json()["user"]["id"]
+            access_resp = await client_a.put(
+                f"{API_BASE}/brokers/{broker_zero_id}/access",
+                json=[{"user_id": user_a_id, "role": "OWNER", "share_percentage": 0}],
+                timeout=TIMEOUT,
+            )
+            assert access_resp.status_code == 200, f"Setting a 0% OWNER share must be legal: {access_resp.text}"
+            await commit_buy(client_a, broker_zero_id)
+
+            async def find_counts(client: httpx.AsyncClient) -> tuple[int, int]:
+                """(tx_count, tx_count_own) for THIS test's asset, found by name."""
+                resp = await client.get(f"{API_BASE}/assets/query", params={"search": marker}, timeout=TIMEOUT)
+                assert resp.status_code == 200, resp.text
+                matches = [a for a in resp.json() if a["id"] == asset_id]
+                assert len(matches) == 1, f"asset {asset_id} not found by marker {marker}: {len(matches)} matches"
+                return matches[0]["tx_count"], matches[0]["tx_count_own"]
+
+            # ── Step 1: the 0%-owned broker's tx counts globally, not as own ──
+            tx_count, tx_count_own = await find_counts(client_a)
+            assert tx_count == 2, f"A: tx_count must be 2 (full + zero-share), got {tx_count}"
+            assert tx_count_own == 1, f"A: tx_count_own must be 1 (0%-share broker excluded), got {tx_count_own}"
+
+            # broker_shared: A owns it, B is VIEWER + one tx
+            broker_shared_id = await create_broker(client_a, f"F15 Shared {marker}")
+            me_b_resp = await client_b.get(f"{API_BASE}/auth/me", timeout=TIMEOUT)
+            assert me_b_resp.status_code == 200, me_b_resp.text
+            user_b_id = me_b_resp.json()["user"]["id"]
+            access_resp = await client_a.put(
+                f"{API_BASE}/brokers/{broker_shared_id}/access",
+                json=[
+                    {"user_id": user_a_id, "role": "OWNER", "share_percentage": 1.0},
+                    {"user_id": user_b_id, "role": "VIEWER", "share_percentage": 0},
+                ],
+                timeout=TIMEOUT,
+            )
+            assert access_resp.status_code == 200, access_resp.text
+            await commit_buy(client_a, broker_shared_id)
+
+            # ── Step 2: a fully-owned shared broker counts as own for A... ────
+            tx_count, tx_count_own = await find_counts(client_a)
+            assert tx_count == 3, f"A: tx_count must be 3 (full+zero+shared), got {tx_count}"
+            assert tx_count_own == 2, f"A: tx_count_own must be 2 (full + shared), got {tx_count_own}"
+
+            # ── ...while the VIEWER sees the global count and owns nothing ────
+            tx_count, tx_count_own = await find_counts(client_b)
+            assert tx_count == 3, f"B: tx_count is global and must still be 3, got {tx_count}"
+            assert tx_count_own == 0, f"B: VIEWER access must not count as own, got {tx_count_own}"
+
+            print_success("✓ tx_count is global; tx_count_own excludes 0%-owned and viewer brokers")
+
+        finally:
+            # Whoever writes, cleans up: brokers (force → cascade over their
+            # transactions), then the asset this test created.
+            for broker_id in (broker_full_id, broker_zero_id, broker_shared_id):
+                if broker_id is not None:
+                    await client_a.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+            if asset_id is not None:
+                await client_a.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

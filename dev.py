@@ -1469,30 +1469,49 @@ def _docker_ensure_assets_built():
     return 0
 
 
+def _docker_build_cmd(image_tag: str, no_cache: bool, light: bool) -> list:
+    """Assemble the `docker build` command for the full or light variant.
+
+    The light variant (build-arg DOCS_VARIANT=light) ships without the
+    documentation images and is tagged with a `-light` suffix.
+    """
+    alias_tag = "librefolio:latest-light" if light else "librefolio:latest"
+    docker_cmd = ["docker", "build", "-t", image_tag, "-t", alias_tag]
+    # Pass host UID/GID so container user matches host user
+    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
+    if light:
+        docker_cmd.extend(["--build-arg", "DOCS_VARIANT=light"])
+    if no_cache:
+        docker_cmd.append("--no-cache")
+    docker_cmd.append(".")
+    return docker_cmd
+
+
 def cmd_docker_build(args):
     """Build the Docker image with git-based versioning."""
     if not _check_env_file():
         return 1
     tag_override = getattr(args, 'tag', None)
     no_cache = getattr(args, 'no_cache', False)
+    light = getattr(args, 'light', False)
 
     result = _docker_ensure_assets_built()
     if result != 0:
         return result
 
     image_tag = _get_docker_tag(tag_override)
-    print(Colors.success(f"🐳 Building Docker image: {image_tag}..."))
-    docker_cmd = ["docker", "build", "-t", image_tag]
-    # Also tag as 'librefolio:latest'
-    docker_cmd.extend(["-t", "librefolio:latest"])
-    # Pass host UID/GID so container user matches host user
-    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
-    if no_cache:
-        docker_cmd.append("--no-cache")
-    docker_cmd.append(".")
+    if light and not tag_override:
+        image_tag += "-light"
+    variant = "light (no documentation images)" if light else "full"
+    print(Colors.success(f"🐳 Building Docker image: {image_tag} [{variant}]..."))
+    docker_cmd = _docker_build_cmd(image_tag, no_cache, light)
     result = run_command_live(docker_cmd)
     if result == 0:
-        print_success(f"✅ Image built: {image_tag} (also tagged librefolio:latest)")
+        alias_tag = "librefolio:latest-light" if light else "librefolio:latest"
+        print_success(f"✅ Image built: {image_tag} (also tagged {alias_tag})")
+        if light:
+            print(Colors.info("ℹ️  Light variant: documentation images load from the online"))
+            print(Colors.info("   docs site — viewing them requires an internet connection."))
     return result
 
 
@@ -1502,6 +1521,7 @@ def cmd_docker_rebuild(args):
         return 1
     tag_override = getattr(args, 'tag', None)
     no_cache = getattr(args, 'no_cache', False)
+    light = getattr(args, 'light', False)
 
     print(Colors.success("🐳 Rebuild: build new image → stop → start..."))
     print()
@@ -1512,18 +1532,18 @@ def cmd_docker_rebuild(args):
         return result
 
     image_tag = _get_docker_tag(tag_override)
+    if light and not tag_override:
+        image_tag += "-light"
     print(Colors.info(f"[1/3] Building new image: {image_tag}..."))
-    docker_cmd = ["docker", "build", "-t", image_tag, "-t", "librefolio:latest"]
-    # Pass host UID/GID so container user matches host user
-    docker_cmd.extend(["--build-arg", f"UID={os.getuid()}", "--build-arg", f"GID={os.getgid()}"])
-    if no_cache:
-        docker_cmd.append("--no-cache")
-    docker_cmd.append(".")
+    docker_cmd = _docker_build_cmd(image_tag, no_cache, light)
     result = run_command_live(docker_cmd)
     if result != 0:
         print_error("Build failed — containers NOT restarted.")
         return result
     print_success(f"Image built: {image_tag}")
+    if light:
+        # docker-compose.yml runs ${LIBREFOLIO_IMAGE:-librefolio:latest}
+        print(Colors.info("ℹ️  Light variant built. To run it, set LIBREFOLIO_IMAGE=librefolio:latest-light in .env"))
     print()
 
     # Step 2: Stop current containers
@@ -2311,11 +2331,13 @@ Examples:
     docker_p = docker_sub.add_parser("build", help="Build Docker image (tag from git version)")
     docker_p.add_argument("--tag", "-t", default=None, help="Override image tag (default: librefolio:<git-version>)")
     docker_p.add_argument("--no-cache", action="store_true", help="Build without Docker cache")
+    docker_p.add_argument("--light", action="store_true", help="Light variant: no documentation images (tagged *-light); doc images load from the online docs site")
     docker_p.set_defaults(func=cmd_docker_build)
 
     docker_p = docker_sub.add_parser("rebuild", help="Build new image → stop containers → restart with new version")
     docker_p.add_argument("--tag", "-t", default=None, help="Override image tag (default: librefolio:<git-version>)")
     docker_p.add_argument("--no-cache", action="store_true", help="Build without Docker cache")
+    docker_p.add_argument("--light", action="store_true", help="Light variant: no documentation images (tagged *-light); doc images load from the online docs site")
     docker_p.set_defaults(func=cmd_docker_rebuild)
 
     docker_p = docker_sub.add_parser("up", help="Start containers (docker compose up)")

@@ -471,6 +471,13 @@ class AssetLotDetailRow(AssetComponentModel):
     unrealized_pnl: SafeDecimal | None = None
     total_pnl: SafeDecimal | None = None
     net_total_pnl: SafeDecimal | None = None
+    # F6 — market context at lot open: the reference unit price at opening_date
+    # (market quote, falling back to the buy price when no quote existed) and the
+    # resulting market value of the original quantity at open. Needed by analyses
+    # to reason about entry conditions (e.g. recovery value), not only by cost.
+    opening_reference_unit_price: SafeDecimal | None = None
+    opening_reference_price_source: str | None = None
+    opening_market_value: SafeDecimal | None = None
     income: SafeDecimal
     allocated_fees: SafeDecimal
     allocated_taxes: SafeDecimal

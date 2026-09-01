@@ -140,4 +140,4 @@ without requiring a page reload.
 | Schemas (common FxBackwardFillInfo) | `backend/app/schemas/common.py` |
 | Scheduled investment provider | `backend/app/services/asset_source_providers/scheduled_investment.py` |
 | Asset currency change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
-| Navigation store | `frontend/src/lib/stores/navigationStore.ts` |
+| Navigation store | `frontend/src/lib/stores/app/navigationStore.ts` |

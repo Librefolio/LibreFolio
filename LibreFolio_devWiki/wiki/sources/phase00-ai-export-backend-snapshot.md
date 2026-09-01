@@ -180,11 +180,11 @@ The original four journal files were untracked at final closure, so the registry
 | Custom options UI and domain manuals | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/components/ui/DocsLink.svelte` |
 | Contextual memory and client-session scope | `frontend/src/lib/features/ai-export/aiExportMemory.ts`, `frontend/src/lib/stores/app/clientSession.ts` |
 | Snapshot/full-prompt and locale normalization | `frontend/src/lib/features/ai-export/aiExportOptions.ts`, `frontend/src/lib/features/ai-export/ui.ts` |
-| Body portal and panel session | `frontend/src/lib/features/ai-export/AiExportMenuV2.svelte` |
+| Body portal and panel session | `frontend/src/lib/features/ai-export/AiExportMenu.svelte` |
 | Clipboard regression | `frontend/src/lib/features/ai-export/aiExportClipboard.ts`, `frontend/src/lib/features/ai-export/__tests__/aiExportClipboard.test.ts` |
 | Canonical backend registration | `scripts/test_runner/_backend_services.py`, `scripts/test_runner/_backend_schemas.py`, `scripts/test_runner/_backend_api.py` |
 | Canonical frontend registration | `scripts/test_runner/_frontend_ai_export.py`, `scripts/test_runner/_registry.py`, `scripts/test_runner/_suites.py` |
-| Browser E2E | `frontend/e2e/ai-export.spec.ts` |
+| Browser E2E | `frontend/e2e/ai-export/` |
 | Applied event/history policy | `backend/app/services/ai_export/temporal/policy.py` |
 | Empty temporal-row renderer | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
 | Explicit Broker universe fields | `backend/app/services/ai_export/components/portfolio_financial.py`, `backend/app/services/ai_export/runtime_service.py` |
@@ -192,5 +192,5 @@ The original four journal files were untracked at final closure, so the registry
 | Prompt warning thresholds | `frontend/src/lib/features/ai-export/aiExportOptions.ts`, `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte` |
 | AI Export test commands | `mkdocs_src/docs/developer/test-walkthrough/api.md` |
 | Repository product/boundary instructions | `.github/copilot-instructions.md` |
-| English domain manuals | `mkdocs_src/docs/user/dashboard/ai-export.en.md`, `mkdocs_src/docs/user/brokers/ai-export.en.md`, `mkdocs_src/docs/user/assets/detail/ai-export.en.md`, `mkdocs_src/docs/user/fx/detail/ai-export.en.md` |
+| English domain manuals | `mkdocs_src/docs/user/ai-export/portfolio.en.md`, `mkdocs_src/docs/user/ai-export/broker.en.md`, `mkdocs_src/docs/user/ai-export/asset.en.md`, `mkdocs_src/docs/user/ai-export/fx.en.md`, `mkdocs_src/docs/user/ai-export/index.en.md` |
 | Localized shared manual fallback | `mkdocs_src/docs/user/ai-export/index.it.md`, `mkdocs_src/docs/user/ai-export/index.fr.md`, `mkdocs_src/docs/user/ai-export/index.es.md` |

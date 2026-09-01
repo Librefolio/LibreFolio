@@ -81,6 +81,7 @@ vi.mock('$lib/components/charts/SemiDonutChart.svelte', async () => ({
 }));
 
 import BrokerSharingPanel from './BrokerSharingPanel.svelte';
+import BrokerSharingPanelHarness from '$test/harness/BrokerSharingPanelHarness.svelte';
 import {zodiosApi} from '$lib/api';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 
@@ -486,6 +487,45 @@ describe('BrokerSharingPanel — save', () => {
         // The saved state became the new baseline: nothing left to save.
         await waitFor(() => expect(saveBtn()).toBeDisabled());
         expect(errorText()).toBeNull();
+    });
+
+    it('F3 — after a successful save the bound hasChanges is already false when onCancel fires', async () => {
+        await setupI18n();
+        // The bug: the modal wrapper binds `hasChanges` and pops the unsaved-changes
+        // confirm whenever it is true at close time. handleSave used to call
+        // `onCancel` in the same flush that cleared the dirty state, so the binding
+        // still read true and every successful save was followed by a "discard
+        // changes?" dialog. The fix is `await tick()` before `onCancel?.()`.
+        //
+        // The harness binds hasChanges like the modal does and probes the value at
+        // the exact moment onCancel fires; the mirror span proves the binding is
+        // live before the save, so `false` afterwards is an observation, not a
+        // constant.
+        const onChanged = vi.fn();
+        const onCancelProbe = vi.fn();
+        api[LIST].mockResolvedValue({items: [access(1, 'alice', 'OWNER', 1), access(2, 'bob', 'VIEWER')]});
+        api[SEARCH].mockResolvedValue({items: []});
+        render(BrokerSharingPanelHarness, {brokerId: 7, onChanged, onCancelProbe});
+        await settled();
+
+        const harnessFlag = () => screen.getByTestId('harness-has-changes').getAttribute('data-value');
+        expect(harnessFlag()).toBe('false'); // clean baseline
+
+        // Dirty the draft: bob becomes an EDITOR. The binding must go live —
+        // without this, the probe's `false` below could never have read `true`.
+        const dialog = await openEdit(2);
+        await pickRole(dialog, 'EDITOR', {triggerIndex: 1});
+        await fireEvent.click(screen.getByTestId('sharing-confirm-edit'));
+        await waitFor(() => expect(saveBtn()).toBeEnabled());
+        await waitFor(() => expect(harnessFlag()).toBe('true'));
+
+        await fireEvent.click(saveBtn());
+
+        await waitFor(() => expect(onCancelProbe).toHaveBeenCalledTimes(1));
+        // F3: by the time the modal wrapper is asked to close, the bound value
+        // has already recomputed to false — no unsaved-changes confirm.
+        expect(onCancelProbe).toHaveBeenCalledWith(false);
+        await waitFor(() => expect(harnessFlag()).toBe('false'));
     });
 
     it('embedded — no onCancel — saves without one and stays put', async () => {

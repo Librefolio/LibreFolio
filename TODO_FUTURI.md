@@ -5,6 +5,73 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
+## 📊 Dashboard — vista P&L assoluto e grafici avanzati (F8)
+
+**Data aggiunta**: 1 Settembre 2026
+**Status**: 📋 FUTURO — emerso dal feedback beta del 30/08/2026, rimandato per consolidamento pre-release
+**Origine**: feedback Alfy 30/08/2026 — classificazione in `LibreFolio_developer_journal/Release_2/Phase_0` (sessione 01/09/2026)
+
+### Richiesta
+
+- Grafico dashboard: vista **solo P&L assoluto** (senza cash, costo asset, ecc.).
+- Possibilità di mostrare il P&L con **grafico a candela** per far capire l'escursione giornaliera.
+- Valutare istogrammi per dividendi e interessi (gli altri parametri della KPI card 1).
+
+### Note
+
+- Va spezzata in sotto-feature: (a) vista P&L-only, (b) candele, (c) istogrammi dividendi/interessi.
+- Da riprendere dopo il consolidamento dei feedback di Release 2.
+
+---
+
+## 🔌 Arricchimento asset da fonti esterne — ESMA FIRDS, OpenFIGI, JustETF (F16)
+
+**Data aggiunta**: 1 Settembre 2026
+**Status**: 📋 FUTURO — da riprendere a consolidamento finito
+**Origine**: feedback Giuseppe + Alfy 07/08/2026; skill di riferimento: `asset-plugin`
+
+### Contesto
+
+Giuseppe scarica cataloghi da ESMA (FIRDS) e Yahoo Finance (quotazioni attuali e storiche) e usa OpenFIGI per arricchire gli ISIN. Twelve Data sarebbe ideale ma è a pagamento. Domanda aperta: esistono API JustETF?
+
+### Idea architetturale (Alfy)
+
+- Funzione di **arricchimento dati asset esterna al provider prezzo**, come **libreria interna**:
+  i plugin provider la usano per arricchire il proprio output — più gestibile di un plugin standalone.
+- ESMA FIRDS: `https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_firds_files`
+  — publication date ultima settimana, type "full file" → restituisce i cataloghi.
+- OpenFIGI: concettualmente simile agli altri provider → integrazione più semplice.
+
+### Collegamenti
+
+- Piano in pausa correlato: `LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` (identità asset, identificativi).
+
+---
+
+## 🔄 Self-update in-app (da F14)
+
+**Data aggiunta**: 1 Settembre 2026
+**Status**: 📋 FUTURO — F14 è stato rilasciato in scope 1 (modale + guida); il self-update richiede un piano dedicato
+**Origine**: discussione F14 del 01/09/2026
+
+### Obiettivo
+
+Pulsante nel frontend (modale "nuova versione") che fa aggiornare e riavviare il backend.
+
+### Fattibilità analizzata
+
+- **Docker**: un container non può aggiornare la propria immagine da solo, ma può farlo se
+  `/var/run/docker.sock` è montato (opt-in in compose): Docker API → pull nuova immagine →
+  ricreazione del container. È ciò che fa **Watchtower** (documentato nella guida come alternativa).
+  Attenzione: docker.sock montato = root sull'host → montaggio opt-in esplicito, endpoint admin-only,
+  script fisso senza input utente. LibreFolio è single-image → caso semplice.
+- **Git clone**: script guardato — `git fetch`, `git pull` solo se work-tree pulito
+  (`git status --porcelain` vuoto), rebuild, restart. Il restart richiede un supervisore
+  (systemd o Docker restart policy). Candidato: `scripts/self_update.sh` documentato.
+- Distinguere le varianti di immagine full/light se necessario (F13).
+
+---
+
 ## 📊 Risk Analysis — evoluzioni scenario catalog e replay
 
 **Data aggiunta**: 29 Luglio 2026
@@ -794,4 +861,7 @@ Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una
   mappings and the persistence UX has been designed.
 
 
-### Aggiungere una pagina changelog dentro la ui per mostrare le modifiche di rilascio, forse con link ai PR e issue.
+## Realizzare un tool per aiutare nell'allocazione del pac
+usando l'esempio studio di LibreFolio_developer_journal/Release_2/guida_allocazione_pac_multi_etf.md pensato per directa che ha vincolo di acquisto intero e allocazione in euro,
+creare un tool che prenda vari parametri in input, risultanti dalla decisione nell'allocazione pac e creare vari flag per attivare la variante intera, il metodo di inserimento (numero quote o ammontare massimo), etc...
+Il tutto deve confluire in una funzionalità backend esposta tramite API e un frontend che consenta all'utente di interagire con il tool. In seguito lo stesso tool mi aspetto potrà essere esportato a un agente AI tramite server MCP così che dopo aver fatto l'analisi pac possa far eseguire al backed, possibilmente in forma ottimizzata i calcoli riportando tutte le colonne e le informazion e facendo poi cedicere all'ia o all'utente.

@@ -152,9 +152,9 @@ a third time on the asset detail page.
 | Current backend platform | `backend/app/services/ai_export/` |
 | Current frontend task catalog | `frontend/src/lib/features/ai-export/catalog/` |
 | Current analysis/options UI | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/features/ai-export/aiExportOptions.ts` |
-| Current contextual memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts`, `frontend/src/lib/features/ai-export/AiExportMenuV2.svelte` |
+| Current contextual memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts`, `frontend/src/lib/features/ai-export/AiExportMenu.svelte` |
 | Domain-aware manual link | `frontend/src/lib/components/ui/DocsLink.svelte` |
 | Current prompt renderer | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |
-| Final cross-surface E2E | `frontend/e2e/ai-export.spec.ts` |
+| Final cross-surface E2E | `frontend/e2e/ai-export/` |
 | Completed Phase 0 index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |

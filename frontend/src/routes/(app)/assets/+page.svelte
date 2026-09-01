@@ -68,6 +68,8 @@
         provider_code?: string | null;
         active: boolean;
         quote_base_quantity?: number | null;
+        tx_count?: number;
+        tx_count_own?: number;
     }
 
     interface AssetState extends AssetInfo {
@@ -301,8 +303,32 @@
             deltaAbs: a.deltaAbs,
             deltaPercent: a.deltaPercent,
             deltas: a.deltas,
+            txCount: a.tx_count ?? 0,
+            txScope: assetScope(a),
         })),
     );
+
+    // =========================================================================
+    // F15 — usage panels: "yours" (tx in brokers you own), "other users'"
+    // (tx only outside your ownership), "under analysis" (never used). This
+    // grouping is unrelated to the active/inactive lifecycle flags above.
+    // =========================================================================
+    type AssetScope = 'own' | 'others' | 'analysis';
+
+    function assetScope(a: {tx_count?: number; tx_count_own?: number}): AssetScope {
+        if ((a.tx_count_own ?? 0) > 0) return 'own';
+        if ((a.tx_count ?? 0) > 0) return 'others';
+        return 'analysis';
+    }
+
+    let ownAssets = $derived(filteredAssets.filter((a) => assetScope(a) === 'own'));
+    let otherAssets = $derived(filteredAssets.filter((a) => assetScope(a) === 'others'));
+    let analysisAssets = $derived(filteredAssets.filter((a) => assetScope(a) === 'analysis'));
+    let assetPanels = $derived([
+        {id: 'own' as const, items: ownAssets},
+        {id: 'others' as const, items: otherAssets},
+        {id: 'analysis' as const, items: analysisAssets},
+    ]);
 
     // =========================================================================
     // Lifecycle
@@ -440,6 +466,8 @@
                 quote_base_quantity: item.quote_base_quantity ?? 1,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
+                tx_count: item.tx_count ?? 0,
+                tx_count_own: item.tx_count_own ?? 0,
                 lastPrice: null,
                 deltaAbs: null,
                 deltaPercent: null,
@@ -1453,36 +1481,51 @@
             {/if}
         </div>
     {:else if viewMode === 'grid'}
-        <!-- Grid View -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {#each filteredAssets as asset (asset.id)}
-                <AssetCard
-                    asset={{
-                        id: asset.id,
-                        display_name: asset.display_name,
-                        currency: asset.currency,
-                        icon_url: asset.icon_url,
-                        asset_type: asset.asset_type,
-                        provider_code: asset.provider_code,
-                        active: asset.active,
-                    }}
-                    livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
-                    livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
-                    deltaPercent={asset.deltaPercent}
-                    deltaAbs={asset.deltaAbs}
-                    dateStart={urlDateStart}
-                    dateEnd={urlDateEnd}
-                    chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
-                    renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
-                    chartData={asset.chartData}
-                    loading={asset.loadingPrices}
-                    syncing={syncingAssetIds.has(asset.id)}
-                    onsync={handleSyncAsset}
-                    onrefresh={handleRefreshAsset}
-                    ondelete={handleDeleteAsset}
-                    onmerge={handleMergeAsset}
-                    onsettings={handleCardSettings}
-                />
+        <!-- Grid View — F15: three usage panels (yours / other users' / under analysis) -->
+        <div class="space-y-6">
+            {#each assetPanels as panel (panel.id)}
+                {#if panel.items.length > 0}
+                    <section data-testid="assets-panel-{panel.id}">
+                        <header class="mb-2 px-1">
+                            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                {$t(`assets.panels.${panel.id}`)} <span class="text-gray-400 dark:text-gray-500 font-normal">({panel.items.length})</span>
+                            </h2>
+                            <p class="text-[11px] text-gray-400 dark:text-gray-500">{$t(`assets.panels.${panel.id}Hint`)}</p>
+                        </header>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {#each panel.items as asset (asset.id)}
+                                <AssetCard
+                                    asset={{
+                                        id: asset.id,
+                                        display_name: asset.display_name,
+                                        currency: asset.currency,
+                                        icon_url: asset.icon_url,
+                                        asset_type: asset.asset_type,
+                                        provider_code: asset.provider_code,
+                                        active: asset.active,
+                                    }}
+                                    txCount={asset.tx_count ?? 0}
+                                    livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
+                                    livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
+                                    deltaPercent={asset.deltaPercent}
+                                    deltaAbs={asset.deltaAbs}
+                                    dateStart={urlDateStart}
+                                    dateEnd={urlDateEnd}
+                                    chartSettings={getSettingsForPair(`asset-${asset.id}`, 'assets')}
+                                    renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
+                                    chartData={asset.chartData}
+                                    loading={asset.loadingPrices}
+                                    syncing={syncingAssetIds.has(asset.id)}
+                                    onsync={handleSyncAsset}
+                                    onrefresh={handleRefreshAsset}
+                                    ondelete={handleDeleteAsset}
+                                    onmerge={handleMergeAsset}
+                                    onsettings={handleCardSettings}
+                                />
+                            {/each}
+                        </div>
+                    </section>
+                {/if}
             {/each}
         </div>
     {:else}

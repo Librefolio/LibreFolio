@@ -75,7 +75,9 @@
     "showActive": "Active",
     "table": {
       "lastPrice": "Last Price",
-      "quoteBaseQuantity": "Units/quote"
+      "quoteBaseQuantity": "Units/quote",
+      "txCount": "Tx",
+      "txCountTooltip": "Transactions using this asset. Green: in brokers you own. Blue: only in other users' brokers. Gray: none — the asset is saved but unused."
     },
     "empty": {
       "noAssets": "No assets yet",
@@ -327,7 +329,15 @@
     "status": {
       "archived": "Archived"
     },
-    "lastPrice": "Last Price"
+    "lastPrice": "Last Price",
+    "panels": {
+      "own": "Your assets",
+      "ownHint": "With transactions in brokers you own",
+      "others": "Other users' assets",
+      "othersHint": "With transactions you do not own",
+      "analysis": "Under analysis",
+      "analysisHint": "Saved but never used in any transaction"
+    }
   },
   "auth": {
     "login": "Login",
@@ -651,7 +661,9 @@
         "fee": "Commission",
         "tax": "Taxes and duties",
         "accrued": "Accrued interest"
-      }
+      },
+      "reportIssueHint": "If a row keeps looking wrong, it may be an importer bug rather than your data:",
+      "reportIssueLink": "open an issue on GitHub"
     },
     "duplicatesStepIntro": "Some rows appear in more than one of the files you are importing: pick which copy to keep. The comparison against your database has already been redone on the corrected rows and reaches the review step ready.",
     "duplicateRecheckFailed": "Could not re-check for duplicates ({error}). The result shown is the one computed before your corrections.",
@@ -799,7 +811,17 @@
       "loadFailedBlocking": "Could not load current sharing settings. Saving is disabled until you retry successfully.",
       "saveRequiresLoadedAccess": "Load the current sharing settings before saving. Use Retry.",
       "lastOwnerRemovalWarning": "Cannot remove the last owner. Promote another owner first, or delete the broker from the broker list; if it has transactions, use force delete to delete them too.",
-      "lastOwnerDemotionWarning": "Cannot demote the last owner. Promote another owner first."
+      "lastOwnerDemotionWarning": "Cannot demote the last owner. Promote another owner first.",
+      "yourAccess": "Your access",
+      "leaveBroker": "Leave broker",
+      "leaveConfirm": "Remove your access to this broker? You will no longer see it in your lists.",
+      "demoteToViewer": "Switch to viewer",
+      "demoteConfirm": "Demote yourself to viewer? You will no longer be able to edit this broker's data. An owner can promote you again.",
+      "leaveAndDelete": "Leave and delete broker",
+      "leaveLastOwnerWarning": "You are the only owner: leaving deletes this broker with all its reports and transactions. This cannot be undone.",
+      "leaveDone": "You left the broker",
+      "leaveDeletedBroker": "Broker deleted: you were the last owner",
+      "selfDemoteDone": "You are now a viewer"
     },
     "lots": {
       "unifiedLots": "Lots",
@@ -2760,12 +2782,12 @@
       },
       "asset": {
         "position_and_history": {
-          "display": "Asset Position & History",
-          "description": "Asset positions, cost, value, P&L, performance, economic lots, compact market context, drawdown, and provenance."
+          "display": "Position & Market History (full)",
+          "description": "Your holdings on this asset — cost, value, P&L, performance, economic lots — plus compact market context, drawdown, and provenance. The complete export."
         },
         "market_history": {
-          "display": "Asset Market History",
-          "description": "Asset prices, returns, indicators, states, events, drawdown, coverage, and provenance."
+          "display": "Market History Only (no holdings)",
+          "description": "Prices, returns, indicators, states, events, drawdown, coverage, and provenance — market data only, no holdings. The lighter export."
         },
         "overview": {
           "display": "Asset Overview",
@@ -3064,5 +3086,18 @@
       "title": "Risk Analysis is in beta.",
       "description": "Calculations, results, and the interface may change before the stable release."
     }
+  },
+  "updateCheck": {
+    "title": "New version available",
+    "message": "LibreFolio {latest} has been released — this installation is running {current}.",
+    "guideLink": "How to update",
+    "releaseLink": "Release notes on GitHub",
+    "laterButton": "Remind me later",
+    "skipVersion": "Skip this version"
+  },
+  "changelog": {
+    "title": "Changelog",
+    "viewRemote": "View on GitHub",
+    "empty": "No changelog is bundled with this build."
   }
 }

@@ -574,7 +574,17 @@
             </div>
         {:else if activeTab === 'posizioni'}
             <div data-testid="broker-holdings">
-                <PositionsPanel summary={portfolioSummary} contribution={positionsContribution} loading={reportLoading && !portfolioSummary} {contributionLoading} assetsHref="/assets" brokers={panelBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
+                <PositionsPanel
+                    summary={portfolioSummary}
+                    contribution={positionsContribution}
+                    loading={reportLoading && !portfolioSummary}
+                    {contributionLoading}
+                    assetsHref="/assets"
+                    brokers={panelBrokers}
+                    onRequestContribution={loadContribution}
+                    onAnalyze={openAssetPanel}
+                    analyzedAssetId={activeAssetId}
+                />
                 <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
             </div>
         {:else if activeTab === 'rischio'}

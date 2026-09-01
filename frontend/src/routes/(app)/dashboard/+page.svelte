@@ -25,7 +25,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
 
     import {fetchReport, invalidate, type PortfolioReport, type PortfolioSummary, type PortfolioHistoryPoint, type AllocationHistoryDimensions, type PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getAccessibleBrokers} from '$lib/stores/reference/brokerStore';
+    import {ensureBrokersLoaded, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
@@ -175,8 +175,13 @@
      */
     const allBrokersSelected = $derived(selectedBrokerIds.length > 0 && selectedBrokerIds.length >= allBrokers.length);
 
-    /** Which broker IDs to pass to the API (undefined = all). */
-    const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : undefined);
+    /** Owned broker IDs (F2: the dashboard only aggregates brokers the user owns,
+     *  scaled by share; a 0% share behaves like editor/viewer and is excluded). */
+    const ownedBrokerIds = $derived(allBrokers.map((b) => b.id));
+
+    /** Which broker IDs to pass to the API — always the explicit owned set, so the
+     *  backend never falls back to "every accessible broker" for the dashboard. */
+    const activeBrokerIds = $derived(!allBrokersSelected && selectedBrokerIds.length > 0 ? selectedBrokerIds : ownedBrokerIds.length > 0 ? ownedBrokerIds : undefined);
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu. */
     let aiExportCompatibility = $state<AiExportCatalogCompatibilityResult>(DISABLED_AI_EXPORT_COMPATIBILITY);
@@ -251,6 +256,12 @@
     });
 
     async function loadTransactions() {
+        // F2: nothing owned → the dashboard (including this tab) shows nothing.
+        if (ownedBrokerIds.length === 0) {
+            txMainRows = [];
+            txPartnerRows = [];
+            return;
+        }
         txLoading = true;
         try {
             // Server-side filter: date range always applied; broker_id per-broker (the endpoint
@@ -498,8 +509,15 @@
         void loadAiExportCompatibility();
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
-            allBrokers = getAccessibleBrokers();
-            await loadAll();
+            // F2: dashboard scope = owned brokers only (share > 0). A user who owns
+            // nothing (viewer/editor elsewhere, or fresh install) gets an empty
+            // dashboard — no fetch, so viewer/editor data never leaks into totals.
+            allBrokers = getOwnedBrokers();
+            if (allBrokers.length > 0) {
+                await loadAll();
+            } else {
+                reportLoading = false;
+            }
         })();
         return () => document.removeEventListener('click', handleDocumentClick);
     });
@@ -702,7 +720,7 @@
         </div>
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
-            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} />
+            <PositionsPanel {summary} contribution={positionsContribution} loading={summaryLoading} {contributionLoading} {assetsHref} brokers={allBrokers} onRequestContribution={loadContribution} onAnalyze={openAssetPanel} analyzedAssetId={activeAssetId} />
             <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)} brokers={allBrokers} currency={activeAsset?.currency ?? appliedCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} />
         </div>
     {:else if activeTab === 'rischio'}

@@ -71,7 +71,7 @@ defaults.
 
 ### E2E and runner cutover
 
-- The former monolithic `frontend/e2e/ai-export.spec.ts` was removed. Coverage is split into panel, catalog, memory, and request/clipboard contract specs with shared helpers.
+- The former monolithic `frontend/e2e/ai-export/` was removed. Coverage is split into panel, catalog, memory, and request/clipboard contract specs with shared helpers.
 - The test runner exposes focused `panel`, `catalog`, `memory`, and `contract` actions. The `cutover` compatibility alias runs all four concern specs, while `all` runs unit coverage followed by the complete E2E set.
 
 ## Consequences

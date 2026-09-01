@@ -75,7 +75,9 @@
     "showActive": "Actifs",
     "table": {
       "lastPrice": "Dernier Prix",
-      "quoteBaseQuantity": "Unités/cotation"
+      "quoteBaseQuantity": "Unités/cotation",
+      "txCount": "Tx",
+      "txCountTooltip": "Transactions utilisant cet actif. Vert : dans des courtiers que vous possédez. Bleu : uniquement dans les courtiers d'autres utilisateurs. Gris : aucune — actif enregistré mais jamais utilisé."
     },
     "empty": {
       "noAssets": "Aucun actif",
@@ -327,7 +329,15 @@
     "status": {
       "archived": "Archivé"
     },
-    "lastPrice": "Dernier Prix"
+    "lastPrice": "Dernier Prix",
+    "panels": {
+      "own": "Vos actifs",
+      "ownHint": "Avec des transactions dans des courtiers que vous possédez",
+      "others": "Actifs des autres utilisateurs",
+      "othersHint": "Avec des transactions qui ne sont pas les vôtres",
+      "analysis": "À l'étude",
+      "analysisHint": "Enregistrés mais jamais utilisés dans une transaction"
+    }
   },
   "auth": {
     "login": "Connexion",
@@ -651,7 +661,9 @@
         "fee": "Commissions",
         "tax": "Impôts et taxes",
         "accrued": "Coupon couru"
-      }
+      },
+      "reportIssueHint": "Si une ligne semble toujours incorrecte, il peut s'agir d'un bug de l'importateur plutôt que de vos données :",
+      "reportIssueLink": "ouvrez une issue sur GitHub"
     },
     "duplicatesStepIntro": "Certaines lignes figurent dans plusieurs des fichiers que vous importez : choisissez la copie à garder. La comparaison avec votre base a déjà été refaite sur les lignes corrigées et arrive prête à la révision.",
     "duplicateRecheckFailed": "Impossible de revérifier les doublons ({error}). Le résultat affiché est celui calculé avant vos corrections.",
@@ -799,7 +811,17 @@
       "loadFailedBlocking": "Impossible de charger les paramètres de partage actuels. L’enregistrement est désactivé tant qu’une nouvelle tentative n’a pas réussi.",
       "saveRequiresLoadedAccess": "Chargez les paramètres de partage actuels avant d’enregistrer. Utilisez Réessayer.",
       "lastOwnerRemovalWarning": "Impossible de supprimer le dernier owner. Promouvez d’abord un autre owner, ou supprimez le broker depuis la liste des brokers ; s’il a des transactions, utilisez la suppression forcée pour les supprimer aussi.",
-      "lastOwnerDemotionWarning": "Impossible de rétrograder le dernier owner. Promouvez d’abord un autre owner."
+      "lastOwnerDemotionWarning": "Impossible de rétrograder le dernier owner. Promouvez d’abord un autre owner.",
+      "yourAccess": "Votre accès",
+      "leaveBroker": "Quitter le courtier",
+      "leaveConfirm": "Supprimer votre accès à ce courtier ? Vous ne le verrez plus dans vos listes.",
+      "demoteToViewer": "Passer en lecteur",
+      "demoteConfirm": "Vous rétrograder en lecteur ? Vous ne pourrez plus modifier les données de ce courtier. Un propriétaire peut vous promouvoir à nouveau.",
+      "leaveAndDelete": "Quitter et supprimer le courtier",
+      "leaveLastOwnerWarning": "Vous êtes le seul propriétaire : en quittant, vous supprimerez ce courtier avec tous ses rapports et transactions. Cette action est irréversible.",
+      "leaveDone": "Vous avez quitté le courtier",
+      "leaveDeletedBroker": "Courtier supprimé : vous étiez le dernier propriétaire",
+      "selfDemoteDone": "Vous êtes maintenant lecteur"
     },
     "lots": {
       "buyDate": "Date d'Achat",
@@ -2760,12 +2782,12 @@
       },
       "asset": {
         "position_and_history": {
-          "display": "Actif, position et évolution",
-          "description": "Positions, coût, valeur, P&L, performance, lots économiques, contexte de marché compact, drawdown et provenance de l'actif."
+          "display": "Position et historique (complet)",
+          "description": "Vos positions sur cet actif — coût, valeur, P&L, performance, lots économiques — plus contexte de marché compact, drawdown et provenance. L'export complet."
         },
         "market_history": {
-          "display": "Historique et données techniques de l'actif",
-          "description": "Prix, rendements, indicateurs, états, événements, drawdown, couverture et provenance de l'actif."
+          "display": "Historique de marché uniquement (sans positions)",
+          "description": "Prix, rendements, indicateurs, états, événements, drawdown, couverture et provenance — données de marché uniquement, sans positions. L'export léger."
         },
         "overview": {
           "display": "Vue d’ensemble de l’actif",
@@ -3064,5 +3086,18 @@
       "title": "L'analyse des risques est en version bêta.",
       "description": "Les calculs, les résultats et l'interface peuvent évoluer avant la version stable."
     }
+  },
+  "updateCheck": {
+    "title": "Nouvelle version disponible",
+    "message": "LibreFolio {latest} est disponible — cette installation exécute la {current}.",
+    "guideLink": "Comment mettre à jour",
+    "releaseLink": "Notes de version sur GitHub",
+    "laterButton": "Me le rappeler plus tard",
+    "skipVersion": "Ignorer cette version"
+  },
+  "changelog": {
+    "title": "Journal des modifications",
+    "viewRemote": "Voir sur GitHub",
+    "empty": "Aucun journal des modifications inclus dans cette build."
   }
 }

@@ -56,11 +56,13 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
+/* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px).
+   Inputs deliberately sized for dense toolbars (e.g. the DateRangePicker date
+   fields) carry .zoom-guard-exempt — forcing 16px there breaks the layout. */
 @media (max-width: 768px) {
-    input,
-    select,
-    textarea {
+    input:not(.zoom-guard-exempt),
+    select:not(.zoom-guard-exempt),
+    textarea:not(.zoom-guard-exempt) {
         font-size: 16px !important;
     }
 }

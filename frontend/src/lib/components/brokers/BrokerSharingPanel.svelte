@@ -21,7 +21,10 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import {tick} from 'svelte';
+    import {goto} from '$app/navigation';
     import {zodiosApi} from '$lib/api';
+    import {auth} from '$lib/stores/app/auth';
     import {trySave} from '$lib/utils/trySave';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {Check, ChevronDown, Crown, Eye, Loader2, Pencil, Plus, RotateCcw, Save, Trash2, X} from 'lucide-svelte';
@@ -98,6 +101,11 @@
     let confirmRemoveUsername = '';
     let confirmRemoveUserId: number | null = null;
 
+    // Self-service state (F4): leave broker / self-demote
+    let confirmLeaveOpen = false;
+    let confirmDemoteOpen = false;
+    let selfActionBusy = false;
+
     // =========================================================================
     // Computed
     // =========================================================================
@@ -127,6 +135,55 @@
     // Users still addable: exclude anyone already granted access locally.
     $: selectableUsers = availableUsers.filter((u) => !existingUserIds.has(u.id));
     $: selectedUser = selectableUsers.find((u) => u.id === selectedUserId) ?? null;
+
+    // =========================================================================
+    // Self-service (F4): the current user can always leave; an EDITOR can also
+    // demote themselves to VIEWER. The last OWNER leaving cascade-deletes the
+    // broker (confirmed semantics) — the UI presents that as a danger action.
+    // =========================================================================
+    $: currentUserId = $auth.user?.id ?? null;
+    $: selfEntry = currentUserId != null ? (accesses.find((a) => a.user_id === currentUserId) ?? null) : null;
+    $: selfIsLastOwner = selfEntry?.role === 'OWNER' && owners.length <= 1;
+
+    async function handleSelfDemote() {
+        if (selfActionBusy) return;
+        selfActionBusy = true;
+        try {
+            await zodiosApi.update_own_broker_role_api_v1_brokers__broker_id__access_me_patch({role: 'VIEWER'}, {params: {broker_id: brokerId}});
+            confirmDemoteOpen = false;
+            toasts.success($_('brokers.sharing.selfDemoteDone'));
+            await loadAccesses();
+            onChanged?.();
+        } catch {
+            toasts.error($_('brokers.sharing.saveFailed'));
+        } finally {
+            selfActionBusy = false;
+        }
+    }
+
+    async function handleSelfLeave() {
+        if (selfActionBusy) return;
+        selfActionBusy = true;
+        try {
+            const res = await zodiosApi.leave_broker_access_api_v1_brokers__broker_id__access_me_delete(undefined, {params: {broker_id: brokerId}});
+            confirmLeaveOpen = false;
+            if (res.broker_deleted) {
+                toasts.success($_('brokers.sharing.leaveDeletedBroker'));
+                onChanged?.();
+                // The broker no longer exists — leave any page that assumes it does
+                goto('/brokers');
+            } else {
+                toasts.success($_('brokers.sharing.leaveDone'));
+                onChanged?.();
+                // Access lost — back to the broker list
+                goto('/brokers');
+            }
+        } catch {
+            toasts.error($_('brokers.sharing.saveFailed'));
+        } finally {
+            selfActionBusy = false;
+        }
+    }
     $: canEditAccess = !readOnly && accessLoadState === 'ready';
 
     // For add form: max share available
@@ -333,8 +390,10 @@
             toasts.success($_('brokers.sharing.saved'));
             saving = false;
             // Mirrors the modal's previous auto-close-on-save behavior. No-op when embedded
-            // (onCancel undefined) — hasChanges is already false at this point so, when
-            // provided, onCancel (typically handleRequestClose) closes without confirming.
+            // (onCancel undefined). `hasChanges` recomputes only on the next flush, so without
+            // `await tick()` a bound modal wrapper would still see it as true and pop the
+            // unsaved-changes confirmation right after a successful save (beta feedback F3).
+            await tick();
             onCancel?.();
             return;
         }
@@ -574,6 +633,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- Self-service (F4): leave / self-demote — always available, even readOnly -->
+        {#if selfEntry}
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700/40 px-3 py-2" data-testid="sharing-self-service">
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                    {$_('brokers.sharing.yourAccess')}: <span class="font-medium text-gray-700 dark:text-gray-200">{getRoleShortLabel(selfEntry.role)}</span>
+                </span>
+                <div class="flex items-center gap-2">
+                    {#if selfEntry.role === 'EDITOR'}
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                            disabled={selfActionBusy}
+                            on:click={() => (confirmDemoteOpen = true)}
+                            data-testid="sharing-self-demote-btn"
+                        >
+                            <Eye size={13} />
+                            {$_('brokers.sharing.demoteToViewer')}
+                        </button>
+                    {/if}
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 {selfIsLastOwner
+                            ? 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+                            : 'border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600'}"
+                        disabled={selfActionBusy}
+                        on:click={() => (confirmLeaveOpen = true)}
+                        data-testid="sharing-self-leave-btn"
+                    >
+                        <Trash2 size={13} />
+                        {selfIsLastOwner ? $_('brokers.sharing.leaveAndDelete') : $_('brokers.sharing.leaveBroker')}
+                    </button>
+                </div>
+            </div>
+        {/if}
 
         <!-- Action row: [Cancel/Close if provided] [Save Configuration] -->
         {#if !readOnly}
@@ -872,3 +966,17 @@
         {/if}
     </ModalBase>
 {/if}
+
+<!-- Self-service confirms (F4) — outside the readOnly guard: they must work
+     for VIEWER/EDITOR embeddings too -->
+<ConfirmModal danger={false} message={$_('brokers.sharing.demoteConfirm')} onCancel={() => (confirmDemoteOpen = false)} onConfirm={handleSelfDemote} open={confirmDemoteOpen} title={$_('brokers.sharing.demoteToViewer')} zIndex={70} />
+
+<ConfirmModal
+    danger={selfIsLastOwner}
+    message={selfIsLastOwner ? $_('brokers.sharing.leaveLastOwnerWarning') : $_('brokers.sharing.leaveConfirm')}
+    onCancel={() => (confirmLeaveOpen = false)}
+    onConfirm={handleSelfLeave}
+    open={confirmLeaveOpen}
+    title={selfIsLastOwner ? $_('brokers.sharing.leaveAndDelete') : $_('brokers.sharing.leaveBroker')}
+    zIndex={70}
+/>

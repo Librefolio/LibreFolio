@@ -116,9 +116,11 @@
         if (!Number.isFinite(prevTotalPnl) || Math.abs(prevTotalPnl) < 0.01) return null;
         return ((pnlDeltaDay / prevTotalPnl) * 100).toFixed(2);
     });
-    const simpleRoiPct = $derived.by(() => {
+    // Absolute (since-inception) ROI next to the absolute total P&L in Card 3 —
+    // period ROI (simple_roi_percent) belongs to Card 2's period-based returns only.
+    const absRoiPct = $derived.by(() => {
         if (!summary) return null;
-        const roi = parseFloat(summary.simple_roi_percent);
+        const roi = parseFloat(summary.total_gain_loss_percent);
         if (!Number.isFinite(roi)) return null;
         return (roi * 100).toFixed(2);
     });
@@ -332,8 +334,8 @@
             {#if totalPnlAmt != null}
                 <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-total-pnl-delta">
                     <TweenedValue value={totalPnlAmt} format={fmtMoney} />
-                    {#if simpleRoiPct != null}
-                        <span> ({parseFloat(simpleRoiPct) >= 0 ? '+' : ''}{simpleRoiPct}%)</span>
+                    {#if absRoiPct != null}
+                        <span> ({parseFloat(absRoiPct) >= 0 ? '+' : ''}{absRoiPct}%)</span>
                     {/if}
                 </p>
             {/if}

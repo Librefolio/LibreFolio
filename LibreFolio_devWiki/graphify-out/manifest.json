@@ -1059,11 +1059,6 @@
     "ast_hash": "d2a2c834de64d386f3dca9285fcd1f42",
     "semantic_hash": "d2a2c834de64d386f3dca9285fcd1f42"
   },
-  "wiki/sources/phase07-part4-round5.md": {
-    "mtime": 1779357383.0647328,
-    "ast_hash": "0ae1696557af8c2d3ee97caf45a4ad7f",
-    "semantic_hash": "0ae1696557af8c2d3ee97caf45a4ad7f"
-  },
   "wiki/sources/phase07-part3-api-consolidation.md": {
     "mtime": 1777316019.486006,
     "ast_hash": "ae06778dccd4695f6926dae879ba45f2",
@@ -1258,11 +1253,6 @@
     "mtime": 1779357383.0610032,
     "ast_hash": "112ac34a4b44c67ac566a9a455e414f0",
     "semantic_hash": "112ac34a4b44c67ac566a9a455e414f0"
-  },
-  "wiki/sources/phase07-part4-round3.md": {
-    "mtime": 1779357383.0613477,
-    "ast_hash": "33e5c3c361e36d76ff5747e2614e2626",
-    "semantic_hash": "33e5c3c361e36d76ff5747e2614e2626"
   },
   "wiki/sources/phase06-step3-rounds.md": {
     "mtime": 1777316019.4848337,
@@ -1814,5 +1804,460 @@
     "mtime": 1785916840.6896462,
     "ast_hash": "",
     "semantic_hash": "8f39f4ed8c1550f682bfb884a837ab02"
+  },
+  "corpus/mkdocs-en/docs/admin/cli_tools.en.md": {
+    "mtime": 1785937239.2550223,
+    "ast_hash": "24b4c30012c10badb1208cc78cec4d35",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/admin/docker_advanced.en.md": {
+    "mtime": 1784420108.7225087,
+    "ast_hash": "1dee9b50a92b693cd5afa20d714d3dd6",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/admin/filesystem.en.md": {
+    "mtime": 1785926302.8076699,
+    "ast_hash": "80aa819d5ea2a509e1e11f533ccbacf4",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/admin/index.en.md": {
+    "mtime": 1784420108.7260084,
+    "ast_hash": "5da288743c2f1cd9b8a766e4e47729be",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/admin/settings.en.md": {
+    "mtime": 1785926201.3819196,
+    "ast_hash": "24bbb7bea800ab7eb9129ead7a7f79a1",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/community/contribute.en.md": {
+    "mtime": 1784886408.5455766,
+    "ast_hash": "5b5a0932d27efc1982c898d43d21a999",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/community/credits-legal.en.md": {
+    "mtime": 1785915261.6925735,
+    "ast_hash": "e59c4a1f04a3925f526eb7df243bedd7",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/community/faq.en.md": {
+    "mtime": 1785926201.4138615,
+    "ast_hash": "dec6804e0d00669940337468ae1e9c7c",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/developer/architecture/patterns/ai_export_composition.md": {
+    "mtime": 1785915994.4872751,
+    "ast_hash": "3f834739b6ddd60f28848222baa6abcd",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/developer/architecture/patterns/ai_export_sampling.md": {
+    "mtime": 1785856932.0365415,
+    "ast_hash": "9543c67604023557913ecc4d79dce727",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/developer/architecture/patterns/ai_export_snapshot.md": {
+    "mtime": 1785915957.1687896,
+    "ast_hash": "f5939453629642c0e414f3a1ca225f06",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/fundamentals/day-count.en.md": {
+    "mtime": 1776003950.4842176,
+    "ast_hash": "aee76e161695c46a6016b72f60a40bd0",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/fundamentals/index.en.md": {
+    "mtime": 1776003950.4852808,
+    "ast_hash": "df8aed36228279d09f87b02e37ae4654",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/fundamentals/returns.en.md": {
+    "mtime": 1782036533.9234798,
+    "ast_hash": "290cf2613c5e722f6e967dafb3cfc49d",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/fundamentals/taxation.en.md": {
+    "mtime": 1776003950.4871318,
+    "ast_hash": "216b7917e814b55ef42dd608079228e8",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/index.en.md": {
+    "mtime": 1782036533.926577,
+    "ast_hash": "eeb0db5fcff0552e96b51837ab5abeeb",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-events/dividend.en.md": {
+    "mtime": 1782036533.9277577,
+    "ast_hash": "85f141272a3fe135343b16ce36677ad6",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-events/index.en.md": {
+    "mtime": 1776073542.557938,
+    "ast_hash": "04a7c287e8c9c9ece3aa1272e14254b9",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-events/interest.en.md": {
+    "mtime": 1782036533.9366138,
+    "ast_hash": "7a926521dcda3c297ec69b73842ca681",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-events/maturity-settlement.en.md": {
+    "mtime": 1776003950.493042,
+    "ast_hash": "18925edc9023669bcd71d0d8a7ca04e0",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-events/price-adjustment.en.md": {
+    "mtime": 1776003950.4940884,
+    "ast_hash": "4dce6d9b7e67eba0610c861fa3c5fbcc",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-events/split.en.md": {
+    "mtime": 1776003950.4949043,
+    "ast_hash": "fb919ca32ee09cd778df84231ec2ba20",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/bonds.en.md": {
+    "mtime": 1776361038.7762294,
+    "ast_hash": "067367a2b0bdab1adde34f9c26ba2b31",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/commodities.en.md": {
+    "mtime": 1782036533.94019,
+    "ast_hash": "d5e137b9ba2ed8bfdae9b23f7f22b11f",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/crypto.en.md": {
+    "mtime": 1782036533.9420943,
+    "ast_hash": "69a1fe152721c798cf36e53a8d071c86",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/etfs.en.md": {
+    "mtime": 1776361038.780648,
+    "ast_hash": "33cf9bc49800e64c16eb0322c3f73a92",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/index-benchmark.en.md": {
+    "mtime": 1785926181.826464,
+    "ast_hash": "aadf6898308766fc0e3a8cb6729ba8ef",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/index.en.md": {
+    "mtime": 1784420108.7317479,
+    "ast_hash": "3879b29a1816c6a3140909f1bc1a2411",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/mutual-fund.en.md": {
+    "mtime": 1776361038.786011,
+    "ast_hash": "bb10a1f81bd1c327944e8f4930da053e",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/other.en.md": {
+    "mtime": 1776361038.7877383,
+    "ast_hash": "bc51029f1047cc885f432eba569063ac",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/real-estate.en.md": {
+    "mtime": 1784420108.7333698,
+    "ast_hash": "52b6b879d2c546bbe06cb4874fef7e3f",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/asset-types/stocks.en.md": {
+    "mtime": 1776361038.790836,
+    "ast_hash": "613a0ca7a1df99cd5575bdb78003c30c",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/index.en.md": {
+    "mtime": 1776073542.5022593,
+    "ast_hash": "d42ac3bd5669abca768f81a285cb1467",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/adjustment.en.md": {
+    "mtime": 1785578839.720256,
+    "ast_hash": "6fd611b6bf6d578861cc9b99d1754e54",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/buy-sell.en.md": {
+    "mtime": 1784558656.9351196,
+    "ast_hash": "5fa877e49fe00817a21e58c38ca2678d",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/cash-transfer.en.md": {
+    "mtime": 1782036533.9482644,
+    "ast_hash": "6537ce8c0e9884d7d2749d9c462ed8a0",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/deposit-withdrawal.en.md": {
+    "mtime": 1785926034.5690625,
+    "ast_hash": "65e4efa8744609a5b4b9f6c8d4c1f80b",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/fee.en.md": {
+    "mtime": 1784710066.5751061,
+    "ast_hash": "61add582d08ab33bdc0cc8d3d904945a",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/fx-conversion.en.md": {
+    "mtime": 1782036533.9551384,
+    "ast_hash": "3f196a11d499e94107e3fed3afd7893e",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/index.en.md": {
+    "mtime": 1782036533.95618,
+    "ast_hash": "849dbbb6b3050c751c27d484c9a257df",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/instruments/transaction-types/transfer.en.md": {
+    "mtime": 1785578839.705146,
+    "ast_hash": "ccb7f771d8de46d1d0cc582f40c77520",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/portfolio-theory/asset-allocation.en.md": {
+    "mtime": 1782036533.960962,
+    "ast_hash": "fbd16e2f2d53eda2c46833caac8956bf",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/portfolio-theory/diversification.en.md": {
+    "mtime": 1782036533.9634733,
+    "ast_hash": "e5478b57cb30db437c0f81cffc289bcc",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/portfolio-theory/index.en.md": {
+    "mtime": 1782036533.9648015,
+    "ast_hash": "519a6662ce64b4756def6cabab5e44c2",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/index.en.md": {
+    "mtime": 1784813157.0612667,
+    "ast_hash": "7a4bef4d3b6ff5c44712d44ad7c78675",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/indicators/bollinger-bands.en.md": {
+    "mtime": 1776003950.5233867,
+    "ast_hash": "8c61472deda362133bc07fc6e4cddaa4",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/indicators/ema.en.md": {
+    "mtime": 1776003950.5241928,
+    "ast_hash": "a1e3fe18c0f153b6e2352638e6f91e55",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/indicators/index.en.md": {
+    "mtime": 1784813157.0606577,
+    "ast_hash": "412543314689018b53d64a86cedb39ab",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/indicators/macd.en.md": {
+    "mtime": 1776003950.5259147,
+    "ast_hash": "63599ba586c0dafa23141b03f53dea64",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/indicators/rsi.en.md": {
+    "mtime": 1776003950.5293112,
+    "ast_hash": "46a198efeba7c6d3746630169eab91a0",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/synthetic-benchmarks/compound.en.md": {
+    "mtime": 1776003950.5302966,
+    "ast_hash": "a858618028b1f383d7cd72b3b4311333",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/synthetic-benchmarks/index.en.md": {
+    "mtime": 1785926221.415902,
+    "ast_hash": "3283b7fc1a6b03e262060e8ac43453f3",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/synthetic-benchmarks/linear.en.md": {
+    "mtime": 1776003950.5317788,
+    "ast_hash": "906d7e040b4477520c62bbc1c0c57fae",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/financial-theory/technical-analysis/synthetic-benchmarks/sine-wave.en.md": {
+    "mtime": 1776003950.53252,
+    "ast_hash": "bc92382e12a0f3aca07ddab913a8a6e9",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/gallery/desktop.en.md": {
+    "mtime": 1784558656.9440017,
+    "ast_hash": "1ccc6c0538aaa647f700955ce2a06a72",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/gallery/index.en.md": {
+    "mtime": 1776003950.5371633,
+    "ast_hash": "66dfac4fd9c1e3819e8dad267246027f",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/gallery/mobile.en.md": {
+    "mtime": 1784558656.9450443,
+    "ast_hash": "11bfa155da8e378d96aaa30398ca9714",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/index.en.md": {
+    "mtime": 1784886771.997365,
+    "ast_hash": "764a1270aa3ebf308430018294516d9f",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/ai-export/index.en.md": {
+    "mtime": 1785868810.8569503,
+    "ast_hash": "f496a8298bedf5aa581b2b065940227a",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/ai-export/portfolio.en.md": {
+    "mtime": 1785868810.8650713,
+    "ast_hash": "01beef804622f3793d0f538e0ccc861b",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/create-edit.en.md": {
+    "mtime": 1786525103.325352,
+    "ast_hash": "3a897ecdbf75ca7ccc7d3e9cdf0b76c1",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/detail/chart.en.md": {
+    "mtime": 1782142720.846053,
+    "ast_hash": "1c217edc7163d9c432ace92d225a768e",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/detail/classification.en.md": {
+    "mtime": 1782142720.8468106,
+    "ast_hash": "9c77c9de21c94675667e244c18f5c01e",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/detail/data-editor.en.md": {
+    "mtime": 1785926105.7258146,
+    "ast_hash": "3026f4803a744ecf90f68de305699e69",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/detail/events.en.md": {
+    "mtime": 1782142720.8487618,
+    "ast_hash": "472aee41a2a918b59c6ccced84d039e4",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/detail/index.en.md": {
+    "mtime": 1782142720.8493764,
+    "ast_hash": "54196055c94e153b03f08cebf11494ac",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/detail/measures.en.md": {
+    "mtime": 1782142720.850244,
+    "ast_hash": "5f6aa135d2529bcd6dc006b6733d4695",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/detail/signals.en.md": {
+    "mtime": 1785399294.4606323,
+    "ast_hash": "5526c9e32bb877ae55478a02fda1b553",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/index.en.md": {
+    "mtime": 1785926105.7038217,
+    "ast_hash": "ccc3f7cab373745510d3155647e95272",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/providers/css-scraper.en.md": {
+    "mtime": 1783071490.8476393,
+    "ast_hash": "e9560a8248af80ae2f89e92020b22605",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/providers/index.en.md": {
+    "mtime": 1785496103.041256,
+    "ast_hash": "f85d961bec9ab58ac88a2b7a3e1fdd11",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/providers/justetf.en.md": {
+    "mtime": 1785926105.7504785,
+    "ast_hash": "9b47d91b1747e189bb465d059804b44b",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/providers/scheduled-investment.en.md": {
+    "mtime": 1785926221.412886,
+    "ast_hash": "bc1c6ee048a9d621e8f52057b3d9529a",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/assets/providers/yahoo-finance.en.md": {
+    "mtime": 1782142720.8567026,
+    "ast_hash": "0a5ae733446316cac569a79448c5cf6b",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/brokers/index.en.md": {
+    "mtime": 1785160769.3092275,
+    "ast_hash": "42dcfbdf88e7fca00a6885ef087aefd4",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/brokers/sharing.en.md": {
+    "mtime": 1782142720.8581772,
+    "ast_hash": "d76c7bac9b82d91712d33aaf244f9439",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/files/index.en.md": {
+    "mtime": 1783071490.855583,
+    "ast_hash": "cf3a8bfb8802a9ddcda6fecf61d60f8a",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/add-pair.en.md": {
+    "mtime": 1782142720.8613365,
+    "ast_hash": "c3bcf4242fdcf79ad307bed434fb5b7e",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/chart-settings.en.md": {
+    "mtime": 1782142720.861911,
+    "ast_hash": "55380e110f8ddac472bf4c071b562a66",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/detail/chart.en.md": {
+    "mtime": 1782142720.8625534,
+    "ast_hash": "6a1c48ec45894abb328deca57eed6cb6",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/detail/data-editor.en.md": {
+    "mtime": 1782142720.8631651,
+    "ast_hash": "0abd374c230aa7c61028fa2a731f2be1",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/detail/index.en.md": {
+    "mtime": 1782142720.8642042,
+    "ast_hash": "981d81784225ba2375c9e036274f7c35",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/detail/measures.en.md": {
+    "mtime": 1782142720.8648102,
+    "ast_hash": "4ff0a97008505755faf1dddd9ca10ac4",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/detail/provider.en.md": {
+    "mtime": 1782142720.8654401,
+    "ast_hash": "31742e77c8e232dbd6cb73d5ff58bf58",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/detail/signals.en.md": {
+    "mtime": 1785399294.465566,
+    "ast_hash": "6c417b383d49119d088b12dce5b6dee6",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/index.en.md": {
+    "mtime": 1782142720.8674526,
+    "ast_hash": "101a19d29c707fdeb5039dba44bd8dee",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/fx/sync.en.md": {
+    "mtime": 1782142720.8740933,
+    "ast_hash": "a6e040c86b6ee3579e7c52d06ac09bf0",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/getting-started.en.md": {
+    "mtime": 1783071490.8584783,
+    "ast_hash": "b1b26be3a24907cfa6088f0743c7ec2a",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/index.en.md": {
+    "mtime": 1782142720.8760457,
+    "ast_hash": "c231f39ca1d1ab163f7c49add980a4af",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/installation.en.md": {
+    "mtime": 1785926201.3967948,
+    "ast_hash": "db7bba68b3fe268d096ac49bf7c51ec8",
+    "semantic_hash": ""
+  },
+  "corpus/mkdocs-en/docs/user/misc/image-crop.en.md": {
+    "mtime": 1785926105.7600598,
+    "ast_hash": "404ac1243c6b6ef13fefc498e4fe2ca0",
+    "semantic_hash": ""
   }
 }

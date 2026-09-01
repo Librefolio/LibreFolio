@@ -70,7 +70,7 @@ No open problems. F-056, F-057, and F-058 are all implemented and correct. The F
 | FIFO engine | `backend/app/services/transaction_service.py` |
 | Currency conversion | `backend/app/services/fx.py` |
 | FX conversion API | `backend/app/api/v1/fx.py` |
-| ROI utilities (TWRR/MWRR) | `backend/app/utils/roi_utils.py` |
+| ROI utilities (TWRR/MWRR) | `backend/app/utils/financial/roi_utils.py` |
 | DB models (Transaction, FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | Currency graph store (frontend) | `frontend/src/lib/stores/currencyGraphStore.ts` |
 | FIFO decision | `LibreFolio_devWiki/wiki/decisions/fifo-runtime-decision.md` |

@@ -71,8 +71,8 @@ graph TD
 | App layout | `frontend/src/routes/(app)/+layout.svelte` |
 | Header | `frontend/src/lib/components/layout/Header.svelte` |
 | Sidebar | `frontend/src/lib/components/layout/Sidebar.svelte` |
-| Theme store | `frontend/src/lib/stores/themeStore.svelte.ts` |
-| Language store | `frontend/src/lib/stores/language.ts` |
+| Theme store | `frontend/src/lib/stores/app/themeStore.ts` |
+| Language store | `frontend/src/lib/stores/app/language.ts` |
 | i18n translations | `frontend/src/lib/i18n/{en,it,fr,es}.json` |
 | Global settings API | `backend/app/api/v1/settings.py` |
 | Global settings service | `backend/app/services/global_settings_service.py` |

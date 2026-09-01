@@ -37,6 +37,8 @@
 
     interface Props {
         asset: AssetData;
+        /** F15 — transactions using this asset; shown as a small badge on the header. */
+        txCount?: number;
         /** Live current price (from bulk current-price endpoint) */
         livePrice?: number | null;
         /** Direction of last price change (for flash animation) */
@@ -70,6 +72,7 @@
 
     let {
         asset,
+        txCount = undefined,
         livePrice = null,
         livePriceDirection = 'neutral',
         deltaPercent = null,
@@ -224,6 +227,11 @@
                     <Percent size={14} />
                 </button>
                 <span class="w-2 h-2 rounded-full shrink-0 {asset.active ? 'bg-emerald-500' : 'bg-red-400'}"></span>
+                {#if txCount !== undefined}
+                    <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.table.txCountTooltip')} data-testid="asset-card-tx-count">
+                        {txCount} tx
+                    </span>
+                {/if}
             </div>
         </div>
     </div>

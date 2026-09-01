@@ -162,7 +162,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | Custom analysis panel and manual links | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte` |
 | Snapshot/full-prompt normalization | `frontend/src/lib/features/ai-export/aiExportOptions.ts` |
 | Short-lived contextual memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts` |
-| Body portal and locale-owned panel session | `frontend/src/lib/features/ai-export/AiExportMenuV2.svelte` |
+| Body portal and locale-owned panel session | `frontend/src/lib/features/ai-export/AiExportMenu.svelte` |
 | Locale mapping | `frontend/src/lib/features/ai-export/ui.ts` |
 | Client-session user isolation | `frontend/src/lib/stores/app/clientSession.ts`, `frontend/src/lib/stores/app/auth.ts` |
 | Shared book-link fallback | `frontend/src/lib/components/ui/DocsLink.svelte` |

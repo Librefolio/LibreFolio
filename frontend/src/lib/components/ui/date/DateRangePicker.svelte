@@ -1210,7 +1210,7 @@
                     data-testid="date-range-custom-amount"
                     min="1"
                     max="999"
-                    class="w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    class="zoom-guard-exempt w-8 px-0.5 py-0.5 text-xs text-center border-none bg-transparent text-amber-700 dark:text-amber-300 focus:ring-0 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <SimpleSelect value={customGranularity} options={granularitySelectOptions} onchange={handleGranularityChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} />
             </div>
@@ -1311,7 +1311,7 @@
                         inputmode="numeric"
                         autocomplete="off"
                         spellcheck="false"
-                        class="min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {startInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {startInvalid ? 'text-red-600 dark:text-red-400' : ''}"
                         value={fieldText('start')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-start"
@@ -1342,7 +1342,7 @@
                         inputmode="numeric"
                         autocomplete="off"
                         spellcheck="false"
-                        class="min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {endInvalid ? 'text-red-600 dark:text-red-400' : ''}"
+                        class="zoom-guard-exempt min-w-0 flex-1 border-none bg-transparent p-0 font-mono {compact ? 'text-[10px]' : 'text-xs'} text-gray-700 outline-none dark:text-gray-200 {endInvalid ? 'text-red-600 dark:text-red-400' : ''}"
                         value={fieldText('end')}
                         title={$_('datePicker.formatHint')}
                         data-testid="date-range-input-end"

@@ -950,7 +950,7 @@
                             <div class="header-content" style={column.align === 'center' ? 'justify-content:center' : column.align === 'right' ? 'justify-content:flex-end' : ''}>
                                 {#if getColumnTooltip(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
-                                    <Tooltip text={tooltipText} position="bottom">
+                                    <Tooltip text={tooltipText} position="top">
                                         <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
                                             {#if getColumnHeaderHtml(column)}
                                                 <span class="header-text">{@html getColumnHeaderHtml(column)}</span>
@@ -995,7 +995,7 @@
                                 {#if getColumnTooltip(column) && getColumnTooltipUrl(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
                                     {@const tooltipUrl = getColumnTooltipUrl(column)}
-                                    <Tooltip text={tooltipText} position="bottom" math={tooltipText.includes('$')}>
+                                    <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
                                         <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" onclick={(e) => e.stopPropagation()}>
                                             <Info size={12} />
                                         </a>
@@ -1796,6 +1796,24 @@
 
     :global(tr.highlighted) td {
         border-bottom-color: #e9d5ff;
+    }
+
+    /* Row whose lot-analysis panel is currently open (F9) — steady emerald
+       tint, no pulse (persistent state, not a navigation flash) */
+    tbody :global(tr.row-analyzed) {
+        background: #ecfdf5;
+    }
+
+    tbody :global(tr.row-analyzed):hover {
+        background: #d1fae5;
+    }
+
+    :global(.dark) tbody :global(tr.row-analyzed) {
+        background: rgba(16, 185, 129, 0.15);
+    }
+
+    :global(.dark) tbody :global(tr.row-analyzed):hover {
+        background: rgba(16, 185, 129, 0.25);
     }
 
     :global(.dark) :global(tr.highlighted) td {

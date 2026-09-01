@@ -80,6 +80,7 @@ def _component(
     suffix: str,
     label: str,
     *,
+    version: int = 1,
     dependencies: tuple[str, ...] = (),
     period_behavior: PeriodBehavior = PeriodBehavior.WINDOWED,
     aggregator: TemporalAggregatorSpec | None = None,
@@ -87,7 +88,7 @@ def _component(
     component_id = f"{domain.value}.{suffix}"
     return ComponentSpec(
         component_id=component_id,
-        version=1,
+        version=version,
         domains=frozenset({domain}),
         output_model=FoundationComponentPayload,
         builder=_not_implemented_builder(component_id),
@@ -158,7 +159,7 @@ _ASSET_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.ASSET, "positions_by_broker", "Positions per broker", dependencies=("asset.position_scope",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.ASSET, "cost_value_pl", "Cost, value and P&L", dependencies=("asset.positions_by_broker",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.ASSET, "performance", "Position performance", dependencies=("asset.cost_value_pl",), period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.ASSET, "lot_detail", "Applicable lot detail", dependencies=("asset.positions_by_broker",), period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.ASSET, "lot_detail", "Applicable lot detail", version=2, dependencies=("asset.positions_by_broker",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.ASSET, "ohlc_returns", "OHLC buckets and returns", dependencies=("asset.identity",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_OHLC_BUCKET_AGGREGATOR),
     _component(Domain.ASSET, "indicators", "Technical indicators", dependencies=("asset.ohlc_returns",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_SIGNAL_PROFILE_BUCKET_AGGREGATOR),
     _component(Domain.ASSET, "states_events", "Technical states and events", period_behavior=PeriodBehavior.WINDOWED),

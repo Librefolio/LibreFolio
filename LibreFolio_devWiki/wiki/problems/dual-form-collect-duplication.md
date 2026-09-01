@@ -29,7 +29,7 @@ Three consecutive bugs in Phase 7 Part 4 Round 5–6 traced to the same root cau
 | `fieldEq`/`diffFields` | `jsonEq`/`nullishEq` | `fieldEq` with numeric normalisation | **Different comparison** |
 
 ## Solution
-Created `frontend/src/lib/utils/txPayloadHelpers.ts` — single shared module:
+Created `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` — single shared module:
 1. `PATCHABLE_FIELDS` — one canonical copy
 2. `applySignRules(qty, cash, typeRule)` — pure sign-flip function
 3. `buildCreatePayload(fields, typeRule)` — constructs `TXCreateItem`
@@ -48,7 +48,7 @@ Any time two components need identical business logic for payload construction, 
 
 | Role | Path |
 |------|------|
-| Shared helpers | `frontend/src/lib/utils/txPayloadHelpers.ts` |
-| FormModal | `frontend/src/lib/components/transactions/TransactionFormModal.svelte` |
-| BulkModal | `frontend/src/lib/components/transactions/TransactionBulkModal.svelte` |
+| Shared helpers | `frontend/src/lib/utils/transactions/txPayloadHelpers.ts` |
+| FormModal | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
+| BulkModal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 

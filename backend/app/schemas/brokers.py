@@ -392,3 +392,19 @@ class BRAccessBulkResponse(BaseBulkResponse[BRAccessItem]):
     Since the operation is atomic (all-or-nothing), success_count equals
     len(results) on success, and on failure an HTTPException is raised.
     """
+
+
+class BRSelfRoleUpdate(StrictModel):
+    """Self-service role change (F4) — demotion only, enforced by the service."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: UserRole = Field(..., description="New own role (EDITOR/VIEWER for an OWNER, VIEWER for an EDITOR)")
+
+
+class BRSelfAccessResponse(BaseModel):
+    """Response for self-service access operations (leave / self-demote)."""
+
+    success: bool = Field(..., description="Whether the operation succeeded")
+    message: str = Field(..., description="Human-readable outcome")
+    broker_deleted: bool = Field(False, description="True when the last OWNER left and the broker was cascade-deleted")

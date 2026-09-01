@@ -4,6 +4,172 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-09-01] lint-repair | Applying the P0–P3 repair list from the 2026-08-31 lint
+
+**The finding that framed the work.** The lint counted **144 of 1 828 paths** cited in
+`## Source files` tables pointing at files that do not exist, and — decisively — **23 of
+the 38 pages written in the 2026-08-31 ingest** were among them. The refactors that could
+explain staleness are from **June 2026**; the ingest is from **31 August**. So this was
+not ageing. **The ingest transcribed paths out of plans without checking them against the
+tree.** Everything below follows from treating that as the root cause rather than the
+symptom.
+
+### P0 — where the wiki asserted things that are false
+
+- **Three invented paths** (present in no source; constructed because they sounded
+  right) replaced with verified ones: `_orphans.py` → `_cli.py` (the check is the
+  `check-orphans` action, registered at `_cli.py:462`), `_schedule.py` → `_scheduler.py`,
+  `actions/frontend.py` → `_frontend_common.py`. **There is no `actions/` package.**
+  A **fourth** invention the lint had not caught: `_resources.py`, also in
+  [[sources/p8-runner-parallel-architecture]].
+- **[[entities/test-runner]] rewritten from the code.** The old page documented
+  `_orchestrator.py`, `_backend_unit.py`, `_e2e.py`, a `suites/` directory, a
+  `@registry.register("transactions")` decorator with auto-discovery and a
+  `./dev.py test backend --suite transactions` CLI. None of it exists. The real package
+  is **30 flat modules, 15 categories, 250 `add_test()` call sites**, with the registry
+  built by **14 explicit `populate_registry()` calls** in `_registry.py` — no decorator,
+  no discovery — and a CLI of the form `./dev.py test <category> <action>` generated
+  from `TEST_REGISTRY.keys()`.
+- **[[concepts/backend-test-isolation]] retired, not amended.** It claimed twice that
+  `unique_id()` combines timestamp + UUID4. The code
+  (`backend/test_scripts/test_utils.py:174-182`) is a millisecond timestamp plus a
+  **process-global counter that restarts at 0 in every process** — two workers starting
+  in the same millisecond produce the same identifier. The naming convention, which is
+  sound and has nothing to do with parallelism, moved to
+  [[concepts/unique-test-identifiers]]; the isolation claim is withdrawn in favour of
+  [[concepts/test-isolation-classes]]. The page's own 2026-08 caveat was also wrong
+  (**56/16** where the truth is **36/7**) and spoke of "**the** `session` fixture" —
+  there are **ten**, redefined locally in ten files of `test_services/`, all
+  function-scoped, none owned. Centralisation is work to be **built**, not an owner to
+  be consulted. Verified totals: **195** test files, **645** `test_` functions in
+  `test_api/`.
+- **[[decisions/test-runner-package-split]]** — History corrected to 30/15/250 and the
+  sentence about an `actions/` reorganisation deleted. The module table is left frozen
+  on purpose: the page documents the *rationale* of 2026-06.
+- **`frontend/mcr.config.js` removed from 4 pages.** It never existed — it is proposal
+  B.3 of `plan-p7-js-coverage.md:227`. Monocart was **removed**
+  (`frontend/e2e/fixtures/playwright.ts:297`, *"no monocart here any more"*); coverage is
+  istanbul end to end. Each page now says so, because that is information and not merely
+  a correction.
+
+### P1 — mass drift
+
+- **233 substitutions across 109 pages** from the 85-entry remap table of the June 2026
+  refactors (stores, transaction components, frontend utils, backend financial utils,
+  skills). Every destination `ls`-verified before writing. Basename matching alone was
+  **not** safe: it proposed `api/v1/brim.py` → `schemas/brim.py`, `ai_export/service.py`
+  → `risk/service.py` and three more semantically wrong hits, all rejected by a guard
+  that only auto-accepts a move *deeper* into the same directory or a pure prefix
+  addition.
+- **A further 11 rules, 20 substitutions**, found while repairing: `test_utils/` →
+  `test_utilities/`, `fx_service.py` → `fx.py`, `scripts/test_runner.py` →
+  `scripts/test_runner/`, `.github/skills/test-triage/` →
+  `.github/skills/devpy-tools/test-triage/`, and an **AI-export cluster where the ingest
+  had again written the planned names rather than the delivered ones**:
+  `AiExportMenuV2.svelte` → `AiExportMenu.svelte`, `aiExportClipboardV2.ts` →
+  `aiExportClipboard.ts`, `ai-export.spec.ts` → the `frontend/e2e/ai-export/` directory
+  of four specs. The `V2` suffix is a plan artefact; it never shipped.
+- **The six absences the lint had already resolved**, plus **9 broken mkdocs paths**
+  (`user/brokers.en.md` and `user/settings.en.md` are directories today) — 12
+  substitutions.
+- **[[problems/utc-today-vs-user-calendar]]** rewritten symbol by symbol. In doing so:
+  `resolveDateSentinel` is at `dateRangeStore.svelte.ts:144`, **124 lines from
+  `defaultRange()` at L20** — two of the three product defects live in the same file.
+- **Twin pairs merged**, descriptive slugs surviving as decided:
+  [[sources/phase07-part4-round3-staging-rewrite]] and
+  [[sources/phase07-part4-round5-server-type-rules]] absorbed the non-redundant lines of
+  the bare-slug copies (which pointed at different `related:` pages), and the copies —
+  the wiki's only two orphans — were deleted.
+
+### P2 / P3
+
+- **[[concepts/silent-no-op-option]]** created and linked from the four problems that
+  paid for it — `resume-mode-stale-import`, `coverage-mode-stale-import`,
+  `coverage-report-category-dest-collision`, `env-var-injection-point-duplicated`. Four
+  incidents, one shape: *an option that is accepted, does nothing, and does not say so.*
+  Two mechanisms underlie it — `from x import y` freezing a value at import time, and two
+  code paths where the design assumed one.
+- **[[concepts/assert-on-identity-not-prose]]** created. Its frontmatter pointer had
+  existed in [[problems/i18n-key-assertion-false-green]] since 2026-08-31, aimed at a page
+  nobody had written.
+- **[[features/F-020]]**: the dangling `decisions/fx-triangulation.md` replaced by
+  [[decisions/fx-sync-pair-based]] with a line on how they differ, and an explicit note
+  that no decision page for the triangulation algorithm exists — a gap, not a broken link.
+- **See also added** in [[decisions/settings-write-path-contract]] →
+  [[decisions/scheduler-converts-at-decision]].
+- **[[sources/coverage-campaign-2026-08]]**: the Final position (78,02 / 59,45 / 90,18)
+  now carries its caveat inline instead of forty lines below, plus a per-figure
+  reconstruction. The frontend pair is comparable to its neighbours in the campaign.
+  **`90,18 %` was initially recorded here as unexplained**; the project owner supplied
+  its provenance the same day from `htmlcov-backend/index.html` — it is the **mixed
+  lines + branch-arms** formula, the *same one* as 90,10 %, measured on the final
+  validation run (`--workers 8`, `--fresh-run`, all three `--cov-clean-*`). So the set
+  is **one pure-lines figure (92,33) against four mixed ones** (90,10 · 90,46 · 92,40 ·
+  90,18), and the caveat now says which is which — because comparing across those two
+  columns is exactly the error the campaign documented and then repeated in its own
+  closing line. A hand-check of the five printed numbers does **not** reproduce 90,18:
+  `coverage.py` uses `missing_branches` (≈1 917) where the HTML shows `partial` (1 719).
+  Recorded, because a figure you cannot reproduce looks wrong when it is not.
+  Same treatment applied to the triple in this log.
+- **`index.md` reabsorbed**: 439 links / 381 destinations / **58 duplicate rows** →
+  348 / 323 / **25**, and 514 → 414 lines. The three "Recent Additions" blocks became one
+  **chronological register** under two rules — a page is listed once, on its creation
+  date, never again when updated; a bulk ingest is named and counted, not expanded.
+  The 60-link bare `F-NNN` dump under "Uncategorized / Auto-Recovered" was deleted (it
+  duplicated `features/registry.md` without its information) and the 9 real pages stranded
+  there were promoted into the Problems and Decisions tables with proper summaries.
+  **"Individual Feature Pages" is now declared a selection**, with
+  [[features/registry]] named as the authoritative catalogue — so a feature's absence
+  from the index is no longer a defect to be re-flagged.
+- **`raw/ingest-registry.md`**: the **14 sources** that lived only in
+  `~/.copilot/session-state/` — outside the repository, outside git, in a directory that
+  dies with the session — now point at
+  `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/`
+  and carry content hashes, so drift detection works for them as for everything else. The
+  same re-pointing was applied to the `original_path` frontmatter and Source-files rows of
+  the **8 source pages** that cited them. Its `INDEX.md` carries the warning these
+  particular sources need: **a plan is not a chronicle** — several describe an
+  architecture in the future tense, and reading them as a record of what shipped is
+  exactly what produced the invented paths above.
+
+### Result
+
+**Non-existent paths: 157 unique / 328 occurrences → 33 unique / 52 occurrences**
+(−79 % and −84 %; measured on the same filter before and after, counting only table rows
+inside `## Source files`). The remainder are genuine unknowns, not drift: symbols whose
+new home cannot be established by matching, and files that appear to have been deleted
+rather than moved. They are listed in the repair report and were deliberately **not**
+guessed at — guessing is what created the problem this entry describes.
+
+**The empty AI-export packages, resolved.** `ai_export/assemblers/` and `profiles/`
+contain nothing but `__pycache__` — stale bytecode, which is the only reason `ls` still
+shows the directories and what makes them look like a move. They were **deleted** in
+commit **`615a52eb` (2026-08-05)**, *"refactor(ai-export): remove legacy runtime"*:
+**22 233 lines removed against 1 577 added**, taking `assemblers/`, `profiles/`,
+`resolver.py`, `sampling.py`, `technical.py`, `normalization.py`, `service.py` and their
+tests. The commit gives the reason: *"Keep one production path so catalog, prompts, and
+tests cannot drift between V3 composition and **an unreachable profile/assembler
+stack**."* Not tidying — **a second path that could still be reached and had started to
+disagree with the first**, resolved by deleting the loser rather than reconciling them.
+Same family as [[problems/registered-but-unreachable-test-actions]] and
+[[concepts/silent-no-op-option]]. The two pages that pointed there now name the V3
+successors — `components/payloads/portfolio_broker.py`,
+`components/portfolio_financial.py`, `components/drawdown_context.py`,
+`components/spec.py`, `analyses/spec.py`, `composer.py`, `runtime_service.py` — and carry
+a note saying the modules were dismantled, with the commit and the rationale.
+
+A detail worth keeping: the drawdown defect was not settled with a better fallback but by
+**removing the fallback shape entirely** — `components/drawdown_context.py:31` reads
+*"never fails — there is deliberately no success-shaped fallback"*, returning an explicit
+`FAILED`/`UNAVAILABLE` status naming scope and period instead. The same lesson as
+[[concepts/silent-no-op-option]], reached from the other side.
+
+**Both pages were written 2026-08-31 — twenty-six days after the deletion.** They named
+the deleted modules because they were written from the plan, not from the tree.
+
+**Still open**: `backend/app/api/v1/brim.py` is cited by 5 pages and **no BRIM router
+exists** — the endpoints live in `api/v1/brokers.py` and `api/v1/uploads.py`.
+
 ## [2026-08-05] update | MkDocs audit capability taxonomy
 
 Updated [[sources/mkdocs-audit-2026-08-05]] with the second-order split:
@@ -1618,3 +1784,256 @@ mtime 1785774139.88 → 1785870347.51).
 
 Graph: **1533→1533 nodes** (±0), **2255→2255 edges** (±0), **144→144 communities** (±0).
 Remaining pending after this refresh: **245** (unrelated; will be processed in a future full `--update` pass).
+
+## [2026-08-31] file | Consolidation campaign — five discoveries
+
+Closing a campaign that fixed sixteen pinned defects across settings, broker
+sharing, the scheduler and FX. Five findings were filed because each cost real
+time to reach and would cost it again:
+
+- **A false green nobody could have seen coming.** Five tests asserted on the
+  string `$_()` returns while looking like they asserted on i18n keys. They were
+  green *only because the keys were untranslated* — `svelte-i18n` echoes a
+  missing key — and went red in the commit that added the translations, blaming
+  the translator for a defect written weeks earlier.
+  Filed: [[problems/i18n-key-assertion-false-green]].
+
+- **`page.route()` is per context, not per suite.** An E2E asserted a global
+  price count reached zero, stubbing every writer in its own browser context.
+  But `PriceHistory` has no `user_id`, so other workers wrote the row anyway —
+  217 commits of "14 row(s) written/updated" in the backend log of the failing
+  run. Passing in isolation proved nothing.
+  Filed: [[problems/playwright-route-stub-is-per-context]].
+
+- **The scheduler's defect was the conversion point, not the model.** Days and
+  times stored in UTC could not be displayed in another zone without lying about
+  the weekday. Storing in the configured zone and converting once, at the
+  decision, removed the defect by construction *and* stopped DST from moving jobs
+  by an hour twice a year. The proposed `(day, time)` redesign was unnecessary.
+  Filed: [[decisions/scheduler-converts-at-decision]].
+
+- **Zero is not an exchange rate.** An absence was travelling with the shape of a
+  datum from the API boundary onward, drawing collapses to zero in charts and a
+  reachable −100 % delta. Widening the type *first* let `svelte-check` enumerate
+  40 sites across 7 files — more than the manual estimate, and it found two
+  consumers the survey had missed.
+  Filed: [[concepts/absence-sentinel-vs-nullable-type]].
+
+- **A near-miss in a shared component.** Fixing the FX chart gap set
+  `connectNulls: false` globally, which would have inverted every overlay in the
+  application; overlays had been `true`. Caught by asking who else passes through
+  the file, not by a test — no test would have caught it.
+  Filed: [[problems/shared-component-option-changed-globally]].
+
+Suite at filing time: 15/15 green in 46m 55s, lines 78,02 %, branch arms
+59,45 %, backend 90,18 %.
+
+> **Provenance added 2026-09-01.** `90,18 %` is **lines + branch arms — the same
+> formula as the 90,10 %** quoted elsewhere in the campaign, not a third scale. It is
+> the `TOTAL` row of `htmlcov-backend/index.html`
+> (`37085 / 2810 / 11048 / 1719`) from the final validation run of 2026-08-31:
+> `dev.py test --fresh-run --coverage all --cov-clean-js --cov-clean-backend
+> --cov-clean-backend-e2e --workers 8 all`. The distance from 90,10 is two successive
+> measurements with the scheduler work and its tests in between, not a change of
+> definition.
+>
+> **`92,33 %` is the only pure-lines figure in the campaign.** Comparing it with
+> 90,18 compares two formulas — the error documented in
+> [[problems/coverage-percent-mixed-lines-and-branches]]. Within the mixed set
+> (90,10 · 90,46 · 92,40 · 90,18) the figures are comparable to each other.
+>
+> The frontend pair is comparable to its neighbours (78,07/59,39 and 78,13/59,53 at
+> the two recorded checkpoints). Worker counts for the **earlier** figures remain
+> **not reconstructible**; for this one it is known and recorded above.
+> See [[sources/coverage-campaign-2026-08]] § Caveats.
+
+---
+
+## [2026-08-31] ingest | Consolidation campaign — 13 session plans + the 2026-08-05 beta testing folder
+
+**Sources**: 14 untracked plan/history files from the session state directory
+(`plan-p7-js-coverage`, `plan-p8-runner-migration`,
+`plan-p9-test-semantics-COMPLETO`, `plan-tappe-7-11-parallelismo-COMPLETO`,
+`tappa9-desleep`, `plan-storico-coverage-campaign` and `-2`,
+`plan-storico-fase012`, `plan-storico-corsie-sync-e-logica`,
+`coda-beta-parametrici-forkserver`, `difetti-aperti-corsia-impostazioni`,
+`plan-storico-corsia-impostazioni-COMPLETO`,
+`plan-storico-undici-difetti-COMPLETO`, plus
+`plan-storico-scheduler-e-fx-COMPLETO` found in the directory but absent from the
+supplied inventory) — and four files from
+`LibreFolio_developer_journal/Release_2/Phase_0/06_betaTestingReportAndFixing/`
+(`571bcde0`, `6eac0225`), a folder never ingested before.
+
+**Created — 31 pages.**
+
+*Concepts (9)* — the runner's execution model and the vocabulary the campaign
+needed to read its own numbers: [[concepts/test-isolation-classes]],
+[[concepts/derived-test-inventory]],
+[[concepts/run-cache-and-campaign-semantics]],
+[[concepts/playwright-run-consolidation]],
+[[concepts/transaction-hygiene-fixture]],
+[[concepts/load-only-red-is-a-product-defect]],
+[[concepts/coverage-rate-vs-volume]], [[concepts/characterisation-test-latch]],
+[[concepts/discard-the-answer-not-the-question]].
+
+*Problems (11)* — five of them share one property worth naming: they produce
+**no signal at all**. Empty coverage files, unreachable test actions, an env var
+that yields a default instead of an error, a cache that stops caching, a barrel
+nobody imports. [[problems/svelte-template-branches-not-instrumented]],
+[[problems/coverage-percent-mixed-lines-and-branches]],
+[[problems/e2e-python-coverage-lost-above-two-workers]],
+[[problems/registered-but-unreachable-test-actions]],
+[[problems/conftest-autouse-write-breaks-pure-class]],
+[[problems/brim-file-store-rename-race]],
+[[problems/commit-reported-success-on-rolled-back-batch]],
+[[problems/utc-today-vs-user-calendar]],
+[[problems/namedcache-clear-leaves-admission-filter]],
+[[problems/env-var-injection-point-duplicated]],
+[[problems/bulk-validate-index-map-off-by-one]].
+
+*Decisions (2)* — [[decisions/settings-write-path-contract]] (C1-C9 as one
+contract: confirm late, show the wait, never lose a field) and
+[[decisions/broker-last-owner-guard]] (recorded precisely because the obvious
+five-minute repair is the wrong one).
+
+*Sources (9)* — [[sources/p7-js-coverage-instrumentation]],
+[[sources/p8-runner-parallel-architecture]], [[sources/p9-test-semantics]],
+[[sources/frontend-parallelism-tappe-7-11]],
+[[sources/coverage-campaign-2026-08]],
+[[sources/coverage-fase012-and-branch-lanes]],
+[[sources/settings-lane-and-sixteen-defects]],
+[[sources/coda-beta-parametric-forkserver]],
+[[sources/beta-testing-2026-08-05]].
+
+**Updated — 7 pages.**
+[[concepts/backend-test-isolation]] now carries a superseded-in-part warning: its
+"parallel-safe, no cleanup required" claim is contradicted by a single-process
+run that produced three `UNIQUE constraint failed` failures, and by the fact that
+56 test files share one SQLite file against 16 using `:memory:`. Not repaired —
+flagged. [[decisions/test-runner-package-split]] gained a History section: 18
+modules/12 categories/~115 actions has become 31/15/219, and the decision was not
+reversed but built upon. The five pages filed by hand a few hours earlier gained
+`See also` blocks linking them into the new material, without rewriting them.
+
+**Not ingested, deliberately**: the ten `plan-phase00*.prompt.md` execution plans
+in the beta folder (operational, and their durable content lives in the taxonomy
+or in existing `phase00-*` pages), plus the non-prose artefacts in the session
+directory (`draft-*.ts`, `collect_pass.py`, `drift_check.py`, `spec_class.txt`,
+screenshots, a compressed log).
+
+**Correction, same day.** The two cases named as "four workers revealed a
+user-facing bug" were not in the session plans — they are in
+`.github/agents/test-author.agent.md` (~538-552) and
+`.github/skills/devpy-tools/testing-frontend/SKILL.md` (~313). They have been
+written into [[concepts/load-only-red-is-a-product-defect]] in their true form:
+`AssetSearchAutocomplete` dropped a query typed before the provider list loaded —
+at one worker the providers *always* won the race, so the defect was not rare but
+**unobservable**, and the suite was green for months on a dead search box; and
+`useValidateScheduler` sampled its anti-bounce key when the response *arrived*
+instead of when the request *left*, so an edit made during a pending validation
+was marked already-validated and never re-checked. Four tests always red under
+load, always green alone, always the same four — the exact signature people
+dismiss as flaky.
+
+The `resolveOps` / `buildOpsIndexMap` off-by-one that had been placed there
+provisionally was **not** a load-only red: it was found statically by the
+pure-logic lane. Split out into
+[[problems/bulk-validate-index-map-off-by-one]].
+
+**index.md**: 267 → 298 unique links (273 → 304 table rows).
+
+**Not run**: `graphify --update` — deferred to the maintainer, after the lint
+pass, so the ~1 280-file queue is processed once.
+
+---
+
+## [2026-09-01] lint | Health check after the 2026-08-31 consolidation ingest
+
+**Scope**: 400 wiki pages, 439 index links, 1 828 source-file paths cited in
+`## Source files` tables, 454 manifest entries, graph built on 100 files.
+
+**The finding that dominates every other**: the wiki's navigation layer is
+broken against the current tree. **144 of the 1 828 cited source paths (7,9 %)
+point at files that do not exist.** 85 of them are files that *moved* — the
+frontend `stores/`, `utils/` and `components/transactions/` trees were regrouped
+on **2026-06-05** (`99144b67`, `ee84e078`) and the backend financial utils on
+**2026-06-10** (`79ea14e5`) — and 59 name files that exist nowhere under any
+name. **23 of the 38 pages written or touched by the 2026-08-31 ingest** contain
+at least one such path, i.e. the ingest transcribed plan-era paths that were
+already three months stale when it wrote them.
+
+**Verified against the code, contradicted**:
+- `concepts/backend-test-isolation` — `unique_id()` does **not** combine
+  timestamp + UUID4. `backend/test_scripts/test_utils.py:180` returns
+  `f"{prefix}_{int(time.time()*1000)}_{_counter}"` with a **process-global
+  counter**. The page's parallel-safety argument rests on a mechanism that is
+  not in the code. The superseded-warning added by the ingest does not say this.
+- `decisions/test-runner-package-split` — the History added by the ingest says
+  31 modules / 15 categories / 219 actions. Code: **30 modules, 15 categories,
+  250 `add_test()` call sites**. It also says the flat `_backend_*` /
+  `_frontend_*` layout "was reorganised around an `actions/` package" — that
+  package does not exist; the flat layout is still there.
+- `entities/test-runner` — the directory tree, the `@registry.register`
+  decorator and the `suites/` package it documents do not exist. Not touched by
+  the ingest despite three new concept pages on the same package.
+- The `:memory:` / shared-file counts in the ingest's own warning (16 / 56) are
+  **7 / 36** in the tree today (195 test files total).
+
+**Repaired (mechanical only)**: `features/registry.md` was missing **F-048**,
+the most-linked feature page in the wiki (43 inbound links); 2 broken
+`[[links]]`; 6 broken frontmatter refs (`phase07-part4-round4-pipeline`,
+two nested-bracket typos, `responsive-layout-strategy`,
+`three-phase-pipeline-pattern`, `sync-modal-base-pattern`). Broken `[[links]]`
+now **0**.
+
+**Duplicates found (pre-existing, not from this ingest)**:
+`sources/phase07-part4-round3` ≡ `sources/phase07-part4-round3-staging-rewrite`
+and `sources/phase07-part4-round5` ≡ `sources/phase07-part4-round5-server-type-rules`
+— same `original_path`, same title modulo "Phase 07"/"Phase 7", ingested twice
+(2026-05-25 and 2026-05-28). Both older copies are orphans and absent from
+`index.md`. Merge deferred: it is a judgement call about which slug survives.
+
+**Deferred, needs a decision**: the `unique_id` reconciliation (owner of the
+fixture); whether `entities/test-runner` is rewritten or retired; the
+`decisions/fx-triangulation` and `assert-on-identity-not-prose` references that
+name pages nobody ever wrote; `index.md` carries 58 duplicate rows across its
+"Recent Additions" sections.
+
+**Also noted, not corrected on purpose**: `.github/copilot-instructions.md:155`
+claims the graph has 9 259 nodes / 14 151 edges / 748 communities. The current
+`GRAPH_REPORT.md` says **1 617 / 2 277 / 167**, built from 100 files. Left for
+the maintainer to fix after the rebuild, so the number is written once.
+
+**Not run**: `graphify --update` — the ~1 280-file queue stays with the
+maintainer.
+
+## [2026-09-01] tooling | check_source_paths.py
+
+Il lint ha trovato **144 path su 1 828 (7,9 %)** citati nelle tabelle `## Source
+files` puntati a file inesistenti, e la ripartizione contava più del totale: 85
+erano deriva databile da tre refactor di giugno, 59 non esistevano da nessuna
+parte, **4 erano inventati**. E 23 delle 38 pagine scritte il giorno prima ne
+contenevano almeno uno — quindi non invecchiamento, ma trascrizione di path
+presi dai piani senza confronto con l'albero.
+
+Nessuna delle tre classi sopravvive a un controllo di esistenza su filesystem, e
+**nessuna era visibile al grafo**, che copre ~4 % del codice: una query BFS
+risponde parzialmente e sembra completa.
+
+Aggiunto `check_source_paths.py`, che verifica ogni path citato. Dopo le
+riparazioni: **41 rotti su 2 016 citati (2,0 %)**, da 7,9 %. Va eseguito **prima**
+di scrivere una pagina, non sei mesi dopo.
+
+Aggiornate anche le istruzioni di progetto: il numero di nodi del grafo era fermo
+a 9 259 contro i ~1 617 reali, e ora rimandano a `GRAPH_REPORT.md` invece di
+riportare una cifra destinata a invecchiare. Con l'avvertenza che conta: il grafo
+è affidabile sulla conoscenza accumulata, **cieco sul codice**.
+
+## [2026-09-01] lint | code-reality-check.md marcato superato
+
+Generato il 2025-05-24, afferma *«Alembic: 1 sola migrazione — conforme alle
+istruzioni "no incremental migrations"»*. Le istruzioni oggi impongono l'**opposto**:
+migrazioni incrementali per non rompere le installazioni rilasciate. Una pagina
+che verifica la conformità al codice e sbaglia sulla regola più delicata è essa
+stessa deriva. Avviso in testa, non riscritta: serve come fotografia del maggio
+2025, non come verifica.

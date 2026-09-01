@@ -75,7 +75,9 @@
     "showActive": "Attivi",
     "table": {
       "lastPrice": "Ultimo Prezzo",
-      "quoteBaseQuantity": "Unità/prezzo"
+      "quoteBaseQuantity": "Unità/prezzo",
+      "txCount": "Mov.",
+      "txCountTooltip": "Transazioni che usano questo asset. Verde: in broker di cui sei owner. Blu: solo in broker di altri utenti. Grigio: nessuna — asset salvato ma mai usato."
     },
     "empty": {
       "noAssets": "Nessun asset",
@@ -327,7 +329,15 @@
     "status": {
       "archived": "Archiviato"
     },
-    "lastPrice": "Ultimo Prezzo"
+    "lastPrice": "Ultimo Prezzo",
+    "panels": {
+      "own": "I tuoi asset",
+      "ownHint": "Con transazioni in broker di cui sei owner",
+      "others": "Asset degli altri utenti",
+      "othersHint": "Con transazioni non tue",
+      "analysis": "Sotto analisi",
+      "analysisHint": "Salvati ma mai usati in una transazione"
+    }
   },
   "auth": {
     "login": "Accedi",
@@ -651,7 +661,9 @@
         "fee": "Commissioni",
         "tax": "Imposte e bolli",
         "accrued": "Rateo cedolare"
-      }
+      },
+      "reportIssueHint": "Se una riga continua a sembrarti sbagliata, potrebbe essere un bug dell'importazione e non un dato errato:",
+      "reportIssueLink": "apri una issue su GitHub"
     },
     "duplicatesStepIntro": "Alcune righe compaiono in più di uno dei file che stai importando: scegli quale copia tenere. Il confronto con il tuo database è già stato rifatto sulle righe corrette e arriva pronto alla revisione.",
     "duplicateRecheckFailed": "Non è stato possibile ricontrollare i duplicati ({error}). Il risultato mostrato è quello calcolato prima delle tue correzioni.",
@@ -799,7 +811,17 @@
       "loadFailedBlocking": "Impossibile caricare le impostazioni di condivisione attuali. Il salvataggio è disabilitato finché un nuovo tentativo non riesce.",
       "saveRequiresLoadedAccess": "Carica le impostazioni di condivisione attuali prima di salvare. Usa Riprova.",
       "lastOwnerRemovalWarning": "Non puoi rimuovere l’ultimo owner. Promuovi prima un altro owner, oppure elimina il broker dalla lista broker; se ha transazioni, usa l’eliminazione forzata per eliminare anche quelle.",
-      "lastOwnerDemotionWarning": "Non puoi retrocedere l’ultimo owner. Promuovi prima un altro owner."
+      "lastOwnerDemotionWarning": "Non puoi retrocedere l’ultimo owner. Promuovi prima un altro owner.",
+      "yourAccess": "Il tuo accesso",
+      "leaveBroker": "Abbandona il broker",
+      "leaveConfirm": "Rimuovere il tuo accesso a questo broker? Non lo vedrai più nelle tue liste.",
+      "demoteToViewer": "Passa a visualizzatore",
+      "demoteConfirm": "Retrocederti a visualizzatore? Non potrai più modificare i dati di questo broker. Un owner può promuoverti di nuovo.",
+      "leaveAndDelete": "Abbandona ed elimina il broker",
+      "leaveLastOwnerWarning": "Sei l'unico owner: abbandonando eliminerai questo broker con tutti i suoi report e le sue transazioni. L'operazione è irreversibile.",
+      "leaveDone": "Hai abbandonato il broker",
+      "leaveDeletedBroker": "Broker eliminato: eri l'ultimo owner",
+      "selfDemoteDone": "Ora sei un visualizzatore"
     },
     "lots": {
       "buyDate": "Data Acquisto",
@@ -2760,12 +2782,12 @@
       },
       "asset": {
         "position_and_history": {
-          "display": "Asset, posizione e andamento",
-          "description": "Posizioni, costo, valore, P&L, performance, lotti economici, contesto di mercato compatto, Drawdown e provenienza dell'Asset."
+          "display": "Posizione e andamento (completo)",
+          "description": "Le tue posizioni su questo asset — costo, valore, P&L, performance, lotti economici — più contesto di mercato compatto, Drawdown e provenienza. L'export completo."
         },
         "market_history": {
-          "display": "Storico e dati tecnici dell'Asset",
-          "description": "Prezzi, rendimenti, indicatori, stati, eventi, Drawdown, copertura e provenienza dell'Asset."
+          "display": "Solo andamento di mercato (senza posizioni)",
+          "description": "Prezzi, rendimenti, indicatori, stati, eventi, Drawdown, copertura e provenienza — solo dati di mercato, senza posizioni. L'export leggero."
         },
         "overview": {
           "display": "Panoramica asset",
@@ -3064,5 +3086,18 @@
       "title": "L'Analisi del rischio è in beta.",
       "description": "Calcoli, risultati e interfaccia possono cambiare prima del rilascio stabile."
     }
+  },
+  "updateCheck": {
+    "title": "Nuova versione disponibile",
+    "message": "LibreFolio {latest} è stato rilasciato — questa installazione esegue la {current}.",
+    "guideLink": "Come aggiornare",
+    "releaseLink": "Note di rilascio su GitHub",
+    "laterButton": "Ricordamelo dopo",
+    "skipVersion": "Salta questa versione"
+  },
+  "changelog": {
+    "title": "Note di rilascio",
+    "viewRemote": "Vedi su GitHub",
+    "empty": "Nessun changelog incluso in questa build."
   }
 }

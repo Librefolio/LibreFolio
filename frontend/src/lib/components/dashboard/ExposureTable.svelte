@@ -51,6 +51,8 @@
         displayCurrency: string;
         brokers?: ReadonlyArray<BrokerLike>;
         onAnalyze?: (assetId: number) => void;
+        /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
+        analyzedAssetId?: number | null;
     }
 
     interface DisplayRow {
@@ -74,7 +76,7 @@
         oldestOpenLotDate: string | null;
     }
 
-    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, ..._legacyProps}: Props & Record<string, unknown> = $props();
+    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -400,6 +402,7 @@
         enableContextMenu={true}
         tableLayout="fixed"
         {rowActions}
+        getRowClass={(row) => (row.assetId === analyzedAssetId ? 'row-analyzed' : '')}
         emptyMessage={tableEmptyMessage}
     />
 </div>

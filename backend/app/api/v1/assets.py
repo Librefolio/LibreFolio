@@ -209,7 +209,7 @@ async def patch_assets_bulk(
 
 
 @asset_router.get("/all", response_model=List[FAinfoResponse], tags=["FA CRUD"])
-async def get_all_assets(session: AsyncSession = Depends(get_session_generator), _current_user: User = Depends(get_current_user)):
+async def get_all_assets(session: AsyncSession = Depends(get_session_generator), current_user: User = Depends(get_current_user)):
     """
     Get all active assets without filters.
 
@@ -222,7 +222,7 @@ async def get_all_assets(session: AsyncSession = Depends(get_session_generator),
     """
     try:
         filters = FAAinfoFiltersRequest(active=True)
-        return await AssetCRUDService.list_assets(filters, session)
+        return await AssetCRUDService.list_assets(filters, session, user_id=current_user.id)
     except Exception as e:
         logger.error(f"Error getting all assets: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -243,7 +243,7 @@ async def list_assets(
     identifier_other: Optional[str] = Query(None, description="Partial match in identifier_other"),
     identifier_contains: Optional[str] = Query(None, description="Partial match in any identifier field"),
     session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     List all assets with optional filters - enhanced for BRIM asset matching.
@@ -290,7 +290,7 @@ async def list_assets(
             identifier_other=identifier_other,
             identifier_contains=identifier_contains,
         )
-        return await AssetCRUDService.list_assets(filters, session)
+        return await AssetCRUDService.list_assets(filters, session, user_id=current_user.id)
     except Exception as e:
         logger.error(f"Error listing assets: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

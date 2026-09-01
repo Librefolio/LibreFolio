@@ -103,7 +103,7 @@ Later ideas:
 | API endpoint | `backend/app/api/v1/portfolio_api.py` |
 | Service | `backend/app/services/portfolio_service.py` |
 | Engine | `backend/app/services/portfolio_engine.py` |
-| ROI utilities | `backend/app/utils/roi_utils.py` |
+| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | Positions panel | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
 | Archived M1/M2 plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/` |

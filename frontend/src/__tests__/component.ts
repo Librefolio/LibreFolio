@@ -101,6 +101,31 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
     } as unknown as typeof globalThis.ResizeObserver;
 }
 
+/**
+ * Fourth instance: jsdom has no media-query engine, so `window.matchMedia` is
+ * undefined — and `svelte/motion` builds a `(prefers-reduced-motion)` query at
+ * import time, which makes every component that tweens a value (KPI cards,
+ * metric bars) throw before its first render.
+ *
+ * The stub answers "no preference / no match" for everything. That is the
+ * honest default for these tests: they assert the *value* a tween targets, not
+ * the animation curve, and reduced-motion is a rendering preference jsdom has
+ * no opinion about.
+ */
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+    window.matchMedia = (query: string): MediaQueryList =>
+        ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener() {},
+            removeListener() {},
+            addEventListener() {},
+            removeEventListener() {},
+            dispatchEvent: () => false,
+        }) as MediaQueryList;
+}
+
 export {render, screen, fireEvent, within, waitFor, cleanup} from '@testing-library/svelte';
 
 /**

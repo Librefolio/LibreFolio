@@ -192,12 +192,12 @@ S    = broker_ids selected by the dashboard filter (S ⊆ V(u))
 | Role | Path |
 |------|------|
 | Engine | `backend/app/services/portfolio_engine.py` |
-| ROI utilities | `backend/app/utils/roi_utils.py` |
-| FIFO utilities | `backend/app/utils/fifo_utils.py` |
-| WAC utilities | `backend/app/utils/wac_utils.py` |
-| Valuation utilities | `backend/app/utils/valuation_utils.py` |
+| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
+| FIFO utilities | `backend/app/utils/financial/fifo_utils.py` |
+| WAC utilities | `backend/app/utils/financial/wac_utils.py` |
+| Valuation utilities | `backend/app/utils/financial/valuation_utils.py` |
 | Service layer | `backend/app/services/portfolio_service.py` |
 | API layer | `backend/app/api/v1/portfolio_api.py` |
-| vNext unit tests (20) | `backend/test_scripts/test_portfolio_engine_vnext.py` |
+| vNext unit tests (20) | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |
 | Math spec | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |
 | Architecture state | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/ARCHITECTURE_CURRENT_STATE.md` |

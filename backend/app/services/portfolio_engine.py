@@ -28,7 +28,7 @@ from typing import Literal, Optional
 import structlog
 from sqlalchemy import func, select
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, PriceHistory, Transaction, TransactionType
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, BrokerUserAccess, PriceHistory, Transaction, TransactionType, UserRole
 from backend.app.schemas.common import Currency as CurrencySchema
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
@@ -1987,7 +1987,10 @@ class PortfolioCalculationEngine:
             )
 
         scope_broker_ids = {a.broker_id for a in accesses}
-        broker_shares = {a.broker_id: a.share_percentage or Decimal("1") for a in accesses}
+        # F2 — ownership scaling: an OWNER's share scales the broker's contribution
+        # (0% is valid and contributes nothing). EDITOR/VIEWER rows always carry
+        # share 0 by schema rule but must still see full data → scale 1 for them.
+        broker_shares = {a.broker_id: (a.share_percentage if a.share_percentage is not None else Decimal("1")) if a.role == UserRole.OWNER else Decimal("1") for a in accesses}
 
         # ── 3. Load ALL transactions for scope brokers ──
         tx_stmt = select(Transaction).where(Transaction.broker_id.in_(scope_broker_ids)).order_by(Transaction.date, Transaction.id)

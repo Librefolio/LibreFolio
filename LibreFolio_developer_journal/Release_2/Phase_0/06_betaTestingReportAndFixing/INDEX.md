@@ -77,6 +77,7 @@ che include la liquidità.
 | [`00_20260805_betaTester_report.md`](00_20260805_betaTester_report.md) | Report grezzo della sessione (fonte primaria, non modificare) |
 | [`01_tassonomia_findings.md`](01_tassonomia_findings.md) | Classificazione dei 34 rilievi nelle 4 categorie richieste + severità + destinazione |
 | [`02_riconciliazione_credit_agricole.md`](02_riconciliazione_credit_agricole.md) | Dossier numerico e metodo per la sessione di verifica congiunta |
+| [`03_feedback_utenti_F1-F17_classificazione_e_fix.md`](03_feedback_utenti_F1-F17_classificazione_e_fix.md) | Seconda ondata di feedback (07.08–01.09): classificazione F1–F17, decisioni, fix applicati e test (01/09/2026) |
 
 ## 4. Piani di fix
 
