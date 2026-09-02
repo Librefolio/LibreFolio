@@ -223,6 +223,32 @@ validati a 0 rotti. Wiki: 22 pagine re-pointed a `Release_2/phases/…`. Skill
 **Restano attive** in `Phase_0/`: `02_riskfolioIntegration` (in pausa, beta) e
 `06_betaTestingReportAndFixing` (P2/P4/P5/P6 aperti).
 
+## 13. Verifica piani aperti del 06 vs codice (02/09)
+
+Explore agent ha letto i 4 piani aperti e confrontato ogni work item col codice. Esito
+(completo nella chat; evidenze file:line nel report):
+
+- **P2 ImportWizardUx (W1–W10)**: **parzialmente aperto.** Fatti: W5 (label N TX), W8
+  (severity info/warning BRIM), W9 (upload/parse paralleli), W10 (parse in process pool —
+  meglio del piano). Aperti: W1 (conteggio asset non deduplica cross-file), W3 (sommario
+  non si ricalcola dopo i duplicati), W4 (tipi non tradotti nel sommario). Parziale: W7
+  (auto-select duplicati non chiamato dai resolve manuali). Passati a P3: W2, W6.
+- **P4 EngineAccountingAndSignals (E1–E2)**: **aperto.** E1 (drawdown warmup su soli 2
+  punti → fuorviante su zoom lungo) non fatto. E2: formula verificata corretta, manca
+  doc/tooltip/test.
+- **P5 TransactionsUxPolish (T1–T4)**: **aperto.** T1 (cancellazione separatore decimale,
+  effect loop su stringhe formattate) parziale. T2 (delay tooltip su hover) no. T3
+  (duplicazione preserva la data originale) no. T4 (delete riga → bulk modal) no.
+- **P6 i18nAndDocsAssets (I1–I3)**: **parziale.** I2 (fallback gallery) fatto. I1 parziale
+  (font in git ✅ ma build non fallisce forte su risorse mancanti). I3 (errori backend non
+  localizzati) no.
+
+Sovrapposizioni già coperte dalla tornata F1–F17: F9 (riga analizzata) tocca T3 nel flusso;
+F11 (banner GitHub) completa W8.
+
+**Sequenza consigliata** (da discutere): prima i gap user-facing — T1, W1/W3, E1; poi
+consistenza — T2/T3/T4, W7; poi infrastruttura — I3, I1-A.
+
 ## 12. Round 7+8 — modale admin e header changelog (02/09)
 
 - **Ask-admin come modale** (`AskAdminModal`): riga per admin con mailto + copia email →
