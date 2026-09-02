@@ -140,7 +140,7 @@ The service does not return prompt text, labels, translations, or user notes. `f
 | 2026-07-26 | Live E2E corrected the false cash valuation-basis equality invariant without modifying Portfolio Engine math. |
 | 2026-07-26 | Final review fixed selected-history drawdown fallback, made non-modern clipboard transport reachable without legacy logic, and registered the complete AI Export/current-signal test set in canonical suites. |
 | 2026-07-27 | Final UX replaced exposed mode/language/web/compatibility controls with the custom analysis select and locale-owned defaults; added per-user/per-context persistent draft memory, Snapshot note non-export, body portal, and domain manual links. |
-| 2026-07-27 | Project owner approved the desktop/mobile review; the completed plan chain was indexed by `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` in its nested migration location. |
+| 2026-07-27 | Project owner approved the desktop/mobile review; the completed plan chain was indexed by `Release_2/phases/01_signalMigration/02_aiExport/README.md` in its nested migration location. |
 | 2026-08-04 | A 49/49 catalog explanation documented the 32-dataset/17-analysis/65-component composition model, confirmed per-position/per-Asset facts in PAC and Rebalancing, clarified price and `all_data` semantics, and recorded two potential gaps. Real Portfolio probe `20260804T085052.052297Z` passed 5/5 with unchanged databases and a passed secret scan. |
 | 2026-08-05 | Final V3 closure reduced the public catalog to 8 datasets/11 analyses over 67 components and 40 internal datasets, removed the entire profile/assembler runtime and proved 114/114 prompt equivalence in candidate `20260804T224056.073291Z`. |
 | 2026-08-05 | Before first release, public snapshot/catalog/selection/instruction/response versions were reset to V1. Probe helper tests stayed in the runner under an explicit helper-only action; real prompt and Task Adequacy runs remained separate. |
@@ -149,8 +149,8 @@ The service does not return prompt text, labels, translations, or user notes. `f
 
 | Role | Path |
 |------|------|
-| Completed chain index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
-| Final audit and closure | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
+| Completed chain index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
+| Final audit and closure | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
 | Runtime orchestration | `backend/app/services/ai_export/runtime_service.py` |
 | Runtime schemas | `backend/app/schemas/ai_export_runtime.py` |
 | Dataset/analysis composition | `backend/app/services/ai_export/datasets/`, `backend/app/services/ai_export/analyses/` |

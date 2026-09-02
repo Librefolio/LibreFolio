@@ -3,7 +3,7 @@ title: "Beta coda — parametric providers, forkserver orphans, and four discard
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/coda-beta-parametrici-forkserver.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/coda-beta-parametrici-forkserver.md"
 tags: [testing, parallelism, backend, frontend, races, brim, method]
 related:
   - concepts/discard-the-answer-not-the-question
@@ -82,4 +82,4 @@ preceded it — which is precisely what is needed when the suspicion is a cascad
 | Backend test conftest | `backend/test_scripts/conftest.py` |
 | Hygiene fixture and gating | `frontend/e2e/fixtures/playwright.ts`, `scripts/test_runner/_consolidate.py` |
 | AI Export endpoint | `backend/app/api/v1/ai_export.py` |
-| Original plan | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/coda-beta-parametrici-forkserver.md` |
+| Original plan | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/coda-beta-parametrici-forkserver.md` |

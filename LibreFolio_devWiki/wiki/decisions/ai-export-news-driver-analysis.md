@@ -55,4 +55,4 @@ violations.
 | Analysis instructions | `frontend/src/lib/features/ai-export/templates/sharedInstructions.ts` |
 | Response contract | `frontend/src/lib/features/ai-export/templates/responseContracts.ts` |
 | Frontend catalog IDs | `frontend/src/lib/features/ai-export/catalog/shared.ts` |
-| Real prompt evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/real_prompt_probe/20260803T100412.057382Z/` |
+| Real prompt evidence | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/real_prompt_probe/20260803T100412.057382Z/` |

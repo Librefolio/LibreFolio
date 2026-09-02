@@ -204,7 +204,7 @@ Pour des instructions détaillées sur ce qu'il faut sauvegarder et comment effe
 
 ---
 
-## 🔄 Mise à jour de LibreFolio
+## 🔄 Mise à jour de LibreFolio {#updating}
 
 ### ⚠️ Attention : Statut Alpha
 LibreFolio est actuellement en cours de développement **Alpha**. Cela signifie qu'entre les versions, il pourrait y avoir des modifications structurelles ou des migrations de base de données susceptibles d'empêcher le démarrage de la nouvelle version, nécessitant une intervention manuelle ou la restauration d'une version précédente.

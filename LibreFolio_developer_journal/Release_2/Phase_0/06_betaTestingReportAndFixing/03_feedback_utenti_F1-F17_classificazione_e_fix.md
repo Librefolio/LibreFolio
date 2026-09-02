@@ -182,6 +182,59 @@ scalati corretti (NAV 11.983,54 = 30%), card OK sul build corrente.
 - **Regole release tag**: documentate in `mkdocs_src/docs/developer/docs/release-pipeline.md`
   (nuova sezione "Release Tag Convention") e nel devWiki `concepts/ci-release-pipeline.md`.
 
+## 10. Round 7 — badge admin con email + badge versioni (02/09)
+
+- **Ask-admin banner**: i badge admin ora mostrano **mailto + copia email** (l'email esce da
+  `/users/search?admins=true`, esposto solo agli utenti loggati — policy confermata
+  dall'utente: gli anonimi non la vedono mai perché l'endpoint richiede auth).
+- **Modale F14**: versione attuale e nuova come **due badge con freccia** (`v1.0.1-… → v99.0.0`)
+  sotto il messaggio, colorate con la palette condivisa `getStringBadgeStyle` (distinguibili
+  in light/dark), senza doppia "v" sulla corrente.
+- **Header changelog mobile**: sotto ~sm le azioni (check, expand/collapse, GitHub) vanno su
+  una seconda riga; titolo e cerca restano in alto. Label del pulsante check già piegata in
+  round 6.
+- **Ask-admin come modale**: non più banner ambra dentro il changelog — una vera modale
+  (`AskAdminModal`) con riga per admin (mailto + bottone copia email → toast "Email copiata").
+  Backend: `/users/search?admins=true` espone `email` solo agli utenti loggati (endpoint
+  auth-gated); USEARCH-006/007 aggiornati al contratto email.
+
+## 11. Archiviazione Phase_0 (02/09, skill plan-archive)
+
+Cartella `Release_2/phases/` creata **allo stesso livello di Phase_0** (correzione utente:
+non dentro). Nomi delle cartelle **ripristinati** agli originali. Struttura target:
+`Release_2/phases/` per gli archivi, `Release_2/Phase_0/` per il lavoro attivo; a phase
+completata, tutta `Phase_N/` si sposta in `phases/Phase_N/`. Work-stream completati spostati
+con `git mv` (rename tracciati):
+
+| Archive | Era | Esito |
+|---|---|---|
+| `phases/01_signalMigration/` | `Phase_0/01_signalMigration` (+ `02_aiExport/`) | ✅ in 1.1.0 |
+| `phases/03_brokerImportRecovery/` | `Phase_0/03_brokerImportRecovery` | ✅ Fase A+B |
+| `phases/04_webSearchEngine/` | `Phase_0/04_webSearchEngine` (solo il piano ddgs) | ✅ Steps 1–6 |
+| `phases/05_cleanAudit/` | `Phase_0/05_cleanAudit` | ✅ |
+| `phases/07_coverageAndConsolidationCampaign/` | `Phase_0/07_coverageAndConsolidationCampaign` | ✅ 15/15 verde |
+
+**Verifica 04**: il cerca esiste già e usa ddgs (`web_link_finder.py`, `DdgsEngine`, dep
+`ddgs==9.14.4`) → piano ddgs archiviato. Il piano **SearXNG resta** in
+`Phase_0/04_webSearchEngine/` marcato DEFERRED. Link relativi corretti dopo i due move,
+validati a 0 rotti. Wiki: 22 pagine re-pointed a `Release_2/phases/…`. Skill
+`plan-archive` aggiornata con la struttura corretta. Master index: `phases/00-index.md`.
+
+**Restano attive** in `Phase_0/`: `02_riskfolioIntegration` (in pausa, beta) e
+`06_betaTestingReportAndFixing` (P2/P4/P5/P6 aperti).
+
+## 12. Round 7+8 — modale admin e header changelog (02/09)
+
+- **Ask-admin come modale** (`AskAdminModal`): riga per admin con mailto + copia email →
+  toast "Email copiata". Backend: `/users/search?admins=true` espone `email` solo agli
+  utenti loggati (endpoint auth-gated — policy utente: gli anonimi non la vedono mai).
+- **Modale F14**: tolta la frase con la versione corrente (già nel badge), badge
+  **centrati** colorati con la palette condivisa `getStringBadgeStyle` (light/dark
+  distinguibili), niente doppia "v"; link guida → `#updating` (anchor stabile `{#updating}`
+  aggiunto alle 4 lingue di `installation.*.md`).
+- **Header changelog mobile**: riga 1 = titolo + expand/collapse + GitHub; riga 2 = cerca
+  a sinistra + "Verifica aggiornamenti" a destra.
+
 ## 4. Collegamenti
 
 - Piani agganciati ancora aperti: **P2** ImportWizardUx (F11 vi si inserisce),

@@ -214,7 +214,7 @@ La memoria frontend con una vecchia selezione Drawdown viene scartata e ricade s
 
 TODO Risk Assessment:
 
-[g7-ai-export-drawdown.md](../../02_riskfolioIntegration/workItems/g7-ai-export-drawdown.md)
+[g7-ai-export-drawdown.md](../../../Phase_0/02_riskfolioIntegration/workItems/g7-ai-export-drawdown.md)
 
 Contiene: integrazione `RISK_DRAWDOWN`, picco/trough e date, profondita, durata, drawdown corrente, percentuale recuperata, distanza residua, episodio aperto/chiuso, massimo nel periodo, episodi confrontabili e futura reintegrazione AI.
 

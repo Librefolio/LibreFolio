@@ -45,4 +45,4 @@ The frontend keeps `SignalConfig` and all local style/view behavior. Backend cat
 | FX adapter | `backend/app/api/v1/fx.py` |
 | Frontend catalog/renderer | `frontend/src/lib/charts/signals/catalogMapper.ts`, `backendRenderer.ts` |
 | Bulk request/result mapping | `frontend/src/lib/charts/signals/requestBuilder.ts`, `resultMapper.ts` |
-| Execution plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |
+| Execution plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |

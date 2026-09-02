@@ -206,7 +206,7 @@ For detailed instructions on what to save and how to perform consistent backups,
 
 ---
 
-## 🔄 Updating LibreFolio
+## 🔄 Updating LibreFolio {#updating}
 
 ### ⚠️ Warning: Alpha Status
 LibreFolio is currently in **Alpha** development. This means that between versions there could be structural changes or database migrations that might prevent the new version from starting, requiring manual intervention or restoring a previous version.

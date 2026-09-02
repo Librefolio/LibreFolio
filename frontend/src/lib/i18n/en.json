@@ -3090,7 +3090,7 @@
   },
   "updateCheck": {
     "title": "New version available",
-    "message": "LibreFolio {latest} has been released — this installation is running {current}.",
+    "message": "LibreFolio {latest} has been released.",
     "guideLink": "How to update",
     "releaseLink": "Release notes on GitHub",
     "laterButton": "Remind me later",
@@ -3106,6 +3106,10 @@
     "checkNow": "Check for updates",
     "upToDate": "You are running the latest version.",
     "askAdmin": "A newer version exists. Ask an administrator to update:",
-    "searchResults": "Matches:"
+    "searchResults": "Matches:",
+    "copyEmail": "Copy email",
+    "copied": "Copied!",
+    "askAdminTitle": "Update available — contact an administrator",
+    "emailCopied": "Email copied to clipboard"
   }
 }

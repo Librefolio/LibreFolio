@@ -1,7 +1,7 @@
 # Graph Report - corpus  (2026-09-02)
 
 ## Corpus Check
-- 100 files · ~56,066 words
+- 100 files · ~56,067 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `29ac61a2`
+- Built from commit: `c2f805ce`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -379,8 +379,8 @@ Cohesion: 0.20
 Nodes (9): 🎨 Asset Picker, 🔐 Authentication, 🖥️ Desktop Gallery, 📤 File Uploader, ✂️ Image Editor, 🔑 Login Page, 🖼️ Media & Upload, 📝 Registration - Empty Form (+1 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.22
-Nodes (8): 🎨 Asset Picker, 🔐 Authentication, 📤 File Uploader, ✂️ Image Editor, 🔑 Login Page, 🖼️ Media & Upload, 📱 Mobile Gallery, 📝 Registration
+Cohesion: 0.20
+Nodes (9): 🔐 Authentication, 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 🔑 Login Page, 📱 Mobile Gallery, 📝 Registration, 📂 Static Resources (+1 more)
 
 ### Community 44 - "Community 44"
 Cohesion: 0.20
@@ -699,8 +699,8 @@ Cohesion: 0.50
 Nodes (3): 💱 FX Rates (Currency Exchange), 📋 The FX List Page, 🔮 What's Next?
 
 ### Community 123 - "Community 123"
-Cohesion: 0.40
-Nodes (5): 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 📂 Static Resources, 🗂️ Static Resources - Grid View
+Cohesion: 0.50
+Nodes (4): 🎨 Asset Picker, 📤 File Uploader, ✂️ Image Editor, 🖼️ Media & Upload
 
 ### Community 124 - "Community 124"
 Cohesion: 0.50

@@ -3,7 +3,7 @@ title: "The settings lane and the sixteen tracked defects"
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/difetti-aperti-corsia-impostazioni.md + plan-storico-corsia-impostazioni-COMPLETO.md + plan-storico-undici-difetti-COMPLETO.md + plan-storico-scheduler-e-fx-COMPLETO.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/difetti-aperti-corsia-impostazioni.md + plan-storico-corsia-impostazioni-COMPLETO.md + plan-storico-undici-difetti-COMPLETO.md + plan-storico-scheduler-e-fx-COMPLETO.md"
 tags: [settings, brokers, scheduler, fx, transactions, product-decisions, testing]
 related:
   - decisions/settings-write-path-contract
@@ -75,4 +75,4 @@ helper is right but unwired (`resolveFormItemsFromOps`).
 | Scheduler config | `frontend/src/lib/components/settings/SchedulerConfigModal.svelte` |
 | FX service and consumers | `backend/app/services/fx.py` |
 | Bulk modal | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
-| Original plans | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/difetti-aperti-corsia-impostazioni.md` and three companions (untracked) |
+| Original plans | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/difetti-aperti-corsia-impostazioni.md` and three companions (untracked) |

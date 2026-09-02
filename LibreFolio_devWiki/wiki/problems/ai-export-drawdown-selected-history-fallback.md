@@ -52,7 +52,7 @@ The targeted Asset assembler regression remained green in the final canonical ga
 
 | Role | Path |
 |------|------|
-| Final plan and archive index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md`, `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
+| Final plan and archive index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md`, `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
 | Drawdown component (direct successor — carries this fix) | `backend/app/services/ai_export/components/drawdown_context.py` |
 | Asset payload components | `backend/app/services/ai_export/components/asset_payloads.py`, `backend/app/services/ai_export/components/asset_core.py` |
 | Applicability contract (successor to the deleted profile) | `backend/app/services/ai_export/analyses/spec.py`, `backend/app/services/ai_export/components/spec.py` |

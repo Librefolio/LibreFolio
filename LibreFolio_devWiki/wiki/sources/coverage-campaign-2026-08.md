@@ -3,7 +3,7 @@ title: "The 2026-08 coverage campaign"
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-coverage-campaign.md, plan-storico-coverage-campaign-2.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-storico-coverage-campaign.md, plan-storico-coverage-campaign-2.md"
 tags: [testing, coverage, campaign, frontend, backend, metrics]
 related:
   - concepts/coverage-rate-vs-volume
@@ -160,7 +160,7 @@ formula is not a number; a coverage number without its worker count is not compa
 | JS merge (istanbul) | `frontend/scripts/js-coverage-report.js` |
 | JS instrumentation | `frontend/vite.config.ts`, `frontend/vitest.config.ts` |
 | Extraction precedent | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Original plans | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-coverage-campaign.md`, `.../plan-storico-coverage-campaign-2.md` |
+| Original plans | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-storico-coverage-campaign.md`, `.../plan-storico-coverage-campaign-2.md` |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file
 > has never existed** — it was proposal B.3 of `plan-p7-js-coverage.md:227`, and the

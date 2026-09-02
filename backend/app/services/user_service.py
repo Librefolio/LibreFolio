@@ -406,7 +406,7 @@ async def search_users(
             "id": user.id,
             "username": user.username,
             "avatar_url": settings.avatar_url if settings else None,
-            **({"is_admin": user.is_superuser} if admins_only else {}),
+            **({"is_admin": user.is_superuser, "email": user.email} if admins_only else {}),
         }
         for user, settings in rows
     ]

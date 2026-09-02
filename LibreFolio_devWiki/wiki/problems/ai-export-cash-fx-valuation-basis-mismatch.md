@@ -54,7 +54,7 @@ The invalid invariant blocked an otherwise valid Portfolio export during live E2
 
 ## Final verification
 
-The 27 July Phase 0 gate retained the corrected denominator through the cross-domain browser flow and approved representative desktop/mobile Portfolio Snapshot and prompt behavior. The plan chain is closed and indexed by `Release_2/Phase_0/01_signalMigration/02_aiExport/README.md`; no Portfolio Engine rewrite was introduced.
+The 27 July Phase 0 gate retained the corrected denominator through the cross-domain browser flow and approved representative desktop/mobile Portfolio Snapshot and prompt behavior. The plan chain is closed and indexed by `Release_2/phases/01_signalMigration/02_aiExport/README.md`; no Portfolio Engine rewrite was introduced.
 
 ## Links
 
@@ -67,7 +67,7 @@ The 27 July Phase 0 gate retained the corrected denominator through the cross-do
 
 | Role | Path |
 |------|------|
-| Final plan and archive index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md`, `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
+| Final plan and archive index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md`, `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
 | Portfolio payload (successor to the deleted assembler) | `backend/app/services/ai_export/components/payloads/portfolio_broker.py` |
 | Portfolio financial components (cash totals, balances, allocations) | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | Composition entrypoint | `backend/app/services/ai_export/composer.py` |

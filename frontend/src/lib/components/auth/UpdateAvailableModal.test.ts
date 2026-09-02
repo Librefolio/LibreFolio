@@ -46,8 +46,9 @@ describe('UpdateAvailableModal (F14)', () => {
         expect(screen.getByTestId('update-available-message')).toBeInTheDocument();
         expect(screen.getByTestId('update-available-release')).toHaveAttribute('href', RELEASE.url);
         expect(screen.getByTestId('update-available-release')).toHaveAttribute('target', '_blank');
-        // Locale-prefixed updating guide, same scheme as HelpMenu.
-        expect(screen.getByTestId('update-available-guide').getAttribute('href')).toMatch(/^\/mkdocs\/([a-z]{2}\/)?user\/installation\/$/);
+        // Locale-prefixed updating guide, deep-linked to the {#updating} anchor
+        // (added to all four locales' installation pages for exactly this).
+        expect(screen.getByTestId('update-available-guide').getAttribute('href')).toMatch(/^\/mkdocs\/([a-z]{2}\/)?user\/installation\/#updating$/);
     });
 
     it('"later" hides the modal without dismissing the version', async () => {

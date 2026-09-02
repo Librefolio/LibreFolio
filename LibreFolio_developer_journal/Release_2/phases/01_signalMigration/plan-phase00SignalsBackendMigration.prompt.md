@@ -6,10 +6,10 @@
 
 ## Contesto e fonti
 
-- [Roadmap & Signals Brainstorm](../Ai_ideas/roadmap_and_signals_brainstorm.md)
-- [Phase 0 Detailed Roadmap](../Ai_ideas/phase_0_detailed_roadmap.md)
-- [AI Feature Decisions](../Ai_ideas/brainstorming_ai_features.md)
-- [MCP Architecture Draft](../Ai_ideas/mcp_server_architecture_draft.md)
+- [Roadmap & Signals Brainstorm](../../Ai_ideas/roadmap_and_signals_brainstorm.md)
+- [Phase 0 Detailed Roadmap](../../Ai_ideas/phase_0_detailed_roadmap.md)
+- [AI Feature Decisions](../../Ai_ideas/brainstorming_ai_features.md)
+- [MCP Architecture Draft](../../Ai_ideas/mcp_server_architecture_draft.md)
 - [Simbiosi pandas-ta-classic + TA-Lib](./research-phase00PandasTaTalibSymbiosis.md)
 - [Mappa delegazione pandas-ta → TA-Lib](./pandas-ta-talib-delegation.json)
 - [Backend previsti per i segnali LibreFolio](./librefolio-signal-backends.json)

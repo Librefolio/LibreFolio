@@ -4,7 +4,7 @@ category: source
 source_type: plan
 date_ingested: 2026-07-26
 date_updated: 2026-08-05
-original_path: LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md
+original_path: LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
 tags: [phase0, ai-export, backend, frontend, snapshot, hard-cutover, mcp, security, ui-memory, accessibility, sampling, documentation]
 related:
@@ -161,17 +161,17 @@ The original four journal files were untracked at final closure, so the registry
 
 | Role | Path |
 |------|------|
-| Completed chain index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
-| Implementation plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
-| Frozen task/profile contract | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/contract-phase00AiExportTaskProfiles.md` |
-| Migration equivalence report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` |
-| Final hardening and documentation report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalHardeningAndDocumentationV1.md` |
-| Cross-domain density audit | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportCrossDomainDensityAuditV1.md` |
-| UI catalog explanation and prompt verification | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
+| Completed chain index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
+| Implementation plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
+| Frozen task/profile contract | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/contract-phase00AiExportTaskProfiles.md` |
+| Migration equivalence report | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportMigrationEquivalence.md` |
+| Final hardening and documentation report | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportFinalHardeningAndDocumentationV1.md` |
+| Cross-domain density audit | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportCrossDomainDensityAuditV1.md` |
+| UI catalog explanation and prompt verification | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |
 | Composition architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
-| Final audit plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportFinalAuditAndLegacyRemoval.prompt.md` |
-| Final audit and closure | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
+| Final audit plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportFinalAuditAndLegacyRemoval.prompt.md` |
+| Final audit and closure | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
 | API contract | `backend/app/schemas/ai_export_runtime.py` |
 | Runtime service | `backend/app/services/ai_export/runtime_service.py` |
 | Composition platform | `backend/app/services/ai_export/components/`, `backend/app/services/ai_export/datasets/`, `backend/app/services/ai_export/analyses/` |

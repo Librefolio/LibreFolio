@@ -1,10 +1,11 @@
 # Plan — SearXNG Metasearch Adapter for the Web Link-Finder
 
-> **STATUS: DEFERRED — Fase B (2026-07-28).** The *immediate* replacement is instead the
-> **ddgs metasearch library** (pip, multi-engine, zero-infra) — see
-> `plan-phase00DdgsMetasearchEngine.prompt.md`. This SearXNG plan is kept as the optional
-> power-user upgrade, revisited **only if** search usage outgrows ddgs (tracked in
-> `../../todo_futuri.md`). When revisited, the runtime engine chain becomes `[searxng → ddgs]`.
+> **STATUS: DEFERRED — Fase B (2026-07-28), confermato 2026-09-02.** Il piano ddgs
+> (`../phases/phase-00-web-search-ddgs/plan-phase00DdgsMetasearchEngine.prompt.md`) è stato
+> eseguito e archiviato: `DdgsEngine` vive in `backend/app/services/web_link_finder.py` e
+> `ddgs==9.14.4` è in `requirements.txt`. Questo piano SearXNG resta come upgrade opzionale
+> per power-user, da riaprire **solo se** l'uso del cerca supera ddgs (vedi
+> `../../../../TODO_FUTURI.md`). Quando riaperto, la catena engine diventa `[searxng → ddgs]`.
 
 > Replace the fragile, hand-rolled DuckDuckGo HTML scraper behind the asset
 > web link-finder with a pluggable **SearXNG** metasearch adapter. SearXNG is a
@@ -18,7 +19,7 @@
 
 Related history:
 - Broker Import Recovery (origin of the link-finder + BI meta-search idea):
-  `../03_brokerImportRecovery/plan-phase00BrokerImportRecovery.prompt.md`
+  `../phases/phase-00-broker-import-recovery/plan-phase00BrokerImportRecovery.prompt.md`
   (§ "Meta-search transport: prefer an official search API behind a small pluggable interface")
 - Link-finder integration lives in `backend/app/services/web_link_finder.py`
   (already a pluggable `_SearchEngine` Protocol + `_build_engine()` selector) and is
