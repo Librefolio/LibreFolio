@@ -104,8 +104,8 @@ defaults.
 
 | Role | Path |
 |------|------|
-| Final plan and approval record | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
-| Completed chain index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
+| Final plan and approval record | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
+| Completed chain index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
 | TTL session memory | `frontend/src/lib/features/ai-export/aiExportMemory.ts` |
 | Reactive hydration and stale-operation guards | `frontend/src/lib/features/ai-export/AiExportMenu.svelte` |
 | Raw note draft / effective option separation | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte` |

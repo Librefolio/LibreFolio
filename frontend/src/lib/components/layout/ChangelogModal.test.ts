@@ -525,7 +525,7 @@ describe('ChangelogModal — manual update check (round 5)', () => {
         expect(api[SEARCH]).not.toHaveBeenCalled();
     });
 
-    it('non-admin + newer release → the amber banner lists the admins from the users search', async () => {
+    it('non-admin + newer release → the ask-admin modal lists the admins from the users search', async () => {
         authStore.set({user: {id: 5, username: 'carol', is_superuser: false}});
         checkForNewerReleaseMock.mockResolvedValue(RELEASE);
         api[SEARCH].mockResolvedValue({items: [{username: 'rooty'}, {username: 'boss'}]});
@@ -534,12 +534,14 @@ describe('ChangelogModal — manual update check (round 5)', () => {
 
         await fireEvent.click(checkBtn());
 
-        await waitFor(() => expect(screen.getByTestId('changelog-ask-admin')).toBeInTheDocument());
+        // Round 7: the ask-admin hint is its own modal, not a banner row.
+        await waitFor(() => expect(screen.getByTestId('ask-admin-modal')).toBeInTheDocument());
         // The admin list comes from the dedicated query, not from a hardcode.
         expect(api[SEARCH]).toHaveBeenCalledWith({queries: {q: '', admins: true}});
-        // One badge per admin, in the search's order (this test's own data).
-        const badges = screen.getAllByTestId('changelog-admin-badge').map((b) => b.textContent);
-        expect(badges).toEqual(['rooty', 'boss']);
+        // One row per admin, in the search's order (this test's own data).
+        const rows = screen.getAllByTestId('ask-admin-row').map((r) => r.textContent);
+        expect(rows.join(' ')).toContain('rooty');
+        expect(rows.join(' ')).toContain('boss');
         // The F14 modal is NOT triggered for non-admins.
         expect(updateAvailableMock.show).not.toHaveBeenCalled();
         // The up-to-date toast is NOT shown on this path.

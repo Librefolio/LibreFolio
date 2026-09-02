@@ -157,9 +157,9 @@ The completed Phase 0 plan records approval by the project owner and implementat
 
 | Role | Path |
 |------|------|
-| Completed chain index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
-| Final audit plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportFinalAuditAndLegacyRemoval.prompt.md` |
-| Final audit and closure | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
+| Completed chain index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
+| Final audit plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportFinalAuditAndLegacyRemoval.prompt.md` |
+| Final audit and closure | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |
 | Composition and `all_data` semantics | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | Runtime schemas | `backend/app/schemas/ai_export_runtime.py` |

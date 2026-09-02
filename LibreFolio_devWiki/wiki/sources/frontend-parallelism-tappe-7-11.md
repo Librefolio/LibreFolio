@@ -3,7 +3,7 @@ title: "Frontend parallelism — tappe 7-11, and the removal of sleeps"
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-tappe-7-11-parallelismo-COMPLETO.md, tappa9-desleep.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-tappe-7-11-parallelismo-COMPLETO.md, tappa9-desleep.md"
 tags: [testing, parallelism, playwright, frontend, performance, flakiness]
 related:
   - concepts/playwright-run-consolidation
@@ -72,4 +72,4 @@ polluting variable.
 | Playwright config | `frontend/playwright.config.ts` |
 | Hygiene + coverage fixtures | `frontend/e2e/fixtures/playwright.ts` |
 | Test server | `scripts/test_runner/_server.py` |
-| Original plans | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-tappe-7-11-parallelismo-COMPLETO.md`, `tappa9-desleep.md` |
+| Original plans | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-tappe-7-11-parallelismo-COMPLETO.md`, `tappa9-desleep.md` |

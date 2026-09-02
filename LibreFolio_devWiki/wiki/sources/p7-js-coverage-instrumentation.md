@@ -3,7 +3,7 @@ title: "P7 — JavaScript/Svelte coverage instrumentation"
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p7-js-coverage.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p7-js-coverage.md"
 tags: [testing, coverage, frontend, svelte, playwright, vitest, monocart, instrumentation]
 related:
   - concepts/coverage-rate-vs-volume
@@ -93,7 +93,7 @@ That pattern recurred later at a larger scale in
 | E2E coverage fixture | `frontend/e2e/fixtures/playwright.ts` |
 | Coverage CLI | `scripts/test_runner/_coverage.py` |
 | Reports | `htmlcov-frontend/`, `frontend/coverage-js/` |
-| Original plan | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p7-js-coverage.md` |
+| Original plan | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p7-js-coverage.md` |
 
 > **Path note (2026-09-01)**: this table cited `frontend/mcr.config.js`. **That file
 > has never existed** — it was proposal B.3 of `plan-p7-js-coverage.md:227`, and the

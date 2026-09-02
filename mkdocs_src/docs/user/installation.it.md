@@ -204,7 +204,7 @@ Per le istruzioni dettagliate su cosa salvare e su come eseguire backup consiste
 
 ---
 
-## 🔄 Aggiornamento di LibreFolio
+## 🔄 Aggiornamento di LibreFolio {#updating}
 
 ### ⚠️ Attenzione: Stato di Alpha
 LibreFolio è attualmente in fase di sviluppo **Alpha**. Questo significa che tra una versione e l'altra potrebbero esserci modifiche strutturali o migrazioni del database che potrebbero impedire l'avvio della nuova versione, richiedendo un intervento manuale o il ripristino di una versione precedente.

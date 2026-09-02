@@ -204,7 +204,7 @@ Para obtener instrucciones detalladas sobre qué guardar y cómo realizar copias
 
 ---
 
-## 🔄 Actualizar LibreFolio
+## 🔄 Actualizar LibreFolio {#updating}
 
 ### ⚠️ Advertencia: Estado Alpha
 LibreFolio se encuentra actualmente en desarrollo **Alpha**. Esto significa que entre versiones puede haber cambios estructurales o migraciones de base de datos que podrían impedir el inicio de la nueva versión, lo que requiere intervención manual o restaurar una versión anterior.

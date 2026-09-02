@@ -107,12 +107,12 @@ The original real-service diagnostic probe completed all 27 Asset/Broker/Portfol
 
 | Role | Path |
 |------|------|
-| Findings and quantitative report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportSizeAndTechnicalDensity.md` |
-| Raw 27-case probe output | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/probe-phase00AiExportTechnicalDensity.json` |
-| Signal Density V2 report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportSignalDensityV2.md` |
-| Signal Density V2 probe output | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/probe-phase00AiExportSignalDensityV2.json` |
-| Cross-domain density audit and applied-policy evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportCrossDomainDensityAuditV1.md` |
-| Final hardening approval and targeted evidence | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalHardeningAndDocumentationV1.md` |
+| Findings and quantitative report | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportSizeAndTechnicalDensity.md` |
+| Raw 27-case probe output | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/probe-phase00AiExportTechnicalDensity.json` |
+| Signal Density V2 report | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportSignalDensityV2.md` |
+| Signal Density V2 probe output | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/probe-phase00AiExportSignalDensityV2.json` |
+| Cross-domain density audit and applied-policy evidence | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportCrossDomainDensityAuditV1.md` |
+| Final hardening approval and targeted evidence | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportFinalHardeningAndDocumentationV1.md` |
 | Reproducible diagnostic probe | `backend/test_scripts/diagnostics/ai_export_technical_density_probe.py` |
 | Real-prompt validation probe | `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` |
 | Central indicator sampling matrix | `backend/app/services/ai_export/temporal/policy.py` |

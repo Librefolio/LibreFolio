@@ -3,7 +3,7 @@ title: "MkDocs English Source Audit 2026-08-05"
 category: source
 source_type: journal_entry
 date_ingested: 2026-08-05
-original_path: LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/mkdocsAudit/00_INDEX.md
+original_path: LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/mkdocsAudit/00_INDEX.md
 tags: [audit, mkdocs, documentation, backend, frontend, ai-export, fx, admin]
 related:
   - sources/wiki-audit-2026-06-18
@@ -51,8 +51,8 @@ authorization.
 
 | Role | Path |
 |---|---|
-| Audit index and cross-report synthesis | `LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/mkdocsAudit/00_INDEX.md` |
-| Reproducible source snapshot | `LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/mkdocsAudit/00_BASELINE.md` |
-| Domain findings | `LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/mkdocsAudit/01_user-core.md` through `07_site-community-gallery.md` |
-| Capability taxonomy | `LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/mkdocsAudit/08-functionality-gap-taxonomy.md` |
+| Audit index and cross-report synthesis | `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/mkdocsAudit/00_INDEX.md` |
+| Reproducible source snapshot | `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/mkdocsAudit/00_BASELINE.md` |
+| Domain findings | `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/mkdocsAudit/01_user-core.md` through `07_site-community-gallery.md` |
+| Capability taxonomy | `LibreFolio_developer_journal/Release_2/phases/05_cleanAudit/mkdocsAudit/08-functionality-gap-taxonomy.md` |
 | Published documentation navigation | `mkdocs_src/mkdocs.yml` |

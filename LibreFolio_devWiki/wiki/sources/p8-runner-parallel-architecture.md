@@ -3,7 +3,7 @@ title: "P8 — test runner migration: isolation classes, derived inventory, reso
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p8-runner-migration.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p8-runner-migration.md"
 tags: [testing, test-runner, parallelism, isolation, tooling, architecture]
 related:
   - concepts/test-isolation-classes
@@ -79,7 +79,7 @@ the code navigable, P8 made the execution model explicit.
 | CLI contract | `scripts/test_runner/_cli.py` |
 | Run cache | `scripts/test_runner/_run_cache.py` |
 | `check-orphans` action | `scripts/test_runner/_cli.py` — `_check_orphan_tests()` (~L154) |
-| Original plan | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p8-runner-migration.md` |
+| Original plan | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p8-runner-migration.md` |
 
 > **Path note (2026-09-01)**: three rows here were invented at ingest time —
 > `_schedule.py` (the module is `_scheduler.py`), `_resources.py` (**never existed**;

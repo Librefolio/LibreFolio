@@ -3090,7 +3090,7 @@
   },
   "updateCheck": {
     "title": "Nouvelle version disponible",
-    "message": "LibreFolio {latest} est disponible — cette installation exécute la {current}.",
+    "message": "LibreFolio {latest} est disponible.",
     "guideLink": "Comment mettre à jour",
     "releaseLink": "Notes de version sur GitHub",
     "laterButton": "Me le rappeler plus tard",
@@ -3106,6 +3106,10 @@
     "checkNow": "Vérifier les mises à jour",
     "upToDate": "Vous utilisez la dernière version.",
     "askAdmin": "Une version plus récente existe. Demandez à un administrateur de mettre à jour :",
-    "searchResults": "Résultats :"
+    "searchResults": "Résultats :",
+    "copyEmail": "Copier l'email",
+    "copied": "Copié !",
+    "askAdminTitle": "Mise à jour disponible — contactez un administrateur",
+    "emailCopied": "Email copiée dans le presse-papiers"
   }
 }

@@ -3,7 +3,7 @@ title: "P9 — test semantics: what the suite is allowed to assert"
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p9-test-semantics-COMPLETO.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p9-test-semantics-COMPLETO.md"
 tags: [testing, semantics, coverage, method, backend, frontend]
 related:
   - concepts/load-only-red-is-a-product-defect
@@ -57,4 +57,4 @@ P9 repeatedly refused to accept a green as evidence. Two habits carried it:
 | Cache wrapper | `backend/app/utils/cache_utils.py` |
 | Consolidation and chunking | `scripts/test_runner/_consolidate.py` |
 | Triage protocol | `.github/skills/devpy-tools/test-triage/SKILL.md` |
-| Original plan | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-p9-test-semantics-COMPLETO.md` |
+| Original plan | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-p9-test-semantics-COMPLETO.md` |

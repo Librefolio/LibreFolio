@@ -12,6 +12,7 @@
     import {marked} from 'marked';
     import {tick} from 'svelte';
     import {ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, RefreshCw, Search} from 'lucide-svelte';
+    import AskAdminModal from '$lib/components/auth/AskAdminModal.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {CHANGELOG_REMOTE_URL, changelogChapters, type ChangelogChapter, type ChangelogSection} from '$lib/features/changelog/changelog';
     import {auth} from '$lib/stores/app/auth';
@@ -178,7 +179,7 @@
     // =========================================================================
     type CheckState = 'idle' | 'checking' | 'newer' | 'ask-admin';
     let checkState = $state<CheckState>('idle');
-    let admins = $state<string[]>([]);
+    let admins = $state<Array<{username: string; email: string | null}>>([]);
     const isAdmin = $derived($auth.user?.is_superuser === true);
 
     async function handleCheckNow() {
@@ -197,10 +198,10 @@
                 updateAvailable.show(release);
                 checkState = 'newer';
             } else {
-                // Non-admin: point at the administrators who can act on it.
+                // Non-admin: open the ask-admin modal listing the administrators.
                 checkState = 'ask-admin';
                 const res = await zodiosApi.search_users_endpoint_api_v1_users_search_get({queries: {q: '', admins: true}});
-                admins = ((res as {items?: Array<{username: string}>}).items ?? []).map((u) => u.username);
+                admins = ((res as {items?: Array<{username: string; email?: string | null}>}).items ?? []).map((u) => ({username: u.username, email: u.email ?? null}));
             }
         } catch {
             checkState = 'idle';
@@ -210,11 +211,27 @@
 
 <ModalBase {open} onRequestClose={onClose} maxWidth="4xl" testId="changelog-modal">
     <div class="bg-white dark:bg-slate-800 rounded-xl flex flex-col max-h-[85vh]">
-        <!-- Header -->
-        <div class="flex items-center justify-between gap-3 p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 shrink-0">{$_('changelog.title')}</h2>
-            <!-- Search descends into the folds -->
-            <div class="relative flex-1 max-w-xs">
+        <!-- Header rows:
+             - Row 1 (always): title + expand/collapse + GitHub link.
+             - Row 2: search (left) + update-check (right). On ≥sm everything merges
+               into one line; on mobile the two rows stay distinct. -->
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
+            <!-- Row 1 -->
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 shrink-0 order-1">{$_('changelog.title')}</h2>
+            <div class="flex items-center gap-1 shrink-0 order-2 sm:order-2 ml-auto">
+                <button type="button" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={$_('changelog.expandAll')} onclick={() => setAll(true)} data-testid="changelog-expand-all">
+                    <ChevronsUpDown size={15} />
+                </button>
+                <button type="button" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={$_('changelog.collapseAll')} onclick={() => setAll(false)} data-testid="changelog-collapse-all">
+                    <ChevronsDownUp size={15} />
+                </button>
+                <a href={CHANGELOG_REMOTE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-medium text-libre-green dark:text-green-400 hover:underline ml-1" data-testid="changelog-remote-link">
+                    <ExternalLink size={13} />
+                    <span class="hidden sm:inline">{$_('changelog.viewRemote')}</span>
+                </a>
+            </div>
+            <!-- Row 2: search (left) + update check (right). Full-width row on mobile. -->
+            <div class="relative flex-1 min-w-32 max-w-xs order-3 sm:order-3">
                 <Search size={14} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 <input
                     type="text"
@@ -224,7 +241,7 @@
                     data-testid="changelog-search"
                 />
             </div>
-            <div class="flex items-center gap-1 shrink-0">
+            <div class="flex items-center gap-1 shrink-0 order-4 sm:order-4 ml-auto sm:ml-0">
                 <!-- Update check (F14): same checkForNewerRelease as the login flow -->
                 <button
                     type="button"
@@ -237,16 +254,6 @@
                     <RefreshCw size={13} class={checkState === 'checking' ? 'animate-spin' : ''} />
                     <span class="hidden sm:inline">{$_('changelog.checkNow')}</span>
                 </button>
-                <button type="button" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={$_('changelog.expandAll')} onclick={() => setAll(true)} data-testid="changelog-expand-all">
-                    <ChevronsUpDown size={15} />
-                </button>
-                <button type="button" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={$_('changelog.collapseAll')} onclick={() => setAll(false)} data-testid="changelog-collapse-all">
-                    <ChevronsDownUp size={15} />
-                </button>
-                <a href={CHANGELOG_REMOTE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-medium text-libre-green dark:text-green-400 hover:underline ml-1" data-testid="changelog-remote-link">
-                    <ExternalLink size={13} />
-                    {$_('changelog.viewRemote')}
-                </a>
             </div>
         </div>
 
@@ -262,12 +269,8 @@
             </div>
         {/if}
         {#if checkState === 'ask-admin'}
-            <div class="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10 shrink-0 text-xs text-amber-700 dark:text-amber-300" data-testid="changelog-ask-admin">
-                <span>{$_('changelog.askAdmin')}</span>
-                {#each admins as name (name)}
-                    <span class="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 font-medium" data-testid="changelog-admin-badge">{name}</span>
-                {/each}
-            </div>
+            <!-- Non-admin + newer release: the AskAdminModal lists the admins. -->
+            <AskAdminModal open={true} {admins} onClose={() => (checkState = 'idle')} />
         {/if}
 
         {#if changelogChapters.length === 0}

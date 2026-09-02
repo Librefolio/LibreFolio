@@ -140,8 +140,8 @@ were reread; all 66 are `OPTIMAL`.
 
 | Role | Path |
 |------|------|
-| Discovery/report | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
-| Final audit and closure | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
+| Discovery/report | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportUiPromptCatalogExplainedV1.md` |
+| Final audit and closure | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/report-phase00AiExportFinalAuditAndClosureV1.md` |
 | Developer composition overview | `mkdocs_src/docs/developer/architecture/patterns/ai_export_composition.md` |
 | Dataset catalog and `all_data` unions | `backend/app/services/ai_export/datasets/catalog.py`, `backend/app/services/ai_export/datasets/spec.py` |
 | Analysis composition | `backend/app/services/ai_export/analyses/catalog.py`, `backend/app/services/ai_export/analyses/spec.py` |

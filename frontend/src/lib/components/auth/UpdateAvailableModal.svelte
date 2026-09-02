@@ -7,7 +7,8 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {ArrowUpCircle, BookOpen, ExternalLink} from 'lucide-svelte';
+    import {ArrowRight, ArrowUpCircle, BookOpen, ExternalLink} from 'lucide-svelte';
+    import {getStringBadgeStyle} from '$lib/utils/colors';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
 
@@ -20,11 +21,12 @@
 
     let release = $derived(updateAvailable.release);
 
-    /** Updating guide, locale-prefixed like HelpMenu.mkdocsUrl. */
+    /** Updating guide, locale-prefixed like HelpMenu.mkdocsUrl, deep-linked to the
+     *  stable {#updating} anchor (added to all four locales' installation pages). */
     function updatingGuideUrl(): string {
         const lang = localStorage.getItem('librefolio-locale') || 'en';
         const prefix = lang !== 'en' ? `${lang}/` : '';
-        return `/mkdocs/${prefix}user/installation/`;
+        return `/mkdocs/${prefix}user/installation/#updating`;
     }
 </script>
 
@@ -38,6 +40,14 @@
             <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed" data-testid="update-available-message">
                 {$_('updateCheck.message', {values: {latest: release.version, current: currentVersion}})}
             </p>
+            <!-- Version badges: current → latest (round 7); colors from the
+                 shared golden-ratio palette so the two are always distinct
+                 and readable in both themes (round 7 fix). Centered row. -->
+            <div class="flex items-center justify-center gap-2" data-testid="update-available-versions">
+                <span class="version-badge px-2.5 py-1 rounded-lg font-mono text-xs font-medium" style={getStringBadgeStyle('installed')} data-testid="update-available-current">{currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`}</span>
+                <ArrowRight size={16} class="text-libre-green dark:text-green-400 shrink-0" />
+                <span class="version-badge px-2.5 py-1 rounded-lg font-mono text-xs font-semibold" style={getStringBadgeStyle('latest-release')} data-testid="update-available-latest">v{release.version}</span>
+            </div>
             <div class="flex flex-col gap-1.5 text-sm">
                 <a href={updatingGuideUrl()} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 font-medium text-libre-green dark:text-green-400 hover:underline" data-testid="update-available-guide">
                     <BookOpen size={15} />
@@ -60,3 +70,17 @@
         </div>
     {/if}
 </ModalBase>
+
+<style>
+    /* Version badges consume the shared golden-ratio palette's CSS custom
+       properties (see $lib/utils/colors.getStringBadgeStyle). */
+    .version-badge {
+        background: var(--badge-bg, #e2e8f0);
+        color: var(--badge-text, #334155);
+    }
+
+    :global(html.dark) .version-badge {
+        background: var(--badge-dark-bg, #334155);
+        color: var(--badge-dark-text, #e2e8f0);
+    }
+</style>

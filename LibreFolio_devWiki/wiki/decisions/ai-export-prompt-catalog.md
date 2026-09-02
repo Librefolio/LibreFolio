@@ -148,7 +148,7 @@ a third time on the asset detail page.
 | Role | Path |
 |------|------|
 | Historical MVP report | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/Ai_consultant_engine/report_ai_export_mvp.md` |
-| Superseding Phase 0 plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
+| Superseding Phase 0 plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md` |
 | Current backend platform | `backend/app/services/ai_export/` |
 | Current frontend task catalog | `frontend/src/lib/features/ai-export/catalog/` |
 | Current analysis/options UI | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/features/ai-export/aiExportOptions.ts` |
@@ -156,5 +156,5 @@ a third time on the asset detail page.
 | Domain-aware manual link | `frontend/src/lib/components/ui/DocsLink.svelte` |
 | Current prompt renderer | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |
 | Final cross-surface E2E | `frontend/e2e/ai-export/` |
-| Completed Phase 0 index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
+| Completed Phase 0 index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
 | Developer architecture | `mkdocs_src/docs/developer/architecture/patterns/ai_export_snapshot.md` |

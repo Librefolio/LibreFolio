@@ -3,7 +3,7 @@ title: "Phases 0-1-2 and the sync / pure-logic lanes"
 category: source
 source_type: plan
 date_ingested: 2026-08-31
-original_path: "LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-fase012.md, plan-storico-corsie-sync-e-logica.md"
+original_path: "LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-storico-fase012.md, plan-storico-corsie-sync-e-logica.md"
 tags: [testing, coverage, frontend, sync, dates, metrics]
 related:
   - concepts/coverage-rate-vs-volume
@@ -52,4 +52,4 @@ delta but three measurement findings and one class of product defect.
 | Table components (`sortFn`) | `frontend/src/lib/components/table/` |
 | Date sentinels and range store | `frontend/src/lib/utils/dateOnly.ts`, `frontend/src/lib/stores/dateRangeStore.svelte.ts` |
 | Spec date helpers | `frontend/e2e/fixtures/dates.ts` |
-| Original plans | `LibreFolio_developer_journal/Release_2/Phase_0/07_coverageAndConsolidationCampaign/plan-storico-fase012.md`, `plan-storico-corsie-sync-e-logica.md` |
+| Original plans | `LibreFolio_developer_journal/Release_2/phases/07_coverageAndConsolidationCampaign/plan-storico-fase012.md`, `plan-storico-corsie-sync-e-logica.md` |

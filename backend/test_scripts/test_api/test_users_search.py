@@ -311,7 +311,9 @@ class TestUserSearch:
                 for u in items:
                     assert "is_admin" in u, "admins=true rows must carry the flag"
                     assert u["is_admin"] is True, f"Non-superuser or unflagged row in admins list: {u['username']}"
-                    assert "email" not in u, "Email must stay hidden on the admins path too"
+                    # Email is intentionally exposed here: the endpoint is auth-gated
+                    # (logged-in users only) and the ask-admin banner needs it to link.
+                    assert "email" in u, "admins=true rows must carry the admin email"
 
                 print_success("✓ admins=true returns only superusers, each flagged is_admin=true")
             finally:

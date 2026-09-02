@@ -87,4 +87,4 @@ graph LR
 | Signals section UI | `frontend/src/lib/components/charts/ChartSignalsSection.svelte` |
 | Chart settings modal | `frontend/src/lib/components/charts/ChartSettingsModal.svelte` |
 | Signal label utility | `frontend/src/lib/charts/signalLabel.ts` |
-| Phase 0 execution plan | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |
+| Phase 0 execution plan | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/plan-phase00SignalsBackendMigrationImplementation.prompt.md` |

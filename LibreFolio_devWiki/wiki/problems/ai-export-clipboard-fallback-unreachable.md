@@ -55,7 +55,7 @@ The bug broke copy on otherwise capable non-modern clipboard environments. The f
 
 | Role | Path |
 |------|------|
-| Final plan and archive index | `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md`, `LibreFolio_developer_journal/Release_2/Phase_0/01_signalMigration/02_aiExport/README.md` |
+| Final plan and archive index | `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/plan-phase00AiExportBackendSnapshotImplementation.prompt.md`, `LibreFolio_developer_journal/Release_2/phases/01_signalMigration/02_aiExport/README.md` |
 | V2 preparation and clipboard orchestration | `frontend/src/lib/features/ai-export/aiExportClipboard.ts` |
 | Modern/fallback regression tests | `frontend/src/lib/features/ai-export/__tests__/aiExportClipboard.test.ts` |
 | Snapshot hidden-note E2E | `frontend/e2e/ai-export/` |
