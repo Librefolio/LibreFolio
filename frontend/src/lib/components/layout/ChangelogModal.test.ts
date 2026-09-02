@@ -129,6 +129,11 @@ vi.mock('$lib/features/update-check/updateCheck', () => ({
 const updateAvailableMock = vi.hoisted(() => ({show: vi.fn(), close: vi.fn(), skipVersion: vi.fn()}));
 vi.mock('$lib/features/update-check/updateCheckStore.svelte', () => ({updateAvailable: updateAvailableMock}));
 
+// Round 6: "up to date" is a toast, not a banner — toasts is mocked so the
+// toast content and the no-banner invariant are both observable.
+const toastsMock = vi.hoisted(() => ({success: vi.fn(), error: vi.fn(), warning: vi.fn()}));
+vi.mock('$lib/stores/app/toastStore.svelte', () => ({toasts: toastsMock}));
+
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import ChangelogModal from './ChangelogModal.svelte';
 import {CHANGELOG_REMOTE_URL} from '$lib/features/changelog/changelog';
@@ -169,6 +174,7 @@ beforeEach(() => {
     api[SEARCH].mockResolvedValue({items: []});
     checkForNewerReleaseMock.mockReset();
     updateAvailableMock.show.mockClear();
+    toastsMock.success.mockClear();
     authStore.set({user: null});
 });
 
@@ -497,7 +503,7 @@ describe('ChangelogModal — manual update check (round 5)', () => {
 
         await fireEvent.click(checkBtn());
 
-        await waitFor(() => expect(screen.getByTestId('changelog-up-to-date')).toBeInTheDocument());
+        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
         expect(screen.queryByTestId('changelog-ask-admin')).not.toBeInTheDocument();
         expect(updateAvailableMock.show).not.toHaveBeenCalled();
         // Up-to-date is decided before any admin lookup — no users search fires.
@@ -515,7 +521,6 @@ describe('ChangelogModal — manual update check (round 5)', () => {
         // The F14 modal takes over: the release is handed over verbatim.
         await waitFor(() => expect(updateAvailableMock.show).toHaveBeenCalledWith(RELEASE));
         expect(screen.queryByTestId('changelog-ask-admin')).not.toBeInTheDocument();
-        expect(screen.queryByTestId('changelog-up-to-date')).not.toBeInTheDocument();
         // An admin needs no admin list — the search endpoint is never hit.
         expect(api[SEARCH]).not.toHaveBeenCalled();
     });
@@ -537,7 +542,8 @@ describe('ChangelogModal — manual update check (round 5)', () => {
         expect(badges).toEqual(['rooty', 'boss']);
         // The F14 modal is NOT triggered for non-admins.
         expect(updateAvailableMock.show).not.toHaveBeenCalled();
-        expect(screen.queryByTestId('changelog-up-to-date')).not.toBeInTheDocument();
+        // The up-to-date toast is NOT shown on this path.
+        expect(toastsMock.success).not.toHaveBeenCalled();
     });
 
     it('a second click while the probe is in flight is a no-op', async () => {
@@ -560,7 +566,7 @@ describe('ChangelogModal — manual update check (round 5)', () => {
 
         // Settle the probe: the outcome renders and the button recovers.
         resolveProbe(null);
-        await waitFor(() => expect(screen.getByTestId('changelog-up-to-date')).toBeInTheDocument());
+        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
         await waitFor(() => expect(checkBtn()).toBeEnabled());
     });
 
@@ -574,14 +580,13 @@ describe('ChangelogModal — manual update check (round 5)', () => {
 
         // Back to idle: button usable again, no outcome bar, no delegation.
         await waitFor(() => expect(checkBtn()).toBeEnabled());
-        expect(screen.queryByTestId('changelog-up-to-date')).not.toBeInTheDocument();
         expect(screen.queryByTestId('changelog-ask-admin')).not.toBeInTheDocument();
         expect(updateAvailableMock.show).not.toHaveBeenCalled();
 
         // Not stuck: a retry really probes again and can succeed.
         await fireEvent.click(checkBtn());
         await waitFor(() => expect(checkForNewerReleaseMock).toHaveBeenCalledTimes(2));
-        await waitFor(() => expect(screen.getByTestId('changelog-up-to-date')).toBeInTheDocument());
+        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
     });
 
     it('a failed admin search after a hit also returns to idle — the banner does not stay', async () => {
@@ -608,7 +613,7 @@ describe('ChangelogModal — manual update check (round 5)', () => {
 
         await fireEvent.click(checkBtn());
 
-        await waitFor(() => expect(screen.getByTestId('changelog-up-to-date')).toBeInTheDocument());
+        await waitFor(() => expect(toastsMock.success).toHaveBeenCalled());
         expect(checkForNewerReleaseMock).not.toHaveBeenCalled();
     });
 });

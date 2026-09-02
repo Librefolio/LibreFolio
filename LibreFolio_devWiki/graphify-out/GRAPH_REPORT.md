@@ -1,16 +1,16 @@
-# Graph Report - corpus  (2026-08-31)
+# Graph Report - corpus  (2026-09-02)
 
 ## Corpus Check
-- 100 files · ~55,908 words
+- 100 files · ~56,066 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1617 nodes · 2277 edges · 167 communities (150 shown, 17 thin omitted)
+- 1618 nodes · 2278 edges · 160 communities (143 shown, 17 thin omitted)
 - Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 132 edges (avg confidence: 0.83)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c8bdbaea`
+- Built from commit: `29ac61a2`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -164,22 +164,15 @@
 - [[_COMMUNITY_Community 147|Community 147]]
 - [[_COMMUNITY_Community 148|Community 148]]
 - [[_COMMUNITY_Community 149|Community 149]]
-- [[_COMMUNITY_Community 150|Community 150]]
-- [[_COMMUNITY_Community 151|Community 151]]
-- [[_COMMUNITY_Community 152|Community 152]]
 - [[_COMMUNITY_Community 153|Community 153]]
 - [[_COMMUNITY_Community 154|Community 154]]
 - [[_COMMUNITY_Community 155|Community 155]]
-- [[_COMMUNITY_Community 156|Community 156]]
-- [[_COMMUNITY_Community 157|Community 157]]
 - [[_COMMUNITY_Community 158|Community 158]]
 - [[_COMMUNITY_Community 159|Community 159]]
-- [[_COMMUNITY_Community 160|Community 160]]
 - [[_COMMUNITY_Community 161|Community 161]]
 - [[_COMMUNITY_Community 163|Community 163]]
 - [[_COMMUNITY_Community 164|Community 164]]
 - [[_COMMUNITY_Community 165|Community 165]]
-- [[_COMMUNITY_Community 166|Community 166]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `F-048 — Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done)` - 76 edges
@@ -211,15 +204,15 @@
 ## Hyperedges (group relationships)
 - **Short-lived session memory decision mechanisms** — wiki_decisions_ai-export-contextual-ui-memory, wiki_decisions_ai-export-contextual-ui-memory_reactive_identity_bound_memory, wiki_decisions_ai-export-contextual-ui-memory_raw_note_effective_option_separation, wiki_decisions_ai-export-contextual-ui-memory_context_bound_in_flight_preparation, wiki_decisions_ai-export-contextual-ui-memory_concern_based_e2e_cutover [EXTRACTED 1.00]
 
-## Communities (167 total, 17 thin omitted)
+## Communities (160 total, 17 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.18
-Nodes (28): Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps, Resolve Validation Message Pattern, saveWithRetry — Frontend Modal Save Pattern, Stateless Preview Pattern — Controlled Components for Computed Values, Svelte 5 Runes Convention, Validate Scheduler Pattern, Blur detection: compare formatDecimalForDisplay() strings (not numeric tolerance), cost_basis_override as Currency object (not bare decimal) (+20 more)
+Cohesion: 0.06
+Nodes (120): Transactions Without-Asset Filter NaN URL Loop, Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Centralized TX Payload Layer, Entity Store Pattern — createEntityStore<T>() factory, Import Todo Signals, Opportunistic Cache Merge — assetStore.merge() as universal ingress, Paired Partner Architecture — pairedWith, getPartnerOp, visibleOps, Resolve Validation Message Pattern (+112 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.05
-Nodes (94): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Single Migration Strategy (001_initial.py), Asset Feature Connections, Dependency Graph — Full Project (+86 more)
+Cohesion: 0.06
+Nodes (93): Async I/O Rule (Event Loop Safety), Daily-Point Policy, Image Preview Cache Pattern, Log Level Policy, `/prices/current` has a persistence side-effect — never chain with `/sync`, Single Migration Strategy (001_initial.py), Asset Feature Connections, Dependency Graph — Full Project (+85 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.21
@@ -230,8 +223,8 @@ Cohesion: 0.05
 Nodes (50): Drawdown Chart, Drawdown Series, Loss-Recovery Asymmetry, Max Drawdown, Drawdown Recovery Time, Risk Analysis Application Plan, Applied Shock Bucket Audit, Shared Foundation and G6-11 Approval Gate (+42 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.07
-Nodes (41): Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), TimeSeriesStore pattern, Data editor unification — generic DataEditor component set (+33 more)
+Cohesion: 0.05
+Nodes (53): Backend-Only Calculations Rule, Backend Test Isolation via unique_id, CI/CD Release Pipeline, Dual View Pattern (Card Grid + DataTable), E2E data-testid Rule, EditBuffer pattern (DataRow status tracking), FX Range Helper Pattern (ensureFxRangeLoaded), Svelte 5 Runes Convention (+45 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.19
@@ -255,7 +248,7 @@ Nodes (18): Cash-Income Zero-Quantity Rule, Dividend, Dividend Yield, Dividend E
 
 ### Community 10 - "Community 10"
 Cohesion: 0.11
-Nodes (17): 📁 1. Create a project folder, 🛠️ 1. Manual Update, 🤖 2. Automatic Update (Watchtower), 📥 2. Get the base configuration files, 🔌 3. Other Management Alternatives, ▶️ 3. Start the application, 🌐 4. Access LibreFolio, 📶 5. Local and Remote Network Access (+9 more)
+Nodes (18): 📁 1. Create a project folder, 🛠️ 1. Manual Update, 🤖 2. Automatic Update (Watchtower), 📥 2. Get the base configuration files, 🔌 3. Other Management Alternatives, ▶️ 3. Start the application, 🌐 4. Access LibreFolio, 📶 5. Local and Remote Network Access (+10 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.16
@@ -386,8 +379,8 @@ Cohesion: 0.20
 Nodes (9): 🎨 Asset Picker, 🔐 Authentication, 🖥️ Desktop Gallery, 📤 File Uploader, ✂️ Image Editor, 🔑 Login Page, 🖼️ Media & Upload, 📝 Registration - Empty Form (+1 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.20
-Nodes (9): 🔐 Authentication, 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 🔑 Login Page, 📱 Mobile Gallery, 📝 Registration, 📂 Static Resources (+1 more)
+Cohesion: 0.22
+Nodes (8): 🎨 Asset Picker, 🔐 Authentication, 📤 File Uploader, ✂️ Image Editor, 🔑 Login Page, 🖼️ Media & Upload, 📱 Mobile Gallery, 📝 Registration
 
 ### Community 44 - "Community 44"
 Cohesion: 0.20
@@ -706,8 +699,8 @@ Cohesion: 0.50
 Nodes (3): 💱 FX Rates (Currency Exchange), 📋 The FX List Page, 🔮 What's Next?
 
 ### Community 123 - "Community 123"
-Cohesion: 0.50
-Nodes (4): 🎨 Asset Picker, 📤 File Uploader, ✂️ Image Editor, 🖼️ Media & Upload
+Cohesion: 0.40
+Nodes (5): 📋 Broker Reports (BRIM), 👁️ File Preview, 📁 Files, 📂 Static Resources, 🗂️ Static Resources - Grid View
 
 ### Community 124 - "Community 124"
 Cohesion: 0.50
@@ -741,18 +734,6 @@ Nodes (12): Empty Temporal-Row Public Rendering Hardening: Omit Only Completely 
 Cohesion: 0.31
 Nodes (13): Causality Boundary for News-Movement Links, LLM-Side Web Research Pattern, portfolio.market_events_review Analysis, Cited Current News Research, Clipboard-Only AI Export Boundary, Contextual AI Export Draft Memory, Dated Asset Movement-to-News Matching, Market Events Review Evidence Binding (+5 more)
 
-### Community 150 - "Community 150"
-Cohesion: 0.22
-Nodes (26): Pair-Adjacent Rendering + GoTo — linked TX pairs in TransactionsTable, Transaction Feature Connections, Dual-Transaction Form — TransactionFormModal paired mode (R6-B.1–B.3), Multi-Broker Atomic Transactions (not broker-scoped), Linked transaction pairs must have identical description and tags, Policy D — Destructive symmetric wipe on asset currency change, Price Currency: Hard-Reject Mismatch + 409 on Asset Currency Change, Server-Driven Type Rules — replace hardcoded frontend files (+18 more)
-
-### Community 151 - "Community 151"
-Cohesion: 0.18
-Nodes (19): Transactions Without-Asset Filter NaN URL Loop, Entity Store Pattern — createEntityStore<T>() factory, Opportunistic Cache Merge — assetStore.merge() as universal ingress, SafeDecimal — Preventing Scientific Notation in JSON Responses, ContextMenu default ON on all DataTables, DataTable Tooltip via CustomCell — no title= HTML attribute, Transactions Client-Side Filtering — W28 decision, F-047 — Transaction List Page (+11 more)
-
-### Community 152 - "Community 152"
-Cohesion: 0.32
-Nodes (16): Import Todo Signals, WorkspaceIntent Pattern, BRIM Fake Asset ID during Parse, BRIM is a Parser Only (Revision 2), Import Wizard v5 paradigm shift (v4→v5), ImportWizardModal, BRIM Framework (Broker Report Import), BRIM Plugins 11 broker parsers (+8 more)
-
 ### Community 153 - "Community 153"
 Cohesion: 0.12
 Nodes (15): 🧠 AI Export, 📈 Asset, ⚠️ Availability and Safety, 🗂️ Available Analyses, 📤 Available Export Data, 🏦 Broker, 🎛️ Export Options, 💱 FX (+7 more)
@@ -765,14 +746,6 @@ Nodes (15): 🧩 AI Export Composition and Prompt, 🧠 AnalysisSpec, 🗺️ Ap
 Cohesion: 0.14
 Nodes (14): ⏱️ AI Export Technical Sampling, 🔥 Calculation Range, Exported Range, and Warm-up, 🎯 Event Selection, 🧪 Extension and Testing Checklist, 🧮 Full Policy Matrix, 📈 Indicator Policy, 🗂️ Initial Instance Mapping, 🧾 Manifest Examples (+6 more)
 
-### Community 156 - "Community 156"
-Cohesion: 0.31
-Nodes (13): Centralized TX Payload Layer, Batch-only split/promote — eliminate standalone endpoints, CASH_TRANSFER first-class enum + Split/Promote via batch pipeline, Unified Batch Pipeline — 2 endpoints replace 4, Pydantic 422 Pre-emption Blocks Service-Layer Validation, Source: Phase 07 Part 4 Round 6 — Plan D: Split/Promote Full Stack, Source: Plan D1 — Backend Batch Pipeline + Promote-Suggest, Source: Plan D2 Bugfix 1 — Split/Promote Polish (+5 more)
-
-### Community 157 - "Community 157"
-Cohesion: 0.29
-Nodes (12): txStore Pattern — Single Source of Truth for Loaded Transactions, TransactionBulkModal mode removal — unified mode-less batch editor, PendingOp tagged union replaces DraftRow flat interface, txStore as single source of truth — eliminate prop cascade for transactions, Phase 7 Part 4 Round 4 — Unified Batch Pipeline, Phase 07 Part 4 Round 5 Bugfix 1 — Dual Form & Unified BulkModal Fixes, Phase 07 Part 4 Round 5 Bugfix 2 — Post-TestWalk Overhaul, Phase 7 Part 4 Round 5 — Server-Driven Type Rules + Dual-Transaction Form (+4 more)
-
 ### Community 158 - "Community 158"
 Cohesion: 0.20
 Nodes (9): 🔒 Applicability, Errors, and Privacy, 📏 Detail and Sampling, 📤 Export Data and Request Analysis, 📍 Location, 📰 Performance and Market Drivers, 🧠 Portfolio AI Export, 🎯 Portfolio Analyses, 📅 Recurring Investment Plan (+1 more)
@@ -780,10 +753,6 @@ Nodes (9): 🔒 Applicability, Errors, and Privacy, 📏 Detail and Sampling, �
 ### Community 159 - "Community 159"
 Cohesion: 0.22
 Nodes (9): 🧠 AI Export Component Runtime, 🔐 Authentication and Failures, 🏦 Broker Scope Semantics, 📦 Completeness and Size, 🗺️ Main Files, 🧭 Ownership Boundary, 🔗 Related Documentation, 🔄 Request Flow (+1 more)
-
-### Community 160 - "Community 160"
-Cohesion: 0.29
-Nodes (11): Paired access level = min(role_A, role_B) + 3-layout delete, User Authentication & Sessions, User Management admin CRUD, Multi-User Role System, Broker CRUD, Broker Sharing Owner/Editor/Viewer, File Management upload/list/delete, Image Upload & Crop broker icon (+3 more)
 
 ### Community 161 - "Community 161"
 Cohesion: 0.50
@@ -801,12 +770,8 @@ Nodes (3): 📝 Exact Prompt Order, 📤 Export Data, 🔬 Request Analysis
 Cohesion: 0.67
 Nodes (3): 🎯 Focused Technical Projections, 🏦 Portfolio Broker Universes, 🔢 Universe Coverage Counts
 
-### Community 166 - "Community 166"
-Cohesion: 0.33
-Nodes (6): Backend-Only Calculations Rule, WAC target currency = last acquisition's currency (deterministic), Domain: CALCULATIONS, F-081 — Fiscal Sale Method (FIFO/LIFO/PMC/SelectID), F-084 — Transaction Gain Chart, F-091 — Multi-Worker Cache Server
-
 ## Knowledge Gaps
-- **730 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+725 more)
+- **731 isolated node(s):** `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings`, `🗄️ Database Migrations`, `📚 Documentation` (+726 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **17 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -814,16 +779,16 @@ Nodes (6): Backend-Only Calculations Rule, WAC target currency = last acquisitio
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Portfolio Engine` connect `Community 11` to `Community 147`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **Why does `3-Pool Cash Model` connect `Community 5` to `Community 11`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **Why does `AI Export falsely required transaction-date engine cash to equal snapshot-date native-cash exposure` connect `Community 11` to `Community 5`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
 - **What connects `▶️ Starting the Server`, `👤 User Management`, `🔧 Initialize Global Settings` to the rest of the system?**
-  _807 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _808 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Community 0` be split into smaller, more focused modules?**
+  _Cohesion score 0.05672268907563025 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.05490734385724091 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05516596540439458 - nodes in this community are weakly interconnected._
 - **Should `Community 3` be split into smaller, more focused modules?**
   _Cohesion score 0.053877551020408164 - nodes in this community are weakly interconnected._
-- **Should `Community 4` be split into smaller, more focused modules?**
-  _Cohesion score 0.07073170731707316 - nodes in this community are weakly interconnected._

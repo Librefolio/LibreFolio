@@ -1352,7 +1352,12 @@ class PortfolioService:
             if period_start_nav_perf > 0:
                 period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
             else:
-                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date >= period_start_date_perf]
+                # Data-less start (e.g. a Sunday): the first NAV snapshot already
+                # contains any flow dated on it, so those flows must be EXCLUDED
+                # from the XIRR input — otherwise the deposit is counted twice
+                # (inside the NAV and as a flow) and the solver is dragged to a
+                # pole (beta report: MWRR cumulative +9.94% on a −1.5% period).
+                period_cfs = [synthetic_cf] + [cf for cf in cash_flows_perf if cf.date > period_start_date_perf]
             period_navs = [s for s in nav_snapshots if s.date >= period_start_date_perf]
         else:
             period_cfs = cash_flows_perf
@@ -1605,11 +1610,13 @@ class PortfolioService:
 
             synthetic_cf = CashFlowInput(date=period_start_date, amount=-period_start_nav)
             # When period_start_nav > 0, CFs on start date are already embedded in starting NAV (exclude with >)
-            # When period_start_nav == 0, CFs on start date must be included (use >=)
+            # When period_start_nav == 0 (data-less start), the first NAV snapshot is
+            # post-flow: flows dated on it are already inside that NAV, so they too are
+            # excluded (>) — including them double-counts the deposit and poles the XIRR.
             if period_start_nav > 0:
                 period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
             else:
-                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date >= period_start_date]
+                period_cash_flows = [synthetic_cf] + [cf for cf in cash_flows if cf.date > period_start_date]
             period_nav_snapshots = [s for s in nav_snapshots if s.date >= period_start_date]
             # When period_start_nav > 0, ensure first snapshot matches so MWRR series is consistent
             if period_start_nav > 0 and period_nav_snapshots and period_nav_snapshots[0].nav != period_start_nav:

@@ -161,6 +161,27 @@ scalati corretti (NAV 11.983,54 = 30%), card OK sul build corrente.
   Convenzione release documentata per l'utente: conta il **tag** `vX.Y.Z` (non draft, non
   prerelease) letto da `releases/latest`; il nome libero della release è solo display.
 
+## 9. Round 6 — MWRR pole + stale frontend + polish modale (02/09)
+
+- **MWRR pole (screenshot 01/09)**: selezionando un periodo con start in un giorno senza
+  dati (domenica 01/03) e un deposito sul primo giorno con NAV reale, il MWRR cumulativo
+  andava a +9.94% mentre TWRR era −1.53%. Causa: nel re-basing del periodo, il ramo
+  `period_start_nav == 0` teneva i flussi con `cf.date >= primo snapshot`, ma il primo
+  snapshot è già post-flusso → deposito contato due volte → il solver XIRR trovava una
+  radice estrema e `annualized_to_cumulative` la mostrava come polo. Fix in
+  `portfolio_service.py` (entrambi i rami: summary + history series): flussi sul primo
+  snapshot esclusi (`>`) anche nel ramo data-less. Riprodotto e fissato con probe;
+  325 test finanziari verdi. Wiki: `wiki/problems/mwrr-pole-dataless-period-start.md`.
+- **Stale frontend**: la versione restava sulla build vecchia fino a F5 manuale. Fix in
+  `main.py`: `/_app` (chunk hashati) ora `Cache-Control: immutable, 1 anno`; le route SPA
+  (`200.html`/`index.html`) ora `no-cache, must-revalidate`. Il service worker era già
+  offline-only (nessun caching app), il problema era HTTP cache sull'HTML.
+- **Modale changelog**: "Sei aggiornato" ora è un **toast**, non una riga nella modale
+  (banner ask-admin solo per i non-admin quando c'è davvero una novità). Pulsante
+  "Verifica aggiornamenti": la label si piega su mobile (`hidden sm:inline`), resta l'icona.
+- **Regole release tag**: documentate in `mkdocs_src/docs/developer/docs/release-pipeline.md`
+  (nuova sezione "Release Tag Convention") e nel devWiki `concepts/ci-release-pipeline.md`.
+
 ## 4. Collegamenti
 
 - Piani agganciati ancora aperti: **P2** ImportWizardUx (F11 vi si inserisce),
