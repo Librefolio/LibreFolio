@@ -202,7 +202,7 @@
 | [[concepts/import-todo-signals]] | Plugin-emitted field blanks (severity: blocker/warning) — wizard-local, never touch PendingOp | frontend, brim, import, wizard, signals |
 | [[concepts/3-pool-cash-model]] | Cash decomposed into deposited/invested/realized — powers GrowthChart 3-line visualization | backend, portfolio, cash, decomposition, dashboard |
 | [[concepts/portfolio-report-unified]] | /portfolio/report runs engine once and returns all dashboard data — prevents race conditions + double runs | backend, api, portfolio, performance, cache |
-| [[concepts/ci-release-pipeline]] | GitHub Actions full pipeline: build→test→docker→push→release. Node 24, Vite 7.3.5, package-lock, 8 workers | ci, github-actions, release, docker, playwright |
+| [[concepts/ci-release-pipeline]] | GitHub Actions full pipeline: build→test→docker→push→release. Node 24, Vite 7.3.5, package-lock, 8 workers. Incl. F14 release-tag convention (SemVer vX.Y.Z, stable only) | ci, github-actions, release, docker, playwright |
 | [[concepts/inline-wac-computation]] | Single-pass inline WAC replacing N×M `compute_wac_iterative` DB calls — pool_qty/pool_cost accumulators in per-tx loop | backend, portfolio, wac, performance, engine |
 | [[concepts/pre-frame-frame-separation]] | No market eval before t0; pre-frame builds accounting state (qty/WAC/cash/K/R/W pools) from historical transactions | backend, portfolio, engine, performance, pre-frame |
 | [[concepts/holdings-performance-panel]] | Holdings/Performance tabs (renamed Exposure/Contribution), date-aware `get_summary()`, reconciliation invariant row, treemap zoom/pan fix | frontend, backend, dashboard, portfolio, treemap, echarts |
@@ -228,6 +228,7 @@
 | [[problems/shared-component-option-changed-globally]] | `connectNulls: false` set on the shared LineChart to fix FX would have inverted every overlay in the app | resolved | frontend, charts, echarts, blast-radius |
 | [[problems/transactions-without-asset-filter-nan-loop]] | `__null__` became `NaN`; `NaN !== NaN` defeated the no-op guard and caused an endless filter/URL navigation loop | resolved | frontend, transactions, datatable, filtering, nan |
 | [[problems/quantlib-sobol-seed-skipto]] | QuantLib Sobol constructor seed did not implement a stream offset; MC now uses `random_seed` and QMC uses `skipTo(sobol_start_index)` | resolved | backend, risk, quantlib, sobol, qmc |
+| [[problems/mwrr-pole-dataless-period-start]] | MWRR cumulativo a polo quando il periodo parte in un giorno senza dati (domenica) con deposito sul primo NAV reale; fix escludendo i flussi già dentro il primo snapshot | resolved | backend, roi, mwrr, xirr |
 | [[problems/risk-spawn-worker-idle-residency]] | Lazy Risk workers stayed resident until app shutdown; generation-safe idle reap now releases all lanes and preserves lazy restart | resolved | backend, risk, multiprocessing, memory |
 | [[problems/spawn-worker-response-queue-semaphore-leak]] | Forced worker crashes leaked response-queue semaphores; one-way response pipes removed the leak | resolved | backend, multiprocessing, spawn, ipc |
 | [[problems/riskfolio-numpy-vectorbt-dependency-trap]] | Riskfolio 7.3.0 conflicts with NumPy 2.5.1 through vectorbt/Numba; exact 7.0.1 provides P13 without either dependency | resolved | backend, riskfolio, numpy, dependencies |

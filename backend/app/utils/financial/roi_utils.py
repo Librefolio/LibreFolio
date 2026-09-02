@@ -409,15 +409,20 @@ def calculate_mwrr_series(
                 continue
 
             if use_warm_start:
-                # Guard: only propagate warm-start if rate is moderate
-                if abs(rate) <= _WARM_START_CAP:
+                # Guard: only propagate warm-start if rate is moderate. The cap
+                # scales with the window length: over a few days even a ±200%
+                # annualized rate is a legitimate reading (a ±3% move compounds
+                # there), so a flat cap contaminates the chain from one loud
+                # early point. Beyond ~a month the cap tightens to ±100%.
+                cap = _WARM_START_CAP if total_days > 31 else max(_WARM_START_CAP, min(10.0, 365.0 / max(total_days, 1)))
+                if abs(rate) <= cap:
                     prev_guess = rate
                 else:
                     # Extreme rate — try again from default guess to find moderate root
                     rate2 = scipy_newton(npv, x0=_DEFAULT_GUESS, tol=1e-8, maxiter=100)
                     if math.isfinite(rate2) and abs(rate2) < abs(rate):
                         rate = rate2
-                        if abs(rate) <= _WARM_START_CAP:
+                        if abs(rate) <= cap:
                             prev_guess = rate
                         else:
                             prev_guess = _DEFAULT_GUESS

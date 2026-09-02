@@ -15,6 +15,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {CHANGELOG_REMOTE_URL, changelogChapters, type ChangelogChapter, type ChangelogSection} from '$lib/features/changelog/changelog';
     import {auth} from '$lib/stores/app/auth';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {zodiosApi} from '$lib/api';
     import {checkForNewerRelease, type NewerRelease} from '$lib/features/update-check/updateCheck';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
@@ -175,7 +176,7 @@
     // checkForNewerRelease the login flow uses (never duplicated). Admins get
     // the update modal; non-admins get a hint with the admin list as badges.
     // =========================================================================
-    type CheckState = 'idle' | 'checking' | 'up-to-date' | 'newer' | 'ask-admin';
+    type CheckState = 'idle' | 'checking' | 'newer' | 'ask-admin';
     let checkState = $state<CheckState>('idle');
     let admins = $state<string[]>([]);
     const isAdmin = $derived($auth.user?.is_superuser === true);
@@ -186,7 +187,9 @@
         try {
             const release: NewerRelease | null = currentVersion ? await checkForNewerRelease(currentVersion) : null;
             if (!release) {
-                checkState = 'up-to-date';
+                // Round 6: "up to date" is a toast, not a banner in the modal.
+                checkState = 'idle';
+                toasts.success($_('changelog.upToDate'));
                 return;
             }
             if (isAdmin) {
@@ -232,7 +235,7 @@
                     data-testid="changelog-check-update"
                 >
                     <RefreshCw size={13} class={checkState === 'checking' ? 'animate-spin' : ''} />
-                    {$_('changelog.checkNow')}
+                    <span class="hidden sm:inline">{$_('changelog.checkNow')}</span>
                 </button>
                 <button type="button" class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" title={$_('changelog.expandAll')} onclick={() => setAll(true)} data-testid="changelog-expand-all">
                     <ChevronsUpDown size={15} />
@@ -258,11 +261,7 @@
                 {/each}
             </div>
         {/if}
-        {#if checkState === 'up-to-date'}
-            <div class="px-4 py-2 border-b border-gray-100 dark:border-slate-700 shrink-0 text-xs text-emerald-600 dark:text-emerald-400" data-testid="changelog-up-to-date">
-                ✓ {$_('changelog.upToDate')}
-            </div>
-        {:else if checkState === 'ask-admin'}
+        {#if checkState === 'ask-admin'}
             <div class="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10 shrink-0 text-xs text-amber-700 dark:text-amber-300" data-testid="changelog-ask-admin">
                 <span>{$_('changelog.askAdmin')}</span>
                 {#each admins as name (name)}

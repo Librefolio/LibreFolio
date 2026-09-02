@@ -68,6 +68,20 @@ graph TD
 
 ---
 
+## 🏷️ Release Tag Convention (F14 update prompt)
+
+The in-app "new version available" prompt reads **`GET /repos/Librefolio/LibreFolio/releases/latest`** (GitHub Releases API) and compares `tag_name` numerically against the running version. Rules for any new release:
+
+- **Tag in SemVer form `vX.Y.Z`** (the leading `v` is tolerated; `1.2.0` works too). This is the only hard requirement — a non-numeric tag compares as `0.0.0` and simply never prompts anyone.
+- **Not a draft, not a prerelease** — `releases/latest` never returns those, so a prerelease never triggers the prompt (by design: it prompts only for *stable* updates).
+- **Numerically greater than the version users run** — the comparison is per-segment (major, minor, patch); pre-release suffixes (`-beta.1`) are stripped before comparing.
+- **The release *name* is free-form** — it is only shown in the modal's link text, never used for the comparison.
+- The release workflow already tags GHCR images with the same SemVer tag (`vX.Y.Z` + `latest`, and the `-light` variants), so the in-app prompt and the published images stay aligned automatically.
+
+See also `.github/copilot-instructions.md` → "Changelog Rules" for the CHANGELOG.md conventions the in-app changelog modal renders.
+
+---
+
 ## 📂 Core Commands & Implementation Details
 
 ### 1. Verification and Setup

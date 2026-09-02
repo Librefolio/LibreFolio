@@ -4,6 +4,14 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-09-02] file | MWRR pole when the period starts on a data-less day
+Filed the beta-reported MWRR cumulative pole (+9.94% on a −1.5% period): deposit on the first NAV day double-counted when the start date had no data. Fixed in the period re-basing (flows embedded in the first snapshot are no longer re-added).
+Filed: [[problems/mwrr-pole-dataless-period-start]].
+
+## [2026-09-02] update | CI/CD Release Pipeline
+Added the release-tag convention for the F14 in-app update prompt (SemVer vX.Y.Z, stable-only via releases/latest, name free-form, GHCR tags aligned) — user asked for the rule to live in the wiki + dev guide.
+Filed: [[concepts/ci-release-pipeline]].
+
 ## [2026-09-01] lint-repair | Applying the P0–P3 repair list from the 2026-08-31 lint
 
 **The finding that framed the work.** The lint counted **144 of 1 828 paths** cited in
