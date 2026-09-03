@@ -602,7 +602,8 @@ async def test_delete_partial_success(test_server):
 
         delete_data = FABulkAssetDeleteResponse(**delete_resp.json())
         assert delete_data.success_count == 1, f"Expected success_count=1, got {delete_data.success_count}"
-        assert delete_data.failed_count == 1, f"Expected failed_count=1, got {delete_data.failed_count}"
+        failed = delete_data.total_count - delete_data.success_count
+        assert failed == 1, f"Expected 1 failed, got {failed}"
 
         # Verify one succeeded and one failed
         valid_result = next((r for r in delete_data.results if r.asset_id == valid_id), None)

@@ -159,13 +159,9 @@ By placing TWRR and MWRR next to each other on your Dashboard, LibreFolio gives 
 
 ## 🔗 UI Integration & Dashboard Help Links
 
-To aid navigation, the LibreFolio dashboard features help icons and links adjacent to each metric. Clicking these links redirects you directly to the relevant financial theory chapter:
+To aid navigation, the three KPI cards on the LibreFolio dashboard — **Period P&L**, **Returns**, and **Net Worth** — each carry a help icon. The path to these theory chapters is two steps:
 
-* **Net Worth (NAV)** widgets link directly to the [NAV / Net Worth Page](portfolio-engine/nav.md).
-* **Book Value** fields link directly to the [Book Value Page](portfolio-engine/book-value.md).
-* **Period P&L** widgets link directly to the [Period P&L Page](portfolio-engine/period-pnl.md).
-* **Timing Effect** widgets link directly to the [Timing Effect Page](portfolio-engine/timing-effect.md).
-* **ROI** widgets link directly to the [Simple ROI Page](portfolio-engine/roi.md).
-* **TWRR** widgets link directly to the [TWRR Page](portfolio-engine/twrr.md).
-* **MWRR** widgets link directly to the [MWRR Page](portfolio-engine/mwrr.md).
-* **Deposited Capital / Total P&L** (Growth Chart tooltip) links to the [Deposited Capital & Total P&L Page](portfolio-engine/deposited-capital.md).
+1. The help icon opens the matching section of the user guide's [KPI Cards](../../../user/dashboard/kpi-cards.md) page ([Card 1](../../../user/dashboard/kpi-cards.md#card-1-period-pl), [Card 2](../../../user/dashboard/kpi-cards.md#card-2-returns), [Card 3](../../../user/dashboard/kpi-cards.md#card-3-net-worth)).
+2. From there, each metric links to its financial theory chapter: [Period P&L](portfolio-engine/period-pnl.md), [Book Value](portfolio-engine/book-value.md), [ROI](portfolio-engine/roi.md), [TWRR](portfolio-engine/twrr.md), [MWRR](portfolio-engine/mwrr.md), [Timing Effect](portfolio-engine/timing-effect.md), [NAV / Net Worth](portfolio-engine/nav.md), [Deposited Capital & Total P&L](portfolio-engine/deposited-capital.md).
+
+Elsewhere in the app, the WAC preview in the transaction form links directly to the [Weighted Average Cost](weighted-average-cost.md) chapter, and each chart signal/indicator links to its own theory page.

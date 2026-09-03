@@ -68,22 +68,6 @@ class WACAnalyticsResponse(StrictModel):
 # =============================================================================
 
 
-class PortfolioSummaryQuery(StrictModel):
-    """Request body for POST /portfolio/summary."""
-
-    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
-    include_breakdown: bool = Field(False, description="Include per-broker breakdown in by_broker")
-    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217, e.g. USD)")
-
-
-class PortfolioHistoryQuery(StrictModel):
-    """Request body for POST /portfolio/history."""
-
-    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
-    date_range: Optional[OpenDateRangeModel] = Field(None, description="Inclusive date range. None = full history.")
-    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217, e.g. USD)")
-
-
 class AllocationItem(StrictModel):
     """Single allocation slice (by type, sector, or geography)."""
 
@@ -268,23 +252,6 @@ class AllocationHistoryPoint(StrictModel):
 
     date: date_type
     components: List[AllocationItem]
-
-
-class AllocationHistoryQuery(StrictModel):
-    """Request body for POST /portfolio/allocation-history."""
-
-    broker_ids: Optional[List[int]] = Field(None, description="Optional broker filter")
-    date_range: Optional[OpenDateRangeModel] = Field(None, description="Date range filter. None = full history.")
-    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217)")
-    dimension: str = Field("type", pattern="^(type|sector|geography)$", description="Allocation dimension")
-
-
-class AllocationHistoryResponse(StrictModel):
-    """Response for POST /portfolio/allocation-history."""
-
-    dimension: str
-    series: List[AllocationHistoryPoint]
-    data_quality: Optional[DataQualityReport] = None
 
 
 class PortfolioHolding(StrictModel):

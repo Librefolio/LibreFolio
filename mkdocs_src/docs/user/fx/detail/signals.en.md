@@ -48,12 +48,11 @@ A **volatility envelope** around the price. The bands widen during volatile peri
 
 ## 🧠 AI Export
 
-The **AI Export** (:material-brain:) button in the page toolbar offers three FX
+The **AI Export** (:material-brain:) button in the page toolbar offers two FX
 tasks:
 
-- **FX Trend Review**
+- **FX Pair Analysis**
 - **FX Exposure Impact**
-- **FX Conversion Timing Context**
 
 The backend snapshot uses the page's canonical currency pair, selected range,
 target currency, rate history, and shared technical-signal results. For FX

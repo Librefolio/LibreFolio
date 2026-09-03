@@ -14,6 +14,7 @@ from pydantic import AfterValidator, ConfigDict, Field, FiniteFloat, JsonValue, 
 from backend.app.schemas.common import BackwardFillInfo, DateRangeModel, StrictModel
 from backend.app.schemas.portfolio import DataQualityReport
 from backend.app.schemas.risk import PreparedAssetSeries, RiskResultMetadata
+from backend.app.utils.json_utils import ensure_json_safe
 
 _SIGNAL_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _KEY_PATTERN = r"^[a-z][a-z0-9_.-]*$"
@@ -43,26 +44,6 @@ SignalDecimal = Annotated[Decimal, AfterValidator(_finite_decimal)]
 SignalSemanticId = Annotated[str, Field(min_length=1, max_length=128, pattern=_SEMANTIC_ID_PATTERN)]
 SignalSemanticDescription = Annotated[str, Field(min_length=1, max_length=300), AfterValidator(_semantic_description)]
 NonNegativeInt = Annotated[int, Field(ge=0)]
-
-
-def _ensure_json_safe(value: Any, path: str = "value") -> Any:
-    if value is None or isinstance(value, (str, bool, int)):
-        return value
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ValueError(f"{path} contains a non-finite float")
-        return value
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            _ensure_json_safe(item, f"{path}[{index}]")
-        return value
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise ValueError(f"{path} contains a non-string key")
-            _ensure_json_safe(item, f"{path}.{key}")
-        return value
-    raise ValueError(f"{path} contains a non-JSON value of type {type(value).__name__}")
 
 
 def _ensure_unique(values: list[Any], label: str) -> None:
@@ -290,7 +271,7 @@ class SignalEventPoint(SignalModel):
     @field_validator("metadata", mode="before")
     @classmethod
     def validate_metadata(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "metadata")
+        return ensure_json_safe(value, "metadata")
 
 
 class SignalInputData(SignalModel):
@@ -725,7 +706,7 @@ class SignalAnnotation(SignalModel):
     @field_validator("metadata", mode="before")
     @classmethod
     def validate_metadata(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "metadata")
+        return ensure_json_safe(value, "metadata")
 
 
 class SignalWarning(SignalModel):
@@ -736,7 +717,7 @@ class SignalWarning(SignalModel):
     @field_validator("details", mode="before")
     @classmethod
     def validate_details(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "details")
+        return ensure_json_safe(value, "details")
 
 
 class SignalError(SignalModel):
@@ -748,7 +729,7 @@ class SignalError(SignalModel):
     @field_validator("details", mode="before")
     @classmethod
     def validate_details(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "details")
+        return ensure_json_safe(value, "details")
 
 
 class SignalInputCoverage(SignalModel):
@@ -888,7 +869,7 @@ class SignalRequest(SignalModel):
     @field_validator("params", mode="before")
     @classmethod
     def validate_params(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "params")
+        return ensure_json_safe(value, "params")
 
 
 class SignalAiOutputDescription(SignalModel):
@@ -940,7 +921,7 @@ class SignalAiExportTemporalRule(SignalModel):
     @field_validator("parameter_match", mode="before")
     @classmethod
     def validate_parameter_match(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "parameter_match")
+        return ensure_json_safe(value, "parameter_match")
 
 
 class SignalCatalogDefinition(SignalModel):
@@ -976,7 +957,7 @@ class SignalCatalogDefinition(SignalModel):
     @field_validator("params_schema", "default_params", mode="before")
     @classmethod
     def validate_json_contract(cls, value: Any, info: Any) -> Any:
-        return _ensure_json_safe(value, info.field_name)
+        return ensure_json_safe(value, info.field_name)
 
     @model_validator(mode="after")
     def validate_catalog(self) -> SignalCatalogDefinition:
@@ -1063,7 +1044,7 @@ class SignalResult(SignalModel):
     @field_validator("normalized_params", mode="before")
     @classmethod
     def validate_params(cls, value: Any) -> Any:
-        return _ensure_json_safe(value, "normalized_params")
+        return ensure_json_safe(value, "normalized_params")
 
     @model_validator(mode="after")
     def validate_status_matrix(self) -> SignalResult:  # noqa: C901 — flat status-matrix invariant raises
@@ -1183,13 +1164,13 @@ class SignalPreviewResponse(SignalModel):
 
 
 __all__ = [
+    "SignalAggregationProfile",
+    "SignalAiExportTemporalRule",
     "SignalAnnotation",
     "SignalAnnotationDirection",
     "SignalAnnotationRequest",
     "SignalAnnotationRequestBase",
     "SignalAnnotationSampling",
-    "SignalAggregationProfile",
-    "SignalAiExportTemporalRule",
     "SignalAreaSeries",
     "SignalAvailability",
     "SignalAvailabilityReason",
@@ -1218,30 +1199,30 @@ __all__ = [
     "SignalLineCrossoverRequest",
     "SignalLineSeries",
     "SignalModel",
-    "SignalOutputValueSource",
     "SignalOutputSpec",
-    "SignalPriceField",
-    "SignalPricePoint",
-    "SignalPriceValueSource",
+    "SignalOutputValueSource",
     "SignalPreviewPoint",
     "SignalPreviewRequest",
     "SignalPreviewResponse",
+    "SignalPriceField",
+    "SignalPricePoint",
+    "SignalPriceValueSource",
     "SignalReferenceLevel",
     "SignalRequest",
     "SignalResult",
     "SignalSeries",
     "SignalSeriesKind",
     "SignalStatus",
+    "SignalTemporalClass",
     "SignalThresholdCrossingRequest",
     "SignalThresholdDirection",
-    "SignalTemporalClass",
     "SignalUnit",
     "SignalValuePoint",
     "SignalValueRegion",
     "SignalValueSource",
     "SignalViewTransform",
-    "SignalWarning",
-    "SignalWarningCode",
     "SignalWarmupMetadata",
     "SignalWarmupRequirement",
+    "SignalWarning",
+    "SignalWarningCode",
 ]

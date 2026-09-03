@@ -23,13 +23,15 @@
         /** @deprecated — CurrencySearchSelect manages its own loading state. */
         loading?: boolean;
         testId?: string;
+        /** Render without the standalone row padding/border — for embedding inside a padded card container. */
+        embedded?: boolean;
         onsave?: () => void;
         onundo?: () => void;
         onreset?: () => void;
         onchange?: (value: string) => void;
     }
 
-    let {value = $bindable(''), options, label, hint = '', icon = null, isModified = false, isNonDefault = false, isLocked = false, isSaving = false, loading = false, testId = '', onsave, onundo, onreset, onchange}: Props = $props();
+    let {value = $bindable(''), options, label, hint = '', icon = null, isModified = false, isNonDefault = false, isLocked = false, isSaving = false, loading = false, testId = '', embedded = false, onsave, onundo, onreset, onchange}: Props = $props();
 
     function handleChange(newValue: string) {
         value = newValue;
@@ -37,7 +39,7 @@
     }
 </script>
 
-<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0" data-testid={testId || undefined}>
+<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 {embedded ? '' : 'py-4 border-b border-gray-100 dark:border-slate-700 last:border-0'}" data-testid={testId || undefined}>
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">

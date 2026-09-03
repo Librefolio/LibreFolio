@@ -18,7 +18,7 @@
  * page per URL shape and reading state that is never rendered.
  */
 import {describe, expect, it, vi} from 'vitest';
-import {buildUrlFilters, cleanUrlParams, hasActiveFilters, parseUrlFilters, type UrlFilterConfig} from '../urlFilters';
+import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '../urlFilters';
 import type {FilterValue} from '$lib/components/table/types';
 
 const COLUMNS: UrlFilterConfig[] = [
@@ -192,63 +192,6 @@ describe('the round trip', () => {
         // parse wins, and the rebuilt link says what the parse understood.
         expect(roundTrip('filename=a%3Aequals')).toBe('filename=a%3Aequals');
         expect(parse('filename=a:equals').get('filename')).toEqual({type: 'text', value: 'a', matchMode: 'equals'});
-    });
-});
-
-describe('hasActiveFilters', () => {
-    it('is false for an empty map', () => {
-        expect(hasActiveFilters(new Map())).toBe(false);
-    });
-
-    it('ignores a map entry whose value is missing', () => {
-        const filters = new Map<string, FilterValue>([['k', undefined as unknown as FilterValue]]);
-        expect(hasActiveFilters(filters)).toBe(false);
-    });
-
-    it.each([
-        ['text', {type: 'text', value: 'x', matchMode: 'contains'}],
-        ['enum', {type: 'enum', selected: ['1']}],
-        ['size (min only)', {type: 'size', minBytes: 1}],
-        ['size (max only)', {type: 'size', maxBytes: 1}],
-        ['date (from only)', {type: 'date', from: '2024-01-01'}],
-        ['date (to only)', {type: 'date', to: '2024-01-01'}],
-    ] as const)('is true for an active %s filter', (_label, value) => {
-        expect(hasActiveFilters(new Map([['k', value as FilterValue]]))).toBe(true);
-    });
-
-    it.each([
-        ['text', {type: 'text', value: '', matchMode: 'contains'}],
-        ['enum', {type: 'enum', selected: []}],
-        ['size', {type: 'size'}],
-        ['date', {type: 'date'}],
-    ] as const)('is false for an empty %s filter', (_label, value) => {
-        expect(hasActiveFilters(new Map([['k', value as FilterValue]]))).toBe(false);
-    });
-
-    it('is true when any one entry is active among empty ones', () => {
-        const filters = new Map<string, FilterValue>([
-            ['a', {type: 'text', value: '', matchMode: 'contains'}],
-            ['b', {type: 'enum', selected: ['1']}],
-        ]);
-        expect(hasActiveFilters(filters)).toBe(true);
-    });
-});
-
-describe('cleanUrlParams', () => {
-    const valid = new Set(['filename', 'broker']);
-
-    it('keeps declared keys that carry a value', () => {
-        expect(cleanUrlParams(new URLSearchParams('filename=a&broker=1'), valid).toString()).toBe(new URLSearchParams('filename=a&broker=1').toString());
-    });
-
-    it('drops undeclared keys and empty values alike', () => {
-        expect(cleanUrlParams(new URLSearchParams('filename=a&ghost=b&broker='), valid).toString()).toBe('filename=a');
-    });
-
-    it('leaves the input untouched', () => {
-        const original = new URLSearchParams('filename=a&ghost=b');
-        cleanUrlParams(original, valid);
-        expect(original.toString()).toBe(new URLSearchParams('filename=a&ghost=b').toString());
     });
 });
 

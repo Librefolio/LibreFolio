@@ -357,6 +357,7 @@ __all__ = [
     "AssetMetadataResource",
     "AssetNotFoundError",
     "AssetPriceObservationData",
+    "all_open_holdings",
     "load_asset_lots",
     "load_asset_market_prices",
     "load_asset_metadata",
@@ -364,5 +365,4 @@ __all__ = [
     "market_snapshot_from_price_result",
     "scoped_contributions",
     "scoped_holdings",
-    "all_open_holdings",
 ]

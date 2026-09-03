@@ -6,7 +6,7 @@
 
 The **About** tab shows:
 
-- Current LibreFolio **version** (backend + frontend)
+- Current LibreFolio **version**
 - **License** (AGPL-3.0)
 - Links to the **GitHub repository** and **documentation**
 

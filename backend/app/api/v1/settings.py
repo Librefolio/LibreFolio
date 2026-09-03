@@ -15,6 +15,10 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.settings import (
+    SETTINGS_REGISTRY,
+    CacheClearResponse,
+    CacheStatusEntry,
+    CacheStatusResponse,
     GlobalSettingBulkUpdate,
     GlobalSettingRead,
     GlobalSettingsInitializeResponse,
@@ -35,6 +39,7 @@ from backend.app.services.settings_service import (
     update_global_setting,
     update_user_settings,
 )
+from backend.app.utils.cache_utils import clear_all_caches, clear_cache, list_caches
 
 logger = structlog.get_logger(__name__)
 
@@ -170,7 +175,7 @@ async def get_scheduler_state(
     # Read scheduler timezone from GlobalSettings
     engine = get_async_engine()
     async with AsyncSession(engine) as db_session:
-        tz_value = await get_setting_value(db_session, "scheduler_timezone")
+        tz_value = await get_setting_value(db_session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key)
     scheduler_tz = str(tz_value) if tz_value else "UTC"
 
     # UTC wall clock (HH:MM)
@@ -215,3 +220,69 @@ async def get_scheduler_log(
     """
     entries = read_job_log(since=since)
     return {"entries": entries}
+
+
+# ============================================================================
+# CACHE ADMIN ENDPOINTS
+# ============================================================================
+
+
+@router.get("/cache/status", response_model=CacheStatusResponse)
+async def get_cache_status(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> CacheStatusResponse:
+    """
+    List all registered caches with their current stats.
+
+    Readable by any authenticated user (user decision 03/09: "il leggere è per tutti").
+    """
+    items = [
+        CacheStatusEntry(
+            name=stats["name"],
+            current_size=stats["current_size"],
+            maxsize=stats["maxsize"],
+            ttl_seconds=stats["ttl"],
+        )
+        for stats in list_caches()
+    ]
+    return CacheStatusResponse(items=items)
+
+
+@router.post("/cache/clear-all", response_model=CacheClearResponse)
+async def clear_all_caches_endpoint(
+    admin: Annotated[User, Depends(require_admin)],
+) -> CacheClearResponse:
+    """
+    Clear ALL registered caches. Admin only.
+
+    After a clear, the next fetch of the affected data will hit the providers
+    again — expect slowdowns comparable to a server restart.
+    """
+    count = clear_all_caches()
+    logger.info("All caches cleared via API", admin_user_id=admin.id, admin_username=admin.username, cleared_count=count)
+    return CacheClearResponse(
+        cleared_count=count,
+        name=None,
+        message=f"Cleared {count} caches",
+    )
+
+
+@router.post("/cache/clear/{name}", response_model=CacheClearResponse)
+async def clear_cache_endpoint(
+    name: str,
+    admin: Annotated[User, Depends(require_admin)],
+) -> CacheClearResponse:
+    """
+    Clear a single named cache. Admin only.
+
+    After a clear, the next fetch of the affected data will hit the providers
+    again — expect slowdowns comparable to a server restart.
+    """
+    if not clear_cache(name):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Cache '{name}' not found")
+    logger.info("Cache cleared via API", admin_user_id=admin.id, admin_username=admin.username, cache_name=name)
+    return CacheClearResponse(
+        cleared_count=1,
+        name=name,
+        message=f"Cache '{name}' cleared",
+    )

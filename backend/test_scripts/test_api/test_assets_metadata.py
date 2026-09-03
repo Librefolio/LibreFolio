@@ -409,9 +409,10 @@ async def test_metadata_refresh_bulk(test_server):
 
         data = FABulkMetadataRefreshResponse(**response.json())
         assert len(data.results) > 0, "Should have at least one result"
-        assert data.success_count + data.failed_count == len(data.results), "Counts should match results length"
+        failed = data.total_count - data.success_count
+        assert data.success_count + failed == len(data.results), "Counts should match results length"
 
-        print_info(f"  Success: {data.success_count}, Failed: {data.failed_count}")
+        print_info(f"  Success: {data.success_count}, Failed: {failed}")
         print_success("✓ Bulk metadata refresh endpoint OK")
 
 

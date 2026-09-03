@@ -16,6 +16,8 @@
     export let isNonDefault: boolean = false;
     export let isLocked: boolean = false;
     export let isSaving: boolean = false;
+    /** Render without the standalone row padding/border — for embedding inside a padded card container. */
+    export let embedded: boolean = false;
     export let onsave: (() => void) | undefined = undefined;
     export let onundo: (() => void) | undefined = undefined;
     export let onreset: (() => void) | undefined = undefined;
@@ -34,7 +36,7 @@
     }
 </script>
 
-<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-gray-100 dark:border-slate-700 last:border-0">
+<div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 {embedded ? '' : 'py-4 border-b border-gray-100 dark:border-slate-700 last:border-0'}">
     <!-- Left: Label and hint -->
     <div class="flex-1 min-w-0">
         <div class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">

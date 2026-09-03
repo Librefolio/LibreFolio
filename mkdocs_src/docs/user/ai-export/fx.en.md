@@ -6,7 +6,7 @@ service.
 
 ## 📍 Location
 
-Open an FX detail page. In the **Signals** header, select **AI Export**. Your
+Open an FX detail page. In the **page toolbar**, select **AI Export**. Your
 draft remains available for 10 minutes in the current login session and resets
 after logout or a new login.
 

@@ -30,14 +30,14 @@ LibreFolio supports importing statement files from the following brokers:
             <img src="https://www.etoro.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="eToro favicon">
             <span class="card-title" style="margin: 0;">eToro</span>
         </div>
-        <span class="card-desc">Import account statement XLSX/CSV files from eToro.</span>
+        <span class="card-desc">Import account statement CSV files from eToro.</span>
     </a>
     <a href="directa/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <img src="https://www.directa.it/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Directa SIM favicon">
             <span class="card-title" style="margin: 0;">Directa SIM</span>
         </div>
-        <span class="card-desc">Import transaction history CSV files from Directa SIM.</span>
+        <span class="card-desc">Import transaction history CSV or XLSX files from Directa SIM.</span>
     </a>
     <a href="schwab/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -51,7 +51,7 @@ LibreFolio supports importing statement files from the following brokers:
             <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Revolut favicon">
             <span class="card-title" style="margin: 0;">Revolut</span>
         </div>
-        <span class="card-desc">Import account statement PDF/CSV reports from Revolut.</span>
+        <span class="card-desc">Import account statement CSV reports from Revolut.</span>
     </a>
     <a href="coinbase/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -236,10 +236,10 @@ LibreFolio supports importing statement files from the following brokers:
     | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
     | <img src="https://www.interactivebrokers.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Interactive Brokers** | 🧪 Beta | CSV (Flex) | ✅ | ✅ | ✅ | ✅ | Best for multi-currency accounts |
     | <img src="https://www.degiro.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Degiro** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Support for standard account statement |
-    | <img src="https://www.etoro.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **eToro** | 🧪 Beta | XLSX/CSV | ✅ | ✅ | ✅ | ✅ | Realized gains and dividends support |
-    | <img src="https://www.directa.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Directa SIM** | ✅ Stable | CSV | ✅ | ✅ | ✅ | ✅ | Italian broker tax statement support |
+    | <img src="https://www.etoro.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **eToro** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Realized gains and dividends support |
+    | <img src="https://www.directa.it/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Directa SIM** | ✅ Stable | CSV/XLSX | ✅ | ✅ | ✅ | ✅ | Italian broker tax statement support |
     | <img src="https://www.schwab.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Charles Schwab** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Standard US broker activity statement |
-    | <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Revolut** | 🧪 Beta | PDF/CSV | ✅ | ✅ | ✅ | ✅ | Stock and crypto transaction support |
+    | <img src="https://assets.revolut.com/assets/favicons/favicon-32x32.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Revolut** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Stock and crypto transaction support |
     | <img src="https://www.coinbase.com/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Coinbase** | 🧪 Beta | CSV | ✅ | ❌ | ✅ | ✅ | Crypto-only transaction reports |
     | <img src="https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Freetrade** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Simple UK brokerage statements |
     | <img src="https://www.finpension.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **Finpension** | 🧪 Beta | CSV | ✅ | ✅ | ✅ | ✅ | Swiss pension 3a statements |
@@ -279,7 +279,7 @@ During the preview step, LibreFolio attempts to **auto-match** each asset name f
 
 ## ♻️ Duplicate Detection {: #duplicate-detection }
 
-BRIM checks for **duplicate transactions** based on date, type, asset, quantity, and amount. Duplicate rows are flagged in the preview — you can choose to skip or force-import them.
+BRIM checks for **duplicate transactions** within the same broker by comparing **type, date, quantity, and cash amount/currency** (with small tolerances for rounding). A matching **description** raises a hit from *possible* to *likely*; a matching **asset** — when the report row was auto-matched to your library — raises the confidence level as well. Duplicate rows are flagged in the preview — you can choose to skip or force-import them.
 
 ---
 

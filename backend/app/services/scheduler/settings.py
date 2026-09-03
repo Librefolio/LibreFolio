@@ -7,6 +7,7 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.settings import SETTINGS_REGISTRY
 from backend.app.services.global_settings_service import get_setting_value
 
 try:
@@ -67,12 +68,12 @@ async def load_scheduler_settings() -> SchedulerSettings:
     """
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
-        enabled = await get_setting_value(session, "scheduler_enabled")
-        freq = await get_setting_value(session, "scheduler_current_price_frequency_minutes")
-        times_csv = await get_setting_value(session, "scheduler_history_sync_times")
-        days_csv = await get_setting_value(session, "scheduler_history_sync_days")
-        horizon = await get_setting_value(session, "scheduler_history_sync_horizon_days")
-        tz_name = await get_setting_value(session, "scheduler_timezone")
+        enabled = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_ENABLED.key)
+        freq = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_CURRENT_PRICE_FREQUENCY_MINUTES.key)
+        times_csv = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_HISTORY_SYNC_TIMES.key)
+        days_csv = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_HISTORY_SYNC_DAYS.key)
+        horizon = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_HISTORY_SYNC_HORIZON_DAYS.key)
+        tz_name = await get_setting_value(session, SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key)
 
     scheduler_tz = str(tz_name) if tz_name else "UTC"
 

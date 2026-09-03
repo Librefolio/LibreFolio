@@ -43,7 +43,7 @@ pipenv run ./dev.py server --force
 User management is done via `./dev.py user` subcommands:
 
 ```bash
-# Create a user (first user becomes admin automatically)
+# Create a user (users created from the CLI are always superusers)
 pipenv run ./dev.py user create <username> <email> <password>
 
 # List all users

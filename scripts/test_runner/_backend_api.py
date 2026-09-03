@@ -480,6 +480,18 @@ def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> 
     return run_command(cmd, "Settings API tests", verbose=verbose)
 
 
+def api_cache_admin(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run cache admin API tests."""
+    print_section("Cache Admin API Tests")
+    print_info("Testing REST API endpoints for cache administration")
+    print_info("Tests: GET /settings/cache/status, POST /settings/cache/clear-all, POST /settings/cache/clear/{name}")
+    print_info("Tests: CAPI-001..008 — auth levels, admin-only clears, functional clear verification")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_cache_admin_api.py", test_names)
+    return run_command(cmd, "Cache Admin API tests", verbose=verbose)
+
+
 def api_scheduler(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run scheduler API tests."""
     print_section("Scheduler API Tests")
@@ -695,6 +707,14 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.enable_registration, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
+    add_test(
+        api,
+        "cache-admin",
+        api_cache_admin,
+        name="Cache Admin API",
+        desc="Cache status/clear endpoints",
+        exclusive_because="clears the process-wide cache registry (clear-all and clear/{name}): entries other units populated and may assert on (fx_provider_responses, search_results, upload_metadata) would vanish mid-run",
+    )
     add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")

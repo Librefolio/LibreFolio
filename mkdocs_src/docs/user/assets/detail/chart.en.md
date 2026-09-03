@@ -16,7 +16,7 @@ The filter bar above the chart provides controls for customizing the view:
 
 Select a time window for the chart data:
 
-- **Presets**: 1W, 1M, 3M, 6M, 1Y, ALL
+- **Presets**: 1W, 1M, 3M, 6M, 1Y, 2Y, YTD, MAX — when the bar has leftover space, extra **fill presets** appear to use it (3Y, 5Y, 10Y and WTD, MTD, QTD)
 - **Custom**: pick a start and end date using the calendar picker
 
 ### 💱 Currency Selector

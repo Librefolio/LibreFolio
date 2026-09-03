@@ -80,6 +80,9 @@ select = [
     "PLC0415",  # import-outside-toplevel (imports inside functions)
     "S110",   # try-except-pass (silent swallow) — audit 08/P0-3: punctual gate so fixed instances never come back
     "C901",   # cyclomatic complexity — audit 08/P1-2: gate at 10; flat data packers carry a justified noqa
+    "RUF022",  # sorted __all__ — audit 08/P1-2 follow-up (03/09): adopted; the 5 deliberately
+               # comment-grouped barrels (db/__init__, db/base, schemas/__init__, schemas/assets,
+               # utils/financial/__init__) carry a justified `# noqa: RUF022` instead.
 ]
 ignore = [
     "E501",   # line too long (handled by black)

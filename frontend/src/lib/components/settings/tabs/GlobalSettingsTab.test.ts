@@ -335,7 +335,13 @@ describe('GlobalSettingsTab — how a value type chooses its control', () => {
         expect(textInput('default_language')).toBeNull();
         expect(textInput('default_currency')).toBeNull();
         expect(textInput('default_theme')).toBeNull();
-        expect(screen.getAllByRole('combobox')).toHaveLength(3);
+        // Language and currency are dropdowns; the theme row is the same
+        // segmented control PreferencesTab uses (SettingTheme) — three option
+        // buttons, one per theme, so no third combobox.
+        expect(screen.getAllByRole('combobox')).toHaveLength(2);
+        expect(screen.getByRole('button', {name: 'settings.themeLight'})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: 'settings.themeDark'})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: 'settings.themeAuto'})).toBeInTheDocument();
     });
 
     it('shows when a setting was last written, and stays quiet when it never was', async () => {
@@ -729,16 +735,21 @@ describe('GlobalSettingsTab — the three picker rows', () => {
         // `SimpleSelect` renders a real disabled <button>, while `SearchSelect` (the
         // currency one) renders a <div role="combobox">, which cannot carry it and
         // announces the state through `aria-disabled` instead. What both genuinely
-        // guarantee, and what this asserts, is that they do not open.
+        // guarantee, and what this asserts, is that they do not open. The theme
+        // picker is the shared segmented control: real buttons, so `disabled`
+        // applies directly.
         await mount([setting('default_language', 'en'), setting('default_currency', 'EUR'), setting('default_theme', 'auto')]);
 
         const comboboxes = screen.getAllByRole('combobox');
-        expect(comboboxes).toHaveLength(3);
+        expect(comboboxes).toHaveLength(2);
         for (const combobox of comboboxes) {
             await fireEvent.click(combobox);
             expect(combobox).toHaveAttribute('aria-expanded', 'false');
         }
         expect(screen.queryByRole('listbox')).toBeNull();
+        for (const name of ['settings.themeLight', 'settings.themeDark', 'settings.themeAuto']) {
+            expect(screen.getByRole('button', {name})).toBeDisabled();
+        }
         expect(screen.queryByTitle('common.save')).toBeNull();
     });
 

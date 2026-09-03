@@ -165,9 +165,6 @@ class FXConversionResult(BaseModel):
     def _parse_conversion_date(cls, v):
         return parse_ISO_date(v)
 
-    def conversion_date_str(self) -> str:
-        """Restituisce la data in formato ISO string (YYYY-MM-DD)."""
-        return self.conversion_date.isoformat()
 
 
 class FXSignalQueryResult(BaseModel):
@@ -481,16 +478,5 @@ class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
 
 # NOTE: FXCurrenciesResponse was removed — GET /fx/currencies endpoint absorbed by
 # GET /fx/providers which now includes target_currencies per provider.
-
-
-class FXPairItem(BaseModel):
-    """A unique currency pair with optional metadata."""
-
-    base: str = Field(..., description="Base currency (alphabetically first)")
-    quote: str = Field(..., description="Quote currency (alphabetically second)")
-    has_provider: bool = Field(default=False, description="Whether this pair has configured providers")
-    rate_count: int = Field(default=0, description="Number of rate data points in the DB")
-
-
-class FXPairsListResponse(BaseListResponse[FXPairItem]):
-    """Response for GET /currencies/pairs — all known FX pairs."""
+# FXPairItem/FXPairsListResponse were removed too — the GET /currencies/pairs
+# endpoint they were pre-written for never shipped (audit 08/G2).

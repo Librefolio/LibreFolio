@@ -224,6 +224,24 @@ class TestBasicLongShort:
         assert len(result.closures) == 1
         assert result.closures[0].proceeds == _d("1200")
 
+    def test_buy_then_full_sell_at_loss_records_negative_pnl(self):
+        # Parity with legacy fifo_utils.test_negative_pnl_on_loss (P1-6 mapping, gap #7):
+        # sell below buy price → negative realized P&L on both lot and closure.
+        result = _run(
+            [
+                _buy(1, "10", "100", dt="2025-01-01"),
+                _sell(2, "10", "80", dt="2025-06-01"),
+            ]
+        )
+
+        lot = result.get_lot(1)
+        assert lot.open_quantity == _d("0")
+        assert lot.realized_pnl == _d("-200")
+        assert result.get_lot_states(1) == {"CLOSED", "LONG"}
+        assert len(result.closures) == 1
+        assert result.closures[0].realized_pnl == _d("-200")
+        assert result.closures[0].proceeds == _d("800")
+
     def test_buy_then_partial_sell_keeps_fragment_identity(self):
         result = _run(
             [

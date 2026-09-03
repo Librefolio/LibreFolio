@@ -34,7 +34,7 @@ from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
 )
-from backend.app.schemas.wac import WACConversionInfo, WACPreviewResultItem, WACQualifyingTX  # noqa: E402, F401
+from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================

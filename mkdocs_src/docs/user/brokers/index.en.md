@@ -13,7 +13,7 @@ All transactions, reports, and import data are tied to a broker. You need at lea
 ## ➕ Creating a Broker
 
 1. Navigate to the **Brokers** page from the sidebar
-2. Click **"New Broker"**
+2. Click **"Add Broker"**
 3. Fill in the details: name, base currency, and optionally an icon
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

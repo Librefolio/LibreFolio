@@ -1,6 +1,6 @@
 <script lang="ts">
-    import {_, LANGUAGE_OPTIONS, type SupportedLocale} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
+    import {_, type SupportedLocale} from '$lib/i18n';
+    import {availableLanguages, currentLanguage} from '$lib/stores/app/language';
     import {userSettings} from '$lib/stores/app/settings';
     import {applyTheme, getStoredThemePreference} from '$lib/stores/app/themeStore';
     import {zodiosApi} from '$lib/api';
@@ -52,7 +52,7 @@
     let selectedCategory: string = '';
 
     // Language options
-    const languageOptions: SelectOption[] = LANGUAGE_OPTIONS.map((l) => ({
+    const languageOptions: SelectOption[] = availableLanguages.map((l) => ({
         value: l.code,
         label: l.name,
         icon: l.flag,

@@ -99,7 +99,14 @@ vi.mock('$lib/stores/app/themeStore', () => ({
 const setLanguage = vi.fn();
 vi.mock('$lib/stores/app/language', () => {
     const store = writable('en');
-    return {currentLanguage: {subscribe: store.subscribe, set: (v: string) => setLanguage(v)}};
+    return {
+        currentLanguage: {subscribe: store.subscribe, set: (v: string) => setLanguage(v)},
+        // The real module re-exports LANGUAGE_OPTIONS as availableLanguages.
+        availableLanguages: [
+            {code: 'en', name: 'English', flag: 'EN'},
+            {code: 'it', name: 'Italiano', flag: 'IT'},
+        ],
+    };
 });
 
 const setDirect = vi.fn();

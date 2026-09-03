@@ -18,16 +18,22 @@
         isNonDefault?: boolean;
         isLocked?: boolean;
         isSaving?: boolean;
+        /** Placeholder mode: control stays visible but read-only regardless of the page lock. */
+        disabled?: boolean;
+        /** Small badge rendered next to the label (e.g. "Coming soon" for placeholders). */
+        badge?: string;
         onsave?: () => void;
         onundo?: () => void;
         onreset?: () => void;
         onchange?: (value: boolean) => void;
     }
 
-    let {value = $bindable(false), label, hint = '', icon = null, isModified = false, isNonDefault = false, isLocked = false, isSaving = false, onsave, onundo, onreset, onchange}: Props = $props();
+    let {value = $bindable(false), label, hint = '', icon = null, isModified = false, isNonDefault = false, isLocked = false, isSaving = false, disabled = false, badge = '', onsave, onundo, onreset, onchange}: Props = $props();
+
+    let effectiveLocked = $derived(isLocked || disabled);
 
     function toggle() {
-        if (isLocked) return;
+        if (effectiveLocked) return;
         value = !value;
         onchange?.(value);
     }
@@ -42,6 +48,11 @@
                 <Icon size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
             {/if}
             {label}
+            {#if badge}
+                <span data-testid="setting-badge" class="ml-2 shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    {badge}
+                </span>
+            {/if}
         </div>
         {#if hint}
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{hint}</p>
@@ -50,12 +61,12 @@
 
     <!-- Right: Actions + Toggle -->
     <div class="flex items-center gap-2 sm:space-x-3 self-end sm:self-auto min-h-[32px]">
-        <SettingActions {isModified} {isNonDefault} {isLocked} {isSaving} {onsave} {onundo} {onreset} />
+        <SettingActions {isModified} {isNonDefault} isLocked={effectiveLocked} {isSaving} {onsave} {onundo} {onreset} />
 
         <!-- Toggle switch -->
         <button
             type="button"
-            disabled={isLocked}
+            disabled={effectiveLocked}
             role="switch"
             aria-checked={value}
             aria-label="Toggle {label}"
@@ -63,7 +74,7 @@
             onclick={toggle}
             class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
                 {value ? 'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'}
-                {isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
+                {effectiveLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
         >
             <span
                 class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform

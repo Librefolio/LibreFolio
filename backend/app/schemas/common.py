@@ -287,10 +287,6 @@ class Currency(BaseModel):
         """Hash for use in sets/dicts."""
         return hash((self.code, self.amount))
 
-    def to_dict(self) -> dict:
-        """Serialize to dict for JSON responses."""
-        return {"currency": self.code, "amount": format(self.amount, "f")}  # Decimal → fixed-point string
-
     @classmethod
     def zero(cls, code: str) -> Currency:
         """Create a zero-valued Currency."""
@@ -406,9 +402,6 @@ class BackwardFillInfo(BaseModel):
     def _parse_actual_rate_date(cls, v):
         return parse_ISO_date(v)
 
-    def actual_rate_date_str(self) -> str:
-        """Return the actual_rate_date as ISO string (YYYY-MM-DD)."""
-        return self.actual_rate_date.isoformat()
 
 
 class FxBackwardFillInfo(BaseModel):
@@ -684,13 +677,11 @@ class BaseBulkResponse[TResult: BaseModel](BaseModel):
     Standard fields:
     - results: List of per-item operation results
     - success_count: Number of successful operations
-    - failed_count: Number of failed operations (derived from len(results) - success_count)
     - errors: Optional list of error messages (operation-level errors, not per-item)
 
     Design Notes:
     - Generic class parameterized by TResult (the result item type)
     - Subclasses inherit this structure and specify their result type
-    - failed_count is NOT stored, computed from results length
     - errors field is for operation-level errors (e.g., "timeout", "provider unavailable")
     - Per-item errors should be in the result items themselves
 
@@ -698,7 +689,6 @@ class BaseBulkResponse[TResult: BaseModel](BaseModel):
         ```python
         class FABulkAssetCreateResponse(BaseBulkResponse[FAAssetCreateResult]):
             # Inherits: results, success_count, errors
-            # failed_count is computed property
             pass
 
         class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
@@ -713,11 +703,6 @@ class BaseBulkResponse[TResult: BaseModel](BaseModel):
     results: List[TResult] = Field(..., description="Per-item operation results")
     success_count: int = Field(..., ge=0, description="Number of successful operations")
     errors: List[str] = Field(default_factory=list, description="Operation-level errors (not per-item)")
-
-    @property
-    def failed_count(self) -> int:
-        """Computed property: number of failed operations."""
-        return len(self.results) - self.success_count
 
     @property
     def total_count(self) -> int:
@@ -742,7 +727,6 @@ class BaseBulkDeleteResponse[TResult: BaseModel](BaseBulkResponse[TResult]):
     - total_deleted: int - Total number of records deleted across all items
 
     Computed properties (from BaseBulkResponse):
-    - failed_count: int - Number of failed deletions
     - total_count: int - Total number of items processed
 
     Design Notes:

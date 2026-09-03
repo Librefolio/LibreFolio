@@ -29,7 +29,7 @@ A positive number means you earned money from investment activity. A negative nu
 Right under the Period P&L value, a smaller line shows something like `+45.20 (+3.10%)`.
 
 - The amount is the **day-over-day** (today vs. yesterday) change in your **Total P&L** — your all-time accumulated gain/loss, not just the selected period.
-- The percentage expresses it as a share of **yesterday's** Period P&L — it tells you how much today's move "weighed" on the period result you're currently viewing.
+- The percentage expresses it as a share of **yesterday's** Total P&L — it tells you how much today's move "weighed" relative to your accumulated all-time result.
 
 \[\text{Daily change} = \text{Total P&L}_{\text{today}} - \text{Total P&L}_{\text{yesterday}}\]
 
@@ -103,14 +103,15 @@ It's a rough estimate of **today's** return — a quick pulse check. It is not t
 The **Net Worth** card shows the absolute value of your portfolio at the end of the selected period.
 
 !!! note "Net Worth includes cash"
+
     The figure is **securities at market value + cash balance** (+ any value in transit between brokers). Because it includes liquidity, it is **not comparable** with the "securities value" (controvalore titoli) shown by a bank statement, which excludes cash — a bank's cash balance is reported separately.
 
 ### The number below Net Worth
 
-Below the Net Worth value you'll find your **Total P&L**, with its percentage change in parentheses — e.g. `+12,450.30 (+0.35%)`.
+Below the Net Worth value you'll find your **Total P&L**, with your absolute return in parentheses — e.g. `+12,450.30 (+24.85%)`.
 
 - The amount is your **Total P&L** — the gain or loss accumulated since the beginning, across this scope's whole history (not just the current period).
-- The percentage in parentheses expresses the **day-over-day** (today vs. yesterday) change of this Total P&L, as a share of **yesterday's** Total P&L.
+- The percentage in parentheses is the **absolute (since-inception) ROI**: Total P&L ÷ net capital invested since inception. It is *not* a day-over-day change — for that daily pulse check, see the small lines on [Card 1](#card-1-period-pl) and [Card 2](#card-2-returns).
 
 \[\text{Total P&L} = \text{Net Worth} - \text{Net Capital Invested Since Inception}\]
 
