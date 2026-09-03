@@ -47,7 +47,7 @@ class OptimizationResourceLimitError(ValueError):
         self.limit = limit
 
 
-async def run_optimization(
+async def run_optimization(  # noqa: C901 — cache/leader-election guard branches + exception handling
     request: OptimizationEngineRequest,
     *,
     algorithm_version: str,

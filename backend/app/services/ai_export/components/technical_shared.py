@@ -501,7 +501,7 @@ class TechnicalUniverseBundle:
     price_results: PriceResultsResource
 
 
-async def load_technical_universe_bundle(
+async def load_technical_universe_bundle(  # noqa: C901 — thin wrapper; complexity from flat nested _build closure
     context: BuildContext,
     *,
     report_key: ResourceKey[PortfolioReportResponse],
@@ -520,7 +520,7 @@ async def load_technical_universe_bundle(
     scope = context.scope
     assert scope is not None
 
-    async def _build() -> TechnicalUniverseBundle:
+    async def _build() -> TechnicalUniverseBundle:  # noqa: C901 — flat bundle assembly with reason-mapping chain
         report = await load_portfolio_or_broker_report(context, report_key=report_key)
         positions = eligible_positions(report)
         asset_ids = tuple(sorted({position.asset_id for position in positions}))
@@ -914,7 +914,7 @@ def _band_series_points(series: SignalBandSeries) -> tuple[BandObservedPoint, ..
     )
 
 
-def build_indicator_table_payloads(
+def build_indicator_table_payloads(  # noqa: C901 — flat payload packing, per-series-type dispatch
     results: Sequence[SignalResult],
     context: BuildContext,
 ) -> tuple[IndicatorTablePayload, ...]:
@@ -1343,7 +1343,7 @@ def classify_reference_level_state(value: float, levels: Sequence[SignalReferenc
     return "neutral"
 
 
-def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthPayload:
+def build_breadth_payload(universe: TechnicalUniverseBundle) -> UniverseBreadthPayload:  # noqa: C901 — guard-clause classification pipeline + rollup packing
     """`portfolio.technical_breadth` / `broker.technical_breadth`: reconciled weighted/unweighted breadth.
 
     Analyzes every `ASSET_CURATED_SIGNALS` plugin output that declares

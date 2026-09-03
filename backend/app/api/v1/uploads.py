@@ -49,6 +49,14 @@ from backend.app.services.static_uploads import (
 
 logger = structlog.get_logger(__name__)
 
+# OpenAPI documentation for endpoints that stream raw file bytes (no JSON body).
+BINARY_FILE_RESPONSE: dict = {
+    200: {
+        "description": "Raw file content",
+        "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}},
+    }
+}
+
 
 class PreviewCache:
     """
@@ -203,7 +211,7 @@ async def upload_file(
         )
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Upload failed", error=str(e), user_id=current_user.id)
+        logger.exception("Upload failed", error=str(e), user_id=current_user.id)
         raise HTTPException(status_code=500, detail="Failed to save file") from e
 
 
@@ -285,7 +293,7 @@ async def get_upload_file_preview(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to build upload preview", error=str(e), file_id=file_id)
+        logger.exception("Failed to build upload preview", error=str(e), file_id=file_id)
         raise HTTPException(status_code=500, detail="Failed to build file preview") from e
 
 
@@ -355,8 +363,8 @@ def _resize_image(file_path: Path, max_width: int, max_height: int) -> bytes | N
     return output.getvalue()
 
 
-@router.get("/file/{file_id}")
-async def serve_file(
+@router.get("/file/{file_id}", response_class=FileResponse, responses=BINARY_FILE_RESPONSE)
+async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early returns
     file_id: str,
     download: bool = False,
     offset: Optional[int] = None,
@@ -414,7 +422,7 @@ async def serve_file(
 
             return PlainTextResponse(content=content, media_type=mime_type)
         except Exception as e:
-            logger.error("Failed to read text preview", error=str(e), file_id=file_id)
+            logger.exception("Failed to read text preview", error=str(e), file_id=file_id)
             raise HTTPException(status_code=500, detail="Failed to read file preview") from e
 
     # Image preview mode
@@ -460,7 +468,7 @@ async def serve_file(
             return StreamingResponse(io.BytesIO(image_bytes), media_type=mime_type, headers={"Cache-Control": "public, max-age=3600"})
 
         except Exception as e:
-            logger.error("Failed to generate image preview", error=str(e), file_id=file_id)
+            logger.exception("Failed to generate image preview", error=str(e), file_id=file_id)
             raise HTTPException(status_code=500, detail="Failed to generate image preview") from e
 
     # Normal file serving (no preview)
@@ -483,7 +491,7 @@ async def serve_file(
 # =============================================================================
 
 
-@router.get("/plugin/{provider_type}/{path:path}")
+@router.get("/plugin/{provider_type}/{path:path}", response_class=FileResponse, responses=BINARY_FILE_RESPONSE)
 async def serve_plugin_static(
     provider_type: str,
     path: str,

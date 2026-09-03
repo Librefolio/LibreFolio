@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
@@ -292,7 +293,7 @@ async def upsert_rates_endpoint(
 
 
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)
-async def delete_rates_endpoint(
+async def delete_rates_endpoint(  # noqa: C901 — flat bulk loop, per-item validation/dispatch
     deletions: List[FXDeleteItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -520,7 +521,7 @@ async def list_fx_signal_catalog(
 
 
 @router_currencies.post("/convert", response_model=FXConvertResponse)
-async def convert_currency_bulk(
+async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: expand, convert, map results
     request: List[FXConversionRequest],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -747,7 +748,7 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator), _c
 
 
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
-async def create_routes_bulk(
+async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item validation
     routes: List[FXConversionRouteItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -919,7 +920,7 @@ async def create_routes_bulk(
 
 
 @router_providers.delete("/routes", response_model=FXDeleteRoutesResponse)
-async def delete_routes_bulk(
+async def delete_routes_bulk(  # noqa: C901 — sequential batch stages: preload, replay, sentinel reinstate
     routes: List[FXDeleteRouteItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
@@ -941,29 +942,31 @@ async def delete_routes_bulk(
     total_deleted = 0
 
     try:
-        for route_item in routes:
-            base = route_item.base
-            quote = route_item.quote
-            priority = route_item.priority
+        # P0-5b (audit 08): no N+1. Before: 1 DELETE per item plus 1 SELECT per
+        # affected pair. After: 1 preload SELECT, at most 2 batched DELETEs,
+        # and 1 post-delete SELECT for the MANUAL-sentinel check.
+        #
+        # The unique constraint on (base, quote, priority) makes each targeted
+        # row individually identifiable, so per-item deleted_count can be
+        # replayed in memory from the preload — the loop below consumes the
+        # preloaded keys in request order, exactly mirroring the old sequential
+        # DELETE semantics (duplicate items: first one reports the row, later
+        # ones report "not found").
+        normalized_items = [(min(item.base, item.quote), max(item.base, item.quote), item.priority) for item in routes]
+        pair_keys = {(norm_base, norm_quote) for norm_base, norm_quote, _ in normalized_items}
 
-            # Normalize to alphabetical
-            norm_base = min(base, quote)
-            norm_quote = max(base, quote)
+        existing_keys: set[tuple[str, str, int]] = set()
+        if pair_keys:
+            preload_stmt = select(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote).in_(pair_keys))
+            existing_keys = {(row_base, row_quote, row_priority) for row_base, row_quote, row_priority in (await session.execute(preload_stmt)).all()}
 
+        for norm_base, norm_quote, priority in normalized_items:
             if priority is not None:
-                stmt = sql_delete(FxConversionRoute).where(
-                    FxConversionRoute.base == norm_base,
-                    FxConversionRoute.quote == norm_quote,
-                    FxConversionRoute.priority == priority,
-                )
+                deleted_count = 1 if (norm_base, norm_quote, priority) in existing_keys else 0
+                existing_keys.discard((norm_base, norm_quote, priority))
             else:
-                stmt = sql_delete(FxConversionRoute).where(
-                    FxConversionRoute.base == norm_base,
-                    FxConversionRoute.quote == norm_quote,
-                )
-
-            result = await session.execute(stmt)
-            deleted_count = result.rowcount
+                deleted_count = sum(1 for row_base, row_quote, _ in existing_keys if (row_base, row_quote) == (norm_base, norm_quote))
+                existing_keys = {key for key in existing_keys if (key[0], key[1]) != (norm_base, norm_quote)}
 
             if deleted_count == 0:
                 priority_str = f" with priority={priority}" if priority else ""
@@ -988,7 +991,19 @@ async def delete_routes_bulk(
                         message=None,
                     )
                 )
-                total_deleted += deleted_count
+            total_deleted += deleted_count
+
+        # Apply the deletions with at most two statements: full-pair deletes
+        # (priority omitted) and priority-targeted deletes. The union matches
+        # exactly the rows consumed by the in-memory replay above, regardless
+        # of execution order.
+        full_delete_pairs = {(norm_base, norm_quote) for norm_base, norm_quote, priority in normalized_items if priority is None}
+        targeted_triples = {(norm_base, norm_quote, priority) for norm_base, norm_quote, priority in normalized_items if priority is not None and (norm_base, norm_quote) not in full_delete_pairs}
+
+        if targeted_triples:
+            await session.execute(sql_delete(FxConversionRoute).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote, FxConversionRoute.priority).in_(targeted_triples)))
+        if full_delete_pairs:
+            await session.execute(sql_delete(FxConversionRoute).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote).in_(full_delete_pairs)))
 
         # Auto-reinstate MANUAL sentinel for pairs that have no routes left
         # (but NOT for pairs that were fully deleted with priority=None — that's intentional removal)
@@ -1006,13 +1021,16 @@ async def delete_routes_bulk(
             if (b, q) not in fully_deleted_pairs:
                 affected_pairs.add((b, q))
 
+        # P0-5b: ONE post-delete SELECT for every affected pair, grouped in
+        # memory, instead of one SELECT per pair.
+        remaining_by_pair: dict[tuple[str, str], list[FxConversionRoute]] = {}
+        if affected_pairs:
+            remaining_stmt = select(FxConversionRoute).where(tuple_(FxConversionRoute.base, FxConversionRoute.quote).in_(affected_pairs))
+            for remaining_route in (await session.execute(remaining_stmt)).scalars().all():
+                remaining_by_pair.setdefault((remaining_route.base, remaining_route.quote), []).append(remaining_route)
+
         for base, quote in affected_pairs:
-            count_stmt = select(FxConversionRoute).where(
-                FxConversionRoute.base == base,
-                FxConversionRoute.quote == quote,
-            )
-            remaining = await session.execute(count_stmt)
-            remaining_routes = remaining.scalars().all()
+            remaining_routes = remaining_by_pair.get((base, quote), [])
 
             # Check if any non-MANUAL route exists
             has_real = False

@@ -15,7 +15,7 @@
  * worker è ciò che, sui 25 spec di una categoria consolidata, arrivava a 8 GB.
  */
 import {test as testBase, expect, request as playwrightRequest} from '@playwright/test';
-import type {APIRequestContext, Browser, BrowserContext, Locator, Page, Request, Response, TestInfo} from '@playwright/test';
+import type {APIRequestContext, Browser, BrowserContext, Locator, Page, Request, Response} from '@playwright/test';
 import {existsSync} from 'node:fs';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -334,4 +334,4 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void}, {hygieneApi: H
 });
 
 export {test, expect};
-export type {APIRequestContext, Browser, BrowserContext, Locator, Page, Request, Response, TestInfo};
+export type {APIRequestContext, Browser, BrowserContext, Locator, Page, Request, Response};

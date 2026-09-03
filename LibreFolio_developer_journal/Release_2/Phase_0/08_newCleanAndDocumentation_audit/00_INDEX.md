@@ -51,6 +51,35 @@ livelli «zero» raggiunti il 05/08 si stanno erodendo per mancanza di gate auto
 > resta aperto ed è nel piano P1 come decisione già presa dall'utente? → resta da
 > pianificare (vedi P2-2: è una decisione di prodotto, endpoint o rimozione).
 
+> **Aggiornamento (03/09) — tornata P1 eseguita**: tutti i 18 task P1 sono chiusi
+> (stato per stato in [99_task_riesumati.md](99_task_riesumati.md)), con tre variazioni
+> rispetto alla lista originaria, tutte già decise dall'utente:
+> 1. **P1-2 a soglia 10, non 25**: 199 siti C901 triagiati uno a uno — 173 flat packer
+>    con `# noqa: C901` giustificato, 26 funzioni genuinamente complesse marcate
+>    `TODO(P2-refactor)` (lista nel piano P1). Effetto collaterale: `ruff check backend/`
+>    è tornato tutto verde per la prima volta (a HEAD c'erano 37 errori preesistenti
+>    in test_scripts: import nei test risolti per hoisting).
+> 2. **P1-10 ribaltato in rimozione**: il grafo valute è costruito solo da capability
+>    provider statiche a runtime → invalidazione impossibile per costruzione →
+>    `cachedProvidersHash` e `invalidateCurrencyGraph` rimossi come macchinari morti.
+> 3. **P1-8 ridotto**: le ~30 chiavi `aiExport.dataset.*` NON erano orfane
+>    (risoluzione dinamica backend-driven) — solo 25 chiavi realmente morte rimosse.
+>
+> Due scoperte nuove di questa tornata, non nell'audit:
+> - **Collisione sitecustomize↔Homebrew** (P1-13): il nostro `sitecustomize.py` su
+>   PYTHONPATH oscurava quello di Homebrew Python → `sys.prefix` non corretto →
+>   `pipenv` non importabile → bootstrap del server di test morto. Risolto con
+>   chain-exec dello sitecustomize shadowato (documentato nel file stesso).
+> - **Post-processor discriminatori**: ogni nuovo membro di union discriminata va
+>   registrato in `frontend/scripts/fix-openapi-discriminators.mjs` e il campo
+>   discriminatore vuole `Field(json_schema_extra={"enum": [...]})` — altrimenti
+>   il client TS generato non compila (svelte-check lo intercetta).
+>
+> Residui aperti dopo la tornata: P1-6 (rimozione `fifo_utils.py` — mappatura pronta,
+> in attesa di review utente), reperto 6 WAC (P2-2, decisione di prodotto), 2 file
+> frontend orfani scoperti in corsa (BaseDropdown, TransactionTypeBadge — decisione
+> utente), e il backlog P2/P3/P4 invariato.
+
 ### I sei reperti che contavano — stato oggi
 
 | # | Reperto (2026-08-07) | Stato oggi | Evidenza |

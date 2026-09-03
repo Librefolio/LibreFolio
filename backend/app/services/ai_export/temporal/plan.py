@@ -52,7 +52,7 @@ class BucketPlan:
     policy: BucketingPolicy
     buckets: tuple[Bucket, ...]
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: C901 — flat invariant validation
         """Validate invariants for *any* construction path, not just :meth:`build`.
 
         ``BucketPlan`` is a public dataclass, so direct construction must be

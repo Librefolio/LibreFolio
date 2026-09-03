@@ -358,7 +358,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: header validation and per-row error handling, no nested logic
         """
         Parse CSV file and return transactions, warnings, and extracted assets.
 
@@ -483,7 +483,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         return column_map
 
-    def _parse_row(
+    def _parse_row(  # noqa: C901 — flat field mapping with validation raises, no nested logic
         self,
         row: Dict[str, str],
         column_map: Dict[str, str],

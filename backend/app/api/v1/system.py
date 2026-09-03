@@ -15,7 +15,7 @@ from fastapi import APIRouter
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
-from backend.app.schemas.system import DependencyInfo, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.schemas.system import DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
 from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
 from backend.app.utils.version import get_git_version
 
@@ -195,7 +195,7 @@ def get_plugin_diagnostics() -> PluginDiagnosticsResponse:
     )
 
 
-@router.get("/health")
+@router.get("/health", response_model=HealthCheckResponse)
 async def health_check():
     """
     Health check endpoint for monitoring and load balancers.

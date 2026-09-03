@@ -22,7 +22,7 @@ These variables allow you to customize LibreFolio's behavior within the `.env` f
 | `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | The root directory path where persistent data is stored (SQLite database, uploads, logs, etc.). Resolved at the system level: relative paths are resolved to absolute paths relative to the project root, while in Docker it is overridden and forced to `/app/backend/data/prod-docker` via Compose volume mappings. |
 | `LOG_LEVEL` | `INFO` | The primary logging level for the application. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
 | `PORTFOLIO_BASE_CURRENCY` | `EUR` | The default base currency for the portfolio calculations (ISO 4217 code). |
-| `PREVIEW_CACHE_MAX_MB` | `50` | Maximum size (in MB) for the in-memory image preview cache. Cached thumbnails are evicted using the LRU algorithm when the limit is reached. |
+| `PREVIEW_CACHE_MAX_MB` | `50` | Maximum size (in MB) for the in-memory image preview cache. Entries expire after 1 hour (TTL); when the limit is reached, the oldest entries are evicted first. |
 
 ## 💻 System Parameters (Environment Variables)
 

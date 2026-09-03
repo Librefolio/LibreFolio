@@ -245,7 +245,7 @@ class JustETFProvider(AssetSourceProvider):
             },
         ]
 
-    async def get_current_value(
+    async def get_current_value(  # noqa: C901 — flat fallback chain + error wrapping
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -328,7 +328,7 @@ class JustETFProvider(AssetSourceProvider):
     def supports_history(self) -> bool:
         return True
 
-    async def get_history_value(
+    async def get_history_value(  # noqa: C901 — flat fetch→map pipeline with guarded enrichments
         self,
         identifier: str,
         identifier_type: IdentifierType,
@@ -492,7 +492,7 @@ class JustETFProvider(AssetSourceProvider):
                 {"currency": currency, "supported": list(self.SUPPORTED_CURRENCIES)},
             )
 
-    async def fetch_asset_metadata(
+    async def fetch_asset_metadata(  # noqa: C901 — flat metadata mapping with guarded sections
         self,
         identifier: str,
         identifier_type: IdentifierType,

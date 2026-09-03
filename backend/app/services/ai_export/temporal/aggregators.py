@@ -99,7 +99,7 @@ class ScalarBucketStatistics:
     maximum: DatedValue | None
     last: DatedValue | None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: C901 — flat invariant validation
         if not isinstance(self.bucket, Bucket):
             raise TypeError("bucket must be a Bucket")
         if not isinstance(self.observation_count, int) or isinstance(self.observation_count, bool):

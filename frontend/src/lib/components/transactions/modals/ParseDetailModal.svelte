@@ -10,7 +10,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import {getTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
+    import {getTransactionTypeIconUrl} from '$lib/stores/transactions/transactionTypeStore';
     import {getIndexColor} from '$lib/utils/colors';
     import {resolveIssueMessage, translateFieldName} from '$lib/utils/transactions/resolveValidationMessage';
     import BrimNoticeList from '$lib/components/transactions/import/BrimNoticeList.svelte';
@@ -179,7 +179,7 @@
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {#each txByType as [type, count]}
                             <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-gray-100 dark:bg-slate-800">
-                                <img src={getTypeIconUrl(type)} alt={type} class="w-4 h-4" />
+                                <img src={getTransactionTypeIconUrl(type)} alt={type} class="w-4 h-4" />
                                 <span class="text-xs font-medium text-gray-600 dark:text-gray-400 flex-1">{$t('transactions.types.' + type)}</span>
                                 <span class="text-sm font-semibold text-gray-900 dark:text-white">{count}</span>
                             </div>

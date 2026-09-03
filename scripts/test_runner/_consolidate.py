@@ -196,6 +196,9 @@ def run_playwright_group(specs: list[str], coverage: bool, project: str | None =
         env["LF_TX_HYGIENE"] = "1"
     if coverage and _common._COVERAGE_PY:
         env["COVERAGE_BACKEND"] = "1"
+        # Same spawn-worker wiring as _frontend_common._run_playwright_body:
+        # Playwright hands this env to the webServer it launches.
+        _common.apply_subprocess_coverage_env(env)
     if coverage and _common._COVERAGE_JS:
         env["COVERAGE_JS"] = "1"
         # A consolidated worker keeps one V8-coverage accumulator alive across every
@@ -291,7 +294,7 @@ def _cache_key(category: str) -> str:
     return f"consolidated:{category}"
 
 
-def run_consolidated(scope: str | None, coverage: bool, resume: bool = False) -> tuple[bool, set, dict]:
+def run_consolidated(scope: str | None, coverage: bool, resume: bool = False) -> tuple[bool, set, dict]:  # noqa: C901 — TODO(P2-refactor): nested category/project/batch verdict-folding loops
     """Run every consolidatable frontend unit in scope.
 
     Returns ``(ok, covered_actions, per_action_outcome)``. ``covered_actions`` is

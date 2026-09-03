@@ -197,7 +197,7 @@ def _cache_set(key: tuple, urls: list[str]) -> None:
 # --------------------------------------------------------------------------- #
 # Public API
 # --------------------------------------------------------------------------- #
-async def find_candidate_urls(
+async def find_candidate_urls(  # noqa: C901 — guard clauses + URL filter loop, no nested logic
     query: str,
     allowed_domains: list[str],
     *,

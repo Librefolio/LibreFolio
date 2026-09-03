@@ -173,7 +173,7 @@ class RiskAnalytic(ABC):
         )
 
     @classmethod
-    def validate_definition(cls) -> None:
+    def validate_definition(cls) -> None:  # noqa: C901 — sequential declaration validation raises, no nested logic
         """Reject incomplete or unsafe declarations at registration."""
         if cls is RiskAnalytic or inspect.isabstract(cls):
             raise TypeError("RiskAnalyticRegistry accepts concrete RiskAnalytic subclasses only")

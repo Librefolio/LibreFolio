@@ -83,21 +83,6 @@ export function notify(opts: NotifyOptions): AppEvent {
     return event;
 }
 
-/** Everything recorded since `since` (exclusive), oldest first. */
-export function eventsSince(since = 0): AppEvent[] {
-    return ring.filter((e) => e.seq > since);
-}
-
-export function currentSeq(): number {
-    return seq;
-}
-
-/** Test-only reset. Production has no reason to call this. */
-export function resetEvents(): void {
-    ring.length = 0;
-    seq = 0;
-}
-
 // Published for E2E. Reading a state cannot race; listening for an edge can.
 if (typeof window !== 'undefined') {
     const w = window as unknown as {__lf?: Record<string, unknown>};

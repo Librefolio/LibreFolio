@@ -196,7 +196,7 @@ class SignalAnnotationService:
             request.sampling,
         )
 
-    def _crossings(
+    def _crossings(  # noqa: C901 — TODO(P2-refactor): stateful crossing detection, nested gap/equality branches
         self,
         *,
         dates: Sequence[date],

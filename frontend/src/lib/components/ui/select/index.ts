@@ -6,7 +6,6 @@
  */
 
 // Base components
-export {default as BaseDropdown} from './BaseDropdown.svelte';
 export {default as SimpleSelect} from './SimpleSelect.svelte';
 export {default as SearchSelect} from './SearchSelect.svelte';
 

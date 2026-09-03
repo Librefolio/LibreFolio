@@ -37,3 +37,9 @@ class PluginDiscoveryFailureInfo(StrictModel):
 
 class PluginDiagnosticsResponse(RootModel[list[PluginDiscoveryFailureInfo]]):
     """Plugin discovery diagnostics as a flat failure list."""
+
+
+class HealthCheckResponse(StrictModel):
+    """Health check response."""
+
+    status: str = Field(..., description="Service status ('ok' when the service is healthy)")

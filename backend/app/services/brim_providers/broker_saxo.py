@@ -184,7 +184,7 @@ class SaxoBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row-variant dispatch (if/elif over type/event), no nested decisions
         """Parse Saxo CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

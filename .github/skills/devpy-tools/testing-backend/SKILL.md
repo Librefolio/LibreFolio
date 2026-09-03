@@ -217,9 +217,15 @@ Rules:
   `COVERAGE_FILE=.coverage_data/backend pipenv run coverage json -o /tmp/cov_report.json`
 - The same command analyses the **frontend** with `--lang js`, reading monocart's istanbul
   JSON from `frontend/coverage-js/` (no regeneration step needed — the test run writes it).
-- **Coverage is blind to `multiprocessing` spawn children.** `services/risk/quant/spawn_worker.py`
-  (`_worker_main`, `_resolve_handler`, `_peak_rss_bytes`) always reads 0 % while being
-  live. Never treat those as dead code — cross-check with `./dev.py lint --dead-code`.
+- **Spawn children are covered only because the runner wires them.** Under
+  `./dev.py test --coverage`, every spawned interpreter (pytest workers, shared
+  backend, Playwright's webServer) gets `COVERAGE_PROCESS_START=<repo>/.coveragerc`
+  plus `backend/test_scripts/_coverage_sitecustomize/` prepended to `PYTHONPATH`
+  (`_common.apply_subprocess_coverage_env`), so the `multiprocessing` spawn children
+  of `services/risk/quant/spawn_worker.py` start their own tracer. If
+  `spawn_worker.py` ever reads 0 % again, that wiring regressed — check the env
+  reaches the child before believing the number (and never treat those lines as
+  dead code: cross-check with `./dev.py lint --dead-code`).
 
 ### Coverage as a dead-code cross-check
 
@@ -227,6 +233,16 @@ A symbol at 0 % **and** flagged by vulture is dead with near-certainty: static a
 can miss dynamic dispatch, but coverage cannot miss code that actually ran. Use the two
 together before proposing any removal. See
 `LibreFolio_developer_journal/Release_2/Phase_0/05_cleanAudit/12_test_coverage.md`.
+
+- **Exclusion belongs in the report, not in reference collection.** Auditing a subset
+  of the tree (e.g. signals+risk without `ai_export/`) is legitimate for *readability*;
+  it is a methodology bug for *collection*. Any scanner (vulture, grep-for-callers,
+  coverage cross-check) must run on the whole codebase first and filter findings
+  afterwards — otherwise a symbol used only by the excluded area reads as dead. It
+  happened twice with `resolve_ai_export_temporal_class` (`signal_plugins/base.py`,
+  called only from `ai_export/components/technical_shared.py`): both audits excluded
+  ai_export up front and both reported the same false positive. Collect wide, report
+  narrow.
 
 ## Provider Filtering (--providers / --exclude-providers)
 

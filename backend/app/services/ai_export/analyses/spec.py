@@ -125,7 +125,7 @@ class AnalysisSpec:
     additional_export_suggestions: tuple[AdditionalExportSuggestion, ...] = ()
     visibility: CatalogVisibility = CatalogVisibility.INTERNAL
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: C901 — flat field-validation chain
         if not _ANALYSIS_ID_PATTERN.fullmatch(self.analysis_id):
             raise AnalysisSpecError(f"analysis_id has invalid format: {self.analysis_id!r}")
         require_positive_int(self.version, "version", owner_id=self.analysis_id, error_cls=AnalysisSpecError)
@@ -203,7 +203,7 @@ class AnalysisSuggestionVisibilityError(AnalysisRegistryError):
 class AnalysisRegistry:
     """Immutable collection of `AnalysisSpec`, validated against a `DatasetRegistry`."""
 
-    def __init__(self, specs: Iterable[AnalysisSpec], *, dataset_registry: DatasetRegistry):
+    def __init__(self, specs: Iterable[AnalysisSpec], *, dataset_registry: DatasetRegistry):  # noqa: C901 — flat registry cross-validation loops
         ordered: dict[str, AnalysisSpec] = {}
         for spec in specs:
             if not isinstance(spec, AnalysisSpec):

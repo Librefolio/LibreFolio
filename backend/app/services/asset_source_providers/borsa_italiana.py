@@ -643,7 +643,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
 
     # ── Search ──────────────────────────────────────────────────────────
 
-    async def search(self, query: str) -> list[dict]:
+    async def search(self, query: str) -> list[dict]:  # noqa: C901 — flat result mapping with language fan-out
         """Search for instruments on Borsa Italiana.
 
         Emits 2 results per match (EN + IT) with flag emojis,
@@ -792,7 +792,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             identifier_other=[codice_fondo],
         )
 
-    async def fetch_asset_metadata(
+    async def fetch_asset_metadata(  # noqa: C901 — flat metadata mapping with guarded sections
         self,
         identifier: str,
         identifier_type: IdentifierType,

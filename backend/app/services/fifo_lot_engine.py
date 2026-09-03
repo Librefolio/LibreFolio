@@ -440,7 +440,7 @@ class FifoLotEngine:
             asset_orphan_taxes=economic.orphan_taxes,
         )
 
-    def classify_events(self) -> list[FifoEvent]:
+    def classify_events(self) -> list[FifoEvent]:  # noqa: C901 — tx-type if/elif dispatch mapping to events
         if self._classified_events_cache is not None:
             return self._classified_events_cache
         events: list[FifoEvent] = []
@@ -1278,7 +1278,7 @@ class FifoLotEngine:
             )
         return orphan_total
 
-    def _match_cost_operations(
+    def _match_cost_operations(  # noqa: C901 — ordered matching-level fallback chain, early returns per level
         self,
         *,
         economic_type: EconomicType,

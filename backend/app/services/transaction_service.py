@@ -304,7 +304,7 @@ class TransactionService:
     # READ OPERATIONS
     # =========================================================================
 
-    async def query(self, params: TXQueryParams, user_id: Optional[int] = None) -> List[TXReadItem]:
+    async def query(self, params: TXQueryParams, user_id: Optional[int] = None) -> List[TXReadItem]:  # noqa: C901 — flat query-builder chain, one branch per filter
         """
         Query transactions with filters.
 
@@ -419,7 +419,7 @@ class TransactionService:
     # BALANCE VALIDATION
     # =========================================================================
 
-    async def _validate_broker_balances(
+    async def _validate_broker_balances(  # noqa: C901 — day-by-day balance replay, per-tx accumulate + raises
         self,
         broker_id: int,
         from_date: Optional[date_type] = None,
@@ -627,7 +627,7 @@ class TransactionService:
     # TRANSFER PROMOTION (Block H.4)
     # =========================================================================
 
-    async def promote_transfer(
+    async def promote_transfer(  # noqa: C901 — sequential validation gates + per-type payload build
         self,
         req: TXTransferPromoteRequest,
         user_id: Optional[int] = None,
@@ -819,7 +819,7 @@ class TransactionService:
         return None
 
     @staticmethod
-    def _check_promote_constraints(tx_a: Transaction, tx_b: Transaction, constraints: list) -> bool:
+    def _check_promote_constraints(tx_a: Transaction, tx_b: Transaction, constraints: list) -> bool:  # noqa: C901 — flat field×relation matcher, early returns
         """Check if two transactions satisfy promote field constraints."""
         for c in constraints:
             assert isinstance(c, PairFieldConstraint)
@@ -852,7 +852,7 @@ class TransactionService:
                         return False
         return True
 
-    async def promote_suggest_bulk(
+    async def promote_suggest_bulk(  # noqa: C901 — nested rule/candidate matching loops, no decision trees
         self,
         inputs: List,
         tolerance_days: int,
@@ -934,7 +934,7 @@ class TransactionService:
     # UNIFIED BATCH PIPELINE (replaces separate create/update/delete bulk)
     # =========================================================================
 
-    async def execute_batch(
+    async def execute_batch(  # noqa: C901 — TODO(P2-refactor): 8-stage batch pipeline, split per-operation stages
         self,
         creates_raw: List[dict],
         updates_raw: List[dict],
@@ -1576,7 +1576,7 @@ class TransactionService:
     # WAC AUTO-COMPUTATION (inline in validate/commit)
     # =========================================================================
 
-    async def _compute_wac_for_auto_items(
+    async def _compute_wac_for_auto_items(  # noqa: C901 — per-item WAC dispatch loop, sequential checks
         self,
         parsed_creates: list[tuple[int, TXCreateItem]],
         parsed_updates: list[tuple[int, TXUpdateItem]],

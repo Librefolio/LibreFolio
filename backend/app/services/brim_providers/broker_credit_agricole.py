@@ -519,7 +519,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
             return self._parse_account_movements(rows, broker_id)
         raise BRIMParseError("Crédit Agricole header row not found (neither securities 'Deposito " "Titoli' nor account 'Lista Movimenti Conto' layout)")
 
-    def _parse_securities(self, rows: List[List], broker_id: int) -> BRIMParseOutput:
+    def _parse_securities(self, rows: List[List], broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat causale dispatch with per-arm field mapping; maturity arm nests par-model fallback
         header_idx = io.find_header_row(rows, ["Data operazione", "Causale", "Quantità"])
         if header_idx is None:
             raise BRIMParseError("Crédit Agricole securities header row not found")
@@ -926,7 +926,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
             return TransactionType.DEPOSIT, Currency(code=currency, amount=abs_amt), tier
         return TransactionType.WITHDRAWAL, Currency(code=currency, amount=-abs_amt), tier
 
-    def _parse_account_movements(self, rows: List[List], broker_id: int) -> BRIMParseOutput:
+    def _parse_account_movements(self, rows: List[List], broker_id: int) -> BRIMParseOutput:  # noqa: C901 — TODO(P2-refactor): two-pass parse with nested trade-resolution closures
         """Parse the account "Lista Movimenti Conto" cash-movements layout.
 
         Header: ``Data Op.;Data Val.;Causale;Descrizione;Importo;Divisa``. Most

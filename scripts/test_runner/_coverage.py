@@ -152,7 +152,7 @@ def _finalize_js_coverage() -> None:
         print_info("   Find the gaps: ./dev.py test coverage-report --lang js --summary")
 
 
-def _finalize_coverage(is_front: bool, is_all: bool) -> str:
+def _finalize_coverage(is_front: bool, is_all: bool) -> str:  # noqa: C901 — TODO(P2-refactor): mode matrix × combine/html pipeline, nested error handling
     """Finalize coverage data after test runs."""
     cwd = Path(os.getcwd())
     main_cov = cwd / ".coverage"

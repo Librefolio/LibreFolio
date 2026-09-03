@@ -149,7 +149,7 @@ class CryptoComBrokerProvider(BRIMProvider):
     def _is_reward_kind(kind: str) -> bool:
         return kind == "crypto_earn_interest_paid" or any(part in kind for part in REWARD_KIND_PARTS)
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row-variant dispatch (if/elif over tx kinds), no nested decisions
         """Parse Crypto.com CSV export file."""
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []

@@ -18,7 +18,6 @@ export const UI_TIMEOUT = 8_000;
 export const API_TIMEOUT = 90_000;
 
 export type AiExportSelectionKind = 'dataset' | 'analysis';
-export type AiExportDetailLevel = 'compact' | 'standard' | 'full';
 export type AiExportPeriodUnit = 'days' | 'weeks' | 'months' | 'years';
 
 export interface AiExportPanel {

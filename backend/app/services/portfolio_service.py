@@ -92,7 +92,7 @@ _wac_cache = get_ttl_cache("portfolio_wac", maxsize=200, ttl=3600)  # 1h
 # =============================================================================
 
 
-async def compute_wac_iterative(
+async def compute_wac_iterative(  # noqa: C901 — TODO(P2-refactor): staged WAC prep pipeline; extract stage helpers
     session: AsyncSession,
     broker_id: int,
     asset_id: int,
@@ -344,7 +344,7 @@ async def compute_wac_iterative(
     return result
 
 
-async def compute_wac_iterative_multi_broker(
+async def compute_wac_iterative_multi_broker(  # noqa: C901 — TODO(P2-refactor): staged WAC prep pipeline; shares helpers with single-broker twin
     session: AsyncSession,
     broker_ids: list[int],
     asset_id: int,
@@ -766,35 +766,6 @@ class PortfolioService:
             return row.close, row.currency, row.date
         return None
 
-    async def _bulk_load_asset_prices(
-        self,
-        asset_ids: set[int],
-        date_from: date_type,
-        date_to: date_type,
-    ) -> dict[int, list[tuple[date_type, Decimal, str]]]:
-        """Bulk-load PriceHistory for a set of assets over a date range.
-
-        Returns {asset_id: [(date, close, currency)]} with each list sorted ascending.
-        A single SQL query for all assets — avoids N separate round-trips.
-        """
-        if not asset_ids:
-            return {}
-        stmt = (
-            select(PriceHistory.asset_id, PriceHistory.date, PriceHistory.close, PriceHistory.currency)
-            .where(
-                PriceHistory.asset_id.in_(asset_ids),
-                PriceHistory.close.is_not(None),
-                PriceHistory.date >= date_from,
-                PriceHistory.date <= date_to,
-            )
-            .order_by(PriceHistory.asset_id, PriceHistory.date)
-        )
-        rows = (await self.db.execute(stmt)).all()
-        result: dict[int, list[tuple[date_type, Decimal, str]]] = defaultdict(list)
-        for r in rows:
-            result[r.asset_id].append((r.date, r.close, r.currency))
-        return dict(result)
-
     async def _get_asset(self, asset_id: int) -> Asset | None:
         return await self.db.get(Asset, asset_id)
 
@@ -804,13 +775,6 @@ class PortfolioService:
         stmt = select(Asset).where(Asset.id.in_(asset_ids))
         result = await self.db.execute(stmt)
         return {asset.id: asset for asset in result.scalars().all()}
-
-    async def _get_quote_base_map(self, asset_ids: set[int]) -> dict[int, int | None]:
-        if not asset_ids:
-            return {}
-        stmt = select(Asset.id, Asset.quote_base_quantity).where(Asset.id.in_(asset_ids))
-        rows = (await self.db.execute(stmt)).all()
-        return dict(rows)
 
     async def _convert_to_base(
         self,
@@ -939,7 +903,7 @@ class PortfolioService:
     # Public API
     # ------------------------------------------------------------------
 
-    async def get_summary(
+    async def get_summary(  # noqa: C901 — TODO(P2-refactor): nested broker/tx/asset accumulation; extract per-position builder
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -1552,7 +1516,7 @@ class PortfolioService:
             data_quality=data_quality,
         )
 
-    async def get_history(
+    async def get_history(  # noqa: C901 — sequential engine→metrics→merge pipeline with period-rebase if/else
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -1703,7 +1667,7 @@ class PortfolioService:
 
         return history_points
 
-    async def get_positions_contribution(
+    async def get_positions_contribution(  # noqa: C901 — TODO(P2-refactor): nested broker/asset/tx accumulation with FX conversion branches
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -2144,7 +2108,7 @@ class PortfolioService:
             gross_losses=gross_losses,
         )
 
-    async def get_report(
+    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration + nested MWRR divergence retry
         self,
         user_id: int,
         query: PortfolioReportQuery,

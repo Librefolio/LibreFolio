@@ -11,9 +11,7 @@ from backend.app.db.models import TransactionType
 from backend.app.services.portfolio_engine import (
     ClassificationResult,
     ClassifiedTransaction,
-    DailyPortfolioState,
     DailyStateBuilder,
-    DerivedViewsBuilder,
     InTransitInterval,
     ValuationSource,
 )
@@ -592,7 +590,6 @@ class TestPrivateValuationHelpers:
         assert valuation.market_value == Decimal("90")  # 5 * 20 USD * 0.9 EUR/USD
         assert valuation.source == ValuationSource.MARKET_PRICE
         assert valuation.reference_date == date(2025, 1, 1)
-        assert valuation.unit_price == Decimal("20")
         assert valuation.effective_unit_price == Decimal("20")
         assert valuation.effective_currency == "USD"
         assert valuation.reference_unit_price == Decimal("20")
@@ -628,7 +625,6 @@ class TestPrivateValuationHelpers:
         assert valuation.market_value == Decimal("48")  # 2 * 30 USD * 0.8 EUR/USD
         assert valuation.source == ValuationSource.LAST_TRADE_PRICE
         assert valuation.reference_date == date(2025, 1, 1)
-        assert valuation.unit_price == Decimal("30")
         assert valuation.effective_unit_price == Decimal("30")
         assert valuation.effective_currency == "USD"
         assert valuation.reference_unit_price == Decimal("30")
@@ -757,33 +753,6 @@ class TestPrivateInTransitHelper:
         assert it_asset_mv == Decimal("80")
         assert it_asset_cb == Decimal("80")
         assert missing_fx == set()
-
-
-class TestDerivedViewAggregators:
-    """Union helpers for per-day data-quality flags."""
-
-    @staticmethod
-    def _state(*, missing=None, stale=None, fx=None, implied=None) -> DailyPortfolioState:
-        state = MagicMock(spec=DailyPortfolioState)
-        state.missing_price_asset_ids = missing or set()
-        state.stale_price_asset_ids = stale or set()
-        state.missing_fx_pairs = fx or set()
-        state.transaction_implied_asset_ids = implied or set()
-        return state
-
-    def test_aggregate_helpers_union_ids_and_pairs(self):
-        views = DerivedViewsBuilder(
-            daily_states=[
-                self._state(missing={1, 2}, stale={3}, fx={"USD/EUR"}, implied={7}),
-                self._state(missing={2, 4}, stale={5}, fx={"CHF/EUR"}, implied={8, 7}),
-            ],
-            target_currency="EUR",
-        )
-
-        assert views.aggregate_missing_price_ids() == {1, 2, 4}
-        assert views.aggregate_stale_price_ids() == {3, 5}
-        assert views.aggregate_missing_fx_pairs() == {"USD/EUR", "CHF/EUR"}
-        assert views.aggregate_transaction_implied_ids() == {7, 8}
 
 
 class TestClassificationResultHelper:

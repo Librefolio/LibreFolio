@@ -107,7 +107,7 @@ class RiskService:
     def catalog():
         return RiskAnalyticRegistry.list_definitions()
 
-    async def execute(
+    async def execute(  # noqa: C901 — per-analytic orchestration loop; branches are guard/exception continues
         self,
         *,
         user_id: int,
@@ -291,7 +291,7 @@ class RiskService:
 
         return RiskQueryResponse(items=[results[index] for index in range(len(request.analytics))])
 
-    async def _load_scope_inputs(
+    async def _load_scope_inputs(  # noqa: C901 — scope-variant dispatch + sequential composition validation
         self,
         *,
         user_id: int,
@@ -437,7 +437,7 @@ class RiskService:
                     parsed = FAClassificationParams.model_validate_json(raw_classification) if isinstance(raw_classification, str) else FAClassificationParams.model_validate(raw_classification)
                 except (TypeError, ValueError, ValidationError) as exc:
                     metadata_error = "invalid_classification_metadata"
-                    logger.error(
+                    logger.exception(
                         "Invalid asset classification metadata",
                         asset_id=asset_id,
                         error=str(exc),

@@ -79,6 +79,7 @@ select = [
     "UP",     # pyupgrade
     "PLC0415",  # import-outside-toplevel (imports inside functions)
     "S110",   # try-except-pass (silent swallow) — audit 08/P0-3: punctual gate so fixed instances never come back
+    "C901",   # cyclomatic complexity — audit 08/P1-2: gate at 10; flat data packers carry a justified noqa
 ]
 ignore = [
     "E501",   # line too long (handled by black)
@@ -89,6 +90,13 @@ ignore = [
     "UP035",  # keep typing imports (List, Dict, Optional, etc.)
     "UP045",  # keep Optional[X] instead of X | None — more explicit with Pydantic
 ]
+
+[tool.ruff.lint.mccabe]
+# Threshold decided 03/09: 10 counts every decision point (incl. ternaries/boolean ops).
+# Functions whose branches are flat format/error handling (packers, CSV parsers) get a
+# per-function `# noqa: C901` with an explicit justification; genuinely nested logic is
+# marked TODO(P2-refactor) and tracked in the audit backlog.
+max-complexity = 10
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]

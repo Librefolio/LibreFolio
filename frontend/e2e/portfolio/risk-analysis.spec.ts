@@ -1,6 +1,7 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToAssetsPage} from '../assets/assets-helpers';
 
@@ -590,7 +591,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
         await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: 8_000});
+        await expectChartCanvas(page, 'risk-correlation-heatmap', 8_000);
         await expect(page.getByTestId('risk-contribution-bars')).toBeVisible({timeout: 8_000});
         await expect(page.getByTestId('risk-var-section')).toBeVisible({timeout: 8_000});
         await expect(page.getByTestId('risk-correlation-section-partial')).toBeVisible();
@@ -621,7 +622,7 @@ test.describe('Risk analysis functional integration', () => {
 
         await expect(page.getByTestId('risk-kpi-section')).toBeVisible({timeout: 8_000});
         await expect(page.getByTestId('risk-var-section-unavailable')).toBeVisible({timeout: 8_000});
-        await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible();
+        await expectChartCanvas(page, 'risk-correlation-heatmap', 8_000);
     });
 
     test('asset global maps broker holdings and supports remove/add', async ({page}) => {
@@ -632,7 +633,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(page.getByTestId('asset-global-risk-panel')).toBeVisible({timeout: 15_000});
         await expect(page.getByTestId('risk-beta-banner')).toBeVisible();
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(1);
-        await expect(page.getByTestId('risk-correlation-heatmap')).toBeVisible({timeout: 8_000});
+        await expectChartCanvas(page, 'risk-correlation-heatmap', 8_000);
 
         const selectedAssets = page.getByTestId(/^risk-selected-asset-\d+$/);
         // The chips arrive with the correlation payload, not with the heatmap frame:
@@ -731,7 +732,7 @@ test.describe('Risk analysis functional integration', () => {
         await expect(comparisonOption).toBeVisible({timeout: 5_000});
         await comparisonOption.click();
         await page.getByTestId('risk-comparison-run').click();
-        await expect(page.getByTestId('risk-comparison-chart')).toBeVisible({timeout: 8_000});
+        await expectChartCanvas(page, 'risk-comparison-chart', 8_000);
 
         const stressBucketInputs = page.getByTestId(/^risk-stress-bucket-input-/);
         await expect(stressBucketInputs).toHaveCount(1, {timeout: 8_000});

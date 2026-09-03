@@ -92,11 +92,3 @@ export function resetNavDepth() {
 }
 
 registerClientSessionReset('navigationStore', resetNavDepth);
-
-/**
- * Debug helper — snapshot of the current stack.
- * Remove or expose via `window.__navStack` only in dev builds.
- */
-export function _debugStack(): string[] {
-    return [...stack];
-}

@@ -718,7 +718,7 @@ async def get_brim_file_preview(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to build BRIM file preview", file_id=file_id, error=str(e))
+        logger.exception("Failed to build BRIM file preview", file_id=file_id, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to build file preview") from e
 
 

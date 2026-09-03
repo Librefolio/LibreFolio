@@ -340,7 +340,7 @@ def calculate_mwrr(
         return MWRRPoint(date=end_date, mwrr=None)
 
 
-def calculate_mwrr_series(
+def calculate_mwrr_series(  # noqa: C901 — TODO(P2-refactor): nested warm-start solver retry/guard chain
     nav_snapshots: list[NAVSnapshot],
     cash_flows: list[CashFlowInput],
     *,

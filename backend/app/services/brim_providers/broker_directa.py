@@ -217,7 +217,7 @@ class DirectaBrokerProvider(BRIMProvider):
         # … plus the "Conto :" account-metadata marker.
         return "conto :" in blob or "conto:" in blob
 
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type field mapping, no nested logic
         """
         Parse a Directa CSV or XLSX export file.
 

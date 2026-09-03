@@ -14,7 +14,6 @@ Architecture:
 
 from __future__ import annotations
 
-import bisect
 import hashlib
 import json
 from collections import defaultdict
@@ -142,12 +141,6 @@ class ValuationResult:
     stale: bool = False
     missing_fx_pair: str | None = None
 
-    @property
-    def unit_price(self) -> Decimal | None:
-        """Compatibility alias for callers that previously read the effective price."""
-
-        return self.effective_unit_price
-
 
 def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, valuation_date: date_type) -> tuple[Decimal, bool]:
     """Return product of split ratios in (reference_date, valuation_date]."""
@@ -250,7 +243,7 @@ class ScopeAwareTransactionClassifier:
                 needed.add(tx.related_transaction_id)
         return needed
 
-    def classify(
+    def classify(  # noqa: C901 — per-tx linked/unlinked variant dispatch with early continues
         self,
         external_paired: dict[int, Transaction] | None = None,
     ) -> ClassificationResult:
@@ -559,7 +552,7 @@ class DailyStateBuilder:
         # valuation date. Populated by PortfolioCalculationEngine.calculate().
         self.mark_series: dict[int, AssetPriceSeries] = mark_series or {}
 
-    def build(self) -> PortfolioCalculationResult:
+    def build(self) -> PortfolioCalculationResult:  # noqa: C901 — TODO(P2-refactor): monolithic daily-replay engine; extract pre-frame/frame stages
         """Build daily states for [frame_start, date_to] + position snapshots + period accumulators.
 
         Architecture (pre-frame / frame split):
@@ -1169,21 +1162,6 @@ class DailyStateBuilder:
             return None
         return amount * rate
 
-    def _price_on_date(
-        self,
-        sorted_prices: list[tuple[date_type, Decimal, str]],
-        query_date: date_type,
-    ) -> tuple[Decimal, str, date_type] | None:
-        """Backward-fill: latest (close, currency, actual_date) with date <= query_date."""
-        if not sorted_prices:
-            return None
-        dates = [p[0] for p in sorted_prices]
-        idx = bisect.bisect_right(dates, query_date) - 1
-        if idx < 0:
-            return None
-        actual_date, close, ccy = sorted_prices[idx]
-        return close, ccy, actual_date
-
     def _market_value_for(
         self,
         asset_id: int,
@@ -1269,7 +1247,7 @@ class DailyStateBuilder:
             reference_currency=None,
         )
 
-    def _compute_in_transit(self, dt: date_type, missing_fx: set[str]) -> tuple[Decimal, Decimal, Decimal]:
+    def _compute_in_transit(self, dt: date_type, missing_fx: set[str]) -> tuple[Decimal, Decimal, Decimal]:  # noqa: C901 — TODO(P2-refactor): nested per-interval valuation with FX/cost fallbacks
         """Compute in_transit_cash, in_transit_asset_mv, in_transit_asset_cb."""
         zero = Decimal("0")
         it_cash = zero
@@ -1675,35 +1653,7 @@ class DerivedViewsBuilder:
             result.append({"date": s.date, "components": components})
         return result
 
-    def aggregate_missing_price_ids(self) -> set[int]:
-        """Collect all asset IDs that had missing prices across any day."""
-        ids: set[int] = set()
-        for s in self.daily_states:
-            ids.update(s.missing_price_asset_ids)
-        return ids
-
-    def aggregate_stale_price_ids(self) -> set[int]:
-        """Collect all asset IDs that had stale prices across any day."""
-        ids: set[int] = set()
-        for s in self.daily_states:
-            ids.update(s.stale_price_asset_ids)
-        return ids
-
-    def aggregate_missing_fx_pairs(self) -> set[str]:
-        """Collect all missing FX pairs across all days."""
-        pairs: set[str] = set()
-        for s in self.daily_states:
-            pairs.update(s.missing_fx_pairs)
-        return pairs
-
-    def aggregate_transaction_implied_ids(self) -> set[int]:
-        """Collect all asset IDs valued via transaction-implied (no market price)."""
-        ids: set[int] = set()
-        for s in self.daily_states:
-            ids.update(s.transaction_implied_asset_ids)
-        return ids
-
-    def build_data_quality_report(
+    def build_data_quality_report(  # noqa: C901 — flat sequential issue-section assembly, one block per issue type
         self,
         missing_price_assets_dto: list | None = None,
         stale_prices_dto: list | None = None,
@@ -1949,7 +1899,7 @@ class PortfolioCalculationEngine:
         """Initialize with an async DB session."""
         self.db = db
 
-    async def calculate(
+    async def calculate(  # noqa: C901 — TODO(P2-refactor): long pipeline orchestrator; extract stage helpers
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -2213,7 +2163,7 @@ class PortfolioCalculationEngine:
         max_fetched = row[1].isoformat() if row[1] else "none"
         return f"{count}:{max_fetched}"
 
-    async def _preload_fx_rates(
+    async def _preload_fx_rates(  # noqa: C901 — sequential fx-need collection loops, no decision logic
         self,
         classified_txs: list[ClassifiedTransaction],
         in_transit_intervals: list[InTransitInterval],

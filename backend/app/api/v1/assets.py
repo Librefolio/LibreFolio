@@ -138,7 +138,7 @@ async def create_assets_bulk(
     try:
         return await AssetCRUDService.create_assets_bulk(assets, session)
     except Exception as e:
-        logger.error(f"Error in bulk asset creation: {e}")
+        logger.exception(f"Error in bulk asset creation: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -204,7 +204,7 @@ async def patch_assets_bulk(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in bulk asset patch: {e}")
+        logger.exception(f"Error in bulk asset patch: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -224,7 +224,7 @@ async def get_all_assets(session: AsyncSession = Depends(get_session_generator),
         filters = FAAinfoFiltersRequest(active=True)
         return await AssetCRUDService.list_assets(filters, session, user_id=current_user.id)
     except Exception as e:
-        logger.error(f"Error getting all assets: {e}")
+        logger.exception(f"Error getting all assets: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -292,7 +292,7 @@ async def list_assets(
         )
         return await AssetCRUDService.list_assets(filters, session, user_id=current_user.id)
     except Exception as e:
-        logger.error(f"Error listing assets: {e}")
+        logger.exception(f"Error listing assets: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -339,7 +339,7 @@ async def delete_assets_bulk(
     try:
         return await AssetCRUDService.delete_assets_bulk(asset_ids, session)
     except Exception as e:
-        logger.error(f"Error in bulk asset deletion: {e}")
+        logger.exception(f"Error in bulk asset deletion: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -385,7 +385,7 @@ async def merge_assets(
         status = 404 if e.error_code == "NOT_FOUND" else 400
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Error merging assets: {e}")
+        logger.exception(f"Error merging assets: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -585,7 +585,7 @@ async def assign_providers_bulk(
         success_count = sum(1 for r in results if r.success)
         return FABulkAssignResponse(results=results, success_count=success_count)
     except Exception as e:
-        logger.error(f"Error in bulk assign providers: {e}")
+        logger.exception(f"Error in bulk assign providers: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -599,7 +599,7 @@ async def remove_providers_bulk(
     try:
         return await AssetSourceManager.bulk_remove_providers(asset_ids, session)
     except Exception as e:
-        logger.error(f"Error in bulk remove providers: {e}")
+        logger.exception(f"Error in bulk remove providers: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -664,7 +664,7 @@ async def get_provider_assignments(
 
         return items
     except Exception as e:
-        logger.error(f"Error getting provider assignments: {e}")
+        logger.exception(f"Error getting provider assignments: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -699,7 +699,7 @@ async def upsert_prices_bulk(
         logger.warning("Upsert prices validation error: %s", e)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Error in bulk upsert prices: {e}")
+        logger.exception(f"Error in bulk upsert prices: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -713,7 +713,7 @@ async def delete_prices_bulk(
     try:
         return await AssetSourceManager.bulk_delete_prices(assets, session)
     except Exception as e:
-        logger.error(f"Error in bulk delete prices: {e}")
+        logger.exception(f"Error in bulk delete prices: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -755,7 +755,7 @@ async def query_prices_bulk(
     except SignalRequestValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Error querying prices bulk: {e}")
+        logger.exception(f"Error querying prices bulk: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -799,7 +799,7 @@ async def get_current_prices_bulk(
         success_count = sum(1 for r in results if r.value is not None)
         return FACurrentPriceResponse(results=results, success_count=success_count)
     except Exception as e:
-        logger.error(f"Error fetching current prices: {e}")
+        logger.exception(f"Error fetching current prices: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -902,7 +902,7 @@ async def read_assets_bulk(
                 try:
                     classification_params = FAClassificationParams.model_validate_json(asset.classification_params)
                 except Exception as e:
-                    logger.error(
+                    logger.exception(
                         f"Failed to parse classification_params for asset {asset.id}: {e}",
                         extra={"asset_id": asset.id, "error": str(e)},
                     )
@@ -923,7 +923,7 @@ async def read_assets_bulk(
 
         return responses
     except Exception as e:
-        logger.error(f"Error reading assets bulk: {e}")
+        logger.exception(f"Error reading assets bulk: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -942,7 +942,7 @@ async def sync_prices_bulk(
     try:
         return await AssetSourceManager.bulk_refresh_prices(requests, session)
     except Exception as e:
-        logger.error(f"Error in bulk refresh prices: {e}")
+        logger.exception(f"Error in bulk refresh prices: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1012,7 +1012,7 @@ async def refresh_assets_from_provider(
         result = await AssetSourceManager.refresh_assets_from_provider(asset_ids, session)
         return result
     except Exception as e:
-        logger.error(f"Error refreshing assets from provider: {e}")
+        logger.exception(f"Error refreshing assets from provider: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1048,7 +1048,7 @@ async def upsert_events_bulk(
         status = 400 if e.error_code in ("EVENT_CURRENCY_MISMATCH",) else 500
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Error in bulk upsert events: {e}")
+        logger.exception(f"Error in bulk upsert events: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1073,7 +1073,7 @@ async def delete_events_bulk(
     try:
         return await AssetSourceManager.delete_events_bulk(ids, session, current_user)
     except Exception as e:
-        logger.error(f"Error in bulk delete events: {e}")
+        logger.exception(f"Error in bulk delete events: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1091,7 +1091,7 @@ async def query_events_bulk(
         results = await AssetSourceManager.query_events_bulk(requests, session)
         return FAEventQueryResponse(items=results)
     except Exception as e:
-        logger.error(f"Error querying events bulk: {e}")
+        logger.exception(f"Error querying events bulk: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1140,7 +1140,7 @@ async def get_events_by_ids(
         results = await AssetSourceManager.get_events_by_ids(ids, session)
         return FAEventQueryResponse(items=results)
     except Exception as e:
-        logger.error(f"Error fetching events by IDs: {e}")
+        logger.exception(f"Error fetching events by IDs: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1168,7 +1168,7 @@ async def market_data_summary(
         status = 404 if e.error_code == "ASSET_NOT_FOUND" else 400
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Error in market-data summary for asset {asset_id}: {e}")
+        logger.exception(f"Error in market-data summary for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1202,7 +1202,7 @@ async def wipe_market_data(
         status = 404 if e.error_code == "ASSET_NOT_FOUND" else 400
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Error in market-data wipe for asset {asset_id}: {e}")
+        logger.exception(f"Error in market-data wipe for asset {asset_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

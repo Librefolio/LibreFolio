@@ -92,7 +92,7 @@ def _alembic_head_revision():
         return None
 
 
-def ensure_database_exists():
+def ensure_database_exists():  # noqa: C901 — sequential DB bootstrap state checks, flag-based
     """
     Ensure database exists and is migrated.
 
@@ -209,7 +209,7 @@ def ensure_database_exists():
                     sys.exit(1)
 
             except Exception as e:
-                logger.error("Error applying database migrations", error=str(e))
+                logger.exception("Error applying database migrations", error=str(e))
                 sys.exit(1)
 
 

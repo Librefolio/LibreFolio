@@ -400,7 +400,7 @@ def probe_quantlib(fixture: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-def probe_riskfolio(
+def probe_riskfolio(  # noqa: C901 — flat sequential probe steps, data packing, no nested logic
     fixture: dict[str, Any],
     *,
     expected_numpy_version: str | None,

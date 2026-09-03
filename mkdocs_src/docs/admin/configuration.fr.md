@@ -21,7 +21,7 @@ Ces variables vous permettent de personnaliser le comportement de LibreFolio dan
 | `LIBREFOLIO_DATA_DIR` | `./backend/data/prod` | Le chemin du répertoire racine où sont stockées les données persistantes (base de données SQLite, téléversements, journaux, etc.). Résolu au niveau système : les chemins relatifs sont résolus en absolus par rapport à la racine du projet, tandis que dans Docker il est remplacé et forcé à `/app/backend/data/prod-docker` via le mappage de volume Compose. |
 | `LOG_LEVEL` | `INFO` | Le niveau de journalisation principal de l'application. Options : `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
 | `PORTFOLIO_BASE_CURRENCY` | `EUR` | La devise de référence par défaut pour les calculs du portefeuille (code ISO 4217). |
-| `PREVIEW_CACHE_MAX_MB` | `50` | Taille maximale (en Mo) du cache de prévisualisation d'images en mémoire. Les vignettes en cache sont expulsées selon l'algorithme LRU lorsque la limite est atteinte. |
+| `PREVIEW_CACHE_MAX_MB` | `50` | Taille maximale (en Mo) du cache de prévisualisation d'images en mémoire. Les entrées expirent après 1 heure (TTL) ; lorsque la limite est atteinte, les plus anciennes sont expulsées en premier. |
 
 ## 💻 Paramètres système (Variables d'environnement)
 

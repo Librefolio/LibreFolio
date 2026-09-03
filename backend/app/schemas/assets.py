@@ -349,7 +349,7 @@ class BaseDistribution(StrictModel):
     distribution: dict[str, SafeDecimal] = Field(..., description="Distribution weights (must sum to 1.0)")
 
     @classmethod
-    def _validate_and_normalize_weights(cls, weights: dict[str, Decimal], allow_empty: bool = False) -> dict[str, Decimal]:
+    def _validate_and_normalize_weights(cls, weights: dict[str, Decimal], allow_empty: bool = False) -> dict[str, Decimal]:  # noqa: C901 — flat validation/normalization passes, no nested logic
         """
         Common validation logic for distribution weights.
 

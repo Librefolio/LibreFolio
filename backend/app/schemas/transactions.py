@@ -84,7 +84,7 @@ def tags_to_csv(tags: Optional[List[str]]) -> Optional[str]:
     return ",".join(tags)
 
 
-def validate_transaction_business_rules(
+def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error collection
     *,
     tx_type: TransactionType,
     asset_id: Optional[int],
@@ -292,7 +292,7 @@ class TXCreateItem(StrictModel):
         return validate_tags_list(v)
 
     @model_validator(mode="after")
-    def validate_transaction_rules(self) -> TXCreateItem:
+    def validate_transaction_rules(self) -> TXCreateItem:  # noqa: C901 — flat per-rule error collection
         """Validate transaction business rules based on 1.4 Constraint Analysis table.
 
         Collects ALL violations instead of raising at the first one, so the

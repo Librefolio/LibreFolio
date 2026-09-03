@@ -99,28 +99,6 @@ export async function waitForChart(scope: Page | Locator, timeout = 15_000): Pro
 }
 
 /**
- * Wait for a chart to draw *again*.
- *
- * `data-chart-ready` stays `true` once set, so a test that changes the range and
- * then waits for it would be satisfied by the previous drawing. `renders`
- * increments on every completed pass, so the caller can read it before acting
- * and wait for it to move afterwards.
- */
-export async function chartRenders(scope: Page | Locator): Promise<number> {
-    const chart = scope.locator('[data-chart-ready]').first();
-    const raw = await chart.getAttribute('data-chart-renders');
-    return Number(raw ?? '0');
-}
-
-export async function waitForChartRerender(scope: Page | Locator, since: number, timeout = 15_000): Promise<void> {
-    const chart = scope.locator('[data-chart-ready]').first();
-    await expect(async () => {
-        const raw = await chart.getAttribute('data-chart-renders');
-        expect(Number(raw ?? '0')).toBeGreaterThan(since);
-    }).toPass({timeout});
-}
-
-/**
  * Count the validate runs a transaction modal has completed.
  *
  * The FormModal and the BulkModal validate server-side behind a debounce, so

@@ -1016,7 +1016,7 @@ def _aggregate_probe_group(probes: Sequence[Mapping[str, Any]]) -> dict[str, Any
     }
 
 
-def _aggregate_summaries(probes: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def _aggregate_summaries(probes: Sequence[dict[str, Any]]) -> dict[str, Any]:  # noqa: C901 — flat rollup aggregation, no nested logic
     successes = [probe for probe in probes if probe["status"] == "ok"]
     failures = [probe for probe in probes if probe["status"] == "failed"]
     grouped: dict[str, dict[str, Any]] = {}

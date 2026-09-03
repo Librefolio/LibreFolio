@@ -15,7 +15,7 @@ from pydantic import BaseModel
 __all__ = ["canonical_json", "estimate_tokens_chars_div_4"]
 
 
-def _normalize_json_value(value: Any, path: str = "$") -> Any:
+def _normalize_json_value(value: Any, path: str = "$") -> Any:  # noqa: C901 — flat type-dispatch normalizer
     if value is None or isinstance(value, (str, bool, int)):
         return value
     if isinstance(value, float):

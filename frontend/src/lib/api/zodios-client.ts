@@ -207,4 +207,3 @@ export class ApiError extends Error {
 // =============================================================================
 
 export {axiosInstance};
-export default zodiosApi;

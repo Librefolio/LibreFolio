@@ -767,7 +767,7 @@ class SignalInputCoverage(SignalModel):
     last_available_date: Optional[date] = None
 
     @model_validator(mode="after")
-    def validate_coverage(self) -> SignalInputCoverage:
+    def validate_coverage(self) -> SignalInputCoverage:  # noqa: C901 — flat invariant raises, no nested logic
         if self.available_points > self.requested_points:
             raise ValueError("available_points cannot exceed requested_points")
         if self.contiguous_points > self.available_points:
@@ -1066,7 +1066,7 @@ class SignalResult(SignalModel):
         return _ensure_json_safe(value, "normalized_params")
 
     @model_validator(mode="after")
-    def validate_status_matrix(self) -> SignalResult:
+    def validate_status_matrix(self) -> SignalResult:  # noqa: C901 — flat status-matrix invariant raises
         if self.series:
             _validate_series_alignment(self.series)
 

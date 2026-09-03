@@ -60,7 +60,7 @@ def restore_registration_setting():
         return
 
     try:
-        from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
+        from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS  # noqa: PLC0415 — deliberate: fall back to {} when schemas are unavailable in this context
     except Exception:
         GLOBAL_SETTINGS_DEFAULTS = {}
 

@@ -405,7 +405,7 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
 
 
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
-    """Test settings service: get_session_ttl_sync."""
+    """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
     print_info("Testing: backend/app/services/settings_service.py")
 
@@ -464,8 +464,8 @@ def services_roi_fifo_utils(verbose: bool = False, test_names: list = None) -> b
     """Test ROI, FIFO, and PortfolioService pure-math utilities."""
     print_section("Services: ROI / FIFO / Portfolio Utils")
     print_info("Testing: backend/app/utils/financial/ (roi_utils, fifo_utils)")
-    print_info("Testing: backend/app/services/portfolio_service.py (_build_history_series)")
-    print_info("Tests: TWRR, MWRR warm-start series, SimpleROI series, FIFO lots, history series")
+    print_info("Testing: backend/app/services/portfolio_service.py (compute_wac_iterative_multi_broker, get_report)")
+    print_info("Tests: TWRR/MWRR/SimpleROI + series, FIFO lots (fifo_utils, FifoLotEngine), price resolver, WAC multi-broker")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/", test_names)
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
@@ -827,13 +827,13 @@ Note: No backend server required.
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
     add_test(cat, "brim-parse-pool", services_brim_parse_pool, name="BRIM Parse Pool", desc="Process-pool off-loading, pickle round-trip, thread fallback")
     add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail")
-    add_test(cat, "settings", services_settings, name="Settings Service", desc="get_session_ttl_sync")
+    add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base default properties")
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(cat, "financial-utils", services_financial_utils, name="Financial Utils", desc="WAC pure math (compute_wac_from_txlist, determine_target_currency)")
-    add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR, MWRR warm-start, SimpleROI series, FIFO lots, _build_history_series")
+    add_test(cat, "roi-fifo-utils", services_roi_fifo_utils, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (fifo_utils + FifoLotEngine), WAC multi-broker, price resolver")
     add_test(
         cat,
         "lots-analysis-pure",

@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.db import IdentifierType
+from backend.app.db.models import AssetType
 from backend.app.services.asset_source import AssetSearchService, AssetSourceError
 from backend.app.services.asset_source_providers import borsa_italiana
 from backend.app.services.asset_source_providers.borsa_italiana import BorsaItalianaProvider
@@ -257,7 +258,6 @@ async def test_search_orders_italian_first_grouped_by_code(monkeypatch):
 @pytest.mark.asyncio
 async def test_fund_metadata_includes_page_sections(monkeypatch):
     """A fund's short description carries name + ISIN + Caratteristiche/Costi entries."""
-    from backend.app.db.models import AssetType
 
     dati = SimpleNamespace(
         codice=CODE,

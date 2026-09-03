@@ -34,15 +34,6 @@ export async function findAcrossPages(container: Locator, probe: () => Promise<b
 }
 
 /**
- * Walk the pages until at least one element matching `locator` is present,
- * and leave the table on that page. Fails with `reason` if never found.
- */
-export async function pageUntilVisible(container: Locator, locator: Locator, reason: string, opts: {maxPages?: number} = {}): Promise<void> {
-    const found = await findAcrossPages(container, async () => (await locator.count()) > 0, opts);
-    expect(found, reason).not.toBeNull();
-}
-
-/**
  * Raise a table's page size to its largest option, so the whole dataset is on
  * one page. Cheaper than walking when the test only needs "exists anywhere".
  * No-op when the table has no pagination bar.

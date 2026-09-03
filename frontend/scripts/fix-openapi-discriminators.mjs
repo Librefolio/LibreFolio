@@ -41,6 +41,8 @@ const discriminatedSchemas = [
     'RiskDrawdownOutput',
     'RiskHistoricalReplayScenario',
     'RiskHypotheticalShockScenario',
+    'SchedulerLogCurrentPriceEntry',
+    'SchedulerLogHistorySyncEntry',
 ];
 
 let source = await readFile(generatedClient, 'utf8');
